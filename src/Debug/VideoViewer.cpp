@@ -127,10 +127,23 @@ void VideoViewer::Draw() noexcept
 		videos.SetFilmsEnabled(films);
 	}
 	ImGui::SameLine();
-	bool sixteenBit = videos.IsSixteenBitColour();
-	if (ImGui::Checkbox("16-bit colour, as the game showed it", &sixteenBit))
+	using graphics::film_surface::Format;
+	const auto surface = videos.GetFilmSurface();
+	ImGui::TextUnformatted("16-bit surface:");
+	ImGui::SameLine();
+	if (ImGui::RadioButton("555, as the game on cards of today", surface == Format::Rgb555))
 	{
-		videos.SetSixteenBitColour(sixteenBit);
+		videos.SetFilmSurface(Format::Rgb555);
+	}
+	ImGui::SameLine();
+	if (ImGui::RadioButton("565, cards with no 555", surface == Format::Rgb565))
+	{
+		videos.SetFilmSurface(Format::Rgb565);
+	}
+	ImGui::SameLine();
+	if (ImGui::RadioButton("None, full colour", !surface.has_value()))
+	{
+		videos.SetFilmSurface(std::nullopt);
 	}
 #if !defined(OPENBLACK_BINK_DECODER)
 	ImGui::TextUnformatted("Built without the decoder: videos keep their timing and show black");

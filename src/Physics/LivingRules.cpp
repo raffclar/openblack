@@ -20,6 +20,7 @@
 
 #include "Body.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/PortableMath.h"
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
@@ -64,8 +65,8 @@ LandingPose living::AnimalLandingPose(float sideUp)
 
 glm::mat3 living::HeadingAxes(float heading)
 {
-	return {glm::vec3(std::cos(heading), 0.0f, std::sin(heading)), glm::vec3(0.0f, 1.0f, 0.0f),
-	        glm::vec3(-std::sin(heading), 0.0f, std::cos(heading))};
+	return {glm::vec3(portable_math::Cos(heading), 0.0f, portable_math::Sin(heading)), glm::vec3(0.0f, 1.0f, 0.0f),
+	        glm::vec3(-portable_math::Sin(heading), 0.0f, portable_math::Cos(heading))};
 }
 
 float living::HeadingOf(glm::vec3 axis)

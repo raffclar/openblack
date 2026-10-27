@@ -25,7 +25,7 @@ public:
 	                    bool fromSky) override;
 	bool Tap(entt::entity chest, PlayerNames player) override;
 	[[nodiscard]] bool IsOpened(entt::entity chest) const override;
-	void Update(float milliseconds) override;
+	void Update(float milliseconds, float turnFraction) override;
 	void ProcessTurn() override;
 	void CollectDrawFrame(particles::draw::Frame& frame) const override;
 };

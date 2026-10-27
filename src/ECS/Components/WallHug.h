@@ -11,6 +11,11 @@
 
 #include <cstdint>
 
+#include <algorithm>
+#include <array>
+#include <string_view>
+
+#include <entt/core/type_info.hpp>
 #include <entt/fwd.hpp>
 #include <glm/vec2.hpp>
 
@@ -48,6 +53,23 @@ using MoveStateExitCircleTag = MoveStateTagComponent<MoveState::ExitCircle>;
 using MoveStateStepThroughTag = MoveStateTagComponent<MoveState::StepThrough>;
 using MoveStateFinalStepTag = MoveStateTagComponent<MoveState::FinalStep>;
 using MoveStateArrivedTag = MoveStateTagComponent<MoveState::Arrived>;
+
+namespace detail
+{
+/// The name of a move state's tag with the number of the state, as "...MoveStateTagComponent<1>". Compilers write the
+/// argument of the template in different forms (a number or the name of the value), and the save and the synced
+/// checksum keep the name, so all builds use this one form.
+template <MoveState S>
+inline constexpr auto k_MoveStateTagName = [] {
+	constexpr std::string_view k_Prefix = "openblack::ecs::components::MoveStateTagComponent<";
+	static_assert(static_cast<int>(S) >= 0 && static_cast<int>(S) < 10, "The name keeps one digit");
+	std::array<char, k_Prefix.size() + 2> name {};
+	std::ranges::copy(k_Prefix, name.begin());
+	name[k_Prefix.size()] = static_cast<char>('0' + static_cast<int>(S));
+	name[k_Prefix.size() + 1] = '>';
+	return name;
+}();
+} // namespace detail
 
 /// The circle a walker hugs or is heading for, and how many turns it goes before it looks again (0xff for no end in
 /// reach)
@@ -111,3 +133,15 @@ struct WallHug
 };
 
 } // namespace openblack::ecs::components
+
+/// The same name of each move state's tag on all compilers (see k_MoveStateTagName)
+template <openblack::ecs::components::MoveState S>
+struct entt::type_name<openblack::ecs::components::MoveStateTagComponent<S>>
+{
+	[[nodiscard]] static constexpr std::string_view value() noexcept
+	{
+		const auto& name = openblack::ecs::components::detail::k_MoveStateTagName<S>;
+		return {name.data(), name.size()};
+	}
+	[[nodiscard]] constexpr operator std::string_view() const noexcept { return value(); }
+};

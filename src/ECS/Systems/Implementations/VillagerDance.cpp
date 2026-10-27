@@ -20,6 +20,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
@@ -115,7 +116,7 @@ void SetGameAngle(entt::entity villager, uint16_t angle)
 	}
 	wallHug->gameAngle = angle;
 	wallHug->yAngle = gutils::ConvertGameAngleTo3D(angle);
-	transform->rotation = glm::eulerAngleY(-wallHug->yAngle - glm::radians(90.0f));
+	transform->rotation = portable_math::EulerAngleY(-wallHug->yAngle - glm::radians(90.0f));
 	registry.SetDirty();
 }
 } // namespace

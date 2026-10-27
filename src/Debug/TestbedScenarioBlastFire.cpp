@@ -180,6 +180,29 @@ void AddFire(std::vector<Scenario>& all)
 	                  .delaySeconds = 2.0f}},
 	});
 
+	all.push_back({
+	    .id = "miracles.fire_paused",
+	    .name = "A pause while a forest burns and the hand holds fire",
+	    .facet = Facet::Miracles,
+	    .description = "A fireball thrown into the front row of a forest, as in the forest fire scenario. Six seconds in, "
+	                   "the hand holds a fireball, and two seconds later the game pauses, as the pause key does. Press P "
+	                   "to continue the game.",
+	    .expected = "While the game is paused, the flames, the steam and the smoke of the burning trees stand still, "
+	                "and the light of the fire on the land holds. Only the fireball in the hand moves on, very slowly, a "
+	                "small step each frame. When the game continues, the fire burns on from where it stopped.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 25.0f}, {20.0f, 70.0f}}},
+	    .objects = Forest({0.0f, 30.0f}, 7, 5, 6.0f),
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {0.0f, 30.0f},
+	                  .handOffset = {0.0f, -5.0f},
+	                  .handHeight = 10.0f,
+	                  .throwVelocity = {0.0f, 4.0f, 30.0f},
+	                  .delaySeconds = 2.0f}},
+	    .commands = {{.kind = Command::Kind::HoldSeed, .delaySeconds = 6.0f, .value = static_cast<size_t>(SpellSeedType::Fire)},
+	                 {.kind = Command::Kind::PauseGame, .delaySeconds = 2.0f, .value = 1}},
+	});
+
 	// Six cows close together. A fireball rolls into them.
 	std::vector<ObjectSetup> cows;
 	for (int i = 0; i < 6; ++i)

@@ -92,12 +92,11 @@ glm::vec3 GameRewardOpeningWorld::Position() const
 	return transform != nullptr ? transform->position : glm::vec3(0.0f);
 }
 
-void GameRewardOpeningWorld::Pour(ResourceType type, uint32_t amount)
+void GameRewardOpeningWorld::Pour(ResourceType type, uint32_t amount, PlayerNames player)
 {
-	// Poured by the player at this computer, as the game pours it
 	if (Locator::resourceStoreSystem::has_value())
 	{
-		Locator::resourceStoreSystem::value().PourAt(type, Position(), amount, false, LocalPlayer(), false);
+		Locator::resourceStoreSystem::value().PourAt(type, Position(), amount, false, player, false);
 	}
 }
 

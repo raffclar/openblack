@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#include <stdexcept>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -51,8 +51,19 @@ TEST_F(PlayerSystemLands, KnowsTheLandsPlayers)
 	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
 	const auto two = MakePlayer(PlayerNames::PLAYER_TWO);
 	_players.RegisterPlayers();
-	EXPECT_EQ(_players.GetPlayer(PlayerNames::PLAYER_ONE), one);
-	EXPECT_EQ(_players.GetPlayer(PlayerNames::PLAYER_TWO), two);
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_ONE), one);
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_TWO), two);
+}
+
+TEST_F(PlayerSystemLands, APlayerWhoHasNotJoinedYetIsNotFound)
+{
+	// A network land has only the first player until the first turn makes the players of the humans
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	_players.AddPlayer(one);
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_TWO), std::nullopt);
+	const auto two = MakePlayer(PlayerNames::PLAYER_TWO);
+	_players.AddPlayer(two);
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_TWO), two);
 }
 
 TEST_F(PlayerSystemLands, TheFirstPlayerMadeKeepsItsName)
@@ -62,7 +73,7 @@ TEST_F(PlayerSystemLands, TheFirstPlayerMadeKeepsItsName)
 	_players.AddPlayer(added);
 	MakePlayer(PlayerNames::PLAYER_ONE);
 	_players.RegisterPlayers();
-	EXPECT_EQ(_players.GetPlayer(PlayerNames::PLAYER_ONE), added);
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_ONE), added);
 }
 
 TEST_F(PlayerSystemLands, ANewLandsPlayersTakeTheLastLandsPlaces)
@@ -78,10 +89,10 @@ TEST_F(PlayerSystemLands, ANewLandsPlayersTakeTheLastLandsPlaces)
 	_players.RegisterPlayers();
 
 	const auto& registry = Locator::entitiesRegistry::value();
-	EXPECT_EQ(_players.GetPlayer(PlayerNames::PLAYER_ONE), one);
-	EXPECT_EQ(_players.GetPlayer(PlayerNames::PLAYER_TWO), two);
-	EXPECT_TRUE(registry.Valid(_players.GetPlayer(PlayerNames::PLAYER_ONE)));
-	EXPECT_TRUE(registry.Valid(_players.GetPlayer(PlayerNames::PLAYER_TWO)));
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_ONE), one);
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_TWO), two);
+	EXPECT_TRUE(registry.Valid(_players.FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null)));
+	EXPECT_TRUE(registry.Valid(_players.FindPlayer(PlayerNames::PLAYER_TWO).value_or(entt::null)));
 }
 
 TEST_F(PlayerSystemLands, APlayerNotOnTheNewLandIsForgotten)
@@ -93,7 +104,7 @@ TEST_F(PlayerSystemLands, APlayerNotOnTheNewLandIsForgotten)
 	MakePlayer(PlayerNames::PLAYER_ONE);
 	_players.RegisterPlayers();
 
-	EXPECT_THROW(static_cast<void>(_players.GetPlayer(PlayerNames::PLAYER_THREE)), std::out_of_range);
+	EXPECT_EQ(_players.FindPlayer(PlayerNames::PLAYER_THREE), std::nullopt);
 }
 
 TEST_F(PlayerSystemLands, APlayerKeepsTheirAlignmentAndWhatIsTheirsOnTheNextLand)

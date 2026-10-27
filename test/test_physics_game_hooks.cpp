@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -93,8 +94,9 @@ public:
 		}
 		cube.faces = {{0, 1, 3}};
 		cube.radius = glm::length(glm::vec3(1.0f));
-		entry.body =
-		    std::make_unique<physics::Body>(physics::BodySetup {.scale = 1.0f, .halfHeight = 1.0f, .mass = 10.0f}, cube);
+		entry.body = std::make_unique<physics::Body>(
+		    physics::BodySetup {.scale = 1.0f, .halfHeight = 1.0f, .mass = 10.0f, .material = {.spinKeptPerSecond = 0.5f}},
+		    cube);
 		entry.body->SetUpPose({.axes = glm::mat3(1.0f), .origin = glm::vec3(5.0f, 1.0f, 5.0f)});
 		entry.body->velocity = velocity;
 		return entry;
@@ -132,7 +134,8 @@ public:
 	[[nodiscard]] std::optional<float> LandHeight(glm::vec2 /*point*/) const override { return 0.0f; }
 	[[nodiscard]] uint32_t Turn() const override { return turn; }
 	[[nodiscard]] GameRandomInterface* Random() override { return random; }
-	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override { return PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] bool PersonPlays(PlayerNames player) const override { return persons.contains(player); }
+	[[nodiscard]] std::optional<PlayerNames> OwnPlayer() const override { return ownPlayer; }
 	[[nodiscard]] float LifeOf(entt::entity object) const override
 	{
 		const auto life = lives.find(object);
@@ -239,7 +242,7 @@ public:
 		return stepTravel;
 	}
 	[[nodiscard]] std::optional<float> CatchMs(entt::entity /*creature*/) const override { return catchMs; }
-	[[nodiscard]] std::optional<entt::entity> HandHeldCreature() const override { return std::nullopt; }
+	[[nodiscard]] bool HandHolds(entt::entity /*creature*/) const override { return false; }
 	[[nodiscard]] bool HasCreatureActions() const override { return true; }
 	[[nodiscard]] bool CanBeCaught(entt::entity /*object*/) const override { return true; }
 	[[nodiscard]] bool FreeToCatch(entt::entity /*creature*/) const override { return freeToCatch; }
@@ -289,6 +292,10 @@ public:
 	std::optional<glm::vec3> stepTravel;
 	bool freeToCatch {true};
 	std::vector<std::pair<entt::entity, entt::entity>> catches;
+	/// The players that a person plays: in a game alone, only the first player
+	std::set<PlayerNames> persons {PlayerNames::PLAYER_ONE};
+	/// The player of this computer
+	PlayerNames ownPlayer {PlayerNames::PLAYER_ONE};
 };
 
 struct Fixture
@@ -403,6 +410,52 @@ TEST(PhysicsGameHooks, AToyNeverHurtsACreatureNorDoesAnythingWhileAScriptControl
 	EXPECT_TRUE(f.world->desireSources.empty());
 }
 
+TEST(PhysicsGameHooks, InAGameAloneAScriptKeepsOnlyTheFirstPlayersCreatureFromHarm)
+{
+	Fixture f;
+	// The computer plays the second player
+	const auto creature = f.world->registry.Create();
+	auto& body = f.world->registry.Assign<Creature>(creature);
+	body.owner = PlayerNames::PLAYER_TWO;
+	body.size = 1.0f;
+	f.world->registry.Assign<ScriptControlled>(creature);
+	f.StrikeWithRock(creature, 100.0f, PlayerNames::PLAYER_ONE, 1.0e6f);
+	EXPECT_EQ(f.world->effects.size(), 1U);
+	EXPECT_FALSE(f.world->desireSources.empty());
+}
+
+TEST(PhysicsGameHooks, InANetworkGameAScriptKeepsTheCreatureOfEachPersonFromHarmOnEveryComputer)
+{
+	// The two computers of a network game: a person plays the first and the second player, and a computer mind plays
+	// the third
+	for (const auto own : {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO})
+	{
+		Fixture f;
+		f.world->persons = {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO};
+		f.world->ownPlayer = own;
+		auto& registry = f.world->registry;
+		const auto second = registry.Create();
+		auto& secondBody = registry.Assign<Creature>(second);
+		secondBody.owner = PlayerNames::PLAYER_TWO;
+		secondBody.size = 1.0f;
+		registry.Assign<ScriptControlled>(second);
+		f.StrikeWithRock(second, 100.0f, PlayerNames::PLAYER_ONE, 1.0e6f);
+		// The second player's creature is swayed, but not hurt, on both computers
+		EXPECT_EQ(f.world->sways.size(), 1U);
+		EXPECT_TRUE(f.world->effects.empty());
+		EXPECT_TRUE(f.world->desireSources.empty());
+
+		const auto third = registry.Create();
+		auto& thirdBody = registry.Assign<Creature>(third);
+		thirdBody.owner = PlayerNames::PLAYER_THREE;
+		thirdBody.size = 1.0f;
+		registry.Assign<ScriptControlled>(third);
+		f.StrikeWithRock(third, 100.0f, PlayerNames::PLAYER_ONE, 1.0e6f);
+		// The creature of the computer mind is hurt on both computers
+		EXPECT_EQ(f.world->effects.size(), 1U);
+	}
+}
+
 TEST(PhysicsGameHooks, ATemplesHeartPassesABlowOnToItsTownsBuildingAndBeamsAtItInTurn)
 {
 	Fixture f;
@@ -450,8 +503,8 @@ public:
 	    , _fractions(std::move(fractions))
 	{
 	}
-	uint32_t GameRand(uint32_t /*n*/) override { return 0; }
-	float GameFloatRand(float /*x*/) override { return 0.0f; }
+	uint32_t SyncedRand(uint32_t /*n*/, DrawSite /*site*/) override { return 0; }
+	float SyncedFloatRand(float /*x*/, DrawSite /*site*/) override { return 0.0f; }
 	uint32_t LocalRand(int32_t /*n*/) override { return _wholes.at(_whole++); }
 	float LocalFloatRand(float /*x*/) override { return _fractions.at(_fraction++); }
 	int32_t CrtRand() override { return 0; }

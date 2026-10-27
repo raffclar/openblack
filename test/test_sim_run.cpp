@@ -40,6 +40,16 @@ TEST(SimRun, FastModeDrawsOneFrameInSome)
 	EXPECT_TRUE(DrawsFrame(settings, 20));
 }
 
+TEST(SimRun, FastModeDrawsTheFrameOfAPicture)
+{
+	const Settings none {.fast = true};
+	EXPECT_TRUE(DrawsFrame(none, 3, true));
+	EXPECT_FALSE(DrawsFrame(none, 4, false));
+	const Settings some {.fast = true, .drawEvery = 10};
+	EXPECT_TRUE(DrawsFrame(some, 5, true));
+	EXPECT_FALSE(DrawsFrame(some, 6));
+}
+
 TEST(SimRun, TheRunEndsAtItsLastTurn)
 {
 	EXPECT_FALSE(Finished(Settings {}, 1000000));

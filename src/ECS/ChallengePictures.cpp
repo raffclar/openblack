@@ -11,12 +11,17 @@
 
 #include <cstddef>
 
+#include <algorithm>
 #include <array>
+#include <iterator>
 
 #include <fmt/format.h>
 
+#include "ECS/ChallengeRecords.h"
 #include "ECS/Components/ChallengePicture.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
+#include "Locator.h"
 
 using namespace openblack::ecs;
 using openblack::ecs::components::ChallengePicture;
@@ -158,9 +163,56 @@ bool challenge_pictures::AnyWaiting(const Registry& registry)
 	return waiting;
 }
 
-void challenge_pictures::Collect(Registry& registry, const Screens& screens)
+namespace
 {
-	registry.Each<ChallengePicture>([&screens](entt::entity, ChallengePicture& picture) {
+/// Each record shows its picture as the files hold it, when the files have it. A record that changes counts one more
+/// picture, so that the room draws it again.
+void ShowFiles(Registry& registry, const challenge_pictures::Files& files)
+{
+	const auto records = challenge_records::InOrder(registry);
+	for (uint32_t place = 0; place < records.size(); ++place)
+	{
+		auto cells = files.cells(place);
+		if (cells.large.empty() && cells.small.empty())
+		{
+			continue;
+		}
+		auto* picture = registry.TryGet<ChallengePicture>(records[place]);
+		if (picture == nullptr)
+		{
+			picture = &registry.Assign<ChallengePicture>(records[place]);
+		}
+		bool changed = false;
+		if (!cells.large.empty() && cells.large != picture->full)
+		{
+			picture->full = std::move(cells.large);
+			changed = true;
+		}
+		if (!cells.small.empty() && cells.small != picture->small)
+		{
+			picture->small = std::move(cells.small);
+			changed = true;
+		}
+		if (changed)
+		{
+			++picture->taken;
+		}
+	}
+}
+} // namespace
+
+void challenge_pictures::Collect(Registry& registry, const Screens& screens, const Files& files)
+{
+	// Without files, a store of its own keeps the pictures that come back now
+	gamesave::ChallengePictureStore own;
+	const bool hasFiles = files.put && files.cells;
+	const Files used =
+	    hasFiles ? files
+	             : Files {.put = [&own](uint32_t place, std::span<const uint8_t> picture) { own.Put(place, picture); },
+	                      .cells = [&own](uint32_t place) { return own.Cells(place); }};
+	const auto records = challenge_records::InOrder(registry);
+	bool anyBack = false;
+	registry.Each<ChallengePicture>([&](entt::entity record, ChallengePicture& picture) {
 		if (!picture.waiting.has_value())
 		{
 			return;
@@ -168,11 +220,11 @@ void challenge_pictures::Collect(Registry& registry, const Screens& screens)
 		if (auto full = screens.take ? screens.take(*picture.waiting) : std::nullopt; full.has_value())
 		{
 			picture.waiting.reset();
-			if (!full->empty())
+			const auto found = std::ranges::find(records, record);
+			if (!full->empty() && found != records.end())
 			{
-				picture.small = Shrink(*full);
-				picture.full = std::move(*full);
-				++picture.taken;
+				used.put(static_cast<uint32_t>(std::distance(records.begin(), found)), *full);
+				anyBack = true;
 			}
 			return;
 		}
@@ -181,4 +233,28 @@ void challenge_pictures::Collect(Registry& registry, const Screens& screens)
 			picture.waiting.reset();
 		}
 	});
+	if (anyBack)
+	{
+		ShowFiles(registry, used);
+	}
+}
+
+challenge_pictures::Files challenge_pictures::ProfileFiles()
+{
+	if (!Locator::saveGameSystem::has_value())
+	{
+		return {};
+	}
+	return {
+	    .put = [](uint32_t place,
+	              std::span<const uint8_t> picture) { Locator::saveGameSystem::value().PutChallengePicture(place, picture); },
+	    .cells = [](uint32_t place) { return Locator::saveGameSystem::value().ChallengePictureCells(place); }};
+}
+
+void challenge_pictures::Refresh(Registry& registry, const Files& files)
+{
+	if (files.cells)
+	{
+		ShowFiles(registry, files);
+	}
 }

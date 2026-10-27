@@ -25,6 +25,7 @@
 #include <entt/meta/context.hpp>
 
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "Inspector/CameraControl.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -67,6 +68,7 @@ public:
 	[[nodiscard]] fight_autopilot::AutopilotInterface* GetFightAutopilot() override;
 	void PauseOnLoad(bool pause) override;
 	[[nodiscard]] std::optional<std::string> ReplayOnLoad(const std::filesystem::path& path) override;
+	void RecordInputOnLoad(const std::filesystem::path& path) override;
 	[[nodiscard]] std::optional<std::string> StartSimRecord(const std::filesystem::path& path, uint32_t every,
 	                                                        const std::optional<std::filesystem::path>& limits,
 	                                                        sim_run::HashDetail hashParts) override;
@@ -111,6 +113,15 @@ private:
 	std::thread _loadingHelper;
 	/// The recorded input that the next land makes from its first frame on
 	std::optional<inspector::Json> _replayOnLoad;
+	/// Tools: the recording of the input starts with the next land, and goes to this file as the inspector stops
+	bool _recordInputOnLoad {false};
+	std::optional<std::filesystem::path> _recordInputTo;
+	void WriteRecordedInput();
+	/// Where the camera of the next land stands before its first frame, as camera.set takes it
+	std::optional<inspector::Json> _cameraOnLoad;
+	/// The frames on which the drawn view changes to a different camera, and the last frame that it checked
+	inspector::ShownCameraCuts _shownCameraCuts;
+	std::optional<uint64_t> _cutsCheckedAt;
 	/// The fight autopilot, which gives its input through the inspector's input
 	std::unique_ptr<inspector::FightAutopilot> _autopilot;
 };

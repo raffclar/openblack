@@ -22,6 +22,11 @@
 #include "Creature/CreatureHandGlow.h"
 #include "Creature/CreatureKiss.h"
 
+namespace openblack::ecs
+{
+class Registry;
+}
+
 namespace openblack::ecs::systems
 {
 
@@ -44,9 +49,15 @@ public:
 	virtual void SwayTurn(entt::entity /*creature*/) {}
 	/// At the end of the creature's own turn, its body takes its pose for the turn if it has no pose yet
 	virtual void EndPoseTurn(entt::entity /*creature*/) {}
-	/// Once a frame, by the game time, which stops while the game is paused: the bodies are reshaped where they have
-	/// changed enough, drawn between the poses of their last two game turns, and their eyes placed
+	/// Once a frame, by the game time, which stops while the game is paused: the bodies are drawn between the poses of
+	/// their last two game turns, and their eyes placed. The frame changes only what the draw reads.
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// In the creature's own turn, as its body lives the turn: the shape that the body is drawn with follows its
+	/// alignment, fatness and strength once they changed enough, and its skeleton follows the shape
+	virtual void MorphTurn(entt::entity /*creature*/) {}
+	/// At the end of each game turn: a creature with no skeleton for its shape gets one, and a creature with no pose yet
+	/// takes its first pose
+	virtual void ShapeBodies() {}
 	/// A creature in the world takes its pose for this game turn now, at the end of its turn: its animations move on by
 	/// one turn, at the place and heading where its turn took it. A creature that has its pose for this turn keeps it.
 	virtual void PoseTurn(entt::entity creature) = 0;
@@ -57,8 +68,9 @@ public:
 	virtual void HoldTurnPose(entt::entity creature) = 0;
 	/// Poses a copy of a creature's body some milliseconds on (see components::CreatureCopy): shaped as its creature is,
 	/// by its own animations, its eyes looking where its head does and blinking. Nothing happens to an entity that isn't
-	/// a copy, or whose creature is gone.
-	virtual void PoseCopy(entt::entity copy, float milliseconds) = 0;
+	/// a copy, or whose creature is gone. The copy is a thing of the registry of copies, which can be another registry
+	/// than the land's, as the temple's rooms have. Its creature is a thing of the land.
+	virtual void PoseCopy(Registry& copies, entt::entity copy, float milliseconds) = 0;
 
 	/// Where a bone of a creature is in one of its animations at a time, played left to right or not, in its mesh's space,
 	/// the animation blended as the body is drawn; nothing when the creature has no such animation or bone, or hasn't been
@@ -86,8 +98,9 @@ public:
 
 	/// Places the glows on a creature's body (see components::CreatureHandGlows) on its pose as it is now. Each glow's
 	/// texture slides on by the real milliseconds of the frame, and the circling glow turns by the game's milliseconds.
-	/// Nothing happens to a creature or copy without glows or a pose.
-	virtual void PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs) = 0;
+	/// Nothing happens to a creature or copy without glows or a pose. `things` is the registry of the creature or the
+	/// copy; the creature of a copy is a thing of the land.
+	virtual void PlaceHandGlows(Registry& things, entt::entity creature, int32_t frameMs, int32_t gameMs) = 0;
 	/// A script gives a creature a creed power: a glow of a scale and a power at a place on its body, a power of 0 to
 	/// remove the glow. The creature hums while its glows have power (see creature_hand_glow::SetCreedPower).
 	virtual void SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power) = 0;
@@ -100,10 +113,11 @@ public:
 	virtual void PlayCreedEvent(entt::entity creature, int32_t event) = 0;
 	/// The middle of a creature's or a copy's groin bone and its lips (the point that kisses, else its head bone), as its
 	/// body is posed at the end of its newest game turn, in the world. Nothing when it has no pose or no such bones.
-	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) = 0;
+	/// `things` is the registry of the creature or the copy.
+	[[nodiscard]] virtual std::optional<glm::vec3> MiddleOfGroinAndLips(const Registry& things, entt::entity creature) = 0;
 	/// A copy of a creature makes its motes or its smoke once, as a creature does each game turn, from the bones of its
-	/// newest turn pose and the alignment that its body shows
-	virtual void AddAlignmentMotesOf(entt::entity copy) = 0;
+	/// newest turn pose and the alignment that its body shows. `copies` is the registry of the copy.
+	virtual void AddAlignmentMotesOf(const Registry& copies, entt::entity copy) = 0;
 };
 
 } // namespace openblack::ecs::systems

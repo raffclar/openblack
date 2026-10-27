@@ -121,6 +121,24 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "hand.grip_dust_paused",
+	    .name = "Grip the land while the game is paused",
+	    .facet = Facet::Hand,
+	    .description = "The hand grips the land and lets go. A moment later it grips the land again, and the game pauses "
+	                   "at the same time, as the pause key does. Press P to continue the game.",
+	    .expected = "The first grip throws up a puff of dust where the hand grips. While the game is paused, that puff "
+	                "stands still. The second grip plays its sound at once, but its dust comes only when the game "
+	                "continues, with the next turn. Then both puffs grow and fade as usual.",
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {PointerTo({0.6f, 0.8f}, 1.0f),
+	                 Press(k_Left, 0.5f),
+	                 Release(k_Left, 0.3f),
+	                 PointerTo({0.4f, 0.8f}, 0.3f),
+	                 Press(k_Left, 0.3f),
+	                 {.kind = Kind::PauseGame, .delaySeconds = 0.0f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "hand.edge_hover",
 	    .name = "Hover at the edges of the screen",
 	    .facet = Facet::Hand,

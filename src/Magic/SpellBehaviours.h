@@ -70,8 +70,9 @@ public:
 	/// reaction going
 	virtual void ReactToSpell(ecs::components::Spell& spell, bool onCast) = 0;
 	/// A further effect of the miracle's own at the point it is cast, such as the storm's swirl, which plays out by itself
-	/// and goes with the miracle
-	virtual void StartCastEffect(ecs::components::Spell& /*spell*/, ParticleType /*type*/) {}
+	/// and goes with the miracle. A synced effect takes its random numbers from the seed that all computers share. An
+	/// effect that is not synced takes them from the seed of this computer.
+	virtual void StartCastEffect(ecs::components::Spell& /*spell*/, ParticleType /*type*/, bool /*synced*/) {}
 	/// The flock miracles' animals, none where there are none to make
 	[[nodiscard]] virtual FlockMiracleInterface* Flocks() { return nullptr; }
 	/// The teleport's stone for the miracle at where it was cast, none if one may not go there

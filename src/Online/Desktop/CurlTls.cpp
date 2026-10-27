@@ -9,8 +9,11 @@
 
 #include "CurlTls.h"
 
+#include <array>
+#include <filesystem>
 #include <mutex>
 #include <string>
+#include <system_error>
 
 namespace openblack::online::tls_settings
 {
@@ -35,6 +38,22 @@ void Apply(CURL* easy, const char* extraAuthorities)
 #if defined(_WIN32)
 	// The certificates of the authorities come from the certificate store of Windows
 	curl_easy_setopt(easy, CURLOPT_SSL_OPTIONS, static_cast<long>(CURLSSLOPT_NATIVE_CA));
+#elif defined(__linux__)
+	// The certificates of the authorities come from the bundle of the system, at the place that the distribution uses
+	if (extraAuthorities == nullptr)
+	{
+		constexpr std::array<const char*, 3> k_SystemBundles {"/etc/ssl/certs/ca-certificates.crt",
+		                                                      "/etc/pki/tls/certs/ca-bundle.crt", "/etc/ssl/cert.pem"};
+		std::error_code error;
+		for (const auto* bundle : k_SystemBundles)
+		{
+			if (std::filesystem::is_regular_file(bundle, error))
+			{
+				curl_easy_setopt(easy, CURLOPT_CAINFO, bundle);
+				break;
+			}
+		}
+	}
 #endif
 }
 

@@ -19,6 +19,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Common/X87.h"
 #include "Common/X87Matrix.h"
 #include "Common/X87Vector.h"
@@ -57,7 +58,7 @@ constexpr std::array<uint8_t, 256> k_Permutation {
 
 glm::mat3 Rotation(float glmAngle, const glm::vec3& axis)
 {
-	return glm::mat3(glm::rotate(glm::mat4(1.0f), glmAngle, axis));
+	return glm::mat3(portable_math::Rotate(glm::mat4(1.0f), glmAngle, axis));
 }
 } // namespace
 
@@ -257,7 +258,7 @@ glm::mat3 maths::Tumble(const glm::mat3& rotation, float angle, bool aboutForwar
 
 float maths::SpriteAngle(const glm::mat3& rotation)
 {
-	return std::atan2(rotation[0][2], rotation[0][0]);
+	return portable_math::Atan2(rotation[0][2], rotation[0][0]);
 }
 
 float maths::ScreenVelocityAngle(const glm::vec3& velocity, const glm::vec3& right, const glm::vec3& up)
@@ -359,7 +360,7 @@ glm::mat3 maths::SpinAboutVertical(const glm::mat3& rotation, float angle)
 
 float maths::SmoothingRate(float smoothing, float scale)
 {
-	return x87::Mul(std::log(static_cast<double>(1.0f - smoothing)), scale);
+	return x87::Mul(portable_math::Log(static_cast<double>(1.0f - smoothing)), scale);
 }
 
 float maths::SmoothingShare(float dt, float rate)
@@ -445,5 +446,5 @@ glm::vec2 maths::ValueNoise::Wind(const glm::vec3& point) const
 
 glm::mat3 maths::LerpRotation(const glm::mat3& from, const glm::mat3& to, float t)
 {
-	return glm::mat3_cast(glm::slerp(glm::quat_cast(from), glm::quat_cast(to), t));
+	return glm::mat3_cast(openblack::portable_math::Slerp(glm::quat_cast(from), glm::quat_cast(to), t));
 }

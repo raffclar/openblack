@@ -247,6 +247,10 @@ bool FightAutopilot::Give(const InputEvent& event)
 		Log("input_failed", std::format("{}: {}", KindName(event.kind), error));
 		return false;
 	}
+	if (_recorder)
+	{
+		_recorder(_frame, event);
+	}
 	return true;
 }
 

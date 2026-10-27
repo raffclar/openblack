@@ -17,6 +17,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Audio/Sound.h"
+#include "Common/PortableRotations.h"
 
 using namespace openblack;
 
@@ -123,7 +124,7 @@ void TempleDoors::LayOutJoints()
 	float turn = 0.0f;
 	if (_swing > 0.0f && _swing < 2.0f)
 	{
-		turn = (1.0f - std::cos(_swing * glm::pi<float>())) * k_HalfSwing;
+		turn = (1.0f - portable_math::Cos(_swing * glm::pi<float>())) * k_HalfSwing;
 	}
 	_joints.fill(glm::mat4(1.0f));
 	if (!_leaf.has_value())
@@ -134,10 +135,10 @@ void TempleDoors::LayOutJoints()
 	const glm::vec3 up {0.0f, 1.0f, 0.0f};
 	if (*_leaf < k_JointCount)
 	{
-		_joints[*_leaf] = glm::rotate(glm::mat4(1.0f), turn, up);
+		_joints[*_leaf] = portable_math::Rotate(glm::mat4(1.0f), turn, up);
 	}
 	if (*_leaf + 1 < k_JointCount)
 	{
-		_joints[*_leaf + 1] = glm::rotate(glm::mat4(1.0f), -turn, up);
+		_joints[*_leaf + 1] = portable_math::Rotate(glm::mat4(1.0f), -turn, up);
 	}
 }

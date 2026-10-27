@@ -9,6 +9,10 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 
 /// Which of the land's objects are drawn in less detail the further into the view they stand (see
@@ -31,6 +35,13 @@ namespace openblack::ecs::object_detail
 /// Whether an object drawn by the bands is drawn by them this frame: not while a hand or a creature holds it, which
 /// draws it whole, nor while a script draws it in high detail
 [[nodiscard]] bool BandedNow(const Registry& registry, entt::entity entity);
+
+/// Whether a mark on the land is drawn by the bands this frame: a mark that fades by its own alpha is drawn whole until
+/// it has gone
+[[nodiscard]] constexpr bool MarkBandedNow(std::optional<uint8_t> alpha)
+{
+	return !alpha.has_value();
+}
 
 /// Whether an object drawn by the bands fades out and then goes beyond them; one that doesn't is drawn as its low mesh
 /// however far it is. `townCentre` says it is a village centre.

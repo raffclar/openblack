@@ -21,6 +21,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Commands/PlayerCommands.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "Magic/AreaEffect.h"
@@ -179,25 +180,39 @@ public:
 
 	void UpdateHand(const HandFrame& frame, float seconds) override;
 	bool TapFireBall(entt::entity ball) override;
-	bool TapGlobe(entt::entity globe) override;
+	bool TapGlobe(entt::entity globe, PlayerNames player) override;
 	bool PressFireBall(uint32_t nowMs, uint32_t turn) override;
 	void HoldFireBall(uint32_t nowMs, uint32_t turn) override;
 	void ReleaseFireBall(uint32_t nowMs, uint32_t turn) override;
+	void DoCatchFireBall(PlayerNames player, entt::entity ball) override;
+	bool DoApplySeed(PlayerNames player, entt::entity target) override;
+	void DoSeedGesture(PlayerNames player, const player_commands::SeedGesture& gesture) override;
+	void DoCast(PlayerNames player, const player_commands::HandCast& cast) override;
+	void DoCastUnlock(PlayerNames player, entt::entity seed) override;
+	void InterfaceTurn() override;
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override;
 	bool PressAction() override;
 	void ReleaseAction() override;
-	[[nodiscard]] bool IsHandBusy() const override { return _held.has_value(); }
+	[[nodiscard]] bool IsHandBusy() const override { return HeldOf(OwnPlayer()).has_value(); }
+	[[nodiscard]] bool IsHandBusyOf(PlayerNames player) const override { return HeldOf(player).has_value(); }
 	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override { return magic::PourPoseAt(_pour, fraction); }
 	[[nodiscard]] HandCastState GetHandCastState() const override;
-	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return _held; }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return HeldOf(OwnPlayer()); }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeedOf(PlayerNames player) const override { return HeldOf(player); }
 	/// The nearest fireball the ray passes through that the hand may hold now, if any
 	/// What the cursor picked under the hand, while the hand is over the world
 	[[nodiscard]] std::optional<entt::entity> PickedUnderHand() const;
 	/// A fireball of another player the hand takes hold of, as a tap or a grab starts, is caught into a fireball seed in
 	/// the hand; whether it was
 	bool CatchFireBall(entt::entity ball);
+	/// The tap or the take of a fireball goes as a command of the player, which the turn does (DoCatchFireBall)
+	void SendFireBallCommand(entt::entity ball, bool take);
 	/// A ready fire seed in the hand put to a fireball takes it in, the seed a twentieth stronger; whether it did
 	bool AbsorbFireBall(entt::entity ball);
+	/// A gesture on the seed in the hand goes as a command of the player, which the turn does (DoSeedGesture)
+	void SendSeedGesture(const player_commands::SeedGesture& gesture);
+	/// Whether the miracle in the hand is a ready fire seed, which takes in a fireball
+	[[nodiscard]] bool AbsorbsFireBalls() const;
 	[[nodiscard]] HandResult GetLastHandResult() const override { return _lastHandResult; }
 	void PlaceHandEffect(glm::vec3 point, float handScale) override;
 	[[nodiscard]] bool IsHandInInfluence() const override;
@@ -237,7 +252,7 @@ private:
 	[[nodiscard]] components::Spell* FindSpell(entt::entity spell) override;
 	[[nodiscard]] float GameRandom(float max) override;
 	void ReactToSpell(components::Spell& spell, bool onCast) override;
-	void StartCastEffect(components::Spell& spell, ParticleType type) override;
+	void StartCastEffect(components::Spell& spell, ParticleType type, bool synced) override;
 	[[nodiscard]] magic::FlockMiracleInterface* Flocks() override { return &_flocks; }
 	entt::entity CreateTeleportStone(const components::Spell& spell) override;
 	[[nodiscard]] bool CanPlaceTeleportStone(glm::vec3 point) const override;
@@ -305,6 +320,9 @@ private:
 
 	/// What the hand hands a miracle it casts: where it is, the camera, how it moves
 	[[nodiscard]] particles::ProcessInfo HandInfo() const;
+	/// What a miracle that follows the hand reads at the turn: the hand, the camera and the hand's velocity as the reports
+	/// of the player give them. Before the first report, the last values stay.
+	[[nodiscard]] particles::ProcessInfo TurnHandInfo(const particles::ProcessInfo& last, PlayerNames player) const;
 	/// The held seed's magic type and records
 	[[nodiscard]] MagicType HeldMagicType() const;
 	/// The object under the hand the held seed may be cast on: a creature for a creature spell
@@ -317,18 +335,32 @@ private:
 	void StoreHeldSeedIn(entt::entity dispenser);
 	/// Whether the held seed may be cast at the hand's point: on the map, by its cast rule, in the player's influence
 	[[nodiscard]] bool HandPointValid() const;
+	/// Whether the held seed may be cast at a point: in the player's influence, by its cast rule
+	[[nodiscard]] bool PointValidForHeld(glm::vec3 point) const;
 	/// A miracle held locked in the local hand that the hand moves outside its cast rule is let go, as the button would
-	void LetGoIfOutsideCastRule(const components::Spell& spell);
-	/// Carries out what the hand's casting state machine says
+	void LetGoIfOutsideCastRule();
+	/// Carries out what the hand's casting state machine says. The hand of this computer shows its part at once; the
+	/// casts and the let go of a locked miracle go as commands of the player, which a later turn does.
 	void Do(const magic::CastActions& actions);
-	/// The held seed's miracle cast at the hand's point, at the circle drawn, or on the object under the hand; or applied
-	/// again when it runs. The miracle, or none.
-	entt::entity CastHeldSeed(magic::CastTarget target);
+	/// The cast of the held seed as the hand of this computer finds it: on the thing under the hand, at the circle drawn
+	/// or at the hand's point. None when the hand may not cast there.
+	[[nodiscard]] std::optional<player_commands::HandCast> MakeCast(magic::CastTarget target);
+	/// The hand of this computer casts the held seed: the cast goes as a command of the player (DoCast)
+	void SendCast(magic::CastTarget target);
+	/// The let go of the miracle locked on in the hand goes as a command of the player (DoCastUnlock)
+	void SendCastUnlock();
+	/// Whether the miracle of the held seed runs from the hand, locked on
+	[[nodiscard]] bool HeldSpellRunsInHand() const;
+	/// At the turn: the held seed's miracle cast as the command gives it, or applied again when it runs. The miracle, or
+	/// none.
+	entt::entity CastHeldSeed(const player_commands::HandCast& cast);
 	/// What becomes of the seed once its miracle is cast: it stays, goes, or leaves the hand with its miracle
 	void AfterCast(entt::entity spell);
 	void FailCast();
 	/// The seed has gone from the hand, kept or not
 	void LetGoOfSeed(bool destroy);
+	/// Once a turn: the seed in the hand of the player that the miracles of the hand act on waits until it is ready
+	void HeldSeedTurn();
 	/// A locked miracle was let go: the seed keeps what is left for another go, if enough
 	void UnlockHeldMiracle();
 	/// The gesture events since the last frame: the circle remembered, a power-up, the seed dropped
@@ -383,6 +415,47 @@ private:
 	/// The tribal power of a player for a magic type
 	[[nodiscard]] float PlayerTribalPower(PlayerNames player, MagicType type) const;
 
+	/// While it lives, the miracles of the hand act on the hand of a player
+	class ActingAs
+	{
+	public:
+		ActingAs(MagicSystem& magic, PlayerNames player)
+		    : _magic(magic)
+		    , _before(std::exchange(magic._acting, player))
+		{
+		}
+		~ActingAs() { _magic._acting = _before; }
+		ActingAs(const ActingAs&) = delete;
+		ActingAs& operator=(const ActingAs&) = delete;
+		ActingAs(ActingAs&&) = delete;
+		ActingAs& operator=(ActingAs&&) = delete;
+
+	private:
+		MagicSystem& _magic;
+		std::optional<PlayerNames> _before;
+	};
+	/// The player whose hand the input and the frames of this computer move
+	[[nodiscard]] static PlayerNames OwnPlayer();
+	/// The player whose hand the miracles of the hand act on now: the player of the command, else the player of this
+	/// computer
+	[[nodiscard]] PlayerNames ActingPlayer() const { return _acting.value_or(OwnPlayer()); }
+	/// Whether the miracles of the hand act on the hand of this computer. Only that hand shows effects, plays sounds,
+	/// gives help and keeps the input of this computer.
+	[[nodiscard]] bool ActsOnOwnHand() const { return ActingPlayer() == OwnPlayer(); }
+	/// The seed in the left hand of a player, none for a player with no hands
+	[[nodiscard]] std::optional<entt::entity> HeldOf(PlayerNames player) const;
+	/// The seed in the hand of the player that the miracles of the hand act on now
+	[[nodiscard]] std::optional<entt::entity> Held() const { return HeldOf(ActingPlayer()); }
+	/// Puts a seed in the hand of the player that the miracles of the hand act on now, or empties it. A player with no
+	/// hands holds nothing.
+	void SetHeld(std::optional<entt::entity> seed);
+	/// Whether the player that the miracles of the hand act on now has a hand that can hold a seed
+	[[nodiscard]] bool HasActingHand() const;
+	/// The player whose hand holds the seed, if a hand holds it
+	[[nodiscard]] std::optional<PlayerNames> HolderOf(entt::entity seed) const;
+	/// Where the last report of the player put the left hand, none before the first report or off the land
+	[[nodiscard]] std::optional<glm::vec3> ReportedHandOf(PlayerNames player) const;
+
 	GameMagicWorld _world;
 	magic::FlockMiracle _flocks;
 	magic::SpellGrid _grid;
@@ -413,7 +486,10 @@ private:
 	float _handScale {1.0f};
 	/// Where the in-hand effect sat when it last stepped
 	glm::vec3 _handAtStep {0.0f};
-	std::optional<entt::entity> _held;
+	/// The player of the command that the turn does now. The hand of this player holds the seed that the miracles of
+	/// the hand act on. With no command, they act on the hand of this computer.
+	std::optional<PlayerNames> _acting;
+	/// The input of the hand of this computer
 	magic::CastInput _input;
 	/// The action button is down
 	bool _actionDown {false};

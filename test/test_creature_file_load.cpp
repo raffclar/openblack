@@ -59,3 +59,47 @@ TEST(CreatureFileLoad, TheCreatureFacesTheAngleOfANewObject)
 {
 	EXPECT_EQ(creature_file_load::k_StartYaw, 0.0f);
 }
+
+namespace
+{
+creature_file_load::BroughtRequest GoodBrought()
+{
+	return {.citadel = true, .file = true, .readable = true, .onMap = true, .species = CreatureType::Lion};
+}
+} // namespace
+
+TEST(CreatureFileLoad, AGodWithACitadelAndAFileBringsItsCreature)
+{
+	EXPECT_EQ(creature_file_load::WhyNotBrought(GoodBrought()), Refusal::None);
+}
+
+TEST(CreatureFileLoad, AGodWithNoCitadelBringsNoCreatureFirst)
+{
+	auto request = GoodBrought();
+	request.citadel = false;
+	request.file = false;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::NoCitadel);
+}
+
+TEST(CreatureFileLoad, AGodWithNoCreatureFilePlaysWithNoCreature)
+{
+	auto request = GoodBrought();
+	request.file = false;
+	request.readable = false;
+	request.species.reset();
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::NoFile);
+	request = GoodBrought();
+	request.readable = false;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::NoFile);
+}
+
+TEST(CreatureFileLoad, AnUnknownSpeciesComesBeforeAPlaceOffTheMap)
+{
+	auto request = GoodBrought();
+	request.species.reset();
+	request.onMap = false;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::UnknownSpecies);
+	request = GoodBrought();
+	request.onMap = false;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::OffMap);
+}

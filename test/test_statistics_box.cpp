@@ -62,6 +62,8 @@ const Row& RowNamed(const Page& page, const std::string& label)
 	ADD_FAILURE() << "no row " << label;
 	return page.rows.front();
 }
+/// A row of a page that is about to end would dangle, so the page must be kept in a variable
+const Row& RowNamed(Page&&, const std::string&) = delete;
 } // namespace
 
 TEST(StatisticsBoxPages, EachTabListsItsRowsInOrder)
@@ -143,7 +145,8 @@ TEST(StatisticsBoxRows, SingleFiguresAreAlwaysNumbersInTheLocalColour)
 	EXPECT_EQ(count.values, (std::vector<float> {113.0f}));
 	EXPECT_EQ(count.players, (std::vector<PlayerNames> {PlayerNames::PLAYER_TWO}));
 	EXPECT_FALSE(DrawnAsBar(count, true));
-	const auto& alignment = RowNamed(MakePage(Tab::Player, figures, PlayerNames::PLAYER_ONE), "HELP_TEXT_PAUSE_STATS_112");
+	const auto playerPage = MakePage(Tab::Player, figures, PlayerNames::PLAYER_ONE);
+	const auto& alignment = RowNamed(playerPage, "HELP_TEXT_PAUSE_STATS_112");
 	EXPECT_FALSE(DrawnAsBar(alignment, true));
 }
 
@@ -300,4 +303,21 @@ TEST(StatisticsGlobal, EveryEntityMadeOnTheLandCounts)
 	EXPECT_EQ(registry.GetEntitiesMade(), 0u);
 	registry.Create();
 	EXPECT_EQ(registry.GetEntitiesMade(), 1u);
+}
+
+TEST(StatisticsGlobal, EveryEntityThatGoesCounts)
+{
+	ecs::Registry registry;
+	const auto first = registry.Create();
+	const auto second = registry.Create();
+	EXPECT_EQ(registry.GetEntitiesGone(), 0u);
+	registry.Destroy(first);
+	EXPECT_EQ(registry.GetEntitiesGone(), 1u);
+	std::array<entt::entity, 1> more {second};
+	registry.Destroy(more.begin(), more.end());
+	EXPECT_EQ(registry.GetEntitiesGone(), 2u);
+	// Emptying the registry counts too, and the count does not start again
+	registry.Create();
+	registry.Reset();
+	EXPECT_GT(registry.GetEntitiesGone(), 2u);
 }
