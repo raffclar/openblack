@@ -302,6 +302,12 @@ TEST(ComputerPlayerStart, ASlotHasNoPlayerWhenItsGodHasACitadelAndNoHumanOrCompu
 	EXPECT_FALSE(SlotHasNoPlayer(false, false, false));
 }
 
+TEST(ComputerPlayerStart, TheMapScriptOfANetworkGameSwitchesNoComputerMind)
+{
+	EXPECT_TRUE(LandScriptSwitchesMind(false));
+	EXPECT_FALSE(LandScriptSwitchesMind(true));
+}
+
 TEST(ComputerPlayerStart, EachSlotWithNoPlayerGetsAComputerGodAndAGrownCreature)
 {
 	FakeSlotWorld world;
