@@ -111,6 +111,14 @@ def hand_deeds_in_file(path, until_turn=None):
         return {}
 
 
+def hand_deeds_of_both(first_path, second_path, last_turn):
+    """The deeds of the hand in two logs, each counted up to last_turn, and whether they are the same. The game can play
+    on a few turns after the last turn that it keeps a record of, so a deed after last_turn is not a difference."""
+    first = hand_deeds_in_file(first_path, last_turn)
+    second = hand_deeds_in_file(second_path, last_turn)
+    return first, second, first == second
+
+
 def expected_deeds(path):
     """The deeds that a recorded input expects of its hand, as {deed: least count}: the "expect" of an input file in the
     object form. A list of events expects none."""
