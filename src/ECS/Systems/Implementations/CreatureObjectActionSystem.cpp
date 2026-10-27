@@ -1373,16 +1373,20 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	{
 		const bool pickingUp = action.kind == Kind::PickUp;
 		action.eventMs = pickingUp ? points->pickUpMs : points->destroyMs;
+		// The corners are measured in the model's own size, and take the creature's scale each time the reach uses them
+		auto unscaled = transform;
+		unscaled.scale = glm::vec3(1.0f);
 		action.reach =
-		    MeasureReach(creature, transform, *points, pickingUp ? ReachWith::FingerEnds : ReachWith::Foot,
+		    MeasureReach(creature, unscaled, *points, pickingUp ? ReachWith::FingerEnds : ReachWith::Foot,
 		                 pickingUp ? creature_reach::k_PickUpAnimations : creature_reach::k_DestroyAnimations, action.eventMs);
 		if (!action.reach.has_value())
 		{
 			// Not posed yet: it tries again next turn
 			return;
 		}
-		action.maxReach = creature_reach::MaxReach(*action.reach);
 	}
+	const auto corners = creature_reach::Scaled(*action.reach, transform.scale.x);
+	action.maxReach = creature_reach::MaxReach(corners);
 	// The reach is measured from the way the creature faces now, which the drawn body catches up with only over a turn
 	const auto facing = AsFacing(registry, creature, transform);
 	// A villager or an animal that moves is reached for where it will be when the hand or foot gets there
@@ -1393,7 +1397,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	// After the turn to get the thing in reach, it reaches at once
 	if (std::exchange(action.turnedToReach, false))
 	{
-		BeginReaching(creature, action, animation, ReachFor(*action.reach, ToLocal(facing, reachPoint)));
+		BeginReaching(creature, action, animation, ReachFor(corners, ToLocal(facing, reachPoint)));
 		return;
 	}
 	const bool pickingUp = action.kind == Kind::PickUp;
@@ -1406,7 +1410,7 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		return;
 	}
 	// The test of the reach takes the place where the thing is now
-	const auto reach = ReachFor(*action.reach, ToLocal(facing, place));
+	const auto reach = ReachFor(corners, ToLocal(facing, place));
 	const float dx = place.x - transform.position.x;
 	const float dz = place.z - transform.position.z;
 	const float flatDistance = std::sqrt((dx * dx) + (dz * dz));
@@ -1426,9 +1430,8 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		}
 		// A thing outside the corners of its reach makes it turn first, so that the middle of its reach lies on the
 		// place where it reaches for the thing. Then it reaches.
-		const auto aimed = ReachFor(*action.reach, ToLocal(facing, reachPoint));
-		if (!aimed.blend.inRange &&
-		    locomotion.TurnToFace(creature, FacingToReach(facing, *action.reach, reachPoint, aimed.mirrored)))
+		const auto aimed = ReachFor(corners, ToLocal(facing, reachPoint));
+		if (!aimed.blend.inRange && locomotion.TurnToFace(creature, FacingToReach(facing, corners, reachPoint, aimed.mirrored)))
 		{
 			action.turnedToReach = true;
 			return;
@@ -2874,8 +2877,8 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 			const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(action.timeMs);
 			const auto aim = AimAt(living, place, creature_lead::ReachSeconds(ShownSize(body), msLeft));
 			const auto local = ToLocal(AsFacing(registry, entity, transform), aim);
-			const auto reach =
-			    creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(*action.reach) : *action.reach, local);
+			const auto corners = creature_reach::Scaled(*action.reach, transform.scale.x);
+			const auto reach = creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(corners) : corners, local);
 			if (!reach.inRange)
 			{
 				Fail(action, "it got out of reach");
