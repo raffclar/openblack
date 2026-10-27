@@ -1006,7 +1006,7 @@ void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const
 {
 	using creature_tree::Attribute;
 	namespace types = creature_tree::belief_types;
-	const auto onFire = [&registry, entity]() -> uint32_t {
+	const auto onFire = [entity]() -> uint32_t {
 		return creature_tree::OnFireValue(Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity));
 	};
 	switch (belief.type)
