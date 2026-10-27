@@ -52,7 +52,7 @@ void CreatureMindSystem::ReactToMusic(entt::entity creature, float mood)
 	// It is made to look or point at the camera, or to be sad, and the reaction's steps take the place of the plan's
 	const auto plan = creature_music::PlanFor(mood, Random(3));
 	creature_music::Camera camera;
-	if (const auto reported = openblack::ecs::ReportedPlayerCamera())
+	if (const auto reported = openblack::ecs::ReportedCreatureCamera(creature))
 	{
 		camera = {.position = reported->origin, .known = true};
 	}

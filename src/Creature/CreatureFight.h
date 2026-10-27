@@ -317,16 +317,17 @@ public:
 	/// Getting hit takes away a charged blow still waiting
 	void CancelWaiting();
 	[[nodiscard]] bool HasWaiting() const;
-	[[nodiscard]] size_t Size() const { return _count; }
+	[[nodiscard]] size_t Size() const { return static_cast<size_t>(_count); }
 	[[nodiscard]] bool Empty() const { return _count == 0; }
-	[[nodiscard]] std::span<const QueuedMove> Moves() const { return {_moves.data(), _count}; }
+	[[nodiscard]] std::span<const QueuedMove> Moves() const { return {_moves.data(), static_cast<size_t>(_count)}; }
 	/// The queue made these moves (as many as it holds) with their charges as given, a blow without a charge waiting
 	/// for the button to be let go if it is the last
 	void Assign(std::span<const QueuedMove> moves);
 
 private:
 	std::array<QueuedMove, k_Capacity> _moves {};
-	size_t _count {0};
+	/// 64 bits on every build, so that the saved bytes of the whole value are the same on each build
+	uint64_t _count {0};
 	/// The move added last is a blow waiting for the button to be let go
 	bool _awaitingRelease {false};
 
@@ -626,8 +627,6 @@ struct Fighter
 	/// It was told to hurry: the span of each turn is two times as long until the fight ends (see TestSpanMs)
 	bool hurried {false};
 	MoveQueue queue;
-	/// The sparkles marking the moves the player queued, in step with the queue
-	marks::MarkList marks;
 	float health {1.0f};
 	float stamina {1.0f};
 	Control control {Control::Computer};
@@ -640,6 +639,9 @@ void Enter(Fighter& fighter, State state, std::optional<size_t> animation = std:
 /// The player (or a script) adds a move: a creature the computer was fighting with is given back to the player, and
 /// the computer waits 15 seconds
 bool PlayerMove(Fighter& fighter, const Move& move, bool replace);
+/// As PlayerMove, with the sparkles that mark the queued moves on the computer of the player: a move in place of the
+/// queue keeps only the newest sparkle
+bool PlayerMove(Fighter& fighter, marks::MarkList& marks, const Move& move, bool replace);
 
 /// What to do with the move at the front of the queue
 struct Order
@@ -662,6 +664,8 @@ struct Order
 /// The move at the front of the queue taken off it, if one can be made now: only in range of the opponent, in the
 /// stance or blocking (when anything ends the block), and a blow only once its charge is known
 [[nodiscard]] std::optional<Order> TakeOrder(Fighter& fighter, bool inRange);
+/// As TakeOrder, with the sparkles that mark the queued moves: the sparkle of each move taken off the queue goes
+[[nodiscard]] std::optional<Order> TakeOrder(Fighter& fighter, marks::MarkList& marks, bool inRange);
 
 // The computer's choices
 

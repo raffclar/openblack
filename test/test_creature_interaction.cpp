@@ -104,6 +104,23 @@ TEST(CreatureReach, HeightDoesNotMatter)
 	}
 }
 
+// The corners of the model's own size take the scale that the creature has now. A creature that grew on its way stops
+// within its straight reach of the thing, and that place is in reach of its corners at the new scale only.
+TEST(CreatureReach, TheCornersTakeTheScaleOfNow)
+{
+	// Corners at the height of the creature's feet, so that the straight reach is the reach along the ground
+	const creature_reach::Points model {glm::vec3(2.0f, 0.0f, -1.0f), glm::vec3(-2.0f, 0.0f, -1.0f),
+	                                    glm::vec3(2.0f, 0.0f, -7.0f), glm::vec3(-2.0f, 0.0f, -7.0f)};
+	constexpr float k_Then = 0.0688f;
+	constexpr float k_Now = 0.0821f;
+	const auto scaled = creature_reach::Scaled(model, k_Now);
+	EXPECT_FLOAT_EQ(scaled.at(2).x, k_Now * 2.0f);
+	EXPECT_FLOAT_EQ(scaled.at(2).z, k_Now * -7.0f);
+	const glm::vec3 thing {0.0f, 0.0f, -0.99f * creature_reach::StraightReach(model, k_Now)};
+	EXPECT_TRUE(creature_reach::Solve(scaled, thing).inRange);
+	EXPECT_FALSE(creature_reach::Solve(creature_reach::Scaled(model, k_Then), thing).inRange);
+}
+
 // The straight reach counts the height the stretched hand is at, unlike the reach along the ground
 TEST(CreatureReach, TheStraightReachCountsHeight)
 {

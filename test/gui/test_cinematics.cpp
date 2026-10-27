@@ -97,6 +97,40 @@ TEST(CinemaBars, SlideInAndTurnBackFromWhereTheyAre)
 	EXPECT_FLOAT_EQ(bars.GetFraction(), 0.0f);
 }
 
+// The scripts wait for the bars of the turns. Only the time of the turns moves them, so they finish at the same turn at
+// any frame rate. The frames move only the drawn bars.
+TEST(CinemaBars, TheTurnsAloneFinishTheSlide)
+{
+	for (const float frameMs : {7.0f, 16.7f, 33.0f, 50.0f})
+	{
+		CinemaBars bars;
+		bars.Set(true, 1.0f);
+		int turns = 0;
+		while (!bars.IsTransitionFinished())
+		{
+			// The frames between two turns slide the drawn bars only
+			for (float spent = 0.0f; spent < 100.0f; spent += frameMs)
+			{
+				bars.Update(frameMs, 1.0f);
+			}
+			bars.ProcessTurn(100.0f, 1.0f);
+			++turns;
+		}
+		EXPECT_EQ(turns, 10) << frameMs;
+	}
+}
+
+// A load starts the drawn bars where the bars of the turns are
+TEST(CinemaBars, TheDrawnBarsStartFromTheTurnsAfterALoad)
+{
+	CinemaBars bars;
+	bars.Set(true, 2.0f);
+	bars.ProcessTurn(1000.0f, 2.0f);
+	EXPECT_FLOAT_EQ(bars.GetFraction(), 0.0f);
+	bars.DrawFromTurns();
+	EXPECT_FLOAT_EQ(bars.GetFraction(), 0.5f);
+}
+
 TEST(CinemaBars, BarsMakeThePictureSixteenByNine)
 {
 	// 768 - 576 is 192, 96 a bar

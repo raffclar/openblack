@@ -48,6 +48,11 @@ float magic::WorshipAvailable(const WorshipBattery& site)
 	return site.infinite ? k_InfiniteChants : site.available - site.used;
 }
 
+float magic::WorshipTotalAvailable(const WorshipBattery& site)
+{
+	return site.infinite ? k_InfiniteChants : site.available;
+}
+
 float magic::WorshipAvailableForIcons(const WorshipBattery& site, const WorshipBatteryRules& rules, bool seedsOut)
 {
 	const float available = WorshipAvailable(site);

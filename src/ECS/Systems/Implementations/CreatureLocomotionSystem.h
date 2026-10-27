@@ -37,6 +37,7 @@ public:
 	void ProcessTurn() override;
 	void CreatureTurn(entt::entity creature) override;
 	void Update(float turnFraction) override;
+	void ShowTurnEnds() override;
 	void ShowTurnEnd(entt::entity creature) override;
 
 	MoveResult MoveTo(entt::entity creature, glm::vec2 point, Pace pace, float minDistance, float maxDistance) override;

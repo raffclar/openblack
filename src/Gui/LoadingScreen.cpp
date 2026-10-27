@@ -10,6 +10,7 @@
 #include "LoadingScreen.h"
 
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
 #include <bgfx/bgfx.h>
@@ -144,6 +145,13 @@ LoadingScreen::LoadingScreen(TextDatabase texts, GameFont font, std::vector<uint
 }
 
 LoadingScreen::~LoadingScreen() = default;
+
+void LoadingScreen::SetBuild(std::string_view shortVersion)
+{
+	_build = u"openblack ";
+	std::ranges::transform(shortVersion, std::back_inserter(_build),
+	                       [](char character) { return static_cast<char16_t>(static_cast<unsigned char>(character)); });
+}
 
 void LoadingScreen::PrepareTip(uint32_t milliseconds, bool hasProfiles)
 {
@@ -401,6 +409,13 @@ void LoadingScreen::DrawTips(glm::u16vec2 resolution, float fade, float progress
 	_painter->DrawString(
 	    {static_cast<float>(width) - versionWidth - 2.0f, static_cast<float>(height) - layout.versionSize - 2.0f}, _version,
 	    layout.versionSize, glm::vec4(k_BackdropColour, alpha));
+
+	// The openblack build, in the bottom left corner, as small as the version
+	if (!_build.empty())
+	{
+		_painter->DrawString({2.0f, static_cast<float>(height) - layout.versionSize - 2.0f}, _build, layout.versionSize,
+		                     glm::vec4(k_BackdropColour, alpha));
+	}
 
 	DrawBar(layout, progress, levels.alpha);
 	_canvas.End();

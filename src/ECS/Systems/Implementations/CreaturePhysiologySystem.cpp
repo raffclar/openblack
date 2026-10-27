@@ -315,10 +315,10 @@ void CreaturePhysiologySystem::CreatureTurn(entt::entity entity)
 		auto shape = ShapeOf(creature);
 		// Not while a hand holds it
 		const bool autoScaled = creature.autoScale.has_value() && playersSize.has_value() && !registry.AllOf<InHand>(entity);
-		// While the player's hand holds it to interact with it, its body's turns stand still: it lives no turns and its
-		// body neither grows hungry, tired nor older
+		// While the hand of a player holds it to interact with it, its body's turns stand still: it lives no turns and
+		// its body neither grows hungry, tired nor older
 		const bool interacting =
-		    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == entity;
+		    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(entity);
 		for (uint32_t i = 0; i < (interacting ? 0 : turns); ++i)
 		{
 			if (autoScaled)

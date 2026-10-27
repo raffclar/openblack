@@ -14,6 +14,7 @@
 
 #include "Creature/LeashOrders.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -112,6 +113,8 @@ private:
 	components::CreatureLeash::Worn* TiedLeash(PlayerNames player);
 	/// The player's tied leash while the hand holds its rope
 	components::CreatureLeash::Worn* HeldLeash(PlayerNames player);
+	/// The rope of the player's worn leash as the frames draw it, none before the frames made it
+	components::CreatureLeashRope* DrawnRope(PlayerNames player);
 	/// The temple's leashes hang if the creature knows them, tumble and glow, the picked one carried in the hand
 	void UpdatePosts(float seconds);
 	/// Whether the posts have been looked for at the temples yet

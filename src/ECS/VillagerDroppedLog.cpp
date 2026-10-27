@@ -13,6 +13,7 @@
 
 #include <glm/gtx/euler_angles.hpp>
 
+#include "Common/PortableRotations.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/TownDesire.h"
@@ -53,7 +54,7 @@ entt::entity villager_dropped_log::Drop(systems::DynamicsSystemInterface& dynami
 	// A pine's trunk, a quarter turn over so that it lies along the ground, drawn as what the villager held, whatever it
 	// was; a tool too
 	const auto model = *villager_held::MeshOf(person->carried);
-	const auto lying = glm::mat3(glm::eulerAngleX(-std::numbers::pi_v<float> / 2.0f));
+	const auto lying = glm::mat3(portable_math::EulerAngleX(-std::numbers::pi_v<float> / 2.0f));
 	const auto log = archetypes::DeadTreeArchetype::Create(transform->position, TreeInfo::Pine, lying, 1.0f, model);
 	const auto& pine = constants.tree.at(static_cast<size_t>(TreeInfo::Pine));
 	registry.Get<DeadTree>(log).woodMultiplier =

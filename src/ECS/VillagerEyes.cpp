@@ -14,6 +14,8 @@
 #include <glm/geometric.hpp>
 #include <glm/mat3x3.hpp>
 
+#include "Common/PortableMath.h"
+
 namespace openblack::ecs::villager_eyes
 {
 
@@ -64,8 +66,8 @@ glm::mat4 Rolled(const glm::mat4& eye, float roll)
 	{
 		return eye;
 	}
-	const float c = std::cos(roll);
-	const float s = std::sin(roll);
+	const float c = portable_math::Cos(roll);
+	const float s = portable_math::Sin(roll);
 	auto rolled = eye;
 	rolled[0] = glm::vec4(glm::vec3(c * eye[0]) + glm::vec3(s * eye[2]), eye[0].w);
 	rolled[2] = glm::vec4(glm::vec3(c * eye[2]) - glm::vec3(s * eye[0]), eye[2].w);
@@ -75,8 +77,8 @@ glm::mat4 Rolled(const glm::mat4& eye, float roll)
 glm::mat4 Lid(const glm::mat4& eye, float closed, bool upper)
 {
 	const float angle = closed * (upper ? k_UpperLidShut : k_LowerLidShut);
-	const float c = std::cos(angle);
-	const float s = std::sin(angle);
+	const float c = portable_math::Cos(angle);
+	const float s = portable_math::Sin(angle);
 	auto lid = eye;
 	lid[1] = glm::vec4(glm::vec3(c * eye[1]) - glm::vec3(s * eye[2]), eye[1].w);
 	lid[2] = glm::vec4(glm::vec3(c * eye[2]) + glm::vec3(s * eye[1]), eye[2].w);
@@ -86,10 +88,10 @@ glm::mat4 Lid(const glm::mat4& eye, float closed, bool upper)
 int32_t Shade(Face face, Side side, const glm::mat4& eye)
 {
 	const auto angles = k_ShadeAngles.at(static_cast<size_t>(face)).at(static_cast<size_t>(side));
-	const float cosAcross = std::cos(angles.across);
-	const float sinAcross = std::sin(angles.across);
-	const float cosUp = std::cos(angles.up);
-	const float sinUp = std::sin(angles.up);
+	const float cosAcross = portable_math::Cos(angles.across);
+	const float sinAcross = portable_math::Sin(angles.across);
+	const float cosUp = portable_math::Cos(angles.up);
+	const float sinUp = portable_math::Sin(angles.up);
 	const glm::vec3 front {sinAcross * cosUp, -sinUp, -(cosAcross * cosUp)};
 	const auto facing = glm::normalize(glm::mat3(eye) * front);
 	const float lit = glm::dot(facing, glm::normalize(k_Sun)) * 255.0f;

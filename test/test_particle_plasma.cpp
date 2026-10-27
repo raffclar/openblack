@@ -51,8 +51,8 @@ public:
 class FakeRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t n) override { return n == 0 ? 0 : game_random::LHRand(n, _seeds.synced); }
-	float GameFloatRand(float x) override { return game_random::FloatRand(x, _seeds.synced); }
+	uint32_t SyncedRand(uint32_t n, DrawSite /*site*/) override { return n == 0 ? 0 : game_random::LHRand(n, _seeds.synced); }
+	float SyncedFloatRand(float x, DrawSite /*site*/) override { return game_random::FloatRand(x, _seeds.synced); }
 	uint32_t LocalRand(int32_t n) override { return n == 0 ? 0 : game_random::LHRand(static_cast<uint32_t>(n), _seeds.local); }
 	float LocalFloatRand(float x) override { return game_random::FloatRand(x, _seeds.local); }
 	int32_t CrtRand() override { return game_random::CrtRand(_crt); }
@@ -73,8 +73,8 @@ private:
 class ScriptedRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t n) override { return Draw(n); }
-	float GameFloatRand(float /*x*/) override { return 0.0f; }
+	uint32_t SyncedRand(uint32_t n, DrawSite /*site*/) override { return Draw(n); }
+	float SyncedFloatRand(float /*x*/, DrawSite /*site*/) override { return 0.0f; }
 	uint32_t LocalRand(int32_t n) override { return Draw(static_cast<uint32_t>(n)); }
 	float LocalFloatRand(float /*x*/) override { return 0.0f; }
 	int32_t CrtRand() override { return 0; }

@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Common/PortableRotations.h"
 #include "Common/X87.h"
 
 namespace openblack::hand_orientation
@@ -108,8 +109,8 @@ glm::mat3 TippedHand(const std::array<glm::vec3, 3>& rows)
 
 glm::mat3 TurnToHeading(const glm::mat3& facingCamera, glm::vec3 cameraHeading, glm::vec3 heading)
 {
-	const auto angle = std::atan2(glm::cross(cameraHeading, heading).y, glm::dot(cameraHeading, heading));
-	return glm::mat3(glm::rotate(glm::mat4(1.0f), angle, k_Up)) * facingCamera;
+	const auto angle = portable_math::Atan2(glm::cross(cameraHeading, heading).y, glm::dot(cameraHeading, heading));
+	return glm::mat3(portable_math::Rotate(glm::mat4(1.0f), angle, k_Up)) * facingCamera;
 }
 
 glm::mat3 StandOnSlope(const glm::mat3& onLevelLand, glm::vec3 heading, glm::vec3 up)
@@ -132,7 +133,7 @@ glm::mat3 TipForwards(const glm::mat3& onLevelLand, glm::vec3 heading, float ang
 	{
 		return onLevelLand;
 	}
-	return glm::mat3(glm::rotate(glm::mat4(1.0f), angle, glm::normalize(across))) * onLevelLand;
+	return glm::mat3(portable_math::Rotate(glm::mat4(1.0f), angle, glm::normalize(across))) * onLevelLand;
 }
 
 } // namespace openblack::hand_orientation

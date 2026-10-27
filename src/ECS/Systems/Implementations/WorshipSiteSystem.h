@@ -54,6 +54,7 @@ public:
 	float MaintainSpell(entt::entity site, float amount) override;
 	void ReturnChants(entt::entity site, float amount) override;
 	[[nodiscard]] float ChantsAvailable(entt::entity site) const override;
+	[[nodiscard]] float TotalChantsAvailable(entt::entity site) const override;
 	float TakeChantsForVirtualInfluence(PlayerNames player, uint32_t interfaces) override;
 	void BuildBy(entt::entity site, float share) override;
 	[[nodiscard]] bool IsBuilt(entt::entity site) const override;

@@ -148,6 +148,21 @@ private:
 	bool _shown {false};
 };
 
+/// The frames on which the inspector changes the drawn view to a different camera. The land's draw list holds the
+/// things near the camera of its last rebuild. The game rebuilds the list when a script puts its camera at a new place.
+/// Thus the inspector also asks for a rebuild when it starts to show its camera, shows a different one, or gives the
+/// camera back. If not, a picture's camera can look at a village that is not in the list, and only the shadows show.
+class ShownCameraCuts
+{
+public:
+	/// Call this one time each frame, with the pose that the inspector shows. Give none when the frame shows the game's
+	/// own camera. The result is true when this frame shows a different camera from the frame before.
+	[[nodiscard]] bool Next(const std::optional<CameraPose>& shown);
+
+private:
+	std::optional<CameraPose> _last;
+};
+
 /// An entity for the camera to look at, and from where: the angles and distance not given are the camera's own
 struct FrameRequest
 {

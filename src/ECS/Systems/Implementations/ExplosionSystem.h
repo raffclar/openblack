@@ -25,14 +25,17 @@ namespace openblack::ecs::systems
 class ExplosionSystem final: public ExplosionSystemInterface
 {
 public:
-	void AddRubble(const glm::vec3& centre, float yaw, float scale) override;
+	void AddRubble(const glm::vec3& centre, const glm::mat3& rotation, float scale) override;
 	void AddSmoke(const glm::vec3& centre, float size, dust_puff::Kind kind, std::optional<uint32_t> colour) override;
 	void AddShake(const glm::vec3& position, float radius, float strength, int32_t milliseconds, bool verticalOnly) override;
 	[[nodiscard]] bool IsShaking() const override { return !_shakes.empty(); }
 	void Update(float milliseconds) override;
+	void AgeRootsPiles(std::chrono::milliseconds gameTime) override;
+	[[nodiscard]] std::span<const roots_pile::Pile> RootsPiles() const override { return _piles; }
 	void CollectDrawFrame(particles::draw::Frame& frame) const override;
 	void AddGhost(const components::DestructionGhost& ghost) override { _ghosts.push_back(ghost); }
 	[[nodiscard]] std::span<const components::DestructionGhost> Ghosts() const override { return _ghosts; }
+	[[nodiscard]] std::span<const GroundMark> GroundMarks() const override { return _marks; }
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
@@ -41,6 +44,9 @@ private:
 	std::vector<camera_shake::Shake> _shakes;
 	std::vector<dust_puff::Puff> _puffs;
 	std::vector<components::DestructionGhost> _ghosts;
+	std::vector<GroundMark> _marks;
+	/// Not in the save: a pile is a mark that only this computer draws
+	std::vector<roots_pile::Pile> _piles;
 };
 
 } // namespace openblack::ecs::systems

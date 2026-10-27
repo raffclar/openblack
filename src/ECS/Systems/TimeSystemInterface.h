@@ -61,6 +61,9 @@ public:
 	virtual void StartTurn() = 0;
 	/// Works out the frame's game time and how far through its turn the game is, after the frame's turns
 	virtual void UpdateFrame() = 0;
+	/// Between two turns of one frame, as a computer that catches up does them: the frame clock takes the time of the
+	/// turn, as the frame after a turn does, and the frame keeps its count of turns
+	virtual void CatchUpFrame() {}
 
 	[[nodiscard]] virtual uint32_t GetTurn() const = 0;
 	/// How far the game is through the turn after the last one played, from 0 to 0.99
@@ -87,6 +90,9 @@ public:
 	/// never stops for one player, and its turns read no part of a frame
 	virtual void SetNetworkGame(bool networkGame) = 0;
 	[[nodiscard]] virtual bool IsNetworkGame() const = 0;
+	/// A player's computer in a network game does up to 10 turns a frame and keeps the time it lost, so that it catches up
+	/// with the server's turns, as the game does. The game server's own world turns as a game alone does.
+	virtual void SetCatchesUp([[maybe_unused]] bool catchesUp) {}
 	/// The game's speed: 1 is normal and 2 twice as fast. The time already gone keeps the speed it went at
 	virtual void SetSpeed(float speed) = 0;
 	[[nodiscard]] virtual float GetSpeed() const = 0;

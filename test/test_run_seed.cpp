@@ -109,6 +109,24 @@ TEST(RunSeed, OtherThreadsGeneralDrawsFollowTheSeed)
 	EXPECT_EQ(after, GeneralDraws(rng));
 }
 
+// The general draws of a thread belong to the manager that seeded last: a manager that takes the place of another, on a
+// thread that drew from the first, starts from its own seed
+TEST(RunSeed, ANewManagerOnTheSameThreadStartsFromItsOwnSeed)
+{
+	std::vector<int> first;
+	{
+		RandomNumberManagerProduction old;
+		old.SetRunSeed(5);
+		GeneralDraws(old, 3);
+	}
+	RandomNumberManagerProduction fresh;
+	fresh.SetRunSeed(5);
+	first = GeneralDraws(fresh);
+	RandomNumberManagerProduction again;
+	again.SetRunSeed(5);
+	EXPECT_EQ(GeneralDraws(again), first);
+}
+
 // The testing manager seeds alike
 TEST(RunSeed, TheTestingManagerSeedsAlike)
 {

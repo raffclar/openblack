@@ -18,8 +18,12 @@ struct EntranceTapFacts
 {
 	/// The scripts let the player tap the entrance
 	bool scriptLetsTap;
+	/// The game is a network game, where the scripts cannot stop the tap
+	bool networkGame;
 	/// The entrance is part of the temple of the player that taps it
 	bool ownTemple;
+	/// The hand that taps is the hand of this computer's player. The game server and an observer have no such hand.
+	bool byThisComputer;
 	/// The hand holds the loose leash of its creature, which takes the tap as an order
 	bool leashHeld;
 };
@@ -33,12 +37,13 @@ struct EntranceTap
 	bool enters;
 };
 
-/// A tap on a temple's entrance. A held leash takes the tap first. The scripts must let the player tap the entrance. Only
-/// the player's own entrance takes them into the temple.
+/// A tap on a temple's entrance. A held leash takes the tap first. In a game on one computer, the scripts must let the
+/// player tap the entrance. Only the player's own entrance takes them into the temple, and only on the computer of that
+/// player: every computer of a network game plays the tap, but only one computer goes into the temple.
 [[nodiscard]] constexpr EntranceTap TapEntrance(const EntranceTapFacts& facts)
 {
-	const bool tapped = facts.scriptLetsTap && !facts.leashHeld;
-	return {.tapped = tapped, .enters = tapped && facts.ownTemple};
+	const bool tapped = (facts.networkGame || facts.scriptLetsTap) && !facts.leashHeld;
+	return {.tapped = tapped, .enters = tapped && facts.ownTemple && facts.byThisComputer};
 }
 
 } // namespace openblack::temple

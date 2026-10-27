@@ -27,6 +27,7 @@
 #include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CaveCreature.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureLearning.h"
@@ -109,6 +110,13 @@ std::optional<cave_creature::Places> CavePlaces()
 	}
 	return cave_creature::Places {
 	    .seat = glm::vec3(marks[0][3]), .fire = glm::vec3(marks[1][3]), .back = glm::vec3(marks[2][3])};
+}
+
+/// The registry of the copy of the creature: the temple's rooms. Only the computer of the player in the temple makes
+/// the copy, so the copy must not take a number from the land's things, which every computer keeps the same.
+Registry* Copies()
+{
+	return Locator::temple::has_value() ? &Locator::temple::value().GetRooms() : nullptr;
 }
 } // namespace
 
@@ -361,7 +369,7 @@ bool CreatureCaveSystem::RemoveTattoo(uint8_t site)
 
 void CreatureCaveSystem::KeepCaveCreature()
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& land = Locator::entitiesRegistry::value();
 	if (!Locator::temple::value().Active())
 	{
 		DropCaveCreature();
@@ -371,8 +379,9 @@ void CreatureCaveSystem::KeepCaveCreature()
 	if (_caveCreature.has_value())
 	{
 		// The copy goes when the creature does
-		const auto* copy = registry.TryGet<const CreatureCopy>(*_caveCreature);
-		if (copy == nullptr || !registry.Valid(copy->creature))
+		const auto& copies = *Copies();
+		const auto* copy = copies.Valid(*_caveCreature) ? copies.TryGet<const CreatureCopy>(*_caveCreature) : nullptr;
+		if (copy == nullptr || !land.Valid(copy->creature))
 		{
 			DropCaveCreature();
 		}
@@ -393,13 +402,15 @@ void CreatureCaveSystem::KeepCaveCreature()
 
 void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& land = Locator::entitiesRegistry::value();
+	auto* copies = Copies();
 	const auto places = CavePlaces();
-	const auto* body = registry.TryGet<const Creature>(creature);
-	if (!places.has_value() || body == nullptr || !registry.AllOf<Mesh, CreatureMorph>(creature))
+	const auto* body = land.TryGet<const Creature>(creature);
+	if (copies == nullptr || !places.has_value() || body == nullptr || !land.AllOf<Mesh, CreatureMorph>(creature))
 	{
 		return;
 	}
+	auto& registry = *copies;
 	const auto size = cave_creature::SizeOf(body->size);
 	const auto coin = _random.LocalRand(2) != 0;
 	const auto rest = cave_creature::RestFor(size, coin);
@@ -408,7 +419,7 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 	const auto heading = cave_creature::HeadingTowards(position, places->fire);
 
 	const auto copy = registry.Create();
-	registry.Assign<Transform>(copy, position, glm::mat3(glm::eulerAngleY(heading.Yaw())),
+	registry.Assign<Transform>(copy, position, glm::mat3(portable_math::EulerAngleY(heading.Yaw())),
 	                           glm::vec3(archetypes::CreatureArchetype::DrawnScale(body->species, size)));
 	registry.Assign<CreatureCopy>(copy, creature, size);
 	const cave_creature::State state {.rest = rest, .heading = heading};
@@ -425,12 +436,11 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 
 void CreatureCaveSystem::DropCaveCreature()
 {
-	if (_caveCreature.has_value() && Locator::entitiesRegistry::has_value())
+	if (auto* copies = Copies(); _caveCreature.has_value() && copies != nullptr)
 	{
-		auto& registry = Locator::entitiesRegistry::value();
-		if (registry.Valid(*_caveCreature))
+		if (copies->Valid(*_caveCreature))
 		{
-			registry.Destroy(*_caveCreature);
+			copies->Destroy(*_caveCreature);
 		}
 	}
 	_caveCreature.reset();
@@ -438,11 +448,12 @@ void CreatureCaveSystem::DropCaveCreature()
 
 void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 {
-	if (!_caveCreature.has_value())
+	auto* copies = Copies();
+	if (!_caveCreature.has_value() || copies == nullptr || !copies->Valid(*_caveCreature))
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = *copies;
 	auto* copy = registry.TryGet<CreatureCopy>(*_caveCreature);
 	auto* cave = registry.TryGet<CaveCreature>(*_caveCreature);
 	auto* animation = registry.TryGet<CreatureAnimation>(*_caveCreature);
@@ -524,15 +535,16 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 		                            .blendedWith = turn.blendedWith,
 		                            .blendWeight = turn.blendWeight});
 	}
-	transform->rotation = glm::mat3(glm::eulerAngleY(state.heading.Yaw()));
+	transform->rotation = glm::mat3(portable_math::EulerAngleY(state.heading.Yaw()));
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		Locator::creatureAnimationSystem::value().PoseCopy(*_caveCreature, frameMs);
+		Locator::creatureAnimationSystem::value().PoseCopy(registry, *_caveCreature, frameMs);
 	}
 	// Its hair swings from the new pose, by the whole time of the frame
 	if (Locator::creatureHairSystem::has_value())
 	{
-		Locator::creatureHairSystem::value().StepCopy(*_caveCreature, std::chrono::duration<float, std::milli>(milliseconds));
+		Locator::creatureHairSystem::value().StepCopy(registry, *_caveCreature,
+		                                              std::chrono::duration<float, std::milli>(milliseconds));
 	}
 	if (frame.zoomed && mouse.has_value())
 	{
@@ -542,12 +554,13 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 
 void CreatureCaveSystem::HoverTattooSites(entt::entity copyEntity, glm::ivec2 pointer)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
+	auto& copies = *Copies();
 	auto& editor = Locator::tattooEditorSystem::value();
-	const auto* copy = registry.TryGet<const CreatureCopy>(copyEntity);
-	auto* cave = registry.TryGet<CaveCreature>(copyEntity);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(copyEntity);
-	const auto* transform = registry.TryGet<const Transform>(copyEntity);
+	const auto* copy = copies.TryGet<const CreatureCopy>(copyEntity);
+	auto* cave = copies.TryGet<CaveCreature>(copyEntity);
+	const auto* animation = copies.TryGet<const CreatureAnimation>(copyEntity);
+	const auto* transform = copies.TryGet<const Transform>(copyEntity);
 	const bool hasCreature = copy != nullptr && registry.Valid(copy->creature);
 	const auto* meshComponent = hasCreature ? registry.TryGet<const Mesh>(copy->creature) : nullptr;
 	const auto* body = hasCreature ? registry.TryGet<const Creature>(copy->creature) : nullptr;
@@ -620,13 +633,13 @@ void CreatureCaveSystem::StartCaveTurn(const CreatureCopy& copy, cave_creature::
 
 std::optional<creature_tattoo_editor::Orbit> CreatureCaveSystem::GetCaveCreatureView() const
 {
-	if (!_caveCreature.has_value())
+	const auto* copies = Copies();
+	if (!_caveCreature.has_value() || copies == nullptr || !copies->Valid(*_caveCreature))
 	{
 		return std::nullopt;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* copy = registry.TryGet<const CreatureCopy>(*_caveCreature);
-	const auto* transform = registry.TryGet<const Transform>(*_caveCreature);
+	const auto* copy = copies->TryGet<const CreatureCopy>(*_caveCreature);
+	const auto* transform = copies->TryGet<const Transform>(*_caveCreature);
 	if (copy == nullptr || transform == nullptr)
 	{
 		return std::nullopt;
@@ -636,14 +649,15 @@ std::optional<creature_tattoo_editor::Orbit> CreatureCaveSystem::GetCaveCreature
 
 bool CreatureCaveSystem::CursorOverCaveCreature(const screen_pick::View& view) const
 {
-	if (!_caveCreature.has_value())
+	const auto* copies = Copies();
+	if (!_caveCreature.has_value() || copies == nullptr || !copies->Valid(*_caveCreature))
 	{
 		return false;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* copy = registry.TryGet<const CreatureCopy>(*_caveCreature);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(*_caveCreature);
-	const auto* transform = registry.TryGet<const Transform>(*_caveCreature);
+	const auto* copy = copies->TryGet<const CreatureCopy>(*_caveCreature);
+	const auto* animation = copies->TryGet<const CreatureAnimation>(*_caveCreature);
+	const auto* transform = copies->TryGet<const Transform>(*_caveCreature);
 	if (copy == nullptr || animation == nullptr || transform == nullptr || !registry.Valid(copy->creature))
 	{
 		return false;

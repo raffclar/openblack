@@ -292,4 +292,9 @@ constexpr float k_LooksNearerTheCamera = 0.3f;
 /// lineOfSight is the way from the camera through the cursor
 [[nodiscard]] glm::vec3 HeldLookPoint(const glm::vec3& hand, const glm::vec3& middle, const glm::vec3& camera,
                                       const glm::vec3& lineOfSight, float creatureHeight);
+/// The look point of HeldLookPoint from the hand and the camera that a player reported. The hand is on the line of
+/// sight through the cursor, so the line from the camera to the hand gives the way of the line of sight. None when the
+/// hand is at the camera.
+[[nodiscard]] std::optional<glm::vec3> ReportedLookPoint(const glm::vec3& hand, const glm::vec3& middle,
+                                                         const glm::vec3& camera, float creatureHeight);
 } // namespace openblack::creature_feedback
