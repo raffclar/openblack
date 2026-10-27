@@ -220,6 +220,7 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	_landPath = path;
 
 	lhscriptx::Script script;
+	_runsNetworkMapScript = _humansFromSession;
 	try
 	{
 		// The tips screen is drawn again as the map's commands are carried out, when it is due
@@ -230,6 +231,7 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 		// A script that can't be read leaves the land as far as it got, rather than ending the game
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", path.generic_string(), e.what());
 	}
+	_runsNetworkMapScript = false;
 	_mapLandscape.clear();
 	// Every land of a network game fills its slots with no human after its script. Without a network session, only a
 	// land made for network play does.

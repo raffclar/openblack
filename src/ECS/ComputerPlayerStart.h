@@ -120,6 +120,9 @@ constexpr uint32_t k_SlotCreatureStage = 12;
 /// and no computer mind plays the god
 [[nodiscard]] bool SlotHasNoPlayer(bool human, bool computer, bool citadel);
 
+/// A line of a land script switches a computer mind on or off, but not while the map script of a network game runs
+[[nodiscard]] bool LandScriptSwitchesMind(bool networkMapScript);
+
 /// What the start of a network game reads and changes in the game when it fills the slots with no player
 class SlotWorld
 {

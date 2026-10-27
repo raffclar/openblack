@@ -429,6 +429,17 @@ bool InfluenceSystem::Shielded(PlayerNames player, const map_coords::MapCoords& 
 	return shielded;
 }
 
+float InfluenceSystem::CitadelReachOf(PlayerNames player) const
+{
+	const auto index = static_cast<size_t>(player);
+	const auto citadels = Citadels();
+	if (index >= citadels.size() || citadels.at(index) == entt::null)
+	{
+		return 0.0f;
+	}
+	return CitadelReach(citadels.at(index));
+}
+
 float InfluenceSystem::InfluencePower(PlayerNames player) const
 {
 	auto& registry = Locator::entitiesRegistry::value();
