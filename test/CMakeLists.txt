@@ -1892,3 +1892,6 @@ add_test(NAME test_save_diff
 )
 openblack_setup_and_add_test(test_scroll_pictures temple/test_scroll_pictures.cpp)
 openblack_setup_and_add_test(test_real_clock test_real_clock.cpp)
+openblack_setup_and_add_test(
+  test_footpath_system test_footpath_system.cpp
+)

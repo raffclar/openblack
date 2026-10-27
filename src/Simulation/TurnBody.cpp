@@ -141,6 +141,16 @@ void PlayPlayerTurns()
 	}
 }
 
+/// The footpaths go round what came onto the map since the last time, and stop going round what left it. The game does
+/// this as each thing comes onto the map or leaves it, so no walker after it sees the paths as they were.
+void FootpathsCatchUp()
+{
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ProcessObstacleChanges();
+	}
+}
+
 void PlayLivingTurn()
 {
 	using namespace ecs::components;
@@ -199,6 +209,8 @@ void PlayLivingTurn()
 				    // The flocks fly and the wolves run and hunt
 				    animals.AnimalTurn(living.id);
 			    }
+			    // What it put down or took away changes the paths before the next one takes its turn
+			    FootpathsCatchUp();
 		    });
 	}
 	if (animalsTurn)
@@ -953,7 +965,13 @@ void PlayTurn(TurnViewInterface& view)
 #endif
 	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn
 	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
-	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); }, decided);
+	game_turn::PlayTurn(
+	    [&view](game_turn::Step step) {
+		    PlayTurnStep(step, view);
+		    // What the step put down or took away changes the paths before the next step
+		    FootpathsCatchUp();
+	    },
+	    decided);
 }
 
 } // namespace openblack::simulation
