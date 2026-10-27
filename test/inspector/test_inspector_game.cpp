@@ -425,8 +425,8 @@ enum class Mood : int32_t
 TEST(InspectorReflection, ComponentsThatAreOneValueAreWrittenAsThatValue)
 {
 	entt::meta_ctx context;
-	reflection::Reflect<Mood>(context);
-	reflection::Reflect<int32_t>(context);
+	[[maybe_unused]] const reflection::Reflect<Mood> moodType {context};
+	[[maybe_unused]] const reflection::Reflect<int32_t> countType {context};
 	const Mood mood = Mood::Angry;
 	const int32_t count = 7;
 	EXPECT_EQ(reflection::ComponentToJson(context, entt::type_id<Mood>(), &mood), Json(3));
