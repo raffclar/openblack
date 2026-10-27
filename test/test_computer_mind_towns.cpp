@@ -118,3 +118,35 @@ TEST(ComputerMindRules, ContainerTakeKeepsToWhatTheContainerHas)
 	EXPECT_EQ(ContainerTake(900, 1000u, 3000), -100);
 	EXPECT_EQ(ContainerTake(900, std::nullopt, 0), 0);
 }
+
+TEST(ComputerMindTowns, OwnsTheWoodOfForests)
+{
+	EXPECT_EQ(DomainOf(NodeKind::ObjectGetWoodFromForest), MindDomain::Towns);
+}
+
+TEST(ComputerMindRules, LoneTreeWishFallsWithDistanceOnly)
+{
+	const SeenWood near {.forest = false, .kindWood = 200, .distanceToEdge = 0.0f};
+	const SeenWood far {.forest = false, .kindWood = 200, .distanceToEdge = 500.0f};
+	EXPECT_FLOAT_EQ(SeenWoodWish(near, 100.0f), gutils::DistanceChangeToBelief(0.0f, 100.0f) * 200.0f);
+	EXPECT_LT(SeenWoodWish(far, 100.0f), SeenWoodWish(near, 100.0f));
+	// The pull of the place does not change the wish of a lone tree
+	SeenWood pulled = near;
+	pulled.pull = 0.0f;
+	EXPECT_FLOAT_EQ(SeenWoodWish(pulled, 100.0f), SeenWoodWish(near, 100.0f));
+}
+
+TEST(ComputerMindRules, ForestWishCountsGrownTreesAndThePullTwoTimes)
+{
+	const SeenWood forest {.forest = true, .grownTrees = 4, .treeWood = 50.0f, .pull = 0.5f, .distanceToEdge = 10.0f};
+	const float near = gutils::DistanceChangeToBelief(10.0f, 100.0f);
+	EXPECT_FLOAT_EQ(SeenWoodWish(forest, 100.0f), 0.5f * (near * ((50.0f * 0.5f) * 4.0f)));
+	SeenWood outside = forest;
+	outside.pull = 0.0f;
+	EXPECT_EQ(SeenWoodWish(outside, 100.0f), 0.0f);
+}
+
+TEST(ComputerMindRules, ChosenTreeWishIsTheNearnessOfTheTree)
+{
+	EXPECT_FLOAT_EQ(ChosenTreeWish(25.0f, 80.0f), gutils::DistanceChangeToBelief(25.0f, 80.0f));
+}

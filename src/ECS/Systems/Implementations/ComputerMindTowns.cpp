@@ -18,19 +18,27 @@
 #include "ComputerMindRuleTable.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/LandForest.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ReportedHand.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/Tree.h"
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerMind.h"
 #include "ECS/ComputerMindRules.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -220,7 +228,7 @@ bool PickUpForTown(RuleContext& context, computer_mind::Mind& mind, uint16_t nod
 		return false;
 	}
 	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = thing}, Argument {.value = context.state.hand.speed}});
+	                   {Argument {.object = thing}, Argument {.value = context.state.speed}});
 	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandOnObject, {Argument {.object = store}});
 	return true;
 }
@@ -324,6 +332,106 @@ float FoodFromFishFarm(RuleContext& context, computer_mind::Mind& mind, uint16_t
 	}
 	mind.nodes[node].object = farms[*best];
 	return wishes[*best];
+}
+
+/// The map position of the hand that the god last reported: its place at the start of the last step of its hand.
+/// Before the first report, the start of the map.
+map_coords::MapCoords ReportedHandCoords(PlayerNames player)
+{
+	glm::vec3 hand {0.0f};
+	const auto hands = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player) : std::nullopt;
+	if (hands.has_value())
+	{
+		const auto left = hands->at(static_cast<size_t>(HandSystemInterface::Side::Left));
+		const auto* reported = Entities().Valid(left) ? Entities().TryGet<const ReportedHand>(left) : nullptr;
+		if (reported != nullptr)
+		{
+			hand = reported->handPoint;
+		}
+	}
+	return {.x = map_coords::ToFixed(hand.x), .z = map_coords::ToFixed(hand.z), .altitude = 0.0f};
+}
+
+/// What the god knows of a thing that it saw, for the wood of a town, and the tree that the thing gives
+struct SeenTree
+{
+	entt::entity tree {entt::null};
+	computer_mind_rules::SeenWood wood;
+};
+
+/// A forest gives its centre tree, and a lone tree gives itself. None for a miracle seed, a forest with no grown trees,
+/// and a tree that a script controls.
+std::optional<SeenTree> TreeOfSeen(const RuleContext& context, entt::entity thing, const map_coords::MapCoords& hand)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	const auto& forests = Locator::forestSystem::value();
+	SeenTree seen;
+	if (registry.AllOf<LandForest>(thing))
+	{
+		// A forest with no grown trees gives nothing, also when it has growing trees
+		const auto grown = static_cast<uint32_t>(forests.TreesOf(thing, false).size());
+		if (grown == 0)
+		{
+			return std::nullopt;
+		}
+		seen.tree = forests.CentreTreeOf(thing).value_or(entt::null);
+		seen.wood = {.forest = true, .grownTrees = grown};
+	}
+	else if (registry.AllOf<Tree>(thing))
+	{
+		seen.tree = thing;
+		const auto kind = static_cast<size_t>(registry.Get<const Tree>(thing).type);
+		seen.wood = {.forest = false, .kindWood = Locator::infoConstants::value().tree.at(kind).woodValue};
+	}
+	const auto coords = CoordsOfThing(seen.tree);
+	if (!coords.has_value() || registry.AllOf<ScriptControlled>(seen.tree))
+	{
+		return std::nullopt;
+	}
+	if (seen.wood.forest)
+	{
+		seen.wood.treeWood = forests.TreeWoodOf(seen.tree);
+		seen.wood.pull = PlacePull(context, *coords);
+	}
+	// The distance goes from the hand to the edge of the tree
+	seen.wood.distanceToEdge = gutils::GetDistanceInMetres(*coords, hand) - ecs::world_objects::SizeOf(seen.tree).radius;
+	return seen;
+}
+
+/// The tree that the god takes for a town that needs wood, from the forests and the lone trees that it saw. The thing
+/// that it saw last comes first, and the first of equal wishes wins. The node's object is the tree.
+float WoodFromForest(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	if (!Locator::forestSystem::has_value() || !Locator::influenceSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const float power = Locator::influenceSystem::value().InfluencePower(context.player);
+	const auto hand = ReportedHandCoords(context.player);
+	std::vector<entt::entity> trees;
+	std::vector<float> wishes;
+	for (const auto& seen : context.state.seen)
+	{
+		if (const auto tree = TreeOfSeen(context, seen.thing, hand))
+		{
+			trees.push_back(tree->tree);
+			wishes.push_back(computer_mind_rules::SeenWoodWish(tree->wood, power));
+		}
+	}
+	const auto best = computer_mind_rules::MostWanting(wishes);
+	if (!best.has_value())
+	{
+		return 0.0f;
+	}
+	const auto chosen = trees[*best];
+	mind.nodes[node].object = chosen;
+	// The value is how near the tree is to the place of the hand in the action, not the wish that chose it
+	return computer_mind_rules::ChosenTreeWish(
+	    gutils::GetDistanceInMetres(context.state.hand.coords, CoordsOfThing(chosen).value()), power);
 }
 
 /// The pile of a storage pit that the hand takes food or wood from: the food pile, or the last wood pile that holds wood.
@@ -516,6 +624,7 @@ void computer_world::RegisterTownsRules(RuleTable& table)
 	         .perform = CastFromIcon});
 	AddRule(table, k_Towns, NodeKind::ObjectGetFoodFromField, {.intensity = FoodFromField});
 	AddRule(table, k_Towns, NodeKind::ObjectGetFoodFromFishFarm, {.intensity = FoodFromFishFarm});
+	AddRule(table, k_Towns, NodeKind::ObjectGetWoodFromForest, {.intensity = WoodFromForest});
 	const auto otherFood = [](RuleContext& context, computer_mind::Mind& mind, uint16_t node) {
 		return FromOtherTown(context, mind, node, ResourceType::Food);
 	};

@@ -1880,3 +1880,11 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_influence_citadel_reach test_influence_citadel_reach.cpp)
+openblack_setup_and_add_test(
+  test_oracle_computer_forest_wood oracle/test_oracle_computer_forest_wood.cpp
+)
+set_tests_properties(
+  test_oracle_computer_forest_wood
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

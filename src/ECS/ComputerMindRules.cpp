@@ -192,6 +192,25 @@ float computer_mind_rules::FishFarmWish(float distanceFromHand, float placePull)
 	return placePull * near;
 }
 
+float computer_mind_rules::SeenWoodWish(const SeenWood& seen, float influencePower)
+{
+	const float near = gutils::DistanceChangeToBelief(seen.distanceToEdge, influencePower);
+	if (!seen.forest)
+	{
+		return near * static_cast<float>(seen.kindWood);
+	}
+	// The order of the products is the order of the game
+	float wish = seen.treeWood * seen.pull;
+	wish = wish * static_cast<float>(seen.grownTrees);
+	wish = near * wish;
+	return seen.pull * wish;
+}
+
+float computer_mind_rules::ChosenTreeWish(float distanceFromHand, float influencePower)
+{
+	return gutils::DistanceChangeToBelief(distanceFromHand, influencePower);
+}
+
 int32_t computer_mind_rules::FoodShortfall(float wanted, uint32_t held)
 {
 	// The whole number of food held is exact in the subtraction, which rounds one time

@@ -96,6 +96,40 @@ CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_FORESTER", 20)
 )";
 
+/// The two towns of the food scenario, but with no wood in either storage pit and no foresters in the west town. A small
+/// forest of six grown pines stands beside the storage pit of the west town.
+constexpr std::string_view k_ForestWoodScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "76.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "90.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 0)
+CREATE_ABODE(900, "110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "110.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_TOWN(901, "-80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(901, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(901, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(901, "-84.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(901, "-70.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 5000, 0)
+CREATE_ABODE(901, "-110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_FOREST(950, "-45.0,105.0")
+CREATE_NEW_TREE(950, "-51.0,101.0", 3, 1, 1.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-45.0,99.0", 3, 1, 2.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-39.0,102.0", 3, 1, 3.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-50.0,109.0", 3, 1, 4.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-44.0,106.0", 3, 1, 5.0, 1.0, 1.0)
+CREATE_NEW_TREE(950, "-38.0,110.0", 3, 1, 6.0, 1.0, 1.0)
+)";
+
 } // namespace
 
 void testbed_scenarios::AddComputerGodTownsScenarios(std::vector<Scenario>& all)
@@ -174,5 +208,21 @@ void testbed_scenarios::AddComputerGodTownsScenarios(std::vector<Scenario>& all)
 	                "original game. The hand holds the pot after the action.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 110.0f)}},
 	    .landScript = k_TwoTownsWoodScript,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_wood_from_forest",
+	    .name = "A computer god that takes a tree from a forest that it saw for its town",
+	    .facet = Facet::Mind,
+	    .description = "The two towns of the food scenario, with no wood in either storage pit. The west town has no "
+	                   "foresters, so its pit gets no wood. A small forest of six grown pines stands beside the storage "
+	                   "pit of the west town. The god sees only the things near its hand.",
+	    .expected = "The hand first takes food from the west town's pit to the east town's pit, and beside the west pit "
+	                "the god sees the forest. When a town next wants wood most, the hand moves to the centre tree of the "
+	                "forest, the grown tree nearest the middle of the forest, and pulls it out. Then the hand carries the "
+	                "tree to the storage pit of that town and drops it in, and the wood of the pit goes up. The god takes "
+	                "the trees one by one until the forest has no grown trees. The players.list query shows the need "
+	                "GetWoodFromForest with the tree, the hand and its steps.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 120.0f)}},
+	    .landScript = k_ForestWoodScript,
 	});
 }
