@@ -134,6 +134,10 @@ public:
 	/// The map script of a land of a network game runs now. While it runs, its lines do not switch a computer mind on or
 	/// off: the slots with no human get their computer gods after the script.
 	[[nodiscard]] virtual bool RunsNetworkMapScript() const = 0;
+
+	/// Tools only (the AI soak): every god with a citadel is a computer god when the land loads, also the god of this
+	/// computer. The slots fill then, and no human joins.
+	virtual void SetAllComputerGods(bool allComputer) = 0;
 	/// Starts the scripts of the challenge: the script machine reads the challenge file, and the story starts if asked.
 	/// Gives false when the challenge file is not there.
 	virtual bool StartChallengeScripts(bool startStory) = 0;

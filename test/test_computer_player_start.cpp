@@ -11,12 +11,15 @@
 
 #include <map>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/ComputerPlayerPersonality.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/PlayerMiracles.h"
 
@@ -68,6 +71,19 @@ public:
 		return share;
 	}
 
+	void SetPersonality(PlayerNames player, std::string_view need, float weight) override
+	{
+		personalities.push_back({player, std::string(need), weight});
+	}
+
+	struct PersonalityCall
+	{
+		PlayerNames player;
+		std::string need;
+		float weight;
+	};
+
+	std::vector<PersonalityCall> personalities;
 	std::map<PlayerNames, entt::entity> creatures;
 	std::map<entt::entity, float> sizes;
 	std::map<PlayerNames, bool> temples;
@@ -394,4 +410,46 @@ TEST(ComputerPlayerStart, TheGodsOfTheSlotsAreTheSevenPlayersInOrder)
 	{
 		EXPECT_EQ(static_cast<size_t>(k_SlotGods.at(i)), i);
 	}
+}
+
+TEST(ComputerPlayerStart, WithNoAiSeedTheMindSetsNoPersonalityWeight)
+{
+	FakeWorld world;
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind);
+	EXPECT_TRUE(world.personalities.empty());
+}
+
+TEST(ComputerPlayerStart, WithAnAiSeedTheMindSetsTheWeightOfEachNeedAndDrawsNoGameNumber)
+{
+	FakeWorld world;
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind, 7u);
+	ASSERT_EQ(world.personalities.size(), personality::k_Aspects.size());
+	for (size_t i = 0; i < personality::k_Aspects.size(); ++i)
+	{
+		EXPECT_EQ(world.personalities[i].player, PlayerNames::PLAYER_TWO);
+		EXPECT_EQ(world.personalities[i].need, personality::k_Aspects[i].name);
+	}
+	// The creature of this fake world is not there, so the start draws nothing: the seed adds no draw either
+	EXPECT_TRUE(world.rangesAsked.empty());
+	EXPECT_TRUE(world.mostsAsked.empty());
+}
+
+TEST(ComputerPlayerStart, TheAiSeedAddsNoDrawToAStartThatDrawsNumbers)
+{
+	FakeWorld plain;
+	FakeWorld seeded;
+	for (auto* world : {&plain, &seeded})
+	{
+		world->temples = {{PlayerNames::PLAYER_TWO, true}};
+		world->pens = {{PlayerNames::PLAYER_TWO, glm::vec3(1.0f, 2.0f, 3.0f)}};
+	}
+	auto mindA = SwitchedOnLikeThePerson();
+	auto mindB = SwitchedOnLikeThePerson();
+	Start(plain, PlayerNames::PLAYER_TWO, mindA);
+	Start(seeded, PlayerNames::PLAYER_TWO, mindB, 99u);
+	ASSERT_FALSE(plain.rangesAsked.empty());
+	EXPECT_EQ(plain.rangesAsked, seeded.rangesAsked);
+	EXPECT_EQ(plain.mostsAsked, seeded.mostsAsked);
 }

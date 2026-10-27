@@ -48,7 +48,8 @@ struct HostSettings
 	game_socket::Start start;
 	/// The checksum of the server's land file, which each player's land file must have before the start
 	uint64_t landChecksum {0};
-	/// The fewest gods with a player that start the game. The start comes when each god in the room is ready.
+	/// The fewest gods with a player that start the game. The start comes when each god in the room is ready. In a room
+	/// with no human god (tools), the world turns when this many observers joined.
 	uint32_t minGods {1};
 	/// The god slots of the room: the citadels of the land. A god who joins when all the slots have a player is refused.
 	uint8_t godSlots {k_DefaultGodSlots};
@@ -197,6 +198,8 @@ private:
 	/// The end box of a decided game opened on a client: no turn comes after the turns closed so far
 	void StopTurns();
 	[[nodiscard]] bool AnyGodConnected() const;
+	/// Tools: the room has no human god. The game starts at once, and observers watch it.
+	[[nodiscard]] bool AllComputerGods() const { return _settings.start.allComputerGods; }
 
 	WebSocketServerInterface& _sockets;
 	CheckTicket _checkTicket;
@@ -224,6 +227,10 @@ private:
 	/// The alignments that the gods sent with their creature files, by god slot
 	std::map<uint8_t, float> _startAlignments;
 	bool _pausedBefore {false};
+	/// Tools, a room with no human god: the world turns from the time that as many observers as the room waits for joined
+	bool _observersJoined {false};
+	/// Tools, a room with no human god: at least one observer joined, so a room with no observer left is over
+	bool _observerSeen {false};
 	uint32_t _turnsDone {0};
 	/// The last turn of the game, once the turns stopped
 	std::optional<uint32_t> _stoppedAfter;

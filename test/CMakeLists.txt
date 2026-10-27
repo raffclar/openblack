@@ -1163,6 +1163,9 @@ openblack_setup_and_add_test(
   test_computer_player_start test_computer_player_start.cpp
 )
 openblack_setup_and_add_test(
+  test_computer_player_personality test_computer_player_personality.cpp
+)
+openblack_setup_and_add_test(
   test_creature_file_load test_creature_file_load.cpp
 )
 openblack_setup_and_add_test(test_draw_window graphics/test_draw_window.cpp)
@@ -1813,6 +1816,9 @@ openblack_setup_and_add_test(test_join_online_entry test_join_online_entry.cpp)
 openblack_setup_and_add_test(test_row_dump test_row_dump.cpp)
 add_test(NAME test_row_dump_compare
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_row_dump.py
+)
+add_test(NAME test_ai_soak
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_ai_soak.py
 )
 openblack_setup_and_add_test(test_start_camera test_start_camera.cpp)
 openblack_setup_and_add_test(test_game_end test_game_end.cpp)

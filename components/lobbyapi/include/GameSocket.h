@@ -82,6 +82,11 @@ struct Start
 	std::string opening;
 	/// The network map for 32 gods in place of a land ("gods_ring_map", optional)
 	bool godsRingMap {false};
+	/// Tools: every god with a citadel is a computer god, and the room has no human god ("all_computer_gods", optional).
+	/// Only a developer build plays such a game.
+	bool allComputerGods {false};
+	/// Tools: the seed of the personalities of the computer gods ("ai_seed", optional). None: the built-in personalities.
+	std::optional<uint32_t> aiSeed;
 	/// The names of the players of the gods, by god slot ("names", optional). A slot with no player has an empty name.
 	std::vector<std::string> names;
 };
