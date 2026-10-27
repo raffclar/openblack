@@ -25,12 +25,12 @@ CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
 )";
 
 /// The lines of a land that give player two a computer mind, a temple and a Celtic town that offers the fireball miracle,
-/// with two abodes of people
+/// with four abodes of people
 constexpr std::string_view k_FireballTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
 CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
 CREATE_TOWN(900, "0.0,40.0", "PLAYER_TWO", 0, "CELTIC")
 SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
-CREATE_NEW_TOWN_SPELL(900, "FIREBALL")
+CREATE_NEW_TOWN_SPELL(900, "FIRE")
 SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
 CREATE_TOWN_CENTRE(900, "-4.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
 CREATE_ABODE(900, "10.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 3000)
@@ -39,6 +39,16 @@ CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
 CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "60.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-60.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_FORESTER", 20)
 CREATE_ABODE(900, "-40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
@@ -64,16 +74,28 @@ Command Weight(std::string_view node, float weight)
 
 /// At the start, the god of player two wants only to play with its creature, in one way:
 /// - The need to play gets the weight 1.
-/// - The needs to look after the worshippers, to look after the creature and to teach it get the weight 0.
+/// - The needs of the towns, to look after the creature and to teach it get the weight 0.
 /// - The way to play gets the weight 1. The throw of food gets the weight 0 when it is not the way.
 std::vector<Command> OnlyPlay(std::string_view way)
 {
-	std::vector<Command> commands {Weight("AttendToWorshippersWorshippers", 0.0f), Weight("Lookaftercreature", 0.0f),
+	std::vector<Command> commands {Weight("TownInteract", 0.0f), Weight("Lookaftercreature", 0.0f),
 	                               Weight("TeachCreature", 0.0f), Weight("PlayWithCreature", 1.0f)};
 	if (way != "ThrowFoodatCreature")
 	{
 		commands.push_back(Weight("ThrowFoodatCreature", 0.0f));
 	}
+	commands.push_back(Weight(way, 1.0f));
+	return commands;
+}
+
+/// The god strokes its creature first, so that its hand is near the town. The god looks for food and villagers only
+/// near its hand, and the hand starts far from the land. After 15 seconds, the god wants only to play in the way.
+std::vector<Command> StrokeThen(std::string_view way)
+{
+	auto commands = OnlyPlay("StrokeCreature");
+	auto stop = Weight("StrokeCreature", 0.0f);
+	stop.delaySeconds = 15.0f;
+	commands.push_back(stop);
 	commands.push_back(Weight(way, 1.0f));
 	return commands;
 }
@@ -88,15 +110,17 @@ void testbed_scenarios::AddComputerGodCreaturePlayScenarios(std::vector<Scenario
 	    .facet = Facet::Mind,
 	    .description = "The land of the food miracle scenario, with two ripe wheat fields to the east of the town. The "
 	                   "tiger of player two stands between the temple and the town. At the start, the god wants only to "
-	                   "play with its creature, and to throw food at it.",
-	    .expected = "The hand of the god takes food from a field. It moves to 20 metres from the tiger and throws the "
+	                   "play with its creature, and to stroke it. After 15 seconds, the god wants only to throw food at "
+	                   "it.",
+	    .expected = "The hand of the god strokes the tiger. Then the hand takes food from a field. It moves to 20 metres from "
+	                "the tiger and throws the "
 	                "food at the tiger in an arc. The food falls near the tiger.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(140.0f, 100.0f)}},
 	    .creatures = {GodCreature({30.0f, -30.0f})},
 	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {100.0f, 20.0f}, .ripeCrop = true},
 	                {.type = FieldTypeInfo::Wheat, .offset = {100.0f, 60.0f}, .ripeCrop = true}},
 	    .landScript = k_ComputerGodTownScript,
-	    .commands = OnlyPlay("ThrowFoodatCreature"),
+	    .commands = StrokeThen("ThrowFoodatCreature"),
 	    .worshipShare = 0.5f,
 	    .objectsAfterLandScript = true,
 	});
@@ -133,15 +157,17 @@ void testbed_scenarios::AddComputerGodCreaturePlayScenarios(std::vector<Scenario
 	    .name = "A computer god that ties the leash of its creature to a villager",
 	    .facet = Facet::Mind,
 	    .description = "Lines of a land give player two a temple to the south and a Celtic town to the north. The tiger of "
-	                   "player two stands between the temple and the town. At the start, the god wants only to play with "
-	                   "its creature, and to tie its leash to a thing that moves.",
-	    .expected = "The hand of the god moves to a free villager near the hand. The god ties the leash of the tiger to "
-	                "the villager, and the hand follows the villager for a time. The rope of the leash goes from the "
+	                   "player two stands in the town, near the people. At the start, the god wants only to play with its "
+	                   "creature, and to stroke it. After 15 seconds, the god wants only to tie its leash to a thing that "
+	                   "moves.",
+	    .expected = "The hand of the god strokes the tiger. Then the hand moves to a free villager near the hand. The god "
+	                "ties the leash of the tiger to the villager, and the hand follows the villager for a time. The rope of "
+	                "the leash goes from the "
 	                "collar of the tiger to the villager.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
-	    .creatures = {GodCreature({30.0f, -30.0f})},
+	    .creatures = {GodCreature({20.0f, 50.0f})},
 	    .landScript = k_FireballTownScript,
-	    .commands = OnlyPlay("AttachLeashtoMovingObject"),
+	    .commands = StrokeThen("AttachLeashtoMovingObject"),
 	});
 	auto laugh = OnlyPlay("CastSpellOnMyCreatureForALaugh");
 	laugh.push_back({.kind = Command::Kind::FillSiteIcons, .player = PlayerNames::PLAYER_TWO, .amount = 1.0f});
