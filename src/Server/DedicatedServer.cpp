@@ -411,14 +411,18 @@ bool ServerWorld::Frame()
 		Locator::handDemoSystem::value().Update();
 	}
 	// The scenario starts in the first frame and gives its commands in the frames before the turns, at the time of the
-	// game's debug windows
+	// game's debug windows. The game starts the scenario after its debug windows of the first frame, so the scenario
+	// gives its first commands in the second frame, as in the game.
 	if (_scenarioRunner != nullptr)
 	{
 		if (_scenario != nullptr)
 		{
 			_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
 		}
-		_scenarioRunner->Update(std::chrono::duration<float>(clock.GetFrameGameTime()).count());
+		else
+		{
+			_scenarioRunner->Update(std::chrono::duration<float>(clock.GetFrameGameTime()).count());
+		}
 	}
 	// The tools check that a world state loads into the same world: the server loads its own world once
 	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&

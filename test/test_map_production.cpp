@@ -16,6 +16,7 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
@@ -76,6 +77,22 @@ TEST_F(MapProductionFiling, AHandfulRefiledAsItIsMadeIsOnTheMapAtOnceAndOnlyOnce
 	const auto cell = map_coords::CellOf(glm::vec3(500.0f, 0.0f, 500.0f));
 	const auto inCell = map.GetAllInCell(cell);
 	EXPECT_EQ(std::ranges::count(inCell, handful), 1);
+}
+
+// A creature holds a pot. The pot is out of the map's cells. A load makes the pot again with what the save keeps, and the
+// pot stays out of the cells until the creature lets it go.
+TEST_F(MapProductionFiling, AThingThatACreatureHoldsStaysOutOfTheCellsAfterALoad)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = registry.Create();
+	const auto pot = registry.Create();
+	registry.Assign<Transform>(pot, glm::vec3(500.0f, 0.0f, 500.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Pot>(pot, Pot {.amount = 300, .maxAmount = 600, .type = PotInfo::WheatInHand});
+	registry.Assign<HeldByCreature>(pot, HeldByCreature {.creature = creature});
+	Locator::entitiesMap::value().Sync();
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(pot));
+	const auto inCell = Locator::entitiesMap::value().GetAllInCell(map_coords::CellOf(glm::vec3(500.0f, 0.0f, 500.0f)));
+	EXPECT_EQ(std::ranges::count(inCell, pot), 0);
 }
 
 TEST_F(MapProductionFiling, AVillagerThatAScriptMakesIsOnTheMapBeforeTheScriptReleasesIt)

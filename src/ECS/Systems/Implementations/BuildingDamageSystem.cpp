@@ -228,8 +228,9 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 	return parts;
 }
 
-/// Draws the building with what is left of its model
-void RedrawBuilding(building_world::World& world, entt::entity building, BuildingDamage& broken)
+/// Draws the building with what is left of its model. A new shape gets a model of a new version. After a load, the model
+/// of the version that the save keeps is made again, so that the synced fields of the damage do not change.
+void RedrawBuilding(building_world::World& world, entt::entity building, BuildingDamage& broken, bool newVersion = true)
 {
 	auto& registry = world.Entities();
 	const auto& transform = registry.Get<const Transform>(building);
@@ -245,7 +246,10 @@ void RedrawBuilding(building_world::World& world, entt::entity building, Buildin
 		return (glm::transpose(transform.rotation) * (point - transform.position)) / transform.scale;
 	};
 	world.EraseModel(broken.drawMesh);
-	++broken.version;
+	if (newVersion)
+	{
+		++broken.version;
+	}
 	broken.drawMesh = world.MakeModel(fmt::format("broken/{}/{}", entt::to_integral(building), broken.version),
 	                                  meshComponent.id, DrawnFaces(broken.mesh, toModel));
 	registry.SetDirty();
@@ -740,7 +744,7 @@ void BuildingDamageSystem::RemakeModelsAfterLoad()
 	});
 	for (const auto building : broken)
 	{
-		RedrawBuilding(world, building, registry.Get<BuildingDamage>(building));
+		RedrawBuilding(world, building, registry.Get<BuildingDamage>(building), false);
 	}
 	std::vector<entt::entity> pieces;
 	registry.Each<BuildingPiece>([&pieces](entt::entity piece, const BuildingPiece&) { pieces.push_back(piece); });

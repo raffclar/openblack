@@ -28,6 +28,7 @@
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/FishFarm.h"
@@ -260,9 +261,10 @@ void MapProduction::FileMadeBeforeLook() const
 	_made.clear();
 	for (const auto entity : made)
 	{
-		// What is held by a hand or moving in the physics stays out of the map's cells until it is put back
+		// What is held by a hand or a creature, or moves in the physics, stays out of the map's cells until it is put
+		// back. A load makes again a thing that a creature holds, and it must stay out of the cells as before the save.
 		if (!_registry->Valid(entity) || _registry->AllOf<MapCellResident>(entity) ||
-		    _registry->AnyOf<InHand, InPhysics>(entity))
+		    _registry->AnyOf<InHand, InPhysics, HeldByCreature>(entity))
 		{
 			continue;
 		}
