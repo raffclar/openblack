@@ -9,8 +9,14 @@
 
 #pragma once
 
+#include <cstdint>
+
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
+
+#include "Enums.h"
 
 namespace openblack::computer_hand
 {
@@ -34,6 +40,13 @@ public:
 	virtual void DropHeld(glm::vec3 hand) = 0;
 	/// The hand throws what it holds from where it is, at the speed
 	virtual void ThrowHeld(glm::vec3 hand, glm::vec3 velocity) = 0;
+	/// What the pot in the hand holds of the food or the wood. None when the hand holds no pot of it.
+	[[nodiscard]] virtual std::optional<uint32_t> HeldPotHolds(ResourceType type) const = 0;
+	/// The food or the wood that a thing has: a pile of a store answers for its store
+	[[nodiscard]] virtual uint32_t ResourceIn(entt::entity thing, ResourceType type) const = 0;
+	/// The hand takes food or wood out of a container. It adds the amount to the pot in its hand, or it makes a new pot
+	/// in the hand at the container. False when the hand gets no pot.
+	virtual bool TakeFromContainer(entt::entity container, ResourceType type, uint32_t amount, glm::vec3 hand) = 0;
 };
 
 } // namespace openblack::computer_hand

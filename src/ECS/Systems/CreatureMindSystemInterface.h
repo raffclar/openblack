@@ -371,6 +371,11 @@ public:
 	{
 		return false;
 	}
+	/// The god of the creature gives it an order, as the hand of a computer god does. The creature comes across the
+	/// thing and what the thing belongs to, a desire that was made dominant ends, and the creature does the action of
+	/// the game's table (by its row) to the thing for its desire to obey. The plan is forced and counts for that desire
+	/// at its end, also when the creature could not make it. Returns whether the action is in the table.
+	virtual bool ObeyGodOrder(entt::entity /*creature*/, uint32_t /*action*/, entt::entity /*object*/) { return false; }
 	/// Whether the creature has played what it was doing, as scripts ask: its agenda is over or it is only idle
 	[[nodiscard]] virtual bool HasPlayed(entt::entity /*creature*/) const { return true; }
 	/// A script asked and the creature has played: it stops the remaining steps of its agenda

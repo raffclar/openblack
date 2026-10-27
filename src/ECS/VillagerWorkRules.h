@@ -116,7 +116,7 @@ struct ForestCandidate
 /// its forests of lone trees nearer than the reach; the first of equals
 [[nodiscard]] std::optional<size_t> NearestTownForest(std::span<const ForestCandidate> forests, float reach);
 
-/// The tree in the middle of a forest: the nearest its place of its grown and its growing trees, the growing one when
+/// The tree in the middle of a forest: the nearest its place of its grown and its growing trees, the grown one when
 /// both are as near
 [[nodiscard]] std::optional<size_t> CentreTree(std::optional<float> nearestGrown, std::optional<float> nearestGrowing);
 
