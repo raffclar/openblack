@@ -33,8 +33,8 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
-#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorshipSites.h"
@@ -83,18 +83,25 @@ entt::entity TownOfTotem(const ecs::Registry& registry, entt::entity totem)
 
 /// Whether a creature may move a totem: the same rule as the hand that takes it. The totem is of a town of the player
 /// who watches the creature, and it works. The heart of that player's temple and the town's worship site stand built.
-/// The player who watches is the creature's own player, and only a player with hands watches.
+/// The player who watches is the creature's own player (see creature_town_help::WatchingPlayer).
 bool MayMoveTotem(const ecs::Registry& registry, entt::entity totem, entt::entity self)
 {
 	const auto town = TownOfTotem(registry, totem);
 	const auto* townComponent = town != entt::null ? registry.TryGet<const Town>(town) : nullptr;
 	const auto* creature = registry.Valid(self) ? registry.TryGet<const Creature>(self) : nullptr;
-	if (townComponent == nullptr || creature == nullptr || !Locator::handSystem::has_value() ||
-	    !Locator::handSystem::value().GetHandsOf(creature->owner).has_value())
+	if (townComponent == nullptr || creature == nullptr)
 	{
 		return false;
 	}
-	const auto player = creature->owner;
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto local =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto watcher = creature_town_help::WatchingPlayer(creature->owner, networkGame, local);
+	if (!watcher.has_value())
+	{
+		return false;
+	}
+	const auto player = *watcher;
 	bool heartBuilt = false;
 	registry.Each<const Temple>([&registry, player, &heartBuilt](entt::entity heart, const Temple& standing) {
 		heartBuilt = heartBuilt || (standing.owner == player && Built(registry, heart));
