@@ -138,6 +138,11 @@ creature_object_actions::ApproachStep creature_object_actions::NextApproachStep(
 	return flatDistance < straightReach || inRange ? ApproachStep::Begin : ApproachStep::WalkInReach;
 }
 
+creature_object_actions::MovingApproachStep creature_object_actions::NextMovingApproachStep(bool turnsToReach)
+{
+	return turnsToReach ? MovingApproachStep::WaitForTurn : MovingApproachStep::AimAgain;
+}
+
 float creature_object_actions::NearWalkDistance(float creatureRadius, float thingRadius)
 {
 	const float radii = creatureRadius + thingRadius;
