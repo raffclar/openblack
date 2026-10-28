@@ -334,14 +334,15 @@ void AddCreatureCatch(std::vector<Scenario>& all)
 
 void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
 {
-	// Boulders from the south break a hut, and the pieces fly north towards a tiger that faces the hut
-	constexpr glm::vec2 k_Hut = k_Field + glm::vec2 {0.0f, 10.0f};
-	std::vector<ObjectSetup> objects {{.type = AbodeInfo::CelticHut, .offset = k_Hut}};
+	// Boulders from the south break a creche, and the pieces fly north towards a tiger near the creche
+	constexpr glm::vec2 k_Creche = k_Field + glm::vec2 {0.0f, 10.0f};
+	std::vector<ObjectSetup> objects {{.type = AbodeInfo::CelticCreche, .offset = k_Creche}};
 	std::vector<ThrowSetup> throws;
 	for (size_t i = 0; i < 2; ++i)
 	{
 		const float x = i == 0 ? -2.0f : 2.0f;
-		objects.push_back({.type = MobileStaticInfo::Boulder2Chalk, .offset = k_Field + glm::vec2 {x, -20.0f}});
+		// Big boulders, too heavy for the tiger to catch
+		objects.push_back({.type = MobileStaticInfo::Boulder2Chalk, .offset = k_Field + glm::vec2 {x, -20.0f}, .scale = 4.0f});
 		throws.push_back({
 		    .object = objects.size() - 1,
 		    .from = k_Field + glm::vec2 {x, -20.0f},
@@ -353,17 +354,18 @@ void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
 	}
 	all.push_back({
 	    .id = "physics.creature_catches_building_piece",
-	    .name = "A creature catching a piece of a hut",
+	    .name = "A creature that tries to catch a piece of a building",
 	    .facet = Facet::Physics,
-	    .description = "Boulders thrown from the south break a hut again and again. A tiger stands north of the hut and "
-	                   "faces it.",
-	    .expected = "Pieces of the hut fly towards the tiger. The tiger turns to a piece that comes near and can catch it "
-	                "in its hand, as it catches a thrown villager.",
+	    .description = "Big boulders thrown from the south break a creche again and again. A tiger stands north east of "
+	                   "the creche.",
+	    .expected = "The tiger does not try to catch the boulders, because they are too heavy. Pieces of the creche fly "
+	                "north. The game log shows that the tiger is made to catch a piece. When its body is free, it turns "
+	                "to the piece and catches it in its hand, as it catches a thrown villager.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = glm::vec3(k_Field.x + 45.0f, 18.0f, k_Field.y + 20.0f),
 	                .look = glm::vec3(k_Field.x, 6.0f, k_Field.y + 20.0f)},
-	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field + glm::vec2 {0.0f, 30.0f}, .facingDegrees = 0.0f}},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field + glm::vec2 {14.0f, 18.0f}, .facingDegrees = 0.0f}},
 	    .objects = objects,
 	    .throws = throws,
 	});
