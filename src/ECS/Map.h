@@ -22,6 +22,7 @@
 
 namespace openblack::ecs
 {
+class Registry;
 
 /// What stands in each of the map's cells, kept in the game's order as things come, move and go (see MapCells.h): the
 /// things that stay put, then the things that move. Searches of a cell meet them in that order.
@@ -63,18 +64,31 @@ public:
 	/// What stands in cells of no land block, in the same order
 	[[nodiscard]] virtual std::span<const entt::entity> GetOffBlocks() const = 0;
 
-	/// Once a game turn, and after the turn's movement: whatever moved to another cell goes into it, as the game moves
-	/// things into their new cells
+	/// Whatever moved to another cell since it went into its cells goes into its new cell. The game's turn moves each
+	/// thing into its new cells as it moves it (see Moved), so this finds only what moved outside the turn.
 	virtual void Sync() = 0;
-	/// Files the things made since the last look, in the order they were made
-	virtual void FileMade() {}
 	/// A thing moved by a hand, a tool or a miracle goes into the cells it now stands in
 	virtual void Refile(entt::entity entity) = 0;
+	/// A thing that moves in the game's turn goes into its new cells at once, as the game moves it: a building as soon
+	/// as it is anywhere else, anything else when it is in another cell. Nothing changes for a thing that is not in the
+	/// cells.
+	virtual void Moved(entt::entity /*entity*/) {}
+	/// A thing in the cells that turns or changes its size comes out of its cells and goes in again, as the game does:
+	/// it covers the cells of its new outline, and it goes to the front of the lists of its cells. Nothing changes for a
+	/// thing that is not in the cells.
+	virtual void Reinsert(entt::entity /*entity*/) {}
+	/// The things made since the last look go into their cells now, in the order they were made, as the game puts a
+	/// thing in its cells when it makes it
+	virtual void FileNew() {}
 	/// After the load of a saved world: each thing goes back into the cells that it keeps, in the order of the things
 	virtual void FileResidents() = 0;
 	/// Whether a thing is in the map's cells. A new thing goes into them first. A thing of a kind that the map does not
 	/// keep in its cells counts as in the map.
 	[[nodiscard]] virtual bool InMap(entt::entity /*entity*/) const { return true; }
 };
+
+/// Whether a thing stands in the map's cells. The things made since the last look go into their cells first, so that a
+/// thing that was just made is in them, as in the game.
+[[nodiscard]] bool InMapCells(const Registry& registry, entt::entity entity);
 
 } // namespace openblack::ecs

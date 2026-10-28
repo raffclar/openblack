@@ -89,10 +89,30 @@ class FakeMinds final: public ecs::systems::ComputerPlayerSystemInterface
 public:
 	void SwitchOn(PlayerNames /*player*/, bool /*on*/) override {}
 	void SetCreatureLike(PlayerNames /*player*/, PlayerNames /*like*/) override {}
+	void SetActive(PlayerNames /*player*/, bool /*on*/) override {}
+	void SetPaused(PlayerNames /*player*/, bool /*paused*/) override {}
+	void SetPersonality(PlayerNames /*player*/, std::string_view /*name*/, float /*weight*/) override {}
+	void SetSuppression(PlayerNames /*player*/, std::string_view /*name*/, float /*suppression*/) override {}
+	[[nodiscard]] bool Ready(PlayerNames /*player*/) override { return true; }
+	bool ForceAction(PlayerNames /*player*/, std::string_view /*name*/, entt::entity /*first*/,
+	                 entt::entity /*second*/) override
+	{
+		return false;
+	}
+	void QueueAction(PlayerNames /*player*/, std::string_view /*name*/, entt::entity /*first*/,
+	                 entt::entity /*second*/) override
+	{
+	}
+	void ClearActions(PlayerNames /*player*/) override {}
+	void SetSpeed(PlayerNames /*player*/, float /*speed*/) override {}
+	void MoveHand(PlayerNames /*player*/, glm::vec3 /*place*/, float /*speed*/, bool /*fixedHeight*/) override {}
+	void SetHand(PlayerNames /*player*/, glm::vec3 /*place*/, bool /*fixedHeight*/) override {}
+	[[nodiscard]] std::optional<glm::vec3> HandPosition(PlayerNames /*player*/) override { return std::nullopt; }
 	void ProcessTurn() override {}
 	void FillEmptySlots(std::span<const PlayerNames> /*gods*/, std::span<const PlayerNames> /*humans*/) override {}
 	void WaitForHumans() override {}
 	void HumansJoined(std::span<const PlayerNames> humans) override { joins.emplace_back(humans.begin(), humans.end()); }
+	void SetAiSeed(std::optional<uint32_t> /*seed*/) override {}
 	std::vector<std::vector<PlayerNames>> joins;
 };
 

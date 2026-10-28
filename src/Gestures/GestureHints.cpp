@@ -13,10 +13,14 @@
 
 #include <algorithm>
 #include <map>
+#include <utility>
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Common/X87.h"
 #include "Gui/ScreenFit.h"
+#include "Magic/MiracleVisuals.h"
 
 using namespace openblack;
 using namespace openblack::gesture_hints;
@@ -40,31 +44,68 @@ float Share(float share, float rowWidth)
 }
 
 /// Where the hint of a request goes in the row, none for a request that is not hinted
-std::optional<int> OrderOf(gesture::Purpose purpose, LeashType leash)
+std::optional<int> OrderOf(const gesture::Request& request)
 {
-	switch (purpose)
+	switch (request.purpose)
 	{
 	case gesture::Purpose::LeashGesture:
 		return k_LeashGestureOrder;
 	case gesture::Purpose::PickLeash:
-		return static_cast<int>(leash) + k_LeashOrderBase;
+		return static_cast<int>(request.leash) + k_LeashOrderBase;
 	case gesture::Purpose::FightSpecialMove:
 		return k_SpecialMoveOrder;
 	case gesture::Purpose::FightMiracle:
 		return k_FightMiracleOrder;
+	case gesture::Purpose::OpenSelection:
+		return request.forCreature ? k_CreatureSelectionOrder : k_OwnSelectionOrder;
+	case gesture::Purpose::RepeatMiracle:
+		return k_RepeatOrder;
+	case gesture::Purpose::SelectMiracle:
+		return k_SelectionStepOrder;
+	case gesture::Purpose::SizeCircle:
+		return k_SizeCircleOrder;
+	case gesture::Purpose::PowerUp:
+		return k_PowerUpOrderBase + request.powerUpLevel;
+	case gesture::Purpose::DropSeed:
+		// Only the scribble that calls off a power-up asked for
+		if (request.powerUpLevel >= 0)
+		{
+			return k_CancelPowerUpOrder;
+		}
+		return std::nullopt;
 	default:
 		return std::nullopt;
 	}
 }
+
+/// The seed pictured over the hint of a request, and its power-up level
+std::pair<SpellSeedType, int> PictureOf(const gesture::Request& request)
+{
+	switch (request.purpose)
+	{
+	case gesture::Purpose::FightMiracle:
+	case gesture::Purpose::RepeatMiracle:
+		return {request.seed, -1};
+	case gesture::Purpose::OpenSelection:
+		return {request.forCreature ? k_CreatureSelectionSeed : SpellSeedType::None, -1};
+	case gesture::Purpose::PowerUp:
+		return {request.seed, request.powerUpLevel};
+	case gesture::Purpose::DropSeed:
+		return {request.seed, -1};
+	default:
+		return {SpellSeedType::None, -1};
+	}
+}
 } // namespace
 
-std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requests, const ShapeOf& shapeOf)
+std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requests, const ShapeOf& shapeOf,
+                                          const MagicOf& magicOf)
 {
 	// One hint a gesture, the last asked for it standing, taken in the order of the gestures' numbers
 	std::map<GestureType, const gesture::Request*> byGesture;
 	for (const auto& request : requests)
 	{
-		if (OrderOf(request.purpose, request.leash).has_value() && request.gesture != GestureType::None)
+		if (OrderOf(request).has_value() && request.gesture != GestureType::None)
 		{
 			byGesture[request.gesture] = &request;
 		}
@@ -75,11 +116,16 @@ std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requ
 	{
 		const bool fight =
 		    request->purpose == gesture::Purpose::FightMiracle || request->purpose == gesture::Purpose::FightSpecialMove;
+		const auto [seed, powerUp] = PictureOf(*request);
+		const bool shown = seed != SpellSeedType::None;
 		Hint hint {
 		    .gesture = gesture,
-		    .order = OrderOf(request->purpose, request->leash).value_or(0),
+		    .order = OrderOf(*request).value_or(0),
 		    .leash = fight ? LeashType::None : request->leash,
-		    .seed = request->purpose == gesture::Purpose::FightMiracle ? request->seed : SpellSeedType::None,
+		    .seed = seed,
+		    .powerUp = shown ? powerUp : -1,
+		    .magic = shown && magicOf ? magicOf(seed, powerUp) : MagicType::None,
+		    .globe = request->purpose == gesture::Purpose::OpenSelection && !request->forCreature,
 		};
 		auto shape = shapeOf ? shapeOf(gesture) : std::nullopt;
 		if (!shape.has_value())
@@ -104,7 +150,8 @@ std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requ
 bool gesture_hints::Differs(std::span<const Hint> shown, std::span<const Hint> next)
 {
 	return !std::ranges::equal(shown, next, [](const Hint& a, const Hint& b) {
-		return a.gesture == b.gesture && a.order == b.order && a.leash == b.leash && a.seed == b.seed;
+		return a.gesture == b.gesture && a.order == b.order && a.leash == b.leash && a.seed == b.seed &&
+		       a.powerUp == b.powerUp && a.magic == b.magic && a.globe == b.globe;
 	});
 }
 
@@ -285,6 +332,61 @@ glm::mat4 gesture_hints::CollarProjection(const PixelRect& rect, glm::vec2 centr
 	return projection;
 }
 
+void gesture_hints::StepPicture(SeedPicture& picture, float seconds)
+{
+	const auto turn = [](float angle) {
+		const float wrapped = std::fmod(angle, glm::two_pi<float>());
+		return wrapped < 0.0f ? wrapped + glm::two_pi<float>() : wrapped;
+	};
+	picture.spin = turn((k_SeedSpin * seconds) + picture.spin);
+	// The rings spin only round a seed that has them
+	if (picture.powerUp >= 0)
+	{
+		picture.ringSpin = turn((magic::visuals::k_RingSpin * seconds) + picture.ringSpin);
+	}
+	if (magic::visuals::IsPhialSeed(picture.seed))
+	{
+		picture.phialFrame = magic::visuals::StepPhialFrame(picture.phialFrame, seconds);
+		picture.phialPhase =
+		    std::fmod(picture.phialPhase + (magic::visuals::PhialPulseSpeed(picture.phialReceiveType) * seconds), 1.0f);
+	}
+}
+
+glm::vec3 gesture_hints::SeedMiddle()
+{
+	return k_CollarAt;
+}
+
+glm::vec3 gesture_hints::HolderPoint(float holderHeight)
+{
+	return k_CollarAt + glm::vec3(0.0f, holderHeight * k_SeedScale, 0.0f);
+}
+
+glm::mat4 gesture_hints::GlobeModel()
+{
+	// A quarter turn about the x axis, in single precision: the up axis goes nearly to the camera, the depth axis up
+	constexpr float k_QuarterTurn = glm::half_pi<float>();
+	const double c = x87::Cos(k_QuarterTurn);
+	const double s = x87::Sin(k_QuarterTurn);
+	glm::mat4 model(1.0f);
+	model[0] = glm::vec4(k_GlobeScale, 0.0f, 0.0f, 0.0f);
+	model[1] = glm::vec4(0.0f, x87::Mul(c, k_GlobeScale), -x87::Mul(s, k_GlobeScale), 0.0f);
+	model[2] = glm::vec4(0.0f, x87::Mul(s, k_GlobeScale), x87::Mul(c, k_GlobeScale), 0.0f);
+	model[3] = glm::vec4(k_CollarAt, 1.0f);
+	return model;
+}
+
+uint8_t gesture_hints::PictureAlpha(float alpha)
+{
+	constexpr float k_Full = 255.0f;
+	return static_cast<uint8_t>(std::clamp(alpha * k_Full, 0.0f, k_Full));
+}
+
+uint8_t gesture_hints::SeedRingAlpha(uint8_t drawnAlpha)
+{
+	return static_cast<uint8_t>((static_cast<uint32_t>(k_SeedRingAlpha) * drawnAlpha) >> 8u);
+}
+
 void gesture_hints::Step(Row& row, float seconds, bool wordsShowing)
 {
 	row.alpha = Fade(row.alpha, seconds, wordsShowing);
@@ -304,5 +406,12 @@ void gesture_hints::Step(Row& row, float seconds, bool wordsShowing)
 			row.collars.at(leash) = Tumble(row.collars.at(leash), hint.leash, seconds);
 		}
 		hint.dot = StepDot(hint.dot, seconds, hint.period);
+		if (hint.seed != SpellSeedType::None)
+		{
+			if (const auto picture = row.seeds.find(hint.magic); picture != row.seeds.end())
+			{
+				StepPicture(picture->second, seconds);
+			}
+		}
 	}
 }

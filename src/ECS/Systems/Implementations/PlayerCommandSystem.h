@@ -40,6 +40,8 @@ public:
 	[[nodiscard]] bool IsBehind(uint32_t turn) const override { return _source != nullptr && _source->IsBehind(turn); }
 
 private:
+	/// At the start of a network game, each god starts at the alignment that its player sent
+	void StartGodsAtSentAlignments(std::span<const PlayerNames> joined);
 	/// At the start of a network game, the god of each human that joined brings its player's creature
 	void BringCreatures(std::span<const PlayerNames> joined);
 

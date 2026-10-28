@@ -18,9 +18,9 @@
 namespace openblack::sim_run
 {
 
-bool DrawsFrame(const Settings& settings, uint64_t frame)
+bool DrawsFrame(const Settings& settings, uint64_t frame, bool pictureWanted)
 {
-	if (!settings.fast)
+	if (!settings.fast || pictureWanted)
 	{
 		return true;
 	}

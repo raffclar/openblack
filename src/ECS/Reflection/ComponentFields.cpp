@@ -61,6 +61,7 @@ void RegisterFields_Values_l(entt::meta_ctx& context);
 void RegisterFields_Values_z(entt::meta_ctx& context);
 void RegisterFields_Values_a(entt::meta_ctx& context);
 void RegisterFields_Values_ca(entt::meta_ctx& context);
+void RegisterFields_Values_co(entt::meta_ctx& context);
 void RegisterFields_Values_creaturea(entt::meta_ctx& context);
 void RegisterFields_Values_creatured(entt::meta_ctx& context);
 void RegisterFields_Values_creaturee(entt::meta_ctx& context);
@@ -134,6 +135,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	RegisterFields_Values_z(context);
 	RegisterFields_Values_a(context);
 	RegisterFields_Values_ca(context);
+	RegisterFields_Values_co(context);
 	RegisterFields_Values_creaturea(context);
 	RegisterFields_Values_creatured(context);
 	RegisterFields_Values_creaturee(context);

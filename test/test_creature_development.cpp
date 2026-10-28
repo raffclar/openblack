@@ -68,6 +68,13 @@ TEST(CreatureDevelopment, OnlyOffTheLeashOnTheFirstLandAndThePlayersOwn)
 	EXPECT_FALSE(KeptAtHome(someoneElses));
 }
 
+TEST(CreatureDevelopment, ANetworkGameKeepsNoCreatureAtHome)
+{
+	auto creature = YoungOnFirstLand();
+	creature.networkGame = true;
+	EXPECT_FALSE(KeptAtHome(creature));
+}
+
 TEST(CreatureDevelopment, ACreatureIsMadeFullyGrownUp)
 {
 	EXPECT_FALSE(KeptAtHome({.localPlayers = true, .land = k_TrainingLand}));

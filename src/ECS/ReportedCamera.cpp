@@ -49,4 +49,23 @@ std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCreatureCame
 	return ReportedPlayerCamera(body->owner);
 }
 
+std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCameraOfItsPlayer(entt::entity creature)
+{
+	if (IsNetworkGame())
+	{
+		return ReportedCreatureCamera(creature);
+	}
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const components::Creature>(creature) : nullptr;
+	if (body == nullptr || body->owner != PlayerNames::PLAYER_ONE)
+	{
+		return std::nullopt;
+	}
+	return ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+}
+
 } // namespace openblack::ecs

@@ -35,6 +35,10 @@ public:
 	/// The audio of a turn of the temple, while the player is in the temple and the world is paused. A view with no
 	/// audio does nothing.
 	virtual void PlayTempleAudioTurn() {}
+
+	/// The developer tools of this computer that act before each turn, as a testbed scenario of a network game does. A
+	/// view with no such tools does nothing.
+	virtual void BeforeTurn() {}
 };
 
 /// A view that does nothing, for a world with no player in front of it. It gives the statistics a fixed frame rate.

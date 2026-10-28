@@ -96,6 +96,9 @@ public:
 	virtual bool Toggle(entt::entity creature) = 0;
 	/// Swaps the leash worn for another the creature knows, or picks the one to put on next
 	virtual bool ChangeType(entt::entity creature, LeashType type) = 0;
+	/// The player picks a leash for their creature with a gesture or a key. The player cannot do this while a nice or
+	/// nasty spell is on the creature.
+	virtual bool PickType(PlayerNames player, LeashType type) = 0;
 	/// Ties the worn leash to something, or puts the picked leash on tied to it
 	virtual bool TieTo(entt::entity creature, entt::entity object) = 0;
 	virtual void UntieToHand(entt::entity creature) = 0;
@@ -180,6 +183,9 @@ public:
 	/// The world does an order of a player to their creature on the leash, at the start of a turn: an order on a thing,
 	/// an order at a place, a tie of the leash to a thing, or an untie
 	virtual void DoOrder(PlayerNames /*player*/, const player_commands::LeashOrder& /*order*/) {}
+	/// At the turn: the hand of the player let go of the rope of the tied leash, which becomes this long
+	/// (player_commands::LeashLength)
+	virtual void DoLeashLength(PlayerNames /*player*/, float /*length*/) {}
 };
 
 } // namespace openblack::ecs::systems

@@ -165,6 +165,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-frame-guard-fields", "Tools: as --sim-frame-guard, and the fields of the components too.")
 		("sim-frame-guard-systems", "Tools: as --sim-frame-guard, and the saved state of each system too. A system can keep state that the turns read outside the registry.")
 		("sim-frame-guard-from", "Tools: the turn at which --sim-frame-guard starts to look (0 by default).", cxxopts::value<uint32_t>()->default_value("0"))
+		("sim-all-computer-gods", "Tools: every god with a citadel is a computer god, also the god of this computer, and no human plays (the AI soak). The hand of this computer does nothing.")
+		("sim-ai-seed", "Tools: the seed of the personalities of the computer gods (the AI soak).", cxxopts::value<uint32_t>())
 		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
 		("sim-trace-draws", "Tools: write each draw on the synced random seed to this file, with its turn and the place of its call in the source (tools/sim/draw_trace.py compares two files).", cxxopts::value<std::string>());
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -181,7 +183,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-hash-parts", "Tools: with --sim-record, also keep in each record the hash of the transforms of the entities of each component, to find what made two runs part.")
 		("sim-hash-fields", "Tools: as --sim-hash-parts, and the synced hash of each field of each component too. The records get large: use it with few records.")
 		("sim-record-input", "Tools: record the input that the game makes from the first frame of the first land on (also the input of the fight autopilot), and write it to this file as the game ends, as --sim-input reads it.", cxxopts::value<std::string>())
-		("sim-input", "Tools: the first land makes the recorded input of this file from its first frame on, as the inspector's input.replay. The file is a list of {frame, event}, as input.record answers it.", cxxopts::value<std::string>())
+		("sim-input", "Tools: works alone and starts the inspector on a free port when --inspect-port is not given. The first land makes the recorded input of this file from its first frame on, as the inspector's input.replay. The file is a list of {frame, event}, as input.record answers it.", cxxopts::value<std::string>())
 		("sim-commands", "Tools: write the commands of each turn to this file, as JSON lines, for a dedicated server that does the same commands (openblack-server --commands).", cxxopts::value<std::string>())
 		("sim-limits", "Tools: with --sim-record, the JSON table of how long a plan or an activity can stay the same (tools/sim/stuck_limits.json).", cxxopts::value<std::string>())
 		("inspect-port", "Start the debug inspector on this port of 127.0.0.1 (0 for any free port), for agents and tools to query and control the game. The player's mouse and keyboard are kept out while a client is connected; Ctrl+Alt+Shift+F12 takes the game back.", cxxopts::value<uint16_t>())
@@ -431,6 +433,11 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			                            ? openblack::sim_run::HashDetail::Components
 			                            : openblack::sim_run::HashDetail::None;
 			simulation.frameGuardFrom = result["sim-frame-guard-from"].as<uint32_t>();
+			simulation.soak.allComputerGods = result.count("sim-all-computer-gods") != 0;
+			if (result.count("sim-ai-seed") != 0)
+			{
+				simulation.soak.aiSeed = result["sim-ai-seed"].as<uint32_t>();
+			}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 			if (result.count("sim-row-dump") != 0)
 			{
@@ -541,35 +548,43 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			        result.count("fight-autopilot-sequence") != 0 ? result["fight-autopilot-sequence"].as<std::string>() : "",
 			};
 		}
-		if (result.count("sim-record") != 0)
+		const bool simRecord = result.count("sim-record") != 0;
+		const bool simInput = result.count("sim-input") != 0;
+		const bool simCommands = result.count("sim-commands") != 0;
+		const bool simLimits = result.count("sim-limits") != 0;
+		if (simRecord || simInput || simCommands || simLimits)
 		{
 			if (!args.simulation.has_value())
 			{
 				args.simulation = openblack::sim_run::Request {};
 			}
-			args.simulation->recordPath = std::filesystem::path(result["sim-record"].as<std::string>());
-			args.simulation->recordEvery = std::max(1u, result["sim-record-every"].as<uint32_t>());
-			args.simulation->hashParts = result["sim-hash-fields"].as<bool>()  ? openblack::sim_run::HashDetail::Fields
-			                             : result["sim-hash-parts"].as<bool>() ? openblack::sim_run::HashDetail::Components
-			                                                                   : openblack::sim_run::HashDetail::None;
-			args.simulation->startPaused = result["sim-start-paused"].as<bool>();
-			if (result.count("sim-record-input") != 0)
+			if (simRecord)
 			{
-				args.simulation->recordInputPath = std::filesystem::path(result["sim-record-input"].as<std::string>());
+				args.simulation->recordPath = std::filesystem::path(result["sim-record"].as<std::string>());
+				args.simulation->recordEvery = std::max(1u, result["sim-record-every"].as<uint32_t>());
+				args.simulation->hashParts = result["sim-hash-fields"].as<bool>()  ? openblack::sim_run::HashDetail::Fields
+				                             : result["sim-hash-parts"].as<bool>() ? openblack::sim_run::HashDetail::Components
+				                                                                   : openblack::sim_run::HashDetail::None;
+				args.simulation->startPaused = result["sim-start-paused"].as<bool>();
+				if (result.count("sim-record-input") != 0)
+				{
+					args.simulation->recordInputPath = std::filesystem::path(result["sim-record-input"].as<std::string>());
+				}
 			}
-			if (result.count("sim-input") != 0)
+			if (simInput)
 			{
 				args.simulation->inputPath = std::filesystem::path(result["sim-input"].as<std::string>());
 			}
-			if (result.count("sim-commands") != 0)
+			if (simCommands)
 			{
 				args.simulation->commandsPath = std::filesystem::path(result["sim-commands"].as<std::string>());
 			}
-			if (result.count("sim-limits") != 0)
+			if (simLimits)
 			{
 				args.simulation->limitsPath = std::filesystem::path(result["sim-limits"].as<std::string>());
 			}
-			if (!args.inspectPort.has_value())
+			// The record and the input replay both go through the inspector
+			if ((simRecord || simInput) && !args.inspectPort.has_value())
 			{
 				args.inspectPort = 0;
 			}
