@@ -136,6 +136,50 @@ TEST(FootpathPlanning, LandWaterIsGoneRoundOnlyWhenAsked)
 	EXPECT_EQ(footpath.All().front().circle.centre, glm::vec2(205.0f, 205.0f));
 }
 
+// A cell knows if a blocked cell, or a water cell, is in it or next to it on the land
+TEST(FootpathPlanning, ACellKnowsTheBlockedCellsNextToIt)
+{
+	std::vector<route::Ground> cells(static_cast<size_t>(route::k_CellsPerSide * route::k_CellsPerSide), route::Ground::Open);
+	cells.at(static_cast<size_t>(20 * route::k_CellsPerSide + 20)) = route::Ground::Blocked;
+	cells.at(static_cast<size_t>(40 * route::k_CellsPerSide + 40)) = route::Ground::Water;
+	cells.at(0) = route::Ground::Blocked;
+	const auto land = route::WalkableLand::OfCells(cells);
+	for (int32_t z = 19; z <= 21; ++z)
+	{
+		for (int32_t x = 19; x <= 21; ++x)
+		{
+			EXPECT_TRUE(land.HasBlockedNear(x, z, false));
+		}
+	}
+	EXPECT_FALSE(land.HasBlockedNear(22, 20, false));
+	EXPECT_FALSE(land.HasBlockedNear(20, 18, true));
+	// Water counts only when asked
+	EXPECT_FALSE(land.HasBlockedNear(41, 41, false));
+	EXPECT_TRUE(land.HasBlockedNear(41, 41, true));
+	EXPECT_FALSE(land.HasBlockedNear(42, 41, true));
+	// At the edge of the land, and off the land
+	EXPECT_TRUE(land.HasBlockedNear(1, 1, false));
+	EXPECT_FALSE(land.HasBlockedNear(-1, 0, true));
+	EXPECT_FALSE(land.HasBlockedNear(route::k_CellsPerSide, 0, true));
+}
+
+// A cell with no blocked cell next to it adds no circle; a cell next to a blocked cell adds the circles of the cells
+// round it
+TEST(FootpathPlanning, OnlyACellNextToABlockedCellAddsCircles)
+{
+	std::vector<route::Ground> cells(static_cast<size_t>(route::k_CellsPerSide * route::k_CellsPerSide), route::Ground::Open);
+	cells.at(static_cast<size_t>(20 * route::k_CellsPerSide + 20)) = route::Ground::Blocked;
+	const auto land = route::WalkableLand::OfCells(cells);
+	route::Obstacles far;
+	far.ResetWithoutWalker(0.0f);
+	route::AddLandCircles(land, {30, 30}, far, true);
+	EXPECT_TRUE(far.All().empty());
+	route::Obstacles near;
+	near.ResetWithoutWalker(0.0f);
+	route::AddLandCircles(land, {21, 20}, near, true);
+	EXPECT_FALSE(near.All().empty());
+}
+
 TEST(FootpathPlanning, WhatAPathGoesRound)
 {
 	using obstacles::Avoidance;

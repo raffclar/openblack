@@ -78,9 +78,53 @@ ArcEnds ArcEndsOf(const Circle& circle, Way way, glm::vec2 from, glm::vec2 to)
 }
 } // namespace
 
+namespace
+{
+constexpr uint8_t k_NearBlocked = 1U;
+constexpr uint8_t k_NearWater = 2U;
+} // namespace
+
 WalkableLand::WalkableLand()
     : _cells(static_cast<size_t>(k_CellsPerSide * k_CellsPerSide), Ground::Open)
+    , _near(_cells.size(), 0)
 {
+}
+
+void WalkableLand::FindNear()
+{
+	_near.assign(_cells.size(), 0);
+	const auto bitOf = [](Ground ground) -> uint8_t {
+		return ground == Ground::Blocked ? k_NearBlocked : (ground == Ground::Water ? k_NearWater : 0);
+	};
+	for (int32_t z = 0; z < k_CellsPerSide; ++z)
+	{
+		for (int32_t x = 0; x < k_CellsPerSide; ++x)
+		{
+			const auto bit = bitOf(_cells[static_cast<size_t>((z * k_CellsPerSide) + x)]);
+			if (bit == 0)
+			{
+				continue;
+			}
+			// The cell is next to each cell round it on the land, and to itself
+			for (auto nz = std::max(z - 1, 0); nz <= std::min(z + 1, k_CellsPerSide - 1); ++nz)
+			{
+				for (auto nx = std::max(x - 1, 0); nx <= std::min(x + 1, k_CellsPerSide - 1); ++nx)
+				{
+					_near[static_cast<size_t>((nz * k_CellsPerSide) + nx)] |= bit;
+				}
+			}
+		}
+	}
+}
+
+bool WalkableLand::HasBlockedNear(int32_t x, int32_t z, bool countWater) const
+{
+	if (x < 0 || z < 0 || x >= k_CellsPerSide || z >= k_CellsPerSide)
+	{
+		return false;
+	}
+	const auto near = _near[static_cast<size_t>((z * k_CellsPerSide) + x)];
+	return (near & (countWater ? (k_NearBlocked | k_NearWater) : k_NearBlocked)) != 0;
 }
 
 WalkableLand WalkableLand::Build(const CornerHeight& height, const CellWater& water)
@@ -154,6 +198,7 @@ WalkableLand WalkableLand::Build(const CornerHeight& height, const CellWater& wa
 	}
 	if (sizes.empty())
 	{
+		land.FindNear();
 		return land;
 	}
 	const auto largest = static_cast<int32_t>(std::distance(sizes.begin(), std::ranges::max_element(sizes)));
@@ -166,6 +211,7 @@ WalkableLand WalkableLand::Build(const CornerHeight& height, const CellWater& wa
 		const auto wet = water(static_cast<int32_t>(i % k_CellsPerSide), static_cast<int32_t>(i / k_CellsPerSide));
 		land._cells[i] = !wet.has_value() || *wet ? Ground::Water : Ground::Open;
 	}
+	land.FindNear();
 	return land;
 }
 
@@ -187,6 +233,7 @@ WalkableLand WalkableLand::OfCells(std::vector<Ground> cells)
 {
 	WalkableLand land;
 	std::ranges::copy(cells | std::views::take(land._cells.size()), land._cells.begin());
+	land.FindNear();
 	return land;
 }
 
