@@ -16,9 +16,15 @@ god with a still hand, the other gods are computer gods, and the observers watch
 personalities of the gods. The games need a build with the developer tools and the AI soak modes (--bin, or the build
 folder of this tree).
 
-The runner checks the processor, the memory and the disk before each game (the processor under 75 %, at least 16 GB of
-memory free, at least 150 GB free on the drive of the output folder) and waits until they allow a game. It stops only the
+The runner checks the processor, the memory and the disk before each game and waits until they allow a game. On the PC:
+the processor under 75 %, at least 16 GB of memory free, at least 150 GB free on the drive of the output folder. On the
+Mac build box, which other lanes also use: the processor under 75 %, at least 6 GB of memory free, at least 30 GB of disk
+free, and at most 4 game programs (openblack and openblack-server, of all lanes) with the programs of the new game. The
+options --cpu-limit, --free-memory-gb, --free-disk-gb and --most-game-programs change the limits. It stops only the
 net_check processes that it started, by their process ids.
+
+On the Mac the tools need Python with the modules cryptography and psutil (the lanes use the virtual environment
+~/projects/openblack/cache/simvenv). tools/sim/desync_soak.sh runs a soak on the Mac or on the PC with one command.
 
 Exit code: 0 when every game stayed in step, 1 when a game parted or failed, 2 for a wrong command line or a tree that
 cannot play the modes.
@@ -39,13 +45,39 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 NET_CHECK = os.path.join(HERE, "net_check.py")
-DEFAULT_OUT = os.environ.get("OB_AI_SOAK_OUT", "E:/openblack/sim-runs/ai-soak")
-DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
+import sim_paths  # noqa: E402
+
+DEFAULT_OUT = os.environ.get("OB_AI_SOAK_OUT", os.path.join(sim_paths.DEFAULT_RUNS, "ai-soak"))
+DEFAULT_BUILDS = sim_paths.DEFAULT_BUILDS
 
 # The limits that a game needs (the lead's rules for the shared computer)
 CPU_LIMIT_PERCENT = 75.0
 FREE_MEMORY_GB = 16.0
 FREE_DISK_GB = 150.0
+# The most turns of a game (net_check's limit)
+MOST_TURNS = 100000
+# The names of the game programs, which the limit of game programs counts
+GAME_PROGRAMS = ("openblack", "openblack-server", "openblack.exe", "openblack-server.exe")
+
+
+@dataclasses.dataclass(frozen=True)
+class Limits:
+    """What the computer must allow before a game starts. most_game_programs is the most game programs that may run with
+    those of the new game (None: no limit)."""
+    cpu_percent: float
+    free_memory_gb: float
+    free_disk_gb: float
+    most_game_programs: object = None
+
+
+# The PC: the lead's rules for the shared computer
+PC_LIMITS = Limits(CPU_LIMIT_PERCENT, FREE_MEMORY_GB, FREE_DISK_GB)
+# The Mac build box (12 cores, 24 GB): other lanes build there; at most 4 game programs at a time (the user, 2026-10-28)
+MAC_LIMITS = Limits(75.0, 6.0, 30.0, 4)
+
+
+def default_limits():
+    return MAC_LIMITS if sim_paths.IS_MAC else PC_LIMITS
 # How long the runner waits for the computer to be free before it gives up, in seconds
 WAIT_LIMIT_SECONDS = 4 * 3600
 POLL_SECONDS = 30.0
@@ -219,35 +251,41 @@ def summary_row(game, status, summary, started, started_clock, finished_clock, r
 
 
 class Guard:
-    """Waits until the computer allows a game: processor, memory and disk. The probes are functions, so that tests give
-    their own."""
+    """Waits until the computer allows a game: processor, memory, disk and, where there is a limit, the count of game
+    programs. The probes are functions, so that tests give their own."""
 
     def __init__(self, out, probes=None, sleep=time.sleep, clock=time.monotonic, wait_limit=WAIT_LIMIT_SECONDS,
-                 poll=POLL_SECONDS):
+                 poll=POLL_SECONDS, limits=None):
         self.out = out
         self.probes = probes or default_probes(out)
         self.sleep = sleep
         self.clock = clock
         self.wait_limit = wait_limit
         self.poll = poll
+        self.limits = limits or default_limits()
 
-    def blockers(self):
-        """The reasons why no game may start now; empty when a game may start"""
+    def blockers(self, programs=0):
+        """The reasons why no game with this many programs may start now; empty when the game may start"""
+        limits = self.limits
         cpu, memory, disk = self.probes["cpu"](), self.probes["memory_gb"](), self.probes["disk_gb"]()
         reasons = []
-        if cpu >= CPU_LIMIT_PERCENT:
-            reasons.append(f"processor {cpu:.0f} % (limit {CPU_LIMIT_PERCENT:.0f} %)")
-        if memory < FREE_MEMORY_GB:
-            reasons.append(f"free memory {memory:.1f} GB (needs {FREE_MEMORY_GB:.0f} GB)")
-        if disk < FREE_DISK_GB:
-            reasons.append(f"free disk {disk:.0f} GB (needs {FREE_DISK_GB:.0f} GB)")
+        if cpu >= limits.cpu_percent:
+            reasons.append(f"processor {cpu:.0f} % (limit {limits.cpu_percent:.0f} %)")
+        if memory < limits.free_memory_gb:
+            reasons.append(f"free memory {memory:.1f} GB (needs {limits.free_memory_gb:.0f} GB)")
+        if disk < limits.free_disk_gb:
+            reasons.append(f"free disk {disk:.0f} GB (needs {limits.free_disk_gb:.0f} GB)")
+        if limits.most_game_programs is not None and "game_programs" in self.probes:
+            running = self.probes["game_programs"]()
+            if running + programs > limits.most_game_programs:
+                reasons.append(f"game programs {running} running + {programs} new (limit {limits.most_game_programs})")
         return reasons
 
-    def wait(self):
+    def wait(self, programs=0):
         """Waits for the computer; raises TimeoutError after the wait limit"""
         end = self.clock() + self.wait_limit
         while True:
-            reasons = self.blockers()
+            reasons = self.blockers(programs)
             if not reasons:
                 return
             if self.clock() >= end:
@@ -269,7 +307,35 @@ def default_probes(out):
         "cpu": lambda: sum(psutil.cpu_percent(interval=1.0) for _ in range(3)) / 3.0,
         "memory_gb": lambda: psutil.virtual_memory().available / 2**30,
         "disk_gb": lambda: shutil.disk_usage(folder or ".").free / 2**30,
+        "game_programs": lambda: count_game_programs(psutil),
     }
+
+
+def count_game_programs(psutil):
+    """The game programs (openblack and openblack-server) that run on the computer now, of every lane"""
+    count = 0
+    for process in psutil.process_iter(["name"]):
+        try:
+            name = (process.info.get("name") or "").lower()
+        except (psutil.Error, AttributeError):
+            continue
+        count += is_game_program(name)
+    return count
+
+
+def is_game_program(name):
+    """Whether a process name is a game program. macOS gives at most 15 letters of a name, so "openblack-server" shows as
+    "openblack-serve" there."""
+    name = name.lower()
+    return name in GAME_PROGRAMS or name == "openblack-serve"
+
+
+def game_programs(game, inject=None):
+    """The programs that a game starts: the server, the human clients and the desktop observers"""
+    clients = 0 if game.mode == "all-computer" else 1
+    if inject is not None:
+        clients = 2
+    return 1 + clients + game.observers
 
 
 def run_net_check(arguments, log_path, limit):
@@ -307,8 +373,9 @@ def play(game, day_folder, options, runner=run_net_check, guard=None, inject=Non
     """Plays one game and, when it parts, plays it again with the tools that find the cause. Gives the summary row."""
     folder = os.path.join(day_folder, game.name)
     os.makedirs(folder, exist_ok=True)
+    programs = game_programs(game, inject)
     if guard is not None:
-        guard.wait()
+        guard.wait(programs)
     started_clock = time.time()
     started = datetime.datetime.now().isoformat(timespec="seconds")
     extra = ["--web-page", options.web_page] if game.web_client and getattr(options, "web_page", None) else []
@@ -325,7 +392,7 @@ def play(game, day_folder, options, runner=run_net_check, guard=None, inject=Non
         turn, client = first_part(summary)
         repro = repro_line(game, options.bin, options.config, inject)
         if guard is not None:
-            guard.wait()
+            guard.wait(programs)
         replay_folder = os.path.join(folder, "replay")
         replay_arguments = net_check_arguments(game, replay_folder, options.bin, options.config, extra + replay_extra(turn))
         runner(replay_arguments, os.path.join(folder, "replay.log"), game_limit_seconds(game))
@@ -335,7 +402,16 @@ def play(game, day_folder, options, runner=run_net_check, guard=None, inject=Non
             file.write(repro + "\n")
             file.write(json.dumps({"first_part_turn": turn, "client": client, "parts": part_names(summary), "replay": replay},
                                   indent=2) + "\n")
+    if not getattr(options, "keep_programs", False):
+        remove_programs(folder)
     return summary_row(game, status, summary, started, started_clock, time.time(), repro, replay)
+
+
+def remove_programs(folder):
+    """Removes the copies of the programs that net_check made in the run folders of a game (the build has them), so that a
+    long soak does not fill the disk"""
+    for run in ("run", "replay"):
+        shutil.rmtree(os.path.join(folder, run, "bin"), ignore_errors=True)
 
 
 def replay_report(summary, first_turn):
@@ -411,7 +487,7 @@ def build_parser():
     parser.add_argument("--observers", type=int, default=2, help="the desktop observers of each game (0 to 4)")
     parser.add_argument("--web-client", action="store_true", help="one more observer in headless Chrome (the web build)")
     parser.add_argument("--web-page", help="the folder of the web page for the web client (the web build's bin/Release)")
-    parser.add_argument("--turns", type=int, default=2000, help="the turns of each game (up to 18000)")
+    parser.add_argument("--turns", type=int, default=2000, help=f"the turns of each game (up to {MOST_TURNS})")
     parser.add_argument("--until-end", action="store_true", help="each game plays until the game is decided, or its turns")
     parser.add_argument("--shuffle-seed", type=int, help="play the games of the matrix in the order of this seed")
     parser.add_argument("--web-one-game", action="store_true",
@@ -429,6 +505,13 @@ def build_parser():
     parser.add_argument("--max-games", type=int, help="the most games to play")
     parser.add_argument("--dry-run", action="store_true", help="only write the games of the matrix")
     parser.add_argument("--no-guard", action="store_true", help="do not wait for the processor, the memory and the disk")
+    parser.add_argument("--keep-programs", action="store_true",
+                        help="keep the copies of the programs in the run folders (by default each game removes them)")
+    parser.add_argument("--cpu-limit", type=float, help="start a game only under this processor use, in percent")
+    parser.add_argument("--free-memory-gb", type=float, help="start a game only with this much free memory")
+    parser.add_argument("--free-disk-gb", type=float, help="start a game only with this much free disk")
+    parser.add_argument("--most-game-programs", type=int,
+                        help="start a game only when the game programs of all lanes with its own are not more (0: no limit)")
     parser.add_argument("--inject-part", type=int, help="tests: a client's world parts at this turn and stays apart")
     parser.add_argument("--table", help="write a short markdown table of the rows of this summary.jsonl and exit")
     parser.add_argument("--since", help="with --table, only the games that started on or after this date (YYYY-MM-DD)")
@@ -452,8 +535,8 @@ def games_of(options, parser=None):
         problems.append(f"no such mode: {', '.join(bad_modes)}")
     if not 0 <= options.observers <= MOST_OBSERVERS:
         problems.append(f"--observers takes 0 to {MOST_OBSERVERS}")
-    if not 1 <= options.turns <= 18000:
-        problems.append("--turns takes 1 to 18000")
+    if not 1 <= options.turns <= MOST_TURNS:
+        problems.append(f"--turns takes 1 to {MOST_TURNS}")
     if "all-computer" in modes and options.observers + (1 if options.web_client else 0) == 0:
         problems.append("the mode all-computer needs an observer: --observers or --web-client")
     if problems:
@@ -477,7 +560,8 @@ def self_test(options):
     game = Game("TwoGods", 1, 0, "all-but-one", 0, 300)
     day = os.path.join(options.out, options.date, "self-test")
     os.makedirs(day, exist_ok=True)
-    row = play(game, day, options, guard=None if options.no_guard else Guard(day), inject=part_turn)
+    row = play(game, day, options, guard=None if options.no_guard else Guard(day, limits=limits_of(options)),
+               inject=part_turn)
     append_row(day, row)
     problems = []
     if row["status"] != "part":
@@ -495,6 +579,21 @@ def self_test(options):
         return 1
     print(f"self-test passed: the part at turn {turn} was found and the rows named")
     return 0
+
+
+def limits_of(options):
+    """The limits of this computer, with the limits that the command line changes"""
+    limits = default_limits()
+    changes = {}
+    if getattr(options, "cpu_limit", None) is not None:
+        changes["cpu_percent"] = options.cpu_limit
+    if getattr(options, "free_memory_gb", None) is not None:
+        changes["free_memory_gb"] = options.free_memory_gb
+    if getattr(options, "free_disk_gb", None) is not None:
+        changes["free_disk_gb"] = options.free_disk_gb
+    if getattr(options, "most_game_programs", None) is not None:
+        changes["most_game_programs"] = options.most_game_programs or None
+    return dataclasses.replace(limits, **changes)
 
 
 def main(argv=None):
@@ -520,7 +619,7 @@ def main(argv=None):
             print(" ".join(net_check_arguments(game, os.path.join(day, game.name, "run"), options.bin, options.config)))
         return 0
     os.makedirs(day, exist_ok=True)
-    guard = None if options.no_guard else Guard(day)
+    guard = None if options.no_guard else Guard(day, limits=limits_of(options))
     failed = 0
     for game in games:
         if options.budget_minutes is not None and (time.monotonic() - began) / 60.0 >= options.budget_minutes:

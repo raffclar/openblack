@@ -680,8 +680,28 @@ void TeleportSystem::ProcessTurn()
 		return;
 	}
 	RemoveOrphans();
-	PruneTravellers();
 	DropCreatures();
+}
+
+void TeleportSystem::PlayerTurn(PlayerNames player)
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	auto& registry = EntityRegistry();
+	for (const auto stone : GetStones(player))
+	{
+		// The stone of a miracle that closed down is not there for the player, so it drops no one
+		const auto& component = registry.Get<const TeleportStone>(stone);
+		const auto* spell = component.spell != entt::null && registry.Valid(component.spell)
+		                        ? registry.TryGet<const Spell>(component.spell)
+		                        : nullptr;
+		if (spell != nullptr && !spell->closedDown)
+		{
+			PruneTravellers(stone);
+		}
+	}
 }
 
 void TeleportSystem::RemoveOrphans()
@@ -702,30 +722,29 @@ void TeleportSystem::RemoveOrphans()
 	}
 }
 
-void TeleportSystem::PruneTravellers()
+void TeleportSystem::PruneTravellers(entt::entity entity)
 {
 	auto& registry = EntityRegistry();
 	std::vector<entt::entity> dropped;
-	registry.Each<TeleportStone>([&](entt::entity entity, TeleportStone& stone) {
-		std::erase_if(stone.travellers, [&](const TeleportStone::Traveller& traveller) {
-			if (!registry.Valid(traveller.living))
-			{
-				return true;
-			}
-			const auto* heading = registry.TryGet<const TeleportTraveller>(traveller.living);
-			if (heading == nullptr || heading->stone != entity || heading->jumped)
-			{
-				return true;
-			}
-			// One that took up another reaction since is no longer on its way to the stone
-			const auto* reacting = registry.TryGet<const LivingReaction>(traveller.living);
-			if (reacting != nullptr && reacting->reaction != stone.reaction && !heading->transported)
-			{
-				dropped.push_back(traveller.living);
-				return true;
-			}
-			return false;
-		});
+	auto& stone = registry.Get<TeleportStone>(entity);
+	std::erase_if(stone.travellers, [&](const TeleportStone::Traveller& traveller) {
+		if (!registry.Valid(traveller.living))
+		{
+			return true;
+		}
+		const auto* heading = registry.TryGet<const TeleportTraveller>(traveller.living);
+		if (heading == nullptr || heading->stone != entity || heading->jumped)
+		{
+			return true;
+		}
+		// One that took up another reaction since is no longer on its way to the stone
+		const auto* reacting = registry.TryGet<const LivingReaction>(traveller.living);
+		if (reacting != nullptr && reacting->reaction != stone.reaction && !heading->transported)
+		{
+			dropped.push_back(traveller.living);
+			return true;
+		}
+		return false;
 	});
 	for (const auto living : dropped)
 	{

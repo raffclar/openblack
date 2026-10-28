@@ -34,6 +34,8 @@ public:
 	[[nodiscard]] std::optional<Active> Find(uint32_t id) const override;
 	void RemoveFrom(entt::entity initiator) override;
 	void RemoveFrom(entt::entity initiator, Reaction type) override;
+	void StopSpreadInHand(entt::entity initiator) override;
+	void SpreadAgain(entt::entity initiator) override;
 	void Remove(uint32_t id) override;
 	void StopReacting(entt::entity living) override;
 	void TakeUp(uint32_t id, entt::entity living) override;

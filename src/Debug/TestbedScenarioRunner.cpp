@@ -218,6 +218,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -3580,8 +3581,14 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::QuickSave)
 	{
-		const bool done = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().QuickSave();
-		Log(fmt::format("{:.1f}s: quick save: {}", _seconds, done ? "done" : "failed"));
+		// As the key: the key checks the rules, and the command saves at the next turn
+		const bool sent = Locator::saveGameSystem::has_value() && Locator::playerCommandSystem::has_value() &&
+		                  Locator::saveGameSystem::value().PressQuickSave();
+		if (sent)
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::QuickSave {});
+		}
+		Log(fmt::format("{:.1f}s: quick save: {}", _seconds, sent ? "sent" : "refused"));
 		return;
 	}
 	if (command.kind == Kind::EndGuidanceWaits)

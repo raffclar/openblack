@@ -27,7 +27,6 @@ constexpr float k_FadeOutSeconds = 0.2f;
 constexpr size_t k_TabCount = 7;
 constexpr size_t k_MultiplayerTab = 1;
 constexpr size_t k_StatisticsTab = 2;
-constexpr int k_TabTextSize = DialogPainter::k_SmallTextSize;
 
 // The title's text size
 constexpr int k_TitleTextSize = 49;
@@ -51,7 +50,7 @@ EndGameBox::EndGameBox(const TextDatabase& texts, const GameFont& font)
 	tabs.resize(k_TabCount);
 	for (auto& tab : tabs)
 	{
-		tab.textSize = k_TabTextSize;
+		tab.textSize = DialogPainter::SmallTextSize();
 	}
 	_dialog = std::make_unique<Dialog>(std::move(tabs), 0, k_Box);
 	auto& dialog = *_dialog;

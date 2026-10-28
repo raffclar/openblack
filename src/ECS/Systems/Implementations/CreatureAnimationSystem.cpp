@@ -504,14 +504,14 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 		}
 		animation.body = {};
 	}
-	const auto bodyDuration = DurationOf(animationOf(creature_layers::CurrentAnimation(animation.body)));
+	const auto bodyDuration = DurationOf(animationOf(creature_layers::TimingAnimation(animation.body)));
 	if (report != nullptr && creature_layers::IsPlaying(animation.body) && !bodyDuration.has_value())
 	{
-		report->missingBody = creature_layers::CurrentAnimation(animation.body);
+		report->missingBody = creature_layers::TimingAnimation(animation.body);
 	}
-	animation.actionMoment =
-	    animation.actionMoment || creature_layers::ReachesActionMoment(animation.body, playbackMs, bodyDuration,
-	                                                                   static_cast<uint32_t>(rig.kissMs.value_or(0.0f)));
+	animation.actionMoment = animation.actionMoment || creature_layers::ReachesActionMoment(
+	                                                       animation.body, playbackMs, bodyDuration,
+	                                                       static_cast<uint32_t>(rig.kissMs.value_or(0.0f)), milliseconds);
 	animation.body = creature_layers::AdvanceBody(animation.body, playbackMs, bodyDuration, milliseconds);
 	// A dance that needs its next move chooses one of the moves that the species has
 	if (animation.body.chooseDanceMove)

@@ -171,7 +171,7 @@ protected:
 	const GameFont& _font;
 	LabelSide _side;
 	Look _look;
-	int _labelSize {DialogPainter::k_MidTextSize};
+	int _labelSize {DialogPainter::MidTextSize()};
 	/// How much further from the button a label beside it is
 	int _labelGap {0};
 	bool _checked {false};
@@ -221,7 +221,7 @@ public:
 	std::function<void(float)> onChange;
 	std::u16string label;
 	/// The size of the label's text along the bar
-	int labelSize {DialogPainter::k_MidTextSize};
+	int labelSize {DialogPainter::MidTextSize()};
 	/// The label goes above a small knob in the lower half of the bar, at a size of half the bar's height and 2 more
 	bool labelAbove {false};
 
@@ -341,7 +341,7 @@ class EditBox final: public Control
 public:
 	/// The font measures the text, drawn size high
 	EditBox(const GameFont& font, DialogRect rect, std::u16string text, size_t maxLength,
-	        int size = DialogPainter::k_MidTextSize);
+	        int size = DialogPainter::MidTextSize());
 	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
 	void MouseDown(glm::ivec2 point) override;
 	void Drag(glm::ivec2 point) override;

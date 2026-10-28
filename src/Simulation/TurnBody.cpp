@@ -160,6 +160,11 @@ void PlayPlayerTurns()
 			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
 		}
 		towns.ProcessPlayerTowns(player);
+		// After its towns, the player's stones drop the travellers that turned to something else
+		if (Locator::teleportSystem::has_value())
+		{
+			Locator::teleportSystem::value().PlayerTurn(player);
+		}
 	}
 }
 

@@ -43,7 +43,7 @@ public:
 		std::u16string label;
 		std::function<void()> onSelect;
 		/// The size of the label's text
-		int textSize {DialogPainter::k_MidTextSize};
+		int textSize {DialogPainter::MidTextSize()};
 	};
 
 	/// MainMenu and the options' box: 780 by 500 in the middle of the dialog space, 40 deeper for its tabs

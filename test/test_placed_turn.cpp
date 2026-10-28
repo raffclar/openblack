@@ -202,6 +202,28 @@ TEST(PlacedTurn, AMovedThingTakesTheAnglesOfItsBody)
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(PlacedTurn, AReleasedThingTakesTheAnglesOfItsTurnInTheHand)
+{
+	const auto held = glm::mat3(glm::eulerAngleY(1.1f) * glm::eulerAngleX(-0.4f) * glm::eulerAngleZ(0.25f));
+	constexpr float k_Scale = 1.7f;
+	// The angles come from the turn in the hand with the scale in each value
+	const auto angles = x87::GameTurnMatrixAngles(held * k_Scale);
+	const auto letGo = ecs::placed_turn::TurnFromHeld(held, k_Scale, true, false);
+	EXPECT_EQ(letGo.angles, angles);
+	// A thing let go of keeps the turn of the hand
+	EXPECT_EQ(letGo.turn, held);
+	// A thrown thing takes the turn of its kept angles
+	const auto thrown = ecs::placed_turn::TurnFromHeld(held, k_Scale, true, true);
+	EXPECT_EQ(thrown.angles, angles);
+	ExpectNear(thrown.turn, x87::GameTurnMatrix(angles.x, angles.y, angles.z), 0.0f);
+	ExpectNear(thrown.turn, held, 1e-5f);
+	// A thrown thing that does not lean stands upright with the heading of the hand
+	const auto upright = ecs::placed_turn::TurnFromHeld(held, k_Scale, false, true);
+	EXPECT_EQ(upright.angles, glm::vec3(0.0f, angles.y, 0.0f));
+	ExpectNear(upright.turn, x87::GameUprightTurn(angles.y), 0.0f);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(PlacedTurn, TheUprightTurnIsTheTurnAboutY)
 {
 	for (const float y : {0.7f, -2.9f, 3.1f, 4.0f})

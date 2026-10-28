@@ -274,8 +274,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Players, .stage = Stage::Players},
     // A town's totem takes its turn with the buildings of its town
     {.step = Step::VillageTotems, .stage = Stage::Players},
-    // After its towns, each player drops the travellers of its teleport stones that no longer go to them. The stones of
-    // a miracle go in the miracle's own turn, when it closes down.
+    // Each player's stones drop their lost travellers in the turn of the player. Here, the stones of a miracle that is
+    // not there go, as a safety net. The stones of a miracle go in the miracle's own turn, when it closes down.
     {.step = Step::Teleports, .stage = Stage::Players},
     {.step = Step::TownFlags, .stage = std::nullopt},
     {.step = Step::ComputerPlayers, .stage = Stage::Players},

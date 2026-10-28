@@ -249,6 +249,26 @@ TEST(InspectorSplash, SplashAtAPositionWithinARadius)
 	EXPECT_FALSE(inspector.Answer(std::get<Request>(decoded)).Ok());
 }
 
+// The symbols of belief that rose last show with their place, amount and colour, the newest first
+TEST(InspectorBelief, TheSymbolsOfBeliefThatRoseLast)
+{
+	const ecs::systems::ParticleSystemInterface::BeliefSpritesSeen seen {
+	    .recent = {{.position = {1.0f, 2.0f, 3.0f}, .amount = 25, .colour = 0xFF0000},
+	               {.position = {4.0f, 5.0f, 6.0f}, .amount = 7, .colour = 0x00FF00}},
+	    .count = 40,
+	};
+	Inspector inspector;
+	inspector.Add(std::make_unique<ParticlesProvider>(ParticleSources {.belief = [&seen]() { return seen; }}));
+
+	const auto found = Ask(inspector, R"({"query": "particles.belief"})");
+	EXPECT_EQ(found["count"], 40);
+	ASSERT_EQ(found["recent"].size(), 2u);
+	EXPECT_EQ(found["recent"][0]["amount"], 25);
+	EXPECT_EQ(found["recent"][0]["colour"], 0xFF0000);
+	EXPECT_DOUBLE_EQ(found["recent"][0]["position"][1].get<double>(), 2.0);
+	EXPECT_EQ(found["recent"][1]["amount"], 7);
+}
+
 // The user's example: objects of a type within a radius, nearest first, with only their id, label, place and distance
 TEST_F(InspectorRegistry, ObjectsOfATypeWithinARadiusNearestFirst)
 {

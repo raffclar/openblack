@@ -171,6 +171,9 @@ struct BodyAction
 [[nodiscard]] bool IsLooping(const BodyAction& body);
 /// The animation the body plays now
 [[nodiscard]] size_t CurrentAnimation(const BodyAction& body);
+/// The animation that times the body: the animation that it plays now. The kiss times its low and its high kiss on
+/// the length of the high kiss.
+[[nodiscard]] size_t TimingAnimation(const BodyAction& body);
 /// An action that plays once, unless the body already plays one: nothing starts while one plays
 [[nodiscard]] std::optional<BodyAction> PlayOnce(const BodyAction& body, size_t animation, bool mirrored);
 /// A start, loop and end, unless the body already plays an action; the loop can hold its last frame, and the whole can
@@ -211,16 +214,17 @@ struct BodyAction
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no
 /// such animation. Each animation starts from its beginning, without blending into the last. A body timed by what plays it
 /// stays where it was put.
-/// The moves of a dance and a body that plays in real time count real milliseconds, not the milliseconds of the
-/// creature's playback.
+/// The moves of a dance, the kiss and a body that plays in real time count real milliseconds, not the milliseconds of
+/// the creature's playback.
 [[nodiscard]] BodyAction AdvanceBody(BodyAction body, float milliseconds, std::optional<uint32_t> duration,
                                      std::optional<float> realMilliseconds = std::nullopt);
 /// Whether the body gets to the moment of its action as AdvanceBody moves it on some milliseconds. An action played
-/// once gets to its moment as it passes the middle of its animation (half its length in whole milliseconds). The kiss
-/// gets to its moment as it passes the kiss time of the species, also when it plays the low kiss alone. A body timed by what
-/// plays it does not get to a moment here.
+/// once gets to its moment as it passes the middle of its animation (half its length in whole milliseconds). A body
+/// timed by what plays it does not get to a moment here.
+/// The kiss gets to its moment as it passes the kiss time of the species, also when it plays the low kiss alone. The
+/// kiss moves on by the real milliseconds, and it gets to no moment in the step that ends it.
 [[nodiscard]] bool ReachesActionMoment(const BodyAction& body, float milliseconds, std::optional<uint32_t> duration,
-                                       uint32_t kissMs);
+                                       uint32_t kissMs, std::optional<float> realMilliseconds = std::nullopt);
 
 /// The face's expression, played on top of the body. A face is pulled for some time: it plays through once and holds
 /// its last frame, the full expression, until that time is up. Then it relaxes, running back to its start a quarter as

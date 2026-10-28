@@ -18,8 +18,11 @@
 #include <glm/common.hpp>
 
 #include "Canvas.h"
+#include "Common/GameLanguage.h"
+#include "EngineConfig.h"
 #include "GameFont.h"
 #include "Graphics/Texture2D.h"
+#include "Locator.h"
 #include "ScreenFit.h"
 
 using namespace openblack::gui;
@@ -80,6 +83,11 @@ constexpr std::array<uint8_t, 8> k_PointerFrames = {9, 10, 11, 12, 41, 49, 57, 2
 constexpr float k_PointerCell = 0.125f;
 constexpr float k_PointerExtent = 0.12109375f;
 } // namespace
+
+bool DialogPainter::NeedsBiggerText()
+{
+	return Locator::config::has_value() && game_language::NeedsBiggerText(Locator::config::value().language);
+}
 
 DialogPainter::DialogPainter(Canvas& canvas, const GameFont& font, const graphics::Texture2D& atlas,
                              const graphics::Texture2D& fontTexture)
@@ -255,7 +263,7 @@ void DialogPainter::DrawTab(const DialogRect& rect, std::u16string_view label, b
 		// size and the centring are as the original draws them.
 		const DialogRect labelRect {.min = {min.x + 8, min.y + 7}, .max = {max.x - 8, max.y + 1}};
 		auto size = textSize;
-		while (size > k_SmallTextSize / 2 &&
+		while (size > SmallTextSize() / 2 &&
 		       GetTextHeight(labelRect.Width(), label, size) > static_cast<float>(labelRect.Height() - 6))
 		{
 			--size;

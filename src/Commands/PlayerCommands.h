@@ -485,13 +485,37 @@ struct ChatTaunt
 	[[nodiscard]] bool operator==(const ChatTaunt&) const = default;
 };
 
+/// The quick save key. The key checks the rules of a quick save, and the turn saves the world into the quick save slot.
+/// Only a single player game sends it.
+struct QuickSave
+{
+};
+
+/// The quick load key. The key checks the rules of a quick load. The turn asks for the load of the quick save slot, and
+/// the game loads it after the draw of the frame. Only a single player game sends it.
+struct QuickLoad
+{
+};
+
+/// The custom music of the player started a track, or stopped. When a track starts, the creature of the player reacts
+/// to what it felt before about the track. Only a single player game sends it.
+struct MusicMood
+{
+	/// The creature of the player when the music changed
+	entt::entity creature;
+	/// The track that plays, 0 when no track plays
+	uint32_t track {0};
+	/// What the creature felt before about the track
+	float mood {0.0f};
+};
+
 /// What a command does
-using Action =
-    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
-                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
-                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
-                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt>;
+using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
+                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
+                            GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
+                            CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood>;
 
 /// A command and the player that sent it
 struct Command

@@ -3871,7 +3871,7 @@ std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts
 			        item["radius"] = highlight.radius;
 			        item["glints"] = highlight.glints;
 			        item["active_effect"] = highlight.activeEffect;
-			        item["hidden"] = registry->AllOf<HiddenByState>(entity);
+			        item["hidden"] = highlight.hidden;
 			        item["scrolls_drawn"] = scrollsDrawn;
 			        item["pulse"] = pulse.level;
 			        items.push_back(std::move(item));
@@ -4365,6 +4365,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return {};
 		    }
 		    return Locator::liquidParticleSystem::value().PlayerParticles(player);
+	    },
+	    .belief = []() -> ecs::systems::ParticleSystemInterface::BeliefSpritesSeen {
+		    if (!Locator::particleSystem::has_value())
+		    {
+			    return {};
+		    }
+		    return Locator::particleSystem::value().GetBeliefSpritesSeen();
 	    },
 	}));
 

@@ -46,8 +46,10 @@
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
@@ -528,6 +530,30 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::leashSystem::has_value())
 			    {
 				    openblack::Locator::leashSystem::value().DoLeashLength(command.player, action.length);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, QuickSave> || std::is_same_v<Kind, QuickLoad>)
+		    {
+			    // Only the player of this computer saves or loads the games of this computer
+			    if (!openblack::Locator::saveGameSystem::has_value() || !PlayerOfThisComputer(command.player))
+			    {
+				    return;
+			    }
+			    auto& saves = openblack::Locator::saveGameSystem::value();
+			    if constexpr (std::is_same_v<Kind, QuickSave>)
+			    {
+				    std::ignore = saves.DoQuickSave();
+			    }
+			    else
+			    {
+				    saves.DoQuickLoad();
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, MusicMood>)
+		    {
+			    if (openblack::Locator::musicMoodSystem::has_value())
+			    {
+				    openblack::Locator::musicMoodSystem::value().DoMusicMood(action);
 			    }
 		    }
 	    },
