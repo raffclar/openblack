@@ -118,6 +118,13 @@ protected:
 		Locator::livingActionSystem::emplace<systems::LivingActionSystem>();
 		_steps = &static_cast<StepRecorder&>(Locator::pathfindingSystem::emplace<StepRecorder>());
 		_info = std::make_unique<InfoConstants>();
+		for (auto& villager : _info->villager)
+		{
+			// The speed divides by these: zero is not a value of the game's data
+			villager.divisorForTownNeedsSpeedMod = 1.0f;
+			villager.maxFoodCarried = villager.maxTraderFoodCarried = 10;
+			villager.maxWoodCarried = villager.maxTraderWoodCarried = 10;
+		}
 		_info->villagerStateTable.at(static_cast<size_t>(k_Next)).isFinalState = 1;
 		// The dance of a script is a state of the scripts, so that its dancer stays in the dance
 		_info->villagerStateTable.at(static_cast<size_t>(VillagerStates::InDance)).isScriptState = 1;
@@ -331,8 +338,8 @@ TEST_F(VillagerWalkStates, AWalkToAPlaceInADanceStepsToThePlaceOfAMovedGroup)
 TEST_F(VillagerWalkStates, AnArtefactDancerWhereTheWalkEndsStartsItsWalkWithNoStep)
 {
 	const auto dance = JoinDance();
-	const auto arrive = map_coords::ToMetres(
-	    ecs::dance_rules::ArrivePlace(Locator::entitiesRegistry::value().Get<const Dance>(dance).place));
+	const auto arrive =
+	    map_coords::ToMetres(ecs::dance_rules::ArrivePlace(Locator::entitiesRegistry::value().Get<const Dance>(dance).place));
 	Locator::entitiesRegistry::value().Get<Transform>(_villager).position = glm::vec3(arrive.x, 0.0f, arrive.y);
 	SetStates(VillagerStates::ArtifactDance, VillagerStates::InvalidState);
 	villager_artefact_dance::ArtefactDance(Action());

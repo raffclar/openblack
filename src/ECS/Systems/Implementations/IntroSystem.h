@@ -26,6 +26,7 @@ public:
 	void Play(int32_t special) override;
 	void ReleaseAll() override;
 	[[nodiscard]] bool HasLiftFinished() const override { return _liftFinished; }
+	void ProcessTurn(uint32_t milliseconds) override;
 	void Update(uint32_t milliseconds) override;
 	[[nodiscard]] std::optional<CameraView> GetCameraView() const override;
 	[[nodiscard]] const intro_rules::light::Frame* GetLightFrame() const override;
@@ -41,8 +42,14 @@ private:
 		Lifting = 12,
 	};
 
-	/// The hand's entity with its model, a clip and where it stands
+	/// The hand's entity with its model, which the turns make, hidden until the frames show it
+	void MakeHiddenHand();
+	/// The hand shown with a clip from its start
+	void ShowHand(std::string_view clipFile);
+	/// The hand's entity, made if there is none, and shown with a clip
 	void MakeHand(std::string_view clipFile);
+	/// The hand gone from view, its entity kept until the turns release it
+	void HideHand();
 	void PlaceHand(const glm::vec3& position, float yaw);
 	void FreeHand();
 	/// The hand's clip moved on; true when it came round
@@ -65,6 +72,9 @@ private:
 	bool _holdingBoy {false};
 	/// Set once the light has gone, when the lifting clip may play
 	int32_t _liftGo {0};
+	/// The light and the lifting clip as the turns move them on, from the fall of the light until the hand stands ready to
+	/// set the boy down. Once the clip comes round, it stays so.
+	std::optional<intro_rules::LiftClock> _liftClock;
 	bool _liftFinished {false};
 	std::optional<glm::vec3> _grip;
 };

@@ -67,10 +67,10 @@ void CameraZoneSystem::PlaceForceField()
 	_forceField->SetPoints(std::move(points));
 	// Without the fence it is neither drawn nor fades
 	_forceField->SetHidden(!_zones.fenceOn);
-	if (!_forceFieldShown && Locator::particleSystem::has_value())
+	// The particles keep the sheet until a new land or a load clears their list, so it is given to them again each time
+	if (Locator::particleSystem::has_value())
 	{
 		Locator::particleSystem::value().AddLightSheet(_forceField);
-		_forceFieldShown = true;
 	}
 }
 
@@ -197,5 +197,6 @@ bool CameraZoneSystem::LoadState(reflection::BinaryReader& in)
 	}
 	_fileName = std::move(fileName);
 	_zones = std::move(zones);
+	PlaceForceField();
 	return true;
 }

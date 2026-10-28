@@ -52,6 +52,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	    .Field<&components::CreatureObjectAction::walked>("walked")
 	    .Field<&components::CreatureObjectAction::stall>("stall")
 	    .Field<&components::CreatureObjectAction::turnedToReach>("turnedToReach")
+	    .Field<&components::CreatureObjectAction::withdraws>("withdraws")
 	    .Field<&components::CreatureObjectAction::waitedForWay>("waitedForWay")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
 	    .Field<&components::CreatureObjectAction::givenFlightSeconds>("givenFlightSeconds")
@@ -76,5 +77,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	Reflect<components::PickUpReach>(context).Field<&components::PickUpReach::points>("points");
 	Reflect<components::StompReach>(context).Field<&components::StompReach::points>("points");
 	Reflect<components::TossHandVelocity>(context).Field<&components::TossHandVelocity::velocity>("velocity");
-	Reflect<components::HeldByCreature>(context).Field<&components::HeldByCreature::creature>("creature");
+	Reflect<components::HeldByCreature>(context)
+	    .Field<&components::HeldByCreature::creature>("creature")
+	    .Field<&components::HeldByCreature::drawn>("drawn");
 }

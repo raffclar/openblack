@@ -29,8 +29,8 @@ namespace openblack::ecs
 /// creature with no player reads no camera. A game with one player has one camera, which every creature reads.
 [[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCreatureCamera(entt::entity creature);
 
-/// The camera of a player for a turn reader that reads the camera of this computer in a game with one player. In a
-/// network game it is the reported camera of the player. None when there is no camera.
-[[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> TurnCamera(PlayerNames player);
+/// The reported camera of the creature's own player, which looks at the creature. In a network game it is the camera of
+/// the creature's player. In a game with one player, only a creature of the first player has it.
+[[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCameraOfItsPlayer(entt::entity creature);
 
 } // namespace openblack::ecs

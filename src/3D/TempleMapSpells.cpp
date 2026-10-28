@@ -15,7 +15,6 @@
 
 #include <glm/gtc/constants.hpp>
 
-#include "Magic/DispenserRules.h"
 #include "Magic/MiracleVisuals.h"
 
 namespace openblack
@@ -26,7 +25,8 @@ glm::vec3 TempleMapSpells::Middle(glm::vec3 mapPoint)
 	return mapPoint + glm::vec3(0.0f, k_Lift, 0.0f);
 }
 
-void TempleMapSpells::Update(std::span<const Cast> casts, float gameSeconds, Effects& effects)
+void TempleMapSpells::Update(std::span<const Cast> casts, float gameSeconds, std::optional<float> effectSeconds,
+                             Effects& effects)
 {
 	_seeds.clear();
 	std::unordered_map<entt::entity, Shown> shown;
@@ -59,20 +59,15 @@ void TempleMapSpells::Update(std::span<const Cast> casts, float gameSeconds, Eff
 		auto& seed = place.seed;
 		seed.middle = middle;
 		seed.ownerAlignment = cast.ownerAlignment;
-		seed.spin = std::fmod(seed.spin + (magic::k_OrbSeedSpin * gameSeconds), glm::two_pi<float>());
-		if (seed.spin < 0.0f)
+		const auto turn =
+		    magic::visuals::TurnSeed({.spin = seed.spin, .phialFrame = seed.phialFrame, .phialPhase = seed.phialPhase},
+		                             cast.phialReceiveType, gameSeconds);
+		seed.spin = turn.spin;
+		seed.phialFrame = turn.phialFrame;
+		seed.phialPhase = turn.phialPhase;
+		if (place.effect.has_value() && effectSeconds.has_value())
 		{
-			seed.spin += glm::two_pi<float>();
-		}
-		if (cast.phialReceiveType.has_value())
-		{
-			seed.phialFrame = magic::visuals::StepPhialFrame(seed.phialFrame, gameSeconds);
-			seed.phialPhase =
-			    std::fmod(seed.phialPhase + (magic::visuals::PhialPulseSpeed(*cast.phialReceiveType) * gameSeconds), 1.0f);
-		}
-		if (place.effect.has_value())
-		{
-			effects.Step(*place.effect, holderPoint, gameSeconds);
+			effects.Step(*place.effect, holderPoint, *effectSeconds);
 		}
 		_seeds.push_back(seed);
 		shown.emplace(cast.spell, place);

@@ -40,7 +40,6 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/MagicForest.h"
-#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
@@ -704,7 +703,7 @@ bool object_physics::KickBall(systems::DynamicsSystemInterface& dynamics, entt::
 	{
 		dynamics.RemoveObject(ball, true, true);
 	}
-	const bool inMap = registry.AllOf<MapCellResident>(ball) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(ball);
+	const bool inMap = ecs::InMapCells(registry, ball) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(ball);
 	// A kick at its own place would fly on no number at all; openblack doesn't start that
 	if (!inMap || !std::isfinite(velocity.x) || !std::isfinite(velocity.y) || !std::isfinite(velocity.z))
 	{

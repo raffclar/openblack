@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 #include <glm/trigonometric.hpp>
 #include <glm/vec4.hpp>
 #include <gtest/gtest.h>
@@ -253,4 +254,159 @@ TEST(GestureHints, TheCollarsCameraLooksAtItInTheMiddleOfItsSquare)
 	const auto moved = CollarProjection(rect, centre, 571.0f, 1.0f) * CollarView() * right;
 	EXPECT_NEAR(moved.x / moved.w * 14.0f, 1.0f, 1e-2f);
 	EXPECT_EQ(PixelsOf({.min = {700.4f, 499.6f}, .max = {728.4f, 527.6f}}), rect);
+}
+
+namespace
+{
+// Each seed casts the miracle of its own number plus its power-up level times a hundred
+MagicType FakeMagic(SpellSeedType seed, int powerUp)
+{
+	return static_cast<MagicType>(static_cast<int>(seed) + (100 * (powerUp + 1)));
+}
+
+const Hint* HintOf(const std::vector<Hint>& hints, GestureType gesture)
+{
+	for (const auto& hint : hints)
+	{
+		if (hint.gesture == gesture)
+		{
+			return &hint;
+		}
+	}
+	return nullptr;
+}
+} // namespace
+
+TEST(GestureHints, TheSelectionGesturesShowAGlobeAndTheCreaturesSeed)
+{
+	const std::vector<gesture::Request> requests {
+	    {.gesture = GestureType::Spiral, .purpose = gesture::Purpose::OpenSelection},
+	    {.gesture = GestureType::InverseSpiral, .purpose = gesture::Purpose::OpenSelection, .forCreature = true},
+	    {.gesture = GestureType::RShape, .purpose = gesture::Purpose::RepeatMiracle, .seed = SpellSeedType::Water},
+	};
+	const auto hints = HintsFor(requests, FakeShapes, FakeMagic);
+	ASSERT_EQ(hints.size(), 3u);
+	// The R is nearest the right edge, then the creature's spiral, then the player's
+	EXPECT_EQ(hints[0].gesture, GestureType::RShape);
+	EXPECT_EQ(hints[0].order, k_RepeatOrder);
+	EXPECT_EQ(hints[0].seed, SpellSeedType::Water);
+	EXPECT_EQ(hints[0].magic, FakeMagic(SpellSeedType::Water, -1));
+	EXPECT_FALSE(hints[0].globe);
+	EXPECT_EQ(hints[1].order, k_CreatureSelectionOrder);
+	EXPECT_EQ(hints[1].seed, k_CreatureSelectionSeed);
+	EXPECT_FALSE(hints[1].globe);
+	EXPECT_EQ(hints[2].order, k_OwnSelectionOrder);
+	EXPECT_EQ(hints[2].seed, SpellSeedType::None);
+	EXPECT_TRUE(hints[2].globe);
+}
+
+TEST(GestureHints, TheSelectionStepsShowNoSeed)
+{
+	const std::vector<gesture::Request> requests {
+	    {.gesture = GestureType::Scribble, .purpose = gesture::Purpose::CloseSelection},
+	    {.gesture = GestureType::WShape, .purpose = gesture::Purpose::SelectMiracle, .seed = SpellSeedType::Water},
+	};
+	const auto hints = HintsFor(requests, FakeShapes, FakeMagic);
+	ASSERT_EQ(hints.size(), 1u);
+	EXPECT_EQ(hints[0].order, k_SelectionStepOrder);
+	EXPECT_EQ(hints[0].seed, SpellSeedType::None);
+	EXPECT_FALSE(hints[0].globe);
+}
+
+TEST(GestureHints, ThePowerUpsShowTheSeedWithItsLevelAndTheCancelOnlyOnceAsked)
+{
+	const std::vector<gesture::Request> unasked {
+	    {.gesture = GestureType::Circle, .purpose = gesture::Purpose::SizeCircle},
+	    {.gesture = GestureType::Scribble, .purpose = gesture::Purpose::DropSeed, .seed = SpellSeedType::Storm},
+	    {.gesture = GestureType::InverseSpiral,
+	     .purpose = gesture::Purpose::PowerUp,
+	     .powerUpLevel = 0,
+	     .seed = SpellSeedType::Storm},
+	    {.gesture = GestureType::Spiral, .purpose = gesture::Purpose::PowerUp, .powerUpLevel = 1, .seed = SpellSeedType::Storm},
+	};
+	auto hints = HintsFor(unasked, FakeShapes, FakeMagic);
+	ASSERT_EQ(hints.size(), 3u);
+	EXPECT_EQ(HintOf(hints, GestureType::Scribble), nullptr);
+	ASSERT_NE(HintOf(hints, GestureType::Circle), nullptr);
+	EXPECT_EQ(HintOf(hints, GestureType::Circle)->order, k_SizeCircleOrder);
+	EXPECT_EQ(HintOf(hints, GestureType::Circle)->seed, SpellSeedType::None);
+	const auto* first = HintOf(hints, GestureType::InverseSpiral);
+	ASSERT_NE(first, nullptr);
+	EXPECT_EQ(first->order, k_PowerUpOrderBase);
+	EXPECT_EQ(first->seed, SpellSeedType::Storm);
+	EXPECT_EQ(first->powerUp, 0);
+	EXPECT_EQ(first->magic, FakeMagic(SpellSeedType::Storm, 0));
+	EXPECT_EQ(HintOf(hints, GestureType::Spiral)->order, k_PowerUpOrderBase + 1);
+
+	const std::vector<gesture::Request> asked {
+	    {.gesture = GestureType::Scribble,
+	     .purpose = gesture::Purpose::DropSeed,
+	     .powerUpLevel = 0,
+	     .seed = SpellSeedType::Storm},
+	    {.gesture = GestureType::Spiral, .purpose = gesture::Purpose::PowerUp, .powerUpLevel = 1, .seed = SpellSeedType::Storm},
+	};
+	hints = HintsFor(asked, FakeShapes, FakeMagic);
+	const auto* cancel = HintOf(hints, GestureType::Scribble);
+	ASSERT_NE(cancel, nullptr);
+	EXPECT_EQ(cancel->order, k_CancelPowerUpOrder);
+	EXPECT_EQ(cancel->seed, SpellSeedType::Storm);
+	// The scribble's seed has no rings
+	EXPECT_EQ(cancel->powerUp, -1);
+}
+
+TEST(GestureHints, ASeedPictureSpinsAndWrapsItsTurns)
+{
+	SeedPicture picture {.seed = SpellSeedType::Water};
+	StepPicture(picture, 0.5f);
+	EXPECT_NEAR(picture.spin, 1.0f, k_Tolerance);
+	// Without a power-up, the rings do not spin
+	EXPECT_EQ(picture.ringSpin, 0.0f);
+	StepPicture(picture, 3.0f);
+	EXPECT_NEAR(picture.spin, 7.0f - glm::two_pi<float>(), k_Tolerance);
+	SeedPicture ringed {.seed = SpellSeedType::Storm, .powerUp = 1};
+	StepPicture(ringed, 0.1f);
+	EXPECT_NEAR(ringed.ringSpin, 1.03f, k_Tolerance);
+}
+
+TEST(GestureHints, TwoHintsOfOneMiracleStepItsPictureTwice)
+{
+	Row row;
+	const auto path = std::vector<glm::vec3> {{0.0f, 0.0f, 0.5f}, {1.0f, 0.0f, 0.5f}};
+	row.hints = {
+	    Hint {.gesture = GestureType::Spiral, .seed = SpellSeedType::Storm, .magic = MagicType::Fireball, .path = path},
+	    Hint {.gesture = GestureType::Scribble, .seed = SpellSeedType::Storm, .magic = MagicType::Fireball, .path = path},
+	    Hint {.gesture = GestureType::Circle, .seed = SpellSeedType::Water, .magic = MagicType::Water, .path = path}};
+	row.seeds.emplace(MagicType::Fireball, SeedPicture {.seed = SpellSeedType::Storm});
+	Step(row, 0.25f, false);
+	EXPECT_NEAR(row.seeds.at(MagicType::Fireball).spin, 1.0f, k_Tolerance);
+	// A miracle without a picture gets none from the step
+	EXPECT_FALSE(row.seeds.contains(MagicType::Water));
+	// Faded out, nothing turns
+	row.alpha = 0.0f;
+	Step(row, 0.25f, true);
+	EXPECT_NEAR(row.seeds.at(MagicType::Fireball).spin, 1.0f, k_Tolerance);
+}
+
+TEST(GestureHints, TheSeedAndTheGlobeSitWhereTheCollarsCameraLooks)
+{
+	EXPECT_EQ(SeedMiddle(), k_CollarAt);
+	EXPECT_NEAR(HolderPoint(2.0f).y, 0.24f, k_Tolerance);
+	EXPECT_EQ(HolderPoint(2.0f).z, k_CollarAt.z);
+	const auto globe = GlobeModel();
+	EXPECT_EQ(globe[3], glm::vec4(k_CollarAt, 1.0f));
+	EXPECT_FLOAT_EQ(globe[0].x, k_GlobeScale);
+	// The globe's up axis points to the camera, its depth axis up
+	EXPECT_NEAR(globe[1].z, -k_GlobeScale, 1e-7f);
+	EXPECT_NEAR(globe[1].y, 0.0f, 1e-7f);
+	EXPECT_NEAR(globe[2].y, k_GlobeScale, 1e-7f);
+	EXPECT_NEAR(globe[2].z, 0.0f, 1e-7f);
+}
+
+TEST(GestureHints, ThePicturesFadeWithTheRowAndTheRingsAreFainter)
+{
+	EXPECT_EQ(PictureAlpha(1.0f), 255);
+	EXPECT_EQ(PictureAlpha(0.5f), 127);
+	EXPECT_EQ(PictureAlpha(0.0f), 0);
+	EXPECT_EQ(SeedRingAlpha(255), 119);
+	EXPECT_EQ(SeedRingAlpha(0), 0);
 }

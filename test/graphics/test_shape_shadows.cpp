@@ -130,3 +130,18 @@ TEST(ShapeShadows, OverlappingShadowsAreNoDarker)
 	// A fully covered texel is half as bright, once
 	EXPECT_EQ(tree_shadows::Shade(TexelAt(coverage, 0, 0)), 128);
 }
+
+TEST(ShapeShadows, AtTheLowResolutionFourColumnsAndTwoRowsOfTheSmallerTexels)
+{
+	const auto sample = shape_shadows::SampleOf({170.0f, 330.0f}, {160.0f, 320.0f}, 128);
+	// 128 texels over 160 units: 3.2 columns along z and 1.6 rows along x a unit
+	EXPECT_FLOAT_EQ(sample.column, 32.0f);
+	EXPECT_FLOAT_EQ(sample.row, 16.0f);
+	// The samples stop at the last of 128 texels, a row of 128 texels a texel along x
+	tree_shadows::Coverage coverage {};
+	shape_shadows::Fill(coverage, {At(-100.0f, -100.0f), At(-100.0f, 2000.0f), At(3000.0f, -100.0f)}, false, 128);
+	EXPECT_EQ(coverage[127], 0xFF);
+	EXPECT_EQ(coverage[128], 0xFF);
+	EXPECT_EQ(coverage[127 * 128 + 0], 0xFF);
+	EXPECT_EQ(coverage[128 * 128], 0x00);
+}

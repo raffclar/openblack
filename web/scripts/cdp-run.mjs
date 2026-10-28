@@ -17,7 +17,9 @@
 //   --real-pointer-lock      the page gets Chrome's real pointer lock. Only for a run by hand on a computer where
 //                            nobody works. No merge script and no check may pass it.
 //   --gpu                    use the graphics card through Direct3D 11 (default: the SwiftShader software renderer)
-//   --size <width>x<height>  the size of the window (default 1280x1024)
+//   --size <width>x<height>  the size of the window in CSS pixels (default 1280x1024)
+//   --dpr <ratio>            the device pixel ratio of the screen (default 1). At 2 the screen has 2 pixels for each
+//                            CSS pixel, and the screenshots have 2 pixels for each CSS pixel too.
 //   --trust-spki <hash>      tests on this computer only: trust the certificate of a test server with this key (the
 //                            base64 SHA-256 of its public key), as for a test lobby on 127.0.0.1
 //   --eval <expression>      at the end, print the value of this expression on the page
@@ -34,7 +36,8 @@
 //                            {"do": "synth-move", "dx", "dy", "count", "ms", "buttons"}
 //                            {"do": "synth-button", "type": "mousedown" | "mouseup", "button": 0 | 1 | 2}
 //                            {"do": "wait-log", "text": "...", "seconds": 60}
-//                            {"do": "resize", "width": 1920, "height": 1080}   (the new size of the window)
+//                            {"do": "resize", "width": 1920, "height": 1080, "dpr": 2}   (the new size of the window;
+//                            the device pixel ratio stays the same when the step has no "dpr")
 //                            The wait-log step waits until the game log of the page has the text (at most the
 //                            seconds), and then moves the times of all the next steps and the end later by the wait.
 //                            {"do": "wait-pointer", "x", "y", "within": 40, "seconds": 60}
@@ -64,6 +67,7 @@ const option = (name, fallback) => {
 const flag = (name) => rest.includes(name);
 const seconds = Number(secondsText);
 const [width, height] = option('--size', '1280x1024').split('x').map(Number);
+let pixelRatio = Number(option('--dpr', '1'));
 const shots = Number(option('--shots', '1'));
 const shotEvery = Number(option('--shot-every', '500'));
 const shotsFrom = Number(option('--shots-from', String(seconds)));
@@ -83,6 +87,7 @@ const chrome = spawn(chromePath, [
   '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run',
   '--no-default-browser-check', '--disable-extensions', '--disable-background-networking', '--disable-sync',
   '--metrics-recording-only', '--disable-component-update', `--window-size=${width},${height}`,
+  `--force-device-scale-factor=${pixelRatio}`,
   '--autoplay-policy=user-gesture-required', ...graphics,
   ...(option('--trust-spki', '') ? [`--ignore-certificate-errors-spki-list=${option('--trust-spki', '')}`] : []),
   'about:blank',
@@ -142,7 +147,7 @@ await send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: f
 await send('Log.enable');
 await send('Page.enable');
 await send('DOM.enable');
-await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: pixelRatio, mobile: false });
 // A headless page has no focus of its own. The pointer lock and the keyboard lock need a page with the focus.
 await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Page.bringToFront');
@@ -291,8 +296,9 @@ const runStep = async (step) => {
     break;
   }
   case 'resize':
-    await send('Emulation.setDeviceMetricsOverride', { width: step.width, height: step.height, deviceScaleFactor: 1,
-      mobile: false });
+    pixelRatio = step.dpr ?? pixelRatio;
+    await send('Emulation.setDeviceMetricsOverride', { width: step.width, height: step.height,
+      deviceScaleFactor: pixelRatio, mobile: false });
     break;
   case 'eval':
     record(`[eval] ${step.expression} = ${JSON.stringify(await evaluate(step.expression))}`);
@@ -392,6 +398,14 @@ while (Date.now() < end || taken < Math.min(shots, 1) || (flag('--run-all-steps'
   }
   if (steps.length > 0 && Date.now() >= clicked + steps[0].at * 1000) {
     await runStep(steps.shift());
+    // On a busy computer a step can take longer than its plan. Then the next steps and the end move later by the
+    // same time, so that the time between two steps stays as the plan gives it.
+    const late = steps.length > 0 ? Date.now() - (clicked + steps[0].at * 1000) : 0;
+    if (late > 0) {
+      clicked += late;
+      end += late;
+      next += late;
+    }
     continue;
   }
   if (checksumsFile && Date.now() >= checksumPoll) {

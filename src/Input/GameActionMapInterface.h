@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 
 #include "BindableActions.h"
+#include "Common/InputSteps.h"
 #include "InputLock.h"
 #include "KeyBindings.h"
 
@@ -160,6 +161,12 @@ public:
 	/// Mouse wheel notches turned this frame, positive away from the user
 	[[nodiscard]] virtual float GetMouseWheelDelta() const = 0;
 	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, 2> GetHandPositions() const = 0;
+	/// Divides the mouse of this frame across the fixed steps of the input that the frame takes (see input_steps). Call it
+	/// one time a frame.
+	virtual void SplitInput([[maybe_unused]] const input_steps::Steps& steps) {}
+	/// While a step is set, the mouse reads as the part of the frame that the step takes: the cursor, its movements and
+	/// the wheel. With no step, the mouse reads as the whole frame again.
+	virtual void UseInputStep([[maybe_unused]] std::optional<uint32_t> step) {}
 
 	/// The options screen's actions and what each is bound to now
 	[[nodiscard]] virtual std::span<const KeyBinding> GetKeyBindings() const { return DefaultKeyBindings(); }
