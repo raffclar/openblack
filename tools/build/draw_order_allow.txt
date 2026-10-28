@@ -1,0 +1,5 @@
+# Places that check_draw_order.py shows but that make no two draws in one expression.
+# Each line: path:text, where text is a part of the statement. Give the reason on the line above.
+
+# FloatRandom() and IntRandom() only make the functions that draw. DiesOfOldAge calls them in its own order.
+src/ECS/Systems/Implementations/VillagerHome.cpp:FloatRandom(), IntRandom()

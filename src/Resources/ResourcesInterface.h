@@ -43,6 +43,7 @@ using GestureTemplatesManager = ResourceManager<GestureTemplatesLoader>;
 using VideoManager = ResourceManager<VideoLoader>;
 using ParticleBitmapManager = ResourceManager<ParticleBitmapLoader>;
 using AdvisorModelManager = ResourceManager<AdvisorModelLoader>;
+using LandThumbnailManager = ResourceManager<LandThumbnailLoader>;
 
 class ResourcesInterface
 {
@@ -102,6 +103,8 @@ public:
 	virtual VideoManager& GetVideos() = 0;
 	/// The two advisors, by help::spirits::ModelId
 	virtual AdvisorModelManager& GetAdvisorModels() = 0;
+	/// The thumbnails of the network lands, by the paths of their ".thm" files
+	virtual LandThumbnailManager& GetLandThumbnails() = 0;
 };
 
 } // namespace openblack::resources

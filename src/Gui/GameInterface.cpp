@@ -24,6 +24,7 @@
 
 #include <SDL.h>
 #include <bgfx/bgfx.h>
+#include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/TempleInteriorInterface.h"
@@ -57,6 +58,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -68,6 +70,7 @@
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
 #include "Gui/GlyphTexture.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/IncomingMessageStripRules.h"
 #include "Gui/SavingBox.h"
 #include "Gui/ScreenFit.h"
@@ -90,6 +93,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "Temple/ChallengeRoomRules.h"
+#include "Temple/ScrollPictures.h"
 
 using namespace openblack::gui;
 using openblack::Locator;
@@ -103,6 +107,8 @@ constexpr std::array k_TextScripts = {"InfoScript2.txt", "InfoScriptPatch2.txt",
 constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED";
 /// "Warning. The game may not be synchronised on your machine. Continue?" The game's text has this name.
 constexpr std::string_view k_OutOfSyncText = "HELP_TEXT_SINGING_STONE_CURSE_03";
+// "%s is out of the game."
+constexpr std::string_view k_GodOutText = "HELP_TEXT_WIN_GAME_03";
 /// The words of a resynchronisation (user decision MI-4). The game has no text for them.
 constexpr std::u16string_view k_ResyncText = u"Resynchronising...";
 /// The words stand in the middle of the top of the dialog space, in the dialogs' middle text size
@@ -302,6 +308,27 @@ WorldTextView PrepareWorldTextCanvas(Canvas& canvas)
 	}
 	return view;
 }
+
+/// The thumbnail of a network land from the resource cache, read from "Online Maps/<file>.thm" the first time
+std::shared_ptr<const land_thumbnail::LandThumbnail> LoadLandThumbnail(const std::string& file)
+{
+	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return nullptr;
+	}
+	const auto path = std::filesystem::path("Online Maps") / (file + ".thm");
+	auto& cache = Locator::resources::value().GetLandThumbnails();
+	const auto id = entt::hashed_string(path.generic_string().c_str()).value();
+	if (!cache.Contains(id))
+	{
+		if (!Locator::filesystem::value().Exists(path))
+		{
+			return nullptr;
+		}
+		cache.Load(id, openblack::resources::LandThumbnailLoader::FromDiskTag {}, path);
+	}
+	return cache.Handle(id).handle();
+}
 } // namespace
 
 TextDatabase GameInterface::LoadTexts()
@@ -400,6 +427,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
     , _saveGameBoxes(std::make_unique<SaveGameBoxes>(_texts, _font))
+    , _endGameBox(std::make_unique<EndGameBox>(_texts, _font))
     , _multiplayerBoxes(std::make_unique<MultiplayerBoxes>(_texts, _font))
     , _musicControls(std::make_unique<CustomMusicControls>(_font, _atmos.get()))
     , _incomingMessages(std::make_unique<IncomingMessageStrip>())
@@ -408,6 +436,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
 	_menuCreaturePainter.SetPictures(_symbols.get(), _mice.get());
+	_multiplayerBoxes->SetThumbnailSource(LoadLandThumbnail);
 	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "Font full height");
 	_painter.SetFullGlyphs(_fullFontTexture.get());
 	_menuCreaturePainter.SetFullGlyphs(_fullFontTexture.get());
@@ -482,6 +511,48 @@ bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec
 void GameInterface::ShowSaveProblem()
 {
 	_saveGameBoxes->Tell(std::u16string(_texts.Get(k_SaveProblemText)));
+}
+
+void GameInterface::OpenEndGameBox(EndGameBox::Contents contents)
+{
+	// The end box closes the other boxes of the game
+	_menu->Close();
+	_saveGameBoxes->WithdrawMessage();
+	_endGameBox->Open(std::move(contents));
+}
+
+void GameInterface::ShowGodOut(std::u16string_view name)
+{
+	const std::array words {name};
+	_saveGameBoxes->Tell(end_game_box::Format(_texts.Get(k_GodOutText), words));
+}
+
+bool GameInterface::ProcessEndGameBoxEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_endGameBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_endGameBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button == SDL_BUTTON_LEFT && _endGameBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_KEYDOWN:
+	case SDL_TEXTINPUT:
+		// The end box takes the keys, and Escape does not close it
+		return true;
+	default:
+		return false;
+	}
 }
 
 void GameInterface::AskOutOfSync()
@@ -1204,6 +1275,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	{
 		return true;
 	}
+	if (_endGameBox->IsOpen())
+	{
+		return ProcessEndGameBoxEvent(event);
+	}
 	if (_saveGameBoxes->IsActive())
 	{
 		return ProcessSaveGameBoxesEvent(event);
@@ -1382,6 +1457,7 @@ void GameInterface::Update(float deltaSeconds)
 	_storyHistoryBox->Update(deltaSeconds);
 	_newPlayerBox->Update(deltaSeconds);
 	_saveGameBoxes->Update(deltaSeconds);
+	_endGameBox->Update(deltaSeconds);
 	// The answer to the out-of-sync box: Yes plays on, No leaves the game
 	if (_outOfSyncAsked && !_saveGameBoxes->IsActive())
 	{
@@ -1420,6 +1496,8 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 		_leftButtonDown = false;
 		_otherButtonsDown = 0;
 	}
+	_tattooEditor->SetNetworkGame(_tattooEditorAsNetworkGame ||
+	                              (Locator::time::has_value() && Locator::time::value().IsNetworkGame()));
 	_tattooEditor->Update(deltaSeconds, editor, palette, _leftButtonDown);
 	_menu->SetCovered(_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 }
@@ -1445,11 +1523,13 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// and the fades
 	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
+	DrawTempleScrollPictures(resolution);
 	DrawChatBubbles(resolution, mouse);
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
-	                      _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() || _multiplayerBoxes->IsActive();
+	                      _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() || _multiplayerBoxes->IsActive() ||
+	                      _endGameBox->IsOpen();
 	UpdateChat(menuOpen || _boxOverGameFade.has_value(), resolution);
 	// The custom music controls go while the chat is open
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value() || (_chatControls->IsActive() && _chatControls->IsOpen()));
@@ -1531,6 +1611,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_canvas.SetOrigin(incoming_message_strip::Origin(resolution));
 		_incomingMessages->Draw(_painter, _gatheringText.get());
 		_canvas.SetOrigin(glm::vec2(0.0f));
+		DrawPingLine(resolution, menuOpen, cinemaBars.in);
 		_storyHistoryBox->Draw(_painter);
 		if (_resyncShown)
 		{
@@ -1540,6 +1621,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		}
 		_saveGameBoxes->Draw(_painter);
 		_multiplayerBoxes->Draw(_painter);
+		_endGameBox->Draw(_painter);
 		if (_menu->IsVisible())
 		{
 			_menu->Draw(_painter);
@@ -1553,8 +1635,10 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// A video on a screen wider than its picture has black bars at its sides, which go with the cinema bars
 	const auto sides = static_cast<float>(DrawVideo(resolution));
 	// The scripts' fade covers the picture between the cinema bars, which are black
+	// The multiplayer front end can open over a cut scene from the browser page. Its room shows with no cinema bars.
 	const auto& director = Locator::cinematicDirectorSystem::value();
-	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, director.GetWideScreenFraction()));
+	const auto barFraction = _multiplayerBoxes->IsActive() ? 0.0f : director.GetWideScreenFraction();
+	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, barFraction));
 	const auto screen = glm::vec2(resolution);
 	const auto drawBars = [&screen, bars, sides](Canvas& canvas) {
 		const auto black = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -1959,6 +2043,66 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	afterDrawing();
 }
 
+void GameInterface::DrawTempleScrollPictures(glm::u16vec2 resolution)
+{
+	namespace pictures = temple::scroll_pictures;
+	if (!Locator::temple::has_value() || !Locator::camera::has_value() || !Locator::temple::value().Active())
+	{
+		return;
+	}
+	const auto& lines = Locator::temple::value().GetScrollPictures();
+	if (lines.empty())
+	{
+		return;
+	}
+	const auto& camera = Locator::camera::value();
+	const auto viewProjection = camera.GetViewProjectionMatrix();
+	const float nearClip = camera.GetNearClip();
+	const auto screen = glm::vec2(resolution);
+	const pictures::ProjectFn project = [&viewProjection, nearClip, screen](glm::vec3 point) {
+		using Seen = pictures::ScreenPoint::Seen;
+		const auto clip = viewProjection * glm::vec4(point, 1.0f);
+		pictures::ScreenPoint out {.depth = clip.w};
+		if (clip.w < nearClip)
+		{
+			return out;
+		}
+		out.pixel = {((clip.x / clip.w) + 1.0f) * screen.x * 0.5f, (1.0f - (clip.y / clip.w)) * screen.y * 0.5f};
+		const bool inside = out.pixel.x >= 0.0f && out.pixel.y >= 0.0f && out.pixel.x < screen.x && out.pixel.y < screen.y;
+		out.seen = inside ? Seen::OnScreen : Seen::OffScreen;
+		return out;
+	};
+	std::span<const input::KeyBinding> bindings;
+	if (Locator::gameActionSystem::has_value())
+	{
+		bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	}
+	const auto keyName = ControlKeyName();
+	const help::tip_bubble::ControlShownFn controlShown = [bindings, &keyName](int action) {
+		return help::control_icons::PictureFor(action, bindings, keyName).has_value();
+	};
+	const float pixelScale = ReferenceScale(resolution.x, resolution.y);
+	pictures::Pictures shown;
+	for (const auto& line : lines)
+	{
+		pictures::Place(shown, line, project, controlShown, pixelScale);
+	}
+	// A gesture's picture is flat on the screen, but the world in front of it hides it
+	auto& canvas = _worldLabelsCanvas;
+	const auto view = PrepareWorldTextCanvas(canvas);
+	for (const auto& [icon, depth] : shown.gestures)
+	{
+		const auto sheet = static_cast<size_t>(icon.sheet);
+		if (sheet < _gestureSheets.size() && _gestureSheets.at(sheet) != nullptr)
+		{
+			canvas.SetDepth(world_text::BufferDepth(view.projection, depth));
+			canvas.DrawQuad(icon.min, icon.max, icon.uvMin, icon.uvMax, icon.colour, _gestureSheets.at(sheet).get());
+		}
+	}
+	// A control's picture goes over all of the world
+	for (const auto& control : shown.controls)
+	{
+		DrawBubbleControl(control, bindings, pixelScale);
 void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 {
 	namespace tip = help::tip_bubble;
@@ -2496,6 +2640,33 @@ void GameInterface::DrawStatBar(const creature_panel::Rect& bar, float fill, glm
 	const glm::vec2 bottomRight {bar.max.x - inset, bar.max.y - inset};
 	quad(top, {bottomRight.x, top.y + inset}, {black, black, clear, clear});
 	quad(top, {top.x + inset, bottomRight.y}, {black, clear, clear, black});
+}
+
+void GameInterface::DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool cinemaBars)
+{
+	const bool shows = ping_display::LineShows({
+	    .hasText = _pingLine.has_value(),
+	    .menuOpen = menuOpen,
+	    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+	    .videoPlays = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying(),
+	    .cinemaBars = cinemaBars,
+	    .fightPanel = _fightPanel.has_value(),
+	    .creaturePanelNearTop = _creaturePanel.has_value() && !_creaturePanel->reward.has_value(),
+	});
+	if (!shows)
+	{
+		return;
+	}
+	_canvas.SetOrigin(ping_display::Origin(resolution));
+	_painter.SetAlpha(ping_display::k_Alpha);
+	const auto corner = ping_display::TextCorner();
+	const auto width = DialogPainter::k_Size.x - corner.x;
+	_painter.DrawText(corner + ping_display::k_ShadowOffset, width, DialogPainter::Justify::Left, *_pingLine,
+	                  ping_display::k_TextSize, DialogPainter::k_ShadowColour);
+	_painter.DrawText(corner, width, DialogPainter::Justify::Left, *_pingLine, ping_display::k_TextSize,
+	                  DialogPainter::k_FocusColour);
+	_painter.SetAlpha(1.0f);
+	_canvas.SetOrigin(glm::vec2(0.0f));
 }
 
 void GameInterface::DrawFightPanel(glm::u16vec2 resolution)

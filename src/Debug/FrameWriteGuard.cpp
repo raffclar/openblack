@@ -11,9 +11,12 @@
 
 #include <algorithm>
 #include <span>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <entt/meta/context.hpp>
+#include <fmt/ranges.h>
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/spdlog.h>
 
@@ -98,6 +101,26 @@ std::optional<uint32_t> ChangedEntity(const Sample& before, const Sample& after,
 	return std::nullopt;
 }
 
+std::vector<size_t> ChangedValues(const Sample& before, const Sample& after, const std::string& part)
+{
+	const auto earlier = before.systemValues.find(part);
+	const auto later = after.systemValues.find(part);
+	if (earlier == before.systemValues.end() || later == after.systemValues.end())
+	{
+		return {};
+	}
+	std::vector<size_t> changed;
+	const auto count = std::max(earlier->second.size(), later->second.size());
+	for (size_t i = 0; i < count; ++i)
+	{
+		if (i >= earlier->second.size() || i >= later->second.size() || earlier->second[i] != later->second[i])
+		{
+			changed.push_back(i);
+		}
+	}
+	return changed;
+}
+
 Guard::Guard(bool byField, bool systems)
     : _context(std::make_unique<entt::meta_ctx>())
     , _byField(byField)
@@ -132,10 +155,27 @@ Sample Guard::Take() const
 	if (_systems)
 	{
 		// Each system's saved state is one more part, and it goes into the hash of the whole sample
-		for (const auto& section : ecs::world_save::SavedSystemSections(*_context))
+		for (const auto& section : ecs::world_save::SavedSystemSections(*_context, _byField))
 		{
 			const auto hash = Fnv(section.bytes, k_FnvOffset);
-			sample.hash.parts.emplace_back(std::string(k_SystemPart) + section.name, hash);
+			auto name = std::string(k_SystemPart) + section.name;
+			if (_byField)
+			{
+				// The hash of each value, from the end of the value before it
+				auto& values = sample.systemValues[name];
+				size_t start = 0;
+				for (const auto end : section.valueEnds)
+				{
+					values.push_back(Fnv(std::span(section.bytes).subspan(start, end - start), k_FnvOffset));
+					start = end;
+				}
+				// The bytes that the system wrote after its last value are one more value
+				if (start < section.bytes.size())
+				{
+					values.push_back(Fnv(std::span(section.bytes).subspan(start), k_FnvOffset));
+				}
+			}
+			sample.hash.parts.emplace_back(std::move(name), hash);
 			sample.hash.hash = Fnv(std::span(reinterpret_cast<const uint8_t*>(&hash), sizeof(hash)), sample.hash.hash);
 		}
 	}
@@ -163,9 +203,11 @@ void Guard::After(std::string_view step, uint32_t turn)
 		if (!_found.contains(key))
 		{
 			const auto entity = ChangedEntity(_before, after, key.second);
+			const auto values = ChangedValues(_before, after, key.second);
 			SPDLOG_LOGGER_WARN(spdlog::get("game"),
-			                   "Frame write guard: the frame step {} changed the synced part {} at turn {}{}", key.first,
-			                   key.second, turn, entity.has_value() ? fmt::format(" (entity {})", *entity) : "");
+			                   "Frame write guard: the frame step {} changed the synced part {} at turn {}{}{}", key.first,
+			                   key.second, turn, entity.has_value() ? fmt::format(" (entity {})", *entity) : "",
+			                   values.empty() ? "" : fmt::format(" (values {})", fmt::join(values, ",")));
 			_found.insert(std::move(key));
 		}
 	}

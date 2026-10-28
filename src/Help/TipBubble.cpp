@@ -277,17 +277,6 @@ Arrow DownArrow(const Placement& placement)
 
 namespace
 {
-/// The bounds the words of one pass are drawn within
-struct WordBounds
-{
-	float left;
-	float right;
-	float clipTop;
-	float fadeTopEnd;
-	float fadeBottomStart;
-	float clipBottom;
-};
-
 /// A row's alpha, from the colour's (0 to 255): fading in over the top of the box, then out under the bottom line, in
 /// whole steps
 float RowAlpha(float y, int alpha, const WordBounds& bounds)
@@ -347,6 +336,8 @@ constexpr float k_GestureCell = 0.25f;
 constexpr float k_ControlRaise = 0.2f;
 /// Fainter than this a control's picture isn't drawn
 constexpr int k_FaintestControl = 4;
+
+} // namespace
 
 /// A gesture's picture centred between the bounds' margins from a top down, cut to their rows; none where it can't fit
 /// across or down, or lies wholly outside them
@@ -424,7 +415,6 @@ void AddControl(std::vector<ControlIcon>& out, int action, float top, float size
 	    .alpha = static_cast<float>(alpha) / 255.0f,
 	});
 }
-} // namespace
 
 Words LayOutWords(const Placement& placement, std::span<const std::u16string_view> items, float scrollPixels, float alpha,
                   const WrapFn& wrap, const WidthFn& widthOf, const ControlShownFn& controlShown)

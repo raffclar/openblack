@@ -55,6 +55,7 @@ public:
 	/// wooshes only when it starts more than 150 from its end. Its half way point rises by the rise times the distance
 	/// across.
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) final;
+	void StopFlight() final { _flightPath.reset(); }
 	/// Flies back to where it was, as when the camera is given back after the hand lets go of a creature: as SetFlight
 	/// with a rise of 0.1, wooshing only when asked
 	void FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh);

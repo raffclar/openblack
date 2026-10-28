@@ -549,3 +549,17 @@ TEST(CreatureRouteSearch, AWalkToASmallRockStopsAtTheStraightReachOutsideTheRock
 	ASSERT_EQ(Finish(tooNear, inside), Search::Status::Found);
 	EXPECT_NEAR(glm::distance(tooNear.GetBest().back().to, rock), 1.0984f, 0.01f);
 }
+
+TEST(CreatureRouteSearch, TheSearchingCreaturesShareThirtyTwoStepsATurn)
+{
+	using openblack::creature_route::TurnSearchShare;
+	// With no searching creature at the start of the turn, a creature that starts a search later gets all the steps
+	EXPECT_EQ(TurnSearchShare(0), 32);
+	EXPECT_EQ(TurnSearchShare(1), 32);
+	EXPECT_EQ(TurnSearchShare(2), 16);
+	// The share rounds down
+	EXPECT_EQ(TurnSearchShare(3), 10);
+	EXPECT_EQ(TurnSearchShare(32), 1);
+	// Each creature gets at least one step
+	EXPECT_EQ(TurnSearchShare(100), 1);
+}

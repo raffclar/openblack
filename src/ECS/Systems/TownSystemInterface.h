@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <functional>
 #include <optional>
 #include <vector>
@@ -138,8 +139,9 @@ public:
 	/// and for any player but the neutral one fireworks and a fountain of the player's symbols rise from its centre.
 	/// The player at this machine hears the town won. Nothing happens if the town is theirs already.
 	virtual void ClaimTown(entt::entity town, PlayerNames player) = 0;
-	/// Each frame, gameSeconds on: every village centre shows its players' symbols of belief over its totem, made with
-	/// the centre and stepped as it is drawn
-	virtual void UpdateFrame(float /*gameSeconds*/) {}
+	/// Each frame of this real time: every village centre shows its players' symbols of belief over its totem, made with
+	/// the centre. They move on by a whole turn's time in each frame that draws the land, no more often than 60 times a
+	/// second, also while the game is paused.
+	virtual void UpdateFrame(std::chrono::milliseconds /*frameRealTime*/, bool /*landDrawn*/) {}
 };
 } // namespace openblack::ecs::systems

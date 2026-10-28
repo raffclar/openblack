@@ -86,20 +86,20 @@ struct Region
 /// The regions that a creature went into
 using Visited = std::bitset<k_RegionCount>;
 
-/// The regions of the land
-class RegionMap
+/// The regions of the land. The world keeps the map: a computer that takes the world of another computer gets the same
+/// map, made from the towns at the start of the land.
+struct RegionMap
 {
-public:
 	/// Makes the map from the cells of the land and the buildings of the towns that stand on it now
 	[[nodiscard]] static RegionMap Make(const CellAt& cellAt, const TownAt& townAt);
 
 	[[nodiscard]] const Region& At(glm::ivec2 region) const;
 	/// The height of the highest region of the land
-	[[nodiscard]] float Highest() const { return _highest; }
+	[[nodiscard]] float Highest() const { return highest; }
 
-private:
-	std::vector<Region> _regions;
-	float _highest {0.0f};
+	/// The regions, by their index
+	std::vector<Region> regions;
+	float highest {0.0f};
 };
 
 /// Whether a region is on the map

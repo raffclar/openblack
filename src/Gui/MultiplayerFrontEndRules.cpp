@@ -13,6 +13,9 @@
 
 #include <algorithm>
 
+#include "Online/OnlineMapLand.h"
+#include "PingDisplay.h"
+
 namespace openblack::gui::multiplayer
 {
 namespace
@@ -134,10 +137,14 @@ uint32_t ReadU32(std::span<const uint8_t> bytes, size_t at)
 	       (static_cast<uint32_t>(bytes[at + 2]) << 16u) | (static_cast<uint32_t>(bytes[at + 3]) << 24u);
 }
 
-/// The nearest of the greys (i, i, i) to a colour is the grey of the mean of its three parts, rounded
+/// The grey that Windows gives a colour when it copies the colour into a picture of 256 greys. Each part goes to the
+/// middle of its step of eight, then the grey is the mean of the three parts, rounded.
 uint8_t NearestGrey(uint32_t red, uint32_t green, uint32_t blue)
 {
-	return static_cast<uint8_t>(((red + green + blue) * 2u + 3u) / 6u);
+	constexpr uint32_t k_StepMask = 0xF8;
+	constexpr uint32_t k_StepMiddles = 12;
+	const auto sum = (red & k_StepMask) + (green & k_StepMask) + (blue & k_StepMask) + k_StepMiddles;
+	return static_cast<uint8_t>((sum + 1) / 3);
 }
 
 } // namespace
@@ -357,6 +364,29 @@ std::vector<Seat> Seats(std::span<const lobby_api::RoomPlayer> players)
 	return seats;
 }
 
+std::u16string RosterLine(const Seat& seat, std::u16string_view name, bool own, const RosterTexts& texts,
+                          const std::optional<std::u16string>& ping)
+{
+	std::u16string line;
+	if (seat.god > 0)
+	{
+		const std::array<TextArgument, 1> god = {int64_t {seat.god}};
+		line = FormatText(texts.god, god);
+	}
+	else
+	{
+		line = texts.observers;
+	}
+	line += u": ";
+	line += name;
+	if (own)
+	{
+		line += texts.current;
+		line = ping_display::AfterOwnName(std::move(line), ping);
+	}
+	return line;
+}
+
 uint32_t GodColourBits(int32_t god) noexcept
 {
 	if (god <= 0 || god > static_cast<int32_t>(k_GodColours.size()))
@@ -441,9 +471,13 @@ std::vector<LocalMap> ParseLocalMaps(std::string_view text)
 
 std::optional<size_t> FindLand(std::span<const LocalMap> maps, std::string_view land)
 {
+	// The server sends the path of a network land, such as "Online Maps/mpm_2p_1.map". The list of the lands has the
+	// file name with no folder and no extension, in any case.
+	const auto mapFile = online_map_land::MapName(land);
 	for (size_t i = 0; i < maps.size(); ++i)
 	{
-		if (maps[i].file == land || maps[i].name == Widen(land))
+		if (maps[i].file == land || maps[i].name == Widen(land) ||
+		    (!mapFile.empty() && online_map_land::MapName(maps[i].file + std::string(online_map_land::k_Extension)) == mapFile))
 		{
 			return i;
 		}
@@ -553,6 +587,17 @@ std::optional<LogoOpacities> DecodeClanLogo(std::span<const uint8_t> bmp)
 		}
 	}
 	return logo;
+}
+
+std::vector<std::u16string> PlayerDetailLines(std::span<const PlayerDetail> details)
+{
+	std::vector<std::u16string> lines;
+	lines.reserve(details.size());
+	for (const auto& detail : details)
+	{
+		lines.push_back(detail.label + u":" + detail.value);
+	}
+	return lines;
 }
 
 std::string_view ConditionText(size_t index) noexcept

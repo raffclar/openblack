@@ -209,6 +209,25 @@ struct ControlBox
 /// The gap between a control's picture and its (empty) label, in pixels of the default screen
 constexpr float k_ControlGap = 2.0f;
 
+/// The bounds of the words and pictures, in pixels: the margins, the rows that cut them, and where they fade in at the
+/// top and start to fade out at the bottom
+struct WordBounds
+{
+	float left;
+	float right;
+	float clipTop;
+	float fadeTopEnd;
+	float fadeBottomStart;
+	float clipBottom;
+};
+/// Adds a gesture's picture, `size` square, centred between the margins from a top down, cut to the rows. Adds nothing
+/// when it cannot fit across or down, or when it is fully outside the rows.
+void AddGesture(std::vector<GestureIcon>& out, int gesture, float top, float size, const WordBounds& bounds, glm::vec4 colour,
+                bool shadow);
+/// Adds a control's picture, `size` high, from a top down, only when it is fully below the top row and above
+/// `boxBottom`. It fades in over the fade at the top and fades out from the fade at the bottom to `boxBottom`.
+void AddControl(std::vector<ControlIcon>& out, int action, float top, float size, const WordBounds& bounds, float boxBottom);
+
 /// Whether a control action has a binding to show
 using ControlShownFn = std::function<bool(int action)>;
 

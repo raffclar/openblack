@@ -40,6 +40,7 @@
 #include "Common/RandomNumberManagerProduction.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/MapProduction.h"
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/Registry.h"
@@ -59,6 +60,7 @@
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
 #include "ECS/Systems/Implementations/ComputerSettingsSystem.h"
+#include "ECS/Systems/Implementations/CreatureAnimationLogSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
 #include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
@@ -125,6 +127,7 @@
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
+#include "ECS/Systems/Implementations/GameEndSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
@@ -219,6 +222,7 @@ using openblack::TempleInterior;
 using openblack::UnloadedIsland;
 using openblack::chlapi::CHLApi;
 using openblack::debug::gui::DebugGuiInterface;
+using openblack::ecs::DrawnRegistry;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
@@ -269,6 +273,7 @@ using openblack::ecs::systems::FixedOutlineSystem;
 using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
+using openblack::ecs::systems::GameEndSystem;
 using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::GuidanceSystem;
@@ -651,6 +656,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::resources::emplace<Resources>();
 	Locator::playerSystem::emplace<PlayerSystem>();
 	Locator::entitiesRegistry::emplace<Registry>();
+	Locator::drawnRegistry::emplace<DrawnRegistry>();
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
@@ -676,6 +682,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
 	Locator::artefactSystem::emplace<ArtefactSystem>();
 	Locator::heartbeatSystem::emplace<HeartbeatSystem>();
+	Locator::gameEndSystem::emplace<GameEndSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
@@ -799,8 +806,10 @@ namespace openblack
 {
 namespace
 {
-template <typename LandSource>
-void InitializeLevelWith(const LandSource& land)
+/// Starts the services of a new level. makeLand gives the level its land, at the place in the order where the land
+/// changes.
+template <typename MakeLand>
+void InitializeLevelWith(MakeLand&& makeLand)
 {
 	// Both seeds go to 0 with every map, as the game clears them
 	Locator::gameRandom::value().SetSeeds({0, 0});
@@ -836,7 +845,7 @@ void InitializeLevelWith(const LandSource& land)
 	Locator::cameraBookmarkSystem::emplace<CameraBookmarkSystem>();
 	// A land starts with no camera zones
 	Locator::cameraZoneSystem::emplace<CameraZoneSystem>();
-	Locator::terrainSystem::emplace<LandIsland>(land);
+	makeLand();
 	// The things on the land's blocks that are drawn, near to far
 	Locator::objectDrawListSystem::emplace<ObjectDrawListSystem>();
 	Locator::cameraPathSystem::emplace<CameraPathSystem>();
@@ -846,12 +855,21 @@ void InitializeLevelWith(const LandSource& land)
 
 void openblack::InitializeLevel(const std::filesystem::path& path)
 {
-	InitializeLevelWith(path);
+	InitializeLevelWith([&path] { Locator::terrainSystem::emplace<LandIsland>(path); });
 }
 
 void openblack::InitializeLevel(const LandData& land)
 {
-	InitializeLevelWith(land);
+	InitializeLevelWith([&land] { Locator::terrainSystem::emplace<LandIsland>(land); });
+}
+
+void openblack::InitializeLevelOnOpenLand()
+{
+	InitializeLevelWith([] {
+		const auto restored = Locator::terrainSystem::value().RestoreBuiltAltitudes();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The level keeps its land: {} cells went back to their built altitude",
+		                   restored);
+	});
 }
 
 void openblack::InitializeComputerSettings(std::optional<std::filesystem::path> file)
@@ -889,6 +907,8 @@ void openblack::ShutDownServices()
 		resources.GetSounds().Clear();
 		// The advisors' models hold meshes of their own
 		resources.GetAdvisorModels().Clear();
+		// The thumbnails of the network lands hold textures of their own
+		resources.GetLandThumbnails().Clear();
 	}
 	Locator::advisorSystem::reset();
 
@@ -908,6 +928,7 @@ void openblack::ShutDownServices()
 	Locator::webSocketClient::reset();
 	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();
+	Locator::creatureAnimationLog::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
@@ -986,6 +1007,7 @@ void openblack::ShutDownServices()
 	Locator::spellIconSystem::reset();
 	Locator::artefactSystem::reset();
 	Locator::heartbeatSystem::reset();
+	Locator::gameEndSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::pauseTextSystem::reset();
@@ -1022,10 +1044,23 @@ void openblack::ShutDownServices()
 
 	Locator::oceanSystem::reset();
 	Locator::skySystem ::reset();
+	Locator::cameraHelpSystem::reset();
+	Locator::cameraPathSystem::reset();
+	Locator::cloudSystem::reset();
+	Locator::mistSystem::reset();
+	Locator::villageLightSystem::reset();
+	Locator::tutorialSkipSystem::reset();
+	Locator::templeExteriorSystem::reset();
+	Locator::temple::reset();
+	Locator::vegetation::reset();
+	Locator::alignmentSystem::reset();
+	Locator::playerProfileSystem::reset();
+	Locator::playerSystem::reset();
 	Locator::debugGui::reset();
 	// The map listens to the registry's signals, so it goes first: a map left behind would later let go of signals of a
 	// registry that is gone
 	Locator::entitiesMap::reset();
+	Locator::drawnRegistry::reset();
 	Locator::entitiesRegistry::reset();
 	Locator::rendererInterface::reset();
 	Locator::windowing::reset();
@@ -1036,6 +1071,8 @@ void openblack::ShutDownServices()
 	Locator::profiler::reset();
 
 	Locator::vm::reset();
+	Locator::gameRandom::reset();
+	Locator::rng::reset();
 }
 
 bool openblack::StartInspector([[maybe_unused]] uint16_t port)
@@ -1050,6 +1087,8 @@ bool openblack::StartInspector([[maybe_unused]] uint16_t port)
 	}
 	// The fights keep a transcript for the inspector's tools
 	Locator::fightTranscript::emplace<ecs::systems::FightTranscriptSystem>();
+	// The creatures' bodies keep a log of their clips for the inspector's tools
+	Locator::creatureAnimationLog::emplace<ecs::systems::CreatureAnimationLogSystem>();
 	Locator::inspector::emplace<ecs::systems::InspectorSystem>(std::move(server));
 	return true;
 #else

@@ -39,6 +39,17 @@ int32_t TurnsFor(float seconds)
 	return static_cast<int32_t>(static_cast<int64_t>(x87::Mul(static_cast<double>(k_TurnsPerSecond), seconds)));
 }
 
+std::optional<uint32_t> DispenserTurns(float seconds)
+{
+	// A time before now gives so many turns that the dispenser never makes another bubble
+	const auto turns = TurnsFor(seconds);
+	if (turns == 0)
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(turns);
+}
+
 Timer Set(uint32_t turn, float seconds)
 {
 	return {.setTurn = turn, .turns = TurnsFor(seconds)};

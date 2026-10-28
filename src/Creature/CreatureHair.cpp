@@ -11,8 +11,12 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 
 #include <algorithm>
+#include <array>
+#include <span>
+#include <vector>
 
 #include <glm/geometric.hpp>
 
@@ -35,6 +39,8 @@ constexpr float k_HeadScalePerSize = 0.5f;
 constexpr float k_MaxHeadScaleSize = 2.0f;
 /// The springs' stiffness is given in thousandths
 constexpr float k_StiffnessScale = 1000.0f;
+/// The number of points of a strand that a step keeps on the stack
+constexpr size_t k_StackPoints = 64;
 
 /// The value made no faster than the most, its squares added in the given order
 template <x87::SumOrder Order>
@@ -156,7 +162,17 @@ Strand creature_hair::FromZero(uint32_t segmentCount)
 	        .velocities = std::vector<glm::vec3>(segmentCount, glm::vec3(0.0f))};
 }
 
+float creature_hair::KeptSpeed(const Physics& physics, float seconds)
+{
+	return physics.damping > 0.0f ? x87::Pow(physics.damping, seconds) : std::pow(physics.damping, seconds);
+}
+
 void creature_hair::Step(Strand& strand, const Root& root, const Physics& physics, float seconds)
+{
+	Step(strand, root, physics, seconds, KeptSpeed(physics, seconds));
+}
+
+void creature_hair::Step(Strand& strand, const Root& root, const Physics& physics, float seconds, float kept)
 {
 	auto& positions = strand.positions;
 	auto& velocities = strand.velocities;
@@ -167,8 +183,20 @@ void creature_hair::Step(Strand& strand, const Root& root, const Physics& physic
 	}
 	// The root is sunk a little into the body
 	positions[0] = root.position + (root.inwardNormal * physics.rootDepth);
-	const auto before = positions;
-	const auto kept = physics.damping > 0.0f ? x87::Pow(physics.damping, seconds) : std::pow(physics.damping, seconds);
+	// The points as they were at the start of the step. A strand of usual length keeps them on the stack.
+	std::array<glm::vec3, k_StackPoints> stackPoints;
+	std::vector<glm::vec3> heapPoints;
+	std::span<glm::vec3> before;
+	if (positions.size() <= stackPoints.size())
+	{
+		before = std::span(stackPoints).first(positions.size());
+	}
+	else
+	{
+		heapPoints.resize(positions.size());
+		before = heapPoints;
+	}
+	std::ranges::copy(positions, before.begin());
 
 	// Each point is pulled towards lying straight on from the segment before it, as the strand lay at the start of
 	// the step; the first towards growing out of the surface

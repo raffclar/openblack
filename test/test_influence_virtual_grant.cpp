@@ -44,6 +44,11 @@ public:
 	{
 		return {};
 	}
+	/// The frames draw the hand where its Transform puts it
+	[[nodiscard]] std::optional<glm::vec3> GetDrawnHandPosition() const noexcept override
+	{
+		return Locator::entitiesRegistry::value().Get<const components::Transform>(hand).position;
+	}
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords>, bool) override {}
 
 	entt::entity hand {entt::null};

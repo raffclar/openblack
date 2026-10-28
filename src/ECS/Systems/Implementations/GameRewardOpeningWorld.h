@@ -30,7 +30,7 @@ class GameRewardOpeningWorld final: public reward::OpeningWorld
 public:
 	explicit GameRewardOpeningWorld(entt::entity chest);
 
-	void Pour(ResourceType type, uint32_t amount) override;
+	void Pour(ResourceType type, uint32_t amount, PlayerNames player) override;
 	[[nodiscard]] bool HasTown() const override;
 	void GiveTownBelief(float belief) override;
 	void MakeObject(MobileStaticInfo object) override;

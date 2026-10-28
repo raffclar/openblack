@@ -21,7 +21,7 @@ namespace openblack::ecs::components
 {
 
 /// The copy (see CreatureCopy) of the player's creature that the falling spell's film shows. It stands at the world's
-/// origin, and the renderer draws it only over the film.
+/// origin, and the renderer draws it only over the film. It is a thing of the drawn registry.
 struct FilmCreature
 {
 	/// The film's time that its pose has moved on to
