@@ -70,6 +70,13 @@ public:
 	void Stop();
 	/// Once a frame
 	void Update(float seconds);
+	/// Once a frame of a network game: only the camera follows the scenario. The commands come before the turns.
+	void UpdateView() { UpdateCamera(); }
+	/// Before each turn of a network game: the scenario steps on by the time of one turn and gives the commands that are
+	/// due. The first turn after the layout gives no commands (see TurnStepOf).
+	void BeforeTurn();
+	/// The turn count at which the last scenario was laid out, or none before the first scenario
+	[[nodiscard]] std::optional<uint32_t> GetLayoutTurn() const { return _layoutTurn; }
 
 	[[nodiscard]] bool IsRunning() const { return _running; }
 	/// The scenario running, or last run
@@ -221,6 +228,8 @@ private:
 	const Scenario* _scenario {nullptr};
 	bool _running {false};
 	float _seconds {0.0f};
+	/// The turn count at which the scenario was laid out
+	std::optional<uint32_t> _layoutTurn;
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;

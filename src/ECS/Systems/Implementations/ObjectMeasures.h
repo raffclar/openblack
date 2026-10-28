@@ -25,7 +25,7 @@ class Registry;
 namespace openblack::ecs::systems::object_measures
 {
 
-/// A thing's radius on the ground, 0 for one without a model
+/// A thing's radius on the ground, 0 for one without a model. Fields and teleport stones have fixed radii.
 [[nodiscard]] float TwoDRadius(const Registry& registry, entt::entity entity);
 /// A thing's height, 0 for one without a model
 [[nodiscard]] float Height(const Registry& registry, entt::entity entity);

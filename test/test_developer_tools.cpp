@@ -211,6 +211,12 @@ TEST(DeveloperTools, ABuildForPlayersRefusesTheSoakToolsAndADeveloperBuildAllows
 	EXPECT_FALSE(SoakRefusalOf(true, seeded).has_value());
 }
 
+TEST(DeveloperTools, ABuildForPlayersRefusesTheScenarioOfAGameServer)
+{
+	EXPECT_TRUE(ScenarioRefusalOf(false).has_value());
+	EXPECT_FALSE(ScenarioRefusalOf(true).has_value());
+}
+
 TEST(DeveloperTools, TheSoakOptionsOfTheGameAndTheServerAreDeveloperOptions)
 {
 	EXPECT_TRUE(IsDeveloperOption("sim-all-computer-gods", k_DeveloperOptions));

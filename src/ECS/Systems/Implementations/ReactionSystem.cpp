@@ -54,6 +54,7 @@
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellSeed.h"
@@ -237,18 +238,29 @@ reaction_timing::Reacting WhoOf(const ecs::Registry& registry, entt::entity livi
 	return registry.AllOf<Creature>(living) ? reaction_timing::Reacting::Creature : reaction_timing::Reacting::Other;
 }
 
+/// Where a thing is now, as the turn knows it. A hand is where the last report of its player put it: its drawn place
+/// follows the pointer of one computer only. Empty when the thing has no place.
+std::optional<glm::vec3> TurnPlaceOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (const auto* reported = registry.TryGet<const ReportedHand>(thing))
+	{
+		return reported->handPoint;
+	}
+	if (const auto* transform = registry.TryGet<const Transform>(thing))
+	{
+		return transform->position;
+	}
+	return std::nullopt;
+}
+
 /// Where the thing a reaction is about is now: the thing itself while it is there, else where the reaction is
 glm::vec3 ThingAt(const ecs::Registry& registry, const ReactionSystem::Active& reaction)
 {
-	const auto thing = reaction.source.initiator;
-	if (thing != entt::null && registry.Valid(thing))
-	{
-		if (const auto* transform = registry.TryGet<const Transform>(thing))
-		{
-			return transform->position;
-		}
-	}
-	return reaction.source.position;
+	return TurnPlaceOf(registry, reaction.source.initiator).value_or(reaction.source.position);
 }
 
 /// Whether what a living reacts to has gone: deleted, or a villager dying
@@ -1098,11 +1110,8 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		}
 		const auto at = registry.Get<const Transform>(entity).position;
 		// Under a shield that what made the reaction isn't inside, where it is now, it is kept off
-		const auto* initiatorAt =
-		    registry.Valid(reaction.source.initiator) ? registry.TryGet<const Transform>(reaction.source.initiator) : nullptr;
 		if (Locator::magicShieldSystem::has_value() &&
-		    Locator::magicShieldSystem::value().KeepsReactionOff(at, initiatorAt != nullptr ? initiatorAt->position
-		                                                                                    : reaction.source.position))
+		    Locator::magicShieldSystem::value().KeepsReactionOff(at, ThingAt(registry, reaction)))
 		{
 			continue;
 		}

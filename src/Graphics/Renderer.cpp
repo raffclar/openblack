@@ -54,6 +54,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandColourStamps.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "3D/Lightning.h"
 #include "3D/Mists.h"
@@ -278,6 +279,13 @@ constexpr float k_NoShadowSpellLook = 0.2f;
 constexpr uint16_t k_GroundShadowDataWidth = 64;
 /// How many buffers the frames are drawn into in turn
 constexpr uint8_t k_BackBuffers = 3;
+/// How finely the land's block textures are painted, for the terrain shader (see u_landTexels there)
+glm::vec4 LandTexelsUniform(int blockTexels)
+{
+	const auto& sampling = land_detail::CoarseSamplingFor(blockTexels);
+	const auto texels = static_cast<float>(sampling.blockTexels);
+	return {texels, static_cast<float>(sampling.step), sampling.drawnTexels, texels / 255.0f};
+}
 /// How deep the snow lies over the island, as a texture the shaders read point by point, refreshed when the snow
 /// changes; none without snow
 const Texture2D* SnowDepth(std::unique_ptr<Texture2D>& texture, std::optional<uint32_t>& revision)
@@ -1896,6 +1904,8 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetUniformValue("u_hazeColour", &noHaze);
 	terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
 	terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
+	const auto landTexels = LandTexelsUniform(island.GetBlockTextureSide());
+	terrainShader->SetUniformValue("u_landTexels", &landTexels);
 	// The map shows no vortex's hole
 	const glm::vec4 noVortex {0.0f, 0.0f, 0.0f, -1.0f};
 	terrainShader->SetUniformValue("u_vortexGround", &noVortex);
@@ -4621,8 +4631,11 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 	}
 	const auto* dome =
 	    Locator::entitiesRegistry::value().TryGet<const ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
-	// A warm-up makes the target and draws a band of no rows when the dome has none this frame: it changes no texel
-	if (dome == nullptr || (dome->frameRows.Get().empty() && !_warmingUp))
+	const bool lowResolution = Locator::config::value().detail.lowResTextures;
+	// A warm-up makes the target and draws a band of no rows when the dome has none this frame: it changes no texel. The
+	// low resolution dome is made once and stays.
+	const bool lowDomeMade = lowResolution && _skyDomeFrameBuffer && _skyDomeRows == sky_dome::k_LowRows;
+	if (dome == nullptr || (!lowResolution && dome->frameRows.Get().empty() && !_warmingUp) || (lowDomeMade && !_warmingUp))
 	{
 		return;
 	}
@@ -4632,19 +4645,35 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 		return;
 	}
 	constexpr uint16_t k_Alignments = 3;
-	constexpr glm::u16vec2 k_Size {sky_dome::k_Rows, sky_dome::k_Rows * k_Alignments};
-	if (!_skyDomeFrameBuffer)
+	const uint16_t domeRows = lowResolution ? sky_dome::k_LowRows : sky_dome::k_Rows;
+	const glm::u16vec2 size {domeRows, static_cast<uint16_t>(domeRows * k_Alignments)};
+	if (!_skyDomeFrameBuffer || _skyDomeRows != domeRows)
 	{
-		_skyDomeFrameBuffer = std::make_unique<FrameBuffer>("SkyDome", k_Size.x, k_Size.y, graphics::TextureFormat::RGBA8,
+		_skyDomeFrameBuffer = std::make_unique<FrameBuffer>("SkyDome", size.x, size.y, graphics::TextureFormat::RGBA8,
 		                                                    std::nullopt, 1, Wrapping::ClampEdge);
+		_skyDomeRows = domeRows;
 	}
-	const auto viewId = SetUpLandView(RenderPass::SkyDome, *_skyDomeFrameBuffer, k_Size);
+	const auto viewId = SetUpLandView(RenderPass::SkyDome, *_skyDomeFrameBuffer, size);
 	const auto& program = *_shaderManager->GetShader("SkyDome");
-	constexpr auto k_Rows = static_cast<float>(sky_dome::k_Rows);
+	const auto rowsAcross = static_cast<float>(domeRows);
+	if (lowResolution)
+	{
+		// Each alignment's day picture, every second texel, never blended for the time of day
+		for (uint16_t alignment = 0; alignment < k_Alignments; ++alignment)
+		{
+			const glm::vec4 u_skyDome {alignment * 3, sky_dome::k_LowTime, sky_dome::k_LowTime, -1.0f};
+			program.SetTextureSampler("s_diffuse", 0, *pictures);
+			program.SetUniformValue("u_skyDome", &u_skyDome);
+			const auto top = static_cast<float>(alignment) * rowsAcross;
+			SubmitLandQuad(viewId, program, {0.0f, top}, {rowsAcross, top + rowsAcross}, {0.0f, 0.0f}, {1.0f, 1.0f},
+			               BGFX_STATE_WRITE_RGB);
+		}
+		return;
+	}
 	if (dome->frameRows.Get().empty())
 	{
 		program.SetTextureSampler("s_diffuse", 0, *pictures);
-		SubmitLandQuad(viewId, program, {0.0f, 0.0f}, {k_Rows, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}, BGFX_STATE_WRITE_RGB);
+		SubmitLandQuad(viewId, program, {0.0f, 0.0f}, {rowsAcross, 0.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}, BGFX_STATE_WRITE_RGB);
 	}
 	for (const auto& rows : dome->frameRows.Get())
 	{
@@ -4657,9 +4686,9 @@ void Renderer::DrawSkyDomePass(const DrawSceneDesc& drawDesc) const
 			const glm::vec4 u_skyDome {alignment * 3, times.lower, times.upper, times.weight};
 			program.SetTextureSampler("s_diffuse", 0, *pictures);
 			program.SetUniformValue("u_skyDome", &u_skyDome);
-			const auto top = static_cast<float>(alignment) * k_Rows;
-			SubmitLandQuad(viewId, program, {0.0f, top + first}, {k_Rows, top + last}, {0.0f, first / k_Rows},
-			               {1.0f, last / k_Rows}, BGFX_STATE_WRITE_RGB);
+			const auto top = static_cast<float>(alignment) * rowsAcross;
+			SubmitLandQuad(viewId, program, {0.0f, top + first}, {rowsAcross, top + last}, {0.0f, first / rowsAcross},
+			               {1.0f, last / rowsAcross}, BGFX_STATE_WRITE_RGB);
 		}
 	}
 }
@@ -4977,7 +5006,8 @@ TextureHandle Renderer::UpdateLandLight() const
 		// The land's light as the sky worked it out for this frame: the clouds over the camera darken the land, and so
 		// does a flash of lightning
 		const auto [skyType, alignment, overcast, flash] = dome->landLight;
-		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash);
+		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash,
+		                       FrameRampDivisor());
 		const auto& haze = _landLightTable->GetHaze();
 		const auto& detail = Locator::config::value().detail;
 		// The lower detail levels draw no haze at all
@@ -6100,7 +6130,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const auto modelMatrix = sky_dome::Placement();
 			// The sky's alignment from 0, evil, to 2, good, mixes two of the alignments' domes
 			const auto alignments = sky_dome::AlignmentPair(Locator::alignmentSystem::value().GetSkyAlignment() + 1.0f);
-			const glm::vec4 u_skyAlignment {alignments.lower, alignments.upper, alignments.weight, 0.0f};
+			const glm::vec4 u_skyAlignment {alignments.lower, alignments.upper, alignments.weight,
+			                                static_cast<float>(_skyDomeRows)};
 
 			skyShader->SetTextureSampler("s_diffuse", 0, _skyDomeFrameBuffer->GetColorAttachment());
 			skyShader->SetUniformValue("u_skyAlignment", &u_skyAlignment);
@@ -6240,6 +6271,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			// in that order in the land's own pass and sorted by their distance in the reflection's. The nearest block
 			// is submitted first with all of these, so they reach every block after it; the textures stay bound from
 			// one block to the next.
+			const auto landTexels = LandTexelsUniform(island.GetBlockTextureSide());
 			const auto setTerrainUniforms = [&]() {
 				terrainShader->SetTextureSampler("s0_blockTextures", 0, island.GetBlockTextures());
 				terrainShader->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
@@ -6261,6 +6293,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetUniformValue("u_hazeColour", &_haze[1]);
 				terrainShader->SetUniformValue("u_skyAndBump", &u_skyAndBump);
 				terrainShader->SetUniformValue("u_islandExtent", &islandExtent);
+				terrainShader->SetUniformValue("u_landTexels", &landTexels);
 				// The moving shadows fall on the land, not on its reflection
 				SetGroundShadowUniforms(*terrainShader, desc.viewId == RenderPass::Main);
 				setTerrainSnow();

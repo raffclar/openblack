@@ -468,7 +468,11 @@ bool Gui::Loop() noexcept
 	FollowNetworkSession();
 	if (_networkDormant)
 	{
-		// An empty frame: no menu, no window and no overlay
+		// An empty frame: no menu, no window and no overlay. The tools that the game server asks for continue.
+		for (auto& window : _debugWindows)
+		{
+			window->UpdateInNetworkGame();
+		}
 		NewFrame();
 		ShowInputLockNotice();
 		ImGui::Render();

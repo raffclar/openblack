@@ -14,6 +14,7 @@
 
 #include <entt/signal/sigh.hpp>
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/TownSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -72,7 +73,7 @@ public:
 	void ClaimTown(entt::entity town, PlayerNames player) override;
 	std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, glm::vec2 from, ResourceType type) override;
 	void SetStoragePit(entt::entity town) override;
-	void UpdateFrame(float gameSeconds) override;
+	void UpdateFrame(std::chrono::milliseconds frameRealTime, bool landDrawn) override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
@@ -97,5 +98,7 @@ private:
 	std::vector<entt::connection> _connections;
 	/// Each village centre's effect of its symbols of belief
 	std::unordered_map<entt::entity, uint32_t> _beliefSymbols;
+	/// When the symbols of belief take their next step
+	frame_pace::Pace _beliefPace;
 };
 } // namespace openblack::ecs::systems

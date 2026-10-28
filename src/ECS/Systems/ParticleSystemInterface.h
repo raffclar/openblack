@@ -101,6 +101,14 @@ public:
 	/// Steps an effect that is stepped as it is drawn, by the frame's game time, rather than each turn; false once it has
 	/// gone
 	virtual bool ProcessByFrame(EffectId /*id*/, float /*seconds*/) { return false; }
+	/// An effect that only ProcessByFrame steps, never the turn, as the draw of its thing moves it on. Its random numbers
+	/// are only this computer's.
+	virtual EffectId StartByFrame(ParticleType type, glm::vec3 origin, float magnitude)
+	{
+		return Start(type, origin, magnitude, false);
+	}
+	/// Whether an effect that its thing draws shows in this frame: it shows only while the frame draws its thing
+	virtual void SetShown(EffectId /*id*/, bool /*shown*/) {}
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
 	/// when negative), staying where it was made, and ending when its owner object (if any) goes
 	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
@@ -130,6 +138,9 @@ public:
 	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows
 	/// the hand between turns
 	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
+	/// The point where this computer draws its hand this frame, for a miracle that this computer casts from the hand.
+	/// The draw moves the atoms of the effect that follow the live hand by it.
+	virtual void SetLiveHand(EffectId id, glm::vec3 hand) = 0;
 	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
 	virtual void SetInTemple(EffectId id) = 0;
 	/// An effect that the world and the temple do not draw. Only CollectEffectDrawFrame draws it, as for the seeds

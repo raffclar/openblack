@@ -196,6 +196,7 @@ bool AnimalSystem::GroundMoveTo(entt::entity entity, Animal& animal)
 		walk.goal = Metres(animal.move.goal);
 		walk.position = animal.move.position;
 		walk.placedAt = Metres(animal.move.position);
+		walk.yAngle = animal.heading;
 		auto& transform = registry.Get<Transform>(entity);
 		transform.position.x = walk.placedAt.x;
 		transform.position.z = walk.placedAt.y;
@@ -205,7 +206,9 @@ bool AnimalSystem::GroundMoveTo(entt::entity entity, Animal& animal)
 		animal.move.step = walked.step;
 		animal.move.angle = walked.gameAngle;
 		animal.height = 0.0f;
-		SyncWorld(animal);
+		// It faces as its walk turned it, which took it out of its map cell and put it in again; a turn round of its
+		// walk alone does not turn it
+		SyncWorldFacing(animal, walked.yAngle, true);
 		if (arrived)
 		{
 			EndWalkRound(entity);

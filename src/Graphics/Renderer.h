@@ -635,6 +635,8 @@ private:
 	mutable std::unique_ptr<FrameBuffer> _landColourFrameBuffer;
 	/// The sky's dome for each alignment, one above the other, kept from frame to frame
 	mutable std::unique_ptr<FrameBuffer> _skyDomeFrameBuffer;
+	/// The rows of each alignment's dome in the frame buffer above
+	mutable uint16_t _skyDomeRows {sky_dome::k_Rows};
 	/// The glow lightning stamps on the land, made the first time it is drawn
 	mutable std::optional<TextureHandle> _lightningGlowTexture;
 	/// How strongly the sun glares, 0 to 255, easing towards how much of the sun shows
