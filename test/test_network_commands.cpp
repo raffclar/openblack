@@ -85,6 +85,7 @@ public:
 	void SetPlayer(EffectId /*id*/, int /*player*/) override {}
 	void SetDrawPath(EffectId /*id*/, particles::draw::DrawPath /*path*/) override {}
 	void SetDrawOffset(EffectId /*id*/, glm::vec3 /*offset*/) override {}
+	void SetLiveHand(EffectId /*id*/, glm::vec3 /*hand*/) override {}
 	void SetInTemple(EffectId /*id*/) override {}
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 /*point*/, float /*margin*/) const override
 	{
@@ -245,6 +246,7 @@ public:
 		return std::nullopt;
 	}
 	bool TapPost(entt::entity /*post*/) override { return false; }
+	bool PickType(PlayerNames /*player*/, LeashType /*type*/) override { return false; }
 	bool TakeOffAtTemple(PlayerNames player) override
 	{
 		templeLeashOff.push_back(player);
