@@ -104,7 +104,7 @@ def unregistered_line(names):
 # The log line of each thing that a turn does with the hand of a player, and the short name of each deed
 HAND_DEED = re.compile(r"Hand deed: the hand of player (\d+) (.+?) thing (\d+)(?: at turn (\d+))?")
 HAND_DEED_NAMES = {"takes": "takes", "scoops from": "scoops", "throws": "throws", "puts down": "puts_down",
-                   "pours": "pours", "uses what it holds on": "uses"}
+                   "pours": "pours", "uses what it holds on": "uses", "gives": "gives"}
 
 
 def hand_deeds_in_text(lines, until_turn=None):
