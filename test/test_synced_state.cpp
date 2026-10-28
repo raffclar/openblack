@@ -177,6 +177,34 @@ TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "RewardSeed", "seed"));
 }
 
+TEST(SyncedState, TheDustOfARewardChestIsNotSynced)
+{
+	// Each computer makes the dust of a chest with its own local random numbers
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dust"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "madeAt"));
+}
+
+TEST(SyncedState, TheCameraPlaceOfABookmarkIsNotSynced)
+{
+	// Only the camera of the computer whose player set the bookmark flies to that place
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CameraBookmark", "cameraOffset"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CameraBookmark", "point"));
+}
+
+TEST(SyncedState, TheNumbersOfTheEffectsOfTeleportStonesAndShieldsAreNotSynced)
+{
+	// Each computer gives its particle effects its own numbers
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "TeleportStone", "pool"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ShieldDome", "effect"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ResourcePile", "speedUpVisual"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureSwap", "beam"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureGestureDrawing", "chain"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "TeleportStone", "serial"));
+}
+
 TEST(SyncedState, TheFramesCarryThePickedLeashInTheHandOfThisComputerOnly)
 {
 	// Each computer puts the picked leash of its own player in its own hand, so the place of a post is not synced

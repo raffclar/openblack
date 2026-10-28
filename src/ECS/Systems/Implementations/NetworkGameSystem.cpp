@@ -355,7 +355,8 @@ void NetworkGameSystem::Update()
 	{
 		_stopped = true;
 		Locator::time::value().SetPaused(true);
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the game stopped after turn {}: the clock stops", *last);
+		// The log names the last turn by the number of the world, as the line of the decision does
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the game stopped after turn {}: the clock stops", *last + 1);
 	}
 
 	// A join from the command line: the server's reply to the join gives the land, the seed and the start of its world,

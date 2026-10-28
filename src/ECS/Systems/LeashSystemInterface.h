@@ -186,8 +186,8 @@ public:
 	/// Hangs a player's three leash posts at three points, the aggression, learning and compassion leashes in turn
 	virtual void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) = 0;
 	/// A player taps one of their leash posts: it picks that leash, or unpicks it when tapped again, and swaps the worn
-	/// leash for it
-	virtual bool TapPost(entt::entity post) = 0;
+	/// leash for it. The tap of a player on the post of another player does nothing.
+	virtual bool TapPost(PlayerNames player, entt::entity post) = 0;
 	/// The world does an order of a player to their creature on the leash, at the start of a turn: an order on a thing,
 	/// an order at a place, a tie of the leash to a thing, or an untie
 	virtual void DoOrder(PlayerNames /*player*/, const player_commands::LeashOrder& /*order*/) {}

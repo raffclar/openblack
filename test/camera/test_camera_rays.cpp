@@ -9,6 +9,7 @@
 
 #include <array>
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <tuple>
@@ -310,4 +311,61 @@ TEST_F(CameraRays, TheDrawnViewIsAboveTheLand)
 	const auto eye = glm::vec3(glm::inverse(_camera.GetViewMatrix(Camera::Interpolation::Current))[3]);
 	EXPECT_LT(glm::distance(eye, glm::vec3(1000.0f, 1.0f, 1000.0f)), 1e-3f);
 	EXPECT_EQ(_camera.GetOrigin(), below);
+}
+
+// An eye or a focus with a coordinate that is not a number changes to the last correct one
+TEST(CameraDrawnPose, APointThatIsNotANumberTakesTheLastCorrectPoint)
+{
+	const auto nan = std::numeric_limits<float>::quiet_NaN();
+	const camera_drawn::Pose lastCorrect {.eye = {1.0f, 2.0f, 3.0f}, .focus = {4.0f, 5.0f, 6.0f}};
+	const auto badEye = camera_drawn::WithoutNaN({.eye = {7.0f, nan, 9.0f}, .focus = {10.0f, 11.0f, 12.0f}}, lastCorrect);
+	EXPECT_EQ(badEye.eye, lastCorrect.eye);
+	EXPECT_EQ(badEye.focus, glm::vec3(10.0f, 11.0f, 12.0f));
+	const auto badFocus = camera_drawn::WithoutNaN({.eye = {7.0f, 8.0f, 9.0f}, .focus = {nan, 11.0f, 12.0f}}, lastCorrect);
+	EXPECT_EQ(badFocus.eye, glm::vec3(7.0f, 8.0f, 9.0f));
+	EXPECT_EQ(badFocus.focus, lastCorrect.focus);
+	const auto correct = camera_drawn::WithoutNaN({.eye = {7.0f, 8.0f, 9.0f}, .focus = {10.0f, 11.0f, 12.0f}}, lastCorrect);
+	EXPECT_EQ(correct.eye, glm::vec3(7.0f, 8.0f, 9.0f));
+	EXPECT_EQ(correct.focus, glm::vec3(10.0f, 11.0f, 12.0f));
+}
+
+// The frame draws from the last correct eye and focus of the world camera when the new ones are not numbers
+TEST_F(CameraRays, TheViewKeepsTheLastCorrectEyeAndFocus)
+{
+	const auto nan = std::numeric_limits<float>::quiet_NaN();
+	_camera.SetOrigin(glm::vec3(nan, 100.0f, 1000.0f)).SetFocus(glm::vec3(1000.0f, nan, 1100.0f));
+	_camera.KeepDrawnView();
+	EXPECT_EQ(_camera.GetOrigin(Camera::Interpolation::Drawn), k_StartOrigin);
+	EXPECT_EQ(_camera.GetFocus(Camera::Interpolation::Drawn), k_StartFocus);
+	// A correct eye later is the new last correct eye
+	_camera.SetOrigin(k_FarOrigin).SetFocus(k_FarFocus);
+	_camera.KeepDrawnView();
+	_camera.SetOrigin(glm::vec3(nan)).SetFocus(glm::vec3(nan));
+	_camera.KeepDrawnView();
+	EXPECT_EQ(_camera.GetOrigin(Camera::Interpolation::Drawn), k_FarOrigin);
+	EXPECT_EQ(_camera.GetFocus(Camera::Interpolation::Drawn), k_FarFocus);
+}
+
+// Before the camera has a correct eye and focus, the frame draws from the first correct point
+TEST(CameraDrawnPose, ACameraWithNoCorrectEyeDrawsFromTheFirstCorrectPoint)
+{
+	const auto nan = std::numeric_limits<float>::quiet_NaN();
+	Camera camera;
+	camera.SetOrigin(glm::vec3(nan)).SetFocus(glm::vec3(nan));
+	const auto pose = camera.DrawnPose(Camera::Interpolation::Current);
+	// The eye on its focus moves away from it
+	EXPECT_EQ(pose.eye, camera_drawn::k_FirstCorrectPoint + camera_drawn::k_GapStep);
+	EXPECT_EQ(pose.focus, camera_drawn::k_FirstCorrectPoint);
+}
+
+// The direction of the drawn view is the direction of the view that the game drew last
+TEST_F(CameraRays, TheDrawnDirectionIsTheDirectionOfTheKeptView)
+{
+	const auto forward = _camera.GetForward(Camera::Interpolation::Drawn);
+	const auto up = _camera.GetUp(Camera::Interpolation::Drawn);
+	EXPECT_LT(glm::distance(forward, glm::normalize(k_StartFocus - k_StartOrigin)), 1e-5f);
+	_camera.SetOrigin(k_FarOrigin).SetFocus(k_FarOrigin + glm::vec3(100.0f, 0.0f, 0.0f));
+	EXPECT_EQ(_camera.GetForward(Camera::Interpolation::Drawn), forward);
+	EXPECT_EQ(_camera.GetUp(Camera::Interpolation::Drawn), up);
+	EXPECT_NE(_camera.GetForward(), forward);
 }

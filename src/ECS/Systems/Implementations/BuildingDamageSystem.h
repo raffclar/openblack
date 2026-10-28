@@ -34,7 +34,8 @@ public:
 	void ReactToPassedOnImpact(DynamicsSystemInterface& dynamics, entt::entity building, PhysicsEntry& struck,
 	                           const ImpactInfo& impact) override;
 	void Smash(entt::entity building, entt::entity creature, float creatureSize) override;
-	void CreatureBlows(entt::entity building, entt::entity creature, std::span<const creature_stomp::Blow> blows) override;
+	void CreatureBlows(entt::entity building, entt::entity creature, std::span<const creature_stomp::Blow> blows,
+	                   bool kick) override;
 	entt::entity PieceAtRest(DynamicsSystemInterface& dynamics, PhysicsEntry* entry, entt::entity piece, bool insert) override;
 	void ForgetHitter(entt::entity rock) override;
 	void ProcessTurn() override;

@@ -14,6 +14,7 @@
 
 #include <functional>
 #include <limits>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -1429,6 +1430,8 @@ void AddCreatureDanceScenarios(std::vector<Scenario>& all);
 void AddCreatureLearningScenarios(std::vector<Scenario>& all);
 /// Creatures going to the places of their map of the land: a hill and its ridge, and the beach
 void AddCreatureExplorationScenarios(std::vector<Scenario>& all);
+/// Creature actions that Land 1 can start and that no other scenario stages, each told by a script
+void AddCreatureActionScenarios(std::vector<Scenario>& all);
 /// The network map for 32 gods, with a citadel and a village in each slot
 void AddGodsRingMapScenarios(std::vector<Scenario>& all);
 
@@ -1498,6 +1501,9 @@ struct Timeline
 [[nodiscard]] std::vector<size_t> Advance(Timeline& timeline, std::span<const Command> commands,
                                           std::optional<size_t> repeatFrom, float seconds,
                                           const std::function<bool(const Command& command)>& isFree);
+/// The commands that the computer of the game gave before a turn, in their order, without any place that the scenario
+/// does not have (it has this many commands)
+[[nodiscard]] std::vector<size_t> GivesAt(const std::map<uint32_t, std::vector<size_t>>& gives, uint32_t turn, size_t commands);
 
 /// What a testbed scenario does before one turn of a network game. In a network game the scenario steps by the turns, not
 /// by the frames, so that the server and every client give its commands before the same turn.

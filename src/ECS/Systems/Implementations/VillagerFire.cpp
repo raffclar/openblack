@@ -43,12 +43,14 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/GraveyardRules.h"
 #include "ECS/Graveyards.h"
 #include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -996,6 +998,11 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 	if (action == nullptr || registry.AnyOf<VillagerDeath, InPhysics>(villager))
 	{
 		return;
+	}
+	// In a network game the killer counts a villager killed, for the winning condition
+	if (cause.has_value() && game_end::CountsAsKilled(cause->reason) && Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(cause->killer, game_end::Condition::VillagersKilled, 1);
 	}
 	// The player here hears of a death with a cause
 	if (cause.has_value())

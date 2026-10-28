@@ -108,7 +108,8 @@ struct Start;
 namespace command_log
 {
 class Writer;
-}
+class GivesWriter;
+} // namespace command_log
 namespace checksum_log
 {
 class Writer;
@@ -487,6 +488,9 @@ public:
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
+	/// Tools: a run that writes the commands of each turn also writes each command of the testbed scenario that the game
+	/// gives before a turn, so that a dedicated server gives it before the same turn (command_log::GivesPathOf)
+	void RecordScenarioGive(uint32_t turn, size_t command);
 	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
 	/// starts, so that only a load or a turn changes the world. None: the window is gone.
 	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
@@ -653,6 +657,8 @@ private:
 	std::optional<sim_run::Request> _simulation;
 	/// The file that a tool's run writes the commands of each turn to
 	std::unique_ptr<command_log::Writer> _commandLog;
+	/// The file that a tool's run writes the commands of the testbed scenario to, with the turn before which each went
+	std::unique_ptr<command_log::GivesWriter> _scenarioGives;
 	/// The file that a tool's run writes the checksum of each turn to
 	std::unique_ptr<checksum_log::Writer> _checksumLog;
 	/// A tool's run that looks for the frame steps that change the synced world
@@ -919,8 +925,11 @@ private:
 	/// The view of the player's world camera for the help, none when the world camera does not show the world. The
 	/// camera that watches a creature fight is part of the world camera.
 	[[nodiscard]] static std::optional<help::profile::WorldCameraView> HelpWorldCameraView();
-	/// The near plane for the camera where it is now
-	void FitNearClip();
+	/// The near plane for the camera at the height of `eye` above the land
+	void FitNearClip(const glm::vec3& eye);
+	/// The near plane for a view that the inspector shows, from the eye of that view. When the inspector gives the camera
+	/// back, the camera gets its near plane back.
+	void FitInspectorNearClip(bool shown, const glm::vec3& eyeBefore, const glm::vec3& focusBefore);
 	/// Shows the camera where the inspector wants the frame drawn from (an override, a picture's), or gives the camera
 	/// back its own place: the game's own frame (the hand, picking, the sound) goes by its own camera, only the drawing
 	/// by the shown one
@@ -956,6 +965,8 @@ private:
 	bool _turnBesideDraw {false};
 	/// The requested screenshot leaves the debug windows out
 	bool _screenshotHidesDebugGui {false};
+	/// The near plane of the game's camera while the inspector shows a different view
+	std::optional<float> _nearClipUnderInspector;
 	/// A frame drawn without the debug windows though no picture is taken of it
 	std::optional<uint32_t> _debugGuiHiddenFrame;
 	std::unique_ptr<audio::AtmosAudio> _atmosAudio;

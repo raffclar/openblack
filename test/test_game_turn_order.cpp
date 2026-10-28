@@ -439,3 +439,17 @@ TEST(GameTurnOrder, AStepWithNoStageFollowsTheStepBeforeIt)
 	EXPECT_FALSE(PlaysOnceDecided(k_Turn, index));
 	EXPECT_TRUE(PlaysOnceDecided(k_Turn, 0));
 }
+
+TEST(GameTurnOrder, TheGodsGetTheirConditionsAfterTheJoinsAndBeforeTheWorldCounts)
+{
+	const auto recorder = PlayOneTurn();
+	// The humans join with the commands of the first turn. The gods get the conditions before any step can count.
+	EXPECT_TRUE(recorder.Before(Step::PlayerCommands, Step::GameConditions));
+	EXPECT_TRUE(recorder.Before(Step::Clock, Step::GameConditions));
+	EXPECT_TRUE(recorder.Before(Step::GameConditions, Step::Players));
+	EXPECT_TRUE(recorder.Before(Step::GameConditions, Step::Living));
+	// A decided game gives no conditions
+	TurnRecorder decided;
+	PlayTurn([&decided](Step step) { decided(step); }, true);
+	EXPECT_EQ(std::ranges::count(decided.Steps(), Step::GameConditions), 0);
+}

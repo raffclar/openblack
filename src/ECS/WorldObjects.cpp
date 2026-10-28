@@ -65,6 +65,7 @@
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -75,6 +76,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -171,6 +173,15 @@ void BuildingHurt(entt::entity abode, float before, float after)
 		{
 			Locator::townSystem::value().SetInStateOfEmergency(town->second);
 		}
+	}
+}
+
+/// In a network game a harm to a building may count as a building smashed by the player who did it
+void CountSmashed(std::optional<PlayerNames> by, const game_end::BuildingHarm& harm)
+{
+	if (const auto condition = game_end::SmashedCondition(harm); condition.has_value() && Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(by, *condition, 1);
 	}
 }
 } // namespace
@@ -579,7 +590,7 @@ void world_objects::SetLife(entt::entity object, float life, bool allowed)
 	}
 }
 
-float world_objects::ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by)
+float world_objects::ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by, bool byCreature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
@@ -654,15 +665,29 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 		{
 			player_statistics::CountDestroyed(registry, *by);
 		}
+		CountSmashed(by, {.lifeBefore = before,
+		                  .lifeAfter = life.life,
+		                  .stopsWorkingAt = info.thresholdForStopBeingFunctional,
+		                  .byPlayer = by.has_value(),
+		                  .age = abode->age,
+		                  .byCreature = byCreature});
 	}
 	// A miracle dispenser is a building of its town and counts by the same rule
 	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object); dispenser != nullptr)
 	{
-		if (const auto* info = AbodeInfoOf(object);
-		    info != nullptr && statistics::StopsWorking(before, life.life, info->thresholdForStopBeingFunctional) &&
-		    statistics::CountsAsDestroyed(by.has_value(), dispenser->age))
+		if (const auto* info = AbodeInfoOf(object); info != nullptr)
 		{
-			player_statistics::CountDestroyed(registry, *by);
+			if (statistics::StopsWorking(before, life.life, info->thresholdForStopBeingFunctional) &&
+			    statistics::CountsAsDestroyed(by.has_value(), dispenser->age))
+			{
+				player_statistics::CountDestroyed(registry, *by);
+			}
+			CountSmashed(by, {.lifeBefore = before,
+			                  .lifeAfter = life.life,
+			                  .stopsWorkingAt = info->thresholdForStopBeingFunctional,
+			                  .byPlayer = by.has_value(),
+			                  .age = dispenser->age,
+			                  .byCreature = byCreature});
 		}
 	}
 	// A built building of a town left under its full life gets a site for its repair, which starts from a little less
