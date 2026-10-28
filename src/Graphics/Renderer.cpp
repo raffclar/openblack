@@ -188,6 +188,7 @@
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/VertexBuffer.h"
+#include "Graphics/ViewFrustum.h"
 #include "Graphics/WarmUpViews.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
@@ -6773,19 +6774,69 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                                          inSegment(segment, [&] { withoutHeld(first, count, draw); });
 				                                          });
 			};
-			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own
+			// The view of this pass, as the pass sets it. An instance out of it puts no pixel on the screen, so the pass
+			// does not draw it. A warm-up draws all instances, so that each draw makes its pipeline.
+			const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+			                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+			const auto instanceSeen = [&](const L3DMesh& mesh, const RenderContext::InstancedDrawDesc& placers,
+			                              uint32_t instance) {
+				// The bones of a model can move its parts out of its box, and so can the offsets of its submeshes
+				if (_warmingUp || mesh.IsBoned() || placers.bonePalette || placers.perEntity ||
+				    !placers.subMeshOffsets.empty() || instance >= renderCtx.instanceUniforms.size())
+				{
+					return true;
+				}
+				const auto& model = renderCtx.instanceUniforms[instance].model;
+				const auto& box = mesh.GetBoundingBox();
+				const bool boxSeen = view_frustum::SeesBox(seenBy, model, box.minima, box.maxima);
+				if (!placers.morphWithTerrain || boxSeen)
+				{
+					return boxSeen;
+				}
+				// A model that goes with the land moves its points along its up, by no more than the highest land under
+				// its box. The test reads the land only when the highest land that a cell can have puts the box in view.
+				const auto up = view_frustum::LandRiseSweep(model, 1.0f);
+				if (!up.has_value())
+				{
+					return true;
+				}
+				if (!view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * view_frustum::k_HighestLand))
+				{
+					return false;
+				}
+				const auto& land = Locator::terrainSystem::value();
+				const float highestRise =
+				    view_frustum::HighestLandUnder(model, box.minima, box.maxima, [&land](glm::ivec2 corner) {
+					    return land.GetCell(glm::u16vec2(corner)).altitude;
+				    });
+				return view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * highestRise);
+			};
+			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own. A
+			// draw of all the other models' instances starts at the first instance in view and stops after the last.
 			const auto drawPlaced = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
-			                            bool useMaterialBlending, const EntityPose* pose = nullptr) {
+			                            bool useMaterialBlending) {
+				const auto& mesh = *meshManager.Handle(meshId);
 				inSegments(placers, [&](uint32_t first, uint32_t count) {
+					const auto seen = [&](uint32_t instance) { return instanceSeen(mesh, placers, instance); };
 					if (!placers.partsByLevel)
 					{
-						drawInstances(meshId, placers, useMaterialBlending, first, count, pose);
+						const auto instances = std::views::iota(first, first + count);
+						const auto start = std::ranges::find_if(instances, seen);
+						if (start == instances.end())
+						{
+							return;
+						}
+						const auto last = *std::ranges::find_if(instances | std::views::reverse, seen);
+						drawInstances(meshId, placers, useMaterialBlending, *start, last + 1 - *start);
 						return;
 					}
 					for (uint32_t instance = first; instance < first + count; ++instance)
 					{
-						submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
-						drawInstances(meshId, placers, useMaterialBlending, instance, 1, pose);
+						if (seen(instance))
+						{
+							submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+							drawInstances(meshId, placers, useMaterialBlending, instance, 1);
+						}
 					}
 					submitDesc.detailLevel = 1;
 				});
@@ -7502,7 +7553,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
-						if (mirroredWithHand(instance))
+						if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
 						{
 							continue;
 						}
@@ -7568,7 +7619,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
-						if (mirroredWithHand(instance))
+						if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
 						{
 							continue;
 						}
@@ -7967,11 +8018,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				// The sprites name their textures by their ids in the cache
 				const auto& textures = Locator::resources::value().GetTextures();
+				// The view of this pass. A sprite out of it puts no pixel on the screen, so the pass does not draw it.
+				const auto seenBy = view_frustum::FromViewProjection(
+				    desc.camera->GetProjectionMatrix() * desc.camera->GetViewMatrix(Camera::Interpolation::Current));
 				const auto drawSprites = [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin,
-				                          bookmarksShown, leashMarkersShown](const ecs::Registry& from) {
+				                          bookmarksShown, leashMarkersShown, &seenBy](const ecs::Registry& from) {
 					from.Each<const Sprite, const Transform>(
 					    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &from, bookmarksShown,
-					     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+					     leashMarkersShown, &seenBy](entt::entity entity, const Sprite& sprite, const Transform& transform) {
 						    if (!bookmarksShown && from.AllOf<CameraBookmark>(entity))
 						    {
 							    return;
@@ -8009,6 +8063,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    modelMatrix = glm::translate(modelMatrix, placed.position);
 						    modelMatrix *= glm::mat4(placed.rotation);
 						    modelMatrix = glm::scale(modelMatrix, placed.scale);
+						    if (!_warmingUp &&
+						        !view_frustum::SeesSphere(seenBy, placed.position,
+						                                  view_frustum::QuadRadius(glm::mat3(modelMatrix)) +
+						                                      view_frustum::k_BoxMargin))
+						    {
+							    return;
+						    }
 
 						    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
 
