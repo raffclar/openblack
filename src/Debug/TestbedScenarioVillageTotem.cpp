@@ -121,6 +121,33 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	    .townBeliefInPlayer = 1.0f,
 	});
 	all.push_back({
+	    .id = "objects.map_cells_refile",
+	    .name = "A totem and a pot go into the map cells again when they change",
+	    .facet = Facet::Objects,
+	    .description = "The same Norse town centre with the player's temple and the town's worship site, and the player's "
+	                   "tiger beside a pot of food on the land. The totem turns to face the worship site and takes the "
+	                   "tiger's icon. The tiger is told to eat from the pot.",
+	    .expected = "The totem stands turned to the worship site, side on, with the tiger on its pole, and it stays drawn "
+	                "as the camera moves. The map cells around it hold it at the front of their fixed things, so the tiger "
+	                "and the villager walk round it. The tiger takes a handful from the pot: the pot becomes smaller and "
+	                "the cells that hold it change with it.",
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(25.0f), k_Centre + glm::vec2(25.0f)},
+	                .distance = 0.5f},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_Centre + glm::vec2(-20.0f, -20.0f),
+	                   .needs = {.energy = 1.0f, .dehydration = 0.0f, .poo = 0.0f}}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
+	                 .joinTown = true},
+	                {.type = PotInfo::FoodPot, .offset = k_Centre + glm::vec2(-20.0f, -10.0f), .amount = 400}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::DoAction, .delaySeconds = 2.0f, .object = 2, .action = "EatFromFoodPile"}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
+	});
+	all.push_back({
 	    .id = "interface.floating_number_pause",
 	    .name = "The share floats up and stops while the game pauses",
 	    .facet = Facet::Interface,

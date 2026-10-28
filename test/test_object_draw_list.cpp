@@ -13,6 +13,7 @@
 #include <map>
 #include <vector>
 
+#include <entt/entity/registry.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <gtest/gtest.h>
@@ -364,4 +365,40 @@ TEST(ObjectDrawList, SomeThingsAreDrawnOnTheirOwn)
 	EXPECT_TRUE(DrawnOnItsOwn({.temple = true}));
 	EXPECT_TRUE(DrawnOnItsOwn({.highDetail = true}));
 	EXPECT_TRUE(DrawnOnItsOwn({.walkingTrack = true}));
+}
+
+TEST(ObjectDrawList, APartIsKnownByItsEntityAndForgottenWhenCleared)
+{
+	entt::registry registry;
+	const auto totem = registry.create();
+	const auto icon = registry.create();
+	Parts parts;
+	EXPECT_FALSE(parts.Of(icon).has_value());
+	parts.Add(icon, {.owner = totem, .keepsOwner = true});
+	ASSERT_TRUE(parts.Of(icon).has_value());
+	EXPECT_EQ(parts.Of(icon)->owner, totem);
+	EXPECT_TRUE(parts.Of(icon)->keepsOwner);
+	EXPECT_FALSE(parts.Of(totem).has_value());
+	// A new thing that takes the index of a part that is gone is not a part
+	registry.destroy(icon);
+	const auto other = registry.create();
+	ASSERT_EQ(entt::to_entity(other), entt::to_entity(icon));
+	EXPECT_FALSE(parts.Of(other).has_value());
+	parts.Clear();
+	EXPECT_FALSE(parts.Of(icon).has_value());
+}
+
+TEST(ObjectDrawList, APartThatStaysDrawnKeepsItsOwnerUntilTheListIsCleared)
+{
+	entt::registry registry;
+	const auto totem = registry.create();
+	const auto other = registry.create();
+	KeptParts kept;
+	EXPECT_FALSE(kept.Keeps(totem));
+	kept.Keep(totem);
+	kept.Keep(totem);
+	EXPECT_TRUE(kept.Keeps(totem));
+	EXPECT_FALSE(kept.Keeps(other));
+	kept.Clear();
+	EXPECT_FALSE(kept.Keeps(totem));
 }

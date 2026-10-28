@@ -127,13 +127,22 @@ void VillageTotemSystem::AddToPlayer(entt::entity totem)
 		const float angle = gutils::Get3DAngleFromXZ(glm::vec2(transform.position.x, transform.position.z),
 		                                             glm::vec2(site->position.x, site->position.z)) +
 		                    gutils::k_ScawenOffset;
-		transform.rotation = glm::mat3(portable_math::EulerAngleY(-angle));
+		const auto turned = glm::mat3(portable_math::EulerAngleY(-angle));
+		const bool changed = turned != transform.rotation;
+		transform.rotation = turned;
 		if (auto* iconTransform = registry.TryGet<Transform>(totemComponent->icon))
 		{
 			iconTransform->rotation = transform.rotation;
 		}
+		// A totem that turns goes out of the map's cells and in again
+		if (changed)
+		{
+			_world->Reinsert(totem);
+		}
 	}
 	ShowIcon(*totemComponent, _world->IconMeshFor(townComponent.owner));
+	// The new icon gives the totem a new outline, so it goes out of the map's cells and in again
+	_world->Reinsert(totem);
 	totemComponent->lastShownRise.reset();
 	totemComponent->quietOnce = true;
 	SetTownShare(town, 0.0f);
@@ -163,6 +172,8 @@ void VillageTotemSystem::RefreshIcons(PlayerNames player)
 		if (townComponent != nullptr && townComponent->owner == player)
 		{
 			ShowIcon(totemComponent, iconMesh);
+			// The new icon gives the totem a new outline, so it goes out of the map's cells and in again
+			_world->Reinsert(totem);
 		}
 	});
 }

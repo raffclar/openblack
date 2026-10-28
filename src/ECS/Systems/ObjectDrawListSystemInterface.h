@@ -31,7 +31,7 @@ namespace openblack::ecs::systems
 /// blocks isn't drawn. The list is made again when a block in view starts or stops to show land triangles, when asked,
 /// or after ten turns, so a thing that comes onto the blocks in between waits for it. Things not standing in the map's
 /// cells (held, flying in the physics) and those drawn on their own (the temple, things drawn in high detail) aren't the
-/// list's to decide.
+/// list's to decide. A part of a thing, such as the icon on a village totem, is drawn when its owner is drawn.
 class ObjectDrawListSystemInterface
 {
 public:
@@ -90,8 +90,11 @@ public:
 	/// Whether the list decides if a frame draws a thing: the thing stands on the land's blocks, and the game does not draw
 	/// it on its own
 	[[nodiscard]] virtual bool Decides(const Registry& /*registry*/, entt::entity /*entity*/) const { return false; }
+	/// Whether the renderer tells on a full frame if a thing stays drawn (see NoteFullFrame): a listed thing, or a part
+	/// whose test counts for its listed owner
+	[[nodiscard]] virtual bool NotesKept(entt::entity entity) const { return Listed(entity); }
 	/// On a frame that draws all of the list, the renderer tells for each listed thing whether it stays drawn on the
-	/// next frames that do not (see object_draw_list::StaysDrawn)
+	/// next frames that do not (see object_draw_list::StaysDrawn). A part that stays drawn keeps its owner drawn.
 	virtual void NoteFullFrame(entt::entity entity, bool staysDrawn) = 0;
 	/// The list as it was last made, nearest blocks first
 	[[nodiscard]] virtual std::span<const entt::entity> GetList() const = 0;
