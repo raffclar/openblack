@@ -47,12 +47,14 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBuild.h"
 #include "ECS/Systems/Implementations/VillagerFootpath.h"
@@ -383,6 +385,19 @@ void Finish(entt::entity building)
 				const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(abode->info));
 				player_statistics::CountBuilt(registry, *owner, info.abodeType);
 			}
+			// In a network game its player counts a wonder or a house built, for the winning conditions
+			if (const auto owner = world_objects::PlayerOf(building); owner.has_value() && Locator::gameEndSystem::has_value())
+			{
+				const auto* info = world_objects::AbodeInfoOf(building);
+				const bool wonder = info != nullptr && info->abodeType == AbodeType::Wonder;
+				Locator::gameEndSystem::value().AddToCondition(
+				    owner, wonder ? game_end::Condition::WondersBuilt : game_end::Condition::HousesBuilt, 1);
+			}
+			// It starts to work, and may make its town a new town
+			if (Locator::gameEndSystem::has_value())
+			{
+				Locator::gameEndSystem::value().BuildingWorks(building);
+			}
 		}
 		// A finished building of a town gets its footpath from the town's storage pit
 		if (registry.AllOf<Abode>(building) && TownOf(building).has_value() && Locator::footpathSystem::has_value())
@@ -423,6 +438,11 @@ void Repaired(entt::entity building)
 	if (!TownOf(building).has_value())
 	{
 		return;
+	}
+	// A repaired building of a town starts to work again, and may make its town a new town
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().BuildingWorks(building);
 	}
 	// A repaired building of a town gets another footpath from the town's storage pit, as when it was first built
 	if (registry.AllOf<Abode>(building) && Locator::footpathSystem::has_value())

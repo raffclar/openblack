@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include <fmt/format.h>
+
 #include "Online/OnlineMapLand.h"
 #include "PingDisplay.h"
 
@@ -603,6 +605,36 @@ std::vector<std::u16string> PlayerDetailLines(std::span<const PlayerDetail> deta
 std::string_view ConditionText(size_t index) noexcept
 {
 	return index < k_Conditions.size() ? k_Conditions.at(index).text : std::string_view();
+}
+
+std::optional<size_t> ConditionIndex(std::string_view key) noexcept
+{
+	const auto place = std::ranges::find(k_Conditions, key, &ConditionName::key);
+	if (place == k_Conditions.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(place - k_Conditions.begin());
+}
+
+std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTemplate>& limits,
+                                             std::span<const game_end::ConditionPick> picks)
+{
+	if (!limits.has_value())
+	{
+		return "the template of the winning conditions has no block for the land";
+	}
+	for (const auto& pick : picks)
+	{
+		const auto index = static_cast<size_t>(pick.condition);
+		const auto& each = limits->at(index);
+		if (pick.value < each.least || pick.value > each.most)
+		{
+			return fmt::format("the value {} of {} is not from {} to {}", pick.value, k_Conditions.at(index).key, each.least,
+			                   each.most);
+		}
+	}
+	return std::nullopt;
 }
 
 std::optional<ConditionTemplate> FindConditions(std::string_view text, std::string_view landFile)

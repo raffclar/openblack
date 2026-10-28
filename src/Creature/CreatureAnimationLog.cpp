@@ -10,6 +10,8 @@
 #include "CreatureAnimationLog.h"
 
 #include <algorithm>
+#include <string>
+#include <string_view>
 #include <utility>
 
 namespace openblack::creature_animation_log
@@ -43,6 +45,24 @@ std::string_view Name(Problem problem)
 		return "refused";
 	}
 	return "missing";
+}
+
+std::string_view MissingDetail(Layer layer)
+{
+	switch (layer)
+	{
+	case Layer::Body:
+		return "the species has no such clip: the body showed the stand";
+	case Layer::Blend:
+		return "the species has no such clip: the blend used the stand in its place";
+	case Layer::Face:
+		return "the species has no such clip: no face clip showed and the body did not change";
+	case Layer::Gesture:
+		return "the species has no such clip: no gesture showed and the body did not change";
+	case Layer::Wobble:
+		return "the species has no such clip: no wobble showed and the body did not change";
+	}
+	return "the species has no such clip";
 }
 
 bool SameClip(const Clip& a, const Clip& b)
@@ -104,7 +124,7 @@ void Log::Posed(uint32_t turn, std::span<const Clip> clips, const Cause& cause)
 			      .animation = clip.animation,
 			      .turn = turn,
 			      .by = cause.by,
-			      .detail = "the species has no such clip: the body showed the stand"});
+			      .detail = std::string(MissingDetail(clip.layer))});
 		}
 	}
 	for (auto& entry : _open)

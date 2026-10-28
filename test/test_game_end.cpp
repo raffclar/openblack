@@ -415,3 +415,23 @@ TEST(GameEnd, OnlyTheEventsThatDecideTheGameCount)
 	EXPECT_EQ(DecidingEvents(ProcessTurn(world, k_Skirmish, state)), 1u);
 	EXPECT_EQ(DecidingEvents(ProcessTurn(world, k_Skirmish, state)), 0u);
 }
+
+// A network game with no conditions ends at the default time limit, and the god with the most influence wins
+TEST(GameEnd, ANetworkGameWithNoConditionsEndsAtItsTimeLimitByTheInfluence)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].influence = 0.75f;
+	world.gods[k_Two].influence = 0.25f;
+	State state;
+	Facts facts = k_Network;
+	facts.timeLimitTurn = 18000;
+	facts.turn = 17999;
+	EXPECT_TRUE(ProcessTurn(world, facts, state).empty());
+	EXPECT_FALSE(state.decided);
+	facts.turn = 18000;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_FALSE(events.empty());
+	EXPECT_EQ(events[0].kind, Event::Kind::Won);
+	EXPECT_EQ(events[0].god, k_One);
+	EXPECT_TRUE(state.decided);
+}

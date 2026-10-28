@@ -141,6 +141,34 @@ def hand_deeds_of_both(first_path, second_path, last_turn):
     return first, second, first == second
 
 
+# The lines of the winning conditions of a network game: each god gets them, completes them, and one god wins
+CONDITION_EVENT = re.compile(r"Turn (\d+): the god of player (\d+) (gets \d+ winning conditions|completed winning condition "
+                             r"\d+ at -?\d+|won the game)")
+
+
+def condition_events_in_file(path, until_turn=None):
+    """The events of the winning conditions that a log tells of, as [turn, player, what], in their order. With until_turn,
+    an event after that turn is left out: the server and a client can end on different turns."""
+    events = []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as file:
+            for line in file:
+                match = CONDITION_EVENT.search(line)
+                if match is None or (until_turn is not None and int(match.group(1)) > until_turn):
+                    continue
+                events.append([int(match.group(1)), int(match.group(2)), match.group(3)])
+    except OSError:
+        pass
+    return events
+
+
+def condition_summary(events):
+    """The count of the conditions completed by each player, and the turn and the player of the win"""
+    completed = Counter(str(player) for _, player, what in events if what.startswith("completed"))
+    won = next(([turn, player] for turn, player, what in events if what == "won the game"), None)
+    return {"completed": dict(sorted(completed.items())), "won": won}
+
+
 def expected_deeds(path):
     """The deeds that a recorded input expects of its hand, as {deed: least count}: the "expect" of an input file in the
     object form. A list of events expects none."""

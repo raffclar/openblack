@@ -15,6 +15,7 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -43,15 +44,16 @@
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -73,6 +75,24 @@ constexpr uint32_t k_TurnsPerSecond = 10;
 constexpr size_t k_NotLearnt = static_cast<size_t>(MagicType::LightningBoltPowerUpTwo);
 /// The cells that the creature looks in, out from the hand, for a thing to cast the miracle at
 constexpr int32_t k_LeashCastCells = 64;
+
+/// The point that the interface of a player picks under the cursor, as the last report of the player's hand tells it.
+/// The turn reads the reports and never the pick of the cursor of this computer.
+std::optional<glm::vec3> ReportedPickOf(const ecs::Registry& registry, PlayerNames player)
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto hands = Locator::handSystem::value().GetHandsOf(player);
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto hand = (*hands)[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? std::optional(reported->collidePoint) : std::nullopt;
+}
 } // namespace
 
 void CreatureMindSystem::WatchMiracle(entt::entity creature, size_t miracle)
@@ -129,7 +149,7 @@ void CreatureMindSystem::CastOnLeashAfterReaction(entt::entity creature, size_t 
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
 	const auto* body = mind != nullptr ? registry.TryGet<const Creature>(creature) : nullptr;
 	if (body == nullptr || !mind->learnt.has_value() || !Locator::leashSystem::has_value() ||
-	    !Locator::pickingSystem::has_value() || !Locator::entitiesMap::has_value())
+	    !Locator::entitiesMap::has_value())
 	{
 		return;
 	}
@@ -145,7 +165,7 @@ void CreatureMindSystem::CastOnLeashAfterReaction(entt::entity creature, size_t 
 	});
 	const auto& known = mind->learnt->knowledge.miraclesKnown;
 	state.knowsMiracle = miracle < known.size() && known.at(miracle);
-	if (const auto& picked = Locator::pickingSystem::value().GetPick().point; picked.has_value())
+	if (const auto picked = ReportedPickOf(registry, body->owner); picked.has_value())
 	{
 		state.pickedPoint = glm::vec2(picked->x, picked->z);
 	}

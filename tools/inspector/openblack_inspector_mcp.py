@@ -613,7 +613,8 @@ TOOLS = [
     {
         "name": "creature_animation_problems",
         "description": "Clips asked of a creature's body that did not play: missing (the species lacks the clip: "
-                       "the body showed the stand or the action ended at once) or refused (the body was playing "
+                       "the body showed the stand, the action ended at once, or a face, gesture or wobble showed "
+                       "nothing) or refused (the body was playing "
                        "another action), with turn, asker and repeats.",
         "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}),
         "query": "creature.animation_problems",

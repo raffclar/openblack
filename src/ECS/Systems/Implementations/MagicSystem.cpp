@@ -89,6 +89,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureSight.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
@@ -102,6 +103,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -641,7 +643,8 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 				if (outcome.damaged > 0.0f)
 				{
 					ecs::world_objects::ReduceLife(outcome.entity, outcome.damaged,
-					                               source.playerless ? std::nullopt : std::optional(source.player));
+					                               source.playerless ? std::nullopt : std::optional(source.player),
+					                               source.creatureSmash);
 				}
 			}
 		}
@@ -871,8 +874,12 @@ void GameMagicWorld::PlantNear(entt::entity tree, const magic::WaterDrop& drop)
 	}
 	// The tree's forest gains a young tree beside it, when it is not too soon after the last any forest gained
 	const auto planted = Locator::forestSystem::value().AddTreeNear(tree);
-	// Planting a tree is good. (The game also counts it in the player's statistics and the alignment's history, which
-	// aren't kept here yet.)
+	// In a network game the player of the water counts a tree grown, for the winning condition
+	if (planted.has_value() && drop.source.player != PlayerNames::NEUTRAL && Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(drop.source.player, game_end::Condition::TreesGrown, 1);
+	}
+	// Planting a tree is good. (The game also counts it in the alignment's history, which is not kept here yet.)
 	if (planted.has_value() && drop.source.player != PlayerNames::NEUTRAL && Locator::alignmentSystem::has_value())
 	{
 		auto& alignment = Locator::alignmentSystem::value();
@@ -2865,7 +2872,9 @@ void MagicSystem::FailCast()
 	const auto point = _hand.point.value_or(_hand.handPosition);
 	if (Locator::particleSystem::has_value())
 	{
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast, point, std::nullopt, entt::null);
+		// Only the hand of this computer failed the cast, so the failure draws on the random numbers of this computer
+		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast, point, std::nullopt, entt::null, 1.0f,
+		                                                 false);
 	}
 	if (Locator::audio::has_value())
 	{
@@ -2933,7 +2942,8 @@ bool MagicSystem::TapFireBall(entt::entity ball)
 	{
 		return false;
 	}
-	return CatchFireBall(ball);
+	SendFireBallCommand(ball, false);
+	return true;
 }
 
 std::optional<entt::entity> MagicSystem::PickedUnderHand() const

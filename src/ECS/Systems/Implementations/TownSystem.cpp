@@ -57,6 +57,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -64,6 +65,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -1203,6 +1205,11 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 		{
 			particles.SetPlayer(fountain, static_cast<int>(player));
 		}
+	}
+	// In a network game the new player counts a town taken over, for the winning condition
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(player, game_end::Condition::TownsTakenOver, 1);
 	}
 }
 

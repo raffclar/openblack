@@ -529,6 +529,25 @@ TEST(MultiplayerRules, LocalMapsAndTheirConditions)
 	EXPECT_EQ(ConditionText(12), "HELP_TEXT_MULTIPLAYER_14");
 }
 
+TEST(MultiplayerRules, TheConditionsOfATestSwitchKeepToTheLimitsOfTheLand)
+{
+	EXPECT_EQ(ConditionIndex("WC_KILL_NUM_VILLAGERS"), 0u);
+	EXPECT_EQ(ConditionIndex("WC_GROW_TREES"), 14u);
+	EXPECT_FALSE(ConditionIndex("WC_NOTHING").has_value());
+	using openblack::game_end::Condition;
+	using openblack::game_end::ConditionPick;
+	const auto limits = FindConditions(k_Conditions, "mpm_2p_1");
+	const std::array inLimits {ConditionPick {.condition = Condition::VillagersKilled, .value = 500},
+	                           ConditionPick {.condition = Condition::TreesGrown, .value = 1}};
+	EXPECT_FALSE(ConditionsRefusal(limits, inLimits).has_value());
+	const std::array tooMany {ConditionPick {.condition = Condition::VillagersKilled, .value = 501}};
+	EXPECT_TRUE(ConditionsRefusal(limits, tooMany).has_value());
+	const std::array tooFew {ConditionPick {.condition = Condition::TreesGrown, .value = 0}};
+	EXPECT_TRUE(ConditionsRefusal(limits, tooFew).has_value());
+	// A land with no block in the template has no limits, so the host can pick nothing there
+	EXPECT_TRUE(ConditionsRefusal(FindConditions(k_Conditions, "Land1"), inLimits).has_value());
+}
+
 TEST(MultiplayerRules, ClanInfoLines)
 {
 	const lobby_api::ClanDetails clan {.id = 1,

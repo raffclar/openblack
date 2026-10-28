@@ -927,7 +927,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 	              });
 	provider->Add(Query("animation_problems",
 	                    "The clips that something asked a creature's body for that did not play: missing (the species has "
-	                    "no such clip, so the body showed the stand or the action ended at once) or refused (the body "
+	                    "no such clip: the body showed the stand, the action ended at once, or a face, gesture or wobble "
+	                    "showed nothing) or refused (the body "
 	                    "played another action), with the turn, what asked and how many turns in a row it came again",
 	                    {id}),
 	              [logOf, lineOf](const QueryContext& context) {

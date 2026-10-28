@@ -73,7 +73,7 @@ public:
 	void LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place) override;
 	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
-	bool TapPost(entt::entity post) override;
+	bool TapPost(PlayerNames player, entt::entity post) override;
 	bool PickType(PlayerNames player, LeashType type) override;
 	void DoOrder(PlayerNames player, const player_commands::LeashOrder& order) override;
 	void DoLeashLength(PlayerNames player, float length) override;

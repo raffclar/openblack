@@ -1333,8 +1333,9 @@ void StartKiss(entt::entity creature, const creature_mind::Commands::KissOrder& 
 			body->blendedWith = creature_kiss::k_HighKiss;
 			body->blendWeight = highWeight;
 		}
-		// A kiss keeps its pace when the creature is told to hurry
+		// A kiss keeps its pace when the creature is told to hurry, and it gets to its moment at the kiss time
 		body->keepsPace = true;
+		body->kiss = true;
 		animation.body = *body;
 	}
 }
