@@ -3451,6 +3451,16 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	EndReaction(creature);
 	Abandon(*mind);
 	ReleaseCast(creature);
+	// When what it does fails, its body also stops its dance, its sitting or lying pose and its point. Each of these
+	// plays its end, which the catch waits for. An action that its body plays continues to its end.
+	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
+	{
+		body->body = creature_layers::EndDance(body->body);
+	}
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		Locator::creatureObjectActionSystem::value().EndPoint(creature);
+	}
 	creature_mind::Step step {.kind = creature_mind::Step::Kind::Object};
 	step.order = {.kind = creature_mind::ObjectOrder::Kind::Catch, .object = entt::to_integral(object)};
 	if (!Replan(creature, creature_mind::Activity::Planned, {step}))
