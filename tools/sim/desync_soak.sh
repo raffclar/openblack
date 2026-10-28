@@ -5,6 +5,9 @@
 #   bash tools/sim/desync_soak.sh mac   [options]   from the PC: copy a commit to the Mac build box, build it there, soak
 #                                                   there, and fetch the results to the PC
 #   bash tools/sim/desync_soak.sh local [options]   soak on this computer (the PC or the Mac) with a build that exists
+#   bash tools/sim/desync_soak.sh cross --out DAY --pc-bin DIR
+#                                                   play the server_checks of a fetched Mac soak (DAY is its date
+#                                                   folder on the PC) again on the PC and compare the checksums
 #
 # Options (all optional):
 #   --commit REF        mac: the commit to soak (default HEAD of this tree)
@@ -94,7 +97,10 @@ server_land() {
 run_local() {
 	case "$(uname -s)" in
 	Darwin)
-		PY=${OB_SIM_PYTHON:-$HOME/projects/openblack/cache/simvenv/bin/python}
+		# The sim tools use the Python of the lanes (pyenv 3.14.8) in their own environment; the older 3.9 one is the
+		# fall-back
+		PY=${OB_SIM_PYTHON:-$HOME/projects/openblack/cache/simvenv314/bin/python}
+		[ -n "${OB_SIM_PYTHON:-}" ] || [ -x "$PY" ] || PY=$HOME/projects/openblack/cache/simvenv/bin/python
 		EXE=""
 		[ -n "$BIN" ] || BIN="$HOME/projects/openblack/builds/$(basename "$TREE")/RelWithDebInfo/bin"
 		[ -n "$OUT" ] || OUT="$HOME/projects/openblack/sim-runs/desync-soak"
@@ -188,6 +194,7 @@ run_mac() {
 	local host=${OB_MAC_HOST:-gavxn@192.168.1.64}
 	local ssh_opts=(-i "$key" -o "UserKnownHostsFile=$known" -o IdentitiesOnly=yes -o BatchMode=yes -o ServerAliveInterval=30)
 	export OB_SRC="$TREE"
+	check_pc_bin || exit 2
 	# The server_check games of the PC (--pc-bin) play no sound either
 	export ALSOFT_CONF=${ALSOFT_CONF:-E:/openblack/tools/audio/alsoft_silent.ini}
 	bash "$tool" sync "$COMMIT" --name "$NAME" || { echo "desync_soak: the sync to the Mac failed"; exit 2; }
@@ -225,6 +232,14 @@ EOF
 	return "$code"
 }
 
+# Stops before the soak when the PC programs of --pc-bin are not there
+check_pc_bin() {
+	[ -z "$PC_BIN" ] && return 0
+	[ -f "$PC_BIN/openblack.exe" ] && [ -f "$PC_BIN/openblack-server.exe" ] && return 0
+	echo "desync_soak: no openblack.exe and openblack-server.exe in $PC_BIN (--pc-bin)"
+	return 1
+}
+
 # Plays each server_check of the Mac again on the PC and compares the server checksums of the two computers. The two
 # builds have other processors and compilers; the world must still turn the same.
 cross_check() {
@@ -250,7 +265,12 @@ cross_check() {
 		eval "python \"$TREE/tools/sim/server_check.py\" $args --seed $seed --all-computer-gods --ai-seed $ai \
 			--turns $SERVER_TURNS --bin \"$PC_BIN\" --out \"$pc\"" >"$pc.log" 2>&1
 		local result
-		result=$(python "$TREE/tools/sim/checksum_compare.py" "$folder/server/server.log" "$pc/server/server.log") || rc=1
+		if [ -f "$pc/server/server.log" ]; then
+			result=$(python "$TREE/tools/sim/checksum_compare.py" "$folder/server/server.log" "$pc/server/server.log") || rc=1
+		else
+			result="no PC result (see $pc.log)"
+			rc=1
+		fi
 		echo "| $land | $seed | $ai | $result |" >>"$day/report.md"
 	done
 	return $rc
@@ -259,5 +279,11 @@ cross_check() {
 case "$MODE" in
 local) run_local ;;
 mac) run_mac ;;
+cross)
+	[ -n "$PC_BIN" ] && [ -n "$OUT" ] && [ -d "$OUT/server-check" ] || { echo "desync_soak: cross needs --out DAY and --pc-bin"; exit 2; }
+	check_pc_bin || exit 2
+	export ALSOFT_CONF=${ALSOFT_CONF:-E:/openblack/tools/audio/alsoft_silent.ini}
+	cross_check "$OUT"
+	;;
 *) sed -n 2,30p "$0"; exit 2 ;;
 esac
