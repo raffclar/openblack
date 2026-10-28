@@ -35,6 +35,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -376,9 +377,8 @@ void CreatureSkinSystem::DoTattoo(PlayerNames player, const player_commands::Cre
 	}
 	// The masks of the player are made again and the skin is painted, as the editor does on the computer of the player.
 	// Only the computer of the player has the player's own pictures.
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
-	RemakeTattooMasks(tattoo.creature, player == local ? creature_tattoo::Sheet::OwnPictures : creature_tattoo::Sheet::Shipped);
+	const bool local = input::IsLocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr, player);
+	RemakeTattooMasks(tattoo.creature, local ? creature_tattoo::Sheet::OwnPictures : creature_tattoo::Sheet::Shipped);
 	PaintTattoos(tattoo.creature);
 }
 

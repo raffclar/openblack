@@ -23,4 +23,12 @@ namespace openblack::input
 	return hands != nullptr ? hands->GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
+/// Whether the player is the god of this computer. The help, the sounds and the files of this computer are for this
+/// player only. With no hands, only the first player is the god of this computer. A computer with no player of its own,
+/// for example the game server, has no such god.
+[[nodiscard]] inline bool IsLocalPlayer(const ecs::systems::HandSystemInterface* hands, PlayerNames player) noexcept
+{
+	return hands != nullptr ? hands->IsOwnPlayer(player) : player == PlayerNames::PLAYER_ONE;
+}
+
 } // namespace openblack::input
