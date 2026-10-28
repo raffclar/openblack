@@ -74,6 +74,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Debug/FightAutopilotInterface.h"
+#include "Debug/TestbedHandSweep.h"
 #include "Debug/TestbedMultiplayer.h"
 #include "Debug/TownMiracles.h"
 #include "DebugGuiInterface.h"
@@ -1055,14 +1056,16 @@ void Runner::Start(const Scenario& scenario)
 		const auto at = MapPoint(_middle, scenario.hand->offset);
 		const glm::vec3 point {at.x, land.GetHeightAt(at), at.y};
 		const glm::vec3 hand = point + glm::vec3(0.0f, scenario.hand->height, 0.0f);
-		Locator::magicSystem::value().DriveHand(ecs::systems::MagicSystemInterface::HandFrame {
+		_heldHand = ecs::systems::MagicSystemInterface::HandFrame {
 		    .handPosition = hand,
 		    .point = point,
 		    .rayOrigin = hand + glm::vec3(0.0f, k_HandEyeHeight, 0.0f),
 		    .rayDirection = glm::vec3(0.0f, -1.0f, 0.0f),
 		    .cameraForward = glm::vec3(0.0f, -1.0f, 0.0f),
 		    .overWorld = true,
-		});
+		};
+		_heldHandHeight = scenario.hand->height;
+		Locator::magicSystem::value().DriveHand(*_heldHand);
 	}
 	for (const auto& miracle : scenario.miracles)
 	{
@@ -1149,6 +1152,8 @@ void Runner::Stop()
 	_addedPlayers.clear();
 	// The mouse is the player's again
 	_sweep.reset();
+	_heldHand.reset();
+	_sweepMovesHeldHand = false;
 	if (Locator::gameActionSystem::has_value())
 	{
 		if (_ownsPointer && Locator::gameActionSystem::value().GetScriptedPointer().has_value())
@@ -3699,10 +3704,13 @@ void Runner::Give(const Command& command)
 		}
 		break;
 	case Kind::HandGive:
-		result = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity)
-		             ? "given"
-		             : "the hand gives nothing";
+	{
+		const bool given = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GiveHeldTo(*entity);
+		// A sweep of the pointer can now move the held hand away, as a player calls off the gift
+		_sweepMovesHeldHand = given && _heldHand.has_value();
+		result = given ? "given" : "the hand gives nothing";
 		break;
+	}
 	case Kind::SetHour:
 	case Kind::HoldSeed:
 	case Kind::DrawGesture:
@@ -5251,15 +5259,45 @@ void Runner::UpdatePointer(float seconds)
 		}
 		actions.SetScriptedPointer(pointer);
 		PushMotion(pointer, moved);
+		if (_sweepMovesHeldHand)
+		{
+			MoveHeldHand(pointer.position);
+		}
 		_sweep->secondsLeft -= step;
 		if (_sweep->secondsLeft <= 0.0f)
 		{
 			_sweep.reset();
-			const auto line = fmt::format("{:.2f}s: moved: {}", _seconds, HandOnScreen());
+			const bool holds = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value();
+			const auto line =
+			    fmt::format("{:.2f}s: moved: {}{}", _seconds, HandOnScreen(),
+			                _sweepMovesHeldHand ? (holds ? ", the hand still holds" : ", the hand is empty") : "");
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Testbed {}", line);
 			Log(line);
 		}
 	}
+}
+
+void Runner::MoveHeldHand(glm::ivec2 pointer)
+{
+	if (!_heldHand.has_value() || !Locator::camera::has_value() || !Locator::terrainSystem::has_value() ||
+	    !Locator::magicSystem::has_value())
+	{
+		return;
+	}
+	glm::vec3 origin {0.0f};
+	glm::vec3 direction {0.0f};
+	Locator::camera::value().DeprojectScreenToWorld(glm::vec2(pointer) / WindowSize(), origin, direction);
+	const auto at = testbed::hand_sweep::OnPlane(origin, direction, _heldHand->point.value_or(_heldHand->handPosition).y);
+	if (!at.has_value())
+	{
+		return;
+	}
+	const glm::vec3 point {at->x, Locator::terrainSystem::value().GetHeightAt(*at), at->y};
+	const glm::vec3 hand = point + glm::vec3(0.0f, _heldHandHeight, 0.0f);
+	_heldHand->handPosition = hand;
+	_heldHand->point = point;
+	_heldHand->rayOrigin = hand + glm::vec3(0.0f, k_HandEyeHeight, 0.0f);
+	Locator::magicSystem::value().DriveHand(*_heldHand);
 }
 
 std::string Runner::HandOnScreen() const
