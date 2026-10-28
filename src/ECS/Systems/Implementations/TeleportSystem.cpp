@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
@@ -47,12 +48,14 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -61,6 +64,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "VillagerReactions.h"
 #include "VillagerTeleport.h"
 
@@ -221,15 +225,28 @@ entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, en
 		component.reaction = Locator::reactionSystem::value().Create(
 		    {.initiator = stone, .type = Reaction::ReactToTeleport, .player = player, .position = position});
 	}
+	// It goes into the map's cells at once, at its full size
+	auto* map = Locator::entitiesMap::has_value() ? &Locator::entitiesMap::value() : nullptr;
+	if (map != nullptr)
+	{
+		map->Refile(stone);
+	}
 	// Its swirling pool, with its hum. Its random numbers are only this computer's: the pool does not change the world.
+	// The pool moves on in the frames that draw the stone, not in the turns.
 	if (Locator::particleSystem::has_value())
 	{
 		auto& particles = Locator::particleSystem::value();
-		component.pool = particles.Start(ParticleType::TeleportVortex, position, 1.0f);
+		component.pool = particles.StartByFrame(ParticleType::TeleportVortex, position, 1.0f);
 		if (component.pool != ParticleSystemInterface::k_NoEffect)
 		{
 			particles.SetPlayer(component.pool, static_cast<int>(player));
 		}
+	}
+	// Then it shrinks to the size it keeps, which takes it out of the map's cells and puts it back in them
+	registry.Get<Transform>(stone).scale = glm::vec3(teleport::k_StoneScale);
+	if (map != nullptr)
+	{
+		map->Refile(stone);
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: stone of player {} at ({}, {})", static_cast<int>(player), position.x,
 	                    position.z);
@@ -859,7 +876,49 @@ void TeleportSystem::StopControl(entt::entity creature)
 	}
 }
 
+void TeleportSystem::UpdateFrame(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+                                 std::chrono::milliseconds frameGameTime, bool landDrawn)
+{
+	const auto seconds = particles::drawn_steps::StepSeconds(_poolPace, frameRealTime, frameGameTime, landDrawn);
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	auto& registry = EntityRegistry();
+	const auto stepPool = [&](entt::entity stone) {
+		const auto* component = registry.TryGet<const TeleportStone>(stone);
+		if (component == nullptr || component->pool == ParticleSystemInterface::k_NoEffect)
+		{
+			return;
+		}
+		// The pool shows and moves on only in the frames that draw its stone
+		const bool drawn = drawList.Drawn(registry, stone);
+		particles.SetShown(component->pool, drawn);
+		if (!drawn)
+		{
+			return;
+		}
+		// The draw of a stone does not test the screen, so the stone stays drawn on the next frames of a still camera
+		if (drawList.GetFrame().drawAll)
+		{
+			drawList.NoteFullFrame(stone, true);
+		}
+		if (seconds.has_value())
+		{
+			particles.ProcessByFrame(component->pool, *seconds);
+		}
+	};
+	std::vector<entt::entity> stones;
+	registry.Each<const TeleportStone>([&stones](entt::entity stone, const TeleportStone&) { stones.push_back(stone); });
+	std::ranges::for_each(particles::drawn_steps::DrawOrder(
+	                          drawList.GetList(), stones, drawList.GetView().has_value(),
+	                          [&registry, &drawList](entt::entity stone) { return drawList.Decides(registry, stone); }),
+	                      stepPool);
+}
+
 void TeleportSystem::Reset()
 {
 	_nextSerial = 0;
+	_poolPace = {};
 }

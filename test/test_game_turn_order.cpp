@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -162,8 +163,7 @@ TEST(GameTurnOrder, TheAnimalsTakeTheirTurnWithTheLivingBeforeTheFires)
 {
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::ForestGrowth, Step::Living));
-	EXPECT_TRUE(recorder.Before(Step::Living, Step::MapCellsAfterLiving));
-	EXPECT_TRUE(recorder.Before(Step::MapCellsAfterLiving, Step::Fires));
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::Fires));
 	EXPECT_TRUE(recorder.Before(Step::Fires, Step::Reactions));
 	EXPECT_TRUE(recorder.Before(Step::Reactions, Step::Miracles));
 }
@@ -177,6 +177,14 @@ TEST(GameTurnOrder, TheScriptsSeeTheWorldAfterTheMiraclesParticlesAndPhysics)
 	EXPECT_TRUE(recorder.Before(Step::Physics, Step::Vortices));
 	EXPECT_TRUE(recorder.Before(Step::Vortices, Step::Scripts));
 	EXPECT_TRUE(recorder.Before(Step::Scripts, Step::ScriptFade));
+}
+
+TEST(GameTurnOrder, TheScriptsSeeTheHandDemonstrationAtTheTimeOfTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Clock, Step::HandDemo));
+	EXPECT_TRUE(recorder.Before(Step::HandDemo, Step::Scripts));
+	EXPECT_TRUE(recorder.Before(Step::IntroLift, Step::Scripts));
 }
 
 TEST(GameTurnOrder, TheHelpComesAfterTheScriptsAndBeforeTheTimeOfDay)
@@ -408,4 +416,26 @@ TEST(GameTurnOrder, TheThingsThatTheTurnMadeGoIntoTheMapAtItsEnd)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::WalkerLookahead, Step::MapCellsAtTurnEnd));
 	EXPECT_TRUE(recorder.Before(Step::MapCellsAtTurnEnd, Step::SyncChecksum));
+}
+
+// After the game is decided, the turn does only the input of the players, the turn count and the steps after the turn
+TEST(GameTurnOrder, ADecidedGameDoesOnlyTheInputTheCountAndTheStepsAfterTheTurn)
+{
+	TurnRecorder recorder;
+	PlayTurn([&recorder](Step step) { recorder(step); }, true);
+	const std::vector<Step> expected {Step::DrawnPlaces,       Step::PlayerCommands,   Step::HandStillness,
+	                                  Step::HandInterface,     Step::ChimneySmoke,     Step::Clock,
+	                                  Step::RealWeather,       Step::WalkerLookahead,  Step::CreatureShapes,
+	                                  Step::MapCellsAtTurnEnd, Step::InfluenceTurnEnd, Step::SyncChecksum,
+	                                  Step::RunRecord};
+	EXPECT_EQ(recorder.Steps(), expected);
+}
+
+// A step with no stage between two steps of the players' turns is part of the players' turns
+TEST(GameTurnOrder, AStepWithNoStageFollowsTheStepBeforeIt)
+{
+	const auto index =
+	    static_cast<size_t>(std::distance(k_Turn.begin(), std::ranges::find(k_Turn, Step::TownFlags, &Place::step)));
+	EXPECT_FALSE(PlaysOnceDecided(k_Turn, index));
+	EXPECT_TRUE(PlaysOnceDecided(k_Turn, 0));
 }

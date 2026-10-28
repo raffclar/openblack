@@ -30,7 +30,8 @@ public:
 	virtual ~VillageTotemSystemInterface() = default;
 
 	/// A totem joins its town's player, when it is made and when the town changes hands: the player's icon goes on
-	/// top, it turns to face the town's worship site, and the town's worship share is set to none
+	/// top, it turns to face the town's worship site, and the town's worship share is set to none. A totem with no
+	/// see-through second plinth and icon gets them here, hidden.
 	virtual void AddToPlayer(entt::entity totem) = 0;
 	/// The player's primary creature changed: the player's own totems put the new icon on top, leaving their shares as
 	/// they are
@@ -39,10 +40,11 @@ public:
 	/// there
 	virtual void SetTownShare(entt::entity town, float share) = 0;
 	/// Each frame: the totems move to their shares by the real clock, in whole milliseconds. Each totem stands at its
-	/// share, or at the share that the hand holds it at. The totems also move while the game is paused.
+	/// share, or at the share that the hand holds it at. The totems also move while the game is paused. The frame shows
+	/// or hides the second totem, and makes or removes no entity.
 	virtual void Update(uint32_t realMs) = 0;
 	/// Each game turn: the totems move by the real clock. A totem that arrives at its share stops the sound of its
-	/// movement and rings the village bell.
+	/// movement and rings the village bell. A totem whose town centre went goes, with its icon and its second totem.
 	virtual void ProcessTurn(uint32_t realMs) = 0;
 
 	/// The totem a picked plinth or icon belongs to

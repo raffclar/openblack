@@ -62,4 +62,19 @@ constexpr uint32_t k_SaveEveryTurns = 600;
 /// it was last looked at: it is written each time its count gets to a multiple of 600 turns
 [[nodiscard]] bool SavesAsItLives(uint32_t turnsBefore, uint32_t turnsNow);
 
+/// What this computer knows about a creature that it can write to the player's files
+struct WriteFacts
+{
+	bool networkGame {false};
+	/// The local player owns the creature
+	bool localPlayers {false};
+	/// The god of this computer brought the creature into the network game from the player's creature file
+	bool broughtHere {false};
+};
+
+/// Whether this computer writes the creature to the player's files. In a game for one player, it writes the creature of
+/// the local player. In a network game, it writes only the creature that the god of this computer brought. Only that
+/// creature came from the files of this player, so the creatures of the other players never replace it.
+[[nodiscard]] bool WritesToPlayersFiles(const WriteFacts& facts);
+
 } // namespace openblack::creature_carry_over

@@ -13,6 +13,7 @@
 #include <optional>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
 #include "ECS/RewardRules.h"
@@ -39,14 +40,22 @@ struct Reward
 	/// The town it was given to, none for none
 	entt::entity town {entt::null};
 	State state {State::Landed};
-	/// Its own clock since it was given, in seconds of the game's time
+	/// Its own clock since it was given, in seconds of the game's time. Only the game turns move it on.
 	float seconds {0.0f};
 	/// Where it is to land: the point on the land under where it was given
 	glm::vec3 landingPoint {0.0f};
 	/// Where it was given, at the height the giver asked for: its dust stays about here
 	glm::vec3 madeAt {0.0f};
-	/// It has landed this frame, and goes into the map's cells at the next game turn
+	/// It has landed in this game turn, and goes into the map's cells at the next game turn
 	bool goesIntoMap {false};
+	/// Where the frame draws a chest that falls, between the places of its last two turns. Only the draw reads it.
+	struct Drawn
+	{
+		glm::vec3 position;
+		glm::mat3 rotation;
+	};
+	/// Empty: the chest is drawn where its Transform puts it
+	std::optional<Drawn> drawn;
 	/// How long its dust has left to show, once it has fallen
 	float dustMilliseconds {0.0f};
 	std::array<reward::DustSprite, reward::k_DustSprites> dust {};

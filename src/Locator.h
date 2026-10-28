@@ -98,6 +98,7 @@ class WindowingInterface;
 namespace ecs
 {
 class Registry;
+class DrawnRegistry;
 class MapInterface;
 } // namespace ecs
 
@@ -119,6 +120,7 @@ class VillageTotemSystemInterface;
 class SpellIconSystemInterface;
 class ArtefactSystemInterface;
 class HeartbeatSystemInterface;
+class GameEndSystemInterface;
 class FieldSystemInterface;
 class FishFarmSystemInterface;
 class AnimalSystemInterface;
@@ -141,6 +143,7 @@ class CreaturePenSystemInterface;
 class LeashSystemInterface;
 class CreatureFightSystemInterface;
 class FightTranscriptSystemInterface;
+class CreatureAnimationLogSystemInterface;
 class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
 class TattooEditorSystemInterface;
@@ -249,6 +252,9 @@ bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
+/// Starts a level on the land that is open: the land keeps its blocks, and its cells go back to the altitudes of its
+/// build. Only the blocks that change are made again.
+void InitializeLevelOnOpenLand();
 /// The settings of this computer, read from the file when there is one (see computer_settings)
 void InitializeComputerSettings(std::optional<std::filesystem::path> file);
 void ShutDownServices();
@@ -291,6 +297,8 @@ struct Locator
 	using weatherSystem = entt::locator<ecs::systems::WeatherSystemInterface>;
 	using pathfindingSystem = entt::locator<ecs::systems::PathfindingSystemInterface>;
 	using entitiesRegistry = entt::locator<ecs::Registry>;
+	/// The things that only the frames make and draw, out of the synced world
+	using drawnRegistry = entt::locator<ecs::DrawnRegistry>;
 	using entitiesMap = entt::locator<ecs::MapInterface>;
 	using playerSystem = entt::locator<ecs::systems::PlayerSystemInterface>;
 	using alignmentSystem = entt::locator<ecs::systems::AlignmentSystemInterface>;
@@ -316,6 +324,7 @@ struct Locator
 	using spellIconSystem = entt::locator<ecs::systems::SpellIconSystemInterface>;
 	using artefactSystem = entt::locator<ecs::systems::ArtefactSystemInterface>;
 	using heartbeatSystem = entt::locator<ecs::systems::HeartbeatSystemInterface>;
+	using gameEndSystem = entt::locator<ecs::systems::GameEndSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
 	using fishFarmSystem = entt::locator<ecs::systems::FishFarmSystemInterface>;
 	using animalSystem = entt::locator<ecs::systems::AnimalSystemInterface>;
@@ -339,6 +348,8 @@ struct Locator
 	using creatureFightSystem = entt::locator<ecs::systems::CreatureFightSystemInterface>;
 	/// Only in builds with the inspector, and only once the inspector started
 	using fightTranscript = entt::locator<ecs::systems::FightTranscriptSystemInterface>;
+	/// Only in builds with the inspector, and only once the inspector started
+	using creatureAnimationLog = entt::locator<ecs::systems::CreatureAnimationLogSystemInterface>;
 	using creatureModeSystem = entt::locator<ecs::systems::CreatureModeSystemInterface>;
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;
 	using tattooEditorSystem = entt::locator<ecs::systems::TattooEditorSystemInterface>;

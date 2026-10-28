@@ -1,0 +1,135 @@
+--- a/bgfx/src/renderer_vk.cpp
++++ b/bgfx/src/renderer_vk.cpp
+@@ -2608,8 +2608,29 @@
+ 				pcci.flags = 0;
+ 				pcci.initialDataSize = 0;
+ 				pcci.pInitialData    = NULL;
++
++				// The pipeline cache that the application kept from earlier runs, read one time. All pipelines
++				// are made from this one cache, and the cache goes back to the application at shutdown.
++				void* keptData = NULL;
++				const uint32_t keptSize = g_callback->cacheReadSize(0);
++				if (0 < keptSize)
++				{
++					keptData = bx::alloc(g_allocator, keptSize);
++					if (g_callback->cacheRead(0, keptData, keptSize) )
++					{
++						pcci.initialDataSize = keptSize;
++						pcci.pInitialData    = keptData;
++					}
++				}
++
+ 				result = vkCreatePipelineCache(m_device, &pcci, m_allocatorCb, &m_pipelineCache);
+ 
++				if (NULL != keptData)
++				{
++					bx::free(g_allocator, keptData);
++				}
++				m_pipelineCacheChanged = false;
++
+ 				if (VK_SUCCESS != result)
+ 				{
+ 					BX_TRACE("Init error: vkCreatePipelineCache failed %d: %s.", result, getName(result) );
+@@ -2775,6 +2796,23 @@
+ 
+ 			m_memoryLru.evictAll();
+ 
++			// The pipeline cache goes back to the application when this run made new pipelines
++			if (m_pipelineCacheChanged
++			&&  VK_NULL_HANDLE != m_pipelineCache)
++			{
++				size_t dataSize = 0;
++				if (VK_SUCCESS == vkGetPipelineCacheData(m_device, m_pipelineCache, &dataSize, NULL)
++				&&  0 < dataSize)
++				{
++					void* data = bx::alloc(g_allocator, dataSize);
++					if (VK_SUCCESS == vkGetPipelineCacheData(m_device, m_pipelineCache, &dataSize, data) )
++					{
++						g_callback->cacheWrite(0, data, (uint32_t)dataSize);
++					}
++					bx::free(g_allocator, data);
++				}
++			}
++
+ 			vkDestroy(m_pipelineCache);
+ 			vkDestroy(m_lowLatencySemaphore);
+ 
+@@ -5031,37 +5069,12 @@
+ 			graphicsPipeline.basePipelineHandle = VK_NULL_HANDLE;
+ 			graphicsPipeline.basePipelineIndex  = 0;
+ 
+-			uint32_t length = g_callback->cacheReadSize(hash);
+-			bool cached = length > 0;
+-
+-			void* cachedData = NULL;
+-
+-			VkPipelineCacheCreateInfo pcci;
+-			pcci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+-			pcci.pNext = NULL;
+-			pcci.flags = 0;
+-			pcci.initialDataSize = 0;
+-			pcci.pInitialData    = NULL;
+-
+-			if (cached)
+-			{
+-				cachedData = bx::alloc(g_allocator, length);
+-				if (g_callback->cacheRead(hash, cachedData, length) )
+-				{
+-					BX_TRACE("Loading cached pipeline state (size %d).", length);
+-					bx::MemoryReader reader(cachedData, length);
+-
+-					pcci.initialDataSize = (size_t)reader.remaining();
+-					pcci.pInitialData    = reader.getDataPtr();
+-				}
+-			}
+-
+-			VkPipelineCache cache;
+-			VK_CHECK(vkCreatePipelineCache(m_device, &pcci, m_allocatorCb, &cache) );
++			// The application counts the pipelines that are made. The kept cache was read one time at init.
++			g_callback->cacheReadSize(hash);
+ 
+ 			const VkResult result = vkCreateGraphicsPipelines(
+ 				  m_device
+-				, cache
++				, m_pipelineCache
+ 				, 1
+ 				, &graphicsPipeline
+ 				, m_allocatorCb
+@@ -5076,28 +5089,7 @@
+ 				);
+ 
+ 			m_pipelineStateCache.add(hash, pipeline);
+-
+-			size_t dataSize;
+-			VK_CHECK(vkGetPipelineCacheData(m_device, cache, &dataSize, NULL) );
+-
+-			if (0 < dataSize)
+-			{
+-				if (length < dataSize)
+-				{
+-					cachedData = bx::realloc(g_allocator, cachedData, dataSize);
+-				}
+-
+-				VK_CHECK(vkGetPipelineCacheData(m_device, cache, &dataSize, cachedData) );
+-				g_callback->cacheWrite(hash, cachedData, (uint32_t)dataSize);
+-			}
+-
+-			VK_CHECK(vkMergePipelineCaches(m_device, m_pipelineCache, 1, &cache) );
+-			vkDestroy(cache);
+-
+-			if (NULL != cachedData)
+-			{
+-				bx::free(g_allocator, cachedData);
+-			}
++			m_pipelineCacheChanged = true;
+ 
+ 			return pipeline;
+ 		}
+@@ -5929,6 +5921,7 @@
+ 		DescriptorSetMap m_descriptorSetMap;
+ 
+ 		VkPipelineCache  m_pipelineCache;
++		bool             m_pipelineCacheChanged;
+ 
+ 		TimerQueryVK m_gpuTimer;
+ 		OcclusionQueryVK m_occlusionQuery;

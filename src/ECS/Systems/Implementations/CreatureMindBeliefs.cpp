@@ -752,8 +752,8 @@ void CreatureMindSystem::LookAtLand(entt::entity entity, const Creature& creatur
 	const auto weights = LookWeightsOf(mind);
 	// Each turn that it moves it finds on its map the nearest mountains, then the nearest water, and prefers the regions
 	// that it did not go into yet. Each may take over what it watches.
-	for (const auto [sight, kind] : {std::pair {creature_look::Sight::Mountains, creature_exploration::Kind::Hill},
-	                                 std::pair {creature_look::Sight::Water, creature_exploration::Kind::Sea}})
+	for (const auto& [sight, kind] : {std::pair {creature_look::Sight::Mountains, creature_exploration::Kind::Hill},
+	                                  std::pair {creature_look::Sight::Water, creature_exploration::Kind::Sea}})
 	{
 		const auto place = ecs::creature_exploration_land::FindPlace(entity, kind, from, true);
 		if (!place.has_value())

@@ -38,6 +38,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -176,8 +177,7 @@ bool LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
 		angle = (facing + (forwards ? step : -step)) & gutils::k_GameAngleMask;
 		facesIt = false;
 	}
-	transform.rotation = portable_math::EulerAngleY(-gutils::ConvertGameAngleTo3D(angle) - glm::radians(90.0f));
-	Entities().SetDirty();
+	openblack::ecs::living_facing::FaceGameAngle(Entities(), villager, static_cast<uint16_t>(angle));
 	return facesIt;
 }
 
