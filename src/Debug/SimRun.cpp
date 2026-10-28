@@ -61,9 +61,19 @@ std::optional<std::chrono::microseconds> FrameTimeFromMs(double milliseconds)
 
 void Timings::AddTurn(float ms)
 {
+	const auto turnMs = std::max(ms - recordSinceTurnMs, 0.0f);
+	recordSinceTurnMs = 0.0f;
 	++turns;
-	turnTotalMs += ms;
-	turnLongestMs = std::max(turnLongestMs, ms);
+	turnTotalMs += turnMs;
+	turnLongestMs = std::max(turnLongestMs, turnMs);
+}
+
+void Timings::AddRecord(float ms)
+{
+	++records;
+	recordTotalMs += ms;
+	recordLongestMs = std::max(recordLongestMs, ms);
+	recordSinceTurnMs += ms;
 }
 
 void Timings::AddFrame(float ms)
@@ -93,6 +103,11 @@ float Timings::TurnAverageMs() const
 float Timings::FrameAverageMs() const
 {
 	return frames == 0 ? 0.0f : frameTotalMs / static_cast<float>(frames);
+}
+
+float Timings::RecordAverageMs() const
+{
+	return records == 0 ? 0.0f : recordTotalMs / static_cast<float>(records);
 }
 
 std::optional<TempleLoss> ParseTempleLoss(std::string_view text)
