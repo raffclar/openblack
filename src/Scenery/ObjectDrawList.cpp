@@ -271,3 +271,42 @@ void Clock::Reset()
 {
 	_rebuiltTurn.reset();
 }
+
+void Parts::Clear()
+{
+	for (const auto part : _parts)
+	{
+		_byIndex.at(static_cast<size_t>(entt::to_entity(part))) = {};
+	}
+	_parts.clear();
+}
+
+void Parts::Add(entt::entity part, Part of)
+{
+	const auto index = static_cast<size_t>(entt::to_entity(part));
+	if (index >= _byIndex.size())
+	{
+		_byIndex.resize(index + 1);
+	}
+	_byIndex[index] = {.entity = part, .of = of};
+	_parts.push_back(part);
+}
+
+std::optional<Part> Parts::Of(entt::entity entity) const
+{
+	const auto index = static_cast<size_t>(entt::to_entity(entity));
+	// A part that went leaves its index to a new thing, which is not a part
+	if (index >= _byIndex.size() || _byIndex[index].entity != entity)
+	{
+		return std::nullopt;
+	}
+	return _byIndex[index].of;
+}
+
+void KeptParts::Keep(entt::entity owner)
+{
+	if (!Keeps(owner))
+	{
+		_owners.push_back(owner);
+	}
+}

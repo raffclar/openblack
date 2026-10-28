@@ -12,6 +12,7 @@
 #include "3D/AllMeshes.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
@@ -49,6 +50,11 @@ std::optional<entt::id_type> thing_model::OutlineModelOf(const Registry& registr
 	if (registry.AllOf<Vortex>(thing))
 	{
 		return resources::HashIdentifier(MeshId::SpellVortexCylinder);
+	}
+	// A town centre's totem gets its outline from the icon on its plinth, with the icon that it has now
+	if (const auto* totem = registry.TryGet<const VillageTotem>(thing))
+	{
+		return ModelOf(registry, totem->icon);
 	}
 	// A teleport stone is a standing thing of the teleport's kind: it has that kind's model, which only gives it its
 	// outline

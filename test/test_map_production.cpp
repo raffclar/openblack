@@ -19,11 +19,13 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/MapCellResident.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/LivingFacing.h"
@@ -31,6 +33,7 @@
 #include "ECS/MapCells.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingModel.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
 
@@ -480,4 +483,44 @@ TEST_F(MapProductionFiling, AWalkerGoesToTheFrontOfItsCellOnlyWhenItsAngleChange
 	living_facing::FaceGameAngle(registry, walker, 512);
 	EXPECT_EQ(MobileIn(map, here), (std::vector {walker, other}));
 	EXPECT_EQ(registry.Get<const WallHug>(walker).gameAngle, 512);
+}
+
+TEST_F(MapProductionFiling, ATotemCoversItsOutlineAndGoesToTheFrontOfItsCellsWhenItChanges)
+{
+	// A town centre's totem stands in the cells as a building does, at the front of the fixed things of each cell. Its
+	// outline comes from the icon on its plinth.
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 place {505.0f, 0.0f, 505.0f};
+	Locator::entitiesMap::reset();
+	Locator::entitiesMap::emplace<MapProduction>([place](const Registry& /*registry*/, entt::entity /*entity*/) {
+		return std::optional(map_cells::OutlineOfBox(place, glm::mat3(1.0f), 1.0f, glm::vec3(0.0f), {1.0f, 1.0f, 1.0f}));
+	});
+	auto& map = Locator::entitiesMap::value();
+	constexpr entt::id_type k_Icon = 7;
+	constexpr entt::id_type k_Plinth = 8;
+	const auto icon = registry.Create();
+	registry.Assign<Mesh>(icon, k_Icon, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	const auto totem = registry.Create();
+	registry.Assign<Transform>(totem, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mesh>(totem, k_Plinth, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<VillageTotem>(totem, VillageTotem {.icon = icon});
+	EXPECT_EQ(thing_model::OutlineModelOf(registry, totem), std::optional(k_Icon));
+	map.FileNew();
+	const auto* resident = registry.TryGet<const MapCellResident>(totem);
+	ASSERT_NE(resident, nullptr);
+	EXPECT_EQ(resident->placement, map_cells::Placement::FixedFront);
+	EXPECT_TRUE(resident->coversOutline);
+	// A building filed after it goes in front of it; the totem goes to the front again when it is put in again
+	const auto building = registry.Create();
+	registry.Assign<Transform>(building, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Abode>(building, AbodeNumber::Field, 0u, 0u, 0u);
+	map.FileNew();
+	const auto middle = map_coords::CellOf(place);
+	ASSERT_FALSE(map.GetAllInCell(middle).empty());
+	EXPECT_EQ(map.GetAllInCell(middle).front(), building);
+	map.Reinsert(totem);
+	EXPECT_EQ(map.GetAllInCell(middle).front(), totem);
+	// It goes out of the cells with its town centre
+	registry.Destroy(totem);
+	EXPECT_EQ(map.GetAllInCell(middle), std::vector {building});
 }

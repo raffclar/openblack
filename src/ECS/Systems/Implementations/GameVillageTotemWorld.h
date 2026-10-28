@@ -35,6 +35,7 @@ public:
 	void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) override;
 	void SeeHandTakeTotem(PlayerNames player) override;
 	void ShareSet(entt::entity town) override;
+	void Reinsert(entt::entity totem) override;
 	void FloatNumber(glm::vec3 position, float value, uint32_t colour) override;
 	bool SendCommand(const player_commands::Action& action) override;
 };
