@@ -311,3 +311,12 @@ bool creature_town_help::CanMakeBreeder(const BreederFacts& facts)
 {
 	return facts.available && facts.hasTown && !facts.disciple && !facts.follower && facts.townBreeders < k_MostBreeders;
 }
+
+std::optional<PlayerNames> creature_town_help::WatchingPlayer(PlayerNames owner, bool networkGame, PlayerNames localPlayer)
+{
+	if (owner != PlayerNames::NEUTRAL)
+	{
+		return owner;
+	}
+	return networkGame ? std::nullopt : std::optional(localPlayer);
+}

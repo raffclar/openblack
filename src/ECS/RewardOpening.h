@@ -76,8 +76,8 @@ class OpeningWorld
 public:
 	virtual ~OpeningWorld() = default;
 
-	/// Food or wood poured at the chest
-	virtual void Pour(ResourceType type, uint32_t amount) = 0;
+	/// Food or wood poured at the chest for a player
+	virtual void Pour(ResourceType type, uint32_t amount, PlayerNames player) = 0;
 	/// Whether the chest has a town
 	[[nodiscard]] virtual bool HasTown() const = 0;
 	/// The chest's town is given belief in its player, and the chest sparkles
@@ -113,8 +113,9 @@ public:
 	virtual void ShowGesture(MagicType type) = 0;
 };
 
-/// Opens a chest that holds these contents into the world
-void Open(const Contents& contents, OpeningWorld& world);
+/// Opens a chest that holds these contents into the world. The player who tapped the chest gets the food or wood. Every
+/// computer of a network game finds the same player.
+void Open(const Contents& contents, PlayerNames tapper, OpeningWorld& world);
 
 /// The magic type the game reads for a seed's level as it looks for a power-up the player lacks: the plain miracle at
 /// the base level (-1), and level n the seed's (n + 1)th magic type. Its count of levels takes in the plain miracle, so

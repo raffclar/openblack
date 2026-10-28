@@ -44,6 +44,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -52,6 +53,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -204,10 +206,8 @@ bool TurnTowards(entt::entity villager, const glm::vec3& point, float step = k_W
 	{
 		turn = std::copysign(step, turn);
 	}
-	wallHug.yAngle += turn;
 	// Turning the walker turns the way its walk faces as well
-	wallHug.gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(wallHug.yAngle));
-	transform.rotation = portable_math::EulerAngleY(-wallHug.yAngle - std::numbers::pi_v<float> * 0.5f);
+	openblack::ecs::living_facing::FaceAngle(registry, villager, wallHug.yAngle + turn);
 	return faces;
 }
 /// The awe of a villager's people at a miracle, heard now and then near the hand
@@ -274,15 +274,16 @@ void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, G
 	{
 		return;
 	}
-	// Heard near enough the hand, and not straight after the guidance has spoken
+	// Heard near enough the hand of this computer, and not straight after the guidance has spoken. The distance is from
+	// the point under the cursor that the last report of the hand gave.
 	const auto& at = registry.Get<const Transform>(source).position;
 	float distance = k_VoiceReach;
 	if (Locator::handSystem::has_value())
 	{
-		const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-		if (const auto* handAt = registry.Valid(hand) ? registry.TryGet<const Transform>(hand) : nullptr)
+		const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+		if (const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr)
 		{
-			distance = glm::distance(glm::xz(handAt->position), glm::xz(at));
+			distance = gutils::GetDistanceInMetres(reported->collidePoint, at);
 		}
 	}
 	const float away = std::min(distance / k_VoiceReach, 1.0f);

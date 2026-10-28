@@ -13,6 +13,7 @@
 #include <span>
 #include <string_view>
 
+#include "ECS/GameEndRules.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "Graphics/Moon.h"
 #include "Graphics/RenderModes.h"
@@ -25,6 +26,9 @@ void RegisterFields_Values_g(entt::meta_ctx& context);
 
 void openblack::ecs::reflection::RegisterFields_Values_g(entt::meta_ctx& context)
 {
+	Reflect<openblack::game_end::State>(context, ValueOnly {})
+	    .Field<&openblack::game_end::State::decided>("decided")
+	    .Field<&openblack::game_end::State::lastPlace>("lastPlace");
 	Reflect<openblack::graphics::moon::Placement>(context, ValueOnly {})
 	    .Field<&openblack::graphics::moon::Placement::offset>("offset")
 	    .Field<&openblack::graphics::moon::Placement::alpha>("alpha");

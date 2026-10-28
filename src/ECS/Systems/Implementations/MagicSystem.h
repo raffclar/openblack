@@ -21,6 +21,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Common/FramePace.h"
 #include "Commands/PlayerCommands.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -178,9 +179,9 @@ public:
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
 	[[nodiscard]] std::optional<uint32_t> TakeHeldMiracleToolTip() override;
 
-	void UpdateHand(const HandFrame& frame, float seconds) override;
+	void UpdateHand(const HandFrame& frame, const input_steps::Steps& steps) override;
 	bool TapFireBall(entt::entity ball) override;
-	bool TapGlobe(entt::entity globe) override;
+	bool TapGlobe(entt::entity globe, PlayerNames player) override;
 	bool PressFireBall(uint32_t nowMs, uint32_t turn) override;
 	void HoldFireBall(uint32_t nowMs, uint32_t turn) override;
 	void ReleaseFireBall(uint32_t nowMs, uint32_t turn) override;
@@ -193,10 +194,12 @@ public:
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override;
 	bool PressAction() override;
 	void ReleaseAction() override;
-	[[nodiscard]] bool IsHandBusy() const override { return _held.has_value(); }
+	[[nodiscard]] bool IsHandBusy() const override { return HeldOf(OwnPlayer()).has_value(); }
+	[[nodiscard]] bool IsHandBusyOf(PlayerNames player) const override { return HeldOf(player).has_value(); }
 	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override { return magic::PourPoseAt(_pour, fraction); }
 	[[nodiscard]] HandCastState GetHandCastState() const override;
-	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return _held; }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return HeldOf(OwnPlayer()); }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeedOf(PlayerNames player) const override { return HeldOf(player); }
 	/// The nearest fireball the ray passes through that the hand may hold now, if any
 	/// What the cursor picked under the hand, while the hand is over the world
 	[[nodiscard]] std::optional<entt::entity> PickedUnderHand() const;
@@ -222,6 +225,8 @@ public:
 
 	void ProcessTurn() override;
 	void Update(float seconds) override;
+	void UpdateDispenserFrame(const ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+	                          std::chrono::milliseconds frameGameTime, bool landDrawn) override;
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
@@ -250,7 +255,7 @@ private:
 	[[nodiscard]] components::Spell* FindSpell(entt::entity spell) override;
 	[[nodiscard]] float GameRandom(float max) override;
 	void ReactToSpell(components::Spell& spell, bool onCast) override;
-	void StartCastEffect(components::Spell& spell, ParticleType type) override;
+	void StartCastEffect(components::Spell& spell, ParticleType type, bool synced) override;
 	[[nodiscard]] magic::FlockMiracleInterface* Flocks() override { return &_flocks; }
 	entt::entity CreateTeleportStone(const components::Spell& spell) override;
 	[[nodiscard]] bool CanPlaceTeleportStone(glm::vec3 point) const override;
@@ -320,7 +325,7 @@ private:
 	[[nodiscard]] particles::ProcessInfo HandInfo() const;
 	/// What a miracle that follows the hand reads at the turn: the hand, the camera and the hand's velocity as the reports
 	/// of the player give them. Before the first report, the last values stay.
-	[[nodiscard]] particles::ProcessInfo TurnHandInfo(const particles::ProcessInfo& last) const;
+	[[nodiscard]] particles::ProcessInfo TurnHandInfo(const particles::ProcessInfo& last, PlayerNames player) const;
 	/// The held seed's magic type and records
 	[[nodiscard]] MagicType HeldMagicType() const;
 	/// The object under the hand the held seed may be cast on: a creature for a creature spell
@@ -357,6 +362,8 @@ private:
 	void FailCast();
 	/// The seed has gone from the hand, kept or not
 	void LetGoOfSeed(bool destroy);
+	/// Once a turn: the seed in the hand of the player that the miracles of the hand act on waits until it is ready
+	void HeldSeedTurn();
 	/// A locked miracle was let go: the seed keeps what is left for another go, if enough
 	void UnlockHeldMiracle();
 	/// The gesture events since the last frame: the circle remembered, a power-up, the seed dropped
@@ -383,7 +390,10 @@ private:
 	/// The held seed as the hand shows it, after it came to the hand, became ready or was powered up: how the hand holds
 	/// it, its model once it is ready (for the seeds that show one), and its in-hand effect drawn once it is ready
 	void ShowHeldSeed();
-	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp)
+	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp). Each turn: whether each
+	/// seed out of the hand shows over its miracle.
+	void ShowSeedsWithSpellsTurn();
+	/// Each frame: places the seeds out of the hand that show over their miracles
 	void ShowSeedsWithSpells();
 	/// What decides whether a seed bound to its miracle is shown over it
 	[[nodiscard]] magic::SeedWithSpell SeedWithSpellOf(const components::SpellSeed& seed, const components::Spell& spell) const;
@@ -411,6 +421,47 @@ private:
 	/// The tribal power of a player for a magic type
 	[[nodiscard]] float PlayerTribalPower(PlayerNames player, MagicType type) const;
 
+	/// While it lives, the miracles of the hand act on the hand of a player
+	class ActingAs
+	{
+	public:
+		ActingAs(MagicSystem& magic, PlayerNames player)
+		    : _magic(magic)
+		    , _before(std::exchange(magic._acting, player))
+		{
+		}
+		~ActingAs() { _magic._acting = _before; }
+		ActingAs(const ActingAs&) = delete;
+		ActingAs& operator=(const ActingAs&) = delete;
+		ActingAs(ActingAs&&) = delete;
+		ActingAs& operator=(ActingAs&&) = delete;
+
+	private:
+		MagicSystem& _magic;
+		std::optional<PlayerNames> _before;
+	};
+	/// The player whose hand the input and the frames of this computer move
+	[[nodiscard]] static PlayerNames OwnPlayer();
+	/// The player whose hand the miracles of the hand act on now: the player of the command, else the player of this
+	/// computer
+	[[nodiscard]] PlayerNames ActingPlayer() const { return _acting.value_or(OwnPlayer()); }
+	/// Whether the miracles of the hand act on the hand of this computer. Only that hand shows effects, plays sounds,
+	/// gives help and keeps the input of this computer.
+	[[nodiscard]] bool ActsOnOwnHand() const { return ActingPlayer() == OwnPlayer(); }
+	/// The seed in the left hand of a player, none for a player with no hands
+	[[nodiscard]] std::optional<entt::entity> HeldOf(PlayerNames player) const;
+	/// The seed in the hand of the player that the miracles of the hand act on now
+	[[nodiscard]] std::optional<entt::entity> Held() const { return HeldOf(ActingPlayer()); }
+	/// Puts a seed in the hand of the player that the miracles of the hand act on now, or empties it. A player with no
+	/// hands holds nothing.
+	void SetHeld(std::optional<entt::entity> seed);
+	/// Whether the player that the miracles of the hand act on now has a hand that can hold a seed
+	[[nodiscard]] bool HasActingHand() const;
+	/// The player whose hand holds the seed, if a hand holds it
+	[[nodiscard]] std::optional<PlayerNames> HolderOf(entt::entity seed) const;
+	/// Where the last report of the player put the left hand, none before the first report or off the land
+	[[nodiscard]] std::optional<glm::vec3> ReportedHandOf(PlayerNames player) const;
+
 	GameMagicWorld _world;
 	magic::FlockMiracle _flocks;
 	magic::SpellGrid _grid;
@@ -433,15 +484,24 @@ private:
 	/// The hand's speed, smoothed, and where it was last frame
 	glm::vec3 _handVelocity {0.0f};
 	std::optional<glm::vec3> _lastHandPosition;
+	/// The hand's place at the last frame, from which the hand moved in this frame
+	std::optional<glm::vec3> _lastFrameHandPosition;
 	/// The spin the hand gives the miracle it holds, measured from when that miracle came to it
 	magic::HandSpin _handSpin;
 	entt::entity _spinningSeed {entt::null};
 	/// Where the held miracle's in-hand effect sits, in the fingers of the hand's pose, and how large the hand is drawn
 	std::optional<glm::vec3> _handEffectPoint;
 	float _handScale {1.0f};
+	/// When the swirls of the dispensers take their next step
+	frame_pace::Pace _swirlPace;
+	/// When the miracle shown in the hand takes its next step
+	frame_pace::Pace _handEffectPace;
 	/// Where the in-hand effect sat when it last stepped
 	glm::vec3 _handAtStep {0.0f};
-	std::optional<entt::entity> _held;
+	/// The player of the command that the turn does now. The hand of this player holds the seed that the miracles of
+	/// the hand act on. With no command, they act on the hand of this computer.
+	std::optional<PlayerNames> _acting;
+	/// The input of the hand of this computer
 	magic::CastInput _input;
 	/// The action button is down
 	bool _actionDown {false};

@@ -213,8 +213,9 @@ public:
 	/// A big forest gives a tree for the hand, taking a tree's wood from it (which may shrink it or use it up): a full
 	/// grown conifer made at its place. None when it gives none.
 	virtual std::optional<entt::entity> TreeFromBigForest(entt::entity /*bigForest*/) { return std::nullopt; }
-	/// A tree pulled out of the ground leaves its roots in a hole, with a puff of smoke
-	virtual void LeaveRootsHole(entt::entity tree) = 0;
+	/// A tree pulled out of the ground leaves its roots in a hole, with a puff of smoke. The hole has the place, the
+	/// turn and the size that the tree had before the pull. Only the computer that pulls the tree draws the hole.
+	virtual void LeaveRootsHole(entt::entity tree, const glm::vec3& place, const glm::mat3& rotation, float scale) = 0;
 	/// Make the land's draw list again on the next frames, this number of frames
 	virtual void RemakeDrawList(uint32_t frames) = 0;
 	/// A pot taken stops calling the people to it
@@ -240,10 +241,20 @@ public:
 	[[nodiscard]] virtual std::vector<PlayerNames> OtherHandPlayers() const { return {}; }
 	/// Whether a hand is the hand of another player of a network game, which this computer does not move or draw
 	[[nodiscard]] virtual bool IsOtherPlayersHand([[maybe_unused]] entt::entity hand) const { return false; }
+	/// The player of a hand that a god of a network game has, none for a hand of the first player
+	[[nodiscard]] virtual std::optional<PlayerNames> PlayerOfHand([[maybe_unused]] entt::entity hand) const
+	{
+		return std::nullopt;
+	}
 	/// A point as the game keeps a place on the map: the ground under it, the height above the ground and the place on
 	/// the map's grid of fixed points
 	[[nodiscard]] virtual glm::vec3 AsMapPlace(glm::vec3 point) const { return point; }
 	virtual void SetPose(entt::entity object, const Pose& pose) = 0;
+	/// The pose that the frames draw a thing in while the hand pulls at it. The world keeps the thing as it stood.
+	virtual void DrawPulledPose(entt::entity object, const Pose& pose) { SetPose(object, pose); }
+	/// The frames draw the thing at its own place again: at the take, at the start of a new pull, and at the let go in a
+	/// network game
+	virtual void ForgetPulledPose([[maybe_unused]] entt::entity object) {}
 	/// A thing's axes at its own size, as they are once it stops being stretched
 	[[nodiscard]] virtual glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const = 0;
 

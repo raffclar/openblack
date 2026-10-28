@@ -112,6 +112,8 @@ struct FinishedTemple
 	int32_t landNumber;
 	/// The game is a skirmish on a playground land
 	bool skirmish;
+	/// The game is a network game, which has no saves
+	bool networkGame;
 };
 
 /// A temple finished plays its music for the player at this machine, unless a script has the cinema bars in or music of

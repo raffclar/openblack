@@ -28,11 +28,13 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "Help/HelpProfile.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -41,8 +43,6 @@ namespace messages = openblack::help_messages;
 
 namespace
 {
-/// The kinds of script a single player game starts by name
-constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 constexpr size_t k_StartedKept = 16;
 
 uint32_t Turn()
@@ -74,11 +74,6 @@ bool StopRunningHelp()
 	return true;
 }
 
-uint32_t LocalRand(int32_t n)
-{
-	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().LocalRand(n) : 0;
-}
-
 /// A script's cut scene: a script task has the cinema bars in
 bool InScriptCutScene()
 {
@@ -100,6 +95,7 @@ void HelpMessageSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _lastSet);
 	reflection::Save(out, _messageTurn);
 	reflection::Save(out, _started);
+	reflection::Save(out, _randomSeed);
 }
 
 bool HelpMessageSystem::LoadState(reflection::BinaryReader& in)
@@ -111,11 +107,22 @@ bool HelpMessageSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _lastSet);
 	reflection::Load(in, _messageTurn);
 	reflection::Load(in, _started);
+	// A save of an older build has no seed of the help
+	if (in.Remaining() > 0)
+	{
+		reflection::Load(in, _randomSeed);
+	}
 	return !in.Failed();
 }
 
 void HelpMessageSystem::Remember(Started started)
 {
+	// The log lets the tools compare the turns of the help at different frame rates
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The help starts the script {} with the texts {} to {} at turn {}", started.script,
+		                   started.first, started.last, started.turn);
+	}
 	_started.push_back(std::move(started));
 	if (_started.size() > k_StartedKept)
 	{
@@ -140,7 +147,7 @@ bool HelpMessageSystem::RunMessage(uint32_t first, uint32_t last, messages::Scri
 	vm.Pushf(static_cast<float>(first));
 	vm.Pushf(static_cast<float>(last));
 	const auto name = std::string(messages::ScriptName(script));
-	vm.StartScript(name, k_SinglePlayerScripts);
+	vm.StartScript(name, script::start::StartableScripts());
 	Remember({.script = name,
 	          .first = first,
 	          .last = last,
@@ -171,12 +178,12 @@ bool HelpMessageSystem::RunMessageSet(size_t set, std::optional<messages::Texts>
 	{
 		Locator::helpProfileSystem::value().Trigger(messages::k_SetSaidEvent);
 	}
-	const auto texts = messages::TextsOf(set, thing, LocalRand);
+	const auto texts = messages::TextsOf(set, thing, [this](int32_t n) { return HelpRand(n); });
 	if (!texts.has_value())
 	{
 		// The script alone
 		const auto name = std::string(messages::ScriptName(row.script));
-		Locator::vm::value().StartScript(name, k_SinglePlayerScripts);
+		Locator::vm::value().StartScript(name, script::start::StartableScripts());
 		Remember({.script = name, .first = 0, .last = 0, .turn = turn});
 		return true;
 	}
@@ -194,11 +201,6 @@ void HelpMessageSystem::TriggerCategory(uint32_t category)
 
 void HelpMessageSystem::HelpQuery()
 {
-	// Not while a script's cut scene has the player's controls
-	if (InScriptCutScene())
-	{
-		return;
-	}
 	// What is in the hand, else what the hand is over, else the ground under it
 	std::optional<entt::entity> held;
 	if (Locator::handGrabSystem::has_value())
@@ -215,12 +217,41 @@ void HelpMessageSystem::HelpQuery()
 	}
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	const auto [thing, ground] = help_query::TargetOf(held, underHand, land, inTemple);
-	if (thing.has_value() && Locator::entitiesRegistry::value().Valid(*thing))
+	// The turn says the help, so that the help starts its script at the same turn at all frame rates
+	if (Locator::playerCommandSystem::has_value())
 	{
-		Say(help_query::About(ecs::help_query_facts::ThingOf(*thing)), ecs::help_query_facts::TextsOf(*thing));
+		Locator::playerCommandSystem::value().Submit(player_commands::HelpQuery {
+		    .thing = thing.value_or(entt::null),
+		    .hasGround = ground.has_value(),
+		    .ground = ground.value_or(glm::vec3(0.0f)),
+		});
+	}
+}
+
+void HelpMessageSystem::DoHelpQuery(const player_commands::HelpQuery& query)
+{
+	// Not while a script's cut scene has the player's controls
+	if (InScriptCutScene())
+	{
 		return;
 	}
+	if (query.thing != entt::null && Locator::entitiesRegistry::value().Valid(query.thing))
+	{
+		Say(help_query::About(ecs::help_query_facts::ThingOf(query.thing)), ecs::help_query_facts::TextsOf(query.thing));
+		return;
+	}
+	const auto ground = query.hasGround ? std::optional(query.ground) : std::nullopt;
 	Say(help_query::AboutGround(ecs::help_query_facts::GroundAt(ground)), std::nullopt);
+}
+
+uint32_t HelpMessageSystem::HelpRand(int32_t n)
+{
+	return n == 0 ? 0 : game_random::LHRand(static_cast<uint32_t>(n), _randomSeed);
+}
+
+float HelpMessageSystem::HelpFloatRand(float x)
+{
+	return game_random::FloatRand(x, _randomSeed);
 }
 
 void HelpMessageSystem::Say(const help_query::Answer& answer, std::optional<messages::Texts> thing)
@@ -244,7 +275,7 @@ void HelpMessageSystem::ProcessTurn()
 	const auto since = profile.Count(messages::k_AnyHelpEvent).SecondsSince(profile.Clock());
 	if (messages::BanterDue(since, InScriptCutScene()))
 	{
-		const auto set = messages::PickBanter(_sent, _banterUsed, LocalRand);
+		const auto set = messages::PickBanter(_sent, _banterUsed, [this](int32_t n) { return HelpRand(n); });
 		RunMessageSet(set);
 	}
 }

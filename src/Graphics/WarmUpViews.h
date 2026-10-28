@@ -29,6 +29,11 @@ constexpr std::array k_WindowSceneViews {RenderPass::Sky,
                                          RenderPass::GestureHintCollar0,
                                          RenderPass::GestureHintCollar1,
                                          RenderPass::GestureHintCollar2,
+                                         RenderPass::GestureHintSeed0,
+                                         RenderPass::GestureHintSeed1,
+                                         RenderPass::GestureHintSeed2,
+                                         RenderPass::GestureHintSeed3,
+                                         RenderPass::GestureHintSeed4,
                                          RenderPass::GestureHints,
                                          RenderPass::Advisors};
 
@@ -45,6 +50,11 @@ constexpr std::array k_PartedViews {RenderPass::ReflectionSky,
                                     RenderPass::GestureHintCollar0,
                                     RenderPass::GestureHintCollar1,
                                     RenderPass::GestureHintCollar2,
+                                    RenderPass::GestureHintSeed0,
+                                    RenderPass::GestureHintSeed1,
+                                    RenderPass::GestureHintSeed2,
+                                    RenderPass::GestureHintSeed3,
+                                    RenderPass::GestureHintSeed4,
                                     RenderPass::GestureHints,
                                     RenderPass::Advisors};
 

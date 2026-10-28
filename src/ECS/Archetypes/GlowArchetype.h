@@ -26,7 +26,8 @@ namespace openblack::ecs::archetypes
 class GlowArchetype
 {
 public:
-	static std::array<entt::entity, 2> Create(const LightEmitter& emitter, TempleRoom room);
+	/// Makes the light beam and the glow of a light of a temple's room in the registry of the temple's rooms
+	static std::array<entt::entity, 2> Create(Registry& registry, const LightEmitter& emitter, TempleRoom room);
 	GlowArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes
