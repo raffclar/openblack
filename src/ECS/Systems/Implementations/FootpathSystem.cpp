@@ -876,8 +876,8 @@ void FootpathSystem::ProcessTurn()
 		}
 	}
 	ProcessObstacleChanges();
-	// The plans that step one after the other with no change to the world between them share what they gather. The
-	// world forgets it at each change.
+	// The plans share what they gather while they step. The loop changes only the paths, the links of the paths and the
+	// finders, which are not in the map's cells and are not gone round, so what each block holds stays the same.
 	struct KeepGathered
 	{
 		WorldInterface& world;
@@ -902,8 +902,6 @@ void FootpathSystem::ProcessTurn()
 			StepPlan(*_world, *finder.plan, planning::k_StepsPerTurn);
 			continue;
 		}
-		// The path is laid or removed: the world forgets what the plans gathered, and keeps nothing while it changes
-		_world->KeepGathered(false);
 		if (alive && status == RouteStatus::Found)
 		{
 			// The way is found: the path is laid along it and both things keep it
@@ -916,7 +914,6 @@ void FootpathSystem::ProcessTurn()
 			registry.Destroy(finder.footpath);
 		}
 		registry.Destroy(entity);
-		_world->KeepGathered(true);
 	}
 }
 

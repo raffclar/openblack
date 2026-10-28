@@ -94,8 +94,8 @@ public:
 	/// A walker walks straight on to a place in whole map units
 	virtual void WalkTo(entt::entity walker, glm::ivec2 place) = 0;
 	/// While the world keeps what the plans gather, each block that a plan gathers keeps its circles, and the next plan
-	/// that reaches the block gets the same circles with less work. The caller does not change the world while the world
-	/// keeps them. A stop forgets all of them.
+	/// that reaches the block gets the same circles with less work. While the world keeps them, the caller does not
+	/// change the land, the things in the map's cells or what they are gone round by. A stop forgets all of them.
 	virtual void KeepGathered(bool keep) { static_cast<void>(keep); }
 };
 
