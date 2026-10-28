@@ -21,9 +21,9 @@
 #include <vector>
 
 #include "Common/DeveloperTools.h"
+#include "ECS/GameEndConditions.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/RowDump.h"
-#include "ECS/GameEndConditions.h"
 #endif
 
 /// The fast simulation mode for long tool runs, such as a creature's whole life. Each frame takes a fixed game time, so a
