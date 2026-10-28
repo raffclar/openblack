@@ -2108,6 +2108,7 @@ openblack_setup_and_add_test(test_hash_identifier test_hash_identifier.cpp)
 openblack_setup_and_add_test(test_skirmish_box gui/test_skirmish_box.cpp)
 openblack_setup_and_add_test(test_land_info_box gui/test_land_info_box.cpp)
 openblack_setup_and_add_test(test_skirmish_ping test_skirmish_ping.cpp)
+openblack_setup_and_add_test(test_leash_report test_leash_report.cpp)
 add_test(NAME test_net_check_web
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_web.py
 )
