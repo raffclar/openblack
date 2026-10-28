@@ -1402,7 +1402,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const bool snowed =
 				    depth != nullptr && prim.depthWrite && _snowTexture != nullptr && _snowAlphaTexture != nullptr;
 				bindings.snowed = snowed;
-				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+				// y: 1 when the submesh has bones. Then the snow is read by the normal of each vertex in its file, not by
+				// the normal of the posed vertex.
+				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, subMesh.GetFlags().hasBones ? 1.0f : 0.0f, 0.0f, 0.0f};
 				setUniform(MeshUniform::Snow, &u_snow);
 				if (snowed)
 				{

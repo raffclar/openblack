@@ -21,6 +21,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/TownDesireFlag.h"
@@ -282,6 +283,22 @@ TEST(SnowLevels, ABrokenBuildingKeepsItsSnowAndItsBrokenModelEasesFromIt)
 	EXPECT_EQ(registry.Get<SnowLevel>(bare).broken, std::optional<int32_t>(0));
 	registry.Get<SnowLevel>(bare).broken = 5;
 	EXPECT_EQ(snow_levels::ShownLevelOf(registry, bare), 0);
+}
+
+TEST(SnowLevels, AVillagerInHighDetailShowsNoSnowAndKeepsItsLevel)
+{
+	ecs::Registry registry;
+	const auto villager = Thing(registry);
+	registry.Assign<SnowLevel>(villager, SnowLevel {.level = 120});
+	EXPECT_EQ(snow_levels::ShownLevelOf(registry, villager), 120);
+
+	registry.Assign<HighDetail>(villager);
+	EXPECT_EQ(snow_levels::ShownLevelOf(registry, villager), 0);
+	EXPECT_EQ(snow_levels::LevelOf(registry, villager), 120);
+
+	// Drawn as usual again, it shows its snow again
+	registry.Remove<HighDetail>(villager);
+	EXPECT_EQ(snow_levels::ShownLevelOf(registry, villager), 120);
 }
 
 TEST(SnowLevels, APieceKeepsTheSnowOfTheBrokenModelThatItBrokeOff)

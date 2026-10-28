@@ -21,6 +21,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HighDetail.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/SnowLevel.h"
@@ -38,6 +39,7 @@ using components::CarriedByTornado;
 using components::Creature;
 using components::Field;
 using components::HeldByCreature;
+using components::HighDetail;
 using components::InHand;
 using components::InPhysics;
 using components::MapCellResident;
@@ -110,7 +112,8 @@ int32_t LevelOf(const Registry& registry, entt::entity entity)
 int32_t ShownLevelOf(const Registry& registry, entt::entity entity)
 {
 	const auto* snow = registry.TryGet<const SnowLevel>(entity);
-	if (snow == nullptr)
+	// A villager in high detail shows a different model, and the land never gives snow to that model
+	if (snow == nullptr || registry.AllOf<HighDetail>(entity))
 	{
 		return 0;
 	}

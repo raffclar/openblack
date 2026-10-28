@@ -49,7 +49,8 @@ void Step(Registry& registry, std::span<const entt::entity> things, const std::f
 [[nodiscard]] int32_t LevelOf(const Registry& registry, entt::entity entity);
 
 /// The snow that the drawn model of a thing shows, 0 to 255. A broken building shows the snow of its broken model, and a
-/// piece that broke off a building shows its own. Each of the two shows no snow below k_BrokenModelLevelShown.
+/// piece that broke off a building shows its own. Each of the two shows no snow below k_BrokenModelLevelShown. A villager
+/// that a script draws in high detail shows no snow.
 [[nodiscard]] int32_t ShownLevelOf(const Registry& registry, entt::entity entity);
 
 /// Keeps the snow of the broken model of a building. When the building breaks, the snow of its broken model starts at

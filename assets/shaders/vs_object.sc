@@ -289,8 +289,10 @@ void main()
 		float snowLevel = SnowShownLevel(i_data4.w);
 		if (snowLevel > 0.0f)
 		{
-			vec3 worldNormal = normalize(TO_WORLD(vec4(normal, 0.0f)).xyz);
-			v_snow = vec4(SnowUv(position, worldNormal), snowLevel / 255.0f, 0.0f);
+			// A submesh with bones reads the snow by the normal in its file. The bones and the place of the thing do
+			// not change it.
+			vec3 snowNormal = u_snow.y > 0.5f ? normal : normalize(TO_WORLD(vec4(normal, 0.0f)).xyz);
+			v_snow = vec4(SnowUv(position, snowNormal), snowLevel / 255.0f, 0.0f);
 			v_snowLight = ModelLightColour(SnowColour(colour), ModelLightFactor(normal, localLight));
 		}
 	}
