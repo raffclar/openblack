@@ -157,6 +157,8 @@ private:
 	/// Each game turn the drips of blood run down the skins
 	void ProcessDrips();
 	void DripTurn(entt::entity creature);
+	/// The sparkle of a held press charges in the creature's turn
+	void ChargeMarkTurn(entt::entity creature);
 	/// One creature beat the other, by a blow or otherwise: the loser faints, and the winner is made to have a poo on
 	/// the loser or to show off
 	void Win(entt::entity winner, entt::entity loser, bool byBlow);

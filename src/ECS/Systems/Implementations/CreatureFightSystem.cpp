@@ -2459,7 +2459,23 @@ void CreatureFightSystem::FightTurn(entt::entity creature)
 
 void CreatureFightSystem::BloodTurn(entt::entity creature)
 {
+	ChargeMarkTurn(creature);
 	DripTurn(creature);
+}
+
+void CreatureFightSystem::ChargeMarkTurn(entt::entity creature)
+{
+	// While a press on a body is held, the sparkle added last charges by the milliseconds of the creature's turn. A
+	// paused game has no turns, thus the charge stops.
+	if (!_markHeld)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* fighting = registry.TryGet<CreatureFighting>(creature))
+	{
+		fighting->marks.Charge(static_cast<float>(TurnMsOf(registry.TryGet<const CreatureAnimation>(creature))));
+	}
 }
 
 void CreatureFightSystem::MovesTurn(entt::entity creature)
@@ -3366,20 +3382,7 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 
 void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto milliseconds = gameTime.count();
-	UpdateView(milliseconds / 1000.0f);
-	// A press held on a body charges the sparkle added last
-	if (_markHeld)
-	{
-		if (const auto self = PrimaryCreatureOf(registry, OwnPlayer()))
-		{
-			if (auto* held = registry.TryGet<CreatureFighting>(*self))
-			{
-				held->marks.Charge(milliseconds);
-			}
-		}
-	}
+	UpdateView(gameTime.count() / 1000.0f);
 	NoteActions();
 }
 

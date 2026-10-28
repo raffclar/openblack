@@ -318,17 +318,16 @@ void ScriptHighlightSystem::UpdateFrame(float frameMilliseconds, float /*turnFra
 		    const bool listed = _world->InDrawList(entity);
 		    const bool selected = object_draw_list::Drawn(frame, listed, highlight.onScreen);
 		    const bool drawn = selected && Drawn(highlight);
-		    const bool hidden = registry.AllOf<HiddenByState>(entity);
-		    if (drawn == hidden)
+		    // A save from an earlier openblack can hide a highlight with the component of hidden things. The field of the
+		    // highlight replaces it.
+		    if (registry.AnyOf<HiddenByState>(entity))
 		    {
-			    if (drawn)
-			    {
-				    registry.Remove<HiddenByState>(entity);
-			    }
-			    else
-			    {
-				    registry.Assign<HiddenByState>(entity);
-			    }
+			    registry.Remove<HiddenByState>(entity);
+			    registry.SetDirty();
+		    }
+		    if (drawn == highlight.hidden)
+		    {
+			    highlight.hidden = !drawn;
 			    registry.SetDirty();
 		    }
 		    if (drawn)
