@@ -18,6 +18,10 @@ each change as one line: scenario, step, component, kind.
     python tools/sim/guard_sweep.py summary OUT [--systems] [--json] [--items] [--fail]
     python tools/sim/guard_sweep.py --self-test
 
+In a game alone the testbed runner makes and moves things in the debug window step. The guard does not tell the parts of
+that step, but it tells each turn at which the step changed the synced world. The map files the runner's new things in the
+next steps. The summary shows these map changes apart, as the known testbed runner class: they are not writes of the game.
+
 The kinds: rows (a frame step made or removed an entity), order (it added, removed or moved a row of a component, which
 the value hash does not see), value (it changed the values of a component), field (with --fields: the field that
 changed), draws (it drew a synced random number), system (it changed the saved state of a system; most of these hold
@@ -55,6 +59,12 @@ LANDS = {
                   "--sim-all-computer-gods", "--sim-ai-seed", "1"],
     "ring32": ["--gods-ring-map", "--sim-network-game", "--sim-all-computer-gods", "--sim-ai-seed", "1"],
 }
+TOOL_LINE = re.compile(r"Frame write guard: the tool step (\S+) changed the synced world at turn (\d+)\s*$")
+# The parts that the map changes when it files a thing: after the testbed runner made or moved things, these changes are
+# the runner's, not the game's
+MAP_FILING = {"FixedOutline", "MapCellResident", "MapCellMover", "map"}
+# A change of the map files the runner's things in the same turn or in the turn after it
+RUNNER_TURNS = 1
 LAND_PREFIX = "land:"
 SCENARIO_ID = re.compile(r"^[a-z0-9_]+[.][a-z0-9_.]+$")
 # The launch switches of the game: the game finds them anywhere on its command line after a "-" or a "/"
@@ -89,6 +99,24 @@ def parse_log(lines):
                         "turn": int(match.group(3)), "entity": int(match.group(4)) if match.group(4) else None,
                         "values": match.group(5)})
     return changes
+
+
+def parse_tool_turns(lines):
+    """The turns at which a step of the tools, as the testbed runner in the debug windows, changed the synced world"""
+    turns = []
+    for line in lines:
+        match = TOOL_LINE.search(line)
+        if match:
+            turns.append(int(match.group(2)))
+    return turns
+
+
+def from_runner(change, tool_turns):
+    """Whether a change is the map that files the things of the testbed runner"""
+    component = change["component"].split(".")[0]
+    if change["kind"] not in ("value", "order", "field", "system") or component not in MAP_FILING:
+        return False
+    return any(0 <= change["turn"] - turn <= RUNNER_TURNS for turn in tool_turns)
 
 
 def scenario_ids(game, argument):
@@ -191,11 +219,14 @@ def run(options):
             process.kill()
             code = process.wait()
         changes = []
+        tool_turns = []
         if os.path.exists(log):
             with open(log, encoding="utf-8", errors="replace") as file:
-                changes = parse_log(file)
+                lines = file.readlines()
+            changes = parse_log(lines)
+            tool_turns = parse_tool_turns(lines)
         record = {"item": item, "code": code, "timeout": timed_out, "seconds": round(time.monotonic() - started, 1),
-                  "changes": changes}
+                  "changes": changes, "toolTurns": tool_turns}
         with open(done, "w", encoding="utf-8") as file:
             json.dump(record, file)
         with open(records, "a", encoding="utf-8") as file:
@@ -221,9 +252,10 @@ def read_records(out):
     return list(records.values())
 
 
-def summarise(records, systems=False):
+def summarise(records, systems=False, runner=None):
     """The lines of the summary: one for each scenario, step, component and kind, the first turn and the fields; the
-    bad exits; and the count of the scenarios of each step, component and kind"""
+    bad exits; and the count of the scenarios of each step, component and kind. The changes of the known testbed
+    runner class go into the list runner, when it is given, and not into the lines."""
     lines = []
     totals = defaultdict(list)
     bad = []
@@ -231,8 +263,17 @@ def summarise(records, systems=False):
         if record["timeout"] or record["code"] != 0:
             bad.append(f"{record['item']} exit {record['code']}{' timeout' if record['timeout'] else ''}")
         grouped = {}
+        tool_turns = record.get("toolTurns", [])
+        runner_keys = set()
         for change in record["changes"]:
             if change["kind"] == "system" and not systems:
+                continue
+            if from_runner(change, tool_turns):
+                component = change["component"].split(".")[0]
+                key = (change["step"], component, change["kind"])
+                if runner is not None and key not in runner_keys:
+                    runner_keys.add(key)
+                    runner.append(f"{record['item']}  {key[0]}  {key[1]}  {key[2]}  turn {change['turn']}")
                 continue
             component = change["component"].split(".")[0] if change["kind"] == "field" else change["component"]
             key = (change["step"], component, change["kind"])
@@ -253,17 +294,20 @@ def summarise(records, systems=False):
 
 def summary(options):
     records = read_records(options.out)
-    lines, bad, count = summarise(records, options.systems)
+    runner = []
+    lines, bad, count = summarise(records, options.systems, runner)
     if options.items:
         # The scenarios and lands with a change, one on each line, for a second sweep with --scenarios @file
         for item in sorted({line.split("  ", 1)[0] for line in lines}):
             print(item)
         return 0
     if options.json:
-        print(json.dumps({"items": len(records), "changes": lines, "bad": bad}))
+        print(json.dumps({"items": len(records), "changes": lines, "runner": runner, "bad": bad}))
     else:
+        runner_items = {line.split("  ", 1)[0] for line in runner}
         print(f"{len(records)} scenarios and lands; {len(lines)} changes"
-              f"{'' if options.systems else ' (system parts left out)'}; {len(bad)} bad exits")
+              f"{'' if options.systems else ' (system parts left out)'}; {len(bad)} bad exits;"
+              f" {len(runner_items)} scenarios with changes of the known testbed runner class")
         for line in lines:
             print(line)
         if bad:
@@ -274,6 +318,11 @@ def summary(options):
             print("by step, component and kind:")
             for line in count:
                 print(line)
+        if runner:
+            print("known testbed runner class (the runner made or moved things in the debug window step; the map files"
+                  " them in the next steps; not a write of the game):")
+            for line in runner:
+                print("  " + line)
     return 1 if options.fail and (lines or bad) else 0
 
 
@@ -299,6 +348,23 @@ def self_test():
     lines, _, _ = summarise([record], systems=True)
     assert "a.b  FrameEffects  snow  system  turn 1 (values 0,2)" in lines, lines
     assert kind_of("synced random draws") == ("draws", "-")
+    # The map files the things that the testbed runner made at turn 5, in that turn and the turn after it
+    tool_log = [
+        "[game] [info] Frame write guard: the tool step DebugGui changed the synced world at turn 5",
+        "[game] [warning] Frame write guard: the frame step Entities changed the synced part MapCellResident at turn 6",
+        "[game] [warning] Frame write guard: the frame step Entities changed the synced part order of FixedOutline at turn 5",
+        "[game] [warning] Frame write guard: the frame step Entities changed the synced part MapCellResident.cells at turn 5",
+        "[game] [warning] Frame write guard: the frame step Entities changed the synced part Transform at turn 5",
+        "[game] [warning] Frame write guard: the frame step Hand changed the synced part MapCellMover at turn 9",
+    ]
+    assert parse_tool_turns(tool_log) == [5]
+    tool_record = {"item": "e.f", "code": 0, "timeout": False, "seconds": 1.0, "changes": parse_log(tool_log),
+                   "toolTurns": parse_tool_turns(tool_log)}
+    runner = []
+    lines, _, _ = summarise([tool_record], runner=runner)
+    assert lines == ["e.f  Entities  Transform  value  turn 5", "e.f  Hand  MapCellMover  value  turn 9"], lines
+    assert runner == ["e.f  Entities  MapCellResident  value  turn 6", "e.f  Entities  FixedOutline  order  turn 5",
+                      "e.f  Entities  MapCellResident  field  turn 5"], runner
     assert SWITCH_IN_PATH.search("/x/multiplayer.page") and SWITCH_IN_PATH.search("E:\\b\\-Land2")
     assert not SWITCH_IN_PATH.search("E:/openblack/builds/mp-guard-sweep-2/bin/openblack")
     print("self-test passed")
