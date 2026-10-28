@@ -73,6 +73,21 @@ void testbed_scenarios::AddBirdScenarios(std::vector<Scenario>& all)
 	                   {.kind = AnimalInfo::Crow, .offset = {10.0f, 40.0f}, .reach = 25.0f}},
 	});
 
+	// Young birds grow as young grazers do
+	all.push_back({
+	    .id = "birds.young_grow",
+	    .name = "Birds: the young grow",
+	    .facet = Facet::Animals,
+	    .description = "A flock of ten doves, made at the ages that a land script gives, wandering up to 25 m about a "
+	                   "point 40 m north of a camera on the ground.",
+	    .expected = "A young dove is smaller than a grown dove. Every 375 turns (37.5 seconds) each young "
+	                "dove grows a random part of the way to the size of the year after its age. The inspector shows the "
+	                "scale of each dove. A grown dove keeps its size.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -5.0f}, .look = {0.0f, 25.0f, 40.0f}},
+	    .birdFlocks = {{.kind = AnimalInfo::Dove, .offset = {0.0f, 40.0f}, .reach = 25.0f}},
+	});
+
 	// Birds that fly out of the view and back while the camera stands still
 	all.push_back({
 	    .id = "birds.still_camera",

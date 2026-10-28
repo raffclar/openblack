@@ -1495,6 +1495,15 @@ void LeashSystem::ProcessTurn()
 	}
 }
 
+void LeashSystem::Reset()
+{
+	_postsPlaced = false;
+	_lastRefusal.reset();
+	_doubleTaps = {};
+	_lastPressDouble = false;
+	_ropeHand = leash_snap::Hand::Away;
+}
+
 void LeashSystem::BeginTurn()
 {
 	if (_postsPlaced)
