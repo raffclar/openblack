@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <chrono>
 #include <functional>
 #include <map>
@@ -149,8 +150,14 @@ public:
 		++deathChecks;
 		return false;
 	}
-	creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity) override
+	creature_mind::HandsCheck CheckHandsBeforeAction(entt::entity creature) override
 	{
+		if (auto found = handsOf.find(creature); found != handsOf.end())
+		{
+			auto& [checks, done] = found->second;
+			++done;
+			return done <= checks.size() ? checks.at(done - 1) : creature_mind::HandsCheck::Free;
+		}
 		++handChecks;
 		if (handChecks <= hands.size())
 		{
@@ -163,6 +170,8 @@ public:
 	/// What the checks of the hands before a faint do in turn, then Free
 	std::vector<creature_mind::HandsCheck> hands;
 	size_t handChecks {0};
+	/// What the checks of the hands of one creature do in turn, then Free, and the count of its checks
+	std::map<entt::entity, std::pair<std::vector<creature_mind::HandsCheck>, size_t>> handsOf;
 	/// How many times a creature asked to fight was checked for death, one time for each question
 	size_t deathChecks {0};
 };
@@ -786,7 +795,8 @@ TEST_F(CreatureFightSystemTest, AFightFacesOffAndTauntsBeforeItLooksForAnArena)
 
 namespace
 {
-/// The hands of the creatures. They record each creature that puts down or drops what it holds.
+/// The hands of the creatures. They record each creature that drops what it holds, and are busy for the creatures in
+/// the busy list.
 class RecordedHands final: public ecs::systems::CreatureObjectActionSystemInterface
 {
 public:
@@ -811,8 +821,10 @@ public:
 	bool Catch(entt::entity, entt::entity) override { return false; }
 	void Cancel(entt::entity) override {}
 	void Drop(entt::entity creature) override { dropped.push_back(creature); }
-	void PutDownAtOnce(entt::entity creature) override { putDown.push_back(creature); }
-	[[nodiscard]] State GetState(entt::entity) const override { return State::Idle; }
+	[[nodiscard]] State GetState(entt::entity creature) const override
+	{
+		return std::ranges::find(busy, creature) != busy.end() ? State::Busy : State::Idle;
+	}
 	[[nodiscard]] bool IsCatching(entt::entity) const override { return false; }
 	[[nodiscard]] std::optional<float> GetProgress(entt::entity) const override { return std::nullopt; }
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity) const override { return std::nullopt; }
@@ -822,22 +834,67 @@ public:
 	[[nodiscard]] bool CanEatHeld(entt::entity) const override { return false; }
 	[[nodiscard]] bool CanDestroy(entt::entity) const override { return false; }
 
-	std::vector<entt::entity> putDown;
 	std::vector<entt::entity> dropped;
+	std::vector<entt::entity> busy;
 };
 } // namespace
 
-// A fight needs free hands: each creature puts down what it holds, as at the end of a put-down clip
+// Each creature keeps what it holds as the fight starts. Before its taunt, it checks its hands: with a thing in the hand
+// it starts to let go, and it tries the taunt from the next turn with no new check. The let-go keeps the body busy.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
-TEST_F(CreatureFightSystemTest, BothCreaturesPutDownWhatTheyHoldAsTheFightStarts)
+TEST_F(CreatureFightSystemTest, EachCreatureLetsGoOfWhatItHoldsBeforeItsTaunt)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Remove<CreatureFighting>(first);
 	registry.Remove<CreatureFighting>(second);
 	auto& hands = static_cast<RecordedHands&>(Locator::creatureObjectActionSystem::emplace<RecordedHands>());
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	auto& game = static_cast<ListedGameRandom&>(Locator::gameRandom::emplace<ListedGameRandom>());
 	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
-	EXPECT_EQ(hands.putDown, (std::vector {first, second}));
 	EXPECT_TRUE(hands.dropped.empty());
+	EXPECT_EQ(minds.handsOf.size(), 0u);
+
+	using creature_mind::HandsCheck;
+	minds.handsOf[first] = {{HandsCheck::Wait, HandsCheck::LetGo}, 0};
+	minds.handsOf[second] = {{}, 0};
+	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Taunt;
+	registry.Get<CreatureFighting>(second).stage = CreatureFighting::Stage::Taunt;
+	const auto& fighter = registry.Get<const CreatureFighting>(first);
+	game.ranges.clear();
+
+	// The other creature has empty hands, so it taunts on the first turn. The first creature cannot start to let go.
+	fights.ProcessTurn();
+	EXPECT_EQ(minds.handsOf[first].second, 1u);
+	EXPECT_EQ(minds.handsOf[second].second, 1u);
+	EXPECT_TRUE(registry.Get<const CreatureFighting>(second).played);
+	EXPECT_FALSE(fighter.played);
+	EXPECT_FALSE(fighter.handsChecked);
+	EXPECT_EQ(game.ranges.size(), 1u);
+
+	// It starts to let go, and does not try the taunt on this turn
+	fights.ProcessTurn();
+	EXPECT_EQ(minds.handsOf[first].second, 2u);
+	EXPECT_TRUE(fighter.handsChecked);
+	EXPECT_FALSE(fighter.played);
+	EXPECT_EQ(game.ranges.size(), 1u);
+
+	// While the let-go plays, each try draws a side and fails, with no new check of the hands
+	hands.busy = {first};
+	fights.ProcessTurn();
+	fights.ProcessTurn();
+	EXPECT_EQ(minds.handsOf[first].second, 2u);
+	EXPECT_FALSE(fighter.played);
+	EXPECT_EQ(game.ranges.size(), 3u);
+
+	// The let-go ends and the taunt starts
+	hands.busy.clear();
+	fights.ProcessTurn();
+	EXPECT_EQ(minds.handsOf[first].second, 2u);
+	EXPECT_TRUE(fighter.played);
+	EXPECT_EQ(game.ranges.size(), 4u);
+	EXPECT_TRUE(hands.dropped.empty());
+	Locator::gameRandom::reset();
+	Locator::creatureMindSystem::reset();
 	Locator::creatureObjectActionSystem::reset();
 }
 

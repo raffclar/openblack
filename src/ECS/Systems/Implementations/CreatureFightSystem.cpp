@@ -1075,9 +1075,8 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entit
 		}
 		if (Locator::creatureObjectActionSystem::has_value())
 		{
-			// A fight needs free hands, thus each creature puts down what it holds, as at the end of a put-down clip
+			// Each creature keeps what it holds. It lets go of the thing before its taunt.
 			Locator::creatureObjectActionSystem::value().Cancel(self);
-			Locator::creatureObjectActionSystem::value().PutDownAtOnce(self);
 		}
 		registry.Get<CreatureAnimation>(self).body = {};
 
@@ -2795,13 +2794,28 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 	case CreatureFighting::Stage::Taunt:
 		if (!fighting->played)
 		{
+			// The taunt needs empty hands. A creature that holds a thing first starts to let go of it with its let-go
+			// clip, and it tries the taunt from the next turn with no new check. While its body or hands are busy, it
+			// cannot start to let go, and it checks again on the next turn.
+			if (!fighting->handsChecked && Locator::creatureMindSystem::has_value())
+			{
+				const auto check = Locator::creatureMindSystem::value().CheckHandsBeforeAction(entity);
+				fighting->handsChecked = check == creature_mind::HandsCheck::LetGo;
+				if (check != creature_mind::HandsCheck::Free)
+				{
+					break;
+				}
+			}
 			// Each try to start the taunt picks a side from the game's random numbers first. A body that plays an
 			// action or moves, or that does not have the clip, refuses the start, and the creature tries again on
-			// the next turn. With no bodies loaded, nothing plays.
+			// the next turn. The hands that let go keep the body busy. With no bodies loaded, nothing plays.
 			const auto clip = fight::FaceOffAnimation(fighting->rude);
 			const bool mirrored = Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1;
 			const bool loaded = Locator::creatureAnimationSystem::has_value();
-			if (creature_layers::IsPlaying(animation.body) || moving(entity) || (loaded && !Has(entity, clip)))
+			const bool lettingGo = fighting->handsChecked && Locator::creatureObjectActionSystem::has_value() &&
+			                       Locator::creatureObjectActionSystem::value().GetState(entity) ==
+			                           CreatureObjectActionSystemInterface::State::Busy;
+			if (creature_layers::IsPlaying(animation.body) || moving(entity) || lettingGo || (loaded && !Has(entity, clip)))
 			{
 				break;
 			}
@@ -4368,7 +4382,7 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 	{
 		const auto check = knockedOut.handsChecked || !Locator::creatureMindSystem::has_value()
 		                       ? creature_mind::HandsCheck::Free
-		                       : Locator::creatureMindSystem::value().CheckHandsBeforeFaint(entity);
+		                       : Locator::creatureMindSystem::value().CheckHandsBeforeAction(entity);
 		knockedOut.handsChecked = check == creature_mind::HandsCheck::LetGo;
 		if (check == creature_mind::HandsCheck::Free)
 		{

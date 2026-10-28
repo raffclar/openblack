@@ -124,9 +124,6 @@ public:
 	virtual void Cancel(entt::entity creature) = 0;
 	/// Lets go of what it holds at once, dropping it from the hand
 	virtual void Drop(entt::entity creature) = 0;
-	/// Puts down what it holds at once, as at the end of a put-down clip. The thing keeps the turn of the hand and gets
-	/// its angles from that turn.
-	virtual void PutDownAtOnce(entt::entity creature) { Drop(creature); }
 
 	[[nodiscard]] virtual State GetState(entt::entity creature) const = 0;
 	/// The cause of the last action's failure, when it failed
