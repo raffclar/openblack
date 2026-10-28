@@ -60,6 +60,9 @@ public:
 	/// Once a frame, by the game's time passed in it: each town's store flies a flag for some of its desires, each as
 	/// high as the town wants that thing, turned to the camera, while the store stands built
 	virtual void UpdateFlags(float seconds) = 0;
+	/// The town gets the entities of its flags, as the game makes them with the town. Each flag goes into the map cell
+	/// of its place. Nothing changes for a town that has its flags.
+	virtual void MakeFlags(entt::entity town) = 0;
 	/// Once a turn: each town gets the entities of its flags, and the flags of a town that has gone go too. Only the turn
 	/// makes and removes these entities, so that every computer keeps the same entities in the world.
 	virtual void ProcessFlags() = 0;

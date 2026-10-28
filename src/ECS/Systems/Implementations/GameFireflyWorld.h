@@ -31,6 +31,7 @@ public:
 	[[nodiscard]] glm::vec3 ToWorld(const map_coords::MapCoords& coords) const override;
 	[[nodiscard]] map_coords::MapCoords FromWorld(glm::vec3 point) const override;
 	[[nodiscard]] std::vector<entt::entity> ThingsInCell(glm::ivec2 cell) const override;
+	void Moved(entt::entity thing) override;
 	[[nodiscard]] std::optional<map_coords::MapCoords> SpotOf(entt::entity thing) const override;
 	[[nodiscard]] bool IsHidingPlace(entt::entity thing) const override;
 	[[nodiscard]] bool IsRock(entt::entity thing) const override;

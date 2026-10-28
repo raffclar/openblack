@@ -14,8 +14,10 @@
 #include <array>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/TownDesire.h"
 #include "Enums.h"
 
@@ -32,6 +34,8 @@ struct TownDesireFlag
 	/// The store it was last put on, and where: it stays there after the store is gone, until its town has another
 	entt::entity store {entt::null};
 	glm::vec3 place {0.0f};
+	/// Its map position when the game made it. A flag that is not at this position any more counts as a thing that moves.
+	map_coords::MapCoords madeAt {};
 	/// How high its place is over the ground, which it keeps if the ground moves
 	float overGround {0.0f};
 	/// How far up it flies, 0 to 1, and how fast it moves
@@ -39,6 +43,11 @@ struct TownDesireFlag
 	float speed {0.0f};
 	/// Whether it showed this frame
 	bool shown {false};
+	/// Where the frames draw it, turned to the camera and at the size of its level. Its Transform is its place in the
+	/// map, which only the turn changes.
+	glm::vec3 drawnPosition {0.0f};
+	glm::mat3 drawnRotation {1.0f};
+	float drawnScale {1.0f};
 };
 
 /// A town's flags, by desire: none for a desire that flies no flag
