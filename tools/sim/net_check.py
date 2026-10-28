@@ -421,7 +421,10 @@ def lines_with(log, words):
         return [line.strip() for line in file if any(word in line for word in words)]
 
 
-SESSION_COUNTS = re.compile(r"Network game: (\d+) turns compared with the server, (\d+) the same")
+# The counts of the session: each 100 compares, and once more with the exact counts when the network game ends. A client
+# that skipped turns in a resume can stop up to 100 compares after its last count of the 100s.
+SESSION_COUNTS = re.compile(r"(?:Network game:|The network game ended \([^)]*\):) (\d+) turns compared with the server, "
+                            r"(\d+) the same")
 RESUMES = re.compile(r"Back in the game at turn")
 PARTS_AT = re.compile(r"parts from the server's world at turn (\d+)")
 

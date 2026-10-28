@@ -339,6 +339,21 @@ class NetCheckHelpers(unittest.TestCase):
         self.assertEqual(recoveries, [0, 304, 422, 467])
         self.assertEqual(net_check.purposeful_part_left_out([301, 419, 464], recoveries, 300), [419, 464])
 
+    def test_the_session_counts_come_from_the_end_of_the_network_game(self):
+        if net_check is None:
+            self.skipTest("net_check needs the cryptography package")
+        with tempfile.TemporaryDirectory() as folder:
+            log = os.path.join(folder, "client.log")
+            with open(log, "w", encoding="utf-8") as file:
+                file.write("[game] [info] Network game: 17900 turns compared with the server, 17899 the same\n")
+                file.write("[game] [info] Back in the game at turn 9358\n")
+                file.write("[game] [info] [NetworkGameSystem.cpp:434] The network game ended (left): 17997 turns "
+                           "compared with the server, 17996 the same, 2 resumes\n")
+            self.assertEqual(net_check.session_counts(log), (17997, 17996, 1))
+            with open(log, "w", encoding="utf-8") as file:
+                file.write("[game] [info] Network game: 300 turns compared with the server, 300 the same\n")
+            self.assertEqual(net_check.session_counts(log), (300, 300, 0))
+
     def test_a_part_on_purpose_with_no_recovery_keeps_every_turn(self):
         self.assertEqual(net_check.purposeful_part_left_out([301, 302], [0], 300), [301, 302])
 
