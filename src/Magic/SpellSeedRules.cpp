@@ -72,6 +72,11 @@ glm::vec3 magic::PlaceForInfluence(glm::vec3 seed, bool followsSpell, glm::vec3 
 	return followsSpell ? glm::vec3 {spell.x, seed.y, spell.z} : seed;
 }
 
+glm::vec3 magic::PlaceOutOfHand(std::optional<glm::vec3> reportedHand, glm::vec3 seed)
+{
+	return reportedHand.value_or(seed);
+}
+
 float magic::TopUnderSeed(float seedRadius, std::span<const ThingUnderSeed> things)
 {
 	float top = 0.0f;

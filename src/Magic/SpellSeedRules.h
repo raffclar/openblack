@@ -85,6 +85,10 @@ struct SeedWithSpell
 /// follows its miracle stays over the miracle, so the turn uses the miracle's place on the land and not the place that
 /// the frames draw the seed at.
 [[nodiscard]] glm::vec3 PlaceForInfluence(glm::vec3 seed, bool followsSpell, glm::vec3 spell);
+/// The place of a seed as it leaves the hand with its miracle. The turn found the seed in the hand at the last reported
+/// place of the hand, so the seed stays there. The frames draw a held seed at another place on each computer. Without a
+/// report, the seed stays where it is.
+[[nodiscard]] glm::vec3 PlaceOutOfHand(std::optional<glm::vec3> reportedHand, glm::vec3 seed);
 
 /// Something standing in the shown seed's cell of the map, which the seed may sit on top of
 struct ThingUnderSeed

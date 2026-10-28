@@ -2121,3 +2121,7 @@ add_test(NAME test_net_check_web
 )
 openblack_setup_and_add_test(test_leash_report test_leash_report.cpp)
 openblack_setup_and_add_test(test_creature_catch_give_kinds test_creature_catch_give_kinds.cpp)
+add_test(NAME test_guard_sweep
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/guard_sweep.py --self-test
+)

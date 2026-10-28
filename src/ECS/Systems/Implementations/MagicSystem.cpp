@@ -2864,6 +2864,13 @@ void MagicSystem::SeedOutOfHandWithSpell(bool followsSpell)
 	StopHandEffect(seed);
 	seed.followsSpell = followsSpell;
 	registry.Remove<Mesh>(entity);
+	// The turns read the place of the seed out of the hand. Thus it must not be the place that the frames drew it at.
+	if (auto* transform = registry.TryGet<Transform>(entity); transform != nullptr)
+	{
+		const auto holder = HolderOf(entity);
+		transform->position =
+		    magic::PlaceOutOfHand(holder.has_value() ? ReportedHandOf(*holder) : std::nullopt, transform->position);
+	}
 	LetGoOfSeed(false);
 }
 
