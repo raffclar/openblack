@@ -45,6 +45,16 @@ learnt_same compares the leans of the clients, and both_learnt tells if the lean
 With --trace-draws the server and each client write a draw trace (each synced random draw with its turn and the place
 of its call), and the summary shows the first draw where each client is not the same as the server (draw_trace.py).
 
+With --chat TURNS:CLIENT:TEXT a client says a line in the chat once it compared that many turns (a multiple of 100,
+as the client writes the count each 100 turns): the inspector
+presses the speech button of its chat, types the line and presses Return. At the end every client must have the line
+in its log, from the god of that client, and the checksums must still agree: a line of the chat goes with the turns
+but changes nothing that the checksum has.
+With --ban-account the script also starts a fake lobby on 127.0.0.1 (HTTPS with mutual TLS, a client certificate for
+the server from the test authority). The fake lobby takes the status reports of the server and answers its bans with
+that account. Before the other clients, a client with a god's ticket of that account tries to join; the server must
+refuse it with "kicked" while the other clients play in step.
+
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
 
@@ -109,7 +119,10 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.x509.oid import NameOID
+import http.server
 import ipaddress
+import ssl
+import threading
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -222,15 +235,85 @@ def make_certificates(folder):
             .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
             .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
             .sign(ca_key, hashes.SHA256()))
-    paths = {name: os.path.join(folder, name) for name in ("ca.pem", "server.pem", "server.key")}
+    # The client certificate of the game server for the status reports to a fake lobby (mutual TLS)
+    client_key = ec.generate_private_key(ec.SECP256R1())
+    client = (x509.CertificateBuilder()
+              .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, SERVER_ID)]))
+              .issuer_name(ca_name).public_key(client_key.public_key()).serial_number(x509.random_serial_number())
+              .not_valid_before(now - datetime.timedelta(minutes=5)).not_valid_after(now + datetime.timedelta(days=1))
+              .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+              .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False)
+              .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
+              .sign(ca_key, hashes.SHA256()))
+    paths = {name: os.path.join(folder, name)
+             for name in ("ca.pem", "server.pem", "server.key", "client.pem", "client.key")}
     with open(paths["ca.pem"], "wb") as file:
         file.write(ca.public_bytes(serialization.Encoding.PEM))
-    with open(paths["server.pem"], "wb") as file:
-        file.write(cert.public_bytes(serialization.Encoding.PEM))
-    with open(paths["server.key"], "wb") as file:
-        file.write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                                     serialization.NoEncryption()))
+    for (cert_name, key_name), (certificate, private) in {("server.pem", "server.key"): (cert, key),
+                                                          ("client.pem", "client.key"): (client, client_key)}.items():
+        with open(paths[cert_name], "wb") as file:
+            file.write(certificate.public_bytes(serialization.Encoding.PEM))
+        with open(paths[key_name], "wb") as file:
+            file.write(private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                             serialization.NoEncryption()))
     return paths
+
+
+class FakeLobby:
+    """The game servers' API of a lobby on 127.0.0.1, for the test only: status reports and the bans of one account.
+    It asks the game server for its client certificate of the test authority, as the lobby does (mutual TLS)."""
+
+    def __init__(self, certs, banned):
+        self.counts = {"status": 0, "bans": 0, "other": 0}
+        lobby = self
+        bans = {"bans": [{"account": {"id": banned, "name": f"Player{banned}"}, "reason": "net_check", "by": "test",
+                          "created": "2026-10-26T00:00:00Z", "expires": None}]}
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def answer(self, status, body):
+                data = json.dumps(body).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def do_PUT(self):
+                length = int(self.headers.get("Content-Length", 0))
+                self.rfile.read(length)
+                if self.path == f"/api/v1/servers/{SERVER_ID}/status":
+                    lobby.counts["status"] += 1
+                    self.answer(200, {"next_status_in": 5, "listed": True, "clans": []})
+                else:
+                    lobby.counts["other"] += 1
+                    self.answer(404, {"code": "not_found"})
+
+            def do_GET(self):
+                if self.path == f"/api/v1/servers/{SERVER_ID}/bans":
+                    lobby.counts["bans"] += 1
+                    self.answer(200, bans)
+                else:
+                    lobby.counts["other"] += 1
+                    self.answer(404, {"code": "not_found"})
+
+            def log_message(self, *args):
+                pass
+
+        # The handshake refuses a game server with no client certificate of the test authority
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(certs["server.pem"], certs["server.key"])
+        context.load_verify_locations(certs["ca.pem"])
+        context.verify_mode = ssl.CERT_REQUIRED
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
+        self.address = f"https://127.0.0.1:{self.server.server_address[1]}/api/v1"
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
 
 
 def start(command, cwd):
@@ -367,6 +450,36 @@ def inspector_call(pid, query, request):
         return json.loads(done.stdout).get("result")
     except ValueError:
         return None
+
+
+def say_in_chat(pid, text):
+    """A client says a line in the chat as the player does: a click on the speech button at the top right corner, the
+    line typed and Return. The inspector takes only the input of the player while a network game is live."""
+    frame = inspector_call(pid, "engine.frame", {}) or {}
+    width = (frame.get("window") or [1280, 1024])[0]
+    inspector_call(pid, "input.pointer", {"params": {"screen": [width - 8, 8]}})
+    time.sleep(0.5)
+    clicked = inspector_call(pid, "input.button", {"params": {"button": "left", "action": "click"}})
+    time.sleep(1.0)
+    inspector_call(pid, "input.text", {"params": {"text": text}})
+    time.sleep(0.5)
+    inspector_call(pid, "input.key", {"params": {"key": "Return"}})
+    print(f"chat: client with pid {pid} says {text!r} (click: {clicked})")
+
+
+def chat_lines(log_path):
+    """The lines of the chat that came to a client, as (turn, god, text)"""
+    found = []
+    pattern = re.compile(r'Chat: turn (\d+) god (\d+) says "(.*)" to ')
+    try:
+        with open(log_path, encoding="utf-8", errors="replace") as log:
+            for line in log:
+                match = pattern.search(line)
+                if match:
+                    found.append((int(match.group(1)), int(match.group(2)), match.group(3)))
+    except OSError:
+        pass
+    return found
 
 
 def hold_creature(pid, near, slaps=0):
@@ -922,6 +1035,8 @@ def main():
     parser.add_argument("--hold-slaps", type=int, default=0,
                         help="with --hold-creature, the hand also strokes the creature for some seconds and slaps it "
                              "this many times before it lets go")
+    parser.add_argument("--chat", action="append", default=[],
+                        help="TURNS:CLIENT:TEXT, the client (from 1) says the line in the chat after that many turns")
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
                              "through the inspector, once it compared --hold-after turns")
@@ -943,6 +1058,9 @@ def main():
                              "give the option more times for more arguments")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
+    parser.add_argument("--ban-account", type=int,
+                        help="a fake lobby bans this account id; a client of that account must be refused before the "
+                             "start (the other clients use the ids 100 and up)")
     parser.add_argument("--clients", type=int, choices=(0, 1, 2, 3, 4), default=2,
                         help="the number of clients that play a god (a god slot each)")
     parser.add_argument("--observers", type=int, choices=(0, 1, 2, 3, 4), default=0,
@@ -967,6 +1085,8 @@ def main():
     parser.add_argument("--trace-draws", action="store_true",
                         help="the server and the clients write a draw trace, and the summary shows the first draw where "
                              "each client is not the same as the server")
+    parser.add_argument("--all-clients-arg", action="append", default=[],
+                        help="one more switch for each client, such as --all-clients-arg=--show-ping (repeat for more)")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
     parser.add_argument("--time-limit", type=int,
                         help="the time limit of the network game in minutes (the server's --time-limit); 30 with none")
@@ -978,6 +1098,8 @@ def main():
                         "Escape, Exit Online Game and Leave Game")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
+    parser.add_argument("--client-args", default="",
+                        help="more arguments of each client game, divided by spaces, such as --turn-beside-draw")
     parser.add_argument("--server-profile",
                         help="the profile folder of the server (--profile-folder), as the live server keeps its profile "
                              "from game to game; with none, the server keeps no profile")
@@ -1077,6 +1199,14 @@ def main():
     # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
     land_kind = {"land": options.land, "testbed": options.testbed, "gods_ring_map": options.gods_ring_map}
     server_command += sim_report.gods_need_no_temple_args(True, **land_kind)
+    lobby = None
+    if options.ban_account is not None:
+        if 100 <= options.ban_account < 100 + options.clients:
+            parser.error("--ban-account must not be the account of a client that plays")
+        lobby = FakeLobby(certs, options.ban_account)
+        server_command += ["--lobby-api", lobby.address, "--client-cert", certs["client.pem"],
+                           "--client-key", certs["client.key"], "--lobby-test-ca", certs["ca.pem"]]
+    banned_result = None
     if options.trace_draws:
         server_command += ["--trace-draws", server_trace]
     if options.temple_loss:
@@ -1108,6 +1238,12 @@ def main():
             time.sleep(options.room_wait)
         if options.leave_room_first and not leave_room(game_exe, options, url, key, kid, certs, out, server_log):
             return 1
+        if lobby is not None:
+            banned_result = try_banned_join(options, game_exe, url, (key, kid), certs, server_log, server,
+                                            os.path.join(out, "banned"), processes)
+            if banned_result is None:
+                print(f"the server did not read the bans of the fake lobby; see {server_log}")
+                return 1
         clients = [None] * desktop_clients
         for index in join_order(options.clients, desktop_clients, bool(options.scenario)):
             client_dir = client_dirs[index]
@@ -1130,6 +1266,7 @@ def main():
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),
                        "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+            command += options.all_clients_arg
             if options.trace_draws:
                 command += ["--sim-trace-draws", os.path.join(client_dir, "draws.tsv")]
             if options.row_dump:
@@ -1138,6 +1275,7 @@ def main():
                     command += ["--sim-row-dump-turn", str(options.row_dump_turn)]
             if options.temple_loss:
                 command += ["--sim-temple-loss", options.temple_loss]
+            command += options.client_args.split()
             if options.throw_lead_latency_ms is not None:
                 command += ["--throw-lead-latency-ms", str(options.throw_lead_latency_ms)]
             command += sim_report.gods_need_no_temple_args(False, **land_kind)
@@ -1155,7 +1293,8 @@ def main():
                 command.append("--sim-still-hand")
             camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
-            if camera or index in holds or options.slot_miracle == index + 1 or options.slot_fight:
+            chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
+            if camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight:
                 command += ["--inspect-port", "0"]
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
@@ -1202,11 +1341,19 @@ def main():
         stopped_second = False
         holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
         held = {index for index in holds if index >= len(clients)}
+        chats = [(int(turns), int(client) - 1, text) for turns, client, text in
+                 (value.split(":", 2) for value in options.chat)]
+        said = set()
         cameras_again = set()
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
                     and (web_process is None or web_process.poll() is not None)):
                 break
+            for number, (turns, index, text) in enumerate(chats):
+                if (number not in said and 0 <= index < len(clients) and clients[index].poll() is None and lines_with(
+                        os.path.join(client_dirs[index], "client.log"), [f"Network game: {turns} turns compared"])):
+                    say_in_chat(clients[index].pid, text)
+                    said.add(number)
             for index, near in holds.items():
                 if index not in held and clients[index].poll() is None and lines_with(
                         os.path.join(client_dirs[index], "client.log"),
@@ -1244,6 +1391,8 @@ def main():
     finally:
         for process in processes:
             stop(process)
+        if lobby is not None:
+            lobby.close()
 
     server_turns = server_checksums(server_log)
     summary = {"turns": options.turns, "server_turns": len(server_turns), "clients": []}
@@ -1391,11 +1540,57 @@ def main():
     if unregistered:
         all_same = False
         print(sim_report.unregistered_line(unregistered))
+    # Each line of the chat came to every client, from the god of the client that said it
+    if options.chat:
+        summary["chat"] = []
+        for turns, client, text in (value.split(":", 2) for value in options.chat):
+            got = []
+            for index, client_dir in enumerate(client_dirs):
+                lines = chat_lines(os.path.join(client_dir, "client.log"))
+                got.append(any(god == int(client) - 1 and line == text for _, god, line in lines))
+            summary["chat"].append({"client": int(client), "text": text, "came_to": got})
+            if not all(got):
+                print(f"the chat line {text!r} of client {client} did not come to every client: {got}")
+                all_same = False
+    if lobby is not None:
+        banned_result["lobby_requests"] = dict(lobby.counts)
+        # The server reads the bans with each status report
+        banned_result["bans_with_each_report"] = lobby.counts["status"] > 0 and lobby.counts["bans"] >= lobby.counts["status"] - 1
+        summary["banned"] = banned_result
+        all_same = all_same and banned_result["refused"] and banned_result["bans_with_each_report"]
     summary["same"] = all_same
     with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)
     print(json.dumps(summary, indent=2))
     return 0 if all_same else 1
+
+
+def try_banned_join(options, game_exe, url, signer, certs, server_log, server, banned_dir, processes):
+    """Waits until the server has the bans of the fake lobby, then lets a client of the banned account try to join.
+    Gives the result, or None when the bans did not come."""
+    if not wait_for_line(server_log, "The lobby bans 1 accounts from the server", server, limit=60):
+        return None
+    os.makedirs(banned_dir, exist_ok=True)
+    log = os.path.join(banned_dir, "client.log")
+    if os.path.exists(log):
+        os.remove(log)
+    ticket = make_ticket(signer[0], signer[1], options.ban_account, f"Player{options.ban_account}", "god", 600)
+    command = [game_exe, "-g", options.game_path, "--skip-logos", "--sim-frame-ms", "20", "--sim-until-turn", "10",
+               "--sim-still-hand", "-n", "4000000000", "--background", "-l", log,
+               "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+    client = start(command, banned_dir)
+    processes.append(client)
+    refused = wait_for_line(log, "The game server refused the client: kicked", client, limit=180) or bool(
+        lines_with(log, ["The game server refused the client: kicked"]))
+    # The client stops by itself after the refusal
+    end = time.monotonic() + 60
+    while client.poll() is None and time.monotonic() < end:
+        time.sleep(0.5)
+    stopped_by_itself = client.poll() is not None
+    stop(client)
+    return {"account": options.ban_account, "refused": bool(refused), "stopped_by_itself": stopped_by_itself,
+            "client": lines_with(log, ["refused the client", "Joined the game server", "the game stops"]),
+            "server": lines_with(server_log, ["The lobby bans", "refuses connection"])}
 
 
 def rows_against_server(server_dir, client_dir):

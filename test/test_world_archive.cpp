@@ -1190,3 +1190,97 @@ TEST(WorldArchive, ASoundTagAndAnArenaKeepNoValuesOfTheRun)
 	// A save of the loaded world has the same bytes
 	EXPECT_EQ(SaveWorld(loaded, context), bytes);
 }
+
+TEST(WorldArchive, AWriterGivesTheSameBytesForAValueThatItWroteBefore)
+{
+	entt::meta_ctx context;
+	Register(context);
+	const auto walker = SampleWalker(entt::entity {3}, entt::entity {8});
+	FakeCounted counted;
+	counted.counter.Add(12);
+
+	// A fresh writer finds the plan of each type as it writes the values the first time
+	BinaryWriter first(context);
+	Save(first, walker);
+	Save(first, counted);
+	const auto firstBytes = first.Bytes();
+
+	// The same writer writes them again by the plans that it kept
+	BinaryWriter again(context);
+	Save(again, walker);
+	Save(again, counted);
+	again.Clear();
+	Save(again, walker);
+	Save(again, counted);
+	EXPECT_EQ(again.Bytes(), firstBytes);
+	ASSERT_NE(again.FindPlan(entt::type_hash<FakeSpot>::value()), nullptr);
+	EXPECT_EQ(again.FindPlan(entt::type_hash<FakeSpot>::value())->fields.size(), 3u);
+	ASSERT_NE(again.FindPlan(entt::type_hash<FakeCounted>::value()), nullptr);
+}
+
+TEST(WorldArchive, AWriterNamesAValueThatItCannotKeepAlsoByThePlanOfItsType)
+{
+	entt::meta_ctx context;
+	Register(context);
+	BinaryWriter out(context);
+	out.SetPlace("First", "hidden");
+	Save(out, FakeHidden {.pointer = std::make_shared<int>(1), .kept = 4});
+	ASSERT_NE(out.FindPlan(entt::type_hash<FakeHidden>::value()), nullptr);
+	out.SetPlace("Second", "hidden");
+	Save(out, FakeHidden {.pointer = std::make_shared<int>(2), .kept = 5});
+	EXPECT_EQ(out.Unsaved().size(), 2u);
+}
+
+TEST(WorldArchive, TheBytesOfAWriterAreTheBytesWrittenUpToNow)
+{
+	entt::meta_ctx context;
+	BinaryWriter out(context);
+	out.WriteRaw(uint32_t {7});
+	EXPECT_EQ(out.Size(), 4u);
+	EXPECT_EQ(out.Bytes().size(), 4u);
+	const auto length = out.BeginLength();
+	out.Write(std::vector<uint8_t>(600, 9));
+	out.EndLength(length);
+	EXPECT_EQ(out.Size(), 608u);
+	EXPECT_EQ(out.Written(4).size(), 604u);
+	const auto& bytes = out.Bytes();
+	ASSERT_EQ(bytes.size(), 608u);
+	uint32_t written = 0;
+	std::memcpy(&written, bytes.data() + length, sizeof(written));
+	EXPECT_EQ(written, 600u);
+	EXPECT_EQ(bytes.back(), 9);
+
+	// A change that the caller made to the list stays, and the next bytes go after it
+	out.Bytes().resize(2);
+	out.WriteRaw(uint8_t {5});
+	EXPECT_EQ(out.Bytes(), (std::vector<uint8_t> {7, 0, 5}));
+
+	out.Clear();
+	EXPECT_EQ(out.Size(), 0u);
+	EXPECT_TRUE(out.Written().empty());
+	out.WriteRaw(uint16_t {0x0102});
+	EXPECT_EQ(out.Bytes(), (std::vector<uint8_t> {2, 1}));
+}
+
+TEST(WorldArchive, AListOfEnumerationsIsTheBytesOfEachValueInTurn)
+{
+	entt::meta_ctx context;
+	const std::vector<entt::entity> entities {entt::entity {1}, entt::null, entt::entity {300}};
+	const std::array<PlayerNames, 2> players {PlayerNames::PLAYER_TWO, PlayerNames::NEUTRAL};
+	BinaryWriter lists(context);
+	Save(lists, entities);
+	Save(lists, players);
+
+	BinaryWriter oneByOne(context);
+	oneByOne.WriteSize(entities.size());
+	for (const auto entity : entities)
+	{
+		oneByOne.WriteRaw(entity);
+	}
+	oneByOne.WriteSize(players.size());
+	for (const auto player : players)
+	{
+		oneByOne.WriteRaw(player);
+	}
+	EXPECT_EQ(lists.Bytes(), oneByOne.Bytes());
+}

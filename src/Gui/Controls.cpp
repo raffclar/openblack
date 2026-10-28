@@ -46,6 +46,8 @@ glm::vec4 TextColour(bool hovered, bool focused)
 constexpr float k_SliderStep = 0.1f;
 /// A list's gap below each item's text
 constexpr int k_ItemGap = 6;
+/// How far a pushed button moves its label
+constexpr int k_PressedShift = 2;
 } // namespace
 
 StaticText::StaticText(DialogRect rect, std::u16string text, Layout layout, int size)
@@ -110,7 +112,7 @@ Button::Button(DialogRect rect, std::u16string label, int size)
 {
 }
 
-void Button::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /*pressed*/) const
+void Button::Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const
 {
 	if (!visible)
 	{
@@ -123,8 +125,10 @@ void Button::Draw(const DialogPainter& painter, bool hovered, bool focused, bool
 	{
 		--fitted;
 	}
-	painter.DrawText({rect.Centre().x, rect.Centre().y - (fitted / 2)}, rect.Width(), Justify::Centre, label, fitted,
-	                 TextColour(hovered, focused));
+	// While the mouse button is down on the button, the label moves 2 down and 2 to the right. The box stays.
+	const auto push = (pressed && hovered) ? k_PressedShift : 0;
+	painter.DrawText({rect.Centre().x + push, rect.Centre().y - (fitted / 2) + push}, rect.Width(), Justify::Centre, label,
+	                 fitted, TextColour(hovered, focused));
 }
 
 BigButton::BigButton(const GameFont& font, glm::ivec2 position, int size, std::u16string label, LabelSide side, Look look)
@@ -504,9 +508,22 @@ void List::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /
 				    {.min = {rect.min.x, std::max(top, rect.min.y)}, .max = {boxRight, std::min(bottom, rect.max.y)}}, 0,
 				    DialogPainter::All, glm::vec4(1.0f));
 			}
-			const auto colour = selected                  ? DialogPainter::k_FocusColour
-			                    : item.colour.has_value() ? *item.colour
-			                                              : TextColour(hoveredItem == i, focused);
+			auto colour = selected                  ? DialogPainter::k_FocusColour
+			              : item.colour.has_value() ? *item.colour
+			                                        : TextColour(hoveredItem == i, focused);
+			if (item.bar.has_value())
+			{
+				const auto x0 = static_cast<float>(rect.min.x + 2);
+				const auto x1 = static_cast<float>(boxRight - 2);
+				const auto y0 = static_cast<float>(std::max(top + 2, rect.min.y));
+				const auto y1 = static_cast<float>(std::min(bottom - 2, rect.max.y));
+				if (y1 > y0)
+				{
+					const auto fill = *item.bar;
+					painter.DrawShape({glm::vec2(x0, y0), {x1, y0}, {x1, y1}, {x0, y1}}, {fill, fill, fill, fill});
+				}
+				colour = DialogPainter::k_ShadowColour;
+			}
 
 			if (drawUnder)
 			{

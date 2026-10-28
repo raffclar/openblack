@@ -18,6 +18,7 @@
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -282,6 +283,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 	}
 	// The tip bubble's time to show runs down by the game's time while it is up
 	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
+	// The speech bubbles of the creatures in the chat run down by the game's time
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
+	}
 	// The names display grows in and out by the game's time
 	view.UpdateVillagerLabels(static_cast<float>(clock.GetFrameGameTime().count()));
 	// The cinema bars coming in hide the game's dialogs

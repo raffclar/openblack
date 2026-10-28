@@ -74,6 +74,19 @@ TEST(GameSocket, EachFrameGoesToJsonAndBack)
 	EXPECT_EQ(state.state, PlayerState::State::Left);
 }
 
+TEST(GameSocket, TheStartNamesTheGods)
+{
+	Start start {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
+	start.gods = {{.slot = 0, .name = "Ann"}, {.slot = 3, .name = "Bob"}};
+	EXPECT_EQ(RoundTrip(start).gods, start.gods);
+	EXPECT_EQ(ToJson(start), R"({"gods":[{"name":"Ann","slot":0},{"name":"Bob","slot":3}],"land":"","seed":1,)"
+	                         R"("testbed":true,"turn":0,"type":"game.start"})");
+	// A list that is not a list, or a god with no name or a slot past 255, does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":3})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1}]})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":256,"name":"a"}]})").has_value());
+}
+
 TEST(GameSocket, TheReplyToAJoinGivesTheServersWorld)
 {
 	const auto joined = RoundTrip(Joined {.role = Role::God,

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -27,6 +28,7 @@
 #include "Common/DrawTrace.h"
 #endif
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -42,6 +44,7 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -91,6 +94,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
@@ -896,6 +900,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::guidanceSystem::value().ProcessTurn();
 		}
+		// What the player sent in the chat since the last turn makes the advisors of this computer speak
+		if (Locator::chatSystem::has_value())
+		{
+			Locator::chatSystem::value().ProcessTurn();
+		}
 		break;
 	case Step::CameraChecks:
 		// A script's two-thing camera lets go of a thing that has gone
@@ -931,6 +940,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::Ambience:
 		// The view does this step
 		view.PlayViewStep(step, cameraPosition);
+		break;
+	case Step::ScriptMusic:
+		// The scripts' music plays for the time of the turn, on every computer and on the server
+		if (Locator::scriptMusicSystem::has_value())
+		{
+			Locator::scriptMusicSystem::value().ProcessTurn();
+		}
 		break;
 	case Step::Music:
 		// The view does this step
@@ -1002,14 +1018,24 @@ void PlayTurn(TurnViewInterface& view)
 #endif
 	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn
 	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
+	// The queue of the main thread knows the step, so that the check of the turn's calls can name it
+	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
 	game_turn::PlayTurn(
-	    [&view](game_turn::Step step) {
+	    [&view, queue](game_turn::Step step) {
+		    if (queue != nullptr)
+		    {
+			    queue->SetTurnStep(static_cast<uint32_t>(step));
+		    }
 		    PlayTurnStep(step, view);
 		    FileNewInMap();
 		    // What the step put down or took away changes the paths before the next step
 		    FootpathsCatchUp();
 	    },
 	    decided);
+	if (queue != nullptr)
+	{
+		queue->SetTurnStep(std::nullopt);
+	}
 }
 
 } // namespace openblack::simulation

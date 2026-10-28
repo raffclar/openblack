@@ -241,6 +241,10 @@ private:
 	float _seconds {0.0f};
 	/// The turn count at which the scenario was laid out
 	std::optional<uint32_t> _layoutTurn;
+	/// When the made-up ping of the ping line started, in the scenario's seconds; none while it does not show
+	std::optional<float> _demoPingSince;
+	/// Gives the made-up ping to the game while it shows
+	void UpdateDemoPing() const;
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
@@ -263,6 +267,8 @@ private:
 	std::optional<std::map<uint32_t, std::vector<size_t>>> _followedGives;
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
+	/// The creatures that the scenario's filled slots got, in the order of their ids
+	std::vector<entt::entity> _slotCreatures;
 	std::vector<entt::entity> _objects;
 	/// The globes that the scenario puts down on their own, in the order of its list
 	std::vector<entt::entity> _globes;

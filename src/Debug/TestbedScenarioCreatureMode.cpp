@@ -313,6 +313,56 @@ void AddCaveTattooOnBody(std::vector<Scenario>& all)
 	});
 }
 
+/// In a network game, OK in the tattoo editor after a change first shows a warning with one OK button. The points
+/// after the click on the creature are for a screen of 1600 by 900.
+void AddCaveTattooNetworkWarning(std::vector<Scenario>& all)
+{
+	const auto at = [](float x, float y, float delay) {
+		return Command {.kind = Kind::PointerTo, .delaySeconds = delay, .point = {x / 1600.0f, y / 900.0f}};
+	};
+	const auto press = [](float delay) { return Command {.kind = Kind::PointerPress, .delaySeconds = delay, .value = 1}; };
+	const auto release = [](float delay) { return Command {.kind = Kind::PointerRelease, .delaySeconds = delay, .value = 1}; };
+	all.push_back({
+	    .id = "creature_mode.tattoo_network_warning",
+	    .name = "The warning of the tattoo editor in a network game",
+	    .facet = Facet::CreatureMode,
+	    .description = "The tattoo editor works as in a network game. The player clicks the tiger in the Creature Cave, "
+	                   "drags the heart onto its chest and presses OK. The player then holds the OK of the warning "
+	                   "down for one second, releases it, and presses OK of the editor again.",
+	    .expected = "After the first OK, a grey box with white edges comes up in front over half a second: \"The "
+	                "changes you have made to your Creature's tattoos will be visible to others when you leave the "
+	                "Temple.\" with an OK button below the text. The editor behind it dims to a quarter. While the "
+	                "button is down on the OK of the box, its label is orange and moves 2 down and 2 to the right. "
+	                "The OK of the box removes it, and the editor is back at once. The second OK closes the editor, "
+	                "and the camera zooms back out.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {{.kind = Kind::TattooEditorAsNetworkGame, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::OpenCreatureCave, .creature = 0, .delaySeconds = 0.5f},
+	                 {.kind = Kind::PointerOnCaveCreature, .delaySeconds = 10.0f},
+	                 press(0.5f),
+	                 release(0.2f),
+	                 // The heart to the chest
+	                 at(368.0f, 780.0f, 5.0f),
+	                 press(0.2f),
+	                 at(600.0f, 600.0f, 0.2f),
+	                 at(799.0f, 404.0f, 0.2f),
+	                 release(1.0f),
+	                 // OK of the editor, then OK of the warning, then OK of the editor again
+	                 at(455.0f, 780.0f, 2.0f),
+	                 press(0.2f),
+	                 release(0.2f),
+	                 at(800.0f, 531.0f, 3.0f),
+	                 press(0.2f),
+	                 release(1.0f),
+	                 at(455.0f, 780.0f, 2.0f),
+	                 press(0.2f),
+	                 release(0.2f),
+	                 {.kind = Kind::TattooEditorAsNetworkGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+}
+
 /// The tattoo editor's view tips down as far as it can go. The points are for a screen of 1600 by 900.
 void AddTattooEditorLowestView(std::vector<Scenario>& all)
 {
@@ -641,6 +691,7 @@ void testbed_scenarios::AddCreatureModeScenarios(std::vector<Scenario>& all)
 	AddCave(all);
 	AddFizzInFront(all);
 	AddCaveTattooOnBody(all);
+	AddCaveTattooNetworkWarning(all);
 	AddCaveOwnTattooPicture(all);
 	AddMenuTattooEditor(all);
 	AddCaveScrollZoom(all);

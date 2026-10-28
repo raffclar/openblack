@@ -572,6 +572,15 @@ struct ScriptArgument
 /// The value of a command that plays custom music that stops the music
 constexpr size_t k_StopCustomMusic = std::numeric_limits<size_t>::max();
 
+/// The values of an AddIncomingMessage command that give a chat line and an e-mail
+constexpr size_t k_IncomingChat = 100;
+constexpr size_t k_IncomingMail = 101;
+/// The values of a Chat command: a god says a line, or the chat of this computer opens with a line in it
+constexpr size_t k_ChatSays = 0;
+constexpr size_t k_ChatTypes = 1;
+/// The names that a Chat command gives the first gods
+constexpr std::array<std::u16string_view, 4> k_ChatNames {u"Alice", u"Bob", u"Carol", u"Dave"};
+
 struct Command
 {
 	enum class Kind : uint8_t
@@ -1016,6 +1025,21 @@ struct Command
 		/// The reports of the player's hand get a fixed latency (value, in milliseconds), as a network game with that
 		/// latency gives them. A throw then moves its start along the flight by the latency. Needs no creature.
 		SetReportLatency,
+		/// The tattoo editor works as in a network game (value 1) or as in a game alone (value 0). Needs no creature.
+		TattooEditorAsNetworkGame,
+		/// The ping line in the top left corner shows a made-up round trip, as --show-ping does in a network game
+		/// (value 1), or goes (value 0). The round trip is 40 ms and grows by 8 ms each second to 64 ms, then starts
+		/// again. Needs no creature.
+		ShowDemoPing,
+		/// A message comes into the list of incoming messages at the bottom left of the screen. A value below
+		/// k_IncomingChat is the message of the real weather with that weather picture, and the action is its place, as
+		/// the real weather gives them. k_IncomingChat gives a chat line and k_IncomingMail an e-mail, with the action as
+		/// their text. Needs no creature.
+		AddIncomingMessage,
+		/// The chat of a network game, with the names that the testbed gives the gods (k_ChatNames). With value
+		/// k_ChatSays, the god (player) says the action to all of the players. With value k_ChatTypes, the chat of this
+		/// computer opens and the action is in its line. Needs no creature.
+		Chat,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1255,6 +1279,9 @@ struct Scenario
 	bool objectsAfterLandScript {false};
 	/// The debug window opened as the scenario starts, by its name; none when empty
 	std::string_view debugWindow;
+	/// After the land script, the start of a network game fills each slot with no player, as for a game where player
+	/// one is the only human
+	bool fillEmptySlots {false};
 	/// The first player's statistics as the scenario starts, for the Game Statistics box and the temple's scrolls
 	std::function<void(ecs::components::PlayerStatistics&)> playerStatistics;
 	/// What the first player's creature has counted of its life

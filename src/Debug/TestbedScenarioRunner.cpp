@@ -152,6 +152,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/Dances.h"
@@ -166,7 +167,9 @@
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -202,6 +205,7 @@
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -219,6 +223,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -369,7 +374,7 @@ std::vector<benchmark::StageInfo> BenchmarkStages()
 	return stages;
 }
 
-double Milliseconds(std::chrono::system_clock::duration duration)
+double Milliseconds(std::chrono::steady_clock::duration duration)
 {
 	return std::chrono::duration<double, std::milli>(duration).count();
 }
@@ -690,6 +695,28 @@ std::string OpenTattooMenu()
 	                                                   : "failed: the editor did not open";
 }
 
+/// The made-up round trip of the ping line in microseconds: 40 ms, then 8 ms more each second to 64 ms, then 40 ms
+/// again
+[[nodiscard]] uint64_t DemoRoundTrip(float seconds)
+{
+	constexpr uint64_t k_First = 40'000;
+	constexpr uint64_t k_Step = 8'000;
+	constexpr uint64_t k_Steps = 4;
+	return k_First + (k_Step * (static_cast<uint64_t>(seconds) % k_Steps));
+}
+
+/// The tattoo editor works as in a network game, or as in a game alone
+std::string TattooEditorAsNetworkGame(bool asNetworkGame)
+{
+	auto* game = Game::Instance();
+	if (game == nullptr || game->GetInterface() == nullptr)
+	{
+		return "failed: no interface";
+	}
+	game->GetInterface()->SetTattooEditorAsNetworkGame(asNetworkGame);
+	return asNetworkGame ? "OK warns about a change first" : "OK closes the editor";
+}
+
 /// The game's menu opens on its Controls page, picks a row and double clicks it, as the player does to bind it anew
 std::string OpenControlsBox(size_t row)
 {
@@ -715,6 +742,83 @@ std::string OpenControlsBox(size_t row)
 		}
 	}
 	return menu.IsCapturing() ? fmt::format("the box asks for the new input of row {}", row) : "failed: no box";
+}
+
+/// A message comes into the list of incoming messages: the message of the real weather with a picture, a chat line or an
+/// e-mail
+std::string AddIncomingMessage(size_t value, std::string_view text)
+{
+	if (!Locator::incomingMessageSystem::has_value())
+	{
+		return "failed: no list of incoming messages";
+	}
+	auto& messages = Locator::incomingMessageSystem::value();
+	if (value == k_IncomingChat || value == k_IncomingMail)
+	{
+		const auto kind = value == k_IncomingChat ? incoming_messages::Kind::Chat : incoming_messages::Kind::Mail;
+		messages.Add(kind, gui::ToUtf16(text), 0);
+	}
+	else if (value < incoming_messages::k_WeatherPictures)
+	{
+		messages.AddWeather(gui::ToUtf16(text), static_cast<uint8_t>(value));
+	}
+	else
+	{
+		return fmt::format("failed: no message for the value {}", value);
+	}
+	return fmt::format("{} messages in the list, the top one \"{}\"", messages.GetQueue().Count(),
+	                   gui::ToUtf8(messages.GetQueue().ShownText()));
+}
+
+/// The chat of a network game: a god says a line, or the chat of this computer opens with a line in it
+std::string Chat(PlayerNames player, size_t value, std::string_view text)
+{
+	auto* game = Game::Instance();
+	if (!Locator::chatSystem::has_value() || game == nullptr || game->GetInterface() == nullptr)
+	{
+		return "failed: no chat";
+	}
+	auto& chat = Locator::chatSystem::value();
+	// The god of this computer and the god that speaks have the names of the testbed
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	auto names = chat.GetNames();
+	for (const auto god : {own, player})
+	{
+		if (static_cast<size_t>(god) < k_ChatNames.size())
+		{
+			names.try_emplace(god, k_ChatNames.at(static_cast<size_t>(god)));
+		}
+	}
+	chat.SetNames(names);
+	const auto line = gui::ToUtf16(text);
+	if (value == k_ChatTypes)
+	{
+		auto& controls = game->GetInterface()->GetChatControls();
+		controls.Open();
+		controls.TextInput(line);
+		return fmt::format("the chat opens with \"{}\"", text);
+	}
+	if (value != k_ChatSays)
+	{
+		return fmt::format("failed: no chat for the value {}", value);
+	}
+	// The line of this computer goes through the turns, and the line of another god comes in as the turns give it
+	if (player == own)
+	{
+		// The line goes to the other named gods
+		std::vector<PlayerNames> others;
+		for (const auto& [god, name] : names)
+		{
+			if (god != own)
+			{
+				others.push_back(god);
+			}
+		}
+		chat.SendLine(line, others);
+		return fmt::format("this computer says \"{}\"", text);
+	}
+	chat.Receive(player, player_commands::ChatSpeech {.recipients = {}, .text = line});
+	return fmt::format("god {} says \"{}\"", static_cast<int>(player), text);
 }
 
 /// The multiplayer front end opens over the temple's future room with the demonstration lobby, on its way to a stage
@@ -859,6 +963,7 @@ void Runner::Start(const Scenario& scenario)
 	_nextMiracleLog = 0.0f;
 	_timeline = {};
 	_creatures.clear();
+	_slotCreatures.clear();
 	_objects.clear();
 	_globes.clear();
 	_temples.clear();
@@ -973,6 +1078,22 @@ void Runner::Start(const Scenario& scenario)
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
 	PlaceDispensers(scenario);
+	// A network game fills its empty slots after the land script. The temples of the scenario must stand first.
+	if (scenario.fillEmptySlots && Locator::computerPlayerSystem::has_value())
+	{
+		constexpr std::array k_Humans {PlayerNames::PLAYER_ONE};
+		Locator::computerPlayerSystem::value().FillEmptySlots(computer_player::k_SlotGods, k_Humans);
+		// The commands can name the creatures of the filled slots after the creatures of the scenario
+		std::vector<entt::entity> filled;
+		Locator::entitiesRegistry::value().Each<const Creature>([this, &filled](entt::entity entity, const Creature&) {
+			if (std::ranges::find(_creatures, entity) == _creatures.end())
+			{
+				filled.push_back(entity);
+			}
+		});
+		std::ranges::sort(filled);
+		_slotCreatures = std::move(filled);
+	}
 	// With the scenario's things laid out on the land, each town of a player with a temple is given its worship site, as
 	// a land's are once it is laid out
 	if (Locator::worshipSiteSystem::has_value())
@@ -1113,6 +1234,12 @@ void Runner::Stop()
 		return;
 	}
 	_running = false;
+	// The ping line belongs to the network game again
+	if (_demoPingSince.has_value() && Game::Instance() != nullptr)
+	{
+		Game::Instance()->SetDemoRoundTrip(std::nullopt);
+	}
+	_demoPingSince.reset();
 	// The debug option's bonus creatures are as they were
 	if (_unlockedBefore.has_value() && Locator::config::has_value())
 	{
@@ -1844,11 +1971,13 @@ void Runner::PointAtBody(entt::entity creature) const
 
 std::optional<entt::entity> Runner::CreatureAt(size_t index) const
 {
-	if (index >= _creatures.size() || !Locator::entitiesRegistry::has_value())
+	// After the creatures of the scenario come the creatures of the filled slots
+	const auto total = _creatures.size() + _slotCreatures.size();
+	if (index >= total || !Locator::entitiesRegistry::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto entity = _creatures[index];
+	const auto entity = index < _creatures.size() ? _creatures[index] : _slotCreatures[index - _creatures.size()];
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(entity) || !registry.AllOf<Creature>(entity))
 	{
@@ -3042,6 +3171,22 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenTattooMenu()));
 		return;
 	}
+	if (command.kind == Kind::ShowDemoPing)
+	{
+		_demoPingSince = command.value != 0 ? std::optional(_seconds) : std::nullopt;
+		if (!_demoPingSince.has_value() && Game::Instance() != nullptr)
+		{
+			Game::Instance()->SetDemoRoundTrip(std::nullopt);
+		}
+		UpdateDemoPing();
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _demoPingSince.has_value() ? "shown" : "gone"));
+		return;
+	}
+	if (command.kind == Kind::TattooEditorAsNetworkGame)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), TattooEditorAsNetworkGame(command.value != 0)));
+		return;
+	}
 	if (command.kind == Kind::OpenControlsBox)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
@@ -3055,6 +3200,16 @@ void Runner::Give(const Command& command)
 			game->RequestJoinOnline();
 		}
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), game != nullptr ? "asked" : "failed: no game"));
+		return;
+	}
+	if (command.kind == Kind::Chat)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), Chat(command.player, command.value, command.action)));
+		return;
+	}
+	if (command.kind == Kind::AddIncomingMessage)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), AddIncomingMessage(command.value, command.action)));
 		return;
 	}
 	if (command.kind == Kind::OpenMultiplayerBox)
@@ -3121,10 +3276,10 @@ void Runner::Give(const Command& command)
 			return;
 		}
 		const auto type = static_cast<audio::MusicType>(command.value);
-		if (auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		if (Locator::scriptMusicSystem::has_value())
 		{
-			game->GetGameMusic()->ResetMusicLyrics();
-			game->GetGameMusic()->StartScriptMusic(type);
+			Locator::scriptMusicSystem::value().ResetLyrics();
+			Locator::scriptMusicSystem::value().Start(type);
 		}
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), audio::GetMusicTypeName(type)));
 		return;
@@ -3790,6 +3945,8 @@ void Runner::Give(const Command& command)
 	case Kind::OwnGod:
 	case Kind::JoinOnline:
 	case Kind::BringCreature:
+	case Kind::AddIncomingMessage:
+	case Kind::Chat:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
@@ -3807,6 +3964,8 @@ void Runner::Give(const Command& command)
 	case Kind::ProfileFolderCheck:
 	case Kind::OwnTattooPicture:
 	case Kind::OpenTattooMenu:
+	case Kind::TattooEditorAsNetworkGame:
+	case Kind::ShowDemoPing:
 	case Kind::OpenControlsBox:
 	case Kind::OpenMenuPage:
 	case Kind::PressMenuKey:
@@ -4205,6 +4364,14 @@ void Runner::UpdateCamera()
 	}
 }
 
+void Runner::UpdateDemoPing() const
+{
+	if (_demoPingSince.has_value() && Game::Instance() != nullptr)
+	{
+		Game::Instance()->SetDemoRoundTrip(DemoRoundTrip(_seconds - *_demoPingSince));
+	}
+}
+
 void Runner::Update(float seconds)
 {
 	if (_scenario == nullptr)
@@ -4242,6 +4409,7 @@ void Runner::Update(float seconds)
 	FinishTakingFireBall();
 	ApplyStates();
 	UpdatePointer(seconds);
+	UpdateDemoPing();
 	auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds, [this](const Command& command) {
 		const bool toHand =
 		    command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed;

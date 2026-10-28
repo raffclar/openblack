@@ -138,15 +138,15 @@ float Fraction(float value, float a, float b)
 	return (value - a) / (b - a);
 }
 
-Sizes SizesAt(float depth)
+Sizes SizesAt(float depth, const Sizes& nearSizes)
 {
-	const auto far = FarSizes(k_NearSizes);
+	const auto far = FarSizes(nearSizes);
 	const float t = Fraction(depth, k_NearDepth, k_FarDepth);
 	return {
-	    .width = Lerp(k_NearSizes.width, far.width, t),
-	    .height = Lerp(k_NearSizes.height, far.height, t),
-	    .margin = Lerp(k_NearSizes.margin, far.margin, t),
-	    .lineHeight = Lerp(k_NearSizes.lineHeight, far.lineHeight, t),
+	    .width = Lerp(nearSizes.width, far.width, t),
+	    .height = Lerp(nearSizes.height, far.height, t),
+	    .margin = Lerp(nearSizes.margin, far.margin, t),
+	    .lineHeight = Lerp(nearSizes.lineHeight, far.lineHeight, t),
 	};
 }
 
@@ -164,7 +164,7 @@ float DistanceAlpha(float depth)
 	return alpha;
 }
 
-std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth, float pixelScale)
+std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth, float pixelScale, const Sizes& nearSizes)
 {
 	if (depth < k_TooClose)
 	{
@@ -176,7 +176,7 @@ std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth,
 	const float side = across <= 0.0f ? tailOffset : -tailOffset;
 	const float share = (std::abs(across) * k_TailShareToEdge) + k_TailShareAtMiddle;
 	Placement placement;
-	const auto sizes0 = SizesAt(depth);
+	const auto sizes0 = SizesAt(depth, nearSizes);
 	placement.sizes = {.width = sizes0.width * pixelScale,
 	                   .height = sizes0.height * pixelScale,
 	                   .margin = sizes0.margin * pixelScale,
@@ -295,7 +295,7 @@ float RowAlpha(float y, int alpha, const WordBounds& bounds)
 
 /// The lines of an item from a top down, as far as they show
 void AddLines(std::vector<Line>& out, const std::vector<std::u16string>& lines, float top, float size, int alpha,
-              const WordBounds& bounds, const WidthFn& widthOf)
+              const WordBounds& bounds, const WidthFn& widthOf, size_t item)
 {
 	// Nothing is drawn where a line can't fit
 	if (size * 0.5f > bounds.right - bounds.left || bounds.clipBottom - bounds.clipTop < size)
@@ -320,6 +320,7 @@ void AddLines(std::vector<Line>& out, const std::vector<std::u16string>& lines, 
 			    .bottomAlpha = RowAlpha(y + size, alpha, bounds),
 			    .clipTop = bounds.clipTop,
 			    .clipBottom = bounds.clipBottom,
+			    .item = item,
 			});
 		}
 		y += size;
@@ -451,9 +452,9 @@ Words LayOutWords(const Placement& placement, std::span<const std::u16string_vie
 
 	Words words;
 	float y = bottomLine + scrollPixels;
-	for (const auto item : items)
+	for (size_t index = 0; index < items.size(); ++index)
 	{
-		for (const auto& piece : SplitCodes(item))
+		for (const auto& piece : SplitCodes(items[index]))
 		{
 			switch (piece.kind)
 			{
@@ -463,8 +464,8 @@ Words LayOutWords(const Placement& placement, std::span<const std::u16string_vie
 				const float itemHeight = static_cast<float>(lines.size()) * size;
 				y -= itemHeight;
 				words.contentHeight += itemHeight;
-				AddLines(words.shadows, lines, y + shadow, size, shadowAlpha, shadowBounds, widthOf);
-				AddLines(words.lines, lines, y, size, wordsAlpha, bounds, widthOf);
+				AddLines(words.shadows, lines, y + shadow, size, shadowAlpha, shadowBounds, widthOf, index);
+				AddLines(words.lines, lines, y, size, wordsAlpha, bounds, widthOf, index);
 				break;
 			}
 			case Piece::Kind::Gap:

@@ -16,6 +16,7 @@
 #include <fmt/format.h>
 
 #include "Online/OnlineMapLand.h"
+#include "PingDisplay.h"
 
 namespace openblack::gui::multiplayer
 {
@@ -363,6 +364,29 @@ std::vector<Seat> Seats(std::span<const lobby_api::RoomPlayer> players)
 		seats.push_back({.account = player.account, .god = isGod ? ++god : 0, .clan = player.clan});
 	}
 	return seats;
+}
+
+std::u16string RosterLine(const Seat& seat, std::u16string_view name, bool own, const RosterTexts& texts,
+                          const std::optional<std::u16string>& ping)
+{
+	std::u16string line;
+	if (seat.god > 0)
+	{
+		const std::array<TextArgument, 1> god = {int64_t {seat.god}};
+		line = FormatText(texts.god, god);
+	}
+	else
+	{
+		line = texts.observers;
+	}
+	line += u": ";
+	line += name;
+	if (own)
+	{
+		line += texts.current;
+		line = ping_display::AfterOwnName(std::move(line), ping);
+	}
+	return line;
 }
 
 uint32_t GodColourBits(int32_t god) noexcept

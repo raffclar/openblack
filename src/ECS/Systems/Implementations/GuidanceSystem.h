@@ -39,6 +39,7 @@ public:
 	void BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining) override;
 	void AlignmentTurn(float change) override;
 	void SayOneOff(guidance::OneOff oneOff) override;
+	void SayText(uint32_t text, guidance::Kind kind) override { Say(text, kind); }
 	void KilledVillager(entt::entity villager) override;
 	void CreatureWonFight(entt::entity creature) override;
 	void WorshipperDied() override;

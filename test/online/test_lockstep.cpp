@@ -15,6 +15,7 @@
 #include <initializer_list>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -268,6 +269,14 @@ TEST_F(LockstepTest, TwoGodsJoinAndTheGameStartsWhenBothAreReady)
 	ASSERT_TRUE(alice.session.GetStart().has_value());
 	EXPECT_EQ(alice.session.GetStart()->land, "Land1.txt");
 	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	// The start names the gods of the game for the chat
+	const auto& gods = alice.session.GetStart()->gods;
+	ASSERT_EQ(gods.size(), 2);
+	EXPECT_EQ(gods[0].slot, 0);
+	EXPECT_EQ(gods[1].slot, 1);
+	EXPECT_EQ(gods[0].name, alice.session.GetJoined()->name);
+	EXPECT_EQ(gods[1].name, bob.session.GetJoined()->name);
+	EXPECT_NE(gods[0].name, gods[1].name);
 }
 
 TEST_F(LockstepTest, TheCommandsOfBothGodsComeInTheSameTurnsOnEveryComputer)
@@ -912,4 +921,81 @@ TEST_F(LockstepTest, ARoomWithNoHumanGodIsOverWhenTheObserversThatJoinedAllLeft)
 	Frames({}, 5);
 	EXPECT_EQ(host->Observers(), 0u);
 	EXPECT_TRUE(host->GameOver());
+}
+
+TEST_F(LockstepTest, TheRoomRefusesABannedGodBeforeTheStartWithAKick)
+{
+	MakeHost(3);
+	host->SetBans({101});
+	Computer alice(network, now, "god:100");
+	Computer banned(network, now, "god:101");
+	Frames({&alice, &banned}, 3);
+	EXPECT_EQ(banned.session.GetState(), NetworkSession::State::Ended);
+	EXPECT_EQ(banned.session.RefusedReason(), "kicked");
+	EXPECT_EQ(alice.session.GetJoined()->slot, 0);
+	EXPECT_TRUE(std::ranges::none_of(host->Seats(), [](const LockstepHost::Seat& seat) { return seat.account == "101"; }));
+	// The lobby lifted the ban: the account joins again
+	host->SetBans({});
+	Computer again(network, now, "god:101");
+	Frames({&alice, &again}, 3);
+	ASSERT_TRUE(again.session.GetJoined().has_value());
+	EXPECT_EQ(again.session.GetJoined()->slot, 1);
+}
+
+TEST_F(LockstepTest, ABanTakesAGodOutOfTheRoomBeforeTheStart)
+{
+	MakeHost(3);
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	Frames({&alice, &bob}, 3);
+	ASSERT_EQ(bob.session.GetJoined()->slot, 1);
+	host->SetBans({101, 555});
+	Frames({&alice, &bob}, 2);
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Ended);
+	EXPECT_EQ(bob.session.RefusedReason(), "kicked");
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Open);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+}
+
+TEST_F(LockstepTest, ABanDuringTheStartStopsTheStart)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	for (int i = 0; i < 8 && !host->Starting(); ++i)
+	{
+		Frame({&alice, &bob});
+	}
+	ASSERT_TRUE(host->Starting());
+	host->SetBans({101});
+	Frames({&alice, &bob}, 6);
+	EXPECT_FALSE(host->Started());
+	EXPECT_FALSE(host->Starting());
+	EXPECT_EQ(bob.session.RefusedReason(), "kicked");
+	bool stopped = false;
+	while (const auto event = alice.session.TakeStartEvent())
+	{
+		stopped = stopped || *event == online::StartEvent::Stopped;
+	}
+	EXPECT_TRUE(stopped);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
+}
+
+TEST_F(LockstepTest, ABanAfterTheStartChangesNothing)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	Frames({&alice, &bob}, 7);
+	ASSERT_TRUE(host->Started());
+	host->SetBans({101});
+	Frames({&alice, &bob}, 50);
+	EXPECT_EQ(host->Bans(), std::set<int64_t> {101});
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
+	EXPECT_GE(bob.world.turns + 3, serverWorld.turns);
+	// The banned god stays in step with the server
+	EXPECT_GT(host->Seats()[1].compares.compared, 40u);
+	EXPECT_EQ(host->Seats()[1].compares.same, host->Seats()[1].compares.compared);
 }

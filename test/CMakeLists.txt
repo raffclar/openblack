@@ -129,6 +129,7 @@ target_link_libraries(test_script_sound_effect PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
 openblack_setup_and_add_test(test_text_wrap gui/test_text_wrap.cpp)
 openblack_setup_and_add_test(test_skip_box gui/test_skip_box.cpp)
+openblack_setup_and_add_test(test_chat_controls gui/test_chat_controls.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)
 openblack_setup_and_add_test(test_screen_fade gui/test_screen_fade.cpp)
 openblack_setup_and_add_test(test_cinematics gui/test_cinematics.cpp)
@@ -1947,3 +1948,20 @@ target_link_libraries(test_land_thumbnail PRIVATE onlinemap)
       ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_draw_order.py
       --root ${CMAKE_SOURCE_DIR}
   )
+openblack_setup_and_add_test(test_tattoo_editor_warning gui/test_tattoo_editor_warning.cpp)
+openblack_setup_and_add_test(test_ping_display gui/test_ping_display.cpp)
+openblack_setup_and_add_test(test_incoming_messages test_incoming_messages.cpp)
+openblack_setup_and_add_test(test_chat test_chat.cpp)
+openblack_setup_and_add_test(test_lobby_bans online/test_lobby_bans.cpp)
+openblack_setup_and_add_test(test_script_music audio/test_script_music.cpp)
+target_link_libraries(test_script_music PRIVATE pack)
+find_program(NODE_EXECUTABLE node)
+if (NODE_EXECUTABLE)
+  add_test(NAME test_web_launcher_arguments
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_arguments.test.js
+  )
+endif ()
+openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
+openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
+openblack_setup_and_add_test(test_side_thread test_side_thread.cpp)

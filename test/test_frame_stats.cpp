@@ -43,7 +43,9 @@ TEST(FrameStats, HundredFramesTakeTheNinetyFifth)
 	const auto summary = Summarise(times);
 	EXPECT_EQ(summary.count, 100u);
 	EXPECT_FLOAT_EQ(summary.average, 50.5f);
+	EXPECT_FLOAT_EQ(summary.p50, 50.0f);
 	EXPECT_FLOAT_EQ(summary.p95, 95.0f);
+	EXPECT_FLOAT_EQ(summary.p99, 99.0f);
 	EXPECT_FLOAT_EQ(summary.max, 100.0f);
 }
 

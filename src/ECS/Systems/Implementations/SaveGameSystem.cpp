@@ -100,6 +100,7 @@
 #include "Gui/TextDatabase.h"
 #include "LandChange.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1858,13 +1859,16 @@ void SaveGameSystem::AskForPicture(std::vector<uint32_t> slots)
 		return;
 	}
 	auto name = std::format("{}save-picture/{}", graphics::ScreenPictures::k_Prefix, _pictureRequests++);
-	Locator::rendererInterface::value().RequestScreenPicture(name, [](const graphics::ScreenView& screen) {
-		return gamesave::SampleScreen({.width = screen.width,
-		                               .height = screen.height,
-		                               .pitch = screen.pitch,
-		                               .bottomUp = screen.yflip,
-		                               .bgra = screen.bgra})
-		    .value_or(std::vector<uint8_t> {});
+	// The renderer takes the picture at the end of a draw, so the request goes to the main thread
+	PostToMainThread(MainThreadApi::Renderer, [name] {
+		Locator::rendererInterface::value().RequestScreenPicture(name, [](const graphics::ScreenView& screen) {
+			return gamesave::SampleScreen({.width = screen.width,
+			                               .height = screen.height,
+			                               .pitch = screen.pitch,
+			                               .bottomUp = screen.yflip,
+			                               .bgra = screen.bgra})
+			    .value_or(std::vector<uint8_t> {});
+		});
 	});
 	_waitingPictures.push_back({.name = std::move(name), .slots = std::move(slots)});
 }

@@ -633,6 +633,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .scenario = settings.scenario,
 	    .timeLimit = settings.timeLimit.value_or(game_end::k_DefaultTimeLimitMinutes),
 	    .conditions = {},
+	    .gods = {},
 	};
 	if (settings.conditions.has_value())
 	{

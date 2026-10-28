@@ -213,6 +213,8 @@ enum class Step : uint8_t
 	CreatureAlignment,
 	SoundTags,
 	Ambience,
+	/// The clock of the music that the scripts start: its cues and its end, which the scripts wait on
+	ScriptMusic,
 	Music,
 	Autosave,
 	GameOver,
@@ -342,6 +344,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::MusicMoods, .stage = Stage::MusicMoods},
     {.step = Step::SoundTags, .stage = Stage::EndTurn},
     {.step = Step::Ambience, .stage = Stage::EndTurn},
+    // The world times the scripts' music before the music heard follows it
+    {.step = Step::ScriptMusic, .stage = Stage::EndTurn},
     {.step = Step::Music, .stage = Stage::EndTurn},
     // The autosave comes before the end of the game, so a save that is due in the last turn is written
     {.step = Step::Autosave, .stage = Stage::EndTurn},

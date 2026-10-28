@@ -85,6 +85,8 @@ public:
 		std::string localMaps;
 		/// The text of "Online Maps\ConditionTemplate.txt"
 		std::string conditionTemplate;
+		/// The room's player list shows the ping after the player's own name (deviation 143, --show-ping)
+		bool showPing {false};
 	};
 
 	/// How the player answers a message box
@@ -169,6 +171,11 @@ public:
 	[[nodiscard]] bool IsObserver() const noexcept { return _observer; }
 	/// The server started the game: the network game has the session now, and the front end leaves it open
 	[[nodiscard]] bool IsStarted() const;
+	/// The room's player list shows the ping after the player's own name
+	[[nodiscard]] bool ShowsPing() const noexcept { return _settings.showPing; }
+	/// The time of the round trip of this computer's last ping to the room's server, in microseconds. None before the
+	/// server lets the player in, and before its first answer.
+	[[nodiscard]] std::optional<uint64_t> GetRoundTrip() const;
 
 	// The Landscape tab
 	[[nodiscard]] std::span<const multiplayer::LocalMap> GetLocalMaps() const noexcept { return _maps; }

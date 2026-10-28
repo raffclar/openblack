@@ -341,4 +341,16 @@ DecodeResult DecodeSound(std::span<const uint8_t> data, int expectedSampleRate)
 	return result;
 }
 
+std::optional<uint64_t> CountMpegFrames(std::span<const uint8_t> data)
+{
+	drmp3 mp3;
+	if (data.empty() || drmp3_init_memory(&mp3, data.data(), data.size(), nullptr) == DRMP3_FALSE)
+	{
+		return std::nullopt;
+	}
+	const auto frames = drmp3_get_pcm_frame_count(&mp3);
+	drmp3_uninit(&mp3);
+	return frames;
+}
+
 } // namespace openblack::audio

@@ -50,6 +50,7 @@
 #include "Common/EventManager.h"
 #include "Common/GameHeading.h"
 #include "Common/GameRandom.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureDesires.h"
@@ -126,6 +127,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -175,6 +177,7 @@
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
@@ -206,6 +209,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -239,6 +243,7 @@
 #include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
+#include "Gui/GameInterface.h"
 #include "Gui/ScriptTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Hand/HandTrace.h"
@@ -286,6 +291,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"computerSettingsSystem", "engine.computer_settings"},
     LocatorCoverage {"infoConstants", "engine.services"},
     LocatorCoverage {"profiler", "engine.frame"},
+    LocatorCoverage {"mainThreadQueue", "engine.services"},
     LocatorCoverage {"events", "engine.services"},
     LocatorCoverage {"windowing", "engine.frame"},
     LocatorCoverage {"debugGui", "engine.services"},
@@ -403,6 +409,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"pauseTextSystem", "view.pause_text"},
+    LocatorCoverage {"incomingMessageSystem", "view.incoming_messages"},
+    LocatorCoverage {"chatSystem", "view.chat"},
     LocatorCoverage {"fireSystem", "magic.fires"},
     LocatorCoverage {"explosionSystem", "magic.state"},
     LocatorCoverage {"floatingNumberSystem", "magic.state"},
@@ -425,6 +433,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},
+    LocatorCoverage {"scriptMusicSystem", "audio.state"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
@@ -789,6 +798,11 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		                  {"events", Locator::events::has_value()},
 		                  {"rng", Locator::rng::has_value()},
 		              };
+		              if (Locator::mainThreadQueue::has_value())
+		              {
+			              // The work that the turn gave to the main thread and that still waits
+			              result["main_thread_work_waits"] = Locator::mainThreadQueue::value().GetPendingCount();
+		              }
 		              if (Locator::gameRandom::has_value())
 		              {
 			              const auto seeds = Locator::gameRandom::value().GetSeeds();
@@ -881,7 +895,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                  return Json {{"count", clouds.GetStormClouds().size()}, {"clouds", std::move(list)}};
 	                  }));
 	provider->Add(Query("real_weather", "The real-world weather: the weather that the lobby gave, whether it changes the land, "
-	                                    "its storm and the background weather"),
+	                                    "its storm, the place of its message and the background weather"),
 	              Serve<Locator::realWeatherSystem>(
 	                  "the real weather", [](const ecs::systems::RealWeatherSystemInterface& real, const QueryContext& /*c*/) {
 		                  Json result {{"applied", real.IsApplied()}, {"storm", real.GetStorm() != entt::null}};
@@ -893,6 +907,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 			                                            {"city", weather->city},
 			                                            {"area", weather->area},
 			                                            {"country", weather->country}};
+			                  result["place"] = real.GetPlace().value_or("");
 		                  }
 		                  else
 		                  {
@@ -2638,6 +2653,114 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
+	provider->Add(
+	    Query("incoming_messages",
+	          "The incoming messages at the bottom left of the screen: the list in order (kind, text, weather picture, the "
+	          "real time it started to show), the real time now, and whether the button shows with its look"),
+	    [](const QueryContext& /*c*/) {
+		    Json result = {{"count", 0}, {"messages", Json::array()}, {"shown", false}};
+		    if (!Locator::incomingMessageSystem::has_value())
+		    {
+			    return QueryResult::Value(std::move(result));
+		    }
+		    const auto& system = Locator::incomingMessageSystem::value();
+		    constexpr std::array<std::string_view, 3> k_Kinds {"chat", "mail", "weather"};
+		    result["now"] = system.GetMilliseconds();
+		    result["count"] = system.GetQueue().Count();
+		    result["shown_text"] = gui::ToUtf8(system.GetQueue().ShownText());
+		    // The list is read from the top message down, by dismissing copies
+		    auto copy = system.GetQueue();
+		    while (const auto* top = copy.Top())
+		    {
+			    result["messages"].push_back({{"kind", k_Kinds.at(static_cast<size_t>(top->kind))},
+			                                  {"text", gui::ToUtf8(top->text)},
+			                                  {"picture", top->picture},
+			                                  {"since", top->since}});
+			    copy.Dismiss(top->since);
+		    }
+		    if (auto* game = Game::Instance(); game != nullptr && game->GetInterface() != nullptr)
+		    {
+			    const auto& strip = game->GetInterface()->GetIncomingMessages();
+			    result["shown"] = strip.IsActive();
+			    if (const auto& look = strip.GetLook(); look.has_value())
+			    {
+				    constexpr std::array<std::string_view, 5> k_Looks {"speech", "speech_arrow", "envelope", "envelope_arrow",
+				                                                       "weather"};
+				    result["look"] = k_Looks.at(static_cast<size_t>(look->look));
+				    result["look_picture"] = look->picture;
+			    }
+			    result["line"] = gui::ToUtf8(strip.GetText());
+		    }
+		    return QueryResult::Value(std::move(result));
+	    });
+	provider->Add(Query("chat",
+	                    "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the "
+	                    "players that get them, text or taunt, shown in the incoming messages), the speech bubbles over "
+	                    "the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, "
+	                    "the typed line, the list of players and who gets a line)"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = {{"names", Json::object()}, {"received", Json::array()}, {"bubbles", Json::array()}};
+		              if (!Locator::chatSystem::has_value())
+		              {
+			              return QueryResult::Value(std::move(result));
+		              }
+		              auto& chat = Locator::chatSystem::value();
+		              for (const auto& [slot, name] : chat.GetNames())
+		              {
+			              result["names"][std::to_string(static_cast<int>(slot))] = gui::ToUtf8(name);
+		              }
+		              for (const auto& line : chat.GetReceived())
+		              {
+			              Json recipients = Json::array();
+			              for (const auto player : line.recipients)
+			              {
+				              recipients.push_back(static_cast<int>(player));
+			              }
+			              result["received"].push_back({{"turn", line.turn},
+			                                            {"sender", static_cast<int>(line.sender)},
+			                                            {"recipients", std::move(recipients)},
+			                                            {"text", gui::ToUtf8(line.text)},
+			                                            {"taunt", line.taunt.has_value() ? Json(*line.taunt) : Json(nullptr)},
+			                                            {"shown", line.shown}});
+		              }
+		              for (const auto& [creature, bubble] : chat.GetBubbles())
+		              {
+			              Json lines = Json::array();
+			              for (const auto& line : bubble.lines)
+			              {
+				              lines.push_back({{"text", gui::ToUtf8(line.text)}, {"sender", static_cast<int>(line.sender)}});
+			              }
+			              result["bubbles"].push_back({{"creature", entt::to_integral(creature)},
+			                                           {"lines", std::move(lines)},
+			                                           {"display_time", bubble.displayTime},
+			                                           {"scroll", bubble.scroll}});
+		              }
+		              if (auto* game = Game::Instance(); game != nullptr && game->GetInterface() != nullptr)
+		              {
+			              const auto& controls = game->GetInterface()->GetChatControls();
+			              Json players = Json::array();
+			              for (const auto& person : controls.GetPeople().players)
+			              {
+				              players.push_back({{"slot", static_cast<int>(person.slot)},
+				                                 {"name", gui::ToUtf8(person.name)},
+				                                 {"selected", person.selected}});
+			              }
+			              Json recipients = Json::array();
+			              for (const auto player : controls.Recipients())
+			              {
+				              recipients.push_back(static_cast<int>(player));
+			              }
+			              result["controls"] = {{"shown", controls.IsActive()},
+			                                    {"open", controls.IsOpen()},
+			                                    {"quick_chat", controls.IsQuickChatOpen()},
+			                                    {"line", gui::ToUtf8(controls.GetLine())},
+			                                    {"expanded", controls.GetPeople().expanded},
+			                                    {"messages_on", controls.GetPeople().messagesOn},
+			                                    {"players", std::move(players)},
+			                                    {"recipients", std::move(recipients)}};
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
 	                             "creature and its effects, whether films are on, and the 16-bit surface of the films"),
 	              [](const QueryContext& /*c*/) {
@@ -4337,11 +4460,21 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    const auto& music = *game->GetGameMusic();
 			    state.musicPlaying = audio::GetMusicTypeName(music.GetPlaying());
 			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
-			    state.scriptMusic = audio::GetMusicTypeName(music.GetScriptType());
 			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
 			    for (const auto& attached : music.GetAttachedMusic())
 			    {
 				    state.attachedMusic.emplace_back(audio::GetMusicTypeName(attached.type), attached.thing);
+			    }
+		    }
+		    if (Locator::scriptMusicSystem::has_value())
+		    {
+			    const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+			    state.scriptMusic = audio::GetMusicTypeName(script.GetType());
+			    state.scriptMusicLine = script.GetLyrics().line;
+			    state.scriptMusicWord = script.GetLyrics().word;
+			    if (const auto time = script.GetChannelTime(); time.has_value())
+			    {
+				    state.scriptMusicMs = std::chrono::duration_cast<std::chrono::milliseconds>(*time).count();
 			    }
 		    }
 		    if (const auto* player = audio.GetMusic(); player != nullptr)

@@ -33,6 +33,7 @@
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
 #include "Common/FatalMessage.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/Platform.h"
 #include "Common/SystemLibraries.h"
 #include "Creature/BonusCreatures.h"
@@ -114,6 +115,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("new-game", "Start a new game on the first land, as the game's own new game option does, rather than continue from the save on exit.")
 		("lobby", "The https:// origin of the lobby for the online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>()->default_value("https://bw.zanidrak.com"))
 		("internet-weather", "The real-world weather of the place of the player's lobby account changes the weather of a single-player game, as the original game's internet weather did. It is on by default (--internet-weather=false turns it off). The game asks one time as a game starts and never waits; with no answer in 10 seconds, or no login, the land keeps its own weather.", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+		("show-ping", "Show the round trip of this computer's game socket in milliseconds in a network game, as \"ping 48\": after the player's own name in the room's player list. The original game shows no ping, so it is off by default.")
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket.", cxxopts::value<std::string>())
 		("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>())
@@ -178,7 +180,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	options.add_options("Developer")
 		("sim-row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("sim-row-dump-turn", "Tools: with --sim-row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
-		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"));
+		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"))
+		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
+		("turn-beside-draw", "Developers: the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later.");
 #endif
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options("Developer")
@@ -486,6 +490,25 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.simulation = simulation;
 		}
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		if (result.count("turn-api-check") != 0)
+		{
+			const auto check = result["turn-api-check"].as<std::string>();
+			if (check == "report")
+			{
+				args.turnApiCheck = openblack::TurnApiCheck::Report;
+			}
+			else if (check == "fail")
+			{
+				args.turnApiCheck = openblack::TurnApiCheck::Fail;
+			}
+			else if (check != "off")
+			{
+				throw cxxopts::exceptions::parsing("--turn-api-check is off, report or fail");
+			}
+		}
+		args.turnBesideDraw = result.count("turn-beside-draw") != 0;
+#endif
 		if (result.count("screenshot-frame") != 0)
 		{
 			args.requestScreenshot = std::make_pair(result["screenshot-frame"].as<uint32_t>(),
@@ -525,6 +548,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.lobbyTestAuthorities = result["lobby-test-ca"].as<std::string>();
 		}
 		args.useInternetWeather = result["internet-weather"].as<bool>();
+		args.showPing = result.count("show-ping") != 0;
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
 		args.noDraw = result.count("no-draw") != 0;
 		args.background = result.count("background") != 0;

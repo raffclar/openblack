@@ -217,71 +217,67 @@ TEST_F(ScriptMiscNatives, AnObjectWithoutMusicHasFinished)
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(ScriptMusic, CuesInTheMusicMarkItsLinesAndWords)
 {
-	GameMusic::MusicLyrics lyrics;
-	GameMusic::ApplyMusicCue(lyrics, "L1");
+	audio::MusicLyrics lyrics;
+	audio::ApplyMusicCue(lyrics, "L1");
 	EXPECT_EQ(lyrics.line, 1);
 	EXPECT_EQ(lyrics.word, 1);
-	GameMusic::ApplyMusicCue(lyrics, "W");
-	GameMusic::ApplyMusicCue(lyrics, "p");
+	audio::ApplyMusicCue(lyrics, "W");
+	audio::ApplyMusicCue(lyrics, "p");
 	EXPECT_EQ(lyrics.word, 3);
-	GameMusic::ApplyMusicCue(lyrics, "l12");
+	audio::ApplyMusicCue(lyrics, "l12");
 	EXPECT_EQ(lyrics.line, 12);
 	EXPECT_EQ(lyrics.word, 1);
 	// Other cues change nothing
-	GameMusic::ApplyMusicCue(lyrics, "X3");
-	GameMusic::ApplyMusicCue(lyrics, "");
+	audio::ApplyMusicCue(lyrics, "X3");
+	audio::ApplyMusicCue(lyrics, "");
 	EXPECT_EQ(lyrics.line, 12);
 	EXPECT_EQ(lyrics.word, 1);
 	// A line cue without a number is line 0
-	GameMusic::ApplyMusicCue(lyrics, "L");
+	audio::ApplyMusicCue(lyrics, "L");
 	EXPECT_EQ(lyrics.line, 0);
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(ScriptMusic, ALineIsReachedOnceItsCueOrALaterOneIsHeard)
 {
-	EXPECT_TRUE(GameMusic::ReachedMusicLine(0, 0));
-	EXPECT_FALSE(GameMusic::ReachedMusicLine(0, 1));
-	EXPECT_TRUE(GameMusic::ReachedMusicLine(3, 3));
-	EXPECT_TRUE(GameMusic::ReachedMusicLine(4, 3));
+	EXPECT_TRUE(audio::ReachedMusicLine(0, 0));
+	EXPECT_FALSE(audio::ReachedMusicLine(0, 1));
+	EXPECT_TRUE(audio::ReachedMusicLine(3, 3));
+	EXPECT_TRUE(audio::ReachedMusicLine(4, 3));
 	// Compared unsigned: a negative line is never reached
-	EXPECT_FALSE(GameMusic::ReachedMusicLine(12, -1));
+	EXPECT_FALSE(audio::ReachedMusicLine(12, -1));
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(ScriptMusic, StartingMusicStartsItsLyricsAgain)
 {
-	GameMusic music;
-	music.OnScriptMusicCue("L4");
-	music.OnScriptMusicCue("W");
-	EXPECT_EQ(music.GetMusicLyrics().line, 4);
-	EXPECT_EQ(music.GetMusicLyrics().word, 2);
-	music.ResetMusicLyrics();
-	EXPECT_EQ(music.GetMusicLyrics().line, 0);
-	EXPECT_EQ(music.GetMusicLyrics().word, 0);
+	audio::ScriptMusic music;
+	music.Restore(MusicType::None, false, {.line = 4, .word = 2});
+	music.ResetLyrics();
+	EXPECT_EQ(music.GetLyrics().line, 0);
+	EXPECT_EQ(music.GetLyrics().word, 0);
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(ScriptMusic, TheEndOfADialogueStartsTheWordAgainAndKeepsTheLine)
 {
-	GameMusic music;
-	music.OnScriptMusicCue("L4");
-	music.OnScriptMusicCue("W");
-	music.ResetMusicWord();
-	EXPECT_EQ(music.GetMusicLyrics().line, 4);
-	EXPECT_EQ(music.GetMusicLyrics().word, 0);
+	audio::ScriptMusic music;
+	music.Restore(MusicType::None, false, {.line = 4, .word = 2});
+	music.ResetWord();
+	EXPECT_EQ(music.GetLyrics().line, 4);
+	EXPECT_EQ(music.GetLyrics().word, 0);
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(ScriptMusic, ScriptMusicIsOverOnceOtherMusicOrNoneIsAskedFor)
 {
-	GameMusic music;
-	EXPECT_TRUE(music.IsScriptMusicOver(MusicType::ScriptMissionariesVerse1));
-	music.StartScriptMusic(MusicType::ScriptMissionariesVerse1);
-	EXPECT_FALSE(music.IsScriptMusicOver(MusicType::ScriptMissionariesVerse1));
-	EXPECT_TRUE(music.IsScriptMusicOver(MusicType::ScriptMissionariesVerse2));
-	music.StartScriptMusic(MusicType::None);
-	EXPECT_TRUE(music.IsScriptMusicOver(MusicType::ScriptMissionariesVerse1));
+	audio::ScriptMusic music;
+	EXPECT_TRUE(music.IsOver(MusicType::ScriptMissionariesVerse1));
+	music.Start(MusicType::ScriptMissionariesVerse1);
+	EXPECT_FALSE(music.IsOver(MusicType::ScriptMissionariesVerse1));
+	EXPECT_TRUE(music.IsOver(MusicType::ScriptMissionariesVerse2));
+	music.Start(MusicType::None);
+	EXPECT_TRUE(music.IsOver(MusicType::ScriptMissionariesVerse1));
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro

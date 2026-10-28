@@ -19,6 +19,7 @@
 #include "Controls.h"
 #include "DialogKeyRules.h"
 #include "Graphics/Texture2D.h"
+#include "PingDisplay.h"
 #include "TextDatabase.h"
 
 using namespace openblack::gui;
@@ -628,24 +629,17 @@ void MultiplayerBoxes::SyncRoom()
 	// The roster: "God 3: name (CURRENT)" in the god's colour, the observers in grey
 	const auto* own = _frontEnd->GetOwnSeat();
 	std::vector<List::Item> roster;
+	const auto godText = Text(k_GodText);
+	const auto observersText = Text(k_ObserversText);
+	const auto currentText = Text(k_CurrentText);
+	const RosterTexts rosterTexts {.god = godText, .observers = observersText, .current = currentText};
+	// The ping display (deviation 143) is off unless the player turns it on
+	const auto ping = _frontEnd->ShowsPing() ? ping_display::Text(_frontEnd->GetRoundTrip()) : std::nullopt;
 	for (const auto& seat : _frontEnd->GetSeats())
 	{
-		std::u16string line;
-		if (seat.god > 0)
-		{
-			const std::array<TextArgument, 1> god = {int64_t {seat.god}};
-			line = FormatText(Text(k_GodText), god);
-		}
-		else
-		{
-			line = Text(k_ObserversText);
-		}
-		line += u": " + ToUtf16(seat.account.name);
-		if (own != nullptr && own->account.id == seat.account.id && own->account.name == seat.account.name)
-		{
-			line += Text(k_CurrentText);
-		}
-		roster.push_back({.text = std::move(line), .colour = GodColour(seat.god)});
+		const bool isOwn = own != nullptr && own->account.id == seat.account.id && own->account.name == seat.account.name;
+		roster.push_back(
+		    {.text = RosterLine(seat, ToUtf16(seat.account.name), isOwn, rosterTexts, ping), .colour = GodColour(seat.god)});
 	}
 	SetItemsIfChanged(*_roster, std::move(roster));
 

@@ -1470,18 +1470,22 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 			              }
 			              channels.push_back(std::move(item));
 		              }
-		              return QueryResult::Value({{"global_volume", state->globalVolume},
-		                                         {"sfx_volume", state->sfxVolume},
-		                                         {"music_volume", state->musicVolume},
-		                                         {"music_active", state->musicActive},
-		                                         {"music_playing", state->musicPlaying},
-		                                         {"land_music", state->landMusic},
-		                                         {"script_music", state->scriptMusic},
-		                                         {"alignment_music", state->alignmentMusic},
-		                                         {"attached_music", std::move(attached)},
-		                                         {"music_channels", std::move(channels)},
-		                                         {"sounds_playing", playing},
-		                                         {"listener", {state->listener.x, state->listener.y, state->listener.z}}});
+		              return QueryResult::Value(
+		                  {{"global_volume", state->globalVolume},
+		                   {"sfx_volume", state->sfxVolume},
+		                   {"music_volume", state->musicVolume},
+		                   {"music_active", state->musicActive},
+		                   {"music_playing", state->musicPlaying},
+		                   {"land_music", state->landMusic},
+		                   {"script_music", state->scriptMusic},
+		                   {"script_music_line", state->scriptMusicLine},
+		                   {"script_music_word", state->scriptMusicWord},
+		                   {"script_music_ms", state->scriptMusicMs.has_value() ? Json(*state->scriptMusicMs) : Json(nullptr)},
+		                   {"alignment_music", state->alignmentMusic},
+		                   {"attached_music", std::move(attached)},
+		                   {"music_channels", std::move(channels)},
+		                   {"sounds_playing", playing},
+		                   {"listener", {state->listener.x, state->listener.y, state->listener.z}}});
 	              });
 	provider->Add(Query("sounds", "The sounds about a point, nearest first (sounds without a place are left out)", {},
 	                    ResultKind::List, true),

@@ -78,6 +78,15 @@ struct ConditionValue
 };
 
 /// Server to client: "game.start". The world starts to turn from this turn.
+/// A human god of the game, for the names in the chat
+struct God
+{
+	uint8_t slot {0};
+	/// The name of the account
+	std::string name;
+	bool operator==(const God&) const = default;
+};
+
 struct Start
 {
 	/// The script of the land, as a path under the Scripts folder of the game (for example "Land1.txt" or
@@ -108,6 +117,8 @@ struct Start
 	std::vector<ConditionValue> conditions;
 	/// The names of the players of the gods, by god slot ("names", optional). A slot with no player has an empty name.
 	std::vector<std::string> names;
+	/// The human gods of the game, by slot, as the game starts or as an observer joins ("gods", optional)
+	std::vector<God> gods;
 };
 
 /// Server to client: "room.joined". The server accepted the ticket.

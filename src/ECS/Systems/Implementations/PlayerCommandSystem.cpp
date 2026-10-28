@@ -28,6 +28,7 @@
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -170,6 +171,14 @@ void Run(const Command& command, uint32_t turn)
 			    {
 				    openblack::Locator::particleSystem::value().StartSpotVisual(openblack::SpotVisualType::GripLandscape,
 				                                                                action.point, std::nullopt, entt::null, 1.0f);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
+		    {
+			    // A line of the chat changes nothing of the synced world
+			    if (openblack::Locator::chatSystem::has_value())
+			    {
+				    openblack::Locator::chatSystem::value().Receive(command.player, action);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)

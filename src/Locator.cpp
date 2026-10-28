@@ -17,6 +17,7 @@
 #include <exception>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -31,10 +32,12 @@
 #include "Audio/AudioManager.h"
 #include "Audio/AudioManagerNoOp.h"
 #include "Audio/ClockedAudioPlayer.h"
+#include "Audio/QueuedAudioManager.h"
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
 #include "Debug/DebugGuiInterface.h"
@@ -116,14 +119,19 @@
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
+#include "ECS/IncomingMessageRules.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
+#include "ECS/Systems/Implementations/ChatSystem.h"
 #include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
 #include "ECS/Systems/Implementations/GameEndSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
+#include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -145,6 +153,7 @@
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
+#include "ECS/Systems/Implementations/ScriptMusicSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
 #include "ECS/Systems/Implementations/SharkSystem.h"
 #include "ECS/Systems/Implementations/SimulationSystem.h"
@@ -173,15 +182,24 @@
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/TextDatabase.h"
+#include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/NetworkSession.h"
 #include "Online/PushChannelInterface.h"
 #include "Online/TokenStoreInterface.h"
 #include "Online/WebSocketInterface.h"
 #include "Online/WebSocketPushChannel.h"
+#include "PlayerSlots.h"
 #include "Profiler.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/BrowserWebSocketClient.h"
@@ -223,6 +241,7 @@ using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
 using openblack::ecs::systems::CameraZoneSystem;
+using openblack::ecs::systems::ChatSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
@@ -270,6 +289,7 @@ using openblack::ecs::systems::HelpProfileSystem;
 using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
+using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
 using openblack::ecs::systems::LandShadeSystem;
@@ -301,6 +321,7 @@ using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
 using openblack::ecs::systems::SaveGameSystem;
 using openblack::ecs::systems::ScriptControlSystem;
+using openblack::ecs::systems::ScriptMusicSystem;
 using openblack::ecs::systems::SharkSystem;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
@@ -346,6 +367,7 @@ void openblack::InitializeSimulationCore()
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), GLM_VERSION_COMPLETE);
 
 	Locator::profiler::emplace();
+	Locator::mainThreadQueue::emplace();
 	Locator::events::emplace<EventManager>();
 #if __ANDROID__
 	Locator::filesystem::emplace<AndroidFileSystem>();
@@ -372,24 +394,27 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 		Locator::audio::emplace<AudioManagerNoOp>();
 		return true;
 	}
+	std::unique_ptr<audio::AudioManagerInterface> machineAudio;
 	try
 	{
 		// A simulation run with a fixed frame time times its sounds by the game's clock
 		if (Locator::config::has_value() && Locator::config::value().clockedAudio)
 		{
-			Locator::audio::emplace<AudioManager>(
+			machineAudio = std::make_unique<AudioManager>(
 			    std::make_unique<audio::ClockedAudioPlayer>([] { return machine_clock::Ticks(); }));
 		}
 		else
 		{
-			Locator::audio::emplace<AudioManager>();
+			machineAudio = std::make_unique<AudioManager>();
 		}
 	}
 	catch (std::runtime_error& error)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("audio"), "Falling back to no-op audio: {}", error.what());
-		Locator::audio::emplace<AudioManagerNoOp>();
+		machineAudio = std::make_unique<AudioManagerNoOp>();
 	}
+	// The game's calls go to the audio through the queue of the main thread
+	Locator::audio::emplace<audio::QueuedAudioManager>(std::move(machineAudio), Locator::mainThreadQueue::value());
 	return true;
 }
 
@@ -496,27 +521,135 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	    online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
 	    []() { return std::chrono::system_clock::now(); });
 	const bool internetWeather = Locator::config::has_value() && Locator::config::value().useInternetWeather;
+	const auto readScript = [](std::string_view file) -> std::optional<std::vector<uint8_t>> {
+		auto& files = Locator::filesystem::value();
+		const auto path = files.GetPath<filesystem::Path::Scripts>() / file;
+		try
+		{
+			if (!files.Exists(path))
+			{
+				return std::nullopt;
+			}
+			return files.ReadAll(path);
+		}
+		catch (const std::exception& error)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read {}: {}", file, error.what());
+			return std::nullopt;
+		}
+	};
 	Locator::realWeatherSystem::emplace<RealWeatherSystem>(
-	    internetWeather, Locator::lobbyClient::value(),
-	    []() -> std::optional<std::vector<uint8_t>> {
-		    auto& files = Locator::filesystem::value();
-		    const auto path = files.GetPath<filesystem::Path::Scripts>() / "weatherinfo.lhw";
-		    try
+	    internetWeather, Locator::lobbyClient::value(), [readScript]() { return readScript("weatherinfo.lhw"); },
+	    []() { return LocalDate(Locator::time::has_value() ? Locator::time::value().GetUnixTime() : std::time(nullptr)); },
+	    []() { return std::chrono::steady_clock::now(); }, [readScript]() { return readScript("country.lhw"); },
+	    // The days of weather go to the folder of the current profile. A developer's run keeps no files for its player.
+	    [developer = profiles.developer](std::span<const uint8_t> bytes) {
+		    if (developer || !Locator::playerProfileSystem::has_value() || !Locator::profileFolderSystem::has_value())
 		    {
-			    if (!files.Exists(path))
-			    {
-				    return std::nullopt;
-			    }
-			    return files.ReadAll(path);
+			    return;
 		    }
-		    catch (const std::exception& error)
+		    const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		    if (profile.has_value() &&
+		        !Locator::profileFolderSystem::value().WritePlayerFile(gui::ToUtf16(profile->name), "weather.dat", bytes))
 		    {
-			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read the weather presets: {}", error.what());
-			    return std::nullopt;
+			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not write the days of the real weather");
 		    }
 	    },
-	    []() { return LocalDate(Locator::time::has_value() ? Locator::time::value().GetUnixTime() : std::time(nullptr)); },
-	    []() { return std::chrono::steady_clock::now(); });
+	    // The message of the real weather goes into the list of incoming messages
+	    [](std::string_view place, uint8_t picture) {
+		    if (Locator::incomingMessageSystem::has_value())
+		    {
+			    Locator::incomingMessageSystem::value().AddWeather(gui::ToUtf16(place), picture);
+		    }
+	    });
+}
+
+/// The chat of a network game, and what it asks of the rest of the game
+void EmplaceChat(bool developer)
+{
+	ChatSystem::Services services;
+	services.submit = [](player_commands::Action action) {
+		if (Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(std::move(action));
+		}
+	};
+	services.localPlayer = []() -> std::optional<PlayerNames> {
+		if (!Locator::handSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& hands = Locator::handSystem::value();
+		const auto own = hands.GetOwnPlayer();
+		return hands.IsOwnPlayer(own) ? std::optional(own) : std::nullopt;
+	};
+	services.creatureOf = [](PlayerNames player) -> std::optional<entt::entity> {
+		return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetPrimaryCreature(player) : std::nullopt;
+	};
+	services.players = []() {
+		std::vector<PlayerNames> players;
+		for (size_t slot = 0; slot < player_slots::k_MaxPlayers; ++slot)
+		{
+			players.push_back(static_cast<PlayerNames>(slot));
+		}
+		return players;
+	};
+	services.incoming = [](std::u16string_view line) {
+		if (Locator::incomingMessageSystem::has_value())
+		{
+			Locator::incomingMessageSystem::value().Add(incoming_messages::Kind::Chat, line, 0);
+		}
+	};
+	// A taunt is said as the remark of the first kind, as the original game does
+	services.advisorsSay = [](uint32_t text) {
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().SayText(text, guidance::Kind::TownDesireSound);
+		}
+	};
+	services.yackingRemark = []() {
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().SayOneOff(guidance::OneOff::QuitTheYacking);
+		}
+	};
+	// The lines go to the chat log in the folder of the current profile. A developer's run keeps no files for its player.
+	services.log = [developer](std::string_view line) {
+		if (developer || !Locator::playerProfileSystem::has_value() || !Locator::profileFolderSystem::has_value())
+		{
+			return;
+		}
+		const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		if (profile.has_value())
+		{
+			const auto* bytes = reinterpret_cast<const uint8_t*>(line.data());
+			Locator::profileFolderSystem::value().AppendPlayerFile(gui::ToUtf16(profile->name), "chat.log",
+			                                                       {bytes, line.size()});
+		}
+	};
+	services.names = []() {
+		std::map<PlayerNames, std::u16string> names;
+		if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
+		{
+			return names;
+		}
+		const auto& session = *Locator::networkGame::value().Session();
+		const auto& start = session.GetStart();
+		const auto& joined = session.GetJoined();
+		const auto* gods = start.has_value()                                 ? &start->gods
+		                   : joined.has_value() && joined->start.has_value() ? &joined->start->gods
+		                                                                     : nullptr;
+		if (gods != nullptr)
+		{
+			for (const auto& god : *gods)
+			{
+				names[static_cast<PlayerNames>(god.slot)] = gui::ToUtf16(god.name);
+			}
+		}
+		return names;
+	};
+	services.turn = []() { return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u; };
+	Locator::chatSystem::emplace<ChatSystem>(std::move(services));
 }
 
 } // namespace
@@ -543,6 +676,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::playerProfileSystem::emplace<PlayerProfileSystem>(profiles);
 	Locator::profileFolderSystem::emplace<ProfileFolderSystem>(Locator::filesystem::value(), profiles.folder);
 	Locator::musicMoodSystem::emplace<MusicMoodSystem>();
+	// The music that the scripts start, which the world times by its turns
+	Locator::scriptMusicSystem::emplace<ScriptMusicSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::computerPlayerSystem::emplace<ComputerPlayerSystem>();
@@ -640,6 +775,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::magicSystem::emplace<MagicSystem>();
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
 	Locator::pauseTextSystem::emplace<PauseTextSystem>();
+	Locator::incomingMessageSystem::emplace<IncomingMessageSystem>([]() { return machine_clock::Ticks(); });
+	EmplaceChat(profiles.developer);
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
 	Locator::floatingNumberSystem::emplace<ecs::systems::FloatingNumberSystem>();
@@ -838,6 +975,7 @@ void openblack::ShutDownServices()
 	Locator::helpProfileSystem::reset();
 	Locator::computerSettingsSystem::reset();
 	Locator::musicMoodSystem::reset();
+	Locator::scriptMusicSystem::reset();
 	Locator::simulation::reset();
 	Locator::profileFolderSystem::reset();
 	Locator::creatureHelpSystem::reset();
@@ -884,6 +1022,8 @@ void openblack::ShutDownServices()
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::pauseTextSystem::reset();
+	Locator::incomingMessageSystem::reset();
+	Locator::chatSystem::reset();
 	Locator::fireSystem::reset();
 	Locator::explosionSystem::reset();
 	Locator::floatingNumberSystem::reset();
@@ -940,6 +1080,7 @@ void openblack::ShutDownServices()
 	Locator::config::reset();
 	Locator::infoConstants::reset();
 	Locator::profiler::reset();
+	Locator::mainThreadQueue::reset();
 
 	Locator::vm::reset();
 	Locator::gameRandom::reset();

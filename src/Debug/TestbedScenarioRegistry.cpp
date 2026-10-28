@@ -32,6 +32,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "ECS/IncomingMessageRules.h"
 #include "Input/BindableActions.h"
 #include "Particles/ParticleTypes.h"
 #include "ScriptHeaders/ScriptEnums.h"
@@ -3835,6 +3836,22 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::RunText, .delaySeconds = 5.05f, .value = 1240}},
 	});
 
+	// The Land 1 script that shows the words of the first sung verse, each at its line of the music
+	all.push_back({
+	    .id = "story.missionaries_verse",
+	    .name = "The words of the missionaries' first sung verse at the lines of the music",
+	    .facet = Facet::Story,
+	    .description = "At the start, the missionaries' first sung verse starts and the Land 1 script that shows its "
+	                   "twelve lines runs, as the explorers' scroll starts them. The script waits for each line of the "
+	                   "music, or for 10 seconds, and then shows the words of that line.",
+	    .expected = "The verse plays for about 40 seconds. The words of each of the twelve lines show at the start of "
+	                "that line of the song, and the glow under the words moves from word to word with the song. The "
+	                "audio log gives each line cue.",
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::StartScriptMusic, .delaySeconds = 0.0f, .value = k_FirstVerseMusic},
+	                 {.kind = Kind::RunScript, .delaySeconds = 0.0f, .script = "TheMissionariesVerseOneText"}},
+	});
+
 	all.push_back({
 	    .id = "audio.temple_music",
 	    .name = "The temple's music following the player's alignment",
@@ -4040,6 +4057,116 @@ void AddAudio(std::vector<Scenario>& all)
 	                "out as they come nearer. The menu (Escape) hides the words at once.",
 	    .framing = {.shot = Shot::Overview},
 	    .commands = {{.kind = Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	// The message of the real weather in the list of incoming messages, then a second one after it
+	all.push_back({
+	    .id = "interface.real_weather_message",
+	    .name = "The message of the real weather",
+	    .facet = Facet::Interface,
+	    .description = "After a second the message of the real weather comes in, as the real weather gives it at the "
+	                   "start of a game: a storm with rain over Guildford. A second message, snow over Oslo, comes in "
+	                   "after it. Click the button, or wait.",
+	    .expected = "At the bottom left of the screen, a 48 pixel button shows a cloud with rain, and to its right the "
+	                "line \"Weather Information from: Guildford (Surrey,Great Britain)\" in white with a black shadow. "
+	                "The picture does not flash. After 10 seconds the second message shows its own picture and "
+	                "\"Weather Information from: Oslo (Norway)\" for 10 seconds, then the corner is clear. A left click "
+	                "on the button clicks, removes the message and locks the camera onto the player's creature. A right "
+	                "click only removes the message.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands =
+	        {{.kind = Kind::AddIncomingMessage, .delaySeconds = 1.0f, .value = 4, .action = "Guildford (Surrey,Great Britain)"},
+	         {.kind = Kind::AddIncomingMessage, .delaySeconds = 0.5f, .value = 6, .action = "Oslo (Norway)"}},
+	});
+
+	// The nine weather pictures one after the other
+	all.push_back({
+	    .id = "interface.weather_pictures",
+	    .name = "The nine weather pictures",
+	    .facet = Facet::Interface,
+	    .description = "After a second nine messages of the real weather come in, one for each weather picture, in the "
+	                   "order of the pictures. Each one shows for 10 seconds. Click the button to go to the next one.",
+	    .expected = "The pictures show in turn: sun, sun with a cloud, a dark cloud, sun with a cloud and some rain, a "
+	                "cloud with rain, sun with a cloud and some snow, a cloud with snow, a cloud with snow and rain, and a "
+	                "thunder storm. The line of text names the number of the picture.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands =
+	        [] {
+		        std::vector<Command> commands;
+		        static constexpr std::array<std::string_view, incoming_messages::k_WeatherPictures> k_Places {
+		            "Picture 0 (Sun)",       "Picture 1 (Sun,Cloud)", "Picture 2 (Cloud)",
+		            "Picture 3 (Some rain)", "Picture 4 (Rain)",      "Picture 5 (Some snow)",
+		            "Picture 6 (Snow)",      "Picture 7 (Snow,Rain)", "Picture 8 (Thunder storm)"};
+		        for (size_t picture = 0; picture < k_Places.size(); ++picture)
+		        {
+			        commands.push_back({.kind = Kind::AddIncomingMessage,
+			                            .delaySeconds = picture == 0 ? 1.0f : 0.1f,
+			                            .value = picture,
+			                            .action = k_Places.at(picture)});
+		        }
+		        return commands;
+	        }(),
+	});
+
+	// A chat line and an e-mail, whose buttons flash
+	all.push_back({
+	    .id = "interface.incoming_chat_and_mail",
+	    .name = "Incoming chat and e-mail",
+	    .facet = Facet::Interface,
+	    .description = "After a second a chat line and an e-mail come into the list of incoming messages, as other "
+	                   "players and the e-mail announcement add them. Single player gets no chat or e-mail; this stages "
+	                   "the looks of their buttons.",
+	    .expected = "The chat line shows first: a speech bubble with an arrow that flashes to a speech bubble without "
+	                "the arrow for a tenth of a second in each four tenths. The bubble lights up under the pointer. "
+	                "After 10 seconds the e-mail shows an envelope that flashes in the same way.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::AddIncomingMessage,
+	                  .delaySeconds = 1.0f,
+	                  .value = k_IncomingChat,
+	                  .action = "Alice: Hello from the other island"},
+	                 {.kind = Kind::AddIncomingMessage,
+	                  .delaySeconds = 0.5f,
+	                  .value = k_IncomingMail,
+	                  .action = "Bob has sent you an e-mail about the harvest"}},
+	});
+
+	// The chat of a network game: the speech bubbles over the creatures, the incoming lines and the open chat
+	all.push_back({
+	    .id = "interface.chat_lines",
+	    .name = "Chat lines and speech bubbles",
+	    .facet = Facet::Interface,
+	    .description = "Bob, the god of the second tiger, says a line in the chat. Then Alice, the god of this computer, "
+	                   "says a line. Then the chat opens with a line in it, and its list of players shows Bob.",
+	    .expected = "A bubble with the line comes over each tiger. The bubble over Bob's tiger has his line in his green, "
+	                "on a box of half of his colour. The bubble of Alice's tiger shows her line without her name. The "
+	                "lines of Bob come into the incoming messages. The speech button at the top right becomes the line "
+	                "of the chat, the quick chat and the send buttons, and the list of players under them. The bubbles "
+	                "fade after some seconds.",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -60.0f}, .look = {0.0f, 10.0f, 0.0f}},
+	    .creatures = {{.label = "Alice's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {-12.0f, 0.0f},
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .size = 0.5f,
+	                   .pauseMind = true},
+	                  {.label = "Bob's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {12.0f, 0.0f},
+	                   .owner = PlayerNames::PLAYER_TWO,
+	                   .size = 0.5f,
+	                   .pauseMind = true}},
+	    .commands = {{.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello from the other island"},
+	                 {.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_ONE,
+	                  .delaySeconds = 1.5f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello Bob"},
+	                 {.kind = Kind::Chat, .delaySeconds = 1.5f, .value = k_ChatTypes, .action = "Shall we trade"}},
 	});
 
 	all.push_back({
@@ -11454,7 +11581,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
 	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
-	       kind == Kind::EndBox || kind == Kind::BringCreature || IsPointerCommand(kind);
+	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
+	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -11482,7 +11610,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 186> k_Names {
+	constexpr std::array<std::string_view, 190> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -11669,6 +11797,10 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "end box",
 	    "bring a creature into a network game",
 	    "give the hand's reports a latency",
+	    "tattoo editor as in a network game",
+	    "show a made-up ping",
+	    "add an incoming message",
+	    "chat",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -11786,6 +11918,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		}
 	}
 	const auto creatures = scenario.creatures.size();
+	// The commands can also name the creatures of the filled slots: one for each temple at most
+	const auto others = creatures + (scenario.fillEmptySlots ? scenario.temples.size() : 0);
 	const auto& framing = scenario.framing;
 	if ((framing.shot == Shot::Follow || framing.shot == Shot::Head) && framing.creature >= creatures)
 	{
@@ -11918,7 +12052,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		}
 		if ((command.kind == Kind::Follow || command.kind == Kind::StartFight || command.kind == Kind::TieLeashToCreature ||
 		     command.kind == Kind::MakeFriends) &&
-		    (command.value >= creatures || command.value == command.creature))
+		    (command.value >= others || command.value == command.creature))
 		{
 			problems.push_back(fmt::format("{}: acts on no other creature", what));
 		}
