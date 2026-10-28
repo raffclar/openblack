@@ -1093,7 +1093,7 @@ def start_web_client(options, out, join_url, ticket, certs, turns, processes):
     plan = web_join_plan(options, join_url, ticket, spki_hash(certs["server.pem"]), turns)
     if not options.web_remote:
         return folder, run_web_plan(plan, folder, web_page_of(options), options.chrome, options.game_path, processes)
-    for name in ("done", "checksums.jsonl", "console.log"):
+    for name in ("done", "checksums.jsonl", "console.log", "page-log.txt"):
         if os.path.exists(os.path.join(folder, name)):
             os.remove(os.path.join(folder, name))
     # The file appears whole: the remote side never reads half of it
@@ -1102,6 +1102,11 @@ def start_web_client(options, out, join_url, ticket, certs, turns, processes):
     os.replace(os.path.join(folder, "join.json.new"), os.path.join(folder, "join.json"))
     print(f"web: the plan of the remote web client is in {os.path.join(folder, 'join.json')}")
     return folder, None
+
+
+def web_log_of(folder):
+    """The game log of the web client: cdp-run writes the log that the page keeps to page-log.txt at the end"""
+    return os.path.join(folder, "page-log.txt")
 
 
 def web_remote_done(folder):
@@ -1690,7 +1695,7 @@ def main():
         summary["clients"].append({"client": "web", "turns": len(web), "compared": len(compared),
                                    "different": different[:20], "same": web_same})
         if options.web_god:
-            joins = lines_with(os.path.join(web_folder, "console.log"), ["Joined the game server"])
+            joins = lines_with(web_log_of(web_folder), ["Joined the game server"])
             in_slot = any(f"in slot {options.clients}" in line for line in joins)
             summary["clients"][-1]["god_slot"] = options.clients if in_slot else None
             if not in_slot:
@@ -1743,7 +1748,7 @@ def main():
         summary["chat"] = []
         logs = [os.path.join(client_dir, "client.log") for client_dir in client_dirs]
         if options.web_god and web_folder is not None:
-            logs.append(os.path.join(web_folder, "console.log"))
+            logs.append(web_log_of(web_folder))
         received = [chat_lines(log) for log in logs]
         # The web god plays the slot after the desktop gods; its client number is the next one
         said = [(int(client), text) for _, client, text in (value.split(":", 2) for value in options.chat)]

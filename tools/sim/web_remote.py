@@ -121,7 +121,7 @@ def main():
             web.wait(timeout=plan["seconds"] + 120)
         except subprocess.TimeoutExpired:
             print("web_remote: the web client did not end in its time")
-        copied = [name for name in ("checksums.jsonl", "console.log", "cdp-run.log")
+        copied = [name for name in ("checksums.jsonl", "console.log", "page-log.txt", "cdp-run.log")
                   if os.path.exists(os.path.join(folder, name))]
         if copied:
             target = f"{options.host}:{options.remote_out.rstrip('/')}/web/"

@@ -91,5 +91,31 @@ class WebRemote(unittest.TestCase):
         self.assertEqual(web_remote.remote_path(options, "done"), "'projects/runs/a b/web/done'")
 
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "web", "scripts"))
+import serve  # noqa: E402
+
+
+class ServePage(unittest.TestCase):
+    PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "web", "page", "index.html")
+
+    def test_the_meta_policy_of_the_page_lets_the_page_connect_to_the_test_server(self):
+        with open(self.PAGE, encoding="utf-8") as file:
+            html = file.read()
+        served = serve.page_with_connect(html, "wss://127.0.0.1:5000")
+        self.assertIn("connect-src 'self' wss://127.0.0.1:5000;", served)
+        self.assertEqual(served.count("wss://127.0.0.1:5000"), 1)
+
+    def test_with_no_origin_the_page_stays_as_it_is(self):
+        html = "<meta http-equiv=\"Content-Security-Policy\" content=\"connect-src 'self'; img-src 'self'\">"
+        self.assertEqual(serve.page_with_connect(html, ""), html)
+
+    def test_only_the_connect_src_of_the_meta_policy_changes(self):
+        html = ("<p>connect-src 'self'</p><meta http-equiv=\"Content-Security-Policy\" "
+                "content=\"default-src 'self'; connect-src 'self'; img-src 'self'\">")
+        self.assertEqual(serve.page_with_connect(html, "ws://127.0.0.1:1"),
+                         "<p>connect-src 'self'</p><meta http-equiv=\"Content-Security-Policy\" "
+                         "content=\"default-src 'self'; connect-src 'self' ws://127.0.0.1:1; img-src 'self'\">")
+
+
 if __name__ == "__main__":
     unittest.main()
