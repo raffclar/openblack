@@ -2691,7 +2691,8 @@ void Game::FollowGameEnd()
 	{
 		end_game_box::StoppedShowing(_endGameBoxState);
 	}
-	// The player's choice in the end box: Leave Game leaves the network game. A skirmish has no front end to go back to yet.
+	// The player's choice in the end box: Leave Game leaves the network game. In a skirmish it ends the skirmish, and the
+	// skirmish box shows again.
 	if (_interface->GetEndGameBox().TakeAction() == gui::EndGameBox::Action::Leave)
 	{
 		if (session != nullptr)
@@ -2699,7 +2700,8 @@ void Game::FollowGameEnd()
 			LeaveNetworkGame();
 			return;
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish front end is not available yet");
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box: Leave Game ends the skirmish");
+		_gameEndAsked = game_session::End::Skirmish;
 	}
 	const auto events = gameEnd.TakeEventsToShow();
 	if (events.empty())
@@ -3031,7 +3033,9 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		{
 			EndGame(*end);
 		}
+		FollowLandInfoBox();
 		StartNextGameWhenSaved();
+		FollowSkirmishBox();
 	}
 }
 
@@ -4731,20 +4735,9 @@ Game::RunStart Game::StartRun() noexcept
 {
 	auto& config = Locator::config::value();
 
-	// The game has no skirmish box yet, so that switch starts the game as with no switch. The -MULTIPLAYER switch opens
-	// the multiplayer front end before the first frame, in the temple of the land that starts, when the player has a
-	// profile.
-	switch (launch_switches::FirstGameOf(_launchSwitches))
-	{
-	case launch_switches::FirstGame::Skirmish:
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The -SKIRMISH switch: the skirmish box is not available yet");
-		break;
-	case launch_switches::FirstGame::Multiplayer:
-	case launch_switches::FirstGame::Plain:
-	case launch_switches::FirstGame::NewGame:
-		break;
-	}
-
+	// The -SKIRMISH switch shows the skirmish box before the first land, when the player has a profile. The
+	// -MULTIPLAYER switch opens the multiplayer front end before the first frame, in the temple of the land that
+	// starts, when the player has a profile.
 	auto start = game_session::Start::NewGame;
 	// A network game's land starts from the state that every computer of the game starts it from
 	if (_networkGame || _networkJoin.has_value())
@@ -4769,6 +4762,21 @@ Game::RunStart Game::StartRun() noexcept
 		// the game at its first frame. A first start always starts a new game.
 		const bool hadProfile = HasPlayerProfiles();
 		AskForNewPlayer();
+		// The skirmish box comes only for a player who had a profile. Start Game starts the skirmish on the land picked;
+		// Back continues as a plain start does, from the save on exit or with a new game.
+		std::optional<std::filesystem::path> skirmishLand;
+		bool skirmishBack = false;
+		if (launch_switches::FirstGameOf(_launchSwitches) == launch_switches::FirstGame::Skirmish && hadProfile &&
+		    !_newGameAsked)
+		{
+			skirmishLand = AskForSkirmishLand();
+			skirmishBack = !skirmishLand.has_value();
+			// The window closed, or the run reached its number of frames, while the box was up
+			if (_quitRequested)
+			{
+				return RunStart::Done;
+			}
+		}
 		// With no player profile, the -MULTIPLAYER switch starts a new game as with no switch. In a browser, the front
 		// end opens after the new player's box.
 		_frontEndOnStart = join_online_entry::FrontEndOnStart({
@@ -4783,8 +4791,21 @@ Game::RunStart Game::StartRun() noexcept
 		                                  .developerRun = _automatedRun,
 		                                  .newGameAsked = _newGameAsked,
 		                                  .continueAsked = _continueAsked});
+		if (skirmishLand.has_value())
+		{
+			start = game_session::Start::Skirmish;
+		}
+		else if (skirmishBack)
+		{
+			start = game_session::Start::Continue;
+		}
 		start = game_session::Resolve(start,
 		                              Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().HasExitSave());
+		if (start == game_session::Start::Skirmish &&
+		    !LoadMap(*skirmishLand, loading::LoadingClock::Mode::Tips, land_change::Kind::Skirmish))
+		{
+			return RunStart::Failed;
+		}
 		if (start == game_session::Start::NewGame &&
 		    !LoadMap(_startMap, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame))
 		{
@@ -5339,7 +5360,7 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 	case escape_key::Outcome::OpenMenu:
 		// The game keeps the help record of the player when Escape opens the menu
 		SaveHelpRecord();
-		_interface->GetMenu().SetNetworkGame(InNetworkGame());
+		TellMenuTheGame();
 		_interface->OpenMenu();
 		// The menu reads the profile's own pictures again as it opens
 		ReadTattooPictures();
@@ -5503,7 +5524,15 @@ void Game::HandleInterfaceAction()
 		}
 		break;
 	case Action::StartSkirmish:
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");
+		// The game ends at once, without a question. The story keeps its save on exit, then the skirmish box shows. The
+		// land changes between frames, not while the game reads the input.
+		_interface->GetMenu().Close();
+		_gameEndAsked = game_session::End::Skirmish;
+		break;
+	case Action::LeaveSkirmish:
+		// Yes to the question ends the skirmish, and the skirmish box shows again. A skirmish keeps no save on exit.
+		_interface->GetMenu().Close();
+		_gameEndAsked = game_session::End::Skirmish;
 		break;
 	case Action::ExitOnlineGame:
 		ExitOnlineGame();
@@ -5744,7 +5773,7 @@ void Game::LeaveAsAPlayerDoes()
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Tests: the player leaves the network game at turn {}",
 	                   Locator::time::value().GetTurn());
 	auto& menu = _interface->GetMenu();
-	menu.SetNetworkGame(InNetworkGame());
+	TellMenuTheGame();
 	_interface->OpenMenu();
 	const auto& texts = _interface->GetTexts();
 	if (const auto exit = centreOf(menu.GetNamedControls(), texts.Get("HELP_TEXT_FRONT_END_03")); exit.has_value())
@@ -6023,6 +6052,12 @@ void Game::CloseMenuForNewLand()
 	{
 		_interface->GetMenu().Close();
 	}
+	// The end of a game closes every box of the game. The script of the next land shows the land information box
+	// again when the land has one. This also closes the box for a land that the debug tools load.
+	if (_interface && _interface->GetLandInfoBox().IsActive())
+	{
+		_interface->GetLandInfoBox().Close();
+	}
 	// The game gets the pause that it had before the menu opened, before the next land asks for a pause of its own
 	if (const auto pause = _menuPause.Release(); pause.has_value())
 	{
@@ -6213,9 +6248,10 @@ void Game::AskForAnotherPlayer(bool canCancel)
 void Game::EndGame(game_session::End end)
 {
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends: {}",
-	                   end == game_session::End::NewGame  ? "a new game starts"
-	                   : end == game_session::End::Online ? "the player left the network game"
-	                                                      : "the game continues as the profile picked");
+	                   end == game_session::End::NewGame    ? "a new game starts"
+	                   : end == game_session::End::Online   ? "the player left the network game"
+	                   : end == game_session::End::Skirmish ? "the skirmish box shows"
+	                                                        : "the game continues as the profile picked");
 	SaveAsGameEnds(end, false);
 	// The next game has no previous profile until the Players page opens again
 	if (_interface)
@@ -6260,8 +6296,10 @@ void Game::StartNextGameWhenSaved()
 	case game_session::Start::Online:
 		StartAfterNetworkGame();
 		break;
-	case game_session::Start::SavedGame:
 	case game_session::Start::Skirmish:
+		OpenSkirmishBoxOverGame();
+		break;
+	case game_session::Start::SavedGame:
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "This start of a game is not available yet");
 		break;
 	}
@@ -6337,6 +6375,18 @@ bool Game::SaveAsGameEnds(game_session::End end, bool quitting)
 	return saved;
 }
 
+void Game::TellMenuTheGame()
+{
+	if (!_interface)
+	{
+		return;
+	}
+	auto& menu = _interface->GetMenu();
+	menu.SetNetworkGame(InNetworkGame());
+	// The land of a network game also plays as a skirmish, but its menu is the menu of a network game
+	menu.SetSkirmish(Locator::entitiesRegistry::value().Context().skirmish && !Locator::time::value().IsNetworkGame());
+}
+
 bool Game::ContinueGame()
 {
 	auto& saves = Locator::saveGameSystem::value();
@@ -6371,7 +6421,7 @@ void Game::ShowMenuOnStart()
 		return;
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The menu shows over the game that continued");
-	_interface->GetMenu().SetNetworkGame(InNetworkGame());
+	TellMenuTheGame();
 	_interface->OpenMenu();
 	// The menu reads the profile's own pictures again as it opens
 	ReadTattooPictures();

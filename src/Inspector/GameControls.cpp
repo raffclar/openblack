@@ -83,6 +83,8 @@ constexpr std::string_view k_MusicPlayer = "music_player";
 /// The incoming message at the bottom left of the screen; its button is "message"
 constexpr std::string_view k_IncomingMessage = "incoming_message";
 constexpr std::string_view k_Multiplayer = "multiplayer";
+constexpr std::string_view k_SkirmishBox = "skirmish_box";
+constexpr std::string_view k_LandInfoBox = "land_info_box";
 /// The chat of a network game at the top right of the screen
 constexpr std::string_view k_Chat = "chat";
 
@@ -503,6 +505,35 @@ std::vector<WindowInfo> GameGui::Windows() const
 			end.buttons.push_back(control.name);
 		}
 		windows.push_back(std::move(end));
+		// The skirmish box: its arrows and its lands, and the land picked
+		const auto& skirmish = game->GetInterface()->GetSkirmishBox();
+		WindowInfo skirmishInfo {.name = std::string(k_SkirmishBox), .kind = "game", .open = skirmish.IsActive()};
+		for (const auto& control : DialogControls(skirmish.GetNamedControls()))
+		{
+			skirmishInfo.buttons.push_back(control.name);
+		}
+		for (const auto& item : skirmish.GetList().GetItems())
+		{
+			skirmishInfo.lines.push_back(gui::ToUtf8(item.text));
+		}
+		if (const auto picked = skirmish.GetSelection(); picked.has_value() && *picked < skirmish.GetList().GetItems().size())
+		{
+			skirmishInfo.selected = gui::ToUtf8(skirmish.GetList().GetItems().at(*picked).text);
+		}
+		windows.push_back(std::move(skirmishInfo));
+		// The land information box: its title as the page, its arrows, and the lines of its list
+		const auto& landInfo = game->GetInterface()->GetLandInfoBox();
+		WindowInfo landInfoWindow {.name = std::string(k_LandInfoBox), .kind = "game", .open = landInfo.IsActive()};
+		landInfoWindow.page = gui::ToUtf8(landInfo.GetTitle().text);
+		for (const auto& control : DialogControls(landInfo.GetNamedControls()))
+		{
+			landInfoWindow.buttons.push_back(control.name);
+		}
+		for (const auto& item : landInfo.GetList().GetItems())
+		{
+			landInfoWindow.lines.push_back(gui::ToUtf8(item.text));
+		}
+		windows.push_back(std::move(landInfoWindow));
 		// The incoming message at the bottom left of the screen, open while its button shows
 		const auto& incoming = game->GetInterface()->GetIncomingMessages();
 		WindowInfo message {.name = std::string(k_IncomingMessage), .kind = "game", .open = incoming.IsActive()};
@@ -829,6 +860,36 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
 		{
 			return "the end box: " + *why + "; gui.windows lists them";
+		}
+		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
+	}
+	if (lower == k_SkirmishBox)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetSkirmishBox().IsActive())
+		{
+			return "the skirmish box isn't open: Start Skirmish Game of the menu opens it";
+		}
+		const auto controls = DialogControls(game->GetInterface()->GetSkirmishBox().GetNamedControls());
+		const auto found = FindDialogControl(controls, path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the skirmish box: " + *why + "; gui.windows lists them";
+		}
+		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
+	}
+	if (lower == k_LandInfoBox)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetLandInfoBox().IsActive())
+		{
+			return "the land information box isn't open: the script of a playground land opens it as the land loads";
+		}
+		const auto controls = DialogControls(game->GetInterface()->GetLandInfoBox().GetNamedControls());
+		const auto found = FindDialogControl(controls, path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the land information box: " + *why + "; gui.windows lists them";
 		}
 		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
 	}

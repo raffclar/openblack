@@ -95,7 +95,8 @@ uint32_t HelpLevel()
 bool FirstLandOfStory()
 {
 	const auto& context = Locator::entitiesRegistry::value().Context();
-	return context.mapScriptGlobals.landNumber == 1 && !context.skirmish;
+	return guidance::QuietFirstLand(context.mapScriptGlobals.landNumber,
+	                                Locator::time::has_value() && Locator::time::value().IsNetworkGame(), context.skirmish);
 }
 
 /// Whether the computer's clock says it is night now

@@ -4047,6 +4047,120 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.skirmish_box",
+	    .name = "The skirmish box",
+	    .facet = Facet::Interface,
+	    .description = "After a second the skirmish box shows over the game, as Start Skirmish Game of the menu shows it. "
+	                   "Click a land of the list, then Start Game to start a skirmish on it, or Back to continue the story.",
+	    .expected = "The screen goes black, then the front end's swirls come up with a box of 780 by 580. \"Choose a map for "
+	                "skirmish game.\" is across its top on a light grey band. The list holds each .txt file of the "
+	                "playground folder in the order of the folder: construct, Death Comes To Those That Wait, Firestorm, "
+	                "\"Defeat three gods to control this realm.\", Island Wars, \"Defeat two gods to control this realm.\" "
+	                "and \"Defeat another god to control this realm.\". Back is at the bottom left. Start Game shows at "
+	                "the bottom right only after a click on a land.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "interface.skirmish_box_picked",
+	    .name = "The skirmish box with a land picked",
+	    .facet = Facet::Interface,
+	    .description = "After a second the skirmish box shows over the game with its second land picked, as after a click "
+	                   "on it.",
+	    .expected = "Death Comes To Those That Wait is on a grey bar, and Start Game shows at the bottom right of the box "
+	                "with its arrow. Start Game starts a skirmish on that land.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 2}},
+	});
+
+	all.push_back({
+	    .id = "interface.skirmish_menu",
+	    .name = "The main menu of a skirmish",
+	    .facet = Facet::Interface,
+	    .description = "After a second the main menu opens as it shows in a skirmish.",
+	    .expected = "The main menu has four buttons: Continue Game, Leave Skirmish Game, Options and Quit Black & White, "
+	                "80 high and 100 apart from the top at 150, with no Join Online Game.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
+	    .id = "interface.land_info_box",
+	    .name = "The land information box of a skirmish",
+	    .facet = Facet::Interface,
+	    .description = "After a second the land information box shows, as the script of Two Gods shows it while the land "
+	                   "loads. The game goes on under the box. Click Go! or press Escape to close it. Back ends a skirmish.",
+	    .expected = "A box of 780 by 580 fades in. \"Defeat another god to control this realm.\" is across its top on a light "
+	                "grey band. The list under it has one line, \"Defeat another god to control this realm.\" again, and "
+	                "shows no selection. Back is an arrow at the bottom left, and Go! a button in the middle of the bottom. "
+	                "The hand does not show while the box is up.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "interface.leave_skirmish_question",
+	    .name = "The question of Leave Skirmish Game",
+	    .facet = Facet::Interface,
+	    .description = "After a second the main menu of a skirmish opens, and Leave Skirmish Game is pressed. Yes ends the "
+	                   "skirmish, and the skirmish box shows again. No goes back to the menu.",
+	    .expected = "A box of 500 by 200 over the menu asks \"This will leave the current Skirmish game.\" and \"Do you "
+	                "wish to do this?\" on two lines, with a Yes arrow and a No arrow.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 4}},
+	});
+
+	all.push_back({
+	    .id = "multiplayer.skirmish_profile_creature",
+	    .name = "The player's creature comes to the temple as a skirmish starts",
+	    .facet = Facet::Multiplayer,
+	    .description = "A temple of the player stands to the north. After a second, the god of the player brings the "
+	                   "creature that the profile keeps, as in the first turn of a skirmish. The mind file LethysCreature "
+	                   "of the game takes the place of the creature file of the profile.",
+	    .expected = "A grown ape named Matey comes at the creature home of the player's temple, at once and with no "
+	                "sparkle. It belongs to the player, it knows every leash, and its mind and body come from the file.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 18.0f, 60.0f}, .look = {-14.0f, 6.0f, 88.0f}},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_ONE}},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 5, .mindFile = "LethysCreature"}},
+	});
+
+	all.push_back({
+	    .id = "multiplayer.skirmish_load_one_creature",
+	    .name = "A loaded skirmish keeps one creature for the player",
+	    .facet = Facet::Multiplayer,
+	    .description =
+	        "A temple of the player stands to the north, and the testbed plays as a skirmish. After a second, "
+	        "the god of the player brings the creature that the profile keeps, and the profile keeps it in its file. "
+	        "The game saves at 3 seconds into slot 0 and loads the slot at 5 seconds. The mind file "
+	        "LethysCreature of the game takes the place of the creature file of the profile.",
+	    .expected = "A grown ape named Matey comes at the creature home of the temple. After the load, the ape stays where "
+	                "the save kept it, and it is the creature of the player. No second ape comes. The log tells that the "
+	                "god brings no creature, with the reason 6.",
+	    .environment = {.dispenserGrid = false, .skirmish = true},
+	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 18.0f, 60.0f}, .look = {-14.0f, 6.0f, 88.0f}},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_ONE}},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 6, .mindFile = "LethysCreature"},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 3.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 5.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "interface.land_info_box_new_land",
+	    .name = "A new land closes the land information box",
+	    .facet = Facet::Interface,
+	    .description = "The game saves into slot 0 after half a second. After a second the land information box of Two Gods "
+	                   "shows. At 3 seconds the game loads the slot, which loads the land again.",
+	    .expected = "The land information box fades in. As the land loads again, the box closes, and it does not show "
+	                "again after the load. The hand shows again.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 0},
+	                 {.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "interface.pause_text",
 	    .name = "The words of the pause",
 	    .facet = Facet::Interface,
@@ -4529,6 +4643,36 @@ void AddAudio(std::vector<Scenario>& all)
 	                  .byHand = true}},
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
 	    .townBeliefInPlayer = 0.2f,
+	});
+
+	// The hand strikes three people of a town with a lightning bolt, far from their hut. The hut does not burn, so its
+	// fire does not take the cry first.
+	all.push_back({
+	    .id = "audio.town_lightning_cry",
+	    .name = "A town cries out about lightning when a lightning bolt harms it",
+	    .facet = Facet::Audio,
+	    .description = "The hand casts a lightning bolt for 30 seconds at the three people of a town, 30 metres from "
+	                   "their hut. The guidance waits end first. The audio log gives each cry of the town and its sample.",
+	    .expected = "When the bolt harms a villager, the town cries out from the town centre: a villager voice of the "
+	                "guidance bank, about an attack, a fire or lightning (samples 190 to 199). With seed 1 the first cry "
+	                "is about lightning. The cries come at least four seconds apart.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, k_CryHut + glm::vec2(10.0f, 10.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_CryHut},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(-30.0f, 2.0f), .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = k_CryHut + glm::vec2(-30.0f, -2.0f),
+	                 .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(-28.0f, 0.0f), .joinTown = true}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = k_CryHut + glm::vec2(-30.0f, 0.0f),
+	                  .handOffset = k_CryHut + glm::vec2(-30.0f, 0.0f),
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 2.0f,
+	                  .holdSeconds = 30.0f,
+	                  .repeatSeconds = 32.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
 	});
 }
 
@@ -11717,7 +11861,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
 	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
 	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
-	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || IsPointerCommand(kind);
+	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -11745,7 +11890,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 192> k_Names {
+	constexpr std::array<std::string_view, 193> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -11938,6 +12083,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "chat",
 	    "computer personality",
 	    "computer sends with no lesson",
+	    "skirmish box",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

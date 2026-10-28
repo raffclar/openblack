@@ -36,6 +36,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -44,6 +45,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Online/SkirmishPing.h"
 
 namespace openblack::ecs::systems
 {
@@ -201,6 +203,11 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 	    });
 	_events = game_end::ProcessTurn(world, facts, context.gameEnd);
 	_eventsToShow.insert(_eventsToShow.end(), _events.begin(), _events.end());
+	// The lobby hears of a decided skirmish. The message is not part of the world.
+	if (facts.skirmish && Locator::lobbyClient::has_value())
+	{
+		online::SendSkirmishPings(Locator::lobbyClient::value(), game_end::DecidingEvents(_events));
+	}
 	if (const auto logger = spdlog::get("game"))
 	{
 		for (const auto& event : _events)

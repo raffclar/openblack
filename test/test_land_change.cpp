@@ -112,3 +112,24 @@ TEST(ProfileAlignment, TheAlignmentIsKeptEverySixHundredTurnsAndAtOnceOnANewLand
 	// The turns start again from nothing on the next land
 	EXPECT_TRUE(DueToKeep(0, 1200));
 }
+
+TEST(LandChange, OnlyASkirmishBringsTheCreatureOfTheProfile)
+{
+	// The god of the player brings the creature that the profile keeps in the first turn of a skirmish only
+	EXPECT_TRUE(RulesFor(Kind::Skirmish).profileCreatureBrought);
+	for (const auto kind : {Kind::Story, Kind::FreshScripts, Kind::NewGame, Kind::Testbed, Kind::SavedGame})
+	{
+		EXPECT_FALSE(RulesFor(kind).profileCreatureBrought) << static_cast<int>(kind);
+	}
+}
+
+TEST(LandChange, ALoadedSkirmishTriesToBringTheCreatureOfTheProfileAgain)
+{
+	// A saved skirmish loads as a skirmish, and the god of the player tries to bring the creature from the profile again.
+	// The god brings no second creature when the save kept its creature (test_creature_file_load).
+	EXPECT_TRUE(LoadBringsProfileCreature(true, false));
+	// A saved game that is not a skirmish brings no creature, and a network game saves no game
+	EXPECT_FALSE(LoadBringsProfileCreature(false, false));
+	EXPECT_FALSE(LoadBringsProfileCreature(true, true));
+	EXPECT_FALSE(LoadBringsProfileCreature(false, true));
+}

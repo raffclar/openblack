@@ -2105,3 +2105,6 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_computer_god_times test_computer_god_times.cpp)
 openblack_setup_and_add_test(test_hash_identifier test_hash_identifier.cpp)
+openblack_setup_and_add_test(test_skirmish_box gui/test_skirmish_box.cpp)
+openblack_setup_and_add_test(test_land_info_box gui/test_land_info_box.cpp)
+openblack_setup_and_add_test(test_skirmish_ping test_skirmish_ping.cpp)

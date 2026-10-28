@@ -221,9 +221,11 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
     , _newGameQuestion(texts.Get("HELP_TEXT_DIALOG_ADDITION_20"))
     , _quitQuestion(texts.Get("HELP_TEXT_DIALOG_QUIT_QUESTION"))
     , _quitGameQuestion(texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"))
+    , _leaveSkirmishQuestion(texts.Get("HELP_TEXT_DIALOG_ADDITION_167"))
     , _videoChange(texts.Get("HELP_TEXT_DIALOG_VIDEOCHANGE"))
     , _settings(std::move(settings))
     , _exitOnlineLabel(texts.Get("HELP_TEXT_FRONT_END_03"))
+    , _leaveSkirmishLabel(texts.Get("HELP_TEXT_DIALOG_ADDITION_170"))
     , _multiplayerTab(texts.Get("HELP_TEXT_MULTIPLAYER_MAIN_TAB"))
     , _mainMenuTab(texts.Get("HELP_TEXT_DIALOG_ADDITION_88"))
     , _worldRoomTab(texts.Get("HELP_TEXT_ROOM_WORLD_TITLE"))
@@ -310,7 +312,16 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 	// (HELP_TEXT_FRONT_END_03) during a network game (SetNetworkGame).
 	const std::array<std::pair<const char*, std::function<void()>>, k_ButtonCount> buttons = {{
 	    {"HELP_TEXT_DIALOG_CONTINUEGAME", [this] { Settle(Action::Continue); }},
-	    {"HELP_TEXT_DIALOG_ADDITION_169", [this] { Settle(Action::StartSkirmish); }},
+	    {"HELP_TEXT_DIALOG_ADDITION_169",
+	     [this] {
+		     // In a skirmish the menu asks first. Out of a skirmish the game ends at once.
+		     if (_skirmish)
+		     {
+			     Ask(_leaveSkirmishQuestion, Action::LeaveSkirmish);
+			     return;
+		     }
+		     Settle(Action::StartSkirmish);
+	     }},
 	    {"HELP_TEXT_DIALOG_JOINGONLINE", [this] { Settle(_networkGame ? Action::ExitOnlineGame : Action::JoinOnline); }},
 	    {"HELP_TEXT_DIALOG_OPTIONS", [this] { ShowPage(Page::Options); }},
 	    {"HELP_TEXT_DIALOG_QUIT", [this] { Ask(_quitQuestion, Action::Quit); }},
@@ -1040,12 +1051,26 @@ void GameMenu::SetNetworkGame(bool networkGame)
 	auto& page = *_pages.at(static_cast<size_t>(Page::Main));
 	page.SetTabLabel(2, networkGame ? _multiplayerTab : std::u16string());
 	_mainButtons.at(2)->label = networkGame ? _exitOnlineLabel : _buttonLabels.at(2);
-	// Start Skirmish Game does not show in a network game. The buttons that show are placed from the top, each a step
-	// lower; in a network game they are bigger and further apart.
+	// Start Skirmish Game does not show in a network game
 	_mainButtons.at(1)->visible = !networkGame;
-	const auto height = networkGame ? k_FewerButtonsHeight : k_ButtonHeight;
-	const auto spacing = networkGame ? k_FewerButtonsSpacing : k_ButtonSpacing;
-	auto top = networkGame ? k_FewerButtonsTop : k_FirstButtonTop;
+	LayOutMainButtons();
+}
+
+void GameMenu::SetSkirmish(bool skirmish)
+{
+	_skirmish = skirmish;
+	_mainButtons.at(1)->label = skirmish ? _leaveSkirmishLabel : _buttonLabels.at(1);
+	// Join Online Game does not show in a skirmish
+	_mainButtons.at(2)->visible = !skirmish;
+	LayOutMainButtons();
+}
+
+void GameMenu::LayOutMainButtons()
+{
+	const bool fewer = _networkGame || _skirmish;
+	const auto height = fewer ? k_FewerButtonsHeight : k_ButtonHeight;
+	const auto spacing = fewer ? k_FewerButtonsSpacing : k_ButtonSpacing;
+	auto top = fewer ? k_FewerButtonsTop : k_FirstButtonTop;
 	for (auto* button : _mainButtons)
 	{
 		button->rect = {.min = {k_ButtonLeft, top}, .max = {k_ButtonLeft + k_ButtonWidth, top + height}};

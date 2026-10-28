@@ -41,6 +41,7 @@ public:
 	                   const std::function<bool()>& restore, SavedLandUse use) override;
 	void LoadLandscape(const std::filesystem::path& path) override;
 	void SetStartCameraPlace(glm::ivec2 place) override { _startCameraPlace = place; }
+	void ShowLandMessage(const land_message::Message& message) override { View().ShowLandMessage(message); }
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const override { return _landPath; }

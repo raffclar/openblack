@@ -315,4 +315,11 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 	return events;
 }
 
+size_t DecidingEvents(std::span<const Event> events)
+{
+	return static_cast<size_t>(std::ranges::count_if(events, [](const Event& event) {
+		return event.kind == Event::Kind::Won || event.kind == Event::Kind::GodOutAndDecided;
+	}));
+}
+
 } // namespace openblack::game_end

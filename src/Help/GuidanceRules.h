@@ -76,6 +76,14 @@ struct KindRule
 };
 [[nodiscard]] const KindRule& Rule(Kind kind);
 
+/// Whether the land is the first land of a story played alone, where the game keeps most remarks quiet. A skirmish
+/// and a network game are never such a land, also when their land number is the first land's.
+[[nodiscard]] constexpr bool QuietFirstLand(int32_t landNumber, bool networkGame, bool skirmish)
+{
+	constexpr int32_t k_FirstLand = 1;
+	return landNumber == k_FirstLand && !networkGame && !skirmish;
+}
+
 /// The random part of the wait: five times the least gap, shrunk by the cube of a draw of 0 to 1 so long waits are
 /// rarer, cut to a whole number of turns. The wait is the least gap plus a local random number below this.
 [[nodiscard]] uint32_t GapSpread(uint32_t leastGap, float draw);
