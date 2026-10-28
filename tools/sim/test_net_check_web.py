@@ -90,12 +90,9 @@ class WebBackAt(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             log = os.path.join(folder, "page-log.txt")
             with open(log, "w", encoding="utf-8") as file:
-                file.write("[game] [warning] The world parts from the server's world at turn 601
-"
-                           "[game] [info] The world goes on from the server's world of turn 612
-"
-                           "[game] [info] The world goes on from the server's world of turn 840
-")
+                file.write("[game] [warning] The world parts from the server's world at turn 601\n"
+                           "[game] [info] The world goes on from the server's world of turn 612\n"
+                           "[game] [info] The world goes on from the server's world of turn 840\n")
             self.assertEqual(net_check.web_back_at(log), 840)
 
     def test_a_page_with_no_load_gives_none(self):
