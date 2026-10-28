@@ -611,6 +611,9 @@ private:
 	bool StartTurnsBesideDraw();
 	/// The main thread waits for the turns that started beside the draw, and does the work that they gave it
 	void FinishTurnsBesideDraw();
+	/// In a run that a tool steps, a frame while the tool holds the game only gives the answers to the tool. Gives true
+	/// when the game skips the rest of the frame.
+	bool ServeHeldRun();
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
@@ -963,6 +966,8 @@ private:
 	TurnApiCheck _turnApiCheck {};
 	/// The turns of the next frame play beside the draw of this frame (deviation row 153)
 	bool _turnBesideDraw {false};
+	/// The inspector gave its answers before this frame, while the tool held the game, so the frame does not ask it again
+	bool _inspectorServedEarly {false};
 	/// The requested screenshot leaves the debug windows out
 	bool _screenshotHidesDebugGui {false};
 	/// The near plane of the game's camera while the inspector shows a different view

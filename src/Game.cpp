@@ -2782,8 +2782,8 @@ void Game::StartFrame(FrameState& frame)
 		Locator::time::value().Update();
 	}
 	// The debug inspector answers what was asked since the last frame, and holds or releases the game for stepping,
-	// before the frame's input and turn
-	if (Locator::inspector::has_value())
+	// before the frame's input and turn. When it answered before this frame, it does not answer again.
+	if (Locator::inspector::has_value() && !std::exchange(_inspectorServedEarly, false))
 	{
 		Locator::inspector::value().Service();
 	}
@@ -4928,8 +4928,41 @@ void Game::BeforeFirstFrame(bool continued)
 	}
 }
 
+bool Game::ServeHeldRun()
+{
+	if (!Locator::inspector::has_value() || !Locator::time::has_value())
+	{
+		return false;
+	}
+	const bool steppedByTool = _simulation.has_value() && _simulation->startPaused;
+	const bool workWaits = _scenarioRequest.has_value() || _requestScreenshot.has_value();
+	if (!sim_run::SkipsHeldFrame(steppedByTool, Locator::time::value().IsPaused(), workWaits))
+	{
+		return false;
+	}
+	Locator::inspector::value().Service();
+	// The window stays responsive. The events wait in the queue for the next frame that plays.
+	SDL_PumpEvents();
+	if (!Locator::time::value().IsPaused())
+	{
+		// The tool released the game: this frame plays, and it does not ask the inspector again
+		_inspectorServedEarly = true;
+		return false;
+	}
+#if !defined(__EMSCRIPTEN__)
+	// The tool holds the game: the loop waits a short time, so that it does not use all of the processor
+	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+#endif
+	return true;
+}
+
 bool Game::RunFrame() noexcept
 {
+	// A run that a tool steps plays no frame while the tool holds it. The wall clock sets the number of these frames.
+	if (ServeHeldRun())
+	{
+		return true;
+	}
 	// The work of the frame starts here. In a web browser, the wait for the display frame is before this point.
 	const auto workStart = std::chrono::steady_clock::now();
 	const auto turnBefore = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
