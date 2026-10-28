@@ -11,11 +11,18 @@
 
 #include <cstdint>
 
+#include <memory>
+
 #include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
 #include "ECS/DanceMoves.h"
 #include "Enums.h"
+
+namespace openblack::dance
+{
+struct DanceFile;
+}
 
 namespace openblack::ecs::systems
 {
@@ -34,11 +41,10 @@ public:
 	                            bool madeByScript, entt::entity town) = 0;
 	/// A dance goes, its dancers going back to deciding what to do
 	virtual void Destroy(entt::entity dance) = 0;
+	/// The file of a row of the dances' table; none when the row is out of the table or its file can't be read
+	[[nodiscard]] virtual std::shared_ptr<const dance::DanceFile> FileOf(DanceInfo /*type*/) { return nullptr; }
 	/// Each turn, after the players and before the living: each dance's turn
 	virtual void ProcessTurn() = 0;
-	/// After a load of a saved world or a world state: each dance with no file gets its file again, by the row of its
-	/// dance in the table. The world keeps no file.
-	virtual void FindFilesAgain() {}
 	/// Each frame that the camera reads the keys: a grip of the land ends the camera of a dance
 	virtual void ProcessCameraKeys(bool /*gripsLand*/) {}
 	/// Each turn, when the camera does its checks: the camera of a dance that ended, or whose dance went, gives the

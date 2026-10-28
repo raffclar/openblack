@@ -32,6 +32,35 @@ constexpr int k_TexelsPerCell = 16;
 /// Texels along a side of a block, and of the land's material, noise and bump maps
 constexpr int k_Side = 256;
 constexpr int k_CellsPerSide = 17;
+/// The texels a block's texture takes at the low resolution of the lowest detail levels: 8 by 8 a cell
+constexpr int k_LowSide = 128;
+
+/// How finely the game paints a block's texture
+enum class Resolution : uint8_t
+{
+	/// 16 by 16 texels a cell
+	Full,
+	/// 8 by 8 texels a cell. Each texel is the texel of the full texture at twice its place along each axis.
+	Low,
+};
+
+/// Texels along a side of a block's texture at a resolution
+[[nodiscard]] constexpr int SideOf(Resolution resolution)
+{
+	return resolution == Resolution::Low ? k_LowSide : k_Side;
+}
+
+/// Texels along a side of a cell at a resolution
+[[nodiscard]] constexpr int TexelsPerCellOf(Resolution resolution)
+{
+	return SideOf(resolution) / (k_Side / k_TexelsPerCell);
+}
+
+/// The RGBA8 bytes of a block's texture at a resolution
+[[nodiscard]] constexpr size_t BlockBytesOf(Resolution resolution)
+{
+	return static_cast<size_t>(SideOf(resolution)) * static_cast<size_t>(SideOf(resolution)) * 4;
+}
 /// The cells a block's texture covers along each side
 constexpr int k_BlockCells = k_Side / k_TexelsPerCell;
 
@@ -62,20 +91,25 @@ struct Sources
 	/// k_Side by k_Side, [x * k_Side + z], the same for every block
 	std::span<const uint8_t> noise;
 	std::span<const uint8_t> bump;
+	/// The resolution of the texture to paint. The maps above always hold k_Side by k_Side texels.
+	Resolution resolution {Resolution::Full};
 };
 
 /// The bytes of a block's texture: k_Side by k_Side RGBA8 texels
 constexpr size_t k_BlockBytes = static_cast<size_t>(k_Side) * k_Side * 4;
 
-/// Paints a block from its 17 by 17 cells ([x * 17 + z]) into rgba, k_BlockBytes long: each 4-bit channel times 17, a
-/// row for each texel along x. The open sea's cells, which aren't drawn, are left clear.
+/// Paints a block from its 17 by 17 cells ([x * 17 + z]) into rgba, BlockBytesOf(sources.resolution) long: each 4-bit channel
+/// times 17, a row for each texel along x. The open sea's cells, which aren't drawn, are left clear.
 void BuildBlock(std::span<const lnd::LNDCell> cells, const Sources& sources, std::span<uint8_t> rgba);
-/// Paints a block as BuildBlock does, into texels as ARGB words at 4 bits a channel, k_Side by k_Side, a row for each
-/// texel along x
+/// Paints a block as BuildBlock does, into texels as ARGB words at 4 bits a channel, SideOf(sources.resolution) on each
+/// side, a row for each texel along x
 void BuildBlockTexels(std::span<const lnd::LNDCell> cells, const Sources& sources, std::span<uint16_t> texels);
 /// Paints the texels of a rectangle of a block's cells as PaintCells does, into ARGB words at 4 bits a channel
 void PaintCellTexels(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell, glm::ivec2 cellCount,
                      std::span<uint16_t> texels);
+/// Puts the texels of a rectangle of cells, as PaintCellTexels paints them, into their place in a block's texels (k_Side
+/// by k_Side, a row for each texel along x)
+void PutCellTexels(std::span<const uint16_t> part, glm::ivec2 firstCell, glm::ivec2 cellCount, std::span<uint16_t> block);
 /// ARGB words at 4 bits a channel as RGBA8 texels, each 4-bit channel times 17
 void ToRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba);
 /// Paints the texels of a rectangle of a block's cells, cellCount (along x, along z) from firstCell, as BuildBlock
@@ -86,11 +120,13 @@ void PaintCells(std::span<const lnd::LNDCell> cells, const Sources& sources, glm
 
 /// The cells of a block by its index
 using CellsOfBlock = std::function<std::span<const lnd::LNDCell>(size_t block)>;
-/// Takes the texture of a block, k_BlockBytes RGBA8 bytes, as BuildBlock paints it
-using TakeBlock = std::function<void(size_t block, std::span<const uint8_t> rgba)>;
+/// The memory of a block's texture, BlockBytesOf(sources.resolution) long, that BuildBlocks paints into. The lanes of the pool call it, so it
+/// must only give memory that is ready for the block.
+using MemoryOfBlock = std::function<std::span<uint8_t>(size_t block)>;
 
-/// Paints the blocks as BuildBlock does, and shares the work among the pool's lanes. The calling thread takes each
-/// block's texture in the order of the blocks.
-void BuildBlocks(size_t count, const CellsOfBlock& cellsOf, const Sources& sources, WorkerPool& pool, const TakeBlock& take);
+/// Paints the blocks as BuildBlock does, each into its own memory, and shares the work among the pool's lanes. It
+/// returns when it painted all the blocks.
+void BuildBlocks(size_t count, const CellsOfBlock& cellsOf, const Sources& sources, WorkerPool& pool,
+                 const MemoryOfBlock& into);
 } // namespace block_texture
 } // namespace openblack

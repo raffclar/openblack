@@ -448,10 +448,15 @@ TEST_F(Fireflies, OutTheyAreDrawnBetweenTheirLastTwoTurnsAndFadeWithDistance)
 	const auto now = _world->ToWorld(firefly.at);
 	const auto offset = DriftOffset(firefly.drift, firefly.clock, Amplitude(firefly.state, firefly.progress));
 	const auto expected = (previous + now) * 0.5f + offset;
-	const auto& drawn = _world->registry.Get<const ecs::components::Transform>(entity).position;
+	const auto drawn = firefly.drawn;
 	EXPECT_NEAR(drawn.x, expected.x, 1e-3f);
 	EXPECT_NEAR(drawn.y, expected.y, 1e-3f);
 	EXPECT_NEAR(drawn.z, expected.z, 1e-3f);
+	// The frame does not move the firefly in the world: its Transform stays at its turn place
+	const auto& position = _world->registry.Get<const ecs::components::Transform>(entity).position;
+	EXPECT_NEAR(position.x, now.x, 1e-3f);
+	EXPECT_NEAR(position.y, now.y, 1e-3f);
+	EXPECT_NEAR(position.z, now.z, 1e-3f);
 	ASSERT_TRUE(_world->registry.AllOf<ecs::components::Sprite>(entity));
 	// The opacity is taken from where it was drawn the frame before: here its hiding place, 200 m away
 	EXPECT_NEAR(_world->registry.Get<const ecs::components::Sprite>(entity).tint.a, 118.0f / 255.0f, 0.01f);

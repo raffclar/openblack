@@ -212,6 +212,11 @@ void CountOut(World& world, State& state, PlayerNames god, OutReason reason, boo
 	}
 }
 
+bool HasTempleOrNeedsNone(const World& world, const Facts& facts, PlayerNames god)
+{
+	return !facts.templesNeeded || world.HasTemple(god);
+}
+
 std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 {
 	std::vector<Event> events;
@@ -235,7 +240,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 				continue;
 			}
 			auto& standing = world.Standing(god);
-			if (facts.templeRule && !world.HasTemple(god) && !standing.out)
+			if (!HasTempleOrNeedsNone(world, facts, god) && !standing.out)
 			{
 				templesLost = true;
 			}
@@ -280,7 +285,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 	for (const auto god : gods)
 	{
 		auto& standing = world.Standing(god);
-		if (facts.templeRule && CanLose(god) && !world.HasTemple(god) && !standing.out)
+		if (CanLose(god) && !HasTempleOrNeedsNone(world, facts, god) && !standing.out)
 		{
 			standing.out = true;
 			world.RemoveCreature(god);

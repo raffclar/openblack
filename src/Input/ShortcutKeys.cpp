@@ -242,7 +242,8 @@ void ShortcutKeys::Update()
 			clickDistance = world->RefreshClickDistance(camera);
 		}
 		// The key flies to the temple of the player of this computer
-		const auto templePosition = PlayerTemplePosition(LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr));
+		const auto templePosition =
+		    PlayerTemplePosition(LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr));
 		press = zoom_to::TempleKey(now, current,
 		                           templePosition.has_value() ? std::optional(glm::vec2(templePosition->x, templePosition->z))
 		                                                      : std::nullopt,
@@ -261,7 +262,7 @@ void ShortcutKeys::Update()
 	// The help's profile counts every flight to the temple or over the realm, and back, but not a single tap's view
 	if (flight->toPlace && Locator::helpProfileSystem::has_value())
 	{
-		Locator::helpProfileSystem::value().Trigger(help::profile::k_CameraFlyToTemple);
+		Locator::helpProfileSystem::value().Report(help::profile::k_CameraFlyToTemple);
 	}
 }
 

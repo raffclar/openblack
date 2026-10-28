@@ -176,6 +176,9 @@ struct DeckPart
 [[nodiscard]] const std::array<DeckPart, 8>& DeckParts();
 /// Where a deck part is drawn: its own place carried by the boat
 [[nodiscard]] glm::mat4 OnDeck(const DeckPart& part, const glm::mat4& boat);
+/// The offset on the ground from a deck part to the boat. Each deck part takes the land's light of the boat's place, and
+/// no colour of the land.
+[[nodiscard]] glm::vec2 DeckLightOffset(const glm::mat4& boat, const glm::mat4& part);
 
 /// One of the five sprites of the boat's wake, which run back from the bow and fade as they spread on the sea
 struct Wake

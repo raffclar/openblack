@@ -36,15 +36,21 @@ class TextDatabase;
 /// The boxes of the multiplayer front end, drawn over the temple's future room, which turns slowly behind them.
 ///
 /// Each box is a see-through framed box of 780 by 500 in the middle of the dialog space, with Back at the bottom left
-/// and Next at the bottom right. The game room has four tabs along its top. A message stands in a white opaque box of
+/// and Next at the bottom right. The frame goes 40 below the box, as the frame of a box with tabs does, so the buttons
+/// at the bottom are in the frame. The game room has four tabs along its top. A message stands in a white opaque box of
 /// 500 by 200 in front of the box, which dims to a quarter. The boxes and the messages fade in over half a second.
 class MultiplayerBoxes
 {
 public:
-	/// The framed box of each box but the game room
-	static constexpr DialogRect k_Box {.min = {10, 50}, .max = {790, 550}};
+	/// The frame of each box but the game room. It has the same size as the frame of the game room, which has tabs.
+	static constexpr DialogRect k_Box = TabbedBox({780, 500});
 	/// The game room's box, 40 deeper for its tabs
 	static constexpr DialogRect k_RoomBox = TabbedBox({780, 500});
+	/// The frame that the controls of a box are in
+	[[nodiscard]] static constexpr DialogRect FrameOf(multiplayer::Box box) noexcept
+	{
+		return box == multiplayer::Box::Room || box == multiplayer::Box::Conditions ? k_RoomBox : k_Box;
+	}
 	static constexpr DialogRect k_MessageBox {.min = {150, 200}, .max = {650, 400}};
 	static constexpr DialogRect k_MessageText {.min = {200, 220}, .max = {600, 350}};
 
@@ -74,6 +80,8 @@ public:
 
 	/// The controls that act, for tools that press them by name
 	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
+	/// The places of all the visible controls of the box, for tools
+	[[nodiscard]] std::vector<DialogRect> GetVisibleRects() const;
 	/// The box shows the text of a message, for tools; empty when there is none
 	[[nodiscard]] std::u16string_view GetMessageText() const;
 

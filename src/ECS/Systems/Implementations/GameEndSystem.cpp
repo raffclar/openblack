@@ -27,6 +27,7 @@
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -169,7 +170,8 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 	    .turn = turn,
 	    .timeLimitTurn = std::nullopt,
 	    .conditionCount = 0,
-	    .templeRule = !Locator::simulation::has_value() || !Locator::simulation::value().GetSettings().godsNeedNoTemple,
+	    .templesNeeded = !(networkGame && Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed()) &&
+	                     !(Locator::simulation::has_value() && Locator::simulation::value().GetSettings().godsNeedNoTemple),
 	};
 	if ((!facts.networkGame && !facts.skirmish) || context.gameEnd.decided)
 	{

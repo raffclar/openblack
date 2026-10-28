@@ -51,6 +51,19 @@ inline constexpr std::string_view k_Extension = ".map";
 	return name.size() > k_Extension.size() && name.ends_with(k_Extension);
 }
 
+/// The name of a land of a network game: its file name with no folder and no extension, in lower case. Empty when the
+/// path is not a land of a network game.
+[[nodiscard]] inline std::string MapName(std::string_view path)
+{
+	if (!IsOnlineMap(path))
+	{
+		return {};
+	}
+	auto name = detail::Lower(detail::FileName(path));
+	name.resize(name.size() - k_Extension.size());
+	return name;
+}
+
 /// Whether the landscape that a map's script loads is the map's own landscape: the file name is the map's name with
 /// ".lnd", in any case. The folder does not matter.
 [[nodiscard]] inline bool IsOwnLandscape(std::string_view map, std::string_view landscape)

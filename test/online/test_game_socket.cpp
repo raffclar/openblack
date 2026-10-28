@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <variant>
@@ -99,6 +103,41 @@ TEST(GameSocket, TheReplyToAJoinGivesTheServersWorld)
 	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","start":{"land":"a"}})").has_value());
 }
 
+TEST(GameSocket, TheToolModesOfTheSoakGoInTheStartAndAreLeftOutWhenNotSet)
+{
+	Start tools {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
+	tools.allComputerGods = true;
+	tools.aiSeed = 4000000000u;
+	const auto read = RoundTrip(tools);
+	EXPECT_TRUE(read.allComputerGods);
+	ASSERT_TRUE(read.aiSeed.has_value());
+	EXPECT_EQ(*read.aiSeed, 4000000000u);
+	const auto plain = RoundTrip(Start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"});
+	EXPECT_FALSE(plain.allComputerGods);
+	EXPECT_FALSE(plain.aiSeed.has_value());
+	// A seed of 0 is a seed, not a missing seed
+	tools.aiSeed = 0u;
+	ASSERT_TRUE(RoundTrip(tools).aiSeed.has_value());
+	// A seed that is not a number does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"ai_seed":"x"})").has_value());
+	EXPECT_FALSE(
+	    Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"all_computer_gods":3})").has_value());
+}
+
+TEST(GameSocket, TheScenarioOfTheToolsGoesInTheStartAndIsLeftOutWhenNotSet)
+{
+	Start tools {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
+	tools.scenario = "mind.computer_god_rivals";
+	const auto read = RoundTrip(tools);
+	ASSERT_TRUE(read.scenario.has_value());
+	EXPECT_EQ(*read.scenario, "mind.computer_god_rivals");
+	EXPECT_FALSE(
+	    RoundTrip(Start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"}).scenario.has_value());
+	// A scenario that is not a word, or is empty, does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"scenario":3})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"scenario":""})").has_value());
+}
+
 TEST(GameSocket, TheJoinOfTheFrontEndReads)
 {
 	// The front end's join frame (lobby_api::RoomJoinFrame) has the same members
@@ -156,6 +195,25 @@ TEST(GameSocket, TheFramesOfTheStartGoToJsonAndBack)
 	const auto toClient = RoundTrip(StartCreature {.slot = 31, .file = {}});
 	EXPECT_EQ(toClient.slot, 31);
 	EXPECT_TRUE(toClient.file.empty());
+	EXPECT_EQ(toClient.alignment, 0.0f);
+}
+
+// The alignment of the start reads back as the same float, and only from -1 to 1
+TEST(GameSocket, TheAlignmentOfTheStartReadsBackAsTheSameFloat)
+{
+	for (const float alignment : {0.7f, -0.5f, 0.002555664f, 1.0f, -1.0f, -0.0f, 1.0e-30f})
+	{
+		const auto creature = RoundTrip(StartCreature {.slot = 2, .file = {1}, .alignment = alignment});
+		EXPECT_EQ(std::bit_cast<uint32_t>(creature.alignment), std::bit_cast<uint32_t>(alignment));
+	}
+	// A frame with no alignment is a god at 0
+	const auto none = Parse(R"({"type":"start.creature","file":""})");
+	ASSERT_TRUE(none.has_value());
+	EXPECT_EQ(std::get<StartCreature>(*none).alignment, 0.0f);
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":1.5})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":-1.0001})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":"0.5"})").has_value());
+	EXPECT_TRUE(Parse(R"({"type":"start.creature","file":"","alignment":-1})").has_value());
 }
 
 TEST(GameSocket, ACreatureFileThatIsTooLargeDoesNotRead)

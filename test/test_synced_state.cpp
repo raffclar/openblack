@@ -7,9 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstring>
+
 #include <algorithm>
 #include <array>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -19,6 +22,8 @@
 
 #include "3D/CameraPath.h"
 #include "Common/WorkerPool.h"
+#include "ECS/Components/SnowLevel.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "ECS/SyncedState.h"
@@ -128,6 +133,157 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	// The turn reads the rest of a miracle
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Spell", "magnitude"));
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
+}
+
+TEST(SyncedState, TheStaticOfAFizzOnlyThisComputerSlidesIsNotSynced)
+{
+	// Each computer slides the static only while it draws the creature. The turns read how far the creature fizzed.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "staticScroll"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "fizz"));
+}
+
+TEST(SyncedState, TheDustOfARewardChestIsNotSynced)
+{
+	// The C library's random numbers place the dust, and the frames fade it. The game server draws neither.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dust"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dustMilliseconds"));
+	// The turn reads the state of the chest
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
+}
+
+// Only the frames of this computer change the hum and the mana path of the hand past the border. The turns change the
+// strength that the hand keeps.
+TEST(SyncedState, TheHumAndTheManaPathOfTheHandPastTheBorderAreNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "shown"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "hum"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "state"));
+}
+
+TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
+{
+	// The frames draw a chest between its turns, lift the lid of an opened chest and fade its dust
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "drawn"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "clipPlace"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dustMilliseconds"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "RewardSeed", "spin"));
+	// The turns move its clock and its state
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "seconds"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "RewardSeed", "seed"));
+}
+
+TEST(SyncedState, TheFramesCarryThePickedLeashInTheHandOfThisComputerOnly)
+{
+	// Each computer puts the picked leash of its own player in its own hand, so the place of a post is not synced
+	const auto parts = synced_state::PresentationParts();
+	for (const std::string_view field : {"position", "rotation", "scale"})
+	{
+		EXPECT_TRUE(std::ranges::any_of(parts, [field](const synced_state::PresentationPart& part) {
+			return part.component == "Transform" && part.field == field && part.marker == "LeashPost";
+		})) << field;
+	}
+	// The turns read the point where the post hangs
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "LeashPost", "point"));
+}
+
+TEST(SyncedState, TheRoomsOfTheTempleAreNotSynced)
+{
+	// Only the player of this computer goes into the temple, and the temple makes its rooms for that player
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "TempleInteriorPart";
+	}));
+}
+
+TEST(SyncedState, TheFramesMoveTheGlowsOnACreatureButNotTheirPowers)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "motion"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "placed"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "slidePace"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "turnPace"));
+	// The turns set the powers and the scales
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "glows"));
+}
+
+TEST(SyncedState, TheSnowOnTheThingsThatTheFramesDrawIsNotSynced)
+{
+	EXPECT_TRUE(synced_state::IsPresentationOnly(synced_state::PresentationParts(), "SnowLevel", "level"));
+}
+
+TEST(SyncedState, ThePicturesOfTheChallengesComeFromThisComputer)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "full"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "small"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "waiting"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "taken"));
+	// The turns count the pictures that the scripts ask for
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "asked"));
+}
+
+TEST(SyncedState, TheStaticOfAFizzingCreatureSlidesInTheFramesOnly)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "staticScroll"));
+}
+
+TEST(SyncedState, TheLightOfAThingInTheHandIsNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "HeldLight", "takenAt"));
+}
+
+TEST(SyncedState, TheFramesMoveTheSeeThroughCopyOfATotemButTheTurnMakesIt)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "VillageTotemGhost";
+	}));
+	// The totem keeps the entities that the turn made
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghost"));
+}
+
+TEST(SyncedState, TheHeightWhereTheFramesDrawATotemIsNotSynced)
+{
+	EXPECT_TRUE(synced_state::IsPresentationOnly(synced_state::PresentationParts(), "DrawnHeight", "y"));
+}
+
+TEST(SyncedState, TheThingsThatOnlyTheFramesMakeTakeNoEntityOfTheLand)
+{
+	entt::meta_ctx context;
+	Register(context);
+	ecs::Registry land;
+	ecs::DrawnRegistry drawn;
+	const auto body = land.Create();
+	land.Assign<FakeBody>(body, FakeBody {.place = 1.0f});
+	const auto before = synced_state::HashOf(land.Underlying(), context, k_Presentation).hash;
+	// The frames make and remove things of their own: the land keeps its entities and its hash
+	const auto mark = drawn.Create();
+	drawn.Assign<FakeBody>(mark, FakeBody {.place = 2.0f});
+	drawn.Create();
+	drawn.Destroy(mark);
+	EXPECT_EQ(synced_state::HashOf(land.Underlying(), context, k_Presentation).hash, before);
+	// A thing that the turn makes on the land changes the synced world
+	land.Create();
+	EXPECT_NE(synced_state::HashOf(land.Underlying(), context, k_Presentation).hash, before);
+}
+
+TEST(SyncedState, WhatOnlyThePlayerAtThisComputerHearsAndSeesIsNotSynced)
+{
+	// Each computer keeps these for its own player, so two computers have different values at the same turn
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHelpMemory", "memory"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Heartbeat", "state"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CitadelWorship", "strainSound"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreaturePictures", "pictures"));
+	// The turn reads the sites of the temple
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CitadelWorship", "sites"));
 }
 
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
@@ -318,3 +474,69 @@ TEST(SyncedStateUnregistered, TheGamesOwnRegistrationCoversACameraPoint)
 	registry.emplace<CameraPoint>(entity);
 	EXPECT_TRUE(UnregisteredStorages(registry, context).empty());
 }
+
+TEST(SyncedState, TheSnowThatAThingShowsDoesNotChangeTheHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	Reflect<ecs::components::SnowLevel>(context).Field<&ecs::components::SnowLevel::level>("level");
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 1.0f});
+	const auto tree = registry.create();
+	registry.emplace<FakeBody>(tree, FakeBody {.place = 3.0f});
+	registry.emplace<ecs::components::SnowLevel>(tree, ecs::components::SnowLevel {.level = 10});
+	const auto parts = synced_state::PresentationParts();
+	const auto before = synced_state::HashOf(registry, context, parts).hash;
+	// The frames of one computer draw the two things in the snow: the snow eases on the tree and starts on the body
+	registry.get<ecs::components::SnowLevel>(tree).level = 40;
+	registry.emplace<ecs::components::SnowLevel>(body, ecs::components::SnowLevel {.level = 5});
+	EXPECT_EQ(synced_state::HashOf(registry, context, parts).hash, before);
+	// The turn moves the tree: the synced state changes
+	registry.get<FakeBody>(tree).place = 4.0f;
+	EXPECT_NE(synced_state::HashOf(registry, context, parts).hash, before);
+}
+
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+TEST(SyncedState, TheRowsHaveEachFieldThatTheHashTakes)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 2.0f, .drawnPlace = 5.0f});
+	const auto glow = registry.create();
+	registry.emplace<FakeGlowMark>(glow);
+	registry.emplace<FakeGlow>(glow, FakeGlow {.shine = 0.5f});
+	WorkerPool pool(2);
+	ecs::reflection::WorldRows rows;
+	const auto hash = synced_state::HashOf(registry, context, k_Presentation, false, {}, &pool, &rows);
+	// The rows do not change the hash
+	EXPECT_EQ(hash.hash, synced_state::HashOf(registry, context, k_Presentation).hash);
+	// The hash keeps the place of the body only: the drawn place and the marked glow are presentation parts, which the
+	// rows mark
+	const auto synced = std::ranges::count(rows.rows, false, &ecs::reflection::WorldRows::Row::presentation);
+	ASSERT_EQ(synced, 1);
+	const auto shown = std::ranges::count(rows.rows, true, &ecs::reflection::WorldRows::Row::presentation);
+	// The drawn place, the glow and the glow mark
+	EXPECT_EQ(shown, 3);
+	// A mark with no values is a row of no bytes
+	registry.emplace<FakeHidden>(body);
+	ecs::reflection::WorldRows marked;
+	static_cast<void>(synced_state::HashOf(registry, context, k_Presentation, false, {}, &pool, &marked));
+	const auto hidden = std::ranges::find_if(marked.rows, [&marked](const ecs::reflection::WorldRows::Row& each) {
+		return marked.fields.at(each.field) == "FakeHidden.*";
+	});
+	ASSERT_NE(hidden, marked.rows.end());
+	EXPECT_EQ(hidden->entity, body);
+	EXPECT_EQ(hidden->size, 0u);
+	EXPECT_FALSE(hidden->presentation);
+	const auto& row = *std::ranges::find(rows.rows, false, &ecs::reflection::WorldRows::Row::presentation);
+	EXPECT_EQ(row.entity, body);
+	EXPECT_EQ(rows.fields.at(row.field), "FakeBody.place");
+	ASSERT_EQ(row.size, sizeof(float));
+	float place = 0.0f;
+	std::memcpy(&place, rows.bytes.data() + row.offset, sizeof(place));
+	EXPECT_EQ(place, 2.0f);
+}
+#endif

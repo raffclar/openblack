@@ -45,13 +45,7 @@ constexpr float k_FishScareFootHeight = 1.0f;
 /// Today's month, counted from 1, and day by the local clock
 std::pair<int, int> Today()
 {
-	const auto now = static_cast<std::time_t>(machine_clock::UnixTime());
-	std::tm local {};
-#if defined(_WIN32)
-	localtime_s(&local, &now);
-#else
-	localtime_r(&now, &local);
-#endif
+	const auto local = machine_clock::LocalTime();
 	return {local.tm_mon + 1, local.tm_mday};
 }
 /// The feet of a creature in the world as its body is posed now, the right foot first; none for a creature without
@@ -78,7 +72,9 @@ std::optional<CreatureDrawnFeet> FeetNow(const ecs::Registry& registry, entt::en
 	}
 	const auto rightBone = points->rightFoot;
 	const auto leftBone = rightBone < animation.mirror.size() ? animation.mirror[rightBone] : rightBone;
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	// The feet are where the frame draws the body
+	const auto drawn = DrawnTransform(transform, &animation);
+	const auto placement = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
 	return CreatureDrawnFeet {
 	    .right = creature::PosedBone(rightBone, animation.boneMatrices, placement),
 	    .left = creature::PosedBone(leftBone, animation.boneMatrices, placement),

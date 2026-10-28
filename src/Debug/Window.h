@@ -26,6 +26,9 @@ public:
 	virtual ~Window() noexcept;
 
 	void WindowUpdate() noexcept;
+	/// Once a frame while a network game is live and the windows stop. Only a tool that the game server asks for, such as
+	/// its testbed scenario, does work here.
+	virtual void UpdateInNetworkGame() noexcept {}
 	/// Draws the window when it is open; a window laid out as several may draw them itself
 	virtual void WindowDraw() noexcept;
 	/// Draws the window's contents into whichever window is being drawn, for another window to host them

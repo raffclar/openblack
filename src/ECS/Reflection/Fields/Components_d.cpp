@@ -19,6 +19,7 @@
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/DrawImportance.h"
+#include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/DrinkWaypoint.h"
 #include "ECS/Components/DrinkingWater.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -126,6 +127,7 @@ void openblack::ecs::reflection::RegisterFields_Components_d(entt::meta_ctx& con
 	    .Field<&components::DiscipleMark::villager>("villager")
 	    .Field<&components::DiscipleMark::symbol>("symbol");
 	Reflect<components::DrawImportance>(context).Field<&components::DrawImportance::importance>("importance");
+	Reflect<components::DrawnHeight>(context).Field<&components::DrawnHeight::y>("y");
 	Reflect<components::DrinkWaypoint>(context).Field<&components::DrinkWaypoint::number>("number");
 	Reflect<components::DrinkingWater>(context).Field<&components::DrinkingWater::place>("place");
 }

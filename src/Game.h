@@ -30,7 +30,7 @@
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
-#include "Common/BuildVersionFile.h"
+#include "Common/BuildVersion.h"
 #include "Common/LoadTimer.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
@@ -112,6 +112,14 @@ namespace checksum_log
 {
 class Writer;
 }
+namespace frame_write_guard
+{
+class Guard;
+}
+namespace player_commands
+{
+struct ViewReport;
+}
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
@@ -165,6 +173,8 @@ struct Arguments
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
+	std::string frameStatsOut;
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
 	/// The https:// origin of the lobby, none for no online services
@@ -282,7 +292,14 @@ public:
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// The audio of a turn of the temple
 	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
-	void CatchUpFrame() override;
+	/// The tools that act before each turn: the testbed scenario of a network game
+	void BeforeTurn() override
+	{
+		if (_scenarioTurn)
+		{
+			_scenarioTurn();
+		}
+	}
 	/// The parts of the land's loads that the view of the player does
 	void ShowLoadingFrame() override;
 	bool WithdrawSkipBox() override;
@@ -367,6 +384,11 @@ public:
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
 	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
 	void ReportHand();
+	/// With the report of the hand: reports the view that the scripts and the advisors' remarks read, when it changed
+	void ReportView();
+	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
+	/// world camera, when they changed
+	void ReportHelp();
 	/// The things in view are made ready for the draw of this frame
 	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
 	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
@@ -451,6 +473,12 @@ public:
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
+	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
+	/// starts, so that only a load or a turn changes the world. None: the window is gone.
+	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
+	/// The scenarios' window sets the work that a scenario does before each turn of a network game. None: the window is
+	/// gone.
+	void SetScenarioTurn(std::function<void()> turn) { _scenarioTurn = std::move(turn); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
@@ -483,6 +511,9 @@ public:
 	/// Join Online Game: the player goes into the temple's future room, and the front end's first box shows over
 	/// it. Returns false when the game has no interface or no temple.
 	bool OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd);
+	/// The Join Online Game button of the browser page: the multiplayer front end opens at the next frame that it may
+	/// open in. Tools and the testbed use this request too.
+	void RequestJoinOnline() noexcept { _joinOnlineAsked = true; }
 	/// The size of the villagers' names display, 0 to 1
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
@@ -588,6 +619,8 @@ private:
 	bool _startTestbed {false};
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	std::function<void()> _scenarioStager;
+	std::function<void()> _scenarioTurn;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
 	std::optional<FightAutopilotRequest> _fightAutopilot;
@@ -597,6 +630,8 @@ private:
 	std::unique_ptr<command_log::Writer> _commandLog;
 	/// The file that a tool's run writes the checksum of each turn to
 	std::unique_ptr<checksum_log::Writer> _checksumLog;
+	/// A tool's run that looks for the frame steps that change the synced world
+	std::unique_ptr<frame_write_guard::Guard> _frameGuard;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
@@ -709,9 +744,13 @@ private:
 	/// The values are as in player_commands::HandReport: the collide point, the hand, the camera and its focus
 	std::array<glm::vec3, 4> _lastHandReport {};
 	entt::entity _reportedHand {entt::null};
-	/// The thing under the cursor that the last player_commands::HandPick sent, in a network game
+	/// The thing under the cursor that the last player_commands::HandPick sent
 	entt::entity _lastHandPick {entt::null};
 	std::optional<uint32_t> _handReportTurn;
+	/// The last report of the view that this computer sent (player_commands::ViewReport), none before the first
+	std::unique_ptr<player_commands::ViewReport> _lastViewReport;
+	/// The turn of the last report of the help that this computer sent
+	std::optional<uint32_t> _helpReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land
@@ -738,11 +777,15 @@ private:
 	uint32_t _handInWaterSample {0};
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
-	/// What the hand steps by this frame, in seconds
+	/// What the drawn fades of the hand step by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
 	/// What the camera and the hand step by this frame: the frame's real time in whole milliseconds, or the game's time
 	/// while a script holds the widescreen
 	[[nodiscard]] std::chrono::milliseconds CameraStepTime() const;
+	/// Whether a script holds the widescreen for a cut scene, when the camera and the hand keep to the game's time
+	[[nodiscard]] bool ScriptHoldsCamera() const;
+	/// The time that the steps of the input go by in this frame (see input_steps), from the real time of the frame
+	[[nodiscard]] std::chrono::microseconds InputStepTime(std::chrono::microseconds frameTime) const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The hand's debugging trace keeps the frame: where the hand was placed and drawn, where it shows, on the screen
@@ -751,9 +794,9 @@ private:
 	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
-	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
-	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
-	                float deltaSeconds);
+	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it. Its up
+	/// eases at the fixed steps of the input.
+	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp);
 	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
 	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
 	/// The camera's helper icons by the hand while a tutorial demonstration plays, from where the hand is drawn; none
@@ -784,6 +827,12 @@ private:
 	/// The land's start-of-game question that waits while the multiplayer front end is open: whether the profile has a
 	/// creature
 	std::optional<bool> _startQuestionAfterFrontEnd;
+	/// Opens the multiplayer front end for a request of the page, when the situation lets it open
+	void AnswerJoinOnline();
+	/// The page asked for the multiplayer front end, and the front end did not open yet
+	bool _joinOnlineAsked {false};
+	/// The front end opened over a cut scene: the land stops until the player leaves the front end
+	bool _frontEndHoldsLand {false};
 	/// The renderer draws the creature that the main menu's tattoo editor shows, in the next frame of the scene
 	void ShowTattooMenuCreature() const;
 	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.

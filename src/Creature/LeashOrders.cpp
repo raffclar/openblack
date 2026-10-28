@@ -18,6 +18,7 @@
 #include "Creature/CreatureFootprints.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Creature/CreatureThrow.h"
 
 using namespace openblack;
 using namespace openblack::creature_leash_orders;
@@ -273,7 +274,8 @@ std::vector<Step> creature_leash_orders::SleepAtHome(glm::vec2 home, float heigh
 
 std::vector<Step> creature_leash_orders::PutDownAt(glm::vec2 point, float height)
 {
-	return {Walk(point, height, false), Hands({.kind = ObjectOrder::Kind::Discard})};
+	// It lets go with the put-down animation, so the thing stays at rest where the hand sets it
+	return {Walk(point, height, false), Hands({.kind = ObjectOrder::Kind::Discard, .animation = creature_throw::k_PutDown})};
 }
 
 std::vector<Step> creature_leash_orders::ThrowAt(glm::vec2 point, float height)

@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <vector>
 
 #include <entt/core/fwd.hpp>
@@ -42,9 +43,12 @@ public:
 
 	/// The hand some seconds on, and the piles of food and wood some seconds of game time on
 	virtual void Update(float seconds, float gameSeconds) = 0;
-	/// The globes some seconds of game time on, once a frame after the hand has placed what it holds: each turns to face
-	/// the camera about its middle, wherever it now is, and its miracle spins inside
-	virtual void UpdateGlobes(float gameSeconds) = 0;
+	/// The globes after a frame of this real and game time, once a frame after the hand has placed what it holds: each
+	/// turns to face the camera about its middle, wherever it now is, and its miracle spins inside. The effect in each
+	/// globe steps no more often than 60 times a second, each step by all the game time since the last, and only in a
+	/// frame that draws the land.
+	virtual void UpdateGlobes(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+	                          bool landDrawn) = 0;
 	/// At the start of each turn: each miracle's pile stands on the land where it is, as the land is now
 	virtual void PlacePilesOnLand() {}
 	/// Loads the models of the globes and their bands, if they are not loaded. The first update of the globes also

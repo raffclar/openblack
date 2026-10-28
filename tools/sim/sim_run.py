@@ -32,6 +32,12 @@ the story's lessons do, up to the last; the run then continues as the creature g
     python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 20   (twenty runs, each against the first)
     python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 5 --frames 10,17,20:1,33,10:1
                                                    (five runs at other frame rates, drawn and not: the synced worlds)
+    python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 5 --load-at 700
+                                                   (runs 2 to 5 save at turn 700 and load that save at once; each
+                                                   must go on as the first run, which does not load)
+    python tools/sim/sim_run.py roundtrip --at 0,500,2000
+                                                   (at each turn: save, load that save, save again at once; the two
+                                                   saves must have the same bytes)
 """
 
 import argparse
@@ -48,6 +54,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "inspector"))
 sys.path.insert(0, HERE)
 
 import openblack_inspector_mcp as inspector  # noqa: E402
+import save_diff  # noqa: E402
 import sim_report  # noqa: E402
 
 DEFAULT_GAME_PATH = os.environ.get("OB_GAME_PATH", "C:/projects/black")
@@ -83,9 +90,11 @@ def default_exe(config):
 def game_arguments(options, record, log, until_turn, fast, driven):
     """The command line of the game for a run"""
     args = ["-g", options.game_path, "--skip-logos", "--seed", str(options.seed), "--inspect-port", "0",
-            "--inspect-lock-input", "--sim-frame-ms", str(options.frame_ms), "--sim-until-turn", str(until_turn),
-            "--sim-record", record, "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000",
-            "--background"]
+            "--inspect-lock-input", "--sim-until-turn", str(until_turn), "--sim-record", record,
+            "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000", "--background"]
+    # Without a frame time, each frame takes the real time that it took, as in a player's game
+    if options.frame_ms is not None:
+        args += ["--sim-frame-ms", str(options.frame_ms)]
     if fast:
         args += ["--sim-fast", "--sim-draw-every", str(options.draw_every)]
     if getattr(options, "still_hand", False):
@@ -113,6 +122,11 @@ def game_arguments(options, record, log, until_turn, fast, driven):
         args += sim_report.gods_need_no_temple_args(False, land=getattr(options, "land", ""),
                                                     testbed=getattr(options, "testbed", False),
                                                     scenario=getattr(options, "scenario", None))
+    # The modes of the AI soak (developer builds): every god is a computer god, with the personality of an AI seed
+    if getattr(options, "all_computer_gods", False):
+        args.append("--sim-all-computer-gods")
+    if getattr(options, "ai_seed", None) is not None:
+        args += ["--sim-ai-seed", str(options.ai_seed)]
     args += options.extra
     return args
 
@@ -326,17 +340,78 @@ def drive(game, options, until_turn):
     return actions
 
 
-def run_once(options, name, fast, until_turn):
-    """One run of the game: its record, its log and its exit code"""
+# The slots that the save and load checks use: the first save, and the save made at once after its load
+FIRST_SLOT = 20
+AGAIN_SLOT = 19
+
+
+def newest_save(options, slot):
+    """The newest saved world of a slot in the run's profiles; None when there is none"""
+    saves = glob.glob(os.path.join(options.out, "Profiles", "**", f"{slot}.obsav"), recursive=True)
+    return max(saves, key=os.path.getmtime) if saves else None
+
+
+def read_save(options, slot):
+    path = newest_save(options, slot)
+    if path is None:
+        raise RuntimeError(f"the game wrote no world file for slot {slot}")
+    with open(path, "rb") as file:
+        return file.read()
+
+
+def save_and_load(game, options):
+    """Saves the game, then loads that save and saves again in the same call: the two saved worlds as bytes"""
+    # A scenario can load a land of its own; the save waits until the game is ready again
+    game.wait_ready()
+    if not game.call("saves.save", {"slot": FIRST_SLOT, "name": "check"}).get("saved"):
+        raise RuntimeError("the first save did not happen")
+    first = read_save(options, FIRST_SLOT)
+    answer = game.call("saves.load_and_save", {"slot": FIRST_SLOT, "into": AGAIN_SLOT, "name": "check again"})
+    if not answer.get("loaded") or not answer.get("saved"):
+        raise RuntimeError(f"the load and the second save did not happen: {answer}")
+    return first, read_save(options, AGAIN_SLOT)
+
+
+def drive_to(game, until_turn, at_turns, action):
+    """Steps the game to each turn of the list and calls the action there, then lets it run to its end"""
+    game.wait_ready()
+    turn = game.call("game.state").get("turn", 0)
+    results = []
+    for at in sorted(at_turns):
+        if at > turn and not game.step_turns(at - turn):
+            break
+        turn = game.call("game.state").get("turn", turn)
+        results.append(action(turn))
+    try:
+        game.call("game.resume")
+    except (RuntimeError, OSError, inspector.GameError):
+        pass
+    return results
+
+
+def run_once(options, name, fast, until_turn, load_at=None, load=True):
+    """One run of the game: its record, its log and its exit code. With load_at, the run is driven to that turn, and
+    there (with load) it saves and loads the save at once, then goes on. Without load it only stops at that turn, so
+    that it plays its turns as a run that loads does."""
     os.makedirs(options.out, exist_ok=True)
     record = os.path.join(options.out, f"{name}.jsonl")
     log = os.path.join(options.out, f"{name}.log")
     exe = options.exe or default_exe(options.config)
-    driven = options.style != "none" or bool(options.stages)
+    driven = options.style != "none" or bool(options.stages) or load_at is not None
     game = Game(exe, game_arguments(options, record, log, until_turn, fast, driven), options.out)
     actions = []
     try:
-        if driven:
+        if load_at is not None:
+            game.connect()
+
+            def load_there(turn):
+                if not load:
+                    return {"turn": turn, "did": "stop"}
+                first, again = save_and_load(game, options)
+                return {"turn": turn, "did": "save and load", "save_differs": save_diff.compare_files(first, again)}
+
+            actions = drive_to(game, until_turn, [load_at], load_there)
+        elif driven:
             game.connect()
             actions = drive(game, options, until_turn)
         code = game.wait()
@@ -442,7 +517,9 @@ def command_repeat(options):
     runs = max(options.runs, 2)
     # A frame-rate repeat gives each run the next frame setting of the list, and compares only the synced worlds
     frames = parse_frames(options.frames)
-    synced = bool(frames)
+    # A driven run (--load-at) waits paused between its steps, and the paused frames move the local draws and the
+    # camera on: then only the synced worlds must agree
+    synced = bool(frames) or options.load_at is not None
 
     def run_options(index):
         if not frames:
@@ -451,13 +528,14 @@ def command_repeat(options):
         ms, draw = frames[(index - 1) % len(frames)]
         return argparse.Namespace(**{**vars(options), "frame_ms": ms, "draw_every": draw, "still_hand": True})
 
-    first = run_once(run_options(1), "repeat-1", True, options.turns)
+    # With --load-at the first run stops at the same turn as the others but does not load
+    first = run_once(run_options(1), "repeat-1", True, options.turns, options.load_at, False)
     first_save = keep_exit_save(options, "repeat-1")
     _, records_first, _ = sim_report.load(first[0])
     results = []
     repeated_files = []
     for index in range(2, runs + 1):
-        other = run_once(run_options(index), f"repeat-{index}", True, options.turns)
+        other = run_once(run_options(index), f"repeat-{index}", True, options.turns, options.load_at)
         repeated_files += [other[0], other[1]]
         _, records_other, _ = sim_report.load(other[0])
         result = repeat_result(records_first, records_other, synced)
@@ -495,10 +573,45 @@ def command_repeat(options):
     return 0 if summary["same"] else 1
 
 
+def command_roundtrip(options):
+    """At each turn of --at: saves, loads that save and saves again at once. The two saves must have the same bytes."""
+    at_turns = [int(turn) for turn in options.at.split(",") if turn.strip()]
+    os.makedirs(options.out, exist_ok=True)
+    record = os.path.join(options.out, "roundtrip.jsonl")
+    log = os.path.join(options.out, "roundtrip.log")
+    exe = options.exe or default_exe(options.config)
+    until_turn = max(at_turns) + 1
+    game = Game(exe, game_arguments(options, record, log, until_turn, True, True), options.out)
+
+    def check(turn):
+        first, again = save_and_load(game, options)
+        for slot, data in ((FIRST_SLOT, first), (AGAIN_SLOT, again)):
+            with open(os.path.join(options.out, f"turn{turn}-slot{slot}.obsav"), "wb") as file:
+                file.write(data)
+        result = save_diff.compare_files(first, again)
+        print(f"turn {turn}: " + save_diff.text_report(result), end="", flush=True)
+        return {"turn": turn, "same": not result, "differs": result}
+
+    code = None
+    results = []
+    try:
+        game.connect()
+        results = drive_to(game, until_turn, at_turns, check)
+        code = game.wait()
+    finally:
+        game.stop()
+    summary = {"same": len(results) == len(at_turns) and all(r["same"] for r in results), "exit_code": code,
+               "results": results}
+    with open(os.path.join(options.out, "roundtrip.json"), "w", encoding="utf-8") as file:
+        json.dump(summary, file, indent=1)
+    print(json.dumps({"same": summary["same"], "turns": [r["turn"] for r in results], "exit_code": code}))
+    return 0 if summary["same"] else 1
+
+
 def parse(argv):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("run", "match", "repeat"):
+    for command in ("run", "match", "repeat", "roundtrip"):
         sub = commands.add_parser(command)
         sub.add_argument("--land", default="Land1.txt", help="the land's script (Land1.txt by default)")
         sub.add_argument("--opening", default="cow",
@@ -531,6 +644,13 @@ def parse(argv):
                          help="repeat: a frame-rate repeat, with the frame setting of each run in turn, as "
                               "'10,17,20:1' (the frame time in ms, and after a colon the draw every); only the synced "
                               "worlds must agree")
+        sub.add_argument("--load-at", type=int,
+                         help="repeat: runs 2 and on save at this turn and load that save at once, then go on")
+        sub.add_argument("--at", default="0,500,2000",
+                         help="roundtrip: the turns to save, load and save again at, as '0,500,2000'")
+        sub.add_argument("--all-computer-gods", action="store_true",
+                         help="every god with a citadel is a computer god, also the god of this computer (the AI soak)")
+        sub.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods (the AI soak)")
         sub.add_argument("--network-game", action="store_true",
                          help="play the world as a network game does: no pause, and the turns read no part of a frame")
         sub.add_argument("extra", nargs="*", help="more arguments for the game, after --")
@@ -542,7 +662,7 @@ def main(argv=None):
     options.out = os.path.abspath(options.out)
     if options.limits:
         options.limits = os.path.abspath(options.limits)
-    commands = {"run": command_run, "match": command_match, "repeat": command_repeat}
+    commands = {"run": command_run, "match": command_match, "repeat": command_repeat, "roundtrip": command_roundtrip}
     return commands[options.command](options)
 
 

@@ -30,6 +30,7 @@ public:
 	bool Order(entt::entity thing, high_detail_rules::ThingSpecial special, bool on) override;
 	void Update() override;
 	void RemakeModelsAfterLoad() override;
+	void LoadModels() override;
 	void PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProjection) override;
 	void LeaveSwimmingRings(uint32_t frameGameMs) override;
 

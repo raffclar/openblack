@@ -123,7 +123,7 @@ TEST(InspectorNetworkGate, RefusedQueries)
 {
 	// Each query that writes the world, the scenario load and the run controls
 	for (const auto* query : {"edit.create", "edit.destroy", "script.run", "level.load", "level.testbed", "saves.load",
-	                          "magic.town_miracle", "gui.press", "autopilot.start"})
+	                          "magic.town_miracle", "gui.press", "creatures.fight"})
 	{
 		EXPECT_TRUE(RefusedInNetworkGame(query, true)) << query;
 	}
@@ -137,7 +137,8 @@ TEST(InspectorNetworkGate, RefusedQueries)
 		EXPECT_FALSE(RefusedInNetworkGame(query, false)) << query;
 	}
 	for (const auto* query : {"input.key", "input.pointer", "camera.set", "screenshot.take", "sim.record", "sim.feedback",
-	                          "fights.transcript_folder", "fights.clear_transcripts", "audio.lose_device"})
+	                          "fights.transcript_folder", "fights.clear_transcripts", "audio.lose_device", "autopilot.start",
+	                          "autopilot.stop", "creatures.fight_cheat"})
 	{
 		EXPECT_FALSE(RefusedInNetworkGame(query, true)) << query;
 	}
