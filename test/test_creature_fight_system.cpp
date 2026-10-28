@@ -204,7 +204,7 @@ public:
 		return creature_hand::InteractTip::None;
 	}
 	[[nodiscard]] bool IsClick() const override { return false; }
-	std::optional<HandPose> Update(const glm::vec3&, const glm::vec3&, glm::vec2, float, float) override
+	std::optional<HandPose> Update(const glm::vec3&, const glm::vec3&, glm::vec2, float, const input_steps::Steps&) override
 	{
 		return std::nullopt;
 	}
