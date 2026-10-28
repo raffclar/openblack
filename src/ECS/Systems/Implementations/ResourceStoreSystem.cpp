@@ -153,6 +153,25 @@ void PileEmptied(entt::entity pile, Pot& pot)
 	}
 }
 
+/// A pot takes its size from what it holds each time this changes. A pot on the land that changes its size goes out of the
+/// map's cells and in again. A pile keeps its size: it rises out of the ground instead.
+void ResizeAfterChange(entt::entity pot, const Pot& data)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* transform = registry.TryGet<Transform>(pot);
+	const auto& info = PotInfoOf(data.type);
+	const auto size = piles::SizeAfterChange(info.potType, data.amount, info.scaleEvery);
+	if (transform == nullptr || !size.has_value() || transform->scale.x == *size)
+	{
+		return;
+	}
+	transform->scale = glm::vec3(*size);
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Reinsert(pot);
+	}
+}
+
 /// The piles of a storage pit that exist: its food pile, then its wood piles
 std::vector<entt::entity> PitPiles(const StoragePit& pit)
 {
@@ -514,6 +533,7 @@ uint32_t ResourceStoreSystem::AddToPile(entt::entity pile, ResourceType type, ui
 	}
 	const auto taken = piles::AmountTaken(pot->amount, amount, pot->maxAmount, piles::IsCapped(info.nextPotForResource));
 	pot->amount += taken;
+	ResizeAfterChange(pile, *pot);
 	// A poisoned gift poisons the pile, which stays poisoned whatever is added after
 	pot->poisoned = pot->poisoned || poisoned;
 	return taken;
@@ -740,9 +760,10 @@ uint32_t ResourceStoreSystem::TakeFromPile(entt::entity pile, ResourceType type,
 	const auto store = StoreOf(pile);
 	if (!store.has_value())
 	{
-		// A pile on its own goes once it has nothing left
+		// A pile on its own goes once it has nothing left. A pot first takes its size from what is left.
 		const auto taken = std::min(amount, pot->amount);
 		pot->amount -= taken;
+		ResizeAfterChange(pile, *pot);
 		if (piles::GoesWhenEmptied(pot->amount, false))
 		{
 			ecs::world_objects::Remove(pile);
@@ -961,9 +982,9 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 			    Locator::particleSystem::value().StartSpotVisual(SpotVisualType::PilefoodSpeedup, point, -1, created, 1.0f);
 		}
 	}
-	// The people come to look at it
+	// The people come to look at it: a new free pile always asks for the reaction of its kind
 	const auto reaction = PotInfoOf(potType).associatedReaction;
-	if (reaction != Reaction::None && Locator::reactionSystem::has_value())
+	if (piles::ReactsWhenMade(PotInfoOf(potType).potType, reaction, true) && Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().Create({.initiator = created,
 		                                         .type = reaction,

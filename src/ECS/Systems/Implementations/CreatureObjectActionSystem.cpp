@@ -2236,6 +2236,11 @@ void CreatureObjectActionSystem::Drop(entt::entity creature)
 	Release(creature, glm::vec3(0.0f));
 }
 
+void CreatureObjectActionSystem::PutDownAtOnce(entt::entity creature)
+{
+	Release(creature, glm::vec3(0.0f), ReleaseFrom::LetGo);
+}
+
 void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2267,14 +2272,18 @@ void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3&
 	{
 		at->position = pose->position;
 		at->rotation = pose->rotation;
-		// A thing that the creature lets go of or throws takes its angles from its turn in the hand. A living thing keeps
-		// its own heading.
-		if (from != ReleaseFrom::Dropped && !registry.AnyOf<Villager, Animal, Creature>(object))
+		// A thing that the creature lets go of or throws takes its angles from its turn in the hand. A held creature keeps
+		// the turn of the hand. A thrown villager or animal stands upright with the heading of the hand. It keeps its own
+		// heading and no angles, and its landing gives it a new heading.
+		if (from != ReleaseFrom::Dropped && !registry.AllOf<Creature>(object))
 		{
 			const auto taken = ecs::placed_turn::TurnFromHeld(
 			    pose->rotation, at->scale.x, ecs::placed_turn::CanLean(registry, object), from == ReleaseFrom::Thrown);
 			at->rotation = taken.turn;
-			ecs::placed_turn::KeepAngles(registry, object, taken.angles);
+			if (!registry.AnyOf<Villager, Animal>(object))
+			{
+				ecs::placed_turn::KeepAngles(registry, object, taken.angles);
+			}
 		}
 	}
 	LetGo(creature, object, velocity);

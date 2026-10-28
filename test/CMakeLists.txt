@@ -2113,3 +2113,9 @@ openblack_setup_and_add_test(test_land_info_box gui/test_land_info_box.cpp)
 openblack_setup_and_add_test(test_skirmish_ping test_skirmish_ping.cpp)
 openblack_setup_and_add_test(test_creature_belief_kinds test_creature_belief_kinds.cpp)
 openblack_setup_and_add_test(test_game_language test_game_language.cpp)
+openblack_setup_and_add_test(test_released_turns test_released_turns.cpp)
+target_link_libraries(test_released_turns PRIVATE psys)
+openblack_setup_and_add_test(test_vanilla_world test_vanilla_world.cpp)
+add_test(NAME test_net_check_web
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_web.py
+)

@@ -54,6 +54,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
@@ -95,6 +96,8 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<Vortex>();
 	// A temple's heart, which stands in the land as a building does
 	func.template operator()<Temple>();
+	// A town centre's totem, which covers the outline of its icon
+	func.template operator()<VillageTotem>();
 	// Trees, shields and the scripts' scrolls and signs, each in one cell
 	func.template operator()<Tree>();
 	func.template operator()<MagicShield>();
@@ -195,7 +198,7 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 		return std::nullopt;
 	}
 	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, WorshipSite,
-	                   WorshipAltar, Temple>(entity))
+	                   WorshipAltar, Temple, VillageTotem>(entity))
 	{
 		return Kind {.placement = Placement::FixedFront, .coversOutline = true, .moves = false};
 	}

@@ -761,9 +761,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    bool gone = false;
 		    const auto* detail = registry.TryGet<const DetailMeshes>(entity);
 		    // On a frame that draws all of the land's draw list, note which listed things stay drawn while the camera
-		    // stands still. A thing of several meshes uses the box of its standard mesh. Another thing uses its own mesh,
-		    // also a broken building, which shows its broken model.
-		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->Listed(entity);
+		    // stands still. The icon of a village totem is noted too: it keeps its totem drawn. A thing of several meshes
+		    // uses the box of its standard mesh. Another thing uses its own mesh, also a broken building, which shows its
+		    // broken model.
+		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->NotesKept(entity);
 		    const auto keptBox =
 		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : mesh.id;
 		    bool noted = false;

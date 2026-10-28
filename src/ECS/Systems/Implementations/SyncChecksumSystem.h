@@ -64,6 +64,8 @@ private:
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	/// The threads that share the hash of the components. The first checksum makes them.
 	std::unique_ptr<WorkerPool> _pool;
+	/// The rows of the last checksum, so that the next checksum mixes again only the rows that changed
+	ecs::reflection::HashMemo _memo;
 	bool _enabled {false};
 	bool _keepParts {false};
 	bool _byField {false};

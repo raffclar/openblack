@@ -1010,7 +1010,8 @@ void Search::Splice(Obstacles& obstacles, Route& route, size_t candidate, const 
 void creature_route::AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles, bool roundWater)
 {
 	const auto inLand = [](int32_t i) { return i >= 0 && i < k_CellsPerSide; };
-	if (!inLand(cell.x) || !inLand(cell.y))
+	// Most cells have no blocked cell and no water next to them, and so they add nothing
+	if (!inLand(cell.x) || !inLand(cell.y) || !land.HasBlockedNear(cell.x, cell.y, roundWater))
 	{
 		return;
 	}
