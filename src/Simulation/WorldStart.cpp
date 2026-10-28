@@ -72,6 +72,7 @@
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -998,8 +999,11 @@ std::optional<creature_tattoo::Pictures> ReadTattooPictures()
 	if (Locator::resources::value().GetCreatureSkinArt().Contains(creature_skin::k_ArtId))
 	{
 		LoadCreatureSkinArt();
-		// The masks of the player's creature take the new pictures, and every creature is painted again
-		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE))
+		// The masks of the creature of the player at this computer take the new pictures, and every creature is painted
+		// again
+		const auto own =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(own))
 		{
 			Locator::creatureSkinSystem::value().RemakeTattooMasks(*creature, creature_tattoo::Sheet::OwnPictures);
 		}

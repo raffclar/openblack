@@ -31,6 +31,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -873,7 +874,9 @@ void GestureSystem::StepHints(float seconds, bool wordsShowing)
 				if (effect != ParticleSystemInterface::k_NoEffect)
 				{
 					particles->SetDrawnAlone(effect);
-					particles->SetPlayer(effect, static_cast<int>(PlayerNames::PLAYER_ONE));
+					particles->SetPlayer(effect, static_cast<int>(Locator::handSystem::has_value()
+					                                                  ? Locator::handSystem::value().GetOwnPlayer()
+					                                                  : PlayerNames::PLAYER_ONE));
 					picture.holderEffect = effect;
 				}
 			}
