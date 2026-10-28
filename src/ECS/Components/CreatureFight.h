@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureFight.h"
+#include "Creature/CreatureTurnToFace.h"
 
 namespace openblack::ecs::components
 {
@@ -82,8 +83,13 @@ struct CreatureFighting
 	/// Whether it has been told what to do in this stage yet, and has taunted its opponent
 	bool played {false};
 	bool taunted {false};
+	/// Its turn to face the opponent in the face-off, and the game turns of the face-off so far
+	creature_turn_to_face::Turn faceTurn {};
+	uint32_t faceOffTurns {0};
 	/// Whether its taunt before the fight is the rude gesture, chosen as the fight starts
 	bool rude {false};
+	/// Whether it started to let go of the thing that it held before its taunt
+	bool handsChecked {false};
 	/// Whether its life has paid for the fight and its mind learnt from it
 	bool ended {false};
 	/// Whether the hand took hold of it in the fight. Its fight steps wait while the hand holds it. When the hand lets go

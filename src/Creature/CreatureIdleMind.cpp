@@ -877,7 +877,6 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 	case Step::Kind::HealItself:
 	case Step::Kind::RaiseTotem:
 	case Step::Kind::LowerTotem:
-	case Step::Kind::Fight:
 	case Step::Kind::Apply:
 		return HandsNeed::Free;
 	case Step::Kind::MakeDisciple:
@@ -911,6 +910,9 @@ HandsNeed creature_mind::HandsNeededFor(const Step& step)
 		// Only the start of the dance and the dance itself need free hands
 		return step.dance.kind == DanceOrder::Kind::Start || step.dance.kind == DanceOrder::Kind::Dance ? HandsNeed::Free
 		                                                                                                : HandsNeed::Any;
+	// The fight starts with the question to the other creature, which does not need free hands. Each creature lets go
+	// of what it holds before its taunt.
+	case Step::Kind::Fight:
 	case Step::Kind::StopMoving:
 	case Step::Kind::FollowWatching:
 	case Step::Kind::Kiss:

@@ -33,6 +33,8 @@ entt::entity FlowersArchetype::Create(const glm::vec3& position, FlowersInfo typ
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 
 	const auto& info = Locator::infoConstants::value().flowers.at(static_cast<size_t>(type));
 

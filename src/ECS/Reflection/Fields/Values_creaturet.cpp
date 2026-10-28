@@ -16,6 +16,7 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureTattoo.h"
 #include "Creature/CreatureTownCompassion.h"
+#include "Creature/CreatureTurnToFace.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
 namespace openblack::ecs::reflection
@@ -87,4 +88,7 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturet(entt::meta_ctx&
 	    .Field<&openblack::creature_tree::Node::bucket>("bucket")
 	    .Field<&openblack::creature_tree::Node::examples>("examples");
 	Reflect<openblack::creature_tree::Tree>(context, ValueOnly {}).Field<&openblack::creature_tree::Tree::nodes>("nodes");
+	Reflect<openblack::creature_turn_to_face::Turn>(context, ValueOnly {})
+	    .Field<&openblack::creature_turn_to_face::Turn::phase>("phase")
+	    .Field<&openblack::creature_turn_to_face::Turn::holdTurns>("holdTurns");
 }

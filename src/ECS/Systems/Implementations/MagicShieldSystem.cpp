@@ -31,6 +31,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -118,6 +119,8 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 	auto& registry = EntityRegistry();
 	const bool physical = miracle.magicType == MagicType::PhysicalShield;
 	const auto object = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	auto position = miracle.castPosition;
 	position.y = LandHeight(position);
 	registry.Assign<Transform>(object, position, glm::mat3(1.0f), glm::vec3(1.0f));

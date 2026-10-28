@@ -867,6 +867,13 @@ constexpr float k_WinPlanPriority = 1.0f;
 [[nodiscard]] bool FearsAfterFight(float life, float otherLife);
 /// Before a fight, each creature plays the taunt or the rude gesture, by a random choice
 [[nodiscard]] size_t FaceOffAnimation(bool rude);
+/// The steps of the face-off, in the game turns of the creature that starts the fight. The first turn is the turn of the
+/// question to the other creature. On the next turn, it tells the other creature not to think for itself. On the third
+/// turn, it tells the other creature to turn to face it. From the fourth turn, it turns to face the other creature.
+constexpr uint32_t k_FaceOffOrderTurn = 3;
+constexpr uint32_t k_FaceOffOwnTurn = 4;
+/// Each creature holds its turn to face the other for this long
+constexpr float k_FaceOffHoldSeconds = 0.1f;
 /// The creature that starts the fight points at the arena for this many game turns
 constexpr uint32_t k_PointAtArenaTurns = 20;
 

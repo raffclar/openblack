@@ -14,6 +14,7 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/TownDesireSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -47,6 +48,11 @@ entt::entity TownArchetype::Create(int id, const glm::vec3& position, PlayerName
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	auto& registryContext = registry.Context();
 	registryContext.towns.insert({id, entity});
+	// The town is not a thing of the world itself, but the flags of its desires are, made with it
+	if (Locator::townDesireSystem::has_value())
+	{
+		Locator::townDesireSystem::value().MakeFlags(entity);
+	}
 
 	return entity;
 }

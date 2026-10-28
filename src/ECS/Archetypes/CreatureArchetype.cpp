@@ -44,6 +44,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -141,6 +142,8 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	const auto creationIndex = TakeThingMadePlace();
 	const auto morph =
 	    creature_morph::FromAttributes(body.alignment, body.fatness, body.strength, SpeciesStrength(creatureType));
 	registry.Assign<Creature>(entity, Creature {.owner = playerName,
@@ -151,7 +154,8 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	                                            .fatness = body.fatness,
 	                                            .strength = body.strength,
 	                                            .size = scale,
-	                                            .made = ++registry.Context().creaturesMade});
+	                                            .made = ++registry.Context().creaturesMade,
+	                                            .creationIndex = creationIndex});
 	// It goes to the front of the list of the living
 	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});
 	// The body is drawn with the base mesh's skins, its shape blended towards the other meshes

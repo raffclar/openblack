@@ -2989,6 +2989,51 @@ void AddLight(std::vector<Scenario>& all)
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
 	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
 	});
+
+	// The same things in snow of three depths. A thing that takes all the snow gets the level (depth - 20) x 255 / 256.
+	struct SnowCoverStep
+	{
+		std::string_view id;
+		std::string_view name;
+		std::string_view description;
+		float depth;
+	};
+	for (const auto& step : std::array {
+	         SnowCoverStep {.id = "light.snow_cover_low",
+	                        .name = "Object snow at a low level",
+	                        .description = "Snow lies 100 deep over the whole island at noon. A hut, two trees, a rock, "
+	                                       "a cow and a villager are new on the land. Their snow increases to the level 79.",
+	                        .depth = 100.0f},
+	         SnowCoverStep {.id = "light.snow_cover_mid",
+	                        .name = "Object snow at a middle level",
+	                        .description = "Snow lies 160 deep over the whole island at noon. A hut, two trees, a rock, "
+	                                       "a cow and a villager are new on the land. Their snow increases to the level 139.",
+	                        .depth = 160.0f},
+	         SnowCoverStep {.id = "light.snow_cover_deep",
+	                        .name = "Object snow at a high level",
+	                        .description = "Snow lies 255 deep over the whole island at noon. A hut, two trees, a rock, "
+	                                       "a cow and a villager are new on the land. Their snow increases to the level "
+	                                       "234.",
+	                        .depth = 255.0f}})
+	{
+		all.push_back({
+		    .id = step.id,
+		    .name = step.name,
+		    .facet = Facet::Light,
+		    .description = step.description,
+		    .expected = "The things start with no snow. The snow shows first on the parts that face up, and then spreads "
+		                "as it increases. Each texel is snow or the colour of the thing, with no mix of the two. A "
+		                "deeper snow covers more of each thing.",
+		    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .snowDepth = step.depth},
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 7.0f, -9.0f}, .look = {0.0f, 2.0f, 12.0f}},
+		    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, 16.0f}},
+		                {.type = TreeInfo::Conifer, .offset = {8.0f, 20.0f}, .scale = 1.5f},
+		                {.type = TreeInfo::Birch, .offset = {12.0f, 8.0f}},
+		                {.type = MobileStaticInfo::Rock, .offset = {3.0f, 2.0f}},
+		                {.type = AnimalInfo::Cow, .offset = {-6.0f, 2.0f}},
+		                {.type = VillagerInfo::CelticFarmerMale, .offset = {-1.0f, 4.0f}}},
+		});
+	}
 }
 
 void AddMovement(std::vector<Scenario>& all)
@@ -4030,6 +4075,25 @@ void AddAudio(std::vector<Scenario>& all)
 	                "room first.",
 	    .framing = {.shot = Shot::Overview},
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
+	});
+
+	all.push_back({
+	    .id = "temple.save_room_close_look_words",
+	    .name = "The temple's save game room writes a save's date and name over its picture",
+	    .facet = Facet::Story,
+	    .description = "The game is saved into slots 0 and 1 with the name Testbed. Then the player goes through the "
+	                   "temple's main room into the save game room. Click the picture of slot 0, then the picture of an "
+	                   "empty land slot, for example Quick Save.",
+	    .expected = "While the camera comes close to the picture of slot 0, the date and the time of the save show at the "
+	                "top of the screen, and Testbed shows below them, both in yellow over a black shadow. The words get "
+	                "stronger as the camera comes closer. An empty land slot shows only its label, such as Quick Save or "
+	                "Auto Save Land: and the land's number, a line below the top. An empty slot of the player shows no "
+	                "words.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
 	});
 
@@ -7741,6 +7805,55 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	{
+		// Each tiger holds a rock as the fight starts. It lets go of the rock before its taunt.
+		auto start = Fight(Kind::StartFight, 0, 1, 1.0f);
+		start.waitUntilFree = true;
+		// The minds wait, so that each tiger keeps its rock until the fight
+		auto holder = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto other = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		holder.pauseMind = true;
+		other.pauseMind = true;
+		all.push_back({
+		    .id = "combat.let_go_before_taunt",
+		    .name = "Two tigers let go of their rocks before they taunt",
+		    .facet = Facet::Combat,
+		    .description = "The blue tiger picks up a rock, and a fifth of a second later the red tiger picks up a rock. "
+		                   "A second after the red tiger holds its rock, it asks the blue tiger to fight. Both fight by "
+		                   "themselves.",
+		    .expected = "Each tiger keeps its rock while it turns to face the other tiger. Then each tiger throws its rock "
+		                "away or puts it down with its let-go clip, and after that it taunts. No rock falls from a hand at "
+		                "the start of the fight.",
+		    .framing = ringside,
+		    .creatures = {holder, other},
+		    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {-21.0f, 34.0f}},
+		                {.type = MobileStaticInfo::RockChalk, .offset = {21.0f, 34.0f}}},
+		    .commands = {OnObject(Kind::PickUp, 1, 1, 1.0f), OnObject(Kind::PickUp, 0, 0, 0.2f), start,
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
+	{
+		// The other tiger plays an action as the fight starts. The action plays on, and its turn to face waits for it.
+		auto asker = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto asked = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		asker.pauseMind = true;
+		asked.pauseMind = true;
+		all.push_back({
+		    .id = "combat.face_off_waits_for_body",
+		    .name = "A tiger finishes its action before it turns to fight",
+		    .facet = Facet::Combat,
+		    .description = "The blue tiger starts its impress action. Six seconds later, near the end of the action, the "
+		                   "red tiger asks the blue tiger to fight. Both fight by themselves.",
+		    .expected = "The red tiger turns to face the blue tiger. The blue tiger plays its action to the end, and only "
+		                "then turns to face the red tiger. Then both taunt.",
+		    .framing = ringside,
+		    .creatures = {asker, asked},
+		    .commands = {Play(Kind::PlayAction, 1, animations::k_Impress, 1.0f, false), Fight(Kind::StartFight, 0, 1, 6.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "saves.arena_ring_back",
 	    .name = "Save and load: the ring of the arena shows again",
@@ -11002,6 +11115,22 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	                "light maps, each wall hazed as one piece. The domes are as at other levels. The doors, the "
 	                "scrolls and the clicks on them work as at other levels. With no --detail-level, or above 0, the "
 	                "rooms have their light maps.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "temple.low_detail_scroll_text",
+	    .name = "At the lowest detail levels the scrolls have textures of half the size",
+	    .facet = Facet::Appearance,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The player has a temple and is put in "
+	                   "its main room. Look at the scrolls on the walls from a distance, then start again with "
+	                   "--detail-level 4 to compare.",
+	    .expected = "At Low and Minimum the text and the parchment of each scroll are softer, with half the texels "
+	                "along each side. Each texel is the mean of four texels of the full text. When the camera goes "
+	                "close to a scroll, the text in front of it is as sharp as at other levels.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview},
 	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},

@@ -53,6 +53,8 @@ public:
 	{
 		uint32_t slot;
 		std::u16string name;
+		/// The date and the time of the save
+		std::u16string date;
 	};
 	/// Reads a file of the saved games' pictures by its name, nothing when there is none
 	using ReadPicture = std::function<std::optional<std::vector<uint8_t>>(std::string_view fileName)>;
@@ -71,7 +73,7 @@ public:
 	/// Reads the pictures again after a save into the slot. The large picture changes too when the slot shows in high
 	/// detail.
 	void ReadPicturesAfterSave(uint32_t slot, const ReadPicture& read);
-	/// Coming into the room, no picture is shown in high detail
+	/// Coming into the room, no picture is shown in high detail, and no picture is looked at
 	void Enter();
 	/// The saved games that the room lists, in its order
 	void SetSaves(std::vector<Save> saves);
@@ -83,6 +85,8 @@ public:
 	[[nodiscard]] bool HasSave(uint32_t slot) const;
 	/// The name of the slot's save, if it has one
 	[[nodiscard]] std::optional<std::u16string_view> SaveName(uint32_t slot) const;
+	/// The save of a slot that the close look shows: the last save in the list with the slot, if any
+	[[nodiscard]] const Save* LastSaveOf(uint32_t slot) const;
 
 	/// The pictures' textures, by submesh
 	[[nodiscard]] std::vector<TempleSubMeshTexture> GetTextures() const;
