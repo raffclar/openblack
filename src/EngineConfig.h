@@ -17,6 +17,7 @@
 #include <string_view>
 #include <utility>
 
+#include "Common/GameLanguage.h"
 #include "Creature/BonusCreatures.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/LandDetail.h"
@@ -83,6 +84,8 @@ static constexpr auto k_GraphicsBackendNames = std::to_array<std::pair<std::stri
 
 struct EngineConfig
 {
+	/// The language of the install, from Country.txt in the game folder. The game reads it one time as it starts.
+	GameLanguage language {GameLanguage::UkEnglish};
 	bool wireframe {false};
 	/// The debug overlay labelling the villagers with their numbers (the game's own labels come with its keys)
 	bool showVillagerNames {false};

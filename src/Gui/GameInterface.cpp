@@ -70,8 +70,8 @@
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
 #include "Gui/GlyphTexture.h"
-#include "Gui/PingDisplay.h"
 #include "Gui/IncomingMessageStripRules.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/SavingBox.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/ScriptTexts.h"
@@ -422,7 +422,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _menuCreaturePainter(_menuCreatureCanvas, _font, *_atlas, *_fontTexture)
     , _logoPainter(_logoCanvas, _font, *_atlas, *_fontTexture)
     , _menu(std::make_unique<GameMenu>(_texts, _font, playerName, std::move(settings)))
-    , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::k_MidTextSize))
+    , _skipBox(std::make_unique<SkipBox>(_texts, _font, DialogPainter::MidTextSize()))
     , _storyHistoryBox(std::make_unique<StoryHistoryBox>(_texts, _font))
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
@@ -1990,14 +1990,14 @@ void GameInterface::DrawHandTricons(glm::u16vec2 resolution)
 	{
 		return;
 	}
-	// The languages that need bigger text aren't chosen in openblack yet
-	constexpr bool k_BiggerText = false;
+	// Some languages use a bigger word
+	const bool biggerText = DialogPainter::NeedsBiggerText();
 	_demoMouseOnLeft = tricons::LabelOnLeft(centre.x, screen.x, _demoMouseOnLeft);
 	const auto& label = _texts.GetHelpText(tricons::k_DemoText).text;
 	// Sized for the original's default screen, and scaled with the screen's height on wide screens
 	const auto scale = tricons::DemoScale(glm::ivec2(screen));
-	const auto labelSize = static_cast<float>(tricons::DemoLabelSize(k_BiggerText, scale));
-	const auto mouse = tricons::LayoutDemoMouse(centre, _demoMouseOnLeft, _font.GetWidth(label, labelSize), k_BiggerText,
+	const auto labelSize = static_cast<float>(tricons::DemoLabelSize(biggerText, scale));
+	const auto mouse = tricons::LayoutDemoMouse(centre, _demoMouseOnLeft, _font.GetWidth(label, labelSize), biggerText,
 	                                            in.moveHeld, in.actionHeld, scale);
 	DrawGlow(mouse.mouseMin, mouse.mouseMax, mouse.mouseGlow);
 	if (!label.empty())
@@ -2533,13 +2533,13 @@ void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line&
 
 void GameInterface::DrawClickCue(const help::TextRegion& box, float share)
 {
-	// The languages that need bigger text aren't chosen in openblack yet
-	constexpr bool k_BiggerText = false;
+	// Some languages use a bigger word
+	const bool biggerText = DialogPainter::NeedsBiggerText();
 	const auto& label = _texts.GetHelpText(help::click_cue::k_LabelText).text;
-	const auto labelSize = static_cast<float>(help::click_cue::LabelSize(box.top, box.bottom, k_BiggerText));
+	const auto labelSize = static_cast<float>(help::click_cue::LabelSize(box.top, box.bottom, biggerText));
 	// Inset from the strip's right end, which is the screen's on 4:3
 	const auto cue = help::click_cue::Layout(box.right, box.top, box.bottom, share, _font.GetWidth(label, labelSize),
-	                                         k_BiggerText, machine_clock::Ticks());
+	                                         biggerText, machine_clock::Ticks());
 	if (!cue.has_value())
 	{
 		return;
@@ -2833,7 +2833,7 @@ void GameInterface::DrawCaption(glm::u16vec2 resolution)
 	// The sizes are pixels of the default screen; each line is centred on the screen, the second a line's height below
 	// the first
 	const float scale = ReferenceScale(resolution.x, resolution.y);
-	const float size = rules::k_TextSize * scale;
+	const float size = rules::TextSize(DialogPainter::NeedsBiggerText()) * scale;
 	const float shadow = rules::k_ShadowOffset * scale;
 	const float alpha = static_cast<float>(_caption->alpha) / 255.0f;
 	float top = rules::k_TextTop * scale;

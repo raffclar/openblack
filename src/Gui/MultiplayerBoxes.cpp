@@ -32,7 +32,11 @@ using Look = BigButton::Look;
 using LabelSide = BigButton::LabelSide;
 using Layout = StaticText::Layout;
 constexpr auto k_Big = DialogPainter::k_BigTextSize;
-constexpr auto k_Mid = DialogPainter::k_MidTextSize;
+/// The middle text size for the language of the install
+[[nodiscard]] int Mid()
+{
+	return DialogPainter::MidTextSize();
+}
 
 constexpr float k_FadeInSeconds = 0.5f;
 /// Behind a message the box dims by three quarters
@@ -358,9 +362,9 @@ void MultiplayerBoxes::BuildLogin(Dialog& dialog)
 	dialog.Add<StaticText>(DialogRect {.min = {110, 250}, .max = {310, 295}}, Text(k_UserNameText), Layout::Right, k_Big);
 	dialog.Add<StaticText>(DialogRect {.min = {110, 370}, .max = {310, 415}}, Text(k_PasswordText), Layout::Right, k_Big);
 	_name = &dialog.Add<EditBox>(_font, DialogRect {.min = {325, 250}, .max = {555, 290}}, _frontEnd->GetLoginName(),
-	                             k_MostLoginCharacters, k_Mid);
+	                             k_MostLoginCharacters, Mid());
 	_password = &dialog.Add<EditBox>(_font, DialogRect {.min = {325, 370}, .max = {555, 410}}, std::u16string(),
-	                                 k_MostLoginCharacters, k_Mid);
+	                                 k_MostLoginCharacters, Mid());
 	_password->masked = true;
 	dialog.Add<StaticText>(k_Title, Text(k_LoginTitle), Layout::Centre, k_Big);
 	dialog.SetFocus(_name);
@@ -376,8 +380,8 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 	dialog.Add<StaticText>(k_Title, Text(lan ? k_LanListTitle : k_InternetListTitle), Layout::Centre, k_Big);
 	_help = &dialog.Add<StaticText>(DialogRect {.min = {420, 175}, .max = {690, 485}}, Text(k_GameListHelp), Layout::Wrapped,
 	                                k_Big);
-	dialog.Add<StaticText>(DialogRect {.min = {110, 130}, .max = {380, 170}}, Text(k_CurrentGamesText), Layout::Left, k_Mid);
-	_list = &dialog.Add<List>(_font, DialogRect {.min = {110, 175}, .max = {380, 485}}, k_Mid, false, true, true);
+	dialog.Add<StaticText>(DialogRect {.min = {110, 130}, .max = {380, 170}}, Text(k_CurrentGamesText), Layout::Left, Mid());
+	_list = &dialog.Add<List>(_font, DialogRect {.min = {110, 175}, .max = {380, 485}}, Mid(), false, true, true);
 	_list->onClick = [this] {
 		const auto line = _list->GetSelection();
 		_frontEnd->SelectGame(line.has_value() && *line < _shownGames.size() ? std::optional(_shownGames[*line])
@@ -393,19 +397,19 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 		}
 	};
 	_playersLabel = &dialog.Add<StaticText>(DialogRect {.min = {420, 130}, .max = {690, 170}}, Text(k_PlayersInGameText),
-	                                        Layout::Right, k_Mid);
-	_players = &dialog.Add<List>(_font, DialogRect {.min = {420, 175}, .max = {690, 485}}, k_Mid, false, true, false);
+	                                        Layout::Right, Mid());
+	_players = &dialog.Add<List>(_font, DialogRect {.min = {420, 175}, .max = {690, 485}}, Mid(), false, true, false);
 	// The game keeps the name's box and its label hidden. The box only holds the name of the game that the player picks.
 	auto& nameLabel =
-	    dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	    dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, Mid());
 	nameLabel.visible = false;
 	_name = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 480}, .max = {550, 510}}, std::u16string(),
-	                             lobby_api::k_MostNameCharacters, k_Mid);
+	                             lobby_api::k_MostNameCharacters, Mid());
 	_name->visible = false;
 	_passwordLabel = &dialog.Add<StaticText>(DialogRect {.min = {130, 530}, .max = {330, 570}}, Text(k_GamePasswordText),
-	                                         Layout::Right, k_Mid);
+	                                         Layout::Right, Mid());
 	_password = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 530}, .max = {550, 570}}, std::u16string(),
-	                                 k_MostLoginCharacters, k_Mid);
+	                                 k_MostLoginCharacters, Mid());
 	// With no game picked, the password's box is the filter of the game names
 	_password->onChange = [this](const std::u16string& text) {
 		if (!_frontEnd->GetSelectedGame().has_value())
@@ -414,7 +418,7 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 		}
 	};
 	// Refresh List shows only on the internet
-	auto& refresh = dialog.Add<Button>(DialogRect {.min = {110, 490}, .max = {250, 530}}, Text(k_RefreshText), k_Mid);
+	auto& refresh = dialog.Add<Button>(DialogRect {.min = {110, 490}, .max = {250, 530}}, Text(k_RefreshText), Mid());
 	refresh.visible = !lan;
 	refresh.onClick = [this] { _frontEnd->RefreshGames(); };
 }
@@ -437,74 +441,74 @@ void MultiplayerBoxes::BuildRoom()
 				                                    _frontEnd->Back();
 			                                    }
 		                                    },
-		                .textSize = k_Mid});
+		                .textSize = Mid()});
 	}
 	_dialog = std::make_unique<Dialog>(std::move(tabs), static_cast<size_t>(_frontEnd->GetTab()), k_RoomBox);
 	auto& dialog = *_dialog;
 
-	_caption = &dialog.Add<StaticText>(DialogRect {.min = {40, 60}, .max = {760, 88}}, std::u16string(), Layout::Centre, k_Mid);
+	_caption = &dialog.Add<StaticText>(DialogRect {.min = {40, 60}, .max = {760, 88}}, std::u16string(), Layout::Centre, Mid());
 	// The gods and the observers of the room, one line each in their colour
-	_roster = &dialog.Add<List>(_font, DialogRect {.min = {40, 95}, .max = {760, 370}}, k_Mid, false, true, true);
+	_roster = &dialog.Add<List>(_font, DialogRect {.min = {40, 95}, .max = {760, 370}}, Mid(), false, true, true);
 	_roster->onClick = [this] { _frontEnd->ShowSeat(_roster->GetSelection()); };
 
 	// The Chat tab
 	_chatControls.push_back(
-	    &dialog.Add<StaticText>(DialogRect {.min = {40, 380}, .max = {760, 408}}, Text(k_IncomingText), Layout::Centre, k_Mid));
-	_chat = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, k_Mid, false, true, false);
+	    &dialog.Add<StaticText>(DialogRect {.min = {40, 380}, .max = {760, 408}}, Text(k_IncomingText), Layout::Centre, Mid()));
+	_chat = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, Mid(), false, true, false);
 	_chatControls.push_back(_chat);
 	_chatEdit = &dialog.Add<EditBox>(_font, DialogRect {.min = {140, 545}, .max = {660, 575}}, Text(k_TypeChatText),
-	                                 k_MostChatCharacters, k_Mid);
+	                                 k_MostChatCharacters, Mid());
 	_chatEdit->onClick = [this] { SendChat(); };
 	_chatControls.push_back(_chatEdit);
 
 	// The Landscape tab: the lands, the server's land marked as the host's choice, and the land's information
 	_landControls.push_back(&dialog.Add<StaticText>(DialogRect {.min = {140, 380}, .max = {330, 408}}, Text(k_LandscapesText),
-	                                                Layout::Centre, k_Mid));
+	                                                Layout::Centre, Mid()));
 	_landControls.push_back(
-	    &dialog.Add<StaticText>(DialogRect {.min = {0, 380}, .max = {800, 408}}, Text(k_ThumbnailText), Layout::Centre, k_Mid));
+	    &dialog.Add<StaticText>(DialogRect {.min = {0, 380}, .max = {800, 408}}, Text(k_ThumbnailText), Layout::Centre, Mid()));
 	_landControls.push_back(&dialog.Add<StaticText>(DialogRect {.min = {470, 380}, .max = {660, 408}}, Text(k_LandInfoTitle),
-	                                                Layout::Centre, k_Mid));
-	_lands = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {330, 530}}, k_Mid, false, true, true);
+	                                                Layout::Centre, Mid()));
+	_lands = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {330, 530}}, Mid(), false, true, true);
 	_lands->onClick = [this] { _frontEnd->ShowLand(_lands->GetSelection()); };
 	_landControls.push_back(_lands);
-	_landInfo = &dialog.Add<List>(_font, DialogRect {.min = {470, 410}, .max = {660, 530}}, k_Mid, false, true, false);
+	_landInfo = &dialog.Add<List>(_font, DialogRect {.min = {470, 410}, .max = {660, 530}}, Mid(), false, true, false);
 	_landControls.push_back(_landInfo);
 
 	// The Clans tab
 	_clansLabel =
-	    &dialog.Add<StaticText>(DialogRect {.min = {100, 380}, .max = {400, 408}}, std::u16string(), Layout::Centre, k_Mid);
+	    &dialog.Add<StaticText>(DialogRect {.min = {100, 380}, .max = {400, 408}}, std::u16string(), Layout::Centre, Mid());
 	_clanInfoLabel =
-	    &dialog.Add<StaticText>(DialogRect {.min = {400, 380}, .max = {700, 408}}, std::u16string(), Layout::Centre, k_Mid);
-	_clans = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {390, 530}}, k_Mid, false, true, true);
+	    &dialog.Add<StaticText>(DialogRect {.min = {400, 380}, .max = {700, 408}}, std::u16string(), Layout::Centre, Mid());
+	_clans = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {390, 530}}, Mid(), false, true, true);
 	_clans->onClick = [this] { _frontEnd->ShowClan(_clans->GetSelection()); };
-	_clanInfo = &dialog.Add<List>(_font, DialogRect {.min = {410, 410}, .max = {660, 530}}, k_Mid, false, true, false);
-	_useClan = &dialog.Add<Button>(DialogRect {.min = {250, 540}, .max = {550, 570}}, Text(k_UseClanText), k_Mid);
+	_clanInfo = &dialog.Add<List>(_font, DialogRect {.min = {410, 410}, .max = {660, 530}}, Mid(), false, true, false);
+	_useClan = &dialog.Add<Button>(DialogRect {.min = {250, 540}, .max = {550, 570}}, Text(k_UseClanText), Mid());
 	_useClan->onClick = [this] { _frontEnd->UseShownClan(); };
-	_noClan = &dialog.Add<Button>(DialogRect {.min = {250, 540}, .max = {550, 570}}, Text(k_NoClanText), k_Mid);
+	_noClan = &dialog.Add<Button>(DialogRect {.min = {250, 540}, .max = {550, 570}}, Text(k_NoClanText), Mid());
 	_noClan->onClick = [this] { _frontEnd->UseNoClan(); };
 	_clanControls = {_clansLabel, _clanInfoLabel, _clans, _clanInfo};
 
 	// The Player Details tab
 	_playerLabel =
-	    &dialog.Add<StaticText>(DialogRect {.min = {0, 380}, .max = {800, 408}}, std::u16string(), Layout::Centre, k_Mid);
-	_playerInfo = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, k_Mid, false, true, false);
+	    &dialog.Add<StaticText>(DialogRect {.min = {0, 380}, .max = {800, 408}}, std::u16string(), Layout::Centre, Mid());
+	_playerInfo = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, Mid(), false, true, false);
 	_playerControls = {_playerLabel, _playerInfo};
 
 	// The conditions page, as the game shows it to a player who is not the host. The game server has the host's part,
 	// so the value of a condition and the arrows do not show.
-	_conditions = &dialog.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 320}}, k_Mid, false, true, true);
+	_conditions = &dialog.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 320}}, Mid(), false, true, true);
 	_selectMap = &dialog.Add<StaticText>(DialogRect {.min = {100, 200}, .max = {700, 260}}, Text(k_SelectMapText),
-	                                     Layout::Centre, k_Mid);
+	                                     Layout::Centre, Mid());
 	_timeLabel =
-	    &dialog.Add<StaticText>(DialogRect {.min = {400, 340}, .max = {560, 370}}, Text(k_TimeLimitText), Layout::Left, k_Mid);
+	    &dialog.Add<StaticText>(DialogRect {.min = {400, 340}, .max = {560, 370}}, Text(k_TimeLimitText), Layout::Left, Mid());
 	_timeLimit =
-	    &dialog.Add<StaticText>(DialogRect {.min = {600, 320}, .max = {680, 380}}, std::u16string(), Layout::Centre, k_Mid);
-	_viewChat = &dialog.Add<Button>(DialogRect {.min = {675, 440}, .max = {775, 472}}, Text(k_ViewChatText), k_Mid);
+	    &dialog.Add<StaticText>(DialogRect {.min = {600, 320}, .max = {680, 380}}, std::u16string(), Layout::Centre, Mid());
+	_viewChat = &dialog.Add<Button>(DialogRect {.min = {675, 440}, .max = {775, 472}}, Text(k_ViewChatText), Mid());
 	_viewChat->onClick = [this] {
 		_frontEnd->SelectTab(RoomTab::Chat);
 		_frontEnd->Back();
 	};
-	_ready = &dialog.Add<CheckBox>(_font, glm::ivec2 {65, 460}, k_Mid, Text(k_ReadyText), LabelSide::Below, false, false);
+	_ready = &dialog.Add<CheckBox>(_font, glm::ivec2 {65, 460}, Mid(), Text(k_ReadyText), LabelSide::Below, false, false);
 	_ready->onChange = [this](bool checked) { _frontEnd->SetReady(checked); };
 	_conditionControls = {_conditions, _selectMap, _timeLabel, _timeLimit, _viewChat, _ready};
 
@@ -840,7 +844,7 @@ void MultiplayerBoxes::ShowMessage(Message message)
 	switch (ButtonsOf(message))
 	{
 	case MessageButtons::Ok:
-		shown.answers.Add<Button>(k_MessageOk, Text(k_OkText), k_Mid).onClick = [this] {
+		shown.answers.Add<Button>(k_MessageOk, Text(k_OkText), Mid()).onClick = [this] {
 			_frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
 		};
 		break;
@@ -1045,7 +1049,7 @@ void MultiplayerBoxes::Draw(const DialogPainter& painter) const
 		{
 			--size;
 		} while (painter.GetTextHeight(k_MessageWidth, _message->text, size) >= k_MessageTallest &&
-		         size > DialogPainter::k_SmallTextSize);
+		         size > DialogPainter::SmallTextSize());
 		_message->textControl->size = size;
 		painter.SetAlpha(messageAlpha);
 		painter.DrawBackground(k_MessageBox, glm::vec3(1.0f), true, DialogPainter::All);

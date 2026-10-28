@@ -47,7 +47,7 @@ void SetupMessage::Show(std::u16string text, std::u16string okLabel)
 	auto& dialog = _dialog.emplace();
 	_text = &dialog.Add<StaticText>(k_Text, std::move(text), StaticText::Layout::Wrapped);
 	_text->takesClicks = true;
-	dialog.Add<Button>(k_Ok, std::move(okLabel), DialogPainter::k_MidTextSize).onClick = [this] { _answered = true; };
+	dialog.Add<Button>(k_Ok, std::move(okLabel), DialogPainter::MidTextSize()).onClick = [this] { _answered = true; };
 	_answered = false;
 	_fade.Reset(0.0f);
 	_fade.SetDestination(1.0f, k_FadeSeconds);
@@ -150,7 +150,7 @@ void SetupMessage::Draw(const DialogPainter& painter, bool active) const
 	do
 	{
 		--size;
-	} while (painter.GetTextHeight(k_TextWidth, _text->text, size) >= k_TextTallest && size > DialogPainter::k_SmallTextSize);
+	} while (painter.GetTextHeight(k_TextWidth, _text->text, size) >= k_TextTallest && size > DialogPainter::SmallTextSize());
 	_text->size = size;
 	const auto alpha = MessageAlpha();
 	painter.SetAlpha(alpha);

@@ -95,6 +95,7 @@
 #endif
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
+#include "Common/GameLanguage.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/MainThreadQueue.h"
@@ -3350,7 +3351,9 @@ void Game::UpdateSingAlong(bool inTemple)
 	if (Locator::scriptMusicSystem::has_value())
 	{
 		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
-		if (help::sing_along::IsSungVerse(static_cast<int32_t>(script.GetType())))
+		// Some languages show no glow under the words of a sung verse
+		const bool shown = game_language::ShowsSingAlong(Locator::config::value().language);
+		if (shown && help::sing_along::IsSungVerse(static_cast<int32_t>(script.GetType())))
 		{
 			word = script.GetLyrics().word;
 		}
@@ -4183,6 +4186,34 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	}
 }
 
+namespace
+{
+
+/// The language of the install from Country.txt in the game folder, or UK English when the game can not read the file
+GameLanguage ReadGameLanguage(filesystem::FileSystemInterface& fileSystem)
+{
+	std::optional<std::vector<uint8_t>> contents;
+	if (const auto path =
+	        filesystem::FileSystemInterface::FindIgnoringCase(fileSystem.GetGamePath(), game_language::k_CountryFile);
+	    path.has_value())
+	{
+		try
+		{
+			contents = fileSystem.ReadAll(*path);
+		}
+		catch (const std::exception& error)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read {}: {}", game_language::k_CountryFile, error.what());
+		}
+	}
+	const auto language = contents.has_value() ? game_language::FromCountryFile(std::span<const uint8_t>(*contents))
+	                                           : game_language::FromCountryFile(std::nullopt);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The language of the install is \"{}\"", game_language::Code(language));
+	return language;
+}
+
+} // namespace
+
 bool Game::Initialize() noexcept
 {
 	auto& config = Locator::config::value();
@@ -4305,6 +4336,7 @@ bool Game::Initialize() noexcept
 	fileSystem.SetGamePath(_gamePath);
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The GamePath is \"{}\".", fileSystem.GetGamePath().generic_string());
+	Locator::config::value().language = ReadGameLanguage(fileSystem);
 
 	if (std::filesystem::path(_startMap).is_absolute())
 	{
