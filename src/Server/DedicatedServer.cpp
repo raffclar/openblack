@@ -356,16 +356,16 @@ bool ServerWorld::StartLand()
 	if (_settings.conditions.has_value())
 	{
 		const auto& request = *_settings.conditions;
-		const auto land =
+		const auto limitsLand =
 		    request.limitsLand.empty() ? std::filesystem::path(_settings.land).stem().string() : request.limitsLand;
-		const auto limits = gui::multiplayer::FindConditions(gui::ReadOnlineMapTexts().conditionTemplate, land);
+		const auto limits = gui::multiplayer::FindConditions(gui::ReadOnlineMapTexts().conditionTemplate, limitsLand);
 		if (const auto refusal = gui::multiplayer::ConditionsRefusal(limits, request.picks); refusal.has_value())
 		{
-			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot start: {} ({})", *refusal, land);
+			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot start: {} ({})", *refusal, limitsLand);
 			return false;
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game has {} winning conditions in the limits of {}",
-		                   request.picks.size(), land);
+		                   request.picks.size(), limitsLand);
 	}
 	Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
 	// The story's scripts run the first land, but not the testbed or a playground. The server's world is the world of a
