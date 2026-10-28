@@ -68,6 +68,9 @@ class WebJoinPlan(unittest.TestCase):
         self.assertEqual(plan["actions"], [])
         self.assertEqual(plan["seconds"], net_check.run_limit_seconds(600))
 
+    def test_the_path_of_the_join_is_on_the_origin_of_the_page(self):
+        self.assertEqual(net_check.web_join_path("wss://127.0.0.1:5000/game/net-check-1"), "/game/net-check-1")
+
     def test_a_line_of_the_text_keeps_its_colons(self):
         plan = net_check.web_join_plan(self.options(["300:a:b"]), "wss://127.0.0.1:5000/game/x", "t", 600)
         keys = "".join(step["key"] for step in plan["actions"] if step["do"] == "key" and len(step["key"]) == 1)
@@ -131,9 +134,6 @@ class ServePage(unittest.TestCase):
         head = serve.request_head("GET /game/x HTTP/1.1", {"Host": "127.0.0.1:443", "Upgrade": "websocket"},
                                   "127.0.0.1:5000")
         self.assertEqual(head, b"GET /game/x HTTP/1.1\r\nHost: 127.0.0.1:5000\r\nUpgrade: websocket\r\n\r\n")
-
-    def test_the_path_of_the_join_is_on_the_origin_of_the_page(self):
-        self.assertEqual(net_check.web_join_path("wss://127.0.0.1:5000/game/net-check-1"), "/game/net-check-1")
 
 
 if __name__ == "__main__":
