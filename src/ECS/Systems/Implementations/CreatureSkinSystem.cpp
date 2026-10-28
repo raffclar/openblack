@@ -31,6 +31,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Player.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -246,6 +247,18 @@ void CreatureSkinSystem::Update()
 		    PaintIfChanged(skin, creature, morph, ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
 		                   MasksOf(registry, creature.owner), marks, art);
 	    });
+	// The creature of the tattoo menu is a thing of the drawn registry. It shows the tattoos and uses the masks of the
+	// players of the land.
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value()
+		    .Each<const Creature, const CreatureMorph, const CreatureTattoos, const CreatureMarks, CreatureSkin>(
+		        [&](const Creature& creature, const CreatureMorph& morph, const CreatureTattoos& tattoos,
+		            const CreatureMarks& marks, CreatureSkin& skin) {
+			        PaintIfChanged(skin, creature, morph, ShownTattoos(registry, creature.owner, tattoos, tattoos),
+			                       tattoos.revision, MasksOf(registry, creature.owner), marks, art);
+		        });
+	}
 	// A copy with a skin of its own is painted at its own times. The copy of the land's creature in the temple's
 	// creature room is a thing of the temple's rooms.
 	const auto paintCopies = [&](Registry& copies) {

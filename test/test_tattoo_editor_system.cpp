@@ -73,7 +73,8 @@ public:
 	{
 		_log.pictures[creature] = std::move(pictures);
 	}
-	void Show(entt::entity shown, std::optional<Slots> slots) override { _log.shown[shown] = slots; }
+	void ShowMenu(entt::entity shown, std::optional<Slots> slots) override { _log.shown[shown] = slots; }
+	void PaintMenu(entt::entity shown) override { _log.painted.push_back(shown); }
 	void RemakeMasks(entt::entity creature, Sheet sheet) override { _log.remade.emplace_back(creature, sheet); }
 	void Paint(entt::entity creature) override { _log.painted.push_back(creature); }
 	void ShowCopy(entt::entity copy, std::optional<Slots> slots) override
