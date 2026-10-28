@@ -6213,25 +6213,26 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = collarHand,
 	});
 
-	// The real hand on the body: a fast sweep slaps, then slow strokes come while the tiger still reels
+	// The real hand on the body: a stroke on one part plays a long pleased animation, then the hand strokes another part
+	// before that animation is far enough through
 	std::vector<Command> refusedStroke {
 	    {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
 	    {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {-0.1f, 0.0f}, .amount = 0.3f},
-	    {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.2f, 0.0f}, .amount = 0.01f}};
-	for (int stroke = 0; stroke < 4; ++stroke)
+	    {.kind = Kind::PointerSweep, .delaySeconds = 0.6f, .point = {0.2f, 0.0f}, .amount = 0.6f}};
+	for (int wiggle = 0; wiggle < 6; ++wiggle)
 	{
-		const float down = stroke % 2 == 0 ? 0.08f : -0.08f;
-		refusedStroke.push_back({.kind = Kind::PointerSweep, .delaySeconds = 0.4f, .point = {0.0f, down}, .amount = 0.4f});
+		const float across = wiggle % 2 == 0 ? 0.02f : -0.02f;
+		refusedStroke.push_back({.kind = Kind::PointerSweep, .delaySeconds = 0.35f, .point = {across, 0.0f}, .amount = 0.3f});
 	}
 	refusedStroke.push_back({.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3});
 	all.push_back({
 	    .id = "hand.refused_stroke_face",
-	    .name = "A stroke while the creature reels pulls only the face",
+	    .name = "A stroke that the creature refuses pulls only the face",
 	    .facet = Facet::Hand,
-	    .description = "The hand holds the player's tiger, which faces the camera, by its middle. It sweeps fast across "
-	                   "the middle of the screen one time, then strokes the tiger slowly up and down while it reels.",
-	    .expected = "The fast sweep plays a reeling animation. A stroke that comes before the reel is far enough through "
-	                "pulls only its face: the tiger reels to the end and plays no pleased animation for that stroke. The "
+	    .description = "The hand holds the player's tiger, which faces the camera, by its middle. It strokes one part of "
+	                   "the body, then moves to another part and strokes it while the first pleased animation plays.",
+	    .expected = "The first stroke plays a pleased animation and its face. A stroke on the other part that comes before "
+	                "that animation is far enough through pulls only its face: the tiger plays no animation for it. The "
 	                "log shows \"pulls only the face of reaction\" at the turn of that stroke.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
 	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
