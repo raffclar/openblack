@@ -159,4 +159,46 @@ bool Playback::Advance(uint32_t gameTime, bool pauseOnTrigger, bool& triggerReac
 	return false;
 }
 
+namespace
+{
+/// The first record of a play that only the turns see
+Playback TurnPlayback(std::span<const hnd::HNDRecord> records, uint32_t turnTime)
+{
+	std::vector<Played> unseen;
+	return {records, turnTime, unseen};
+}
+} // namespace
+
+SplitPlayback::SplitPlayback(std::span<const hnd::HNDRecord> records, uint32_t turnTime, bool pauseOnTrigger,
+                             std::vector<Played>& played)
+    : _turn(TurnPlayback(records, turnTime))
+    , _frame(records, turnTime, played)
+    , _pauseOnTrigger(pauseOnTrigger)
+{
+}
+
+bool SplitPlayback::AdvanceTurn(uint32_t turnTime, bool& triggerReached)
+{
+	std::vector<Played> unseen;
+	return _turn.Advance(turnTime, _pauseOnTrigger, triggerReached, unseen);
+}
+
+bool SplitPlayback::AdvanceFrame(uint32_t frameTime, std::vector<Played>& played)
+{
+	// A side that does not hold keeps the clock of the turns, which also holds at a mark until the scripts read it. A
+	// side that holds plays nothing until then.
+	const bool held = FrameHeld();
+	if (!held)
+	{
+		_frame.KeepClockOf(_turn);
+	}
+	bool markReached = held;
+	const bool goesOn = _frame.Advance(frameTime, _pauseOnTrigger, markReached, played);
+	if (markReached && !held)
+	{
+		++_frameMarks;
+	}
+	return goesOn;
+}
+
 } // namespace openblack::hand_demo

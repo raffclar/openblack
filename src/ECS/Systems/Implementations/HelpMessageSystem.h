@@ -13,6 +13,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Common/GameRandom.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "Help/HelpQuery.h"
 
@@ -33,7 +34,10 @@ public:
 	bool RunMessageSet(size_t set, std::optional<help_messages::Texts> thing = std::nullopt) override;
 	void TriggerCategory(uint32_t category) override;
 	void HelpQuery() override;
+	void DoHelpQuery(const player_commands::HelpQuery& query) override;
 	void ProcessTurn() override;
+	uint32_t HelpRand(int32_t n) override;
+	float HelpFloatRand(float x) override;
 
 	[[nodiscard]] const help_messages::SetCounts& GetSentCounts() const override { return _sent; }
 	[[nodiscard]] const std::vector<Started>& GetStarted() const override { return _started; }
@@ -53,6 +57,8 @@ private:
 	std::optional<size_t> _lastSet;
 	uint32_t _messageTurn {0};
 	std::vector<Started> _started;
+	/// The seed of the random numbers of the help
+	uint32_t _randomSeed {game_random::k_InitialSeed};
 };
 
 } // namespace openblack::ecs::systems

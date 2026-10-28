@@ -26,6 +26,7 @@ public:
 	void Play(int32_t special) override;
 	void ReleaseAll() override;
 	[[nodiscard]] bool HasLiftFinished() const override { return _liftFinished; }
+	void ProcessTurn(uint32_t milliseconds) override;
 	void Update(uint32_t milliseconds) override;
 	[[nodiscard]] std::optional<CameraView> GetCameraView() const override;
 	[[nodiscard]] const intro_rules::light::Frame* GetLightFrame() const override;
@@ -71,6 +72,9 @@ private:
 	bool _holdingBoy {false};
 	/// Set once the light has gone, when the lifting clip may play
 	int32_t _liftGo {0};
+	/// The light and the lifting clip as the turns move them on, from the fall of the light until the hand stands ready to
+	/// set the boy down. Once the clip comes round, it stays so.
+	std::optional<intro_rules::LiftClock> _liftClock;
 	bool _liftFinished {false};
 	std::optional<glm::vec3> _grip;
 };

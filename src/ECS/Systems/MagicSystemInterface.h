@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/InputSteps.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Magic/CastInput.h"
@@ -254,8 +255,9 @@ public:
 
 	// The hand
 
-	/// Once a frame, before any press or release
-	virtual void UpdateHand(const HandFrame& frame, float seconds) = 0;
+	/// Once a frame, before any press or release. The hand's movement and its spin are measured at the steps of the
+	/// input that the frame takes (see input_steps), the hand at its place between the last frame and this frame.
+	virtual void UpdateHand(const HandFrame& frame, const input_steps::Steps& steps) = 0;
 	/// A fireball tapped by the empty hand within the player's influence: another player's is caught into the hand, the
 	/// player's own slips through. Whether it was caught.
 	virtual bool TapFireBall(entt::entity ball) = 0;
