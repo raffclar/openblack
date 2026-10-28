@@ -661,6 +661,46 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 	return hashes;
 }
 
+std::vector<std::pair<std::string, uint64_t>> openblack::ecs::reflection::RowOrders(const entt::registry& registry,
+                                                                                    const entt::meta_ctx& context,
+                                                                                    std::span<const HashLeaveOut> leaveOut)
+{
+	std::vector<std::string> unregistered;
+	std::vector<std::pair<std::string, uint64_t>> orders;
+	for (const auto& component : RegisteredStorages(registry, context, unregistered))
+	{
+		const auto* codec = ComponentCodec(component.type);
+		const auto fields = KeptFields(component.type);
+		if (codec == nullptr && fields.empty())
+		{
+			continue;
+		}
+		std::vector<std::string_view> names;
+		if (codec != nullptr)
+		{
+			names.push_back(k_WholeComponent);
+		}
+		else
+		{
+			std::ranges::transform(fields, std::back_inserter(names),
+			                       [](const KeptField& field) { return std::string_view(field.info->name); });
+		}
+		const auto left = FindLeaveOut(leaveOut, component.name, names);
+		if (left.whole || std::ranges::all_of(left.fieldAlways, [](bool always) { return always; }))
+		{
+			continue;
+		}
+		uint64_t order = k_HashOffset;
+		for (const auto row : LiveRows(*component.storage))
+		{
+			const auto value = entt::to_integral(row);
+			MixBytes(order, std::span(reinterpret_cast<const uint8_t*>(&value), sizeof(value)));
+		}
+		orders.emplace_back(component.name, order);
+	}
+	return orders;
+}
+
 std::shared_ptr<const WorldSnapshot> openblack::ecs::reflection::SnapshotWorld(const entt::registry& registry,
                                                                                const entt::meta_ctx& context)
 {
