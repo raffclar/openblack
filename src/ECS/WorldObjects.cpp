@@ -668,14 +668,13 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	// A miracle dispenser is a building of its town and counts by the same rule
 	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object); dispenser != nullptr)
 	{
-		if (const auto* info = AbodeInfoOf(object);
-		    info != nullptr && statistics::StopsWorking(before, life.life, info->thresholdForStopBeingFunctional) &&
-		    statistics::CountsAsDestroyed(by.has_value(), dispenser->age))
+		if (const auto* info = AbodeInfoOf(object); info != nullptr)
 		{
-			player_statistics::CountDestroyed(registry, *by);
-		}
-		if (info != nullptr)
-		{
+			if (statistics::StopsWorking(before, life.life, info->thresholdForStopBeingFunctional) &&
+			    statistics::CountsAsDestroyed(by.has_value(), dispenser->age))
+			{
+				player_statistics::CountDestroyed(registry, *by);
+			}
 			CountSmashed(by, {.lifeBefore = before,
 			                  .lifeAfter = life.life,
 			                  .stopsWorkingAt = info->thresholdForStopBeingFunctional,
