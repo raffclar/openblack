@@ -96,8 +96,6 @@ constexpr size_t k_DanceMoveCount = 7;
 /// After the first move, the body chooses the next move from only the first five
 constexpr size_t k_LaterDanceMoveCount = 5;
 constexpr size_t k_Talk = 205;
-/// The kiss
-constexpr size_t k_Kiss = 212;
 
 /// The spec file's name of an animation the minds play, without its type letter, or empty for others
 [[nodiscard]] std::string_view Name(size_t animation);
@@ -152,6 +150,9 @@ struct BodyAction
 	/// The body keeps its pace when it is told to hurry. A kiss, a cast and the confused look of a walk that waits for
 	/// its route do this.
 	bool keepsPace {false};
+	/// The body plays the kiss of the creature: the low kiss, alone or blended towards the high kiss. The kiss gets to its
+	/// moment at the kiss time of the species, not at the middle of its animation.
+	bool kiss {false};
 	/// The body plays at the pace of real time, whatever the size of the creature
 	bool realTime {false};
 	/// Each move of a dance lasts this many milliseconds of real time, whatever the size of the creature
@@ -216,8 +217,8 @@ struct BodyAction
                                      std::optional<float> realMilliseconds = std::nullopt);
 /// Whether the body gets to the moment of its action as AdvanceBody moves it on some milliseconds. An action played
 /// once gets to its moment as it passes the middle of its animation (half its length in whole milliseconds). The kiss
-/// gets to its moment as it passes the kiss time of the species. A body timed by what plays it does not get to a moment
-/// here.
+/// gets to its moment as it passes the kiss time of the species, also when it plays the low kiss alone. A body timed by what
+/// plays it does not get to a moment here.
 [[nodiscard]] bool ReachesActionMoment(const BodyAction& body, float milliseconds, std::optional<uint32_t> duration,
                                        uint32_t kissMs);
 

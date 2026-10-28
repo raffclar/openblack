@@ -756,7 +756,9 @@ void LockstepHost::StopTurns()
 		return;
 	}
 	_stoppedAfter = _turnsDone - 1;
-	Log(spdlog::level::info, fmt::format("The game is decided: the turns of the game stop after turn {}", *_stoppedAfter));
+	// The world gives each turn the number after the number of its commands, as the checksums and the records do. The
+	// log uses the number of the world, so that it names the same turn as the line of the decision.
+	Log(spdlog::level::info, fmt::format("The game is decided: the turns of the game stop after turn {}", *_stoppedAfter + 1));
 	Broadcast(game_socket::GameStop {.turn = *_stoppedAfter});
 }
 

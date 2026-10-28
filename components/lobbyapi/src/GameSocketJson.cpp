@@ -43,6 +43,10 @@ constexpr std::string_view k_GameStop = "game.stop";
 
 /// The most god slots that a frame can name
 constexpr uint64_t k_MostSlots = 32;
+/// The number of the winning conditions of a network game
+constexpr uint64_t k_ConditionCount = 15;
+/// The largest value of a winning condition: the largest whole number that the game keeps for it
+constexpr uint64_t k_MostConditionValue = std::numeric_limits<int32_t>::max();
 
 std::string Dump(const Json& value)
 {
@@ -181,6 +185,15 @@ bool ReadStart(const Json& object, Start& start)
 		}
 		start.aiSeed = static_cast<uint32_t>(value);
 	}
+	if (const auto* timeLimit = Member(object, "time_limit"); timeLimit != nullptr && !timeLimit->is_null())
+	{
+		uint64_t value = 0;
+		if (!ReadUnsigned(object, "time_limit", k_MostNumber, value))
+		{
+			return false;
+		}
+		start.timeLimit = static_cast<uint32_t>(value);
+	}
 	if (const auto* scenario = Member(object, "scenario"); scenario != nullptr && !scenario->is_null())
 	{
 		if (!scenario->is_string() || scenario->get<std::string>().empty())
@@ -188,6 +201,24 @@ bool ReadStart(const Json& object, Start& start)
 			return false;
 		}
 		start.scenario = scenario->get<std::string>();
+	}
+	if (const auto* conditions = Member(object, "conditions"); conditions != nullptr && !conditions->is_null())
+	{
+		if (!conditions->is_array() || conditions->size() > k_ConditionCount)
+		{
+			return false;
+		}
+		for (const auto& each : *conditions)
+		{
+			uint64_t condition = 0;
+			uint64_t value = 0;
+			if (!each.is_object() || !ReadUnsigned(each, "condition", k_ConditionCount - 1, condition) ||
+			    !ReadUnsigned(each, "value", k_MostConditionValue, value))
+			{
+				return false;
+			}
+			start.conditions.push_back({.condition = static_cast<uint8_t>(condition), .value = static_cast<uint32_t>(value)});
+		}
 	}
 	if (const auto* names = Member(object, "names"); names != nullptr && !names->is_null())
 	{
@@ -253,9 +284,21 @@ void WriteStart(const Start& start, Json& object)
 	{
 		object["ai_seed"] = *start.aiSeed;
 	}
+	if (start.timeLimit.has_value())
+	{
+		object["time_limit"] = *start.timeLimit;
+	}
 	if (start.scenario.has_value())
 	{
 		object["scenario"] = *start.scenario;
+	}
+	if (!start.conditions.empty())
+	{
+		auto& conditions = object["conditions"] = Json::array();
+		for (const auto& each : start.conditions)
+		{
+			conditions.push_back({{"condition", each.condition}, {"value", each.value}});
+		}
 	}
 	if (!start.names.empty())
 	{

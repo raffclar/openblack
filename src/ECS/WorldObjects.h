@@ -70,8 +70,9 @@ struct Size
 void SetLife(entt::entity object, float life, bool allowed = true);
 /// Life taken from an object, as each kind takes it: a building's people come out, and it stops working once low; a
 /// field loses food rather than life; a creature that runs out is knocked out. Its life after. The player who did it,
-/// if any, is counted as destroying a settled building it puts out of action.
-float ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by = std::nullopt);
+/// if any, is counted as destroying a settled building it puts out of action. In a network game the player also counts a
+/// building smashed, by a creature when the harm comes from a creature.
+float ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> by = std::nullopt, bool byCreature = false);
 
 /// Whether a building, a field, a wonder, a spell dispenser and the like: what a miracle that destroys things leaves
 /// standing at no life

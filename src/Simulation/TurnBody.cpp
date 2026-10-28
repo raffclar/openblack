@@ -151,6 +151,11 @@ void PlayPlayerTurns()
 	for (uint8_t index = 0; index < static_cast<uint8_t>(PlayerNames::_COUNT); ++index)
 	{
 		const auto player = static_cast<PlayerNames>(index);
+		// In a network game, the winning conditions that the world measures take their values before the player's turn
+		if (Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().MeasureConditions(player);
+		}
 		if (Locator::templeDestructionSystem::has_value())
 		{
 			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
@@ -591,6 +596,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::worshipSiteSystem::has_value())
 		{
 			Locator::worshipSiteSystem::value().UpdateTurn();
+		}
+		break;
+	case Step::GameConditions:
+		// At the first turn of a network game, each god gets the winning conditions of the game
+		if (Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().GiveConditions();
 		}
 		break;
 	case Step::GameEnd:

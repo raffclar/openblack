@@ -15,6 +15,7 @@
 #include <span>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include "Enums.h"
 
@@ -80,6 +81,10 @@ struct SeedWithSpell
 [[nodiscard]] bool ShownWithSpell(const SeedWithSpell& seed);
 /// A miracle whose seed is shown closes down once the seed stands where its player has no influence
 [[nodiscard]] bool ClosesOutOfInfluence(bool shown, bool inInfluence, bool closedDown);
+/// The place at which the turn finds a seed out of the hand for the check of its player's influence. A seed that
+/// follows its miracle stays over the miracle, so the turn uses the miracle's place on the land and not the place that
+/// the frames draw the seed at.
+[[nodiscard]] glm::vec3 PlaceForInfluence(glm::vec3 seed, bool followsSpell, glm::vec3 spell);
 
 /// Something standing in the shown seed's cell of the map, which the seed may sit on top of
 struct ThingUnderSeed

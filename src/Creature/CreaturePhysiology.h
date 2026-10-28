@@ -201,6 +201,22 @@ void TickTurn(Needs& needs, Shape& shape, const Species& species, const Turn& tu
 constexpr float k_AutoScaleEasing = 0.5f;
 constexpr float k_AutoScaleLargest = 2.0f;
 [[nodiscard]] float AutoScaledSize(float size, float playersSize, float share);
+/// What tells if a script scales a creature in this turn
+struct AutoScaleFacts
+{
+	/// A script turned the scale on for the creature
+	bool on {false};
+	/// The player has a creature to scale to
+	bool playersCreature {false};
+	/// A hand holds the creature
+	bool held {false};
+	bool networkGame {false};
+};
+/// Only in a game alone, and never while a hand holds the creature
+[[nodiscard]] constexpr bool AutoScales(const AutoScaleFacts& facts)
+{
+	return facts.on && facts.playersCreature && !facts.held && !facts.networkGame;
+}
 
 /// Gains strength, within 0 and 1
 void ModifyStrength(Shape& shape, float amount);

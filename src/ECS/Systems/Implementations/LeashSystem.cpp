@@ -1280,11 +1280,11 @@ void LeashSystem::ShowPosts(bool handShown)
 	});
 }
 
-bool LeashSystem::TapPost(entt::entity post)
+bool LeashSystem::TapPost(PlayerNames player, entt::entity post)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* tapped = registry.TryGet<LeashPost>(post);
-	if (tapped == nullptr)
+	if (tapped == nullptr || !creature_leash::MayTapPost(player, tapped->owner))
 	{
 		return false;
 	}
