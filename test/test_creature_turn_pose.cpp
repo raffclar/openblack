@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <cstdint>
+#include <cstring>
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <random>
@@ -140,5 +142,90 @@ TEST(CreatureTurnPose, TheBlendGivesTheBitsOfTheWideMaths)
 		ASSERT_EQ(std::bit_cast<uint32_t>(creature_turn_pose::BlendNumber(older, newer, weight)),
 		          std::bit_cast<uint32_t>(wide(older, newer, weight)))
 		    << older << " " << newer << " " << weight;
+	}
+}
+
+namespace
+{
+/// A matrix of random turn and place numbers, its last row (0, 0, 0, 1)
+glm::mat4 RandomBone(std::mt19937& random)
+{
+	std::uniform_real_distribution<float> number(-50.0f, 50.0f);
+	glm::mat4 bone(1.0f);
+	for (glm::length_t column = 0; column < 4; ++column)
+	{
+		for (glm::length_t row = 0; row < 3; ++row)
+		{
+			bone[column][row] = number(random);
+		}
+	}
+	return bone;
+}
+} // namespace
+
+// The blend into the space of the mesh in one pass has the bits of the blend followed by the change into the mesh's space
+TEST(CreatureTurnPose, TheBlendIntoTheMeshIsTheBlendThenTheMesh)
+{
+	std::mt19937 random(12);
+	std::uniform_real_distribution<float> part(0.0f, 2.0f);
+	for (int round = 0; round < 200; ++round)
+	{
+		std::vector<glm::mat4> older(40);
+		std::vector<glm::mat4> newer(40);
+		std::ranges::generate(older, [&random] { return RandomBone(random); });
+		std::ranges::generate(newer, [&random] { return RandomBone(random); });
+		const auto placement = glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, 3.0f, -20.0f)),
+		                                   part(random) * 3.0f, glm::vec3(0.0f, 1.0f, 0.0f)) *
+		                       glm::scale(glm::mat4(1.0f), glm::vec3(1.0f + part(random)));
+		const float weight = round % 9 == 0 ? 1.0f : part(random);
+		std::vector<glm::mat4> drawn(older.size());
+		std::vector<glm::mat4> twoSteps(older.size());
+		Blend(older, newer, weight, drawn);
+		ToMesh(drawn, placement, twoSteps);
+		std::vector<glm::mat4> onePass(older.size());
+		BlendToMesh(older, newer, weight, placement, onePass);
+		ASSERT_EQ(std::memcmp(onePass.data(), twoSteps.data(), onePass.size() * sizeof(glm::mat4)), 0) << round;
+	}
+}
+
+// The posed bones give the world matrix of each bone as PosedBone does, also for a bone the pose lacks and for a bone
+// after the kept ones, and the triangles placed by them are the same
+TEST(CreatureTurnPose, ThePosedBonesAreTheBonesInTheWorld)
+{
+	std::mt19937 random(3);
+	std::vector<glm::mat4> bones(150);
+	std::ranges::generate(bones, [&random] { return RandomBone(random); });
+	const auto placement = RandomBone(random);
+	creature::PosedBones posed(bones, placement);
+	for (int pass = 0; pass < 2; ++pass)
+	{
+		for (const uint32_t bone : {0u, 5u, 127u, 128u, 149u, 150u, 4000u})
+		{
+			const auto kept = posed.At(bone);
+			const auto made = creature::PosedBone(bone, bones, placement);
+			ASSERT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0) << bone;
+		}
+	}
+	std::uniform_real_distribution<float> number(-2.0f, 2.0f);
+	std::uniform_int_distribution<uint32_t> bone(0, 151);
+	for (int round = 0; round < 500; ++round)
+	{
+		std::array<std::array<glm::vec3, 3>, creature::CreatureRig::k_MeshCount> vertices {};
+		for (auto& mesh : vertices)
+		{
+			for (auto& vertex : mesh)
+			{
+				vertex = glm::vec3(number(random), number(random), number(random));
+			}
+		}
+		const std::array triangleBones {bone(random), bone(random), bone(random)};
+		const creature_morph::Morph morph {
+		    .evilGood = number(random) * 0.5f, .thinFat = number(random) * 0.5f, .weakStrong = number(random) * 0.5f};
+		for (const auto* order : {&creature::k_SkinPointOrder, &creature::k_TurnedHairOrder})
+		{
+			const auto kept = creature::PosedTriangle(vertices, triangleBones, morph, posed, *order);
+			const auto made = creature::PosedTriangle(vertices, triangleBones, morph, bones, placement, *order);
+			ASSERT_EQ(std::memcmp(&kept, &made, sizeof(made)), 0) << round;
+		}
 	}
 }
