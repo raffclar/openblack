@@ -1826,6 +1826,9 @@ add_test(NAME test_row_dump_compare
 add_test(NAME test_ai_soak
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_ai_soak.py
 )
+add_test(NAME test_checksum_compare
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_checksum_compare.py
+)
 openblack_setup_and_add_test(test_start_camera test_start_camera.cpp)
 openblack_setup_and_add_test(test_game_end test_game_end.cpp)
 openblack_setup_and_add_test(test_influence_rules test_influence_rules.cpp)
