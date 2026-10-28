@@ -90,7 +90,6 @@
 #include "Commands/PlayerCommands.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
-#include "Common/BuildVersionFile.h"
 #include "Common/DeveloperToolsGate.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
