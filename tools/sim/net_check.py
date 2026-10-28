@@ -1501,6 +1501,9 @@ def main():
                         help="TURNS:CLIENT:TEXT, the client (from 1) says the line in the chat after that many turns")
     parser.add_argument("--tattoo-menu", action="append", default=[], metavar="TURNS:CLIENT",
                         help="the client (from 1) opens the tattoo editor from the game's menu after that many turns")
+    parser.add_argument("--profile-creature", action="append", default=[], metavar="CLIENT:FOLDER",
+                        help="the profile of the client (from 1) keeps the creature files of the folder (Player.erc and "
+                             "PhysiquePlayer.erc, as a game alone keeps them), so its menu shows Edit Tattoo")
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
                              "through the inspector, once it compared --hold-after turns")
@@ -1766,6 +1769,11 @@ def main():
         for index in join_order(options.clients, desktop_clients, bool(options.scenario)):
             client_dir = client_dirs[index]
             os.makedirs(client_dir, exist_ok=True)
+            for value in options.profile_creature:
+                client, folder = value.split(":", 1)
+                if int(client) == index + 1:
+                    kept = os.path.join(client_dir, "Profiles", "developer", "Scripts", "CreatureMind")
+                    shutil.copytree(folder, kept, dirs_exist_ok=True)
             is_observer = index >= options.clients
             # The observers of a scenario are in the room before the start; other observers join the game as it turns
             if (is_observer and not options.all_computer_gods and not options.scenario
