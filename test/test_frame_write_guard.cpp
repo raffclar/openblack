@@ -77,3 +77,14 @@ TEST(FrameWriteGuard, TheChangedEntityIsTheFirstRowThatDiffers)
 	EXPECT_FALSE(frame_write_guard::ChangedEntity(before, before, "Transform.position").has_value());
 	EXPECT_FALSE(frame_write_guard::ChangedEntity(before, after, "Animal.move").has_value());
 }
+
+TEST(FrameWriteGuard, TheChangedValuesOfASystemAreFoundByTheirNumber)
+{
+	auto before = SampleOf({{"system fire", 1}});
+	auto after = SampleOf({{"system fire", 2}});
+	before.systemValues["system fire"] = {10, 20, 30};
+	after.systemValues["system fire"] = {10, 21, 30, 40};
+	EXPECT_EQ(frame_write_guard::ChangedValues(before, after, "system fire"), (std::vector<size_t> {1, 3}));
+	EXPECT_TRUE(frame_write_guard::ChangedValues(before, before, "system fire").empty());
+	EXPECT_TRUE(frame_write_guard::ChangedValues(before, after, "system snow").empty());
+}

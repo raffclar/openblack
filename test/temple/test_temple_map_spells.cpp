@@ -71,7 +71,7 @@ TEST(TempleMapSpells, ShowsTheSeedHalfAUnitOverTheMap)
 	TempleMapSpells spells;
 	FakeEffects effects;
 	const std::vector casts {FireballCast(entt::entity {1})};
-	spells.Update(casts, 0.0f, effects);
+	spells.Update(casts, 0.0f, 0.0f, effects);
 	ASSERT_EQ(spells.GetSeeds().size(), 1u);
 	const auto& seed = spells.GetSeeds().front();
 	EXPECT_EQ(seed.seed, SpellSeedType::Fire);
@@ -92,18 +92,32 @@ TEST(TempleMapSpells, TurnsTheSeedsByTheGameTimeOnly)
 	FakeEffects effects;
 	const std::vector casts {FireballCast(entt::entity {1})};
 	// The world stops in the temple: no game time, no turn
-	spells.Update(casts, 0.0f, effects);
-	spells.Update(casts, 0.0f, effects);
+	spells.Update(casts, 0.0f, 0.0f, effects);
+	spells.Update(casts, 0.0f, 0.0f, effects);
 	EXPECT_FLOAT_EQ(spells.GetSeeds().front().spin, 0.0f);
 	// Two radians a second, round the circle
-	spells.Update(casts, 0.5f, effects);
+	spells.Update(casts, 0.5f, 0.5f, effects);
 	EXPECT_NEAR(spells.GetSeeds().front().spin, 1.0f, 1e-6f);
-	spells.Update(casts, 3.0f, effects);
+	spells.Update(casts, 3.0f, 3.0f, effects);
 	EXPECT_NEAR(spells.GetSeeds().front().spin, std::fmod(7.0f, glm::two_pi<float>()), 1e-5f);
-	// The effect steps by the same time, every frame
+	// The effect steps by the time it is given, in each frame that steps it
 	ASSERT_EQ(effects.steps.size(), 4u);
 	EXPECT_FLOAT_EQ(effects.steps.back().second, 3.0f);
 	EXPECT_EQ(effects.started.size(), 1u);
+}
+
+TEST(TempleMapSpells, TheEffectsDoNotStepInAFrameWithoutTheirStep)
+{
+	TempleMapSpells spells;
+	FakeEffects effects;
+	const std::vector casts {FireballCast(entt::entity {1})};
+	spells.Update(casts, 0.5f, std::nullopt, effects);
+	// The seed turns, but its effect does not step
+	EXPECT_NEAR(spells.GetSeeds().front().spin, 1.0f, 1e-6f);
+	EXPECT_TRUE(effects.steps.empty());
+	spells.Update(casts, 0.0f, 0.25f, effects);
+	ASSERT_EQ(effects.steps.size(), 1u);
+	EXPECT_FLOAT_EQ(effects.steps.front().second, 0.25f);
 }
 
 TEST(TempleMapSpells, FollowsTheMiracleAndDropsItWhenItStops)
@@ -112,10 +126,10 @@ TEST(TempleMapSpells, FollowsTheMiracleAndDropsItWhenItStops)
 	FakeEffects effects;
 	auto first = FireballCast(entt::entity {1});
 	const auto second = FireballCast(entt::entity {2});
-	spells.Update(std::vector {first, second}, 0.0f, effects);
+	spells.Update(std::vector {first, second}, 0.0f, 0.0f, effects);
 	EXPECT_EQ(spells.GetSeeds().size(), 2u);
 	first.mapPoint = glm::vec3(4.0f, 0.0f, 4.0f);
-	spells.Update(std::vector {first}, 0.0f, effects);
+	spells.Update(std::vector {first}, 0.0f, 0.0f, effects);
 	ASSERT_EQ(spells.GetSeeds().size(), 1u);
 	EXPECT_EQ(spells.GetSeeds().front().middle, glm::vec3(4.0f, 0.5f, 4.0f));
 	EXPECT_EQ(effects.stepPoints.back(), glm::vec3(4.0f, 0.7f, 4.0f));
@@ -135,10 +149,10 @@ TEST(TempleMapSpells, PulsesPhialsByTheGameTime)
 	phial.seed = SpellSeedType::CreatureSpellFreeze;
 	phial.holderParticle = ParticleType::None;
 	phial.phialReceiveType = 1;
-	spells.Update(std::vector {phial}, 0.0f, effects);
+	spells.Update(std::vector {phial}, 0.0f, 0.0f, effects);
 	EXPECT_FLOAT_EQ(spells.GetSeeds().front().phialPhase, 0.0f);
 	EXPECT_FLOAT_EQ(spells.GetSeeds().front().phialFrame, 0.0f);
-	spells.Update(std::vector {phial}, 1.0f, effects);
+	spells.Update(std::vector {phial}, 1.0f, 1.0f, effects);
 	EXPECT_GT(spells.GetSeeds().front().phialPhase, 0.0f);
 	EXPECT_NE(spells.GetSeeds().front().phialFrame, 0.0f);
 	// A seed without a holder's effect starts none

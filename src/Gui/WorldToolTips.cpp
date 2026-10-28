@@ -22,6 +22,7 @@
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/TownHomes.h"
 #include "ECS/WorldObjects.h"
@@ -35,7 +36,11 @@ namespace
 {
 using namespace ecs::components;
 
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
+/// The player of this computer, whose temple and towns the tool tips tell of
+PlayerNames OwnPlayer()
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
 
 /// How much more the town believes in the local player than in the player it believes in most besides, the neutral
 /// player included (none counting below nothing)
@@ -45,12 +50,12 @@ float BeliefMargin(const TownImpression& impression)
 	float others = 0.0f;
 	for (size_t i = 0; i < belief.size(); ++i)
 	{
-		if (i != static_cast<size_t>(k_LocalPlayer))
+		if (i != static_cast<size_t>(OwnPlayer()))
 		{
 			others = std::max(others, belief[i]);
 		}
 	}
-	return belief[static_cast<size_t>(k_LocalPlayer)] - others;
+	return belief[static_cast<size_t>(OwnPlayer())] - others;
 }
 
 /// Whether a building is fully built
@@ -97,7 +102,7 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 	{
 		const auto* temple = registry.Valid(entrance->temple) ? registry.TryGet<const Temple>(entrance->temple) : nullptr;
 		if (temple != nullptr &&
-		    OffersEnterTemple(temple->owner == k_LocalPlayer, StandsBuilt(registry, entrance->temple), handInInfluence))
+		    OffersEnterTemple(temple->owner == OwnPlayer(), StandsBuilt(registry, entrance->temple), handInInfluence))
 		{
 			submissions.push_back({.numbers = {.index = k_EnterTemple, .first = 0.0, .second = std::nullopt},
 			                       .action = ToolTipAction::Apply,

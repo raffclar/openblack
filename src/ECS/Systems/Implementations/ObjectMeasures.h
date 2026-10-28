@@ -20,12 +20,12 @@ class Registry;
 }
 
 // How big the things of the world are, as creatures measure them to walk up to them and cast at them (see
-// creature_cast_moves): a thing's radius on the ground and height from its model and scale, a field's radius always 5, a
+// creature_cast_moves): a thing's radius on the ground and height from its model and scale, the radius of a field and a fish farm always 5, a
 // creature's from its size and how far its bones reach.
 namespace openblack::ecs::systems::object_measures
 {
 
-/// A thing's radius on the ground, 0 for one without a model
+/// A thing's radius on the ground, 0 for one without a model. Fields and teleport stones have fixed radii.
 [[nodiscard]] float TwoDRadius(const Registry& registry, entt::entity entity);
 /// A thing's height, 0 for one without a model
 [[nodiscard]] float Height(const Registry& registry, entt::entity entity);
@@ -34,6 +34,9 @@ namespace openblack::ecs::systems::object_measures
 /// A building or anything else of several map cells fixed to the land, or a tree: a creature walking up to one stops
 /// where its walk takes it
 [[nodiscard]] bool WalkedUpToItself(const Registry& registry, entt::entity entity);
+/// The distance from the edge of a thing to the edge of another thing, across the land. A worship site measures from
+/// its middle with its fixed reach. Every other thing measures from where it stands with its radius on the ground.
+[[nodiscard]] float DistanceFromObject(const Registry& registry, entt::entity entity, entt::entity other);
 /// Where a thing stands, none once it has gone
 [[nodiscard]] std::optional<glm::vec3> PositionOf(const Registry& registry, entt::entity entity);
 

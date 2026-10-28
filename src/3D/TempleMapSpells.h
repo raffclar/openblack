@@ -80,9 +80,10 @@ public:
 		virtual void Stop(uint32_t effect) = 0;
 	};
 
-	/// Shows the seeds of these miracles this frame, and steps them by the game's time of the frame. The seed of a
-	/// miracle that is new on the map starts unturned. The seeds of the miracles that stopped go, with their effects.
-	void Update(std::span<const Cast> casts, float gameSeconds, Effects& effects);
+	/// Shows the seeds of these miracles this frame, and turns them by the game's time of the frame. Their effects step by
+	/// the given seconds, none in a frame where the effects do not step. The seed of a miracle that is new on the map
+	/// starts unturned. The seeds of the miracles that stopped go, with their effects.
+	void Update(std::span<const Cast> casts, float gameSeconds, std::optional<float> effectSeconds, Effects& effects);
 	/// Removes all the seeds and their effects
 	void Clear(Effects& effects);
 	/// The seeds that the map shows this frame

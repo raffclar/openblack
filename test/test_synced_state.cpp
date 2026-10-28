@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -22,6 +23,7 @@
 #include "3D/CameraPath.h"
 #include "Common/WorkerPool.h"
 #include "ECS/Components/SnowLevel.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "ECS/SyncedState.h"
@@ -131,6 +133,157 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	// The turn reads the rest of a miracle
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Spell", "magnitude"));
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
+}
+
+TEST(SyncedState, TheStaticOfAFizzOnlyThisComputerSlidesIsNotSynced)
+{
+	// Each computer slides the static only while it draws the creature. The turns read how far the creature fizzed.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "staticScroll"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "fizz"));
+}
+
+TEST(SyncedState, TheDustOfARewardChestIsNotSynced)
+{
+	// The C library's random numbers place the dust, and the frames fade it. The game server draws neither.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dust"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dustMilliseconds"));
+	// The turn reads the state of the chest
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
+}
+
+// Only the frames of this computer change the hum and the mana path of the hand past the border. The turns change the
+// strength that the hand keeps.
+TEST(SyncedState, TheHumAndTheManaPathOfTheHandPastTheBorderAreNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "shown"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "hum"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "state"));
+}
+
+TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
+{
+	// The frames draw a chest between its turns, lift the lid of an opened chest and fade its dust
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "drawn"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "clipPlace"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dustMilliseconds"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "RewardSeed", "spin"));
+	// The turns move its clock and its state
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "seconds"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "RewardSeed", "seed"));
+}
+
+TEST(SyncedState, TheFramesCarryThePickedLeashInTheHandOfThisComputerOnly)
+{
+	// Each computer puts the picked leash of its own player in its own hand, so the place of a post is not synced
+	const auto parts = synced_state::PresentationParts();
+	for (const std::string_view field : {"position", "rotation", "scale"})
+	{
+		EXPECT_TRUE(std::ranges::any_of(parts, [field](const synced_state::PresentationPart& part) {
+			return part.component == "Transform" && part.field == field && part.marker == "LeashPost";
+		})) << field;
+	}
+	// The turns read the point where the post hangs
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "LeashPost", "point"));
+}
+
+TEST(SyncedState, TheRoomsOfTheTempleAreNotSynced)
+{
+	// Only the player of this computer goes into the temple, and the temple makes its rooms for that player
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "TempleInteriorPart";
+	}));
+}
+
+TEST(SyncedState, TheFramesMoveTheGlowsOnACreatureButNotTheirPowers)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "motion"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "placed"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "slidePace"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "turnPace"));
+	// The turns set the powers and the scales
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "glows"));
+}
+
+TEST(SyncedState, TheSnowOnTheThingsThatTheFramesDrawIsNotSynced)
+{
+	EXPECT_TRUE(synced_state::IsPresentationOnly(synced_state::PresentationParts(), "SnowLevel", "level"));
+}
+
+TEST(SyncedState, ThePicturesOfTheChallengesComeFromThisComputer)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "full"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "small"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "waiting"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "taken"));
+	// The turns count the pictures that the scripts ask for
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "asked"));
+}
+
+TEST(SyncedState, TheStaticOfAFizzingCreatureSlidesInTheFramesOnly)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "staticScroll"));
+}
+
+TEST(SyncedState, TheLightOfAThingInTheHandIsNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "HeldLight", "takenAt"));
+}
+
+TEST(SyncedState, TheFramesMoveTheSeeThroughCopyOfATotemButTheTurnMakesIt)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "VillageTotemGhost";
+	}));
+	// The totem keeps the entities that the turn made
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghost"));
+}
+
+TEST(SyncedState, TheHeightWhereTheFramesDrawATotemIsNotSynced)
+{
+	EXPECT_TRUE(synced_state::IsPresentationOnly(synced_state::PresentationParts(), "DrawnHeight", "y"));
+}
+
+TEST(SyncedState, TheThingsThatOnlyTheFramesMakeTakeNoEntityOfTheLand)
+{
+	entt::meta_ctx context;
+	Register(context);
+	ecs::Registry land;
+	ecs::DrawnRegistry drawn;
+	const auto body = land.Create();
+	land.Assign<FakeBody>(body, FakeBody {.place = 1.0f});
+	const auto before = synced_state::HashOf(land.Underlying(), context, k_Presentation).hash;
+	// The frames make and remove things of their own: the land keeps its entities and its hash
+	const auto mark = drawn.Create();
+	drawn.Assign<FakeBody>(mark, FakeBody {.place = 2.0f});
+	drawn.Create();
+	drawn.Destroy(mark);
+	EXPECT_EQ(synced_state::HashOf(land.Underlying(), context, k_Presentation).hash, before);
+	// A thing that the turn makes on the land changes the synced world
+	land.Create();
+	EXPECT_NE(synced_state::HashOf(land.Underlying(), context, k_Presentation).hash, before);
+}
+
+TEST(SyncedState, WhatOnlyThePlayerAtThisComputerHearsAndSeesIsNotSynced)
+{
+	// Each computer keeps these for its own player, so two computers have different values at the same turn
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHelpMemory", "memory"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Heartbeat", "state"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CitadelWorship", "strainSound"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreaturePictures", "pictures"));
+	// The turn reads the sites of the temple
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CitadelWorship", "sites"));
 }
 
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)

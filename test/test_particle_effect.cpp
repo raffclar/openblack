@@ -1012,3 +1012,115 @@ TEST(WillowWisp, ItDrawsThePointInTheBallBeforeTheSpeed)
 	const glm::vec3 expected = origin + ball * k_Step;
 	EXPECT_EQ(atoms[0].position, expected);
 }
+
+namespace
+{
+/// A miracle that this computer casts, or another computer casts
+class CastingSpell final: public SpellSink
+{
+public:
+	explicit CastingSpell(bool mine)
+	    : _mine(mine)
+	{
+	}
+	bool SpellEvent(const SpellEventInfo& /*event*/) override { return true; }
+	[[nodiscard]] int PowerUpLevel() const override { return 0; }
+	[[nodiscard]] bool IsMyInterfaceCasting() const override { return _mine; }
+	[[nodiscard]] bool IsHumanPlayerCasting() const override { return true; }
+
+private:
+	bool _mine;
+};
+
+/// A rain cloud that pours from the hand, and its rain cone that keeps with it, as the water miracle has them
+std::string RainCloudFile()
+{
+	return Header() + Object("ParticleSpriteCreator", "Cloud0", k_Sprite) + Object("ParticleSpriteCreator", "Cone0", k_Sprite) +
+	       Object("UR_HandSprinkle", "Sprinkle0",
+	              "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Cloud0\nPROPERTY NextGroups ARRAY SIZE 1 1\n") +
+	       Object("CreateRuleAnAtom", "Cone0Create", "PROPERTY Group INTEGER 1\nPROPERTY PCreator PERSIS_PNTR Cone0\n") +
+	       Object("UR_FollowParent", "Cone0Follow", "PROPERTY Group INTEGER 1\nPROPERTY UseParentsDrawOffset BOOL 1\n");
+}
+
+/// The cloud steps at a hand high above the land, then a step with the hand moved east
+void PourAndMove(Effect& effect)
+{
+	effect.SetProcessInfo({.handPosition = {0.0f, 100.0f, 0.0f}});
+	for (int i = 0; i < 3; ++i)
+	{
+		effect.Step(k_Step);
+	}
+	effect.SetProcessInfo({.handPosition = {8.0f, 100.0f, 0.0f}});
+	effect.Step(k_Step);
+}
+} // namespace
+
+TEST_F(ParticleEffectTest, TheCloudOfThisComputersCastIsDrawnAtTheLiveHandAboveTheLimit)
+{
+	CastingSpell spell(true);
+	auto effect = Make(RainCloudFile());
+	effect->SetSink(&spell);
+	PourAndMove(*effect);
+	Effect::DrawWalk walk;
+	effect->Walk(0.25f, walk);
+	// The cloud and the cone both show, drawn where the last step put them, not between the last two steps
+	ASSERT_EQ(walk.atoms.size(), 2u);
+	const glm::vec3 live(12.0f, 140.0f, 3.0f);
+	for (const auto& atom : walk.atoms)
+	{
+		EXPECT_FLOAT_EQ(atom.position.x, 8.0f);
+		EXPECT_FLOAT_EQ(atom.position.y, k_MaximumSprinkleHeight);
+		// The cone shares the cloud's offset, whose reference is the stepped point under the limit of height
+		ASSERT_TRUE(atom.handOffset.has_value());
+		EXPECT_EQ(atom.handOffset->reference, glm::vec3(8.0f, k_MaximumSprinkleHeight, 0.0f));
+		EXPECT_FLOAT_EQ(atom.handOffset->weight, 1.0f);
+		// So the caster sees both at the live hand, also above the limit
+		EXPECT_EQ(atom.position + LiveHandShift(*atom.handOffset, live), live);
+	}
+}
+
+TEST_F(ParticleEffectTest, TheCloudOfAnotherComputersCastIsBlendedAtTheSteppedHand)
+{
+	CastingSpell spell(false);
+	auto effect = Make(RainCloudFile());
+	effect->SetSink(&spell);
+	PourAndMove(*effect);
+	Effect::DrawWalk walk;
+	effect->Walk(0.25f, walk);
+	ASSERT_EQ(walk.atoms.size(), 2u);
+	for (const auto& atom : walk.atoms)
+	{
+		EXPECT_FLOAT_EQ(atom.position.x, 2.0f);
+		EXPECT_FALSE(atom.handOffset.has_value());
+	}
+}
+
+TEST(ParticleDrawOffsets, AnAtomHasOneDrawOffset)
+{
+	// A falling grain keeps only its own fading offset
+	Atom grain;
+	grain.drawOffset = glm::vec3(1.0f, 2.0f, 3.0f);
+	FollowLiveHand(grain, glm::vec3(0.0f), 1.0f);
+	EXPECT_FALSE(grain.handOffset.has_value());
+	// The weight stays in 0..1
+	Atom source;
+	FollowLiveHand(source, glm::vec3(4.0f, 5.0f, 6.0f), 2.0f);
+	ASSERT_TRUE(source.handOffset.has_value());
+	EXPECT_FLOAT_EQ(source.handOffset->weight, 1.0f);
+	EXPECT_EQ(LiveHandShift(*source.handOffset, glm::vec3(5.0f, 5.0f, 6.0f)), glm::vec3(1.0f, 0.0f, 0.0f));
+	// A child shares its parent's offset only when it has none and its parent has one, and only once
+	Atom parent;
+	Collection children;
+	children.parent = &parent;
+	Atom child;
+	child.collection = &children;
+	EXPECT_FALSE(ShareParentDrawOffset(child));
+	parent.handOffset = HandOffset {.reference = glm::vec3(1.0f), .weight = 1.0f};
+	EXPECT_TRUE(ShareParentDrawOffset(child));
+	EXPECT_FALSE(ShareParentDrawOffset(child));
+	EXPECT_EQ(&DrawOffsetHolder(child), &parent);
+	EXPECT_TRUE(HasDrawOffset(child));
+	// A shared offset is not replaced by a live hand offset of its own
+	FollowLiveHand(child, glm::vec3(0.0f), 1.0f);
+	EXPECT_FALSE(child.handOffset.has_value());
+}

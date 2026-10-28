@@ -155,6 +155,11 @@ void TimeSystem::StartDraw()
 	_lastDrawTicks = ticks;
 }
 
+void TimeSystem::StepInput(std::chrono::microseconds stepTime)
+{
+	_inputSteps = _inputClock.Advance(stepTime);
+}
+
 std::chrono::milliseconds TimeSystem::GetElapsedTime() const
 {
 	return _elapsedTime;
@@ -180,6 +185,9 @@ void TimeSystem::StartGameClock(bool paused)
 	_visualMs = 0;
 	_frameGameMs = 0;
 	_turnFraction = 0.0f;
+	// The steps of the input count from the start of the game's clock, so that the same input steps the same way
+	_inputClock.Restart();
+	_inputSteps = {};
 	ResetTimerToTurn();
 }
 

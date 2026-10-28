@@ -8,7 +8,6 @@
  *******************************************************************************/
 
 #include <atomic>
-#include <chrono>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -20,8 +19,15 @@ using openblack::graphics::UploadPacer;
 namespace
 {
 
-/// Long enough for a thread that isn't held to have moved on
-constexpr auto k_Settle = std::chrono::milliseconds(50);
+/// Waits until the pacer holds one thread, which has then made its first upload and cannot make its second. No timer is
+/// involved: a pacer that never holds the thread stops the test at the test runner's limit.
+void WaitUntilHeld(const UploadPacer& pacer)
+{
+	while (pacer.GetWaiting() != 1)
+	{
+		std::this_thread::yield();
+	}
+}
 
 /// Uploads 100 bytes twice through the pacer on a thread of its own, counting each that went
 class PacedUploads
@@ -73,7 +79,7 @@ TEST(UploadPacer, WhatDoesNotFitInAFrameWaitsForTheNext)
 	pacer.BeginFrame({.bytes = 150});
 	PacedUploads uploads(pacer);
 	// The first goes, as the first of a frame always does; the second would go over
-	std::this_thread::sleep_for(k_Settle);
+	WaitUntilHeld(pacer);
 	EXPECT_EQ(uploads.Done(), 1);
 	pacer.BeginFrame({.bytes = 150});
 	uploads.Join();
@@ -87,7 +93,7 @@ TEST(UploadPacer, MoreUploadsThanAFrameHasRoomForWaitForTheNext)
 	// Room for every byte, but for only one buffer or texture
 	pacer.BeginFrame({.bytes = 1000, .uploads = 1});
 	PacedUploads uploads(pacer);
-	std::this_thread::sleep_for(k_Settle);
+	WaitUntilHeld(pacer);
 	EXPECT_EQ(uploads.Done(), 1);
 	EXPECT_EQ(pacer.GetUploadCount(), 1);
 	pacer.BeginFrame({.bytes = 1000, .uploads = 1});
@@ -112,7 +118,7 @@ TEST(UploadPacer, TheFirstUploadOfAFrameGoesHoweverLarge)
 	UploadPacer pacer;
 	pacer.BeginFrame({.bytes = 10});
 	PacedUploads uploads(pacer);
-	std::this_thread::sleep_for(k_Settle);
+	WaitUntilHeld(pacer);
 	EXPECT_EQ(uploads.Done(), 1);
 	pacer.BeginFrame({.bytes = 10});
 	uploads.Join();
@@ -124,7 +130,7 @@ TEST(UploadPacer, HurryingLetsEverythingThrough)
 	UploadPacer pacer;
 	pacer.BeginFrame({.bytes = 150});
 	PacedUploads uploads(pacer);
-	std::this_thread::sleep_for(k_Settle);
+	WaitUntilHeld(pacer);
 	{
 		const UploadPacer::Hurry hurry(pacer);
 		uploads.Join();
@@ -137,7 +143,7 @@ TEST(UploadPacer, ReleasingLetsEverythingThrough)
 	UploadPacer pacer;
 	pacer.BeginFrame({.bytes = 150});
 	PacedUploads uploads(pacer);
-	std::this_thread::sleep_for(k_Settle);
+	WaitUntilHeld(pacer);
 	pacer.Release();
 	uploads.Join();
 	EXPECT_EQ(uploads.Done(), 2);

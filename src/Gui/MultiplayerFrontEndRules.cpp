@@ -136,10 +136,14 @@ uint32_t ReadU32(std::span<const uint8_t> bytes, size_t at)
 	       (static_cast<uint32_t>(bytes[at + 2]) << 16u) | (static_cast<uint32_t>(bytes[at + 3]) << 24u);
 }
 
-/// The nearest of the greys (i, i, i) to a colour is the grey of the mean of its three parts, rounded
+/// The grey that Windows gives a colour when it copies the colour into a picture of 256 greys. Each part goes to the
+/// middle of its step of eight, then the grey is the mean of the three parts, rounded.
 uint8_t NearestGrey(uint32_t red, uint32_t green, uint32_t blue)
 {
-	return static_cast<uint8_t>(((red + green + blue) * 2u + 3u) / 6u);
+	constexpr uint32_t k_StepMask = 0xF8;
+	constexpr uint32_t k_StepMiddles = 12;
+	const auto sum = (red & k_StepMask) + (green & k_StepMask) + (blue & k_StepMask) + k_StepMiddles;
+	return static_cast<uint8_t>((sum + 1) / 3);
 }
 
 } // namespace
@@ -559,6 +563,17 @@ std::optional<LogoOpacities> DecodeClanLogo(std::span<const uint8_t> bmp)
 		}
 	}
 	return logo;
+}
+
+std::vector<std::u16string> PlayerDetailLines(std::span<const PlayerDetail> details)
+{
+	std::vector<std::u16string> lines;
+	lines.reserve(details.size());
+	for (const auto& detail : details)
+	{
+		lines.push_back(detail.label + u":" + detail.value);
+	}
+	return lines;
 }
 
 std::string_view ConditionText(size_t index) noexcept

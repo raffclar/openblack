@@ -59,7 +59,6 @@ enum class Step : uint8_t
 	KeyCommands,
 	DebugGui,
 	Interface,
-	GripEffect,
 	Turns,
 	SendCommands,
 	FrameTime,
@@ -152,8 +151,6 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     // The villagers that a script drew in high detail are drawn as usual once its cinema bars are gone, as the land is
     // drawn
     {.step = Step::HighDetail, .stage = Stage::Draw},
-    // The dust where the hand grips the land moves on as the draw shows it, as the other spot effects do
-    {.step = Step::GripEffect, .stage = Stage::Draw},
     // The markers of the bookmarks throb by the game time of this frame, as the draw shows them
     {.step = Step::Bookmarks, .stage = Stage::Draw},
     // The effects that the draw moves on: the weather, the fires, the villagers and the animals, the marks and the texts
@@ -229,10 +226,13 @@ struct CameraKeyState
 	return false;
 }
 
-/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary
-[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted)
+/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary.
+/// A run with a fixed frame time draws each frame also while the window is minimised. The renderer keeps some of what it
+/// drew before, such as the shadows on the land. Thus a picture of the run is the same whatever the desktop did with the
+/// window.
+[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted, bool fixedFrameTime)
 {
-	return !minimised || pictureWanted;
+	return !minimised || pictureWanted || fixedFrameTime;
 }
 
 /// The state of the window and the run that decides which steps of the graphics a frame does

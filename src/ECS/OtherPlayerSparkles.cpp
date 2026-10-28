@@ -11,8 +11,13 @@
 
 #include <cstddef>
 
+#include <optional>
+
+#include <glm/vec3.hpp>
+
 #include "3D/TempleInteriorInterface.h"
 #include "Common/GameRandom.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/Player.h"
 #include "ECS/PlayerColour.h"
@@ -20,6 +25,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
 #include "Particles/PlayerSparkles.h"
 
@@ -36,6 +42,44 @@ bool Left(const Registry& registry, PlayerNames name)
 		left = left || (player.name == name && registry.AllOf<components::LeftGame>(entity));
 	});
 	return left;
+}
+
+/// Who plays the player
+player_kind::Kind KindOf(PlayerNames name)
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return player_kind::Kind::None;
+	}
+	const auto& players = Locator::playerSystem::value();
+	if (players.IsComputerPlayer(name))
+	{
+		return player_kind::Kind::Computer;
+	}
+	return players.IsHumanPlayer(name) ? player_kind::Kind::Human : player_kind::Kind::None;
+}
+
+/// What the player shows a sparkle from
+player_sparkles::Watched WatchedOf(const Registry& registry, const systems::HandSystemInterface& hands, PlayerNames name)
+{
+	player_sparkles::Watched watched {.kind = KindOf(name)};
+	registry.Each<const components::Player, const components::ComputerPlayer>(
+	    [&](const components::Player& player, const components::ComputerPlayer& computer) {
+		    if (player.name == name && computer.switchedOn && !watched.mindOn)
+		    {
+			    watched.mindOn = true;
+			    watched.mindCamera = computer.hand.camera;
+		    }
+	    });
+	if (hands.GetHandsOf(name).has_value())
+	{
+		if (const auto camera = hands.GetReportedCamera(name); camera.has_value())
+		{
+			watched.reportedCamera = camera->origin;
+		}
+	}
+	watched.left = Left(registry, name);
+	return watched;
 }
 } // namespace
 
@@ -59,18 +103,20 @@ void AddAtCameras()
 	for (size_t i = 0; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
 	{
 		const auto player = static_cast<PlayerNames>(i);
-		// Only the players with hands of their own play. A player shows no camera before its first report.
-		const auto camera = hands.GetReportedCamera(player);
-		if (player == hands.GetOwnPlayer() || !hands.GetHandsOf(player).has_value() || !camera.has_value() ||
-		    Left(registry, player))
+		if (player == hands.GetOwnPlayer())
+		{
+			continue;
+		}
+		const auto origin = player_sparkles::PlaceOf(WatchedOf(registry, hands, player));
+		if (!origin.has_value())
 		{
 			continue;
 		}
 		const auto tint = random.LocalRand(player_sparkles::k_Tints);
 		const auto colour = player_sparkles::Colour(player_colour::OnLand(player, land), tint);
 		const auto kind = player_sparkles::KindOf(random.LocalRand(2));
-		liquids.AddForPlayer(player, camera->origin, glm::vec3(0.0f), player_sparkles::k_Size, colour, kind);
-		liquids.SetPlayerPoint(player, camera->origin);
+		liquids.AddForPlayer(player, *origin, glm::vec3(0.0f), player_sparkles::k_Size, colour, kind);
+		liquids.SetPlayerPoint(player, *origin);
 	}
 }
 

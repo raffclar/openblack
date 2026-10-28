@@ -30,6 +30,7 @@
 #include <HelpDudeFile.h>
 #include <L3DFile.h>
 #include <MorphFile.h>
+#include <OnlineMapThumbnail.h>
 #include <PackFile.h>
 #include <ParticleFile.h>
 #include <PhysicsConstantsFile.h>
@@ -43,14 +44,17 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandLightTable.h"
 #include "3D/Light.h"
+#include "3D/LowResolutionTextures.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
 #include "Audio/SoundDecoder.h"
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
+#include "ECS/Components/Player.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
+#include "Gui/LandThumbnail.h"
 #include "Help/AdvisorModel.h"
 #include "Locator.h"
 #include "Physics/Materials.h"
@@ -279,11 +283,27 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 }
 
 Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
-                                                         const std::filesystem::path& alphaPath, uint16_t side) const
+                                                         const std::filesystem::path& alphaPath, uint16_t side,
+                                                         bool halve) const
 {
 	auto& fileSystem = Locator::filesystem::value();
-	const auto colours = rawimage::DecodeRgb(fileSystem.ReadAll(rawTexturePath), side, side);
-	const auto alpha = rawimage::DecodeGrey(fileSystem.ReadAll(alphaPath), side, side);
+	auto colourBytes = fileSystem.ReadAll(rawTexturePath);
+	auto alphaBytes = fileSystem.ReadAll(alphaPath);
+	// At half its size the picture and its alpha each take every second texel of each second row
+	if (halve)
+	{
+		auto halfColours = low_resolution_textures::Halve(colourBytes, side);
+		auto halfAlpha = low_resolution_textures::Halve(alphaBytes, side);
+		if (!halfColours || !halfAlpha)
+		{
+			throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
+		}
+		colourBytes = std::move(*halfColours);
+		alphaBytes = std::move(*halfAlpha);
+		side /= 2;
+	}
+	const auto colours = rawimage::DecodeRgb(colourBytes, side, side);
+	const auto alpha = rawimage::DecodeGrey(alphaBytes, side, side);
 	if (!colours || !alpha)
 	{
 		throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
@@ -611,6 +631,10 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	for (const auto& set : file.GetAnimationSpecs().animationSets)
 	{
 		animationCount += set.animations.size();
+		for (const auto& line : set.animations)
+		{
+			rig->specLines.push_back({.name = line.name, .type = static_cast<char>(line.type), .set = set.name});
+		}
 	}
 	for (size_t mesh = 0; mesh < CreatureRig::k_AnimatedMeshCount; ++mesh)
 	{
@@ -960,6 +984,28 @@ HandDemoLoader::result_type HandDemoLoader::operator()(FromDiskTag, const std::f
 		                         std::string(hnd::ResultToStr(result)));
 	}
 	return file;
+}
+
+LandThumbnailLoader::result_type LandThumbnailLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	const auto bytes = Locator::filesystem::value().ReadAll(path);
+	const auto file = onlinemap::ParseThumbnail(std::as_bytes(std::span(bytes)));
+	if (!file.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land thumbnail {} is not a thumbnail file", path.generic_string());
+		return nullptr;
+	}
+	auto picture = gui::land_thumbnail::Paint(*file, ecs::components::Player::k_Colours);
+	auto thumbnail = std::make_shared<gui::land_thumbnail::LandThumbnail>();
+	thumbnail->side = picture.side;
+	thumbnail->description = std::string(file->description);
+	thumbnail->texture = std::make_shared<graphics::Texture2D>("Land thumbnail " + path.stem().string());
+	// As in the game, the texture repeats at its edges and its texels blend
+	thumbnail->texture->Create(
+	    gui::land_thumbnail::k_TextureSide, gui::land_thumbnail::k_TextureSide, 1, graphics::TextureFormat::BGRA4,
+	    graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	    bgfx::copy(picture.texels.data(), static_cast<uint32_t>(picture.texels.size() * sizeof(uint16_t))));
+	return thumbnail;
 }
 
 VideoLoader::result_type VideoLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

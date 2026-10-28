@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
@@ -306,4 +307,81 @@ TEST(ScriptFlocks, ASeparatedLivingGetsAFlockOfItsOwnAndTheOldFlockStays)
 	// A living in no flock is not separated
 	const auto alone = Living(registry, 1, 1);
 	EXPECT_EQ(script_flocks::SeparateIntoNewFlock(registry, alone), static_cast<entt::entity>(entt::null));
+}
+
+namespace
+{
+/// A bird of the land: an animal with a place, in no flock yet
+entt::entity Bird(Registry& registry, float x, float z)
+{
+	const auto bird = Living(registry, x, z);
+	registry.Assign<components::Animal>(bird);
+	return bird;
+}
+} // namespace
+
+TEST(FlockMembers, ALeaderThatGoesLeavesItsFlockAndTheNextLeads)
+{
+	Registry registry;
+	const auto flock = script_flocks::Create(registry, Metres(0, 0));
+	const auto leader = Bird(registry, 1, 1);
+	const auto follower = Bird(registry, 2, 2);
+	script_flocks::AddLeader(registry, flock, leader);
+	script_flocks::AddLiving(registry, flock, follower);
+	ASSERT_EQ(script_flocks::Leader(registry, flock), leader);
+	// The leader goes in a way that does not know about flocks
+	registry.Destroy(leader);
+	ASSERT_TRUE(script_flocks::IsFlock(registry, flock));
+	EXPECT_EQ(registry.Get<const components::Flock>(flock).members, std::vector {follower});
+	EXPECT_EQ(script_flocks::Leader(registry, flock), follower);
+	EXPECT_EQ(registry.Get<const components::Animal>(follower).flock, flock);
+}
+
+TEST(FlockMembers, AFlockThatLosesItsLastMemberGoes)
+{
+	Registry registry;
+	const auto flock = script_flocks::Create(registry, Metres(0, 0));
+	const auto bird = Bird(registry, 1, 1);
+	script_flocks::AddLiving(registry, flock, bird);
+	registry.Destroy(bird);
+	EXPECT_FALSE(registry.Valid(flock));
+}
+
+TEST(FlockMembers, AVillagerThatGoesLeavesItsFlock)
+{
+	Registry registry;
+	const auto flock = script_flocks::Create(registry, Metres(0, 0));
+	const auto first = Living(registry, 1, 1);
+	const auto second = Living(registry, 2, 2);
+	script_flocks::AddLiving(registry, flock, first);
+	script_flocks::AddLiving(registry, flock, second);
+	registry.Destroy(first);
+	EXPECT_EQ(registry.Get<const components::Flock>(flock).members, std::vector {second});
+}
+
+TEST(FlockMembers, ALivingThatLeftItsFlockBeforeItGoesLeavesTheEmptyFlock)
+{
+	Registry registry;
+	const auto flock = script_flocks::Create(registry, Metres(0, 0));
+	const auto bird = Bird(registry, 1, 1);
+	script_flocks::AddLiving(registry, flock, bird);
+	// Out of the line but still with its flock, as a temple's bird that vanishes: the flock stays though it is empty
+	std::erase(registry.Get<components::Flock>(flock).members, bird);
+	registry.Destroy(bird);
+	ASSERT_TRUE(script_flocks::IsFlock(registry, flock));
+	EXPECT_TRUE(registry.Get<const components::Flock>(flock).members.empty());
+}
+
+TEST(FlockMembers, AnEmptiedRegistryHasNoFlocksOrLivings)
+{
+	Registry registry;
+	for (int i = 0; i < 4; ++i)
+	{
+		const auto flock = script_flocks::Create(registry, Metres(0, 0));
+		script_flocks::AddLiving(registry, flock, Bird(registry, 1, 1));
+		script_flocks::AddLiving(registry, flock, Living(registry, 2, 2));
+	}
+	registry.Reset();
+	EXPECT_EQ(registry.Underlying().view<const components::Flock>().size(), 0u);
+	EXPECT_EQ(registry.Underlying().view<const components::Animal>().size(), 0u);
 }
