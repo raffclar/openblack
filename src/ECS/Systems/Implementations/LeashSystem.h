@@ -28,6 +28,7 @@ class LeashSystem final: public LeashSystemInterface
 {
 public:
 	void ProcessTurn() override;
+	void Reset() override;
 	void BeginTurn() override;
 	void CreatureTurn(entt::entity creature) override;
 	void Update(float seconds) override;

@@ -56,6 +56,9 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// Once a game turn, before the creatures' own turns: the posts go up at the temples
 	virtual void BeginTurn() {}
+	/// A new land starts. At the next turn, its temples get their posts. The taps and refusals of the old land are
+	/// forgotten.
+	virtual void Reset() {}
 	/// In the creature's own turn, before its body lives the turn: its leash pulls it and keeps it near
 	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Once a frame, some seconds of game time on: the ropes swing
