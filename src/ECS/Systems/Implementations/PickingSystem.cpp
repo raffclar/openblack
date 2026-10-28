@@ -62,6 +62,7 @@
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/UndrawnPicks.h"
 #include "ECS/WorldObjects.h"
@@ -621,9 +622,11 @@ void PickingSystem::AddBubbles(glm::vec3 camera)
 	}
 	const auto box = meshes.Handle(bubbleMesh)->GetBoundingBox();
 	const auto halfExtents = box.Size() * 0.5f;
+	// The draw of a globe picks it, so a globe that the land's draw list does not draw is not picked
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 	registry.Each<const OneOffSpellSeed, const Transform>(
 	    [&](entt::entity entity, const OneOffSpellSeed& globe, const Transform& transform) {
-		    if (registry.AnyOf<InHand, SeeThrough>(entity))
+		    if (registry.AnyOf<InHand, SeeThrough>(entity) || (drawList != nullptr && !drawList->Drawn(registry, entity)))
 		    {
 			    return;
 		    }

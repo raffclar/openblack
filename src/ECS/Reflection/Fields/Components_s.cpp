@@ -115,7 +115,11 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Moon::placement>("placement")
 	    .Field<&components::Moon::colour>("colour")
 	    .Field<&components::Moon::strength>("strength");
-	Reflect<components::SnowLevel>(context).Field<&components::SnowLevel::level>("level");
+	Reflect<components::SnowLevel>(context)
+	    .Field<&components::SnowLevel::level>("level")
+	    .Field<&components::SnowLevel::broken>("broken")
+	    .Field<&components::SnowLevel::piece>("piece")
+	    .Field<&components::SnowLevel::drawnOutOfLand>("drawnOutOfLand");
 	Reflect<components::SoundTag>(context)
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")
