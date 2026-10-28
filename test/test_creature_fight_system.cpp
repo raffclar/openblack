@@ -899,6 +899,39 @@ TEST_F(CreatureFightSystemTest, ACreatureThatTheHandHoldsInADuelLeavesTheDuelAnd
 	Locator::creatureHandSystem::reset();
 }
 
+// After the hold, the plan asks the opponent again. The opponent agrees, and the fight starts when its move finished.
+TEST_F(CreatureFightSystemTest, AFightAskedAgainAfterAHoldWaitsForTheMoveThatFinishes)
+{
+	using Result = ecs::systems::CreatureFightSystemInterface::StartResult;
+	auto& hand = static_cast<HoldingHand&>(Locator::creatureHandSystem::emplace<HoldingHand>());
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+		registry.Assign<CreatureNeeds>(self).needs.life = 1.0f;
+	}
+	hand.held = first;
+	fights.FightTurn(first);
+	// While the hand holds it, the fight is not only a move that finishes
+	EXPECT_EQ(fights.StartFight(first, second), Result::Busy);
+	fight::Enter(registry.Get<CreatureFighting>(first).fighter, fight::State::Idle);
+	hand.held.reset();
+	fights.HandLetGo(first);
+	ASSERT_FALSE(registry.AllOf<CreatureFighting>(first));
+	ASSERT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Stop);
+	// The opponent still finishes its move: it agrees, but nothing starts
+	EXPECT_EQ(fights.StartFight(first, second), Result::Finishing);
+	EXPECT_FALSE(registry.AllOf<CreatureFighting>(first));
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Stop);
+	// Its move finished, it leaves the fight, and the new fight starts
+	fight::Enter(registry.Get<CreatureFighting>(second).fighter, fight::State::Idle);
+	fights.ProcessTurn();
+	ASSERT_FALSE(registry.AllOf<CreatureFighting>(second));
+	EXPECT_EQ(fights.StartFight(first, second), Result::Started);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::FaceOff);
+	Locator::creatureHandSystem::reset();
+}
+
 TEST_F(CreatureFightSystemTest, TheFightMusicPlaysWhileTheHandDirectsTheFightOrNearItsArena)
 {
 	auto& registry = Locator::entitiesRegistry::value();

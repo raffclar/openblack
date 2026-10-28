@@ -993,8 +993,17 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	{
 		return StartResult::NoOpponent;
 	}
-	if (registry.AnyOf<CreatureFighting, CreatureKnockedOut>(creature) ||
-	    registry.AnyOf<CreatureFighting, CreatureKnockedOut>(opponent))
+	// A fight that stopped, and that the hand does not hold, is only a move that finishes. The question to the other
+	// creature does not wait for it.
+	const auto finishesMove = [&registry](entt::entity entity) {
+		const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
+		return fighting != nullptr && fighting->stage == CreatureFighting::Stage::Stop && !fighting->held;
+	};
+	const auto busy = [&registry, &finishesMove](entt::entity entity) {
+		return registry.AllOf<CreatureKnockedOut>(entity) ||
+		       (registry.AllOf<CreatureFighting>(entity) && !finishesMove(entity));
+	};
+	if (busy(creature) || busy(opponent))
 	{
 		return StartResult::Busy;
 	}
@@ -1014,6 +1023,11 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	if (const auto* link = registry.TryGet<const CreaturePartner>(opponent); link != nullptr && link->partner != creature)
 	{
 		return StartResult::Refused;
+	}
+	// The other creature agreed. The face-off starts when both moves have finished.
+	if (finishesMove(creature) || finishesMove(opponent))
+	{
+		return StartResult::Finishing;
 	}
 	// The arena appears only after the face-off, so a fight with no room for an arena starts and then stops
 	for (const auto& [self, other] : {std::pair(creature, opponent), std::pair(opponent, creature)})

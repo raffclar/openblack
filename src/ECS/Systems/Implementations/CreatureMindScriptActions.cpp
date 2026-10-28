@@ -105,9 +105,10 @@ void CreatureMindSystem::StopForScript(entt::entity creature)
 		Locator::creatureFightSystem::value().TakeForScript(creature);
 	}
 	// The step that the creature does stops as a failure. Thus a walk to a thing that the hands act on also stops, and
-	// does not start again on the next turn.
+	// does not start again on the next turn. A catch or a let-go that plays its clip is the body's own, and it plays on.
 	if (Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}

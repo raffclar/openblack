@@ -46,6 +46,9 @@ public:
 		/// The other creature, asked first, won't fight it: it is less than half or more than twice its height, it lies
 		/// dead, or only one of the two is under a script's control
 		Refused,
+		/// The other creature agreed, but one of the two still finishes the move of a fight that stopped. Nothing
+		/// starts: ask again on a later turn.
+		Finishing,
 	};
 
 	virtual ~CreatureFightSystemInterface() = default;

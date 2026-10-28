@@ -3392,8 +3392,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		}
 		auto& fights = Locator::creatureFightSystem::value();
 		using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
-		constexpr std::array<std::string_view, 6> k_Results {"started",  "no_opponent", "busy",
-		                                                     "too_weak", "no_arena",    "refused"};
+		constexpr std::array<std::string_view, 7> k_Results {"started",  "no_opponent", "busy",     "too_weak",
+		                                                     "no_arena", "refused",     "finishing"};
 		const auto started = fights.StartFight(*creature, *opponent);
 		const auto index = std::min(static_cast<size_t>(started), k_Results.size() - 1);
 		if (started != Start::Started)

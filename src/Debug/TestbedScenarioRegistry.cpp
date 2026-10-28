@@ -5370,6 +5370,52 @@ void AddObjects(std::vector<Scenario>& all)
 	                 Go(Kind::LeashOrderAt, 0, {0.0f, 40.0f}, 0.2f, false)},
 	});
 
+	// The hand strokes the tiger and lets it go while the tiger puts the villager down. The feedback stops the plan, but
+	// the put-down continues and lets her go at its moment.
+	all.push_back({
+	    .id = "creature.put_down_through_a_stroke",
+	    .name = "A put-down that continues through a stroke",
+	    .facet = Facet::Objects,
+	    .description = "A tiger picks up the villager in front of it and starts to put her down. A tenth of a second later, "
+	                   "the hand strokes the head of the tiger. A tenth of a second after that, the hand lets go.",
+	    .expected = "The feedback of the hand stops what the tiger does, but not the put-down. The tiger lets the villager "
+	                "go at the moment of the put-down, with no speed, and she stands on the land. The tiger does not keep "
+	                "her in its hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 Act(Kind::PutDown, 0, 1.5f, true),
+	                 {.kind = Kind::HandStroke,
+	                  .delaySeconds = 0.1f,
+	                  .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
+	                 Act(Kind::HandLetGo, 0, 0.1f)},
+	});
+
+	// A script takes the tiger while it puts the villager down. The put-down continues, and the action of the script
+	// waits.
+	{
+		constexpr uint32_t k_HappyAnimation = 55;
+		all.push_back({
+		    .id = "creature.put_down_through_a_script",
+		    .name = "A put-down that continues when a script takes the creature",
+		    .facet = Facet::Objects,
+		    .description = "A tiger picks up the villager in front of it and starts to put her down. A fifth of a second "
+		                   "later, a script takes the tiger and tells it to play the happy animation two times.",
+		    .expected = "The script does not cut the put-down. The tiger lets the villager go at the moment of the "
+		                "put-down, with no speed, and she stands on the land. When the put-down ends, the tiger plays the "
+		                "happy animation.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}}},
+		    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f),
+		                 Act(Kind::PutDown, 0, 1.5f, true),
+		                 {.kind = Kind::ScriptPlay, .delaySeconds = 0.2f, .value = k_HappyAnimation, .amount = 2.0f}},
+		});
+	}
+
 	auto hungryAtTheGive = hungryThinking;
 	hungryAtTheGive.pauseMind = true;
 	hungryAtTheGive.thinksAfterSeconds = k_ThinksBeforeTheGive;

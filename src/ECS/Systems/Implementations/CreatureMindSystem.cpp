@@ -1971,11 +1971,12 @@ creature_mind::HandsState HandsOf(entt::entity creature)
 	return creature_mind::HandsState::Idle;
 }
 /// The creature's plan has it fight another creature: whether the other creature agreed and the fight started
-bool StartPlannedFight(entt::entity creature, entt::entity opponent)
+CreatureFightSystemInterface::StartResult StartPlannedFight(entt::entity creature, entt::entity opponent)
 {
 	using Result = CreatureFightSystemInterface::StartResult;
-	return Locator::creatureFightSystem::has_value() &&
-	       Locator::creatureFightSystem::value().StartPlannedFight(creature, opponent) == Result::Started;
+	return Locator::creatureFightSystem::has_value()
+	           ? Locator::creatureFightSystem::value().StartPlannedFight(creature, opponent)
+	           : Result::NoOpponent;
 }
 } // namespace openblack::ecs::systems::mind_detail
 
@@ -2509,11 +2510,22 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		}
 		Order(registry, entity, commands);
 		// It asks the other creature to fight. If the other creature does not agree, the rest of the agenda is no use.
-		if (commands.startFight.has_value() && !StartPlannedFight(entity, static_cast<entt::entity>(*commands.startFight)))
+		// When the other creature agrees while a move of a fight that stopped still finishes, the step waits. It starts
+		// again on the next turn.
+		if (commands.startFight.has_value())
 		{
-			mind.idle.step = mind.idle.agenda.size();
-			mind.idle.stepStarted = false;
-			mind.idle.gaveUp = true;
+			using Result = CreatureFightSystemInterface::StartResult;
+			const auto started = StartPlannedFight(entity, static_cast<entt::entity>(*commands.startFight));
+			if (started == Result::Finishing)
+			{
+				mind.idle.stepStarted = false;
+			}
+			else if (started != Result::Started)
+			{
+				mind.idle.step = mind.idle.agenda.size();
+				mind.idle.stepStarted = false;
+				mind.idle.gaveUp = true;
+			}
 		}
 		// A joint action: when the other creature refuses to be its partner, the rest of the agenda is no use
 		if (commands.requestPartner.has_value() &&
@@ -3082,8 +3094,14 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	mind->lastFeedback = CreatureMindState::Feedback {.value = feedback, .activity = mind->idle.activity};
 	// Let go of, however slightly it was stroked or slapped, it stops whatever it was doing: it stops walking, puts down
 	// what it was doing with a thing, drops its agenda and gets up out of a sitting or lying pose. An action it is playing,
-	// such as reeling from the last slap, plays on.
-	if (Locator::creatureObjectActionSystem::has_value())
+	// such as reeling from the last slap, plays on. A catch or a let-go also plays on, because it is the body's own.
+	// A fight that its plan started again after the hold stops for both creatures, with no winner.
+	if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().CallOff(creature);
+	}
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
