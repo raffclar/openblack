@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <chrono>
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
@@ -265,5 +266,9 @@ public:
 	/// After a load of a saved game: the temple gives back the dialogue that the save kept for it, if nobody has the
 	/// dialogue now. Then, kept or not, the box shows its texts again and the newest starts its reading time again.
 	virtual void ShowHelpAfterLoad() = 0;
+	/// The warm-up of a load calls draw while the temple shows a visit: all the rooms are there and the temple draws all of
+	/// them. After the draw, the rooms go and the island draws again. Nothing that the game keeps or saves changes. When
+	/// the player is in the temple, this does nothing.
+	virtual void WarmUpVisit(const std::function<void()>& draw) = 0;
 };
 } // namespace openblack

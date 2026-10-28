@@ -1385,6 +1385,10 @@ std::optional<float> TempleInterior::GetWayOutSeconds() const
 
 bool TempleInterior::IsRoomDrawn(TempleRoom room) const
 {
+	if (_warmUpVisit)
+	{
+		return true;
+	}
 	if (room == _currentRoom || room == _transitionRoom)
 	{
 		return true;
@@ -1861,6 +1865,35 @@ void TempleInterior::Activate(TempleRoom room)
 	camera.SetFocus(_cameraModel->GetTargetFocus());
 	ApplyLens();
 	CreateScrolls();
+}
+
+void TempleInterior::WarmUpVisit(const std::function<void()>& draw)
+{
+	if (_active || !Locator::rendereringSystem::has_value())
+	{
+		return;
+	}
+	// The rooms of the warm-up are in a registry of their own, as a visit makes them
+	auto rooms = std::make_unique<ecs::Registry>();
+	const auto rotation = portable_math::EulerAngleY(_templeRotation.y);
+	for (const auto& [roomType, assetName] : k_TempleInteriorParts)
+	{
+		addRoomToRegistry(*rooms, assetName, roomType, _templePosition, rotation, glm::vec3(1.0f));
+	}
+	for (const auto& [roomType, assetName] : k_TempleInteriorGlows)
+	{
+		addGlowsToRegistry(*rooms, roomType);
+	}
+	std::swap(_rooms, rooms);
+	const auto island = Locator::rendereringSystem::handle();
+	Locator::rendereringSystem::emplace<ecs::systems::RenderingSystemTemple>();
+	_active = true;
+	_warmUpVisit = true;
+	draw();
+	_warmUpVisit = false;
+	_active = false;
+	Locator::rendereringSystem::reset(island);
+	std::swap(_rooms, rooms);
 }
 
 void TempleInterior::EnterLockedRoom(TempleRoom room)
