@@ -9,7 +9,12 @@
 
 #pragma once
 
+#include <memory>
+#include <span>
+
 #include "ECS/Components/Footpath.h"
+#include "ECS/FootpathPlanning.h"
+#include "ECS/FootpathWorld.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -22,6 +27,12 @@ namespace openblack::ecs::systems
 class FootpathSystem final: public FootpathSystemInterface
 {
 public:
+	/// The footpaths of the game's own world
+	FootpathSystem();
+	/// The footpaths of a world given to them, as a test's fake
+	explicit FootpathSystem(std::unique_ptr<footpath_world::WorldInterface> world);
+	~FootpathSystem() override;
+
 	void BuildingWorking(entt::entity building) override;
 	void TownJoinedSite(entt::entity site, entt::entity town) override;
 	void DanceMade(entt::entity dance, entt::entity town) override;
@@ -36,6 +47,18 @@ public:
 private:
 	/// A path sent round a thing put on the map, or back from one removed from it
 	void Reroute(entt::entity footpath, const components::FootpathObstacleChange& change);
+	/// The path takes the planned nodes, each on the land
+	void SetNodes(components::Footpath& footpath, std::span<const footpath_planning::PlanNode> nodes) const;
+	/// A new path with two nodes, the first where the first thing is arrived at
+	entt::entity MakeFootpath(glm::ivec2 first, glm::ivec2 last);
+	/// The path's nodes between its two ends are laid along the route
+	void LayRoute(entt::entity footpath, std::span<const glm::ivec2> route, bool settle);
+	/// A thing keeps a path among those that lead from it, the newest first
+	void AddFootpath(entt::entity thing, entt::entity footpath);
+	/// The town's storage pit, while it stands built
+	[[nodiscard]] std::optional<entt::entity> StandingStoragePit(entt::entity town) const;
+
+	std::unique_ptr<footpath_world::WorldInterface> _world;
 };
 
 } // namespace openblack::ecs::systems

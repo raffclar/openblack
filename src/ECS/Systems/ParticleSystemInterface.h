@@ -106,6 +106,13 @@ public:
 	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                                 float magnitude = 1.0f) = 0;
 
+	/// Gives a running effect another number, as an effect that its owner starts again after a load takes the number that
+	/// the save has for it. When the effect had the newest number, the next effect gets that number again. Returns false,
+	/// and changes nothing, when no effect has the first number or an effect has the second.
+	virtual bool Renumber(EffectId /*from*/, EffectId /*to*/) { return false; }
+	/// A save does not keep the effect: its owner starts it again after a load
+	virtual void KeepOutOfSaves(EffectId /*id*/) {}
+
 	virtual void SetOrigin(EffectId id, glm::vec3 origin) = 0;
 	virtual void SetPlayer(EffectId id, int player) = 0;
 	/// How strong an effect is drawn from now on, which the strength its rules read follows: a glowing artefact's magic
@@ -125,6 +132,9 @@ public:
 	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
 	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
 	virtual void SetInTemple(EffectId id) = 0;
+	/// An effect that the world and the temple do not draw. Only CollectEffectDrawFrame draws it, as for the seeds
+	/// pictured over the gestures' hints.
+	virtual void SetDrawnAlone(EffectId /*id*/) {}
 	/// The live shield holding a point, its sphere grown by a margin, if any
 	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
 	/// How many particle sounds are playing or dying away, for the debug window
@@ -189,6 +199,11 @@ public:
 	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple
 	/// only the temple's effects are drawn, and outside it only the world's.
 	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const = 0;
+	/// Clears the frame and fills it with what one effect draws, none if the effect does not run
+	virtual void CollectEffectDrawFrame(EffectId /*id*/, float /*turnFraction*/, particles::draw::Frame& frame) const
+	{
+		frame.Clear();
+	}
 	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
 	[[nodiscard]] virtual std::vector<EffectInfo> GetEffects() const = 0;
 	/// The particle files' names, for the debug window

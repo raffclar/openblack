@@ -138,6 +138,18 @@ enum class Land : uint8_t
 	GodsRingMap,
 };
 
+/// A date and time on the player's computer, by its own time zone
+struct RealDate
+{
+	int year {2001};
+	/// 1 for January to 12 for December
+	int month {1};
+	/// 1 to 31
+	int day {1};
+	int hour {12};
+	int minute {0};
+};
+
 struct Environment
 {
 	Land land {Land::Testbed};
@@ -154,6 +166,9 @@ struct Environment
 	bool fainting {true};
 	/// Smiley faces for footprints as on the first of April, or by the date when not given
 	std::optional<bool> aprilFools;
+	/// The date and time that the machine's clock gives while the scenario runs, as if the computer's clock were set to
+	/// it; the clock continues from it. When not given, the clock is as it was before the scenario.
+	std::optional<RealDate> realDate;
 	/// The grid of every miracle's dispenser the testbed lays out in front of the camera stays, or is cleared away
 	bool dispenserGrid {true};
 	/// The footpaths are drawn as lines, as the debug menu's Footpaths box draws them
@@ -612,6 +627,8 @@ struct Command
 		/// hand, taking it off; keeping it within a radius of where it stands
 		PutOnLeash,
 		TieLeash,
+		/// The leash tied to the flag of a town's desire (by value), the first such flag found
+		TieLeashToDesireFlag,
 		UntieLeash,
 		TakeOffLeash,
 		ConfineToHome,
@@ -969,6 +986,9 @@ struct Command
 		/// Each worship site of the player that is not built yet is built at once, with its altar, as when its builders
 		/// put on the last of it. Needs no creature.
 		BuildWorshipSites,
+		/// The player presses a key (value, the key's scancode) on the keyboard and lets it go. The key goes through the
+		/// queue of the window's events, as the real keyboard's keys do. Needs no creature.
+		PressPlainKey,
 		/// Another god's hand, as a network game reports it: the player (player) gets hands of its own, and its hand
 		/// takes the scenario's object (object), or holds a miracle seed (heldSeed) in place of the object. Then the
 		/// player reports its hand at the point (point), so high above the land (radius), and its camera 30 m above the
