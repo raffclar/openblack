@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <numbers>
 
 #include <fmt/format.h>
@@ -1102,8 +1103,10 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .id = "needs.poo",
 	    .name = "Needs to poo",
 	    .facet = Facet::Needs,
-	    .description = "A tiger full of poo with its desire to go as strong as it gets.",
-	    .expected = "It may show it needs a poo first, then squats. All through the squat's loop, every fifth game turn, "
+	    .description = "A tiger full of poo with its desire to go as strong as it gets, and an oak 30 m in front of it. "
+	                   "A creature poos only by a thing that is not alive and is taller than 1.5 m.",
+	    .expected = "It may show it needs a poo first, then walks to the oak, turns its back to it and squats. All through the "
+	                "squat's loop, every fifth game turn, "
 	                "a lump of poo comes out at its rear and is thrown back along the ground behind it, and the desire "
 	                "is held back for a minute.",
 	    .framing = {.shot = Shot::Follow},
@@ -1112,6 +1115,7 @@ void AddNeeds(std::vector<Scenario>& all)
 	        .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.95f},
 	        .desires = {{.desire = Desire::Poo, .fraction = 1.0f}},
 	    }},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, -30.0f}}},
 	});
 
 	all.push_back({
@@ -1286,12 +1290,15 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .name = "Needs to poo after a meal",
 	    .facet = Facet::Needs,
 	    .description = "A tiger that has just eaten, half full of poo, nothing held and no desire set, its body's time "
-	                   "ten times as fast.",
-	    .expected = "Its desire to poo grows from the poo inside it; it may show it needs to go, then squats and goes, a "
+	                   "ten times as fast. An oak stands 30 m in front of it, as a creature poos only by a thing that is "
+	                   "not alive and is taller than 1.5 m.",
+	    .expected = "Its desire to poo grows from the poo inside it; it may show it needs to go, then walks to the oak, "
+	                "turns its back to it, squats and goes, a "
 	                "lump drops behind it and the desire is held back for a while.",
 	    .environment = {.bodyTimeScale = 10.0f},
 	    .framing = {.shot = Shot::Follow},
 	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = {.poo = 0.6f}}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, -30.0f}}},
 	});
 
 	all.push_back({
@@ -11112,6 +11119,7 @@ std::vector<Scenario> Build()
 	AddWorldSoundScenarios(all);
 	AddTownMiracleScenarios(all);
 	AddCreatureExplorationScenarios(all);
+	AddCreatureActionScenarios(all);
 	AddScriptTaskRelease(all);
 	AddLandOneScriptStubScenarios(all);
 	AddVillagerSizeAndReachScenarios(all);
@@ -11891,6 +11899,17 @@ void testbed_scenarios::Apply(std::span<const DesireOverride> overrides, creatur
 		state.activated = true;
 		state.value = std::clamp(override.fraction, 0.0f, 1.0f) * std::max(state.max, 0.0f);
 	}
+}
+
+std::vector<size_t> testbed_scenarios::GivesAt(const std::map<uint32_t, std::vector<size_t>>& gives, uint32_t turn,
+                                               size_t commands)
+{
+	std::vector<size_t> given;
+	if (const auto found = gives.find(turn); found != gives.end())
+	{
+		std::ranges::copy_if(found->second, std::back_inserter(given), [commands](size_t place) { return place < commands; });
+	}
+	return given;
 }
 
 std::vector<size_t> testbed_scenarios::Advance(Timeline& timeline, std::span<const Command> commands,

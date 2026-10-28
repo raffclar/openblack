@@ -109,13 +109,17 @@ struct Entry
 /// Why an asked clip did not play
 enum class Problem : uint8_t
 {
-	/// The species does not have the clip: the body showed the stand in its place, or the action ended at once
+	/// The species does not have the clip. What the creature showed in its place depends on the layer (see MissingDetail).
 	Missing,
 	/// The body played another action, and it refused the new one
 	Refused,
 };
 
 [[nodiscard]] std::string_view Name(Problem problem);
+
+/// What the creature showed in place of a clip of this layer that its species does not have. A missing face, gesture
+/// or wobble adds nothing, so the body does not change.
+[[nodiscard]] std::string_view MissingDetail(Layer layer);
 
 struct ProblemEntry
 {

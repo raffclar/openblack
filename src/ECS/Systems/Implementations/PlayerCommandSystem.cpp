@@ -404,7 +404,7 @@ void Run(const Command& command, uint32_t turn)
 		    {
 			    if (openblack::Locator::leashSystem::has_value() && registry.Valid(action.post))
 			    {
-				    openblack::Locator::leashSystem::value().TapPost(action.post);
+				    openblack::Locator::leashSystem::value().TapPost(command.player, action.post);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, GiveCallOff>)

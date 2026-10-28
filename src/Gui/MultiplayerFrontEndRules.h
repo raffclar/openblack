@@ -22,6 +22,7 @@
 #include <LobbyApi.h>
 #include <glm/vec4.hpp>
 
+#include "ECS/GameEndConditions.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 
 /// The rules of the multiplayer front end: the boxes over the temple's future room that find a game and show its room.
@@ -328,6 +329,15 @@ using ConditionTemplate = std::array<ConditionLimits, k_ConditionCount>;
 /// The conditions of a land from "Online Maps\ConditionTemplate.txt": the lines after "FORMAP <file>.txt", by the
 /// names of the conditions. None when the file has no block for the land.
 [[nodiscard]] std::optional<ConditionTemplate> FindConditions(std::string_view text, std::string_view landFile);
+
+/// The number of a winning condition from its name in the template file, such as "WC_HOUSES_BUILT". None for another
+/// name.
+[[nodiscard]] std::optional<size_t> ConditionIndex(std::string_view key) noexcept;
+
+/// Why the picks are not a pick that the host can make on the limits of a land, or none when they are. Each value must
+/// be from the least to the most value of its condition. No limits: the template file has no block for the land.
+[[nodiscard]] std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTemplate>& limits,
+                                                           std::span<const game_end::ConditionPick> picks);
 
 /// The front end's flow from box to box. It knows nothing of the lobby: the controller tells it what happened.
 struct Flow

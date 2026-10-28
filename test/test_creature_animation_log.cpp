@@ -8,6 +8,8 @@
  *******************************************************************************/
 
 #include <array>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -125,6 +127,25 @@ TEST(CreatureAnimationLog, AClipThatTheSpeciesLacksIsAMissingProblemOnce)
 	EXPECT_EQ(log.Problems()[0].problem, Problem::Missing);
 	EXPECT_EQ(log.Problems()[0].animation, 140u);
 	EXPECT_EQ(log.Problems()[0].by, "object action");
+}
+
+TEST(CreatureAnimationLog, AMissingFaceClipDoesNotSayThatTheBodyShowedTheStand)
+{
+	Log log;
+	auto face = BodyClip(23, 0.0f);
+	face.layer = Layer::Face;
+	face.found = false;
+	auto blend = BodyClip(140, 0.0f);
+	blend.layer = Layer::Blend;
+	blend.found = false;
+	log.Posed(1, std::array {face, blend}, CauseBy("mind"));
+	ASSERT_EQ(log.Problems().size(), 2);
+	EXPECT_EQ(log.Problems()[0].layer, Layer::Face);
+	EXPECT_EQ(log.Problems()[0].detail, MissingDetail(Layer::Face));
+	EXPECT_EQ(log.Problems()[0].detail.find("stand"), std::string::npos);
+	EXPECT_EQ(log.Problems()[1].detail, MissingDetail(Layer::Blend));
+	EXPECT_NE(MissingDetail(Layer::Gesture).find("did not change"), std::string_view::npos);
+	EXPECT_NE(MissingDetail(Layer::Wobble).find("did not change"), std::string_view::npos);
 }
 
 TEST(CreatureAnimationLog, AProblemInTheNextTurnsCountsAsARepeat)

@@ -112,6 +112,7 @@ void openblack::ecs::reflection::RegisterFields_Components_t(entt::meta_ctx& con
 	    .Field<&components::Town::homelessVillagers>("homelessVillagers")
 	    .Field<&components::Town::abodes>("abodes")
 	    .Field<&components::Town::gained>("gained")
+	    .Field<&components::Town::countedAsNew>("countedAsNew")
 	    .Field<&components::Town::injured>("injured")
 	    .Field<&components::Town::deathsByKiller>("deathsByKiller", {std::span<const std::string_view> {}, k_DeathReasonNames})
 	    .Field<&components::Town::scenicForest>("scenicForest")
