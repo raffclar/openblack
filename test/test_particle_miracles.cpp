@@ -82,6 +82,7 @@ public:
 		return found;
 	}
 	void QueueArcs(entt::entity object) override { arcsQueued.push_back(object); }
+	void StrikeWithoutMiracle(glm::vec3 point) override { strikesWithoutMiracle.push_back(point); }
 	void AddShield(const std::shared_ptr<ShieldSphere>& shield) override { shields.push_back(shield); }
 	[[nodiscard]] std::shared_ptr<ShieldSphere> FindShield(glm::vec3 point, float margin) const override
 	{
@@ -132,6 +133,7 @@ public:
 	std::map<entt::entity, glm::vec3> objects;
 	std::vector<StrikeCandidate> candidates;
 	std::vector<entt::entity> arcsQueued;
+	std::vector<glm::vec3> strikesWithoutMiracle;
 	std::vector<std::weak_ptr<ShieldSphere>> shields;
 	std::vector<std::shared_ptr<ParticleSoundLink>> sounds;
 };
@@ -445,6 +447,44 @@ TEST_F(ParticleMiracleTest, ABoltStrikesWhatIsInFrontOfTheHandAndNotWhatIsBehind
 	EXPECT_NEAR(walk.joints.at(walk.chains.front().firstJoint).position.y, 15.0f, k_Epsilon);
 }
 
+TEST_F(ParticleMiracleTest, ALookStraightDownTurnsTheConeToTheXAxis)
+{
+	const auto alongX = static_cast<entt::entity>(1);
+	const auto alongMinusZ = static_cast<entt::entity>(2);
+	world.candidates = {{.object = alongX, .position = {20.0f, 0.0f, 0.0f}, .height = 10.0f},
+	                    {.object = alongMinusZ, .position = {0.0f, 0.0f, -20.0f}, .height = 10.0f}};
+	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
+	                 Object("UR_Lightning", "Bolt",
+	                        "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
+	                        "PROPERTY MinLightningObjects INTEGER 1\nPROPERTY MaxJointsPerFork INTEGER 6\n"
+	                        "PROPERTY DefaultSearchRadius FLOAT 50\nPROPERTY SplitAngle FLOAT 0.785\n"));
+	bolt->SetProcessInfo({.handPosition = {0.0f, 15.0f, 0.0f}, .cameraForward = {0.0f, 0.0f, -1.0f}, .enabled = true});
+	for (int step = 0; step < 5; ++step)
+	{
+		bolt->Step(k_Step);
+	}
+	// The camera now looks straight down: the heading is the x axis, not the last look
+	bolt->SetProcessInfo({.handPosition = {0.0f, 15.0f, 0.0f}, .cameraForward = {0.0f, -1.0f, 0.0f}, .enabled = true});
+	for (int step = 0; step < 15; ++step)
+	{
+		bolt->Step(k_Step);
+	}
+	spell.events.clear();
+	for (int step = 0; step < 15; ++step)
+	{
+		bolt->Step(k_Step);
+	}
+	ASSERT_GE(spell.Count(SpellEventInfo::Type::Landed), 1u);
+	for (const auto& event : spell.events)
+	{
+		if (event.type == SpellEventInfo::Type::Landed)
+		{
+			EXPECT_NEAR(event.position.x, 20.0f, k_Epsilon);
+			EXPECT_NEAR(event.position.z, 0.0f, k_Epsilon);
+		}
+	}
+}
+
 TEST_F(ParticleMiracleTest, ACreatureInTheConeTakesEveryFork)
 {
 	world.candidates = {
@@ -567,6 +607,31 @@ TEST_F(ParticleMiracleTest, ArcsCrawlOverWhatABoltStrikesAgainAfterEachSearch)
 	EXPECT_GE(world.arcsQueued.size(), 2u);
 	EXPECT_LE(world.arcsQueued.size(), 3u);
 	EXPECT_TRUE(std::ranges::all_of(world.arcsQueued, [&](entt::entity object) { return object == tree; }));
+}
+
+TEST_F(ParticleMiracleTest, ABoltWithNoMiracleBehindItStrikesWhatIsThereThroughTheWorld)
+{
+	world.candidates = {{.object = static_cast<entt::entity>(1), .position = {50.0f, 0.0f, 50.0f}, .height = 4.0f}};
+	auto bolt = Make(Header("1 0 0") + Object("ParticleChainCreator", "Joint", k_Chain) +
+	                     Object("UR_Lightning", "Bolt",
+	                            "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Joint\nPROPERTY ForkGroup INTEGER 1\n"
+	                            "PROPERTY MinLightningObjects INTEGER 1\nPROPERTY MaxJointsPerFork INTEGER 6\n"
+	                            "PROPERTY DefaultSearchRadius FLOAT 15\nPROPERTY CastingFromHand BOOL 0\n"),
+	                 {55.0f, 0.0f, 55.0f});
+	// A storm's bolt: no miracle receives its events
+	bolt->SetSink(nullptr);
+	bolt->SetProcessInfo({.enabled = true});
+	for (int step = 0; step < 30; ++step)
+	{
+		bolt->Step(k_Step);
+	}
+	EXPECT_EQ(spell.Count(SpellEventInfo::Type::Landed), 0u);
+	ASSERT_FALSE(world.strikesWithoutMiracle.empty());
+	for (const auto& point : world.strikesWithoutMiracle)
+	{
+		EXPECT_NEAR(point.x, 50.0f, k_Epsilon);
+		EXPECT_NEAR(point.z, 50.0f, k_Epsilon);
+	}
 }
 
 TEST_F(ParticleMiracleTest, ABoltThatIsNoLongerCastStrikesNothing)

@@ -63,9 +63,9 @@ void DynamicsSystem::ConsiderToyPlay(entt::entity object, const FromHand& releas
 // What happens as a hand, or a creature's hand, lets go of what it held. Whether it is put down where it is or flies is
 // decided here, as the game decides it for every kind of thing; each kind's own part is in its hooks.
 
-std::optional<player_commands::ThrowStart>
+std::optional<hand_grab::throw_lead::LedThrow>
 DynamicsSystem::StartOfThrow(entt::entity object, const std::optional<std::pair<glm::mat3, glm::vec3>>& drawn,
-                             bool alignToSlope)
+                             bool alignToSlope, glm::vec3 velocity, int leadTurns)
 {
 	auto body = MakeBody(object, FactsOf(object), drawn);
 	const auto* land = Land();
@@ -74,15 +74,27 @@ DynamicsSystem::StartOfThrow(entt::entity object, const std::optional<std::pair<
 		return std::nullopt;
 	}
 	// The hand holds the thing with no spin
-	const auto angularMomentum = hand_grab::SpinMomentum(body->Inertia(), glm::vec3(0.0f));
+	body->angularMomentum = hand_grab::SpinMomentum(body->Inertia(), glm::vec3(0.0f));
+	body->velocity = velocity;
 	// Lifted out of the land, never pulled down to it
 	body->SettleOnLand(*land, true, alignToSlope);
+	// The body flies alone for the turns of lead. The start is where the flight is after them.
+	auto flight = hand_grab::throw_lead::Flight {
+	    .places = physics::PredictFlight(*body, *land, leadTurns),
+	    .scale = body->Scale(),
+	    .centreOfMass = body->CentreOfMass(),
+	};
 	// The angles come from the turn of the body, which has no scale
 	const auto& axes = body->Axes();
-	return player_commands::ThrowStart {
-	    .angularMomentum = angularMomentum,
-	    .origin = body->ObjectPose().origin,
-	    .angles = x87::GameAnglesYxz(axes[0], axes[2]),
+	return hand_grab::throw_lead::LedThrow {
+	    .start =
+	        {
+	            .angularMomentum = body->angularMomentum,
+	            .origin = body->ObjectPose().origin,
+	            .angles = x87::GameAnglesYxz(axes[0], axes[2]),
+	        },
+	    .velocity = body->velocity,
+	    .flight = std::move(flight),
 	};
 }
 

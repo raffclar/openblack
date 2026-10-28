@@ -58,6 +58,7 @@
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/FootpathRules.h"
 #include "ECS/Registry.h"
@@ -1058,8 +1059,10 @@ void FeatureScriptCommands::SetInteractDesire(float)
 
 void FeatureScriptCommands::ToggleComputerPlayer(const std::string& affiliation, int32_t toggle)
 {
-	// Any value but 0 switches the computer mind of the player on, and 0 switches it off
-	if (Locator::computerPlayerSystem::has_value())
+	// Any value but 0 switches the computer mind of the player on, and 0 switches it off. The map script of a network
+	// game does not do this, so that a human's god gets no computer mind.
+	const bool networkMapScript = Locator::landSystem::has_value() && Locator::landSystem::value().RunsNetworkMapScript();
+	if (Locator::computerPlayerSystem::has_value() && computer_player::LandScriptSwitchesMind(networkMapScript))
 	{
 		Locator::computerPlayerSystem::value().SwitchOn(GetPlayerName(affiliation), toggle != 0);
 	}

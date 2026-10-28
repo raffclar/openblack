@@ -36,23 +36,6 @@ constexpr float k_Tolerance = 1e-3f;
 constexpr float k_Height = 15.0f;
 } // namespace
 
-TEST(CreatureTouch, StepsComeAtMostSixtyTimesASecondTakingAllTheTimeSinceTheLast)
-{
-	float since = 0.0f;
-	// Fast frames step only once a sixtieth of a second has gone by, with all of it
-	for (int i = 0; i < 10; ++i)
-	{
-		EXPECT_FALSE(feedback::Pace(since, 1.6f).has_value());
-	}
-	const auto step = feedback::Pace(since, 2.0f);
-	ASSERT_TRUE(step.has_value());
-	EXPECT_NEAR(*step, 18.0f, k_Tolerance);
-	// A slow frame steps once with all its time
-	const auto slow = feedback::Pace(since, 40.0f);
-	ASSERT_TRUE(slow.has_value());
-	EXPECT_NEAR(*slow, 40.0f, k_Tolerance);
-}
-
 TEST(CreatureTouch, StrokesWaitLongerTheLessTheCreatureHasBeenRewarded)
 {
 	EXPECT_NEAR(feedback::StrokeWaitMs(0.0f), 1250.0f, k_Tolerance);

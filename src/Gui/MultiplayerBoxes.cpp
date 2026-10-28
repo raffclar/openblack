@@ -11,11 +11,15 @@
 
 #include <algorithm>
 #include <array>
+#include <utility>
 
 #include <SDL_keycode.h>
+#include <bgfx/bgfx.h>
 
 #include "Controls.h"
 #include "DialogKeyRules.h"
+#include "Graphics/Texture2D.h"
+#include "PingDisplay.h"
 #include "TextDatabase.h"
 
 using namespace openblack::gui;
@@ -105,7 +109,6 @@ constexpr std::string_view k_NoClanText = "HELP_TEXT_DIALOG_ADDITION_49";
 constexpr std::string_view k_PlayerInfoText = "HELP_TEXT_DIALOG_ADDITION_109";
 constexpr std::string_view k_GodText = "HELP_TEXT_DIALOG_ADDITION_63";
 constexpr std::string_view k_ObserversText = "HELP_TEXT_PAUSE_STATS_137";
-constexpr std::string_view k_ConditionValueText = "HELP_TEXT_MULTIPLAYER_CONDITION_VALUE";
 constexpr std::string_view k_TimeLimitText = "HELP_TEXT_MULTIPLAYER_TIMELIMIT";
 constexpr std::string_view k_ViewChatText = "HELP_TEXT_MULTIPLAYER_TOCHAT";
 constexpr std::string_view k_ReadyText = "HELP_TEXT_MULTIPLAYER_READY";
@@ -260,12 +263,17 @@ void MultiplayerBoxes::Build()
 	_playerInfo = nullptr;
 	_conditions = nullptr;
 	_selectMap = nullptr;
-	_conditionValue = nullptr;
+	_timeLabel = nullptr;
 	_timeLimit = nullptr;
+	_viewChat = nullptr;
 	_ready = nullptr;
 	_chatLines = 0;
 	_shownTab.reset();
 	_shownPick.reset();
+	_thumbnailLand.reset();
+	_thumbnail.reset();
+	_thumbnailShown = false;
+	_logoShown = false;
 	if (_frontEnd == nullptr)
 	{
 		_dialog.reset();
@@ -387,9 +395,13 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 	_playersLabel = &dialog.Add<StaticText>(DialogRect {.min = {420, 130}, .max = {690, 170}}, Text(k_PlayersInGameText),
 	                                        Layout::Right, k_Mid);
 	_players = &dialog.Add<List>(_font, DialogRect {.min = {420, 175}, .max = {690, 485}}, k_Mid, false, true, false);
-	dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	// The game keeps the name's box and its label hidden. The box only holds the name of the game that the player picks.
+	auto& nameLabel =
+	    dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	nameLabel.visible = false;
 	_name = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 480}, .max = {550, 510}}, std::u16string(),
 	                             lobby_api::k_MostNameCharacters, k_Mid);
+	_name->visible = false;
 	_passwordLabel = &dialog.Add<StaticText>(DialogRect {.min = {130, 530}, .max = {330, 570}}, Text(k_GamePasswordText),
 	                                         Layout::Right, k_Mid);
 	_password = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 530}, .max = {550, 570}}, std::u16string(),
@@ -478,26 +490,23 @@ void MultiplayerBoxes::BuildRoom()
 	_playerInfo = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, k_Mid, false, true, false);
 	_playerControls = {_playerLabel, _playerInfo};
 
-	// The conditions page
+	// The conditions page, as the game shows it to a player who is not the host. The game server has the host's part,
+	// so the value of a condition and the arrows do not show.
 	_conditions = &dialog.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 320}}, k_Mid, false, true, true);
 	_selectMap = &dialog.Add<StaticText>(DialogRect {.min = {100, 200}, .max = {700, 260}}, Text(k_SelectMapText),
 	                                     Layout::Centre, k_Mid);
-	auto& valueLabel = dialog.Add<StaticText>(DialogRect {.min = {98, 340}, .max = {218, 370}}, Text(k_ConditionValueText),
-	                                          Layout::Left, k_Mid);
-	_conditionValue =
-	    &dialog.Add<StaticText>(DialogRect {.min = {260, 320}, .max = {340, 380}}, std::u16string(), Layout::Centre, k_Mid);
-	auto& timeLabel =
-	    dialog.Add<StaticText>(DialogRect {.min = {400, 340}, .max = {560, 370}}, Text(k_TimeLimitText), Layout::Left, k_Mid);
+	_timeLabel =
+	    &dialog.Add<StaticText>(DialogRect {.min = {400, 340}, .max = {560, 370}}, Text(k_TimeLimitText), Layout::Left, k_Mid);
 	_timeLimit =
 	    &dialog.Add<StaticText>(DialogRect {.min = {600, 320}, .max = {680, 380}}, std::u16string(), Layout::Centre, k_Mid);
-	auto& viewChat = dialog.Add<Button>(DialogRect {.min = {675, 440}, .max = {775, 472}}, Text(k_ViewChatText), k_Mid);
-	viewChat.onClick = [this] {
+	_viewChat = &dialog.Add<Button>(DialogRect {.min = {675, 440}, .max = {775, 472}}, Text(k_ViewChatText), k_Mid);
+	_viewChat->onClick = [this] {
 		_frontEnd->SelectTab(RoomTab::Chat);
 		_frontEnd->Back();
 	};
 	_ready = &dialog.Add<CheckBox>(_font, glm::ivec2 {65, 460}, k_Mid, Text(k_ReadyText), LabelSide::Below, false, false);
 	_ready->onChange = [this](bool checked) { _frontEnd->SetReady(checked); };
-	_conditionControls = {_conditions, &valueLabel, _conditionValue, &timeLabel, _timeLimit, &viewChat, _ready};
+	_conditionControls = {_conditions, _selectMap, _timeLabel, _timeLimit, _viewChat, _ready};
 
 	// Back leaves the room; Next goes to the conditions page. The host's Start is the server's own: it does not show.
 	dialog.Add<BigButton>(_font, k_RoomBackPosition, k_ArrowSize, Text(k_RoomBackText), LabelSide::Right, Look::LeftArrow)
@@ -620,24 +629,17 @@ void MultiplayerBoxes::SyncRoom()
 	// The roster: "God 3: name (CURRENT)" in the god's colour, the observers in grey
 	const auto* own = _frontEnd->GetOwnSeat();
 	std::vector<List::Item> roster;
+	const auto godText = Text(k_GodText);
+	const auto observersText = Text(k_ObserversText);
+	const auto currentText = Text(k_CurrentText);
+	const RosterTexts rosterTexts {.god = godText, .observers = observersText, .current = currentText};
+	// The ping display (deviation 143) is off unless the player turns it on
+	const auto ping = _frontEnd->ShowsPing() ? ping_display::Text(_frontEnd->GetRoundTrip()) : std::nullopt;
 	for (const auto& seat : _frontEnd->GetSeats())
 	{
-		std::u16string line;
-		if (seat.god > 0)
-		{
-			const std::array<TextArgument, 1> god = {int64_t {seat.god}};
-			line = FormatText(Text(k_GodText), god);
-		}
-		else
-		{
-			line = Text(k_ObserversText);
-		}
-		line += u": " + ToUtf16(seat.account.name);
-		if (own != nullptr && own->account.id == seat.account.id && own->account.name == seat.account.name)
-		{
-			line += Text(k_CurrentText);
-		}
-		roster.push_back({.text = std::move(line), .colour = GodColour(seat.god)});
+		const bool isOwn = own != nullptr && own->account.id == seat.account.id && own->account.name == seat.account.name;
+		roster.push_back(
+		    {.text = RosterLine(seat, ToUtf16(seat.account.name), isOwn, rosterTexts, ping), .colour = GodColour(seat.god)});
 	}
 	SetItemsIfChanged(*_roster, std::move(roster));
 
@@ -679,12 +681,25 @@ void MultiplayerBoxes::SyncRoom()
 	{
 		_lands->SetSelection(shownLand);
 	}
+	// The thumbnail of the land picked
+	if (shownLand != _thumbnailLand)
+	{
+		_thumbnailLand = shownLand;
+		_thumbnail = shownLand.has_value() && *shownLand < maps.size() && _thumbnailSource
+		                 ? _thumbnailSource(maps[*shownLand].file)
+		                 : nullptr;
+	}
+	// The first three lands have texts of their own; the other lands show the description of their thumbnail
 	std::vector<std::u16string> info;
 	if (shownLand.has_value())
 	{
 		if (const auto text = LandInfoText(*shownLand); text.has_value())
 		{
 			info.push_back(Text(*text));
+		}
+		else if (_thumbnail != nullptr)
+		{
+			info.emplace_back(_thumbnail->description.begin(), _thumbnail->description.end());
 		}
 	}
 	SetItemsIfChanged(*_landInfo, Items(info));
@@ -729,41 +744,79 @@ void MultiplayerBoxes::SyncRoom()
 	const auto seatName = seat != nullptr ? ToUtf16(seat->account.name) : playerName;
 	const std::array<TextArgument, 1> seatArgument = {std::u16string_view(seatName)};
 	_playerLabel->text = FormatText(Text(k_PlayerInfoText), seatArgument);
-	std::vector<std::u16string> details;
-	if (seat != nullptr)
-	{
-		if (seat->god > 0)
-		{
-			const std::array<TextArgument, 1> god = {int64_t {seat->god}};
-			details.push_back(FormatText(Text(k_GodText), god));
-		}
-		else
-		{
-			details.push_back(Text(k_ObserversText));
-		}
-	}
-	SetItemsIfChanged(*_playerInfo, Items(details));
+	// The game shows only the lines of the lobby's player database under the title. The lobby has no such lines yet.
+	SetItemsIfChanged(*_playerInfo, Items(PlayerDetailLines({})));
 
-	// The conditions page: the conditions of the server's land, or "Please select a map first."
-	const auto& conditions = _frontEnd->GetConditions();
-	_selectMap->visible = conditionsPage && !conditions.has_value();
-	_conditions->visible = conditionsPage && conditions.has_value();
-	std::vector<std::u16string> conditionLines;
-	if (conditions.has_value())
+	// The conditions page: the conditions of the game and its time limit, or "Please select a map first." A game of
+	// the game server has no conditions, so the list is empty.
+	const auto page = ConditionsPageOf(_frontEnd->GetConditions().has_value());
+	_selectMap->visible = conditionsPage && page.selectMap;
+	_conditions->visible = conditionsPage && page.conditions;
+	_timeLabel->visible = conditionsPage && page.timeLimit;
+	_timeLimit->visible = conditionsPage && page.timeLimit;
+	_viewChat->visible = conditionsPage && page.viewChat;
+	SetItemsIfChanged(*_conditions, Items({}));
+	_timeLimit->text = TimeLimitText(_frontEnd->GetTimeLimit());
+	_ready->SetChecked(_frontEnd->IsReady());
+
+	SyncPictures(onTab && tab == RoomTab::Landscape, onTab && tab == RoomTab::Clans && !lan);
+}
+
+void MultiplayerBoxes::SyncPictures(bool landShown, bool clanShown)
+{
+	_thumbnailShown = landShown && _thumbnail != nullptr && _thumbnail->side > 0;
+	if (_frontEnd->TakeLogoChanged())
 	{
-		for (size_t i = 0; i < k_ConditionCount; ++i)
+		const auto& logo = _frontEnd->GetShownLogo();
+		_logoSheet = logo.has_value() ? land_thumbnail::LogoSheet(*logo) : land_thumbnail::Texels {};
+		_logoChanged = true;
+	}
+	_logoShown = clanShown && !_logoSheet.empty();
+}
+
+std::vector<DialogRect> MultiplayerBoxes::GetPictureRects() const
+{
+	std::vector<DialogRect> rects;
+	if (_thumbnailShown)
+	{
+		rects.push_back(land_thumbnail::k_Place);
+	}
+	if (_logoShown && _clanInfo != nullptr)
+	{
+		rects.push_back(land_thumbnail::LogoPlace(_clanInfo->rect));
+	}
+	return rects;
+}
+
+void MultiplayerBoxes::DrawPictures(const DialogPainter& painter) const
+{
+	if (_logoChanged)
+	{
+		_logoChanged = false;
+		_logoTexture.reset();
+		if (!_logoSheet.empty())
 		{
-			conditionLines.push_back(Text(ConditionText(i)));
+			_logoTexture = std::make_unique<graphics::Texture2D>("Clan logo");
+			_logoTexture->Create(land_thumbnail::k_TextureSide, land_thumbnail::k_TextureSide, 1,
+			                     graphics::TextureFormat::BGRA4, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+			                     bgfx::copy(_logoSheet.data(), static_cast<uint32_t>(_logoSheet.size() * sizeof(uint16_t))));
 		}
 	}
-	SetItemsIfChanged(*_conditions, Items(conditionLines));
-	const auto pickedCondition = _conditions->GetSelection();
-	_conditionValue->text = conditions.has_value() && pickedCondition.has_value() && *pickedCondition < k_ConditionCount
-	                            ? ToUtf16(std::to_string(conditions->at(*pickedCondition).value))
-	                            : std::u16string();
-	const auto timeLimit = _frontEnd->GetTimeLimit();
-	_timeLimit->text = timeLimit.has_value() ? TimeLimitText(*timeLimit) : std::u16string();
-	_ready->SetChecked(_frontEnd->IsReady());
+	// The game draws the pictures after the controls, at the box's opacity
+	if (_thumbnailShown && _thumbnail->texture != nullptr)
+	{
+		painter.DrawPicture(land_thumbnail::k_Place, *_thumbnail->texture, glm::vec2(0.0f),
+		                    land_thumbnail::UvMax(_thumbnail->side), glm::vec4(1.0f));
+	}
+	// The logo is a faint mark behind the lines of the clan's information
+	if (_logoShown && _logoTexture != nullptr && _clanInfo != nullptr)
+	{
+		const auto alpha = painter.GetAlpha();
+		painter.SetAlpha(land_thumbnail::LogoAlpha(alpha));
+		const auto [uvMin, uvMax] = land_thumbnail::LogoCellUv();
+		painter.DrawPicture(land_thumbnail::LogoPlace(_clanInfo->rect), *_logoTexture, uvMin, uvMax, glm::vec4(1.0f));
+		painter.SetAlpha(alpha);
+	}
 }
 
 void MultiplayerBoxes::ShowMessage(Message message)
@@ -823,7 +876,7 @@ void MultiplayerBoxes::SendChat()
 
 void MultiplayerBoxes::Join()
 {
-	// A name typed in the name's box picks the game of that name
+	// The name's box holds the name of the game that the player picked, and that name picks the game
 	const auto games = _frontEnd->GetGames();
 	const auto typed = ToUtf8(_name->GetText());
 	if (const auto found = std::ranges::find(games, typed, &lobby_api::ServerEntry::hostname); found != games.end())
@@ -983,6 +1036,7 @@ void MultiplayerBoxes::Draw(const DialogPainter& painter) const
 		painter.SetAlpha(alpha);
 	}
 	_dialog->Draw(painter, !_message.has_value() && !_frontEnd->IsBusy());
+	DrawPictures(painter);
 	if (_message.has_value())
 	{
 		// The message's text starts as large as it fits in under 125 high
@@ -1008,6 +1062,11 @@ std::vector<Dialog::NamedControl> MultiplayerBoxes::GetNamedControls() const
 		return _message->answers.GetNamedControls();
 	}
 	return _dialog != nullptr ? _dialog->GetNamedControls() : std::vector<Dialog::NamedControl> {};
+}
+
+std::vector<DialogRect> MultiplayerBoxes::GetVisibleRects() const
+{
+	return _dialog != nullptr ? _dialog->GetVisibleRects() : std::vector<DialogRect> {};
 }
 
 std::u16string_view MultiplayerBoxes::GetMessageText() const

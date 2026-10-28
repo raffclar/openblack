@@ -10,6 +10,7 @@
 #include "GestureRequests.h"
 
 #include <algorithm>
+#include <tuple>
 #include <utility>
 
 #include "Help/HelpProfile.h"
@@ -157,13 +158,17 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 	if (poweringUp)
 	{
 		// A scribble calls off the power-up asked for, or drops the seed; each other level's gesture powers it up
-		requests.push_back({.gesture = GestureType::Scribble, .purpose = Purpose::DropSeed});
+		requests.push_back({.gesture = GestureType::Scribble,
+		                    .purpose = Purpose::DropSeed,
+		                    .powerUpLevel = seed->powerUp,
+		                    .seed = seed->type});
 		for (int level = 0; level < static_cast<int>(seed->powerUpGestures.size()); ++level)
 		{
 			const auto gesture = seed->powerUpGestures.at(static_cast<size_t>(level));
 			if (gesture != GestureType::None && level != seed->powerUp)
 			{
-				requests.push_back({.gesture = gesture, .purpose = Purpose::PowerUp, .powerUpLevel = level});
+				requests.push_back(
+				    {.gesture = gesture, .purpose = Purpose::PowerUp, .powerUpLevel = level, .seed = seed->type});
 			}
 		}
 	}
@@ -229,12 +234,13 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 	// creature's. The gesture that opened the selection is not waited for again while it is open.
 	if (!fighting && context.handReady)
 	{
-		for (const auto& [gesture, offered] : {std::pair {context.ownSelectionGesture, context.ownSelectionOffered},
-		                                       std::pair {context.creatureSelectionGesture, context.creatureSelectionOffered}})
+		for (const auto& [gesture, offered, forCreature] :
+		     {std::tuple {context.ownSelectionGesture, context.ownSelectionOffered, false},
+		      std::tuple {context.creatureSelectionGesture, context.creatureSelectionOffered, true}})
 		{
 			if (offered && gesture != GestureType::None && (!selectionOpen || context.selection->openedWith != gesture))
 			{
-				requests.push_back({.gesture = gesture, .purpose = Purpose::OpenSelection});
+				requests.push_back({.gesture = gesture, .purpose = Purpose::OpenSelection, .forCreature = forCreature});
 			}
 		}
 	}

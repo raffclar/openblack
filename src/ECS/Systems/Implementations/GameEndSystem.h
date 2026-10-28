@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "ECS/Systems/GameEndSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -24,9 +26,14 @@ public:
 	void ProcessTurn(uint32_t turn) override;
 	[[nodiscard]] const std::vector<game_end::Event>& LastEvents() const override { return _events; }
 	[[nodiscard]] bool IsDecided() const override;
+	[[nodiscard]] std::vector<game_end::Event> TakeEventsToShow() override { return std::exchange(_eventsToShow, {}); }
+	[[nodiscard]] std::optional<PlayerNames> LastGodIn() const override;
+	[[nodiscard]] std::vector<GodStanding> Standings() const override;
 
 private:
 	std::vector<game_end::Event> _events;
+	/// The events that the view did not take yet
+	std::vector<game_end::Event> _eventsToShow;
 };
 
 } // namespace openblack::ecs::systems

@@ -196,9 +196,13 @@ public:
 				auto& atom = effect.NewAtom(collection, sparkCreator, nextGroups);
 				atom.position = effect.GlobalToLocal(collection, impact);
 				StartAtomSound(effect, atom, sound);
-				// Three angles of its own and how many times it wiggles across
-				atom.data[this].a = glm::vec4(effect.Random(k_TwoPi), effect.Random(k_TwoPi), effect.Random(k_TwoPi),
-				                              std::floor(effect.Random(k_SparkWigglesRange) + k_SparkWigglesMin));
+				// Three angles of its own and how many times it wiggles across. The draws occur in this order, one
+				// statement each, because the arguments of a call have no fixed order of evaluation.
+				auto& a = atom.data[this].a;
+				a.x = effect.Random(k_TwoPi);
+				a.y = effect.Random(k_TwoPi);
+				a.z = effect.Random(k_TwoPi);
+				a.w = std::floor(effect.Random(k_SparkWigglesRange) + k_SparkWigglesMin);
 			}
 			shield->impacts.clear();
 		}

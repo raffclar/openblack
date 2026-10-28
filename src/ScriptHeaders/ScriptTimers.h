@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 /// The scripts' timers: a timer counts game turns from when it was set and holds how many it was set for
 namespace openblack::script::timers
 {
@@ -27,6 +29,9 @@ struct Timer
 
 /// The turns a timer of some seconds runs for: the seconds times the turns in a second, cut down to whole turns
 [[nodiscard]] int32_t TurnsFor(float seconds);
+/// The turns that a script gives a spell dispenser to make its next bubble. A time of no whole turns gives none, and the
+/// dispenser keeps the turns that it has.
+[[nodiscard]] std::optional<uint32_t> DispenserTurns(float seconds);
 /// A timer set now for some seconds
 [[nodiscard]] Timer Set(uint32_t turn, float seconds);
 /// The seconds a timer has left, none once it has run out

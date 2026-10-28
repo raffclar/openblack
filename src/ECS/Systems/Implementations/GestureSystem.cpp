@@ -59,12 +59,12 @@ constexpr auto k_TemplatesId = entt::hashed_string("gestures/templates");
 /// How long a recognised gesture shows in the debug window
 constexpr float k_RecognisedShownSeconds = 10.0f;
 
-/// The help counts an event, if the help is there
+/// The help counts an event of the player's input at the turn of its next report, if the help is there
 void Help(uint32_t event)
 {
 	if (Locator::helpProfileSystem::has_value())
 	{
-		Locator::helpProfileSystem::value().Trigger(event);
+		Locator::helpProfileSystem::value().Report(event);
 	}
 }
 
@@ -161,6 +161,15 @@ void GestureSystem::Reset()
 	// A new land: no hints, and the collars start unturned; the row's fade carries on
 	_hints.hints.clear();
 	_hints.collars = {};
+	// and the seeds pictured go, with their effects
+	for (const auto& [magic, picture] : _hints.seeds)
+	{
+		if (picture.holderEffect.has_value() && Locator::particleSystem::has_value())
+		{
+			Locator::particleSystem::value().Delete(*picture.holderEffect);
+		}
+	}
+	_hints.seeds.clear();
 }
 
 void GestureSystem::ForgetPath()
@@ -244,7 +253,8 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		{
 			const auto& seedInfo = magic::GetSpellSeedInfo(*info, seed->seedType);
 			// Only a seed made at an icon of the player's worship can be powered up
-			context.seed = gesture::HandContext::Seed {.ready = seed->ready,
+			context.seed = gesture::HandContext::Seed {.type = seed->seedType,
+			                                           .ready = seed->ready,
 			                                           .cast = seed->hasCast,
 			                                           .sizingGesture = seedInfo.sizingGesture,
 			                                           .powerUpGestures = seedInfo.powerUpGestures,
@@ -352,6 +362,8 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 void GestureSystem::Update(const Frame& frame)
 {
 	LoadTemplates();
+	const auto lastCursor = _lastCursor.value_or(frame.cursor);
+	_lastCursor = frame.cursor;
 	if (frame.view.screenSize.x > 0.0f && frame.view.screenSize.y > 0.0f)
 	{
 		_screenAspect = frame.view.screenSize.x / frame.view.screenSize.y;
@@ -405,15 +417,18 @@ void GestureSystem::Update(const Frame& frame)
 		return;
 	}
 
-	// Sampled at the game's pace, not the frame's
-	_sinceSample += frame.seconds;
-	if (_sinceSample < gesture::k_SampleSeconds)
+	// Sampled at the steps of the input, not at the frames. A sample between two frames takes the cursor at its place
+	// between them.
+	for (const auto part : gesture::SamplePoints(_sinceSample, frame.steps))
 	{
-		return;
+		SampleCursor(input_steps::Between(lastCursor, frame.cursor, part), frame, context);
 	}
-	_sinceSample = 0.0f;
+}
+
+void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context)
+{
 	const auto toReference = frame.view.screenSize.y > 0.0f ? gesture::k_ReferenceHeight / frame.view.screenSize.y : 1.0f;
-	glm::vec2 point = frame.cursor * toReference;
+	glm::vec2 point = cursor * toReference;
 	if (!_drawing.empty())
 	{
 		point = _drawing.front();
@@ -815,7 +830,12 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 
 void GestureSystem::RefreshHints()
 {
-	if (!gesture_hints::Differs(_hints.hints, gesture_hints::HintsFor(_requests, nullptr)))
+	const auto* info = Locator::infoConstants::has_value() ? &Locator::infoConstants::value() : nullptr;
+	const auto magicOf = [info](SpellSeedType seed, int powerUp) {
+		return info != nullptr ? magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(*info, seed), powerUp)
+		                       : MagicType::None;
+	};
+	if (!gesture_hints::Differs(_hints.hints, gesture_hints::HintsFor(_requests, nullptr, magicOf)))
 	{
 		return;
 	}
@@ -827,10 +847,81 @@ void GestureSystem::RefreshHints()
 		}
 		return gesture_hints::Shape {.points = symbol->points, .length = symbol->length};
 	};
-	_hints.hints = gesture_hints::HintsFor(_requests, shapeOf);
+	_hints.hints = gesture_hints::HintsFor(_requests, shapeOf, magicOf);
 }
 
 void GestureSystem::StepHints(float seconds, bool wordsShowing)
 {
+	const auto* info = Locator::infoConstants::has_value() ? &Locator::infoConstants::value() : nullptr;
+	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	const bool shows = gesture_hints::Fade(_hints.alpha, seconds, wordsShowing) > 0.0f;
+	// The first hint of a miracle makes its seed picture, unturned. The picture is the player's at this computer, and
+	// its holder's effect starts at full size above the world's origin.
+	if (shows && info != nullptr)
+	{
+		for (const auto& hint : _hints.hints)
+		{
+			if (hint.path.empty() || hint.seed == SpellSeedType::None || _hints.seeds.contains(hint.magic))
+			{
+				continue;
+			}
+			const auto& seedInfo = magic::GetSpellSeedInfo(*info, hint.seed);
+			gesture_hints::SeedPicture picture {.seed = hint.seed, .powerUp = hint.powerUp};
+			if (const auto* spell = magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(*info, seedInfo.magicTypes[0]))
+			{
+				picture.phialReceiveType = static_cast<int>(spell->creatureReceiveSpellType);
+			}
+			if (particles != nullptr && seedInfo.holderParticle != ParticleType::None)
+			{
+				const auto effect =
+				    particles->Start(seedInfo.holderParticle, glm::vec3(0.0f, seedInfo.holderHeight, 0.0f), 1.0f);
+				if (effect != ParticleSystemInterface::k_NoEffect)
+				{
+					particles->SetDrawnAlone(effect);
+					particles->SetPlayer(effect, static_cast<int>(PlayerNames::PLAYER_ONE));
+					picture.holderEffect = effect;
+				}
+			}
+			_hints.seeds.emplace(hint.magic, picture);
+		}
+	}
 	gesture_hints::Step(_hints, seconds, wordsShowing);
+	if (!shows || info == nullptr || particles == nullptr)
+	{
+		return;
+	}
+	// Each hint that draws a seed moves the effect of its holder above it, at the seed's size, and steps it by the
+	// frame's game time. The effect shows at the row's alpha.
+	const auto alpha = static_cast<float>(gesture_hints::PictureAlpha(_hints.alpha));
+	for (const auto& hint : _hints.hints)
+	{
+		if (hint.path.empty() || hint.seed == SpellSeedType::None)
+		{
+			continue;
+		}
+		const auto found = _hints.seeds.find(hint.magic);
+		if (found == _hints.seeds.end() || !found->second.holderEffect.has_value())
+		{
+			continue;
+		}
+		const auto effect = *found->second.holderEffect;
+		const auto& seedInfo = magic::GetSpellSeedInfo(*info, found->second.seed);
+		auto* running = particles->Find(effect);
+		if (running == nullptr)
+		{
+			found->second.holderEffect.reset();
+			continue;
+		}
+		running->SetOrigin(gesture_hints::HolderPoint(seedInfo.holderHeight));
+		running->SetMagnitude(gesture_hints::k_SeedScale);
+		if (!particles->ProcessByFrame(effect, seconds))
+		{
+			found->second.holderEffect.reset();
+			continue;
+		}
+		if (auto* stepped = particles->Find(effect))
+		{
+			stepped->SetGlobalAlpha(alpha);
+		}
+	}
 }

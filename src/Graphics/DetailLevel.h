@@ -71,6 +71,8 @@ struct Settings
 	bool lowResTextures {false};
 	/// The whole land is drawn with its coarse texture pages, without painting each block's texture
 	bool coarseLand {false};
+	/// Brightens the light of the sky and the land (see LandLightTable::RampDivisor); 0 for every level of the table
+	float lightBoost {0.0f};
 };
 
 // The game's tables, one value per level
@@ -137,6 +139,7 @@ inline constexpr std::array<uint8_t, k_Count> k_RainSplashes = {0, 0, 3, 5, 8, 8
 	take(settings.objectShadows, custom.objectShadows);
 	take(settings.lowResTextures, custom.lowResTextures);
 	take(settings.coarseLand, custom.coarseLand);
+	take(settings.lightBoost, custom.lightBoost);
 	return settings;
 }
 

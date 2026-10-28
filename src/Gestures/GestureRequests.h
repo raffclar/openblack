@@ -86,14 +86,17 @@ struct Request
 {
 	GestureType gesture {GestureType::None};
 	Purpose purpose {Purpose::DropSeed};
-	/// PowerUp: the level, 0 to 2
+	/// PowerUp: the level, 0 to 2. DropSeed with a seed that can power up: the level that the seed has, -1 for none.
 	int powerUpLevel {-1};
 	/// PickLeash: the leash; LeashGesture: the leash worn, else the one picked to put on next
 	LeashType leash {LeashType::None};
 	/// FightMiracle: the miracle, and the seed of the miracle that its hint shows
 	MagicType magic {MagicType::None};
-	/// SelectMiracle and RepeatMiracle: the miracle that the hint of the gesture shows
+	/// FightMiracle and RepeatMiracle: the seed that the hint of the gesture shows. SelectMiracle: the seed that the
+	/// gesture selects. PowerUp, and DropSeed with a seed that can power up: the seed in the hand.
 	SpellSeedType seed {SpellSeedType::None};
+	/// OpenSelection: the gesture opens the selection for the miracles of the creature
+	bool forCreature {false};
 
 	bool operator==(const Request&) const = default;
 };
@@ -104,6 +107,7 @@ struct HandContext
 	/// The seed held in the hand
 	struct Seed
 	{
+		SpellSeedType type {SpellSeedType::None};
 		/// Held long enough to cast, and not yet cast
 		bool ready {true};
 		bool cast {false};

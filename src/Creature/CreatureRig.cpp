@@ -90,10 +90,13 @@ std::vector<glm::vec3> creature::TurnPoseBones(std::span<const glm::vec3> lastTu
 	return bones;
 }
 
-std::array<glm::vec3, 3> creature::PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCount>& vertices,
-                                                 const std::array<uint32_t, 3>& bones, const creature_morph::Morph& morph,
-                                                 std::span<const glm::mat4> boneMatrices, const glm::mat4& placement,
-                                                 const PlacingOrder& order)
+namespace
+{
+/// A triangle of the body in the world, each vertex placed by the world matrix of its bone that `posedBone` gives
+template <typename PosedBoneOf>
+std::array<glm::vec3, 3> PlaceTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCount>& vertices,
+                                       const std::array<uint32_t, 3>& bones, const creature_morph::Morph& morph,
+                                       const creature::PlacingOrder& order, PosedBoneOf&& posedBone)
 {
 	const auto evilGood = morph.evilGood < 0.0f ? CreatureRig::Mesh::Evil : CreatureRig::Mesh::Good;
 	const auto thinFat = morph.thinFat < 0.0f ? CreatureRig::Mesh::Thin : CreatureRig::Mesh::Fat;
@@ -104,7 +107,44 @@ std::array<glm::vec3, 3> creature::PosedTriangle(const std::array<std::array<glm
 		const auto vertexOf = [&vertices, i](CreatureRig::Mesh mesh) { return vertices.at(static_cast<size_t>(mesh)).at(i); };
 		const auto local = creature_morph::Blend(vertexOf(CreatureRig::Mesh::Base), vertexOf(evilGood), vertexOf(thinFat),
 		                                         vertexOf(weakStrong), morph);
-		world.at(i) = x87::TransformPoint(PosedBone(bones.at(i), boneMatrices, placement), local, order.at(i));
+		world.at(i) = x87::TransformPoint(posedBone(bones.at(i)), local, order.at(i));
 	}
 	return world;
+}
+} // namespace
+
+std::array<glm::vec3, 3> creature::PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCount>& vertices,
+                                                 const std::array<uint32_t, 3>& bones, const creature_morph::Morph& morph,
+                                                 std::span<const glm::mat4> boneMatrices, const glm::mat4& placement,
+                                                 const PlacingOrder& order)
+{
+	return PlaceTriangle(vertices, bones, morph, order,
+	                     [&](uint32_t bone) { return PosedBone(bone, boneMatrices, placement); });
+}
+
+creature::PosedBones::PosedBones(std::span<const glm::mat4> boneMatrices, const glm::mat4& placement)
+    : _boneMatrices(boneMatrices)
+    , _placement(placement)
+{
+}
+
+glm::mat4 creature::PosedBones::At(uint32_t bone)
+{
+	if (bone >= _known.size())
+	{
+		return PosedBone(bone, _boneMatrices, _placement);
+	}
+	if (!_known.at(bone))
+	{
+		_world.at(bone) = PosedBone(bone, _boneMatrices, _placement);
+		_known.at(bone) = true;
+	}
+	return _world.at(bone);
+}
+
+std::array<glm::vec3, 3> creature::PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCount>& vertices,
+                                                 const std::array<uint32_t, 3>& bones, const creature_morph::Morph& morph,
+                                                 PosedBones& posed, const PlacingOrder& order)
+{
+	return PlaceTriangle(vertices, bones, morph, order, [&posed](uint32_t bone) { return posed.At(bone); });
 }

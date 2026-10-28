@@ -9,6 +9,8 @@
 
 #include "RowDump.h"
 
+#include <cstdio>
+
 #include <algorithm>
 #include <array>
 #include <span>
@@ -18,6 +20,29 @@
 
 namespace openblack::row_dump
 {
+
+TaggedLines::int_type TaggedLines::overflow(int_type character)
+{
+	if (traits_type::eq_int_type(character, traits_type::eof()))
+	{
+		return traits_type::not_eof(character);
+	}
+	const auto letter = traits_type::to_char_type(character);
+	if (letter != '\n')
+	{
+		_line.push_back(letter);
+		return character;
+	}
+	const auto line = _tag + _line + '\n';
+	std::fputs(line.c_str(), stdout);
+	_line.clear();
+	return character;
+}
+
+int TaggedLines::sync()
+{
+	return std::fflush(stdout);
+}
 
 void AddValue(ecs::reflection::WorldRows& rows, std::string_view name, std::span<const uint8_t> bytes)
 {

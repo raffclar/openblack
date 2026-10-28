@@ -11,6 +11,8 @@
 
 #include "HelpProfileSystem.h"
 
+#include <algorithm>
+
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "Help/HelpProfileFile.h"
@@ -40,18 +42,67 @@ void HelpProfileSystem::Trigger(uint32_t event)
 	}
 }
 
-void HelpProfileSystem::ProcessTurn(bool frontEndBoxShows, const std::optional<help::profile::WorldCameraView>& worldCamera)
+void HelpProfileSystem::Report(uint32_t event)
 {
-	if (frontEndBoxShows || InScriptCutScene())
+	_reported.Add(event);
+}
+
+std::optional<openblack::player_commands::HelpReport>
+HelpProfileSystem::MakeReport(bool boxShows, const std::optional<help::profile::WorldCameraView>& worldCamera,
+                              bool cursorOnPoint)
+{
+	player_commands::HelpReport report {
+	    .events = _reported.Take(),
+	    .boxShows = boxShows,
+	    .cursorOnPoint = cursorOnPoint,
+	};
+	// The report keeps only the events of the view, so that it changes only when they change
+	if (worldCamera.has_value())
+	{
+		const auto viewEvents = help::profile::CameraViewEvents(*worldCamera);
+		const auto has = [&viewEvents](uint32_t event) { return std::ranges::find(viewEvents, event) != viewEvents.end(); };
+		report.cameraSeesLand = has(help::profile::k_CameraSeesLand);
+		report.cameraNearAndSteep = has(help::profile::k_CameraNearAndSteep);
+		report.cameraSeesSky = has(help::profile::k_CameraSeesSky);
+	}
+	// The events are new in each report. The other values stay until a report changes them.
+	auto unchanged = _lastMade;
+	unchanged.events = report.events;
+	if (report.events == 0 && report == unchanged)
+	{
+		return std::nullopt;
+	}
+	_lastMade = report;
+	return report;
+}
+
+void HelpProfileSystem::DoReport(const player_commands::HelpReport& report)
+{
+	for (const auto event : help::profile::EventsOf(report.events))
+	{
+		Trigger(event);
+	}
+	_lastReport = report;
+}
+
+void HelpProfileSystem::ProcessTurn()
+{
+	if (_lastReport.boxShows || InScriptCutScene())
 	{
 		return;
 	}
-	if (worldCamera.has_value())
+	// The events of the view of the camera, in the order that they count
+	if (_lastReport.cameraSeesLand)
 	{
-		for (const auto event : help::profile::CameraViewEvents(*worldCamera))
-		{
-			_profile.Trigger(event);
-		}
+		_profile.Trigger(help::profile::k_CameraSeesLand);
+	}
+	if (_lastReport.cameraNearAndSteep)
+	{
+		_profile.Trigger(help::profile::k_CameraNearAndSteep);
+	}
+	if (_lastReport.cameraSeesSky)
+	{
+		_profile.Trigger(help::profile::k_CameraSeesSky);
 	}
 	_profile.EndTurn();
 }

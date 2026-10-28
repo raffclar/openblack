@@ -38,6 +38,8 @@ constexpr std::string_view k_StartCancel = "start.cancel";
 constexpr std::string_view k_StartStop = "start.stop";
 constexpr std::string_view k_StartTransfer = "start.transfer";
 constexpr std::string_view k_StartCreature = "start.creature";
+constexpr std::string_view k_StopRequest = "game.stop_request";
+constexpr std::string_view k_GameStop = "game.stop";
 
 /// The most god slots that a frame can name
 constexpr uint64_t k_MostSlots = 32;
@@ -104,6 +106,28 @@ bool ReadBool(const Json& object, std::string_view key, bool& out, bool required
 	return true;
 }
 
+/// Reads an alignment, a number from -1 to 1 that the frame holds as a float. A frame with no alignment gives 0.
+bool ReadAlignment(const Json& object, std::string_view key, float& out)
+{
+	const auto* member = Member(object, key);
+	if (member == nullptr || member->is_null())
+	{
+		out = 0.0f;
+		return true;
+	}
+	if (!member->is_number())
+	{
+		return false;
+	}
+	const auto value = member->get<double>();
+	if (!(value >= -1.0 && value <= 1.0))
+	{
+		return false;
+	}
+	out = static_cast<float>(value);
+	return true;
+}
+
 constexpr std::string_view StateName(PlayerState::State state) noexcept
 {
 	switch (state)
@@ -144,10 +168,68 @@ bool ReadStart(const Json& object, Start& start)
 	}
 	start.seed = static_cast<uint32_t>(seed);
 	start.turn = static_cast<uint32_t>(turn);
+	if (!ReadBool(object, "all_computer_gods", start.allComputerGods, false))
+	{
+		return false;
+	}
+	if (const auto* aiSeed = Member(object, "ai_seed"); aiSeed != nullptr && !aiSeed->is_null())
+	{
+		uint64_t value = 0;
+		if (!ReadUnsigned(object, "ai_seed", k_MostNumber, value))
+		{
+			return false;
+		}
+		start.aiSeed = static_cast<uint32_t>(value);
+	}
+	if (const auto* scenario = Member(object, "scenario"); scenario != nullptr && !scenario->is_null())
+	{
+		if (!scenario->is_string() || scenario->get<std::string>().empty())
+		{
+			return false;
+		}
+		start.scenario = scenario->get<std::string>();
+	}
+	if (const auto* names = Member(object, "names"); names != nullptr && !names->is_null())
+	{
+		if (!names->is_array() || names->size() > k_MostSlots)
+		{
+			return false;
+		}
+		for (const auto& name : *names)
+		{
+			if (!name.is_string())
+			{
+				return false;
+			}
+			start.names.push_back(name.get<std::string>());
+		}
+	// Each god of the list has a slot and a name
+	const auto gods = object.find("gods");
+	if (gods == object.end())
+	{
+		return true;
+	}
+	if (!gods->is_array())
+	{
+		return false;
+	}
+	constexpr uint64_t k_MostSlot = std::numeric_limits<uint8_t>::max();
+	for (const auto& entry : *gods)
+	{
+		God god;
+		uint64_t slot = 0;
+		if (!entry.is_object() || !ReadUnsigned(entry, "slot", k_MostSlot, slot) || !ReadString(entry, "name", god.name))
+		{
+			return false;
+		}
+		god.slot = static_cast<uint8_t>(slot);
+		start.gods.push_back(std::move(god));
+	}
 	return true;
 }
 
-/// Writes the members of a start. The frame leaves out an empty opening and a false map for 32 gods.
+/// Writes the members of a start. The frame leaves out an empty opening, a false map for 32 gods and the tool members that are
+/// not set.
 void WriteStart(const Start& start, Json& object)
 {
 	object["land"] = start.land;
@@ -161,6 +243,29 @@ void WriteStart(const Start& start, Json& object)
 	if (start.godsRingMap)
 	{
 		object["gods_ring_map"] = true;
+	}
+	if (start.allComputerGods)
+	{
+		object["all_computer_gods"] = true;
+	}
+	if (start.aiSeed.has_value())
+	{
+		object["ai_seed"] = *start.aiSeed;
+	}
+	if (start.scenario.has_value())
+	{
+		object["scenario"] = *start.scenario;
+	}
+	if (!start.names.empty())
+	{
+		object["names"] = start.names;
+	if (!start.gods.empty())
+	{
+		auto& gods = object["gods"] = Json::array();
+		for (const auto& god : start.gods)
+		{
+			gods.push_back({{"slot", god.slot}, {"name", god.name}});
+		}
 	}
 }
 
@@ -346,7 +451,24 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 			}
 			creature.slot = static_cast<uint8_t>(slot);
 		}
+		if (!ReadAlignment(object, "alignment", creature.alignment))
+		{
+			return std::nullopt;
+		}
 		return creature;
+	}
+	if (type == k_StopRequest)
+	{
+		return StopRequest {};
+	}
+	if (type == k_GameStop)
+	{
+		uint64_t turn = 0;
+		if (!ReadUnsigned(object, "turn", k_MostTurn, turn))
+		{
+			return std::nullopt;
+		}
+		return GameStop {.turn = static_cast<uint32_t>(turn)};
 	}
 	return std::nullopt;
 }
@@ -466,9 +588,20 @@ std::string ToJson(const Frame& frame)
 		    {
 			    object = Json {{"type", k_StartTransfer}};
 		    }
+		    else if constexpr (std::is_same_v<Kind, StopRequest>)
+		    {
+			    object = Json {{"type", k_StopRequest}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, GameStop>)
+		    {
+			    object = Json {{"type", k_GameStop}, {"turn", value.turn}};
+		    }
 		    else
 		    {
-			    object = Json {{"type", k_StartCreature}, {"file", join_ticket::EncodeBase64Url(value.file)}};
+			    // The alignment goes as the double of the float, which reads back to the same float
+			    object = Json {{"type", k_StartCreature},
+			                   {"file", join_ticket::EncodeBase64Url(value.file)},
+			                   {"alignment", static_cast<double>(value.alignment)}};
 			    if (value.slot.has_value())
 			    {
 				    object["slot"] = *value.slot;
