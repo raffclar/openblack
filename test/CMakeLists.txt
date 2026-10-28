@@ -1949,6 +1949,7 @@ if (NODE_EXECUTABLE)
            COMMAND ${NODE_EXECUTABLE}
                    ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_arguments.test.js
   )
+endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
 openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
 openblack_setup_and_add_test(test_side_thread test_side_thread.cpp)
