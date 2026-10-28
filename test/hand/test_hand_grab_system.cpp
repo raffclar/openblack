@@ -24,6 +24,7 @@
 #include <gtest/gtest.h>
 
 #include "Animals/FishFarmRules.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
@@ -727,6 +728,23 @@ TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
 	ASSERT_FALSE(world->reactions.empty());
 	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
 	EXPECT_EQ(world->reactions.front().initiator, world->hand);
+}
+
+// The hand does not hold a creature as a thing. Because of this, the hand never gives a creature to a creature.
+TEST_F(HandGrabSystemWithWorld, TheHandNeverTakesACreature)
+{
+	const auto creature = world->registry.Create();
+	world->registry.Assign<Transform>(creature, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Creature>(creature);
+	world->underCursor = creature;
+	Press();
+	for (int i = 0; i < 20; ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_FALSE(world->registry.AllOf<InHand>(creature));
 }
 
 // Pressed with nothing under the cursor, the hand reaches for what stands nearest the land behind it; something under
