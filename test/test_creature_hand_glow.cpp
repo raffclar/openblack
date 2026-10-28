@@ -33,10 +33,10 @@ TEST(CreatureHandGlow, APowerMakesAGlowAndNoPowerRemovesIt)
 	EXPECT_FLOAT_EQ(glows.at(2)->scale, 1.5f);
 	EXPECT_FALSE(glows.at(0).has_value());
 
-	// A glow that has a new power keeps how far its texture has slid
-	glows.at(2)->slide = {0.25f, 0.5f};
+	// A glow that has a new power stays, with its new scale
 	creature_hand_glow::Set(glows, Place::RightHand, 1.0f, 3.0f);
-	EXPECT_FLOAT_EQ(glows.at(2)->slide.x, 0.25f);
+	ASSERT_TRUE(glows.at(2).has_value());
+	EXPECT_FLOAT_EQ(glows.at(2)->scale, 1.0f);
 	EXPECT_FLOAT_EQ(creature_hand_glow::Zoom(*glows.at(2)), 6.0f);
 
 	creature_hand_glow::Set(glows, Place::RightHand, 1.0f, 0.0f);
@@ -45,7 +45,7 @@ TEST(CreatureHandGlow, APowerMakesAGlowAndNoPowerRemovesIt)
 
 TEST(CreatureHandGlow, TheTextureSlidesByRealTimeAndWrapsRound)
 {
-	creature_hand_glow::Glow glow;
+	creature_hand_glow::Motion glow;
 	creature_hand_glow::Slide(glow, 16);
 	const float seconds = 16.0f * 0.001f;
 	EXPECT_EQ(glow.slide.x, seconds * 2.0f);
@@ -59,7 +59,7 @@ TEST(CreatureHandGlow, TheTextureSlidesByRealTimeAndWrapsRound)
 
 TEST(CreatureHandGlow, TheCirclingGlowTurnsByTheGameTimeAboveTheBody)
 {
-	creature_hand_glow::Glow glow;
+	creature_hand_glow::Motion glow;
 	creature_hand_glow::Turn(glow, 1000);
 	EXPECT_FLOAT_EQ(glow.turn, 1.0f);
 	creature_hand_glow::Turn(glow, 0);
@@ -170,16 +170,11 @@ TEST(CreatureHandGlow, ALoadStartsWithNoGlowsAndGivesEachPlaceItsSavedPower)
 	ASSERT_TRUE(glows.at(2).has_value());
 	EXPECT_EQ(glows.at(2)->power, -0.5f);
 	ASSERT_TRUE(glows.at(3).has_value());
-	// Each glow is new, so the circling glow has not turned and no texture has slid
-	EXPECT_EQ(glows.at(3)->turn, 0.0f);
-	EXPECT_EQ(glows.at(3)->slide, glm::vec2(0.0f));
 
 	// The load removes the glows that the creature had before, and the hum continues
 	creature_hand_glow::Set(glows, Place::Belly, 1.0f, 1.0f);
-	glows.at(3)->turn = 2.0f;
 	EXPECT_EQ(creature_hand_glow::LoadCreedPowers(glows, k_Saved), Hum::Unchanged);
 	EXPECT_FALSE(glows.at(1).has_value());
-	EXPECT_EQ(glows.at(3)->turn, 0.0f);
 
 	// A save with no power stops the hum and leaves no glows
 	constexpr std::array<SavedPower, creature_hand_glow::k_PlaceCount> k_None {};

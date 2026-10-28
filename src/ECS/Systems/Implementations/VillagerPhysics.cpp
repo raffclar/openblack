@@ -26,6 +26,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/CreatureSight.h"
+#include "ECS/HandPlayer.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -140,20 +141,17 @@ void PlayerDid(uint32_t deed, entt::entity object, PlayerNames player)
 
 std::optional<PlayerNames> villager_physics::DropperOf(entt::entity object)
 {
-	return DropperOf(Entities(), object,
-	                 Locator::playerSystem::has_value() ? std::optional(Locator::playerSystem::value().GetLocalPlayer())
-	                                                    : std::nullopt);
+	return DropperOf(Entities(), object);
 }
 
-std::optional<PlayerNames> villager_physics::DropperOf(const Registry& registry, entt::entity object,
-                                                       std::optional<PlayerNames> localPlayer)
+std::optional<PlayerNames> villager_physics::DropperOf(const Registry& registry, entt::entity object)
 {
-	// The hand whose last let-go thing it is: the local player's hands are the only ones on the screen
+	// Find the hand that let it go last. Each god has its own hands.
 	std::optional<PlayerNames> dropper;
-	registry.Each<const HandGrab>([&dropper, object, localPlayer](const HandGrab& hand) {
-		if (hand.lastDropped == object)
+	registry.Each<const HandGrab>([&registry, &dropper, object](entt::entity hand, const HandGrab& grab) {
+		if (grab.lastDropped == object)
 		{
-			dropper = localPlayer.value_or(PlayerNames::PLAYER_ONE);
+			dropper = ecs::HandPlayer(registry, hand);
 		}
 	});
 	return dropper;

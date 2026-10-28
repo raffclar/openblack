@@ -190,12 +190,36 @@ struct MorphTargets
 /// How opaque the coarse texture is over the full one at a corner, 0 to 255: clear before the band, opaque beyond it
 [[nodiscard]] uint8_t CrossFadeAlpha(float offset, float band);
 
-/// The coarse texture of a block is 64 texels square: 62 of them sampled from the block's 256 texel texture, with a
-/// texel round the edge shared with the neighbouring blocks. The texel of the block's texture a coarse texel (1 to 62)
-/// is sampled from, along one side.
-[[nodiscard]] uint16_t CoarseSourceTexel(uint8_t coarseTexel);
+/// How a block's coarse texture takes its texels from the block's texture. The coarse texture is a quarter of the
+/// block's texture along each side. A texel round its edge is shared with the neighbouring blocks, and the game samples
+/// the texels between them from the block's texture.
+struct CoarseSampling
+{
+	/// Texels along a side of the block's texture, and of the page that holds the coarse textures
+	uint16_t blockTexels;
+	/// The coarse texels sampled along a side, between the shared texels
+	uint8_t samples;
+	/// The step from one sample to the next, in 65536ths of a texel of the block's texture
+	uint32_t step;
+	/// The coarse texels a block covers along a side when it is drawn
+	float drawnTexels;
+};
+
+/// The full textures: 62 samples of a 256 texel texture into a 64 texel coarse texture, drawn 62 texels across
+inline constexpr CoarseSampling k_FullCoarseSampling {.blockTexels = 256, .samples = 62, .step = 0x10842, .drawnTexels = 62.0f};
+/// The low resolution textures: 30 samples of a 128 texel texture into a 32 texel coarse texture, drawn 31 texels across
+inline constexpr CoarseSampling k_LowCoarseSampling {.blockTexels = 128, .samples = 30, .step = 0x11111, .drawnTexels = 31.0f};
+
+/// The coarse sampling for a block texture of this many texels along a side
+[[nodiscard]] constexpr const CoarseSampling& CoarseSamplingFor(int blockTexels)
+{
+	return blockTexels == k_LowCoarseSampling.blockTexels ? k_LowCoarseSampling : k_FullCoarseSampling;
+}
+
+/// The texel of the block's texture that a coarse texel (1 to the samples) takes its colour from, along one side
+[[nodiscard]] uint16_t CoarseSourceTexel(uint8_t coarseTexel, const CoarseSampling& sampling = k_FullCoarseSampling);
 
 /// Where a point a fraction across its block (0 to 1) falls on its coarse texture, in coarse texels
-[[nodiscard]] float CoarseTexelPosition(float fraction);
+[[nodiscard]] float CoarseTexelPosition(float fraction, const CoarseSampling& sampling = k_FullCoarseSampling);
 
 } // namespace openblack::graphics::land_detail

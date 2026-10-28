@@ -9,12 +9,14 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <functional>
 #include <map>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -29,16 +31,28 @@
 namespace openblack::server
 {
 
+/// The god slots of a room when the land gives none, such as the testbed: each god of a network land
+constexpr uint8_t k_DefaultGodSlots = 7;
+
+/// The god slots of the room of a land. Each slot up to the last one with a citadel can have a player, so that each
+/// citadel can have a human. A land with no citadel gives the default slots.
+[[nodiscard]] uint8_t GodSlotsOfLand(std::span<const bool> slotHasCitadel) noexcept;
+
+/// The rule of the start of the room, as the server presses the host's Start: each god in the room is ready, and there
+/// are at least the fewest gods of the room
+[[nodiscard]] bool RoomStarts(size_t godsInRoom, size_t readyGods, uint32_t minGods) noexcept;
+
 struct HostSettings
 {
 	/// The land and the seed that the clients start, which are the server's own
 	game_socket::Start start;
 	/// The checksum of the server's land file, which each player's land file must have before the start
 	uint64_t landChecksum {0};
-	/// The game starts when this many gods joined and are ready
-	uint32_t godsToStart {1};
-	/// The god slots of the room
-	uint8_t godSlots {7};
+	/// The fewest gods with a player that start the game. The start comes when each god in the room is ready. In a room
+	/// with no human god (tools), the world turns when this many observers joined.
+	uint32_t minGods {1};
+	/// The god slots of the room: the citadels of the land. A god who joins when all the slots have a player is refused.
+	uint8_t godSlots {k_DefaultGodSlots};
 	/// How long a god's player can be away before the god is defeated (user decision MP-Q6: 5 minutes, set by the server)
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
 	/// The turns that the server keeps to send again to a player who comes back: 5 minutes of turns, and some more
@@ -76,6 +90,8 @@ public:
 		uint32_t compared {0};
 		uint32_t same {0};
 		std::optional<uint32_t> firstDifferent;
+		/// The last checksum that the server compared differed from the server's
+		bool differs {false};
 	};
 
 	struct Seat
@@ -107,6 +123,9 @@ public:
 	/// The server's world state at the start of the next turn, which a client whose world parted loads as it comes back
 	using WorldState = std::function<std::vector<uint8_t>()>;
 	void SetWorldState(WorldState worldState) { _worldState = std::move(worldState); }
+	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
+	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
+	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
 
 	/// The commands of the server itself: it has no player
 	void Send(const player_commands::Action& action) override;
@@ -116,6 +135,10 @@ public:
 	[[nodiscard]] std::vector<player_commands::Command> TakeTurn(uint32_t turn) override;
 	/// The world of the server turns by its own clock
 	[[nodiscard]] bool IsBehind(uint32_t /*turn*/) const override { return false; }
+	/// The creature file that the god of the slot sent before the start. The world of the server makes the same
+	/// creatures as the worlds of the clients from these files.
+	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
+	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
 	/// The checksum of the server's world after a turn. It goes to every client.
 	void TurnChecksum(uint32_t turn, uint64_t checksum);
 
@@ -126,6 +149,8 @@ public:
 	[[nodiscard]] bool Paused() const;
 	/// True when the game started and every god left or was defeated: no player can come back
 	[[nodiscard]] bool GameOver() const;
+	/// The last turn of the game, after a client asked the server to stop the turns of a decided game. None before.
+	[[nodiscard]] std::optional<uint32_t> StoppedAfter() const { return _stoppedAfter; }
 	[[nodiscard]] const std::vector<Seat>& Seats() const { return _seats; }
 	[[nodiscard]] size_t Observers() const;
 	/// The blocks of commands that the server did not accept: from an observer, before the start, or a command that only
@@ -148,6 +173,10 @@ private:
 	void Closed(ConnectionId connection);
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
 	void Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume);
+	/// A join after the start: the player of a waiting god comes back into it, and any other player is an observer
+	void JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims);
+	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
+	bool SendWorld(ConnectionId connection);
 	void Refuse(ConnectionId connection, std::string_view reason);
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
 	void StartCreature(ConnectionId connection, const Peer& peer, const game_socket::StartCreature& creature);
@@ -166,7 +195,11 @@ private:
 	void BroadcastBinary(std::span<const uint8_t> bytes);
 	void CloseSeat(uint8_t seat);
 	void CompareClient(uint8_t seat, uint32_t turn, uint64_t checksum);
+	/// The end box of a decided game opened on a client: no turn comes after the turns closed so far
+	void StopTurns();
 	[[nodiscard]] bool AnyGodConnected() const;
+	/// Tools: the room has no human god. The game starts at once, and observers watch it.
+	[[nodiscard]] bool AllComputerGods() const { return _settings.start.allComputerGods; }
 
 	WebSocketServerInterface& _sockets;
 	CheckTicket _checkTicket;
@@ -188,8 +221,19 @@ private:
 	StartStep _startStep {StartStep::None};
 	/// The connections whose reply or creature file the server waits for in the step of the start
 	std::set<ConnectionId> _awaited;
+	/// The creature files that the gods sent in the start, by god slot. The server sends each file to all the players and
+	/// keeps it only in memory, for its own world.
+	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
+	/// The alignments that the gods sent with their creature files, by god slot
+	std::map<uint8_t, float> _startAlignments;
 	bool _pausedBefore {false};
+	/// Tools, a room with no human god: the world turns from the time that as many observers as the room waits for joined
+	bool _observersJoined {false};
+	/// Tools, a room with no human god: at least one observer joined, so a room with no observer left is over
+	bool _observerSeen {false};
 	uint32_t _turnsDone {0};
+	/// The last turn of the game, once the turns stopped
+	std::optional<uint32_t> _stoppedAfter;
 	/// The blocks that came since the last turn
 	std::vector<turn_codec::StampedBlock> _pending;
 	/// The slots whose god leaves at the next turn
@@ -204,6 +248,7 @@ private:
 	std::map<std::pair<uint8_t, uint32_t>, uint64_t> _early;
 	uint32_t _refusedBlocks {0};
 	WorldState _worldState;
+	PartListener _partListener;
 };
 
 } // namespace openblack::server

@@ -25,6 +25,7 @@
 #include <entt/meta/context.hpp>
 
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "Inspector/CameraControl.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -118,6 +119,9 @@ private:
 	void WriteRecordedInput();
 	/// Where the camera of the next land stands before its first frame, as camera.set takes it
 	std::optional<inspector::Json> _cameraOnLoad;
+	/// The frames on which the drawn view changes to a different camera, and the last frame that it checked
+	inspector::ShownCameraCuts _shownCameraCuts;
+	std::optional<uint64_t> _cutsCheckedAt;
 	/// The fight autopilot, which gives its input through the inspector's input
 	std::unique_ptr<inspector::FightAutopilot> _autopilot;
 };

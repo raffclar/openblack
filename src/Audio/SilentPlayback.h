@@ -45,6 +45,14 @@ struct SilentPlayback
 	return deviceLost || fixedFrameTime;
 }
 
+/// Whether the scripts find an advisor still talking, by the clock of the scripts' turns. The line starts after its
+/// delay, lasts the length of its sample, and the advisor counts as talking for a short time after it.
+[[nodiscard]] constexpr bool TalkingForScripts(const SilentPlayback& line, uint32_t nowMs, uint32_t afterMs)
+{
+	const auto since = static_cast<int32_t>(nowMs - line.startMs);
+	return since < 0 || static_cast<float>(since) < line.lengthMs + static_cast<float>(afterMs);
+}
+
 /// Whether a sound plays: as the device tells while the device works, or by its sample's length once the device is lost
 [[nodiscard]] constexpr bool PlaysOn(bool sounding, bool deviceLost, const SilentPlayback& playback, uint32_t nowMs)
 {

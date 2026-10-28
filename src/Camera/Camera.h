@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -19,6 +20,7 @@
 
 #include "CameraModel.h"
 #include "CameraZoomer.h"
+#include "Common/InputSteps.h"
 #include "Common/ZoomInterpolator.h"
 #include "DrawnPose.h"
 #include "ECS/Components/Transform.h"
@@ -125,6 +127,11 @@ public:
 
 	void DeprojectScreenToWorld(glm::vec2 screenCoord, glm::vec3& outWorldOrigin, glm::vec3& outWorldDirection,
 	                            Interpolation interpolation = Camera::Interpolation::Current) const;
+	/// As DeprojectScreenToWorld, through the camera as it was after a fixed step of the input in this frame. The input
+	/// that steps with the camera looks through it so. A step that the frame did not take looks through the camera now.
+	void DeprojectAtStep(glm::vec2 screenCoord, uint32_t step, glm::vec3& outWorldOrigin, glm::vec3& outWorldDirection) const;
+	/// The eye after a fixed step of the input in this frame, or the eye now for a step that the frame did not take
+	[[nodiscard]] glm::vec3 GetStepOrigin(uint32_t step) const;
 	/// The eye, and the point of the near plane a point of the screen (0 to 1 from the top left) shows
 	struct NearPlanePoint
 	{
@@ -136,7 +143,15 @@ public:
 	bool ProjectWorldToScreen(glm::vec3 worldPosition, glm::vec4 viewport, glm::vec3& outScreenPosition,
 	                          Interpolation interpolation = Camera::Interpolation::Current) const;
 
+	/// The eye and the focus of the view, with the shake. The view now also has the limits of the drawn eye.
+	[[nodiscard]] camera_drawn::Pose DrawnPose(Interpolation interpolation) const;
+
+	/// One step of the camera, as long as the frame
 	void Update(std::chrono::microseconds dt);
+	/// A frame goes by. The model and the camera take the fixed steps of the player's input that the frame takes, none
+	/// to a few (see input_steps), each step for its whole milliseconds. At each step after the first, the model reads
+	/// the keys after the step before and the part of the mouse that the step takes.
+	void Update(const input_steps::Steps& steps);
 	void HandleActions(std::chrono::microseconds dt);
 	/// The keys of the current camera, after its step in this frame. They move the camera in the next frame.
 	void HandleKeys(std::chrono::microseconds dt);
@@ -200,6 +215,25 @@ protected:
 	[[nodiscard]] float GetFocusInterpolatorT() const { return ShareOf(_focusInterpolatorTime, _focusInterpolatorDuration); }
 	/// Where the eye is going is kept within the world's ball, as for every camera but the editor's
 	void KeepInsideTheWorld();
+	/// The count of the model's time goes on by a frame
+	void CountModelTime(std::chrono::microseconds dt);
+	/// The camera keeps its eye and its view after a step of the input
+	void KeepStepView();
+	static void Deproject(glm::vec2 screenCoord, const glm::mat4& viewProjection, glm::vec3& outWorldOrigin,
+	                      glm::vec3& outWorldDirection);
+	/// The eye and the focus set off from where they are, at their speed, for the place that the model tells
+	void SetOff(const CameraModel::CameraInterpolationUpdateInfo& updateInfo);
+	/// The clocks of the movement run on by a step, at most a tenth of a second
+	void Advance(std::chrono::microseconds dt);
+
+	/// The eye and the view after each step of the input in this frame
+	struct StepView
+	{
+		glm::vec3 origin {0.0f};
+		glm::mat4 view {1.0f};
+	};
+	std::array<StepView, input_steps::k_MostSteps> _stepViews {};
+	uint32_t _stepViewCount {0};
 
 	ZoomInterpolator3f _originInterpolators;
 	ZoomInterpolator3f _focusInterpolators;
@@ -231,8 +265,6 @@ protected:
 	std::optional<View> _drawnView;
 	/// The kept view, or the view now when there is no kept view
 	[[nodiscard]] View GetDrawnView() const;
-	/// The eye and the focus of the view, with the shake. The view now also has the limits of the drawn eye.
-	[[nodiscard]] camera_drawn::Pose DrawnPose(Interpolation interpolation) const;
 	[[nodiscard]] glm::mat4 GetProjectionMatrix(Projection projection, Interpolation interpolation) const;
 	float _keyboardMoveSpeed = k_KeyboardMoveSpeedDefault;
 };

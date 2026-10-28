@@ -1,0 +1,67 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index ce9833f..ca146c1 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -6772,7 +6772,10 @@ WGPU_IMPORT
+ 
+ 	void OcclusionQueryWGPU::resolve()
+ 	{
+-		if (0 < m_control.getNumUsed() )
++		// The readback buffer cannot take a copy while it is mapped or while its map is pending. A submit that uses it
++		// then is not valid, and the browser drops it.
++		if (0 < m_control.getNumUsed()
++		&&  !m_mapPending)
+ 		{
+ 			WGPUCommandEncoder commandEncoder = s_renderWGPU->m_cmd.m_commandEncoder;
+ 
+@@ -6795,20 +6798,34 @@ WGPU_IMPORT
+ 				, 0
+ 				, kOcclusionQueryBufferSize
+ 				) );
++
++			m_copied = true;
+ 		}
+ 	}
+ 
+ 	static void readQueryResultsCb(WGPUMapAsyncStatus _status, WGPUStringView _message, void* _userdata1, void* _userdata2)
+ 	{
+-		BX_UNUSED(_status, _message);
++		BX_UNUSED(_message);
+ 		OcclusionQueryWGPU& occlusionQuery = *(OcclusionQueryWGPU*)_userdata1;
+-		occlusionQuery.consumeResults( (Frame*)_userdata2);
++		occlusionQuery.m_mapPending = false;
++
++		// A map that failed has no range to read
++		if (WGPUMapAsyncStatus_Success == _status)
++		{
++			occlusionQuery.consumeResults( (Frame*)_userdata2);
++		}
+ 	}
+ 
+ 	void OcclusionQueryWGPU::readResultsAsync(Frame* _frame)
+ 	{
+-		if (0 < m_control.getNumUsed() )
++		// One map at a time, and only of a copy that a submit made
++		if (0 < m_control.getNumUsed()
++		&&  m_copied
++		&&  !m_mapPending)
+ 		{
++			m_copied     = false;
++			m_mapPending = true;
++
+ 			constexpr uint64_t kOcclusionQueryBufferSize = BGFX_CONFIG_MAX_OCCLUSION_QUERIES * sizeof(uint64_t);
+ 
+ 			WGPU_CHECK(wgpuBufferMapAsync(
+diff --git a/bgfx/src/renderer_webgpu.h b/bgfx/src/renderer_webgpu.h
+index f2194c9..4a61a6d 100644
+--- a/bgfx/src/renderer_webgpu.h
++++ b/bgfx/src/renderer_webgpu.h
+@@ -914,6 +914,8 @@ namespace wgpu {
+ 
+ 		OcclusionQueryHandle m_handle[BGFX_CONFIG_MAX_OCCLUSION_QUERIES];
+ 		bx::RingBufferControl m_control;
++		bool m_copied     = false;
++		bool m_mapPending = false;
+ 	};
+ 
+ } /* namespace bgfx */ } // namespace wgpu

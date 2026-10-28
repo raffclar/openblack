@@ -648,6 +648,18 @@ void SimProvider::TurnEnded(uint32_t turn)
 		parts[name] = fmt::format("{:016x}", part);
 	}
 	Json value = {{"hash", fmt::format("{:016x}", synced.hash)}};
+	// A component with no registration is left out of the hash: tell of each name once, and show the names in the record
+	if (!synced.unregistered.empty())
+	{
+		value["unregistered"] = synced.unregistered;
+		if (const auto fresh = _unregisteredTold.Fresh(synced.unregistered); !fresh.empty())
+		{
+			if (const auto logger = spdlog::get("game"); logger != nullptr)
+			{
+				logger->error("{}", synced_state::UnregisteredLine(fresh));
+			}
+		}
+	}
 	if (Locator::gameRandom::has_value())
 	{
 		const auto& random = Locator::gameRandom::value();
@@ -821,6 +833,10 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 		}
 	}
 	record["entities"] = entities;
+	// How many entities the world made and lost since it started: a count that two computers do not share shows a step
+	// that made or removed an entity outside the turns
+	record["entities_made"] = registry->GetEntitiesMade();
+	record["entities_gone"] = registry->GetEntitiesGone();
 	record["hash"] = fmt::format("{:016x}", TransformHash(*registry));
 	// The hashes of the transforms of the entities of each component, to find what made two runs part
 	if (_hashParts != sim_run::HashDetail::None)

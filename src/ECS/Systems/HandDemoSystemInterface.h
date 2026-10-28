@@ -42,6 +42,10 @@ public:
 		bool pauseOnTrigger {false};
 		bool triggerReached {false};
 		bool holding {false};
+		/// The frames still play records, the next record that they play, and whether they hold at a mark
+		bool replaying {false};
+		size_t replayRecord {0};
+		bool replayHolding {false};
 	};
 
 	virtual ~HandDemoSystemInterface() = default;
@@ -49,11 +53,18 @@ public:
 	/// A script task starts the demonstration of a name (a file of Data/HandDemo). Unless `withoutHandModify`, the hand
 	/// first lets go of what it holds. A demonstration that can't be read doesn't play.
 	virtual void Play(std::string_view name, uint32_t task, bool pauseOnTrigger, bool withoutHandModify) = 0;
-	/// Whether a demonstration plays: any, or only the one a task started (task 0 for any)
+	/// Whether a demonstration plays, as the turns and the scripts see it: any, or only the one a task started (task 0 for
+	/// any). It plays until the time of a turn reaches its last record.
 	[[nodiscard]] virtual bool IsPlaying(uint32_t task) const = 0;
-	/// Whether the demonstration reached a mark since the last asked, which also lets a held one go on
+	/// Whether the frames still play the records of a demonstration: the player's mouse stays out, and the hand shows the
+	/// recorded hints. The frames can reach the end before the turns do.
+	[[nodiscard]] virtual bool IsReplaying() const = 0;
+	/// Whether the demonstration reached a mark since the last asked, as the turns see it, which also lets a held one go on
 	virtual bool TakeTrigger() = 0;
-	/// Once a frame, before the hand and the camera move: the records the game's time has reached play
+	/// Once a turn, before the scripts: the records that the time of the turn has reached play for the scripts
+	virtual void ProcessTurn() = 0;
+	/// Once a frame, before the hand and the camera move: the records the time into the turn has reached play through the
+	/// player's interface
 	virtual void Update() = 0;
 	/// Ends the demonstration where it is
 	virtual void Stop() = 0;

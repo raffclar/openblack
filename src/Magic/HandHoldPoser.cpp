@@ -14,6 +14,7 @@
 
 #include "3D/HandAnimation.h"
 #include "3D/L3DMesh.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Transform.h"
@@ -28,6 +29,7 @@
 using namespace openblack;
 using namespace openblack::magic;
 using namespace openblack::magic::hand_hold;
+using openblack::ecs::components::InHand;
 using openblack::ecs::components::Transform;
 
 namespace
@@ -106,10 +108,18 @@ bool HandHoldPoser::Pose(const std::optional<HeldSeed>& seed, const Frame& frame
 	hand.rotation = basis * frame.modelCorrection;
 
 	auto& registry = Locator::entitiesRegistry::value();
-	if (auto* transform = registry.TryGet<Transform>(seed->entity))
+	const auto position = hand.position - up * seed->hang;
+	const auto rotation = SeedTurn(HeldFrame(frame.heading, up, frame.handScale, frame.rightHanded), seed->yRotate);
+	// A thing that the hand picked up is drawn at the drawn hand, and the world keeps it where the turn put it. A miracle's
+	// seed is only drawn, so it goes to the drawn hand.
+	if (auto* inHand = registry.TryGet<InHand>(seed->entity))
 	{
-		transform->position = hand.position - up * seed->hang;
-		transform->rotation = SeedTurn(HeldFrame(frame.heading, up, frame.handScale, frame.rightHanded), seed->yRotate);
+		inHand->drawn = InHand::Drawn {.position = position, .rotation = rotation};
+	}
+	else if (auto* transform = registry.TryGet<Transform>(seed->entity))
+	{
+		transform->position = position;
+		transform->rotation = rotation;
 	}
 	return true;
 }
@@ -136,7 +146,11 @@ void HandHoldPoser::Fade(const hand_blend::Changes& changes, bool drawn, bool ha
 	{
 		return;
 	}
-	if (auto* transform = registry.TryGet<Transform>(held))
+	if (auto* inHand = registry.TryGet<InHand>(held); inHand != nullptr && inHand->drawn.has_value())
+	{
+		inHand->drawn->position += offset;
+	}
+	else if (auto* transform = registry.TryGet<Transform>(held); transform != nullptr && inHand == nullptr)
 	{
 		transform->position += offset;
 	}

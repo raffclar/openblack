@@ -1117,7 +1117,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 	SendHelpEvents(_helpEvents);
 	// The measure of how fast the player turns the camera, which the advisors' cheering of the turning lesson goes by,
-	// takes in this frame's turn, or slows towards still
+	// takes in this step's turn, or slows towards still
 	if (const auto seconds = std::chrono::duration<float>(dt).count(); seconds > 0.0f && Locator::cameraHelpSystem::has_value())
 	{
 		auto& turnSpeed = Locator::cameraHelpSystem::value().Get().turnSpeed;
@@ -1248,7 +1248,7 @@ void DefaultWorldCameraModel::SendHelpEvents(camera_help::events::EventSet event
 		return;
 	}
 	auto& profile = Locator::helpProfileSystem::value();
-	events.ForEach([&profile](uint32_t event) { profile.Trigger(event); });
+	events.ForEach([&profile](uint32_t event) { profile.Report(event); });
 }
 
 DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)

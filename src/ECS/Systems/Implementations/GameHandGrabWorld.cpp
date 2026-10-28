@@ -189,6 +189,9 @@ entt::entity GameHandGrabWorld::Hand() const
 		const auto acting = hands.GetHandsOf(*_acting);
 		return acting.has_value() ? (*acting)[k_Left] : entt::null;
 	}
+	// With no acting player the turn acts with the first player's hand. The turn does the first player's hand first, and
+	// then each other god's hand as its acting player. The input, the frames and the questions of this computer set
+	// its own player as the acting player.
 	return hands.GetPlayerHands()[k_Left];
 }
 
@@ -586,7 +589,8 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 	{
 		return;
 	}
-	auto* data = Entities().TryGet<Player>(Locator::playerSystem::value().GetPlayer(player));
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	auto* data = entity.has_value() && Entities().Valid(*entity) ? Entities().TryGet<Player>(*entity) : nullptr;
 	if (data == nullptr)
 	{
 		return;
@@ -603,7 +607,8 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	{
 		SPDLOG_LOGGER_INFO(logger, "The hand of player {} taps thing {}", static_cast<int>(player), entt::to_integral(object));
 	}
-	const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+	// The game server and an observer have no hand of their own
+	const bool ownHand = !Locator::handSystem::has_value() || Locator::handSystem::value().IsOwnPlayer(player);
 	// The help counts each tap of this computer's hand on a thing that takes the tap, before the thing answers it
 	const auto countTap = [ownHand]() {
 		if (ownHand && Locator::helpProfileSystem::has_value())
@@ -627,12 +632,15 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
 	}
 	// A temple's entrance takes the player of this computer into their own temple. The held leash takes the tap first.
+	// The game server and the other computers play the tap, but stay out of the temple.
 	if (const auto* entrance = Entities().TryGet<const TempleEntrance>(object); entrance != nullptr)
 	{
 		const auto* heart = Entities().Valid(entrance->temple) ? Entities().TryGet<const Temple>(entrance->temple) : nullptr;
 		const auto tap = openblack::temple::TapEntrance({
 		    .scriptLetsTap = Entities().Context().scriptLetsTempleBeEntered,
-		    .ownTemple = ownHand && heart != nullptr && heart->owner == player,
+		    .networkGame = IsNetworkGame(),
+		    .ownTemple = heart != nullptr && heart->owner == player,
+		    .byThisComputer = ownHand,
 		    .leashHeld = LeashTakesTap(object, player),
 		});
 		if (tap.tapped)
@@ -659,7 +667,7 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	if (Entities().AllOf<OneOffSpellSeed>(object) && Locator::magicSystem::has_value())
 	{
 		countTap();
-		return Locator::magicSystem::value().TapGlobe(object);
+		return Locator::magicSystem::value().TapGlobe(object, player);
 	}
 	// A reward chest is opened by its player's tap, until it is open
 	if (const auto* reward = Entities().TryGet<const Reward>(object); reward != nullptr && Locator::rewardSystem::has_value())
@@ -766,6 +774,13 @@ float GameHandGrabWorld::CreatureSizeOf(entt::entity creature) const
 
 void GameHandGrabWorld::CallOffGiving(entt::entity creature)
 {
+	// A creature that took the thing from the hand already keeps it and goes on
+	if (Locator::creatureMindSystem::has_value() && Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureMindSystem::value().IsTakingFromHand(creature) &&
+	    Locator::creatureObjectActionSystem::value().GetHeld(creature).has_value())
+	{
+		return;
+	}
 	// It gives up taking as a failure, and its hand closes on nothing if it was already reaching
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetTakingFromHand(creature).has_value())
@@ -882,6 +897,13 @@ bool GameHandGrabWorld::IsOtherPlayersHand(entt::entity hand) const
 	return player != Locator::handSystem::value().GetOwnPlayer();
 }
 
+std::optional<PlayerNames> GameHandGrabWorld::PlayerOfHand(entt::entity hand) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* god = registry.Valid(hand) ? registry.TryGet<const GodHand>(hand) : nullptr;
+	return god != nullptr ? std::optional(god->player) : std::nullopt;
+}
+
 std::optional<glm::vec3> GameHandGrabWorld::ReportedCollidePoint() const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -948,6 +970,42 @@ void GameHandGrabWorld::SetPose(entt::entity object, const Pose& pose)
 	}
 	transform->position = pose.origin;
 	Locator::entitiesRegistry::value().SetDirty();
+}
+
+void GameHandGrabWorld::DrawPulledPose(entt::entity object, const Pose& pose)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
+	{
+		return;
+	}
+	const auto& stands = registry.Get<const Transform>(object);
+	HandPulled pulled {
+	    .position = pose.origin,
+	    .rotation = glm::mat3(1.0f),
+	    .scale = glm::vec3(1.0f),
+	    .standsAt = stands.position,
+	    .standsRotation = stands.rotation,
+	    .standsScale = stands.scale,
+	};
+	for (glm::length_t column = 0; column < 3; ++column)
+	{
+		const float length = glm::length(pose.axes[column]);
+		pulled.rotation[column] = length > 0.0f ? pose.axes[column] / length : pose.axes[column];
+		pulled.scale[column] = length;
+	}
+	registry.AssignOrReplace<HandPulled>(object, pulled);
+	registry.SetDirty();
+}
+
+void GameHandGrabWorld::ForgetPulledPose(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(object) && registry.AllOf<HandPulled>(object))
+	{
+		registry.Remove<HandPulled>(object);
+		registry.SetDirty();
+	}
 }
 
 glm::mat3 GameHandGrabWorld::UnstretchedAxes(entt::entity object, const glm::mat3& axes) const
@@ -1368,8 +1426,9 @@ bool GameHandGrabWorld::PlayerHasNoWindResistance(PlayerNames player) const
 	{
 		return false;
 	}
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
-	const auto* data = Locator::entitiesRegistry::value().TryGet<const Player>(entity);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* data = entity.has_value() && registry.Valid(*entity) ? registry.TryGet<const Player>(*entity) : nullptr;
 	return data != nullptr && data->windResistance != 0;
 }
 

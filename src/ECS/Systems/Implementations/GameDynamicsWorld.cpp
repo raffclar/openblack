@@ -19,11 +19,14 @@
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/DeadTreeArchetype.h"
+#include "ECS/Components/Animal.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
@@ -167,6 +170,14 @@ std::vector<entt::entity> GameDynamicsWorld::AllInCell(glm::ivec2 cell) const
 
 void GameDynamicsWorld::Refile(entt::entity object)
 {
+	// An animal that comes to rest is on the map where it lies, before it goes into the cell there
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* animal = registry.TryGet<components::Animal>(object);
+	    animal != nullptr && registry.AllOf<components::Transform>(object))
+	{
+		const auto& at = registry.Get<const components::Transform>(object).position;
+		animal->move.position = {map_coords::ToFixed(at.x), map_coords::ToFixed(at.z)};
+	}
 	if (Locator::entitiesMap::has_value())
 	{
 		Locator::entitiesMap::value().Refile(object);

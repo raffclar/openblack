@@ -103,6 +103,9 @@ public:
 	virtual void Poll() = 0;
 	/// The number of requests that did not run their callback yet
 	[[nodiscard]] virtual size_t Pending() const = 0;
+	/// The number of bytes of the body of a request that went to the server. None when the client cannot tell, or the
+	/// request ran its callback.
+	[[nodiscard]] virtual std::optional<uint64_t> SentBytes(HttpRequestId /*id*/) const { return std::nullopt; }
 };
 
 /// The rules of the addresses
