@@ -276,7 +276,7 @@ bool creature_layers::ReachesActionMoment(const BodyAction& body, float millisec
 		return false;
 	}
 	milliseconds = HurriedStep(milliseconds, body.hurried);
-	const auto moment = static_cast<float>(body.animations[0] == animations::k_Kiss ? kissMs : duration.value_or(0) / 2);
+	const auto moment = static_cast<float>(body.kiss ? kissMs : duration.value_or(0) / 2);
 	return body.timeMs <= moment && body.timeMs + milliseconds > moment;
 }
 
