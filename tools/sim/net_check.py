@@ -509,7 +509,11 @@ def menu_page(pid):
     windows = inspector_call(pid, "gui.windows", {}) or {}
     for item in windows.get("items", []):
         if isinstance(item, dict) and item.get("name") == "menu":
-            return item.get("page") if item.get("open") else None
+            if not item.get("open"):
+                return None
+            # The Edit Tattoo button shows only while the profile keeps its creature
+            tattoo = " with Edit Tattoo" if "Edit Tattoo" in item.get("buttons", []) else ""
+            return f"{item.get('page')}{tattoo}"
     return None
 
 
