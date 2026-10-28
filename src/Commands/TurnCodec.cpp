@@ -312,6 +312,13 @@ void WriteAction(Writer& out, const Action& action)
 		               WriteRecipients(out, command.recipients);
 		               out.Number(command.taunt);
 	               },
+	               [](const QuickSave& /*command*/) {},
+	               [](const QuickLoad& /*command*/) {},
+	               [&out](const MusicMood& command) {
+		               out.Entity(command.creature);
+		               out.Number(command.track);
+		               out.Float(command.mood);
+	               },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -710,6 +717,19 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = std::move(taunt);
 		return DecodeError::None;
 	}
+	case CommandTag::QuickSave:
+		action = QuickSave {};
+		return DecodeError::None;
+	case CommandTag::QuickLoad:
+		action = QuickLoad {};
+		return DecodeError::None;
+	case CommandTag::MusicMood:
+	{
+		const auto creature = in.Entity();
+		const auto track = in.Number<uint32_t>();
+		action = MusicMood {.creature = creature, .track = track, .mood = in.Float()};
+		return DecodeError::None;
+	}
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -852,6 +872,9 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const TempleLeashOff& /*command*/) { return CommandTag::TempleLeashOff; },
 	                      [](const ChatSpeech& /*command*/) { return CommandTag::ChatSpeech; },
 	                      [](const ChatTaunt& /*command*/) { return CommandTag::ChatTaunt; },
+	                      [](const QuickSave& /*command*/) { return CommandTag::QuickSave; },
+	                      [](const QuickLoad& /*command*/) { return CommandTag::QuickLoad; },
+	                      [](const MusicMood& /*command*/) { return CommandTag::MusicMood; },
 	                  },
 	                  action);
 }
@@ -905,6 +928,9 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const LeashLength& /*command*/) { return size_t {4}; },
 	                   [](const ChatSpeech& command) { return 1 + command.recipients.size() + 2 + (2 * command.text.size()); },
 	                   [](const ChatTaunt& command) { return 1 + command.recipients.size() + 4; },
+	                   [](const QuickSave& /*command*/) { return size_t {0}; },
+	                   [](const QuickLoad& /*command*/) { return size_t {0}; },
+	                   [](const MusicMood& /*command*/) { return k_Entity + 4 + 4; },
 	               },
 	               action);
 	return 1 + fields;

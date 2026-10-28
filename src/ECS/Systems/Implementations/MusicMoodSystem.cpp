@@ -23,6 +23,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -144,9 +145,10 @@ std::optional<music_mood::Emotion> MusicMoodSystem::Feelings()
 
 void MusicMoodSystem::Tell(const music_mood::Packet& packet)
 {
-	// Only a packet of a track that starts makes the creature react; then the player's recent feedback starts again.
-	// A network game has no music moods, so the music of this computer does not change the world of the others.
-	if (packet.id == 0 || NetworkGame() || !Locator::creatureMindSystem::has_value())
+	// The change goes to the turns as a command of the player, also when no track starts. The creature reacts at the
+	// turn of the command. A network game has no music moods, so the music of this computer does not change the world
+	// of the others.
+	if (NetworkGame() || !Locator::playerCommandSystem::has_value())
 	{
 		return;
 	}
@@ -155,9 +157,22 @@ void MusicMoodSystem::Tell(const music_mood::Packet& packet)
 	{
 		return;
 	}
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} hears music track {:08x} with mood {}", entt::to_integral(*creature),
-	                    packet.id, packet.emotion.mood);
+	Locator::playerCommandSystem::value().Submit(
+	    player_commands::MusicMood {.creature = *creature, .track = packet.id, .mood = packet.emotion.mood});
+}
+
+void MusicMoodSystem::DoMusicMood(const player_commands::MusicMood& command)
+{
+	// Only a command of a track that starts makes the creature react. Then the player's recent feedback starts again.
+	// The creature can go from the world before the turn of the command
+	if (command.track == 0 || NetworkGame() || !Locator::creatureMindSystem::has_value() ||
+	    !Locator::entitiesRegistry::value().Valid(command.creature))
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} hears music track {:08x} with mood {}",
+	                    entt::to_integral(command.creature), command.track, command.mood);
 	auto& minds = Locator::creatureMindSystem::value();
-	minds.ReactToMusic(*creature, packet.emotion.mood);
+	minds.ReactToMusic(command.creature, command.mood);
 	minds.ClearAverageFeedback();
 }

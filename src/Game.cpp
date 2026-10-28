@@ -3220,7 +3220,9 @@ bool Game::StartTurnsBesideDraw()
 	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
 	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
 	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
-	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || _closeAsked)
+	// A quick load waits for the end of this frame, and the next turns play in the world that it loads
+	const bool loadAsked = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().LoadAsked();
+	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || loadAsked || _closeAsked)
 	{
 		return false;
 	}
@@ -5137,6 +5139,12 @@ bool Game::RunFrame() noexcept
 			Locator::creatureWebPageSystem::value().CollectPictures(
 			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+		}
+		// A quick load that a command of the turns asked for loads after the draw of the frame, as the game does. The load
+		// forgets the commands of the old world.
+		if (Locator::saveGameSystem::has_value())
+		{
+			std::ignore = Locator::saveGameSystem::value().LoadAskedSlot();
 		}
 		// The turns beside the draw had the camera of the game back before they started
 		if (!turnsBeside)

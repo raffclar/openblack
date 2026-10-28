@@ -32,6 +32,7 @@ public:
 	void ReadRecords(const std::optional<std::vector<music_mood::Record>>& records, bool own) override;
 	[[nodiscard]] std::vector<music_mood::Record> WriteRecords() override;
 	[[nodiscard]] std::vector<music_mood::Record> GetRecords() const override;
+	void DoMusicMood(const player_commands::MusicMood& command) override;
 
 private:
 	/// Whether this is a network game, which has no music moods
@@ -40,7 +41,7 @@ private:
 	[[nodiscard]] static std::optional<entt::entity> LocalCreature();
 	/// What the local player's creature feels now: the player's recent feedback and its fear
 	[[nodiscard]] static std::optional<music_mood::Emotion> Feelings();
-	/// The creature reacts to the track that starts
+	/// Sends the change of the music to the turns as a command of the player
 	static void Tell(const music_mood::Packet& packet);
 
 	music_mood::Controller _controller;
