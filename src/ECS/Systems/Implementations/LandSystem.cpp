@@ -94,6 +94,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/IntroSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
