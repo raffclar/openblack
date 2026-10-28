@@ -690,6 +690,18 @@ std::string OpenTattooMenu()
 	                                                   : "failed: the editor did not open";
 }
 
+/// The tattoo editor works as in a network game, or as in a game alone
+std::string TattooEditorAsNetworkGame(bool asNetworkGame)
+{
+	auto* game = Game::Instance();
+	if (game == nullptr || game->GetInterface() == nullptr)
+	{
+		return "failed: no interface";
+	}
+	game->GetInterface()->SetTattooEditorAsNetworkGame(asNetworkGame);
+	return asNetworkGame ? "OK warns about a change first" : "OK closes the editor";
+}
+
 /// The game's menu opens on its Controls page, picks a row and double clicks it, as the player does to bind it anew
 std::string OpenControlsBox(size_t row)
 {
@@ -3042,6 +3054,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenTattooMenu()));
 		return;
 	}
+	if (command.kind == Kind::TattooEditorAsNetworkGame)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), TattooEditorAsNetworkGame(command.value != 0)));
+		return;
+	}
 	if (command.kind == Kind::OpenControlsBox)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
@@ -3807,6 +3824,7 @@ void Runner::Give(const Command& command)
 	case Kind::ProfileFolderCheck:
 	case Kind::OwnTattooPicture:
 	case Kind::OpenTattooMenu:
+	case Kind::TattooEditorAsNetworkGame:
 	case Kind::OpenControlsBox:
 	case Kind::OpenMenuPage:
 	case Kind::PressMenuKey:

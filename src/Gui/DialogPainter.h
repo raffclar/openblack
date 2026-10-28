@@ -15,6 +15,7 @@
 #include <string_view>
 #include <vector>
 
+#include <glm/gtc/type_precision.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -88,6 +89,14 @@ public:
 	static constexpr int k_BigTextSize = 35;
 	static constexpr int k_MidTextSize = 22;
 	static constexpr int k_SmallTextSize = 20;
+
+	/// The colour of the edge lines of a bevelled box. Each part is the edge colour of the style times the same part of
+	/// the colour of the box, divided by 256 with no fraction. Thus white edges on a white box are 254, not 255.
+	[[nodiscard]] static constexpr glm::u8vec3 EdgeLineColour(glm::u8vec3 edge, glm::u8vec3 box) noexcept
+	{
+		const auto part = [](uint8_t a, uint8_t b) { return static_cast<uint8_t>((unsigned {a} * unsigned {b}) >> 8U); };
+		return {part(edge.r, box.r), part(edge.g, box.g), part(edge.b, box.b)};
+	}
 
 	DialogPainter(Canvas& canvas, const GameFont& font, const graphics::Texture2D& atlas,
 	              const graphics::Texture2D& fontTexture);

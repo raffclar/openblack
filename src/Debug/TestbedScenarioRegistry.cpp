@@ -11454,7 +11454,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
 	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
-	       kind == Kind::EndBox || kind == Kind::BringCreature || IsPointerCommand(kind);
+	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -11669,6 +11670,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "end box",
 	    "bring a creature into a network game",
 	    "give the hand's reports a latency",
+	    "tattoo editor as in a network game",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

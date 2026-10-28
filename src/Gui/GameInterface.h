@@ -227,6 +227,8 @@ public:
 
 	/// The tattoo editor's dialog, shown while the tattoo editor is open
 	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }
+	/// For the testbed: the tattoo editor works as in a network game, also in a game alone
+	void SetTattooEditorAsNetworkGame(bool asNetworkGame) noexcept { _tattooEditorAsNetworkGame = asNetworkGame; }
 	/// The mouse buttons held down while the tattoo editor takes the mouse: the left one, and any of them
 	[[nodiscard]] bool IsTattooEditorLeftHeld() const noexcept { return _leftButtonDown; }
 	[[nodiscard]] bool IsTattooEditorButtonHeld() const noexcept { return _leftButtonDown || _otherButtonsDown != 0; }
@@ -451,6 +453,7 @@ private:
 	std::optional<new_game_choice::Choice> _skipBoxAnswer;
 	std::unique_ptr<StoryHistoryBox> _storyHistoryBox;
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
+	bool _tattooEditorAsNetworkGame {false};
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
 	std::unique_ptr<SaveGameBoxes> _saveGameBoxes;
 	std::unique_ptr<EndGameBox> _endGameBox;

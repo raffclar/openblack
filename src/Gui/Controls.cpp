@@ -46,6 +46,8 @@ glm::vec4 TextColour(bool hovered, bool focused)
 constexpr float k_SliderStep = 0.1f;
 /// A list's gap below each item's text
 constexpr int k_ItemGap = 6;
+/// How far a pushed button moves its label
+constexpr int k_PressedShift = 2;
 } // namespace
 
 StaticText::StaticText(DialogRect rect, std::u16string text, Layout layout, int size)
@@ -110,7 +112,7 @@ Button::Button(DialogRect rect, std::u16string label, int size)
 {
 }
 
-void Button::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /*pressed*/) const
+void Button::Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const
 {
 	if (!visible)
 	{
@@ -123,8 +125,10 @@ void Button::Draw(const DialogPainter& painter, bool hovered, bool focused, bool
 	{
 		--fitted;
 	}
-	painter.DrawText({rect.Centre().x, rect.Centre().y - (fitted / 2)}, rect.Width(), Justify::Centre, label, fitted,
-	                 TextColour(hovered, focused));
+	// While the mouse button is down on the button, the label moves 2 down and 2 to the right. The box stays.
+	const auto push = (pressed && hovered) ? k_PressedShift : 0;
+	painter.DrawText({rect.Centre().x + push, rect.Centre().y - (fitted / 2) + push}, rect.Width(), Justify::Centre, label,
+	                 fitted, TextColour(hovered, focused));
 }
 
 BigButton::BigButton(const GameFont& font, glm::ivec2 position, int size, std::u16string label, LabelSide side, Look look)

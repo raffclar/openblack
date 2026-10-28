@@ -1016,6 +1016,8 @@ struct Command
 		/// The reports of the player's hand get a fixed latency (value, in milliseconds), as a network game with that
 		/// latency gives them. A throw then moves its start along the flight by the latency. Needs no creature.
 		SetReportLatency,
+		/// The tattoo editor works as in a network game (value 1) or as in a game alone (value 0). Needs no creature.
+		TattooEditorAsNetworkGame,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

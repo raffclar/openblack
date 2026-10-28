@@ -26,6 +26,7 @@
 #include <LobbyApiJson.h>
 #include <gtest/gtest.h>
 
+#include "ECS/PlayerColour.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Gui/LandThumbnail.h"
@@ -1102,6 +1103,26 @@ TEST(MultiplayerRules, The32GodsHaveDistinctReadableChatColours)
 		const auto contrast = (Luminance(GodColourBits(god)) + 0.05) / 0.05;
 		EXPECT_GE(contrast, 4.5) << "god " << god;
 	}
+}
+
+TEST(MultiplayerRules, TheRoomAndTheLandShowGodsThreeAndFourInOtherColours)
+{
+	// Nobody picks a colour: the god's slot gives it. The room shows a god in the colour of its team, and the land shows
+	// it in the colour of its player. The network lands have the land number 0, so the land takes the colours of the
+	// players as they are. Gods 1 and 2 are red and green in both. God 3 is blue in the room but magenta on the land,
+	// and god 4 is yellow in the room but cyan on the land, as in the game (vanilla-bugs 478).
+	constexpr int32_t k_NetworkLand = 0;
+	const auto onLand = [](int32_t god) {
+		return openblack::player_colour::OnLand(static_cast<openblack::PlayerNames>(god - 1), k_NetworkLand);
+	};
+	EXPECT_EQ(GodColourBits(1), 0xFFFF0000u);
+	EXPECT_EQ(onLand(1), 0xFFFF4646u);
+	EXPECT_EQ(GodColourBits(2), 0xFF00FF00u);
+	EXPECT_EQ(onLand(2), 0xFF47FF54u);
+	EXPECT_EQ(GodColourBits(3), 0xFF0000FFu);
+	EXPECT_EQ(onLand(3), 0xFFE347FFu);
+	EXPECT_EQ(GodColourBits(4), 0xFFFFFF00u);
+	EXPECT_EQ(onLand(4), 0xFF47F9FFu);
 }
 
 namespace

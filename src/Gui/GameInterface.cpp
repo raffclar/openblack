@@ -44,6 +44,7 @@
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -1155,6 +1156,8 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 		_leftButtonDown = false;
 		_otherButtonsDown = 0;
 	}
+	_tattooEditor->SetNetworkGame(_tattooEditorAsNetworkGame ||
+	                              (Locator::time::has_value() && Locator::time::value().IsNetworkGame()));
 	_tattooEditor->Update(deltaSeconds, editor, palette, _leftButtonDown);
 	_menu->SetCovered(_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 }

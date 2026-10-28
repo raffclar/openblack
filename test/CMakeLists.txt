@@ -1947,3 +1947,4 @@ target_link_libraries(test_land_thumbnail PRIVATE onlinemap)
       ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_draw_order.py
       --root ${CMAKE_SOURCE_DIR}
   )
+openblack_setup_and_add_test(test_tattoo_editor_warning gui/test_tattoo_editor_warning.cpp)
