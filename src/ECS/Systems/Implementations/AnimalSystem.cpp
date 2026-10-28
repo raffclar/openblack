@@ -674,15 +674,20 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 	animal.previousPosition = animal.position;
 	animal.previousHeading = animal.heading;
 	++animal.turnsInState;
+	// The needs of every kind come first, and then the target. A target that it lets go of ends its turn
+	NeedsTurn(entity, animal);
+	if (DropTarget(entity, animal))
+	{
+		return;
+	}
 	// Every kind is brought down, eaten and lands in the same way
 	if (CommonStateTurn(entity, animal))
 	{
 		return;
 	}
-	// In a hand it does nothing, but its needs grow and a young animal grows. A creature can make it die in its hand
+	// In a hand it does nothing. A creature can make it die in its hand
 	if (animal.state == AnimalState::InHand)
 	{
-		InHandTurn(entity, animal);
 		return;
 	}
 	if (animal.state == AnimalState::Dying || animal.state == AnimalState::Dead)
@@ -690,17 +695,10 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 		ProcessDeath(entity, animal);
 		return;
 	}
-	// A grazer sees to its own needs as it goes
 	if (auto* grazer = registry.TryGet<Grazer>(entity))
 	{
 		GrazerTurn(entity, animal, *grazer);
 		return;
-	}
-	// Hungrier each turn, up to its kind's hunger
-	const auto& info = InfoOf(animal.type);
-	if (info.hunger != 0 && animal.hunger < static_cast<int32_t>(info.hunger))
-	{
-		++animal.hunger;
 	}
 	// Its reaction comes before its own ways
 	if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
@@ -709,12 +707,6 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 	}
 	if (IsBird(animal.type))
 	{
-		// Seeing to its needs, a flock's leader counts the turns it has kept to its leg
-		if (auto* flockData = registry.TryGet<Flock>(animal.flock);
-		    flockData != nullptr && SeesToNeedsIn(animal.state) && LeaderOf(animal.flock) == entity)
-		{
-			++flockData->turnsOnLeg;
-		}
 		Bird(entity, animal);
 	}
 	else if (registry.AllOf<SpellWolf>(entity))
@@ -726,21 +718,6 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 	{
 		// Any other kind goes into its next state when its clip ends
 		SetTopState(animal, animal.afterClip);
-	}
-}
-
-void AnimalSystem::InHandTurn(entt::entity entity, Animal& animal)
-{
-	// The state of the hand sees to the needs, as the states in the land do. The state itself does nothing
-	if (auto* grazer = EntityRegistry().TryGet<Grazer>(entity))
-	{
-		GrazerNeedsTurn(entity, animal, *grazer);
-		return;
-	}
-	const auto& info = InfoOf(animal.type);
-	if (info.hunger != 0 && animal.hunger < static_cast<int32_t>(info.hunger))
-	{
-		++animal.hunger;
 	}
 }
 
@@ -1096,18 +1073,35 @@ void AnimalSystem::RunToFinalDestination(entt::entity wolf, Animal& animal)
 	SetupMoveTo(animal, run.finalDestination, 0.0f, AnimalState::SetDying);
 }
 
+bool AnimalSystem::DropTarget(entt::entity entity, Animal& animal)
+{
+	// Only a hunter has a target: the prey that it brought down and eats. Of the hunters, openblack makes only the
+	// spell wolves.
+	auto& registry = EntityRegistry();
+	auto* run = registry.TryGet<SpellWolf>(entity);
+	if (run == nullptr || run->food == entt::null)
+	{
+		return false;
+	}
+	const bool gone = !registry.Valid(run->food);
+	const auto drop = animals::DropOfTarget({.gone = gone,
+	                                         .inPlayersHand = !gone && registry.AllOf<InHand>(run->food),
+	                                         .inHand = animal.state == AnimalState::InHand});
+	if (drop == animals::TargetDrop::Keeps)
+	{
+		return false;
+	}
+	run->food = entt::null;
+	animal.turnsUntilStateChange = 0;
+	if (drop == animals::TargetDrop::DropsAndDecides)
+	{
+		SetTopState(animal, AnimalState::DecideWhatToDo);
+	}
+	return true;
+}
+
 void AnimalSystem::Wolf(entt::entity entity, Animal& animal)
 {
-	auto& registry = EntityRegistry();
-	auto& run = registry.Get<SpellWolf>(entity);
-	// What it was eating is gone: it decides again
-	if (run.food != entt::null && !registry.Valid(run.food))
-	{
-		run.food = entt::null;
-		animal.turnsUntilStateChange = 0;
-		SetTopState(animal, AnimalState::DecideWhatToDo);
-		return;
-	}
 	switch (animal.state)
 	{
 	case AnimalState::MoveToPos:
@@ -2216,6 +2210,11 @@ void AnimalSystem::StopReaction(entt::entity entity, bool resetState)
 	// states of a reaction.
 	const auto next =
 	    animals::StateAfterReacting(animal->stateBeforeReaction, Locator::infoConstants::value().animalStateTable);
+	// The state of the hand refuses most changes: a held animal stays in it
+	if (animal->state == AnimalState::InHand && !animals::HandStateAllows(next))
+	{
+		return;
+	}
 	if (const auto state = AnimalStateOfGame(next))
 	{
 		SetTopState(*animal, *state);

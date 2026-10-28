@@ -1192,7 +1192,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	    Query("animal",
 	          "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, "
 	          "whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether "
-	          "a creature fears it, and a grazer's needs",
+	          "a creature fears it, the hunger of a kind that is not a grazer, a grazer's needs, and a spell wolf's prey "
+	          "and target",
 	          {IdParameter("The animal's entity id")}),
 	    Serve<Locator::animalSystem>(
 	        "the animals", [](const ecs::systems::AnimalSystemInterface& animals, const QueryContext& context) {
@@ -1210,6 +1211,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                       {"turns_in_state", animal.turnsInState},
 		                       {"turns_until_state_change", animal.turnsUntilStateChange},
 		                       {"dying", animal.dying},
+		                       {"hunger", animal.hunger},
 		                       {"birth_turn", animal.birthTurn},
 		                       {"clip", static_cast<int>(animal.animation)},
 		                       {"speed", animal.move.speed},
@@ -1225,6 +1227,11 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		        {
 			        result["grazer"] = {
 			            {"hunger", grazer->needs.hunger}, {"sleep", grazer->needs.sleep}, {"breed", grazer->needs.breed}};
+		        }
+		        // A spell wolf's prey that it hunts, and its target: the prey that it brought down and eats
+		        if (const auto* run = registry->TryGet<const SpellWolf>(*entity))
+		        {
+			        result["spell_wolf"] = {{"prey", Id(run->prey)}, {"food", Id(run->food)}};
 		        }
 		        return QueryResult::Value(std::move(result));
 	        }));
