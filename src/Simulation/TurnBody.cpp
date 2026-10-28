@@ -41,7 +41,6 @@
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
-#include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
@@ -621,9 +620,6 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::TownFlags:
 		Locator::townDesireSystem::value().ProcessFlags();
-		break;
-	case Step::AppleBarrel:
-		Locator::appleBarrelSystem::value().ProcessTurn();
 		break;
 	case Step::ChimneySmoke:
 		Locator::chimneySmokeSystem::value().ProcessTurn();

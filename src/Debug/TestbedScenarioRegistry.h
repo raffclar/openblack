@@ -998,6 +998,10 @@ struct Command
 		/// player reports its hand at the point (point), so high above the land (radius), and its camera 30 m above the
 		/// hand. This computer does not move these hands. Needs no creature.
 		OtherGodHand,
+		/// This computer is the computer of the god of the player (player), as in a network game: that player gets hands
+		/// of its own, and this computer moves and draws them. The next scenario starts with the first player as the god
+		/// of this computer again. Needs no creature.
+		OwnGod,
 		/// A press of the Join Online Game button of the browser page: the game opens the multiplayer front end at the
 		/// next frame that it may open in, also while a cut scene has the cinema bars in. Needs no creature.
 		JoinOnline,

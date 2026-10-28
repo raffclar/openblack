@@ -11191,8 +11191,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox ||
-	       kind == Kind::BringCreature || IsPointerCommand(kind);
+	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
+	       kind == Kind::EndBox || kind == Kind::BringCreature || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -11220,7 +11220,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 184> k_Names {
+	constexpr std::array<std::string_view, 185> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -11402,6 +11402,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "build the worship sites",
 	    "press a key on the keyboard",
 	    "show another god's hand",
+	    "be the god of a player at this computer",
 	    "press Join Online Game of the page",
 	    "end box",
 	    "bring a creature into a network game",

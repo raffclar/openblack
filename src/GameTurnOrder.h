@@ -117,10 +117,9 @@ enum class Step : uint8_t
 	/// The gods of a network game get the winning conditions of the game
 	GameConditions,
 	VillageTotems,
-	/// The flags over the towns' stores, and the apple barrel at the player's store. The game draws them and keeps no
-	/// object for them: openblack makes their entities in the turn, so that no frame makes an entity of the world.
+	/// The flags over the towns' stores. The game draws them and keeps no object for them: openblack makes their entities
+	/// in the turn, so that no frame makes an entity of the world.
 	TownFlags,
-	AppleBarrel,
 	ChimneySmoke,
 	Dances,
 	Fields,
@@ -277,7 +276,6 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // a miracle go in the miracle's own turn, when it closes down.
     {.step = Step::Teleports, .stage = Stage::Players},
     {.step = Step::TownFlags, .stage = std::nullopt},
-    {.step = Step::AppleBarrel, .stage = std::nullopt},
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
     // The influence of the towns and the temples. The borders that it draws and the influence that the hand keeps are
     // also in this step.

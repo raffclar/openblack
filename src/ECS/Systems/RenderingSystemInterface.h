@@ -209,6 +209,9 @@ struct RenderContext
 		uint32_t instance;
 	};
 	std::vector<EntityDraw> entityDraws;
+	/// The things of the drawn registry drawn one by one, and where each one's instance is. Their entities are of the drawn
+	/// registry, not of the land's.
+	std::vector<EntityDraw> drawnEntityDraws;
 	/// Copies of creatures drawn where they stand in a pose of their own (see components::CreatureCopy), as the Creature
 	/// Cave shows the player's creature: each looks as `creature` does, takes its pose and eyes from `copy`, is placed by
 	/// its instance and lit from a light of its own. The creature is a thing of the land, and the copy is a thing of the

@@ -31,7 +31,6 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
-#include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
@@ -388,11 +387,6 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		const auto entity = drawnObject.entity;
 		const auto& model = drawnObject.model;
 		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity) || heldSeed == entity)
-		{
-			continue;
-		}
-		// The apple barrel and its worm are only drawn: the cursor meets the land behind them
-		if (registry.AnyOf<AppleBarrel, AppleBarrelWorm>(entity))
 		{
 			continue;
 		}

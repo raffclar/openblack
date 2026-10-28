@@ -126,6 +126,30 @@ void testbed_scenarios::AddHandLookScenarios(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// The god of the second player at this computer: its hand shows the alignment of the second player, not of the first
+	std::vector<Command> secondGod {{.kind = Kind::OwnGod, .player = PlayerNames::PLAYER_TWO, .delaySeconds = 1.0f}};
+	for (const float alignment : {-1.0f, 0.0f, 1.0f, 0.0f})
+	{
+		auto align = Align(alignment, 3.0f);
+		align.player = PlayerNames::PLAYER_TWO;
+		secondGod.push_back(align);
+	}
+	all.push_back({
+	    .id = "hand.look_second_god",
+	    .name = "The hand of the second player's god at its computer",
+	    .facet = Facet::Hand,
+	    .description = "The first player is fully good (alignment 1). After a second, this computer becomes the computer of "
+	                   "the god of the second player, as in a network game, with the hand over the land in the middle of "
+	                   "the window. Then every three seconds the alignment of the second player jumps: to -1, 0, 1 and 0.",
+	    .expected = "First the pale gold hand of the good first player. Then the hand of the second player shows the "
+	                "alignment of the second player only: plain at first, red and ridged at -1, plain at 0, pale gold at 1, "
+	                "then plain again. It does not stay gold because of the first player.",
+	    .environment =
+	        {.dispenserGrid = false, .playerAlignment = 1.0f, .cursor = k_Cursor, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = Close(),
+	    .commands = secondGod,
+	});
+
 	std::vector<Command> holding;
 	for (size_t object = 0; object < 3; ++object)
 	{

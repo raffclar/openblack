@@ -81,6 +81,9 @@ public:
 	virtual void PlaceOthersHeldForFrame([[maybe_unused]] int32_t frameMs) {}
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
+	/// Each hand of a god that holds the thing lets go of it as ForceDrop does: the first player's hand, then the hands of
+	/// the other players. A thing that goes from the game leaves the hand of each player that holds it.
+	virtual void ForceDropFromEveryHand([[maybe_unused]] entt::entity object) {}
 	/// At the turn: a scribble of the player's hand shakes off the thing that the hand holds (see
 	/// player_commands::HandShakeOff)
 	virtual void DoShakeOff(PlayerNames player) = 0;

@@ -642,6 +642,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 	// Set transforms for instanced draw at offsets
 	_renderContext.entityDraws.clear();
+	_renderContext.drawnEntityDraws.clear();
 	_renderContext.drawnObjects.clear();
 	_renderContext.animalDraws.clear();
 	_renderContext.highDetailDraws.clear();
@@ -1064,16 +1065,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // The worm on the apple barrel takes the land's light of the point where the barrel stands
-		    if (const auto* worm = registry.TryGet<const AppleBarrelWorm>(entity);
-		        worm != nullptr && registry.Valid(worm->barrel))
-		    {
-			    if (const auto* barrelTransform = registry.TryGet<const Transform>(worm->barrel); barrelTransform != nullptr)
-			    {
-				    lightOffset = apple_barrel::WormLightOffset(barrelTransform->position, transform.position);
-			    }
-		    }
-
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
 		    if (!placed.has_value())
 		    {
@@ -1447,8 +1438,23 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 			look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
 		}
 		const uint32_t idx = slots->second.offset + slots->second.filled;
-		_renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
+		// The worm on the apple barrel takes the land's light of the point where the barrel stands
+		auto instanceModel = modelMatrix;
+		if (const auto* worm = drawn.TryGet<const AppleBarrelWorm>(entity); worm != nullptr && drawn.Valid(worm->barrel))
+		{
+			if (const auto* barrelTransform = drawn.TryGet<const Transform>(worm->barrel); barrelTransform != nullptr)
+			{
+				graphics::instance_light::SetLightOffset(
+				    instanceModel, apple_barrel::WormLightOffset(barrelTransform->position, transform.position));
+			}
+		}
+		_renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
 		_renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
+		// One posed by its own clip, as the worm, is drawn by itself
+		if (slots->second.perEntity)
+		{
+			_renderContext.drawnEntityDraws.push_back({.entity = entity, .instance = idx});
+		}
 		// A gate stone that the cursor can find is the plinth that holds it to the cursor
 		if (const auto* stone = drawn.TryGet<const PlinthStone>(entity); stone != nullptr && stone->pickable)
 		{
