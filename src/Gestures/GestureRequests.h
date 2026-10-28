@@ -200,6 +200,25 @@ inline constexpr std::string_view k_HiddenScript = "HiddenScript";
 /// The event that the help counts when the hand draws the gesture of a request, none for most gestures. A scribble
 /// counts only when it is about a miracle that the hand can power up.
 [[nodiscard]] std::optional<uint32_t> HelpEventOf(const Request& request, const HandContext& context);
+/// What a gesture of the miracle selection, or the R, did
+enum class SelectionStep : uint8_t
+{
+	/// The selection had nothing to offer and stays closed, or no miracle of the open selection has the gesture
+	Nothing,
+	/// A spiral or an inverse spiral opens the selection
+	Opened,
+	/// A miracle of the selection has the gesture, and more gestures follow it in the chain of the miracle
+	Advanced,
+	/// The gesture is the last of the chain of a miracle: the hand asks the icon of the miracle for it
+	Chosen,
+	/// A scribble closes the selection
+	Closed,
+	/// The R asks the icon again for the last miracle that came into the hand
+	Repeated,
+};
+/// The events that the help counts, in their order, for a step of the miracle selection. A choice counts as a step of
+/// the chain first.
+[[nodiscard]] std::vector<uint32_t> HelpEventsOf(SelectionStep step);
 /// Whether the chain follows the hand. It follows the hand while the hand holds a miracle that it can power up or that a
 /// circle sizes. After a miracle did its first turn in the hand on the land, it follows the hand while it holds any
 /// miracle.
