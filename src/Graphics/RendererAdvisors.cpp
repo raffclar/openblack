@@ -151,6 +151,34 @@ void SubmitQuads(const ShaderManager& shaders, RenderPass view, std::span<const 
 	bgfx::setState(state);
 	program->Submit(static_cast<uint16_t>(view), depth);
 }
+
+/// For a warm-up, each advisor drawn in each way that it can be drawn: near the screen and in the world, opaque and
+/// fading, with its halo. Every bone is at no size, so nothing shows.
+std::vector<AdvisorSystem::Draw> WarmUpDraws(const AdvisorSystem& advisors)
+{
+	std::vector<AdvisorSystem::Draw> draws;
+	for (int advisor = 0; advisor < help::spirits::k_Dudes; ++advisor)
+	{
+		const auto* model = advisors.GetModel(advisor);
+		if (model == nullptr || !model->mesh)
+		{
+			continue;
+		}
+		const std::vector<glm::mat4> noBones(model->mesh->GetBoneMatrices().size(), glm::mat4(0.0f));
+		for (const bool nearScreen : {true, false})
+		{
+			for (const uint8_t alpha : {uint8_t {255}, uint8_t {128}})
+			{
+				draws.push_back({.advisor = advisor,
+				                 .nearScreen = nearScreen,
+				                 .alpha = alpha,
+				                 .bones = noBones,
+				                 .sprites = {AdvisorSystem::Sprite {.halfWidth = 0.0f, .halfHeight = 0.0f}}});
+			}
+		}
+	}
+	return draws;
+}
 } // namespace
 
 void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
@@ -160,8 +188,17 @@ void Renderer::DrawAdvisors(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& advisors = Locator::advisorSystem::value();
-	const auto draws = advisors.GetDraws();
-	const auto trails = advisors.GetTrails();
+	auto draws = advisors.GetDraws();
+	auto trails = advisors.GetTrails();
+	// A warm-up draws each advisor and a trail at no size, so that the first advisor in the game makes no new states of
+	// the graphics card
+	const auto warmUpDraws = _warmingUp ? WarmUpDraws(advisors) : std::vector<AdvisorSystem::Draw> {};
+	const std::array<AdvisorSystem::TrailVertex, 3> warmUpTrail {};
+	if (_warmingUp)
+	{
+		draws = warmUpDraws;
+		trails = warmUpTrail;
+	}
 	if (draws.empty() && trails.empty())
 	{
 		return;

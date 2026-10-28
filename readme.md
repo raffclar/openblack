@@ -118,6 +118,18 @@ for you. To do so, you will be selecting the `"ninja-multi-vcpkg"   - Ninja Mult
     * Arch Linux / Manjaro: `# pacman -S base-devel cmake ninja`
 * You can generate the cmake build preset using `cmake --preset` and you can list the presets using `cmake --list-presets`
 
+## Sanitizer job (AddressSanitizer and UBSan)
+
+Test code can read freed memory and still pass on some test orders. To find this, build the tests with sanitizers in a
+separate Debug build folder (Clang or GCC; MSVC supports only `address`):
+
+    cmake -G Ninja -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DOPENBLACK_SANITIZE=address,undefined <your usual options>
+    cmake --build build-asan --target openblack_tests
+    cd build-asan/test && ../bin/openblack_tests && ../bin/openblack_tests --gtest_shuffle --gtest_random_seed=1
+
+Run the program plain and shuffled. Any report from a sanitizer is a bug to fix. The option is off by default and does not
+change the normal builds.
+
 ## Configuration for using System Dependencies (Recommended for packagers)
 
 If you don't want to use vcpkg; CMake will use system libraries, or manually specified package directories.

@@ -90,7 +90,7 @@ function (openblack_compile_shaders)
       set(output_dir "${ARGS_OUTPUT_DIR}/${profile_dir}")
       set(output "${output_dir}/${shader_file_name}.bin.h")
       set(profile_platform ${platform})
-      if (profile STREQUAL "spirv")
+      if (profile STREQUAL "spirv" OR (profile STREQUAL "wgsl" AND APPLE))
         set(profile_platform LINUX)
       endif ()
 

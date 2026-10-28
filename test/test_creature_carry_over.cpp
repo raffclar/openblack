@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #include <MindFile.h>
 #include <PhysiqueFile.h>
@@ -31,6 +32,7 @@
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreaturePhysiology.h"
+#include "Creature/CreatureTattoo.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFileSave.h"
@@ -163,6 +165,7 @@ public:
 	void TakeOff(entt::entity /*creature*/) override {}
 	bool Toggle(entt::entity /*creature*/) override { return false; }
 	bool ChangeType(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	bool PickType(PlayerNames /*player*/, LeashType /*type*/) override { return false; }
 	bool TieTo(entt::entity /*creature*/, entt::entity /*object*/) override { return false; }
 	void UntieToHand(entt::entity /*creature*/) override {}
 	void SetWorks(entt::entity /*creature*/, bool /*works*/) override {}
@@ -633,6 +636,31 @@ TEST_F(CreatureCarryOverSaves, ThePlayersCreatureIsWrittenToItsFilesAsItLives)
 	Live(creature, 1800);
 	carryOver.ProcessTurn();
 	EXPECT_EQ(Saved(), 2);
+}
+
+TEST_F(CreatureCarryOverSaves, TheKeptFileHasTheTattoosThatThisComputerShows)
+{
+	const TestFolder folder("carry_over_shown_tattoos");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 1199);
+	auto& tattoos = Locator::entitiesRegistry::value().Assign<ecs::components::CreatureTattoos>(creature);
+	tattoos.pictures = {9};
+	// In a network game a change from the tattoo editor stays on this computer only
+	creature_tattoo::Slots shown {};
+	shown.at(0) = {.design = 3, .site = 2, .colour = {10, 20, 30}};
+	tattoos.shown = shown;
+	tattoos.picturesShown = true;
+	tattoos.shownPictures = {1, 2};
+
+	carryOver.ProcessTurn();
+	Live(creature, 1200);
+	carryOver.ProcessTurn();
+	carryOver.FinishWrites();
+	ASSERT_NE(carryOver.Kept(), nullptr);
+	ASSERT_TRUE(carryOver.Kept()->tattooHeader.has_value());
+	EXPECT_EQ(carryOver.Kept()->tattooHeader->at(0), creature_tattoo::ToWord(shown.at(0)));
+	EXPECT_EQ(carryOver.Kept()->tattooHeader->at(1), creature_tattoo::ToWord(creature_tattoo::Slot {}));
+	EXPECT_EQ(carryOver.Kept()->tattoo, std::optional(std::vector<uint8_t> {1, 2}));
 }
 
 TEST_F(CreatureCarryOverSaves, ALandThatKeepsNoCreaturesWritesNoneAsTheyLiveNorAtTheEnd)

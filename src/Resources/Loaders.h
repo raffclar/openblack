@@ -214,7 +214,7 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath,
 	                                     graphics::texel_depth::Depth depth = graphics::texel_depth::Depth::Full) const;
 	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
-	                                     const std::filesystem::path& alphaPath, uint16_t side) const;
+	                                     const std::filesystem::path& alphaPath, uint16_t side, bool halve = false) const;
 	/// The bytes of a square raw file that the game made, as a raw file on the disk with the same name is loaded
 	[[nodiscard]] result_type operator()(FromBufferTag, const std::string& name, std::vector<uint8_t> data,
 	                                     graphics::texel_depth::Depth depth) const;

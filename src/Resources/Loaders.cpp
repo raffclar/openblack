@@ -44,6 +44,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandLightTable.h"
 #include "3D/Light.h"
+#include "3D/LowResolutionTextures.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
 #include "Audio/SoundDecoder.h"
@@ -282,11 +283,27 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 }
 
 Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
-                                                         const std::filesystem::path& alphaPath, uint16_t side) const
+                                                         const std::filesystem::path& alphaPath, uint16_t side,
+                                                         bool halve) const
 {
 	auto& fileSystem = Locator::filesystem::value();
-	const auto colours = rawimage::DecodeRgb(fileSystem.ReadAll(rawTexturePath), side, side);
-	const auto alpha = rawimage::DecodeGrey(fileSystem.ReadAll(alphaPath), side, side);
+	auto colourBytes = fileSystem.ReadAll(rawTexturePath);
+	auto alphaBytes = fileSystem.ReadAll(alphaPath);
+	// At half its size the picture and its alpha each take every second texel of each second row
+	if (halve)
+	{
+		auto halfColours = low_resolution_textures::Halve(colourBytes, side);
+		auto halfAlpha = low_resolution_textures::Halve(alphaBytes, side);
+		if (!halfColours || !halfAlpha)
+		{
+			throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
+		}
+		colourBytes = std::move(*halfColours);
+		alphaBytes = std::move(*halfAlpha);
+		side /= 2;
+	}
+	const auto colours = rawimage::DecodeRgb(colourBytes, side, side);
+	const auto alpha = rawimage::DecodeGrey(alphaBytes, side, side);
 	if (!colours || !alpha)
 	{
 		throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
@@ -614,6 +631,10 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	for (const auto& set : file.GetAnimationSpecs().animationSets)
 	{
 		animationCount += set.animations.size();
+		for (const auto& line : set.animations)
+		{
+			rig->specLines.push_back({.name = line.name, .type = static_cast<char>(line.type), .set = set.name});
+		}
 	}
 	for (size_t mesh = 0; mesh < CreatureRig::k_AnimatedMeshCount; ++mesh)
 	{

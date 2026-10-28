@@ -32,6 +32,7 @@
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 
+#include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
@@ -52,6 +53,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureRig.h"
 #include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
@@ -106,6 +108,7 @@
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/CreatureReactionNotice.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -127,6 +130,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -308,6 +312,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"weatherSystem", "land.weather"},
     LocatorCoverage {"pathfindingSystem", "living.pathfinding"},
     LocatorCoverage {"entitiesRegistry", "ecs.components"},
+    LocatorCoverage {"drawnRegistry", "drawn.components"},
     LocatorCoverage {"entitiesMap", "map.cell"},
     LocatorCoverage {"playerSystem", "players.list"},
     LocatorCoverage {"alignmentSystem", "players.list"},
@@ -346,6 +351,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"leashSystem", "creatures.status"},
     LocatorCoverage {"creatureFightSystem", "creatures.status"},
     LocatorCoverage {"fightTranscript", "fights.transcripts"},
+    LocatorCoverage {"creatureAnimationLog", "creature.animation"},
     LocatorCoverage {"creatureModeSystem", "creatures.systems"},
     LocatorCoverage {"creatureCaveSystem", "creatures.systems"},
     LocatorCoverage {"cinematicDirectorSystem", "view.cinematic"},
@@ -474,6 +480,12 @@ Json Optional(const std::optional<Value>& value)
 const ecs::Registry* Registry()
 {
 	return Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
+}
+
+/// The things that only the frames make, out of the synced world
+const ecs::Registry* DrawnRegistry()
+{
+	return Locator::drawnRegistry::has_value() ? &Locator::drawnRegistry::value() : nullptr;
 }
 
 const InfoConstants* Info()
@@ -1159,12 +1171,11 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              return QueryResult::Value(std::move(result));
 	              }));
 	provider->Add(
-	    Query(
-	        "animal",
-	        "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock "
-	        "and town, its kind's radius, where it moves to, whether "
-	        "a creature fears it, and a grazer's needs",
-	        {IdParameter("The animal's entity id")}),
+	    Query("animal",
+	          "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, "
+	          "whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether "
+	          "a creature fears it, and a grazer's needs",
+	          {IdParameter("The animal's entity id")}),
 	    Serve<Locator::animalSystem>(
 	        "the animals", [](const ecs::systems::AnimalSystemInterface& animals, const QueryContext& context) {
 		        const auto entity = EntityParam(context.params);
@@ -1180,6 +1191,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                       {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
 		                       {"turns_in_state", animal.turnsInState},
 		                       {"turns_until_state_change", animal.turnsUntilStateChange},
+		                       {"dying", animal.dying},
 		                       {"birth_turn", animal.birthTurn},
 		                       {"clip", static_cast<int>(animal.animation)},
 		                       {"speed", animal.move.speed},
@@ -1823,7 +1835,8 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 			        const auto name = player.name;
 			        Json item = {{"player", static_cast<int>(name)},
 			                     {"id", Id(entity)},
-			                     {"local", players.GetLocalPlayer() == name},
+			                     {"local", (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+			                                                                 : PlayerNames::PLAYER_ONE) == name},
 			                     {"computer", players.IsComputerPlayer(name)},
 			                     {"primary_creature", Id(players.GetPrimaryCreature(name))}};
 			        // The computer mind of the player, when a land script switched it on or named a player for it
@@ -1835,6 +1848,41 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 				                                 {"creature_like", mind->creatureLike.has_value()
 				                                                       ? Json(static_cast<int>(*mind->creatureLike))
 				                                                       : Json(nullptr)}};
+				        // What the god wants and what its hand does: the nodes that were wanted when last looked at
+				        auto& computer = item["computer_mind"];
+				        computer["paused"] = mind->mind.paused;
+				        computer["last_empty_turn"] = mind->mind.lastEmptyTurn;
+				        computer["doing"] = mind->mind.doing;
+				        computer["hand"] = {mind->hand.hand.x, mind->hand.hand.y, mind->hand.hand.z};
+				        Json steps = Json::array();
+				        for (const auto& step : mind->hand.steps)
+				        {
+					        steps.push_back(static_cast<int>(step.kind));
+				        }
+				        computer["steps"] = std::move(steps);
+				        computer["step_part"] = mind->hand.part;
+				        Json wanted = Json::array();
+				        for (const auto& node : mind->mind.nodes)
+				        {
+					        if (node.value != 0.0f)
+					        {
+						        wanted.push_back({{"name", computer_mind::InfoOf(node.kind).name},
+						                          {"value", node.value},
+						                          {"suppression", node.suppression},
+						                          {"object", Id(node.object)}});
+					        }
+				        }
+				        computer["wanted"] = std::move(wanted);
+				        Json requests = Json::object();
+				        for (size_t type = 0; type < mind->mind.castRequested.size(); ++type)
+				        {
+					        if (mind->mind.castRequested.at(type) != 0)
+					        {
+						        requests[std::to_string(type)] = mind->mind.castRequested.at(type);
+					        }
+				        }
+				        computer["cast_requests"] = std::move(requests);
+				        computer["casts"] = mind->casts.size();
 			        }
 			        if (Locator::alignmentSystem::has_value())
 			        {
@@ -1930,13 +1978,10 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		        return Json {{"decided", end.IsDecided()}, {"gods", gods}, {"last_events", events}};
 	        }));
 	provider->Add(
-	    Query("hand", "This computer's hands: where they are, and what the hand holds or takes"),
+	    Query("hand", "This computer's hands, the hands of its own god that it moves and draws: the player, where the hands "
+	                  "are, and what the hand holds or takes"),
 	    Serve<Locator::handSystem>("the hands", [](const ecs::systems::HandSystemInterface& hands, const QueryContext& /*c*/) {
-		    Json result = Json::object();
-		    const auto entities = hands.GetPlayerHands();
-		    const auto positions = hands.GetPlayerHandPositions();
-		    result["left"] = {{"id", Id(entities[0])}, {"position", Optional(positions[0])}};
-		    result["right"] = {{"id", Id(entities[1])}, {"position", Optional(positions[1])}};
+		    Json result = OwnHandsJson(hands);
 		    if (Locator::handGrabSystem::has_value())
 		    {
 			    const auto& grab = Locator::handGrabSystem::value();
@@ -3104,9 +3149,12 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 			                                {"creature_shown", cave.IsCreatureShown()},
 			                                {"copy", Id(cave.GetCaveCreature())}};
 			              // The copy of the creature by the cave's fire, and what it is doing
-			              const auto& registry = Locator::entitiesRegistry::value();
-			              if (const auto copy = cave.GetCaveCreature(); copy.has_value() && registry.Valid(*copy))
+			              const auto copy = cave.GetCaveCreature();
+			              if (copy.has_value() && Locator::temple::has_value() &&
+			                  Locator::temple::value().GetRooms().Valid(*copy))
 			              {
+				              // The copy is a thing of the temple's rooms
+				              const auto& registry = Locator::temple::value().GetRooms();
 				              const auto* self = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
 				              const auto* state = registry.TryGet<const ecs::components::CaveCreature>(*copy);
 				              const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
@@ -3266,8 +3314,9 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 			    return QueryResult::Error("no leash system");
 		    }
 		    const auto& leash = Locator::leashSystem::value();
+		    // The god of this computer, whose hand is at the rope
 		    const auto local =
-		        Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+		        Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 		    auto entity = EntityParam(context.params);
 		    if (!context.params.contains("id"))
 		    {
@@ -3356,6 +3405,20 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    {"fighting", {fights.IsFighting(*creature), fights.IsFighting(*opponent)}},
 		    {"opponent_of_id", Id(fights.OpponentOf(*creature))},
 		});
+	});
+	auto cheat = Query("fight_cheat",
+	                   "Sends the fight cheat of the player of this computer as a command: at the turn, the player's "
+	                   "creature fights the nearest creature, or stops the duel that it is in. A game server takes the "
+	                   "command only with its test commands on",
+	                   {});
+	cheat.writes = true;
+	provider->Add(std::move(cheat), [](const QueryContext& /*context*/) {
+		if (Registry() == nullptr || !Locator::playerCommandSystem::has_value())
+		{
+			return QueryResult::Error("there are no fights without a land");
+		}
+		Locator::playerCommandSystem::value().Submit(player_commands::CreatureFightCheat {});
+		return QueryResult::Value({{"sent", true}});
 	});
 	auto move = Query("move",
 	                  "Sends a creature walking or running to a point by its own legs (turning and stepping off as it "
@@ -3738,6 +3801,31 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		const bool loaded = Locator::saveGameSystem::value().Load(static_cast<uint32_t>(*slot));
 		return QueryResult::Value({{"loaded", loaded}, {"slot", static_cast<uint32_t>(*slot)}});
 	});
+	auto loadAndSave =
+	    Query("load_and_save",
+	          "Loads a slot and then saves the game into a second slot in the same call, with no frame and no turn between. A "
+	          "save of a loaded world must have the same bytes as the save that the game loaded (tools/sim/save_diff.py "
+	          "compares the two files)",
+	          {slotParameter,
+	           {.name = "into", .type = "integer", .description = "The slot of the second save, 0 to 20", .required = true},
+	           {.name = "name", .type = "string", .description = "The name of the second save", .required = false}});
+	loadAndSave.writes = true;
+	provider->Add(std::move(loadAndSave), [](const QueryContext& context) {
+		const auto slot = NumberMember(context.params, "slot");
+		const auto into = NumberMember(context.params, "into");
+		if (!Locator::saveGameSystem::has_value() || !slot.has_value() || *slot < 0.0 || !into.has_value() || *into < 0.0)
+		{
+			return QueryResult::Error("saves.load_and_save needs a game, a slot and an into slot from 0 to 20");
+		}
+		auto& saves = Locator::saveGameSystem::value();
+		const bool loaded = saves.Load(static_cast<uint32_t>(*slot));
+		const auto name = gui::ToUtf16(StringMember(context.params, "name").value_or(""));
+		const bool saved = loaded && saves.Save(static_cast<uint32_t>(*into), name);
+		return QueryResult::Value({{"loaded", loaded},
+		                           {"saved", saved},
+		                           {"slot", static_cast<uint32_t>(*slot)},
+		                           {"into", static_cast<uint32_t>(*into)}});
+	});
 	provider->Add(Query("vanilla_check",
 	                    "After a load of a slot of the game itself: each creature of the game's file, and whether the record "
 	                    "that a save writes for it now has the same bytes as the file's record",
@@ -3995,7 +4083,8 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	        }));
 	provider->Add(Query("hand_demo",
 	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "
-	                    "it is at, whether it holds at a mark, and the camera and hints it has"),
+	                    "the turns are at, whether it holds at a mark, the record the frames are at, and the camera and "
+	                    "hints it has"),
 	              Serve<Locator::handDemoSystem>(
 	                  "the hand demonstrations",
 	                  [](const ecs::systems::HandDemoSystemInterface& demos, const QueryContext& /*c*/) -> Json {
@@ -4012,6 +4101,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		                               {"pause_on_trigger", status->pauseOnTrigger},
 		                               {"trigger_reached", status->triggerReached},
 		                               {"holding", status->holding},
+		                               {"replaying", status->replaying},
+		                               {"replay_record", status->replayRecord},
+		                               {"replay_holding", status->replayHolding},
 		                               {"hints", demos.GetHints()}};
 		                  if (const auto camera = demos.GetCamera(); camera.has_value())
 		                  {
@@ -4025,6 +4117,17 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 
 } // namespace
 
+Json openblack::inspector::OwnHandsJson(const ecs::systems::HandSystemInterface& hands)
+{
+	const auto entities = hands.GetOwnHands();
+	const auto positions = hands.GetOwnHandPositions();
+	return Json {
+	    {"player", static_cast<int>(hands.GetOwnPlayer())},
+	    {"left", {{"id", Id(entities[0])}, {"position", Optional(positions[0])}}},
+	    {"right", {{"id", Id(entities[1])}, {"position", Optional(positions[1])}}},
+	};
+}
+
 std::span<const LocatorCoverage> openblack::inspector::CoveredServices()
 {
 	return k_Coverage;
@@ -4036,6 +4139,9 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 {
 	const RegistrySources registrySources {.registry = &Registry, .info = &Info};
 	inspector.Add(std::make_unique<RegistryProvider>(registrySources, reflection));
+	// The same queries over the things that only the frames make: drawn.entities, drawn.entity and the others
+	inspector.Add(std::make_unique<RegistryProvider>(
+	    RegistrySources {.registry = &DrawnRegistry, .info = &Info, .name = "drawn"}, reflection));
 	inspector.Add(std::make_unique<ObjectsProvider>(registrySources));
 	inspector.Add(std::make_unique<EditProvider>(
 	    EditSources {
@@ -4118,6 +4224,35 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		               ? Locator::creatureMindSystem::value().FindClearAreaFor(creature, point, width, livingBlocks)
 		               : std::nullopt;
 	    },
+	    .animationLog = [](entt::entity creature) -> const creature_animation_log::Log* {
+		    return Locator::creatureAnimationLog::has_value() ? Locator::creatureAnimationLog::value().Find(creature) : nullptr;
+	    },
+	    .clipLine = [](entt::entity creature, size_t clip) -> std::optional<ClipLine> {
+		    const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+		    if (body == nullptr || !Locator::resources::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& rigs = Locator::resources::value().GetCreatureRigs();
+		    const auto rigId = creature::GetRigId(body->species);
+		    if (!rigs.Contains(rigId))
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& lines = rigs.Handle(rigId)->specLines;
+		    if (clip >= lines.size())
+		    {
+			    return std::nullopt;
+		    }
+		    return ClipLine {.name = lines[clip].name, .type = lines[clip].type, .set = lines[clip].set};
+	    },
+	    .clearAnimationLogs =
+	        [] {
+		        if (Locator::creatureAnimationLog::has_value())
+		        {
+			        Locator::creatureAnimationLog::value().Clear();
+		        }
+	        },
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),
@@ -4135,21 +4270,17 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(MakeWorshipProvider(World()));
 	inspector.Add(MakeInfluenceProvider({
 	    .hand = [](int player) -> std::optional<glm::vec3> {
-		    // Only this computer's player's hands are known; the first hand there is
-		    if (!Locator::handSystem::has_value() ||
-		        (Locator::playerSystem::has_value() &&
-		         static_cast<int>(Locator::playerSystem::value().GetLocalPlayer()) != player))
+		    // Where the reports put the left hand of the player, none for a player with no hands
+		    if (!Locator::handSystem::has_value() || player < 0 || player >= static_cast<int>(PlayerNames::_COUNT))
 		    {
 			    return std::nullopt;
 		    }
-		    for (const auto& position : Locator::handSystem::value().GetPlayerHandPositions())
-		    {
-			    if (position.has_value())
-			    {
-				    return position;
-			    }
-		    }
-		    return std::nullopt;
+		    return Locator::handSystem::value().GetHandPositionsOf(
+		        static_cast<PlayerNames>(player))[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    },
+	    .ownPlayer = []() -> int {
+		    return static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+		                                                             : PlayerNames::PLAYER_ONE);
 	    },
 	    .at = [](int player, glm::vec3 point) -> std::optional<InfluenceAt> {
 		    if (!Locator::influenceSystem::has_value())

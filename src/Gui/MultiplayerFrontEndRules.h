@@ -229,6 +229,29 @@ struct ChatItem
 /// The time limit as hours and minutes: "1:30"
 [[nodiscard]] std::u16string TimeLimitText(uint32_t minutes);
 
+/// The time limit of a network game in minutes, when the host does not change it
+inline constexpr uint32_t k_DefaultTimeLimitMinutes = 30;
+
+/// The parts of the conditions page that show to a player who is not the host. The host's controls never show: the
+/// box of each condition, the value of a condition with its arrows, and the arrows of the time limit. Ready always
+/// shows.
+struct ConditionsPage
+{
+	/// "Please select a map first."
+	bool selectMap;
+	/// The list of the conditions of the game, one line for each condition that the host switched on
+	bool conditions;
+	/// "Time Limit (Hours:Minutes):" and the time limit
+	bool timeLimit;
+	bool viewChat;
+};
+
+/// With no land, the page shows only "Please select a map first." and Ready
+[[nodiscard]] constexpr ConditionsPage ConditionsPageOf(bool landKnown) noexcept
+{
+	return {.selectMap = !landKnown, .conditions = landKnown, .timeLimit = landKnown, .viewChat = landKnown};
+}
+
 /// A land of the local maps' file, "Online Maps\localmaps.txt": a line "number:name:file:players:"
 struct LocalMap
 {

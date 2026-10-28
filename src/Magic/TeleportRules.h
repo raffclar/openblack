@@ -31,6 +31,9 @@ namespace openblack::magic::teleport
 /// The stone's reach: nothing that stands fixed on the land may be this close to a new one, and no building may be put
 /// on it
 inline constexpr float k_StoneRadius = 6.0f;
+/// A new stone goes into the map's cells at its full size, and then at this size, which it keeps. The size only sets
+/// the outline of the stone's model on the map: the stone is not drawn.
+inline constexpr float k_StoneScale = 0.01f;
 /// The hand touches a stone within this of it
 inline constexpr float k_HandTouchRadius = 3.0f;
 /// The detour must be this much shorter than the walk it replaces, as a factor of its length

@@ -9,12 +9,15 @@
 
 #pragma once
 
+#include <chrono>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <entt/entity/registry.hpp>
 #include <entt/signal/sigh.hpp>
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -46,7 +49,8 @@ public:
 	void SetDrawHeight(entt::entity highlight, float height) override;
 	bool Tap(entt::entity highlight, bool byThisPlayer) override;
 	void ProcessTurn() override;
-	void UpdateFrame(float frameMilliseconds, float turnFraction, glm::vec3 camera) override;
+	void UpdateFrame(float frameMilliseconds, float turnFraction, glm::vec3 camera, std::chrono::milliseconds frameRealTime,
+	                 bool landDrawn) override;
 	void Reset() override;
 	[[nodiscard]] const script_highlights::Pulse& GetPulse() const override { return _pulse; }
 	[[nodiscard]] const script_highlights::TipsRead& GetTipsRead() const override { return _tipsRead; }
@@ -81,6 +85,10 @@ private:
 
 	std::unique_ptr<script_highlights::ScriptHighlightWorldInterface> _world;
 	script_highlights::Pulse _pulse;
+	/// When the effects of the highlights take their next step, and by how many seconds they step in this frame (none
+	/// in a frame where they do not step)
+	frame_pace::Pace _effectPace;
+	std::optional<float> _effectStep;
 	/// The tips the player has read, which the temple keeps from land to land
 	script_highlights::TipsRead _tipsRead;
 	/// The sign whose tip the help system's bubble shows

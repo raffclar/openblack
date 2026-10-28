@@ -51,6 +51,7 @@ public:
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return _circles; }
 	[[nodiscard]] bool IsBorderShown(PlayerNames player) const override;
 	[[nodiscard]] float InfluencePower(PlayerNames player) const override;
+	[[nodiscard]] float CitadelReachOf(PlayerNames player) const override;
 	[[nodiscard]] glm::vec2 GetScrollOffset() const override { return influence::ScrollOffset(_scrollClock); }
 	[[nodiscard]] std::span<const influence::Ripple> GetRipples() const override { return _ripples; }
 

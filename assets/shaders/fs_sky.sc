@@ -4,7 +4,7 @@ $input v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 
 // The sky's dome for each alignment, blended for the time of day, one above the other from evil to good
 SAMPLER2D(s_diffuse, 0);
-// x, y: the alignments' domes mixed. z: how much of the second there is, of 255
+// x, y: the alignments' domes mixed. z: how much of the second there is, of 255. w: the rows of each dome
 uniform vec4 u_skyAlignment;
 // The colours the domes are drawn in: their pictures times the first, with the second added
 uniform vec4 u_skyModulate;
@@ -13,7 +13,7 @@ uniform vec4 u_skyAdd;
 // A point of an alignment's dome, sampled as if its third of the texture stood alone, clamped to its edges
 vec3 Dome(vec2 uv, float alignment)
 {
-	const float rows = 256.0f;
+	float rows = u_skyAlignment.w;
 	float v = clamp(uv.y, 0.5f / rows, 1.0f - 0.5f / rows);
 	return texture2D(s_diffuse, vec2(uv.x, (alignment + v) / 3.0f)).rgb;
 }

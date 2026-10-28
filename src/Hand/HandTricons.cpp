@@ -165,7 +165,7 @@ WorldCameraIcons WorldCamera(const WorldCameraFrame& frame, float rotateAngle)
 	// The mouse's hints, only offered while nothing is dragged
 	const bool offered = (mouse & k_HintIdle) != 0;
 	uint32_t icons = 0;
-	for (const auto [hint, iconBit] :
+	for (const auto& [hint, iconBit] :
 	     {std::pair(k_HintPitch, icon::k_Pitch), std::pair(k_HintRotate, icon::k_Rotate), std::pair(k_HintZoom, icon::k_Zoom)})
 	{
 		if ((mouse & hint) != 0)

@@ -257,3 +257,17 @@ TEST(MusicMood, MindFileFeelingsOutsideTheirRecordAreLeftOut)
 	ASSERT_EQ(records.front().emotions.size(), 1u);
 	EXPECT_FLOAT_EQ(records.front().emotions.front().mood, 0.0f);
 }
+
+TEST(MusicMood, ANetworkGameHearsNoMusicAndEndsTheCurrentTrack)
+{
+	Controller controller;
+	// A game alone hears the track that plays
+	ASSERT_TRUE(Look(controller, ForGame(false, Plays(9u)), Emotion {}).has_value());
+	ASSERT_TRUE(controller.Current().has_value());
+	// A network game hears no player: the track ends, and the next look an hour later
+	const auto off = Look(controller, ForGame(true, Plays(9u)), Emotion {});
+	ASSERT_TRUE(off.has_value());
+	EXPECT_EQ(off->id, 0u);
+	EXPECT_FALSE(controller.Current().has_value());
+	EXPECT_FLOAT_EQ(controller.GetCountdown(), k_InactiveSeconds);
+}

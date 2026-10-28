@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <span>
 
 #include "Common/X87.h"
 #include "Magic/SpellRules.h"
@@ -57,6 +58,20 @@ constexpr std::array<std::array<uint32_t, 3>, 19> k_DesireVoices {{
     {0, 0, 0},       {0, 0, 0},       {0, 0, 0}, {23, 24, 25}, // food for the worship site
     {19, 20, 21},                                              // worshippers
 }};
+/// The voices of awe, good then evil, the most awed first, as samples of the guidance sound bank
+constexpr std::array<uint32_t, 3> k_GoodAwe {187, 188, 189};
+constexpr std::array<uint32_t, 3> k_EvilAwe {174, 175, 176};
+/// The least left shares for the first and the second voice of awe. The third voice needs more than the last value.
+constexpr float k_MostAwed = 0.7f;
+constexpr float k_Awed = 0.4f;
+constexpr float k_LeastAwed = 0.05f;
+/// The small amount added to the beliefs before the share is made
+constexpr float k_BeliefShareSmall = 0.0001f;
+/// The float nearest to a third, as the game keeps it
+constexpr float k_Third = 0.333333343f;
+/// The time since the last town desire voice counts in full after this many turns
+constexpr float k_BeliefDesireTurns = 50.0f;
+
 /// The least values (less the draw) for the first, the second and the third voice of a row
 constexpr std::array<float, 3> k_DesireVoiceSteps {0.85f, 0.65f, 0.45f};
 constexpr float k_DesireDrawShare = 0.33333334f;
@@ -236,4 +251,65 @@ float guidance::DesireVoiceReachDrawLimit(float best)
 float guidance::DesireVoiceReach(float best, float draw)
 {
 	return k_DesireVoiceRange * (best - draw);
+}
+
+std::optional<float> guidance::BeliefVoiceShare(std::span<const float> beliefs, size_t player)
+{
+	float most = 0.0f;
+	for (const float belief : beliefs)
+	{
+		if (most < belief)
+		{
+			most = belief;
+		}
+	}
+	const float believed = beliefs[player];
+	if (!(believed < most))
+	{
+		return std::nullopt;
+	}
+	return (believed + k_BeliefShareSmall) / (most + k_BeliefShareSmall);
+}
+
+float guidance::BeliefVoiceDrawLimit(float share)
+{
+	return share * k_Third;
+}
+
+std::optional<uint32_t> guidance::BeliefVoice(GuidanceAlignment alignment, float left)
+{
+	if (alignment != GuidanceAlignment::Good && alignment != GuidanceAlignment::Evil)
+	{
+		return std::nullopt;
+	}
+	const auto& voices = alignment == GuidanceAlignment::Good ? k_GoodAwe : k_EvilAwe;
+	if (!(left < k_MostAwed))
+	{
+		return voices[0];
+	}
+	if (!(left < k_Awed))
+	{
+		return voices[1];
+	}
+	if (left > k_LeastAwed)
+	{
+		return voices[2];
+	}
+	return std::nullopt;
+}
+
+float guidance::BeliefVoiceWanted(uint32_t turnsSinceDesireVoice, float distance, bool sameAsLast)
+{
+	// Each step rounds to a float, in the order that the game uses
+	const float heard = x87::Div(static_cast<double>(turnsSinceDesireVoice), k_BeliefDesireTurns);
+	const float since = heard < 1.0f ? heard : 1.0f;
+	const float far = distance / k_BeliefVoiceReach;
+	const float away = far < 1.0f ? far : 1.0f;
+	const float near = 1.0f - away * away;
+	if (sameAsLast)
+	{
+		const float repeat = since * since * since;
+		return repeat * near * since;
+	}
+	return near * since;
 }

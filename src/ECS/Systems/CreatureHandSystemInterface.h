@@ -15,6 +15,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/InputSteps.h"
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
 #include "Enums.h"
@@ -64,9 +65,9 @@ public:
 	/// Whether the hand held to a creature by the button would, let go now, have been clicked on it rather than held
 	[[nodiscard]] virtual bool IsClick() const = 0;
 	/// Once a frame while held to a creature, with the line of sight through the cursor, the cursor on the screen, the
-	/// screen's width and the frame's seconds: strokes and slaps, and where the hand is
+	/// screen's width and the steps of the input that the frame takes: strokes and slaps, and where the hand is
 	virtual std::optional<HandPose> Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-	                                       float screenWidth, float seconds) = 0;
+	                                       float screenWidth, const input_steps::Steps& steps) = 0;
 	/// The button was let go: the creature is told how it was treated
 	virtual void Release() = 0;
 
@@ -107,7 +108,7 @@ public:
 	/// Whether letting go just told the creature something too slight to count, which forces the hand's "Focus Creature"
 	/// tooltip once; asking takes it
 	virtual bool TakeFocusTip() = 0;
-	/// At the turn of a network game: the creature that the hand holds looks at the hand that the player last reported,
+	/// At the turn of a network game: each creature that a hand holds looks at the hand that its player last reported,
 	/// so that every computer has the same look. A single game sets the look from the hand in each frame.
 	virtual void LookAtReportedHand() {}
 };

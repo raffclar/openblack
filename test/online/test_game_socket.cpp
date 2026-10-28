@@ -103,6 +103,41 @@ TEST(GameSocket, TheReplyToAJoinGivesTheServersWorld)
 	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","slot":1,"session":"x","start":{"land":"a"}})").has_value());
 }
 
+TEST(GameSocket, TheToolModesOfTheSoakGoInTheStartAndAreLeftOutWhenNotSet)
+{
+	Start tools {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
+	tools.allComputerGods = true;
+	tools.aiSeed = 4000000000u;
+	const auto read = RoundTrip(tools);
+	EXPECT_TRUE(read.allComputerGods);
+	ASSERT_TRUE(read.aiSeed.has_value());
+	EXPECT_EQ(*read.aiSeed, 4000000000u);
+	const auto plain = RoundTrip(Start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"});
+	EXPECT_FALSE(plain.allComputerGods);
+	EXPECT_FALSE(plain.aiSeed.has_value());
+	// A seed of 0 is a seed, not a missing seed
+	tools.aiSeed = 0u;
+	ASSERT_TRUE(RoundTrip(tools).aiSeed.has_value());
+	// A seed that is not a number does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"ai_seed":"x"})").has_value());
+	EXPECT_FALSE(
+	    Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"all_computer_gods":3})").has_value());
+}
+
+TEST(GameSocket, TheScenarioOfTheToolsGoesInTheStartAndIsLeftOutWhenNotSet)
+{
+	Start tools {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
+	tools.scenario = "mind.computer_god_rivals";
+	const auto read = RoundTrip(tools);
+	ASSERT_TRUE(read.scenario.has_value());
+	EXPECT_EQ(*read.scenario, "mind.computer_god_rivals");
+	EXPECT_FALSE(
+	    RoundTrip(Start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"}).scenario.has_value());
+	// A scenario that is not a word, or is empty, does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"scenario":3})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"scenario":""})").has_value());
+}
+
 TEST(GameSocket, TheJoinOfTheFrontEndReads)
 {
 	// The front end's join frame (lobby_api::RoomJoinFrame) has the same members

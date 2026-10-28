@@ -134,6 +134,8 @@ private:
 		std::vector<BakeBlock> blocks;
 		std::vector<BakeCaster> casters;
 		bool rowsFromFarEnd {false};
+		/// The texels along a side of a block: those of the land blocks' textures
+		int side {tree_shadows::k_BlockTexels};
 	};
 	/// The texels of a baked block
 	struct BlockShades
@@ -158,6 +160,8 @@ private:
 
 	std::unique_ptr<Texture2D> _texture;
 	glm::u16vec2 _texels {0, 0};
+	/// The texels along a side of a block, as the land blocks' textures have them
+	int _side {tree_shadows::k_BlockTexels};
 	glm::vec2 _extentMin {0.0f};
 	bool _rowsFromFarEnd {false};
 	Casters _casters {};
