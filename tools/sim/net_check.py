@@ -929,6 +929,112 @@ def slot_cast(pid, player):
     return done
 
 
+def leash_state(pid):
+    """The leash of the creature of the god of a desktop client, as the inspector tells it"""
+    leash = inspector_call(pid, "creatures.leash", {})
+    if not isinstance(leash, dict):
+        return leash
+    return {key: leash.get(key) for key in ("id", "leashed", "type", "tied_to")}
+
+
+def press_key(pid, key, tap):
+    """Presses a key of a desktop client through the inspector. A tap holds the key down for one frame; else the key
+    stays down for half a second, as a player presses it. Gives the answer of the inspector to the key down."""
+    if tap:
+        pressed = inspector_call(pid, "input.key", {"params": {"key": key, "how": "tap"}})
+    else:
+        pressed = inspector_call(pid, "input.key", {"params": {"key": key, "how": "press"}})
+        time.sleep(0.5)
+        inspector_call(pid, "input.key", {"params": {"key": key, "how": "release"}})
+    time.sleep(1.0)
+    return pressed
+
+
+def box_keys_check(pid, log, tap=False):
+    """Presses the leash key L and the temple key F4 of a desktop client while the information box of the land shows.
+    Tells whether the box still shows after the keys, whether the player went into the temple, the leash after the
+    keys, and the turns that the client compared when the check ended."""
+    for key in ("L", "F4"):
+        press_key(pid, key, tap)
+    time.sleep(1.0)
+    windows = items_of(inspector_call(pid, "gui.windows", {}))
+    interior = inspector_call(pid, "temple.interior", {})
+    counts = session_counts(log)
+    return {"open_after_keys": any(window.get("name") == "land_info_box" and window.get("open") for window in windows),
+            "in_temple": interior.get("active") if isinstance(interior, dict) else None,
+            "leash": leash_state(pid), "checked_after_turns": counts[0] if counts else None}
+
+
+def box_kept_keys(box, server_commands):
+    """Whether the information box of the land kept the keys L and F4 from the controls: the box still showed after the
+    keys, the player stayed out of the temple, the creature wore no leash, and the server got no leash command of the
+    slot up to the turn of the check. None when the box did not show, so there was nothing to check."""
+    if box is None:
+        return None
+    leash = box.get("leash")
+    checked = box.get("checked_after_turns")
+    return (box.get("open_after_keys") is True and box.get("in_temple") is False and isinstance(leash, dict)
+            and not leash.get("leashed") and checked is not None
+            and not any(command[0] <= checked for command in server_commands))
+
+
+def desktop_leash_step(leash, done, pid, log):
+    """Presses the next keys of a leash check on a desktop client once its log tells the turns of the key. Gives True
+    when the check pressed every key."""
+    presses = leash_key_presses(leash)
+    while len(done) < len(presses):
+        turns, key, before = presses[len(done)]
+        if not lines_with(log, [f"Network game: {turns} turns compared"]):
+            return False
+        time.sleep(before)
+        if not done:
+            # The information box of the land keeps the keys from the controls while it shows. The Escape key closes
+            # it, as Go! does: the inspector presses no button of a window in a network game.
+            windows = items_of(inspector_call(pid, "gui.windows", {}))
+            box = any(window.get("name") == "land_info_box" and window.get("open") for window in windows)
+            print(f"leash: the information box of the land shows on the client with pid {pid}: {box}")
+            if box:
+                # While the box shows, the leash key and the temple key must do nothing
+                leash["box"] = box_keys_check(pid, log, leash.get("tap", False))
+                print(f"leash: L and F4 with the information box open on the client with pid {pid}: "
+                      f"{json.dumps(leash['box'])[:400]}")
+                press_key(pid, "Escape", leash.get("tap", False))
+                time.sleep(1.0)
+        pressed = press_key(pid, key, leash.get("tap", False))
+        done.append({"turns": turns, "key": key, "pressed": pressed, "leash": leash_state(pid)})
+        print(f"leash: client with pid {pid} pressed {key} after {turns} turns: {json.dumps(done[-1])[:400]}")
+    return True
+
+
+def leash_result(leash, server_log, logs):
+    """What the server and each client did with the leash of the god's creature. The server must put the leash on and
+    take it off. Each client must tell the same leash commands of the slot, with the same leash after each, as the
+    server. logs gives (name, path, first turn, last turn) for each client; a turn of None sets no limit."""
+    slot = leash["slot"]
+    server = [command for command in sim_report.leash_commands_in_file(server_log) if command[1] == slot]
+    on = [command for command in server if command[0] >= leash["turn"] and command[2] == "presses the leash key"
+          and " wears leash " in command[3]]
+    off_words = "goes into the temple" if leash["off"] == "temple" else "presses the leash key"
+    off = [command for command in server if command[0] >= leash["turn"] + leash["hold"] and command[2] == off_words
+           and command[3].endswith("wears no leash")]
+    result = {"client": "web" if leash["client"] == "web" else leash["client"] + 1, "slot": slot,
+              "server": [list(command) for command in server], "on": bool(on), "off": bool(off),
+              "held_turns": off[0][0] - on[0][0] if on and off else None, "clients": {},
+              "box": leash.get("box"), "box_kept_keys": box_kept_keys(leash.get("box"), server)}
+    same = bool(on) and bool(off) and result["box_kept_keys"] is not False
+    for name, path, first, last in logs:
+        mine = [command for command in sim_report.leash_commands_in_file(path, last) if command[1] == slot]
+        theirs = [command for command in server if last is None or command[0] <= last]
+        mine = sim_report.leash_commands_from_turn(mine, first)
+        theirs = sim_report.leash_commands_from_turn(theirs, first)
+        result["clients"][name] = mine == theirs
+        same = same and mine == theirs
+        if mine != theirs:
+            print(f"client {name} tells other leash commands of slot {slot} than the server: {mine} / {theirs}")
+    result["same"] = same
+    return result
+
+
 def write_kept_alignment(folder, alignment):
     """Writes the list of profiles of a server or a client whose profile kept an alignment from an earlier game. The
     world of each game must start the same on every computer with any value."""
@@ -1039,15 +1145,97 @@ WEB_WIDTH = 1280
 WEB_SPEECH_FROM_CORNER = (16, 24)
 
 
-def web_chat_steps(chats, seconds, width=WEB_WIDTH):
+# The keys of the leash check in the web page, as the page reads them
+WEB_KEYS = {"L": {"key": "l", "code": "KeyL", "keyCode": 76}, "F4": {"key": "F4", "code": "F4", "keyCode": 115},
+            "Escape": {"key": "Escape", "code": "Escape", "keyCode": 27}}
+# The seconds in the temple before the Escape key takes the player out again
+LEASH_TEMPLE_SECONDS = 8.0
+
+
+def parse_leash(values, clients):
+    """The leash checks of --leash, as dicts: the client (an index from 0, or "web"), the turn that the leash goes on,
+    the turns that the hand holds it and how it comes off ("temple" or "key")"""
+    leashes = []
+    for value in values:
+        parts = value.split(":")
+        if len(parts) not in (3, 4):
+            raise ValueError(f"--leash {value}: give CLIENT:TURN:HOLD[:OFF]")
+        client = "web" if parts[0] == "web" else int(parts[0]) - 1
+        turn, hold = int(parts[1]), int(parts[2])
+        off = parts[3] if len(parts) == 4 else "temple"
+        if off not in ("temple", "key"):
+            raise ValueError(f"--leash {value}: the leash comes off by 'temple' or 'key'")
+        if turn % 100 or hold % 100 or turn <= 0 or hold <= 0:
+            raise ValueError(f"--leash {value}: the turn and the hold are multiples of 100 (the log lines of the turns)")
+        if client != "web" and not 0 <= client < clients:
+            raise ValueError(f"--leash {value}: no desktop god of that number")
+        # The web god plays the slot after the desktop gods
+        slot = clients if client == "web" else client
+        leashes.append({"client": client, "slot": slot, "turn": turn, "hold": hold, "off": off})
+    return leashes
+
+
+def leash_key_presses(leash):
+    """The keys of a leash check, as (turns, key, seconds before) tuples: L puts the leash on; after the hold, F4 goes
+    into the temple and Escape comes out of it, or L takes the leash off"""
+    off_turn = leash["turn"] + leash["hold"]
+    if leash["off"] == "temple":
+        return [(leash["turn"], "L", 0.0), (off_turn, "F4", 0.0), (off_turn, "Escape", LEASH_TEMPLE_SECONDS)]
+    return [(leash["turn"], "L", 0.0), (off_turn, "L", 0.0)]
+
+
+def decided_after_the_run(decided_at_turn, turns):
+    """Whether the game was decided only after the last turn that the clients play. Then the clients stop at their own
+    last turn, before the stop of the turns of the game."""
+    return decided_at_turn is not None and decided_at_turn > turns
+
+
+def land_shows_info_box(game_path, land):
+    """Whether the land script opens the information box of the land at the start (its game message). In a network
+    game the box stays open until the player closes it, and it keeps the keys from the controls meanwhile."""
+    if not land.lower().endswith(".txt"):
+        return False
+    try:
+        with open(os.path.join(game_path, "Scripts", land), encoding="latin-1") as file:
+            return any(line.strip().upper().startswith("START_GAME_MESSAGE") for line in file)
+    except OSError:
+        return False
+
+
+def web_leash_presses(leash, close_box):
+    """The keys of a leash check of the web god: an Escape first closes the information box of the land when it shows"""
+    presses = leash_key_presses(leash)
+    if close_box:
+        presses = [(leash["turn"], "Escape", 0.0)] + presses
+    return presses
+
+
+def web_chat_steps(chats, seconds, width=WEB_WIDTH, leashes=(), close_box=False):
     """The cdp-run steps of the lines that the web client says, from (turns, text) pairs: for each line in the order of
     its turns, the page waits for the line of those turns in its log, then the mouse clicks the speech button at the top
-    right corner, the keys type the line and Return sends it. A wait moves the next steps later by its time."""
+    right corner, the keys type the line and Return sends it. A wait moves the next steps later by its time. The keys of
+    the leash checks (leash_key_presses) go in the same order of turns."""
     steps = []
     at = 0.0
-    for number, (turns, text) in enumerate(sorted(chats)):
-        steps.append({"at": at, "do": "wait-log", "text": f"Network game: {turns} turns compared", "seconds": seconds})
-        at += 0.5
+    events = sorted([(turns, 0, number, text) for number, (turns, text) in enumerate(sorted(chats))] +
+                    [(turns, 1, order, (key, before)) for leash in leashes
+                     for order, (turns, key, before) in enumerate(web_leash_presses(leash, close_box))],
+                    key=lambda event: (event[0], event[1], event[2]))
+    waited = None
+    for turns, kind, number, value in events:
+        if waited != turns:
+            steps.append({"at": at, "do": "wait-log", "text": f"Network game: {turns} turns compared", "seconds": seconds})
+            at += 0.5
+            waited = turns
+        if kind == 1:
+            key, before = value
+            at += before
+            steps.append(dict({"at": at, "do": "key", "hold": 300}, **WEB_KEYS[key]))
+            at += 1.0
+            steps.append({"at": at, "do": "shot", "name": f"leash-{turns}-{key.lower()}"})
+            at += 0.5
+            continue
+        text = value
         for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
             steps.append({"at": at, "do": "mouse", "type": kind, "x": width - WEB_SPEECH_FROM_CORNER[0],
                           "y": WEB_SPEECH_FROM_CORNER[1],
@@ -1078,9 +1266,17 @@ def web_join_plan(options, join_url, ticket, turns):
                  "--sim-still-hand", "--sim-checksums", "-", "--join", web_join_path(join_url), "--join-ticket", ticket]
     if getattr(options, "web_part_at", None) is not None:
         arguments += ["--join-part-at", str(options.web_part_at)]
+    if getattr(options, "web_creature", None):
+        # The page reads the game folder at its own path
+        arguments += ["--join-creature", "/game/" + options.web_creature.replace("\\", "/")]
     seconds = run_limit_seconds(turns)
     chats = [(int(value.split(":", 1)[0]), value.split(":", 1)[1]) for value in options.web_chat]
-    return {"join_url": join_url, "arguments": arguments, "actions": web_chat_steps(chats, seconds), "turns": turns,
+    leashes = [leash for leash in parse_leash(getattr(options, "leash", []), getattr(options, "clients", 0))
+               if leash["client"] == "web"]
+    return {"join_url": join_url, "arguments": arguments,
+            "actions": web_chat_steps(chats, seconds, leashes=leashes,
+                                      close_box=bool(leashes) and getattr(options, "web_close_box", False)),
+            "turns": turns,
             "seconds": seconds}
 
 
@@ -1236,6 +1432,14 @@ def main():
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
                              "through the inspector, once it compared --hold-after turns")
+    parser.add_argument("--leash", action="append", default=[], metavar="CLIENT:TURN:HOLD[:OFF]",
+                        help="the client (from 1, or 'web' for the web god) presses L after TURN turns, so that the leash "
+                             "goes on its god's creature, holds it HOLD more turns, then goes into the temple (F4, then "
+                             "Escape; OFF 'temple', the default) or presses L again (OFF 'key'). TURN and HOLD are "
+                             "multiples of 100. The server and every client must tell the same leash commands")
+    parser.add_argument("--key-tap", action="store_true",
+                        help="the leash checks of the desktop clients tap each key (down for one frame) in place of a "
+                             "press of half a second")
     parser.add_argument("--give", type=int, metavar="CLIENT",
                         help="once the client (from 1) compared --hold-after turns, its hand takes a villager near its "
                              "god's creature and gives it to the creature through the inspector; the server and every "
@@ -1280,6 +1484,9 @@ def main():
     parser.add_argument("--web-chat", action="append", default=[],
                         help="TURNS:TEXT, with --web-god: the web client says the line in the chat after that many turns "
                              "(a multiple of 100)")
+    parser.add_argument("--web-creature", metavar="FILE",
+                        help="with --web-god, the creature file that the web god sends before the start, as a path in "
+                             "the game folder of the page, such as Scripts/CreatureMind/C643e7b7f.erc")
     parser.add_argument("--web-part-at", type=int,
                         help="the world of the web client parts from the server's at this turn (--join-part-at), and "
                              "must come back in step by the server's world state")
@@ -1339,6 +1546,14 @@ def main():
         options.clients = 0
     if not 1 <= options.turns <= MOST_TURNS:
         parser.error(f"--turns takes 1 to {MOST_TURNS}")
+    try:
+        leashes = parse_leash(options.leash, options.clients)
+    except ValueError as error:
+        parser.error(str(error))
+    if any(leash["client"] == "web" for leash in leashes) and not (options.web_client and options.web_god):
+        parser.error("--leash web needs --web-client and --web-god")
+    # The web god closes the information box of the land with the Escape key before its first leash key
+    options.web_close_box = not options.testbed and land_shows_info_box(options.game_path, options.land)
     waited_observers = options.observers + (1 if options.web_client else 0)
     if options.all_computer_gods and waited_observers == 0:
         parser.error("--all-computer-gods needs --observers or --web-client: the clients watch the game")
@@ -1453,6 +1668,10 @@ def main():
     miracle_done = None
     fight_done = None
     give_done = None
+    # The keys that each leash check of a desktop client pressed, by the place of the check in the list
+    leash_done = {number: [] for number, leash in enumerate(leashes) if leash["client"] != "web"}
+    for leash in leashes:
+        leash["tap"] = options.key_tap
     try:
         server = start(server_command, server_dir)
         processes.append(server)
@@ -1522,7 +1741,7 @@ def main():
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
             chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
-                    or options.give == index + 1):
+                    or options.give == index + 1 or any(leash["client"] == index for leash in leashes)):
                 command += ["--inspect-port", "0"]
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
@@ -1609,6 +1828,11 @@ def main():
                         print(f"the camera of client {index + 1} was not set again; see {client_dirs[index]}")
                         return 1
                     cameras_again.add(index)
+            for number, done in leash_done.items():
+                index = leashes[number]["client"]
+                if index < len(clients) and clients[index].poll() is None:
+                    desktop_leash_step(leashes[number], done, clients[index].pid,
+                                       os.path.join(client_dirs[index], "client.log"))
             giver = (options.give or 0) - 1
             if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None and lines_with(
                     os.path.join(client_dirs[giver], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
@@ -1645,6 +1869,10 @@ def main():
     if decided_reason is not None:
         print(decided_reason)
         all_same = False
+    # A god whose client stopped at its last turn leaves the game, and the god that stays can win a game of two gods: a
+    # game decided after the last turn of the run tells nothing of the stop of the turns on the clients
+    decided_after_run = decided_after_the_run(summary["decided_at_turn"], options.turns)
+    summary["decided_after_run"] = decided_after_run
     for index, client_dir in enumerate(client_dirs):
         client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))
         compared = [turn for turn in sorted(client_turns) if turn in server_turns]
@@ -1678,7 +1906,7 @@ def main():
             expected = leave_turn
             if not lines_with(os.path.join(client_dir, "client.log"), ["The player leaves the network game"]):
                 different = different + [-2]
-        elif stopped_after is not None:
+        elif stopped_after is not None and not decided_after_run:
             # The client did every turn up to the last turn of the game, and none after it
             expected = stopped_after
             if client_stopped_after != stopped_after or max(client_turns, default=0) > stopped_after:
@@ -1785,6 +2013,28 @@ def main():
         if gifts == 0:
             print(f"the server did no gift of the hand of client {options.give}: {give_done}")
             all_same = False
+    if leashes:
+        # The leash of each god's creature: the server put it on and took it off, and each client tells the same
+        # commands with the same leash after each. An observer that joined a running game compares from its world.
+        logs = []
+        for index, client_dir in enumerate(client_dirs):
+            first = min(record_checksums(os.path.join(client_dir, "record.jsonl")), default=0)
+            logs.append((str(index + 1), os.path.join(client_dir, "client.log"), first if index >= options.clients else 0,
+                         summary["clients"][index].get("last_compared")))
+        if web_folder is not None:
+            web = web_checksums(web_folder)
+            compared = [turn for turn in sorted(web) if turn in server_turns]
+            logs.append(("web", web_log_of(web_folder), min(web, default=0) if not options.web_god else 0,
+                         compared[-1] if compared else None))
+        summary["leash"] = []
+        for number, leash in enumerate(leashes):
+            result = leash_result(leash, server_log, logs)
+            result["keys"] = leash_done.get(number)
+            summary["leash"].append(result)
+            if not result["same"]:
+                print(f"the leash check of client {result['client']} failed: on {result['on']}, off {result['off']}, "
+                      f"clients {result['clients']}")
+                all_same = False
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the",
                                                 "turns of the game stop", "leaves the game"])
     # A component with no registration is left out of the checksum: a change in it would never show here
