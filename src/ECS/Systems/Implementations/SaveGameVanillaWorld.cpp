@@ -1,0 +1,284 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#define LOCATOR_IMPLEMENTATIONS
+
+#include <algorithm>
+#include <iterator>
+#include <ranges>
+#include <unordered_map>
+#include <vector>
+
+#include <VanillaWorld.h>
+#include <spdlog/spdlog.h>
+
+#include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
+#include "Common/GameRandom.h"
+#include "ECS/Archetypes/AbodeArchetype.h"
+#include "ECS/Archetypes/TownArchetype.h"
+#include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/AtHome.h"
+#include "ECS/Components/Town.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
+#include "ECS/Registry.h"
+#include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/VanillaWorldImport.h"
+#include "ECS/WorldObjects.h"
+#include "Locator.h"
+#include "SaveGameSystem.h"
+
+using namespace openblack;
+using namespace openblack::ecs::components;
+using namespace openblack::ecs::systems;
+namespace world_import = openblack::ecs::vanilla_world_import;
+
+namespace
+{
+std::shared_ptr<spdlog::logger> ImportLog()
+{
+	return spdlog::get("game");
+}
+
+/// The game's map position as a world point, on the ground plus the altitude
+glm::vec3 GroundPosition(const gamesave::MapCoords& position)
+{
+	const map_coords::MapCoords coords {position.x, position.z, position.altitude};
+	if (Locator::terrainSystem::has_value())
+	{
+		return map_coords::ToWorld(Locator::terrainSystem::value(), coords);
+	}
+	return {map_coords::ToMetres(coords.x), coords.altitude, map_coords::ToMetres(coords.z)};
+}
+
+/// The entity that an object number of the file became, or no entity
+entt::entity EntityOf(const std::unordered_map<uint32_t, entt::entity>& made, uint32_t number)
+{
+	const auto found = made.find(number);
+	return found != made.end() ? found->second : entt::null;
+}
+
+/// The game clears the map before it reads the world of a file. The import removes the villagers of the land, and the
+/// buildings of the kinds that it makes again, before it makes them from the file.
+void RemoveLandTownsContents(ecs::Registry& registry)
+{
+	std::vector<entt::entity> villagers;
+	registry.Each<const Villager>([&villagers](entt::entity entity, const Villager&) { villagers.push_back(entity); });
+	for (const auto villager : villagers)
+	{
+		if (Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().RemoveVillager(villager);
+		}
+		ecs::world_objects::Remove(villager);
+	}
+	registry.Context().namedVillagersUsed = {};
+
+	// A building that goes puts a plan of itself into its town. The import keeps only the plans that the towns had.
+	std::unordered_map<entt::entity, std::vector<entt::entity>> plans;
+	registry.Each<const Town>([&plans](entt::entity entity, const Town& town) { plans[entity] = town.planned; });
+	std::vector<entt::entity> buildings;
+	registry.Each<const Abode>([&buildings](entt::entity entity, const Abode& abode) {
+		if (world_import::IsImportedBuilding(abode.info))
+		{
+			buildings.push_back(entity);
+		}
+	});
+	for (const auto building : buildings)
+	{
+		ecs::world_objects::Remove(building);
+	}
+	registry.Each<Town>([&registry, &plans](entt::entity entity, Town& town) {
+		const auto& kept = plans[entity];
+		std::vector<entt::entity> added;
+		std::ranges::copy_if(town.planned, std::back_inserter(added),
+		                     [&kept](entt::entity plan) { return std::ranges::find(kept, plan) == kept.end(); });
+		std::erase_if(town.planned, [&added](entt::entity plan) { return std::ranges::find(added, plan) != added.end(); });
+		for (const auto plan : added)
+		{
+			if (registry.Valid(plan))
+			{
+				registry.Destroy(plan);
+			}
+		}
+		town.homelessVillagers.clear();
+	});
+	registry.SetDirty();
+}
+
+/// The town of the file: the town of the land with the same number, or a new town
+entt::entity PutTown(ecs::Registry& registry, const world_import::ImportedTown& imported)
+{
+	const auto position = GroundPosition(imported.position);
+	auto& towns = registry.Context().towns;
+	auto found = towns.find(static_cast<int>(imported.id));
+	const auto entity = found != towns.end() ? found->second
+	                                         : ecs::archetypes::TownArchetype::Create(static_cast<int>(imported.id), position,
+	                                                                                  imported.owner, imported.tribe);
+	auto& town = registry.Get<Town>(entity);
+	town.owner = imported.owner;
+	town.uninhabitable = imported.uninhabitable;
+	town.cannotHaveWorshipSite = imported.cannotBuildWorshipSite;
+	town.emptyTownTimer = imported.emptyTownTimer;
+	registry.AssignOrReplace<Tribe>(entity, imported.tribe);
+	if (auto* transform = registry.TryGet<Transform>(entity))
+	{
+		transform->position = position;
+	}
+	return entity;
+}
+
+} // namespace
+
+bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world)
+{
+	const auto imported = world_import::ReadTowns(world);
+	for (const auto& why : imported.skipped)
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The import does not take {}", why);
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+
+	// The ages and the timers of the villagers count from the turn of the file
+	if (Locator::time::has_value())
+	{
+		Locator::time::value().ResumeAtTurn(imported.turn, 0);
+	}
+	_lastAutosaveTurn = imported.turn;
+	_lastLoadTurn = imported.turn;
+
+	RemoveLandTownsContents(registry);
+
+	std::unordered_map<uint32_t, entt::entity> made;
+	std::unordered_map<uint32_t, uint32_t> townIds;
+	for (const auto& town : imported.towns)
+	{
+		made.emplace(town.number, PutTown(registry, town));
+		townIds.emplace(town.number, town.id);
+	}
+
+	for (const auto& abode : imported.abodes)
+	{
+		const auto townId = townIds.find(abode.town);
+		if (townId == townIds.end())
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The building {} of the file has no town of the file, so it is not made",
+			                   abode.number);
+			continue;
+		}
+		const auto entity =
+		    ecs::archetypes::AbodeArchetype::Create(townId->second, GroundPosition(abode.position), abode.row, abode.heading,
+		                                            abode.scale, abode.food, abode.wood, abode.built);
+		if (entity == entt::null)
+		{
+			continue;
+		}
+		ecs::world_objects::SetLife(entity, abode.life);
+		made.emplace(abode.number, entity);
+	}
+
+	uint32_t present = 0;
+	for (const auto& villager : imported.villagers)
+	{
+		const auto states = world_import::StartStates(villager.states, villager.moveState);
+		const auto entity =
+		    ecs::archetypes::VillagerArchetype::CreateLoaded({.position = GroundPosition(villager.position),
+		                                                      .heading = villager.heading,
+		                                                      .scale = villager.scale,
+		                                                      .type = villager.row,
+		                                                      .nameRow = villager.nameRow,
+		                                                      .life = villager.life,
+		                                                      .birthTurn = villager.birthTurn,
+		                                                      .food = villager.food,
+		                                                      .lastCheckTurn = villager.lastCheckTurn,
+		                                                      .made = villager.made,
+		                                                      .foodSpeedUp = villager.foodSpeedUp,
+		                                                      .foodHeld = villager.foodHeld,
+		                                                      .woodHeld = villager.woodHeld,
+		                                                      .pregnancy = villager.pregnancy,
+		                                                      .states = states,
+		                                                      .turnsUntilStateChange = villager.turnsUntilStateChange,
+		                                                      .turnsSinceStateChange = villager.turnsSinceStateChange});
+		made.emplace(villager.number, entity);
+		auto& person = registry.Get<Villager>(entity);
+		person.town = EntityOf(made, villager.town);
+		person.abode = EntityOf(made, villager.home);
+		if (person.abode != entt::null && world_import::IsInsideHome(static_cast<VillagerStates>(states[0])))
+		{
+			registry.Assign<AtHome>(entity,
+			                        AtHome {.beenToBed = states[0] == static_cast<uint8_t>(VillagerStates::SleepingAtHome)});
+			++present;
+		}
+	}
+	// The mothers come after all the villagers, because a mother can come later in the file
+	for (const auto& villager : imported.villagers)
+	{
+		registry.Get<Villager>(EntityOf(made, villager.number)).mother = EntityOf(made, villager.mother);
+	}
+
+	// Each building takes its villagers in the order of the file, and the villagers that are in it
+	uint32_t presentInFile = 0;
+	for (const auto& abode : imported.abodes)
+	{
+		const auto entity = EntityOf(made, abode.number);
+		if (entity == entt::null)
+		{
+			continue;
+		}
+		auto& building = registry.Get<Abode>(entity);
+		building.inhabitants.clear();
+		for (const auto number : abode.villagers)
+		{
+			if (const auto villager = EntityOf(made, number); villager != entt::null)
+			{
+				building.inhabitants.push_back(villager);
+			}
+		}
+		building.presentAtHome = static_cast<uint32_t>(std::ranges::count_if(
+		    building.inhabitants, [&registry](entt::entity villager) { return registry.AllOf<AtHome>(villager); }));
+		presentInFile += abode.present;
+	}
+	if (present != presentInFile)
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "{} villagers of the file are in their homes, but the buildings count {}", present,
+		                   presentInFile);
+	}
+	// Each town takes its homeless villagers and the order of its buildings from the file
+	for (const auto& town : imported.towns)
+	{
+		auto& component = registry.Get<Town>(EntityOf(made, town.number));
+		for (const auto number : town.homeless)
+		{
+			if (const auto villager = EntityOf(made, number); villager != entt::null)
+			{
+				component.homelessVillagers.push_back(villager);
+			}
+		}
+		std::vector<entt::entity> ordered;
+		for (const auto number : town.abodes)
+		{
+			if (const auto abode = EntityOf(made, number);
+			    abode != entt::null && std::ranges::find(component.abodes, abode) != component.abodes.end())
+			{
+				ordered.push_back(abode);
+			}
+		}
+		// The buildings that the import does not make stay after them, in their order
+		std::ranges::copy_if(component.abodes, std::back_inserter(ordered),
+		                     [&ordered](entt::entity abode) { return std::ranges::find(ordered, abode) == ordered.end(); });
+		component.abodes = std::move(ordered);
+	}
+	registry.SetDirty();
+	SPDLOG_LOGGER_INFO(ImportLog(), "Imported {} towns, {} buildings and {} villagers of the game's file at turn {}",
+	                   imported.towns.size(), imported.abodes.size(), imported.villagers.size(), imported.turn);
+	return true;
+}

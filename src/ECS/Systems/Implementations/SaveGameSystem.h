@@ -21,6 +21,7 @@
 
 #include <SavedObjects.h>
 #include <VanillaSaveFile.h>
+#include <VanillaWorld.h>
 #include <WorldFile.h>
 #include <entt/entity/fwd.hpp>
 #include <entt/meta/context.hpp>
@@ -120,8 +121,11 @@ private:
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
-	/// Takes the seeds of the random draws from the game data of a world file of the game
-	void ImportVanillaSeeds(uint32_t slot, std::span<const uint8_t> bytes);
+	/// Reads the whole world file of the game. Puts its turn, its towns, buildings and villagers into the world, then
+	/// takes the seeds of the random draws. Returns whether the file reads as a whole world.
+	bool ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes);
+	/// Puts the turn, the towns, the buildings of the towns and the villagers of the world file into the world
+	bool ImportVanillaTowns(const gamesave::VanillaWorld& world);
 	/// The world file in the game's layout of a save of a game that came from such a file
 	[[nodiscard]] std::vector<ecs::save_files::SaveFile> VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
 	                                                                  std::span<const gamesave::SavedCreature> saved,

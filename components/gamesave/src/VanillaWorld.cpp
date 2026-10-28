@@ -378,7 +378,7 @@ void ReadMobile(WorldReader& r)
 void ReadWallHug(WorldReader& r)
 {
 	ReadMobile(r);
-	r.Half();
+	r.Half("turnsToStateChange");
 	r.Half("speed");
 	r.Half("angle");
 	const auto state = r.Byte("moveState");
@@ -707,9 +707,11 @@ void ReadTown(WorldReader& r)
 	r.Word("id");
 	r.Word("tribe");
 	r.Byte("player");
-	for (int i = 0; i < 13; ++i)
+	for (const std::string_view name : {"worshipShare", "worshipCount", "influence", "onWayToWorshipCount", "turnsToWorship",
+	                                    "promiscuity", "beliefInNeutral", "raining", "buildingRequested", "desireDirty",
+	                                    "desireDirtyTimer", "cannotBuildWorshipSite", "uninhabitable"})
 	{
-		r.Word();
+		r.Word(name);
 	}
 	r.Refs("pots");
 	r.Refs("forests");
@@ -744,8 +746,8 @@ void ReadTown(WorldReader& r)
 	r.Refs("flocks");
 	r.Refs("desireFlags");
 	r.Refs("missionaries");
-	r.Word();
-	r.Word();
+	r.Word("balanceBeliefScale");
+	r.Word("emptyTownTimer");
 }
 
 void ReadFragMesh(WorldReader& r)
@@ -792,6 +794,7 @@ std::array<uint8_t, 2> ReadLiving(WorldReader& r)
 	ReadWallHug(r);
 	r.Ref("footpathLink");
 	r.Ref("footpathNode");
+	// The three states, a spare byte and the turns since the last change of state
 	const auto action = r.Bytes(6, "action");
 	r.Ref("reaction");
 	r.Word();
@@ -856,15 +859,15 @@ constexpr std::array<uint8_t, 255> k_VillagerStateLayouts = {
 void ReadVillager(WorldReader& r)
 {
 	const auto states = ReadLiving(r);
-	r.Half();
-	r.Word("food");
-	r.Word();
-	r.Byte();
+	r.Half("villagerFlags");
+	r.Float("food");
+	r.Word("lastCheckTurn");
+	r.Byte("foodSpeedUp");
 	r.Byte();
 	const auto discipleType = r.Byte("discipleType");
-	r.Half();
-	r.Half();
-	r.Half();
+	r.Half("foodHeld");
+	r.Half("woodHeld");
+	r.Half("pregnancy");
 	r.Ref("home");
 	r.Ref("town");
 	r.Ref("mother");
@@ -1407,6 +1410,11 @@ std::optional<VanillaWorld> ReadVanillaRecords(std::span<const uint8_t> bytes, S
 	}
 	return VanillaWorld(std::vector<uint8_t>(bytes.begin(), bytes.end()), VanillaFraming {}, reader.TakeRecords(),
 	                    reader.TakeNumbers());
+}
+
+bool VillagerStateKeepsValues(uint8_t state)
+{
+	return state < k_VillagerStateLayouts.size() && k_VillagerStateLayouts.at(state) != 0;
 }
 
 bool KnowsVanillaType(uint32_t type)
