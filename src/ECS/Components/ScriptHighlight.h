@@ -54,6 +54,8 @@ struct ScriptHighlight
 	std::array<entt::entity, script_highlights::k_Sparks> sparkSprites = NoSparkSprites();
 	/// It was on the screen in the last frame where the game drew all of its list
 	bool onScreen {false};
+	/// The frame does not draw it: its draw list did not select it, or the scrolls do not show. Only the frames write it.
+	bool hidden {false};
 
 	[[nodiscard]] static constexpr std::array<entt::entity, script_highlights::k_Sparks> NoSparkSprites()
 	{

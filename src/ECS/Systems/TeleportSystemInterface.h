@@ -76,8 +76,10 @@ public:
 	/// way to the site again. Whether it did.
 	virtual bool RouteWorshipper(entt::entity villager, glm::vec3 site) = 0;
 
-	/// Once a game turn, with the players' towns: the stones of miracles that are not there go, and the travellers that
-	/// gave up are dropped. A creature is dropped when its plan has no step of the teleport left.
+	/// In the turn of each player, after its towns: its stones drop the travellers that gave up, the newest stone first
+	virtual void PlayerTurn(PlayerNames player) = 0;
+	/// Once a game turn, after the turns of the players: the stones of miracles that are not there go. A creature is
+	/// dropped when its plan has no step of the teleport left.
 	virtual void ProcessTurn() = 0;
 	/// Once a frame, after the frame makes the land's draw list: the pools of the stones that the frame draws show and
 	/// move on, and the other pools do not show. They step no more often than 60 times a second, by the game time since
