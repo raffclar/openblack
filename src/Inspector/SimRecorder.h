@@ -92,6 +92,8 @@ private:
 	std::set<std::string, std::less<>> _flagged;
 	/// The unregistered components that the log already told of
 	synced_state::UnregisteredReporter _unregisteredTold;
+	/// The rows of the last hash of a record, so that the next hash mixes again only the rows that changed
+	ecs::reflection::HashMemo _hashMemo;
 	std::shared_ptr<SimLogSink> _sink;
 	uint64_t _frame {0};
 	/// What the records keep of the hashes of the parts of the world

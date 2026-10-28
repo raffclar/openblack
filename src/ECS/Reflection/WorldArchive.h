@@ -20,6 +20,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -153,9 +154,30 @@ struct WorldRows
 	std::vector<uint8_t> bytes;
 };
 
+/// What the last hash of the world kept of each component: the bytes of its rows, and the hash after each row. A hash
+/// that gets the memo of the hash before it mixes again only the rows from the first row that changed. The memo never
+/// changes a hash. Only a hash with no hash of each field, no visitor and no rows uses it.
+struct HashMemo
+{
+	struct Row
+	{
+		/// The end of the row in the bytes of the component
+		size_t end {0};
+		/// The hash of the component after the row
+		uint64_t hash {0};
+	};
+	struct Component
+	{
+		std::vector<uint8_t> bytes;
+		std::vector<Row> rows;
+	};
+	std::unordered_map<std::string, Component> components;
+};
+
 [[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context,
                                     std::span<const HashLeaveOut> leaveOut = {}, bool byField = false,
-                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr);
+                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr,
+                                    HashMemo* memo = nullptr);
 
 /// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
 /// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the
