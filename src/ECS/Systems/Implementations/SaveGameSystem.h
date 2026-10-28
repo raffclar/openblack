@@ -17,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <SavedObjects.h>
@@ -121,11 +122,16 @@ private:
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
-	/// Reads the whole world file of the game. Puts its turn, its towns, buildings and villagers into the world, then
-	/// takes the seeds of the random draws. Returns whether the file reads as a whole world.
+	/// Reads the whole world file of the game. Puts its turn, its towns, buildings, villagers, forests and trees into the
+	/// world, then takes the seeds of the random draws. Returns whether the file reads as a whole world.
 	bool ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes);
+	/// The entity that each object number of a world file of the game became
+	using VanillaMade = std::unordered_map<uint32_t, entt::entity>;
 	/// Puts the turn, the towns, the buildings of the towns and the villagers of the world file into the world
-	bool ImportVanillaTowns(const gamesave::VanillaWorld& world);
+	bool ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// Puts the forests, the big forests and the trees of the world file into the world, in the place of those of the
+	/// land. Each town of the file takes its list of forests.
+	void ImportVanillaForests(const gamesave::VanillaWorld& world, VanillaMade& made);
 	/// The world file in the game's layout of a save of a game that came from such a file
 	[[nodiscard]] std::vector<ecs::save_files::SaveFile> VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
 	                                                                  std::span<const gamesave::SavedCreature> saved,

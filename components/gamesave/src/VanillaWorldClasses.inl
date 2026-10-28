@@ -483,30 +483,30 @@ void ReadMobileObject(WorldReader& r)
 void ReadForest(WorldReader& r)
 {
 	ReadContainer(r);
-	r.Word();
+	r.Word("scenic");
 	r.Ref();
-	r.Word();
-	r.Refs();
-	r.Refs();
-	r.Ref();
-	r.Word();
-	r.Word();
+	r.Word("forestId");
+	r.Refs("grownTrees");
+	r.Refs("growingTrees");
+	r.Ref("bigForest");
+	r.Word("lastTreeAddedTurn");
+	r.Word("nextForestId");
 }
 
 void ReadBigForest(WorldReader& r)
 {
 	ReadMultiMapFixed(r);
-	r.Ref();
-	r.Word();
+	r.Ref("forest");
+	r.Word("wood");
 }
 
 void ReadTree(WorldReader& r)
 {
 	ReadFixed(r);
-	r.Half();
-	r.Word();
-	r.Ref();
-	r.Half();
+	r.Half("growthCountdown");
+	r.Word("maxSize");
+	r.Ref("forest");
+	r.Half("treeFlags");
 }
 
 void ReadTownDesireFlags(WorldReader& r)

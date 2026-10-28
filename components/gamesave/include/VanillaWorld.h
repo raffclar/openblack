@@ -38,6 +38,7 @@ enum class VanillaType : uint32_t
 	Field = 0x32,
 	Citadel = 0x35,
 	WorshipSite = 0x3C,
+	BigForest = 0x4D,
 	Forest = 0x4E,
 	Tree = 0x4F,
 	Creche = 0x50,

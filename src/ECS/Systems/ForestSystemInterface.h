@@ -100,6 +100,12 @@ public:
 	/// A tree joins a forest by its number: among its growing trees when made to grow and still short of its largest
 	/// size, or else among its grown trees
 	virtual void JoinForest(entt::entity tree, uint32_t forest) = 0;
+	/// A tree joins a forest by its number, among its growing trees or among its grown trees as asked. It comes after
+	/// the trees that joined before it. The import of a game's file uses this.
+	virtual void ListInForest(entt::entity tree, uint32_t forest, bool growing) = 0;
+	/// The import of a game's file gives the turn that a forest last got a tree near another tree, and the number of
+	/// the next forest without a number
+	virtual void ResumeCounts(uint32_t lastTreeAddedTurn, uint32_t nextLandForestId) = 0;
 	/// Once a game turn, after the fields and before the living: each forest, the newest first, grows its growing trees
 	/// and may spread, and one long empty goes
 	virtual void GrowForests() = 0;

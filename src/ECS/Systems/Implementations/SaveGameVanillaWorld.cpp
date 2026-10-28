@@ -36,35 +36,20 @@
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
 #include "SaveGameSystem.h"
+#include "SaveGameVanillaPlaces.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace world_import = openblack::ecs::vanilla_world_import;
+using openblack::ecs::systems::vanilla_import::EntityOf;
+using openblack::ecs::systems::vanilla_import::GroundPosition;
 
 namespace
 {
 std::shared_ptr<spdlog::logger> ImportLog()
 {
 	return spdlog::get("game");
-}
-
-/// The game's map position as a world point, on the ground plus the altitude
-glm::vec3 GroundPosition(const gamesave::MapCoords& position)
-{
-	const map_coords::MapCoords coords {position.x, position.z, position.altitude};
-	if (Locator::terrainSystem::has_value())
-	{
-		return map_coords::ToWorld(Locator::terrainSystem::value(), coords);
-	}
-	return {map_coords::ToMetres(coords.x), coords.altitude, map_coords::ToMetres(coords.z)};
-}
-
-/// The entity that an object number of the file became, or no entity
-entt::entity EntityOf(const std::unordered_map<uint32_t, entt::entity>& made, uint32_t number)
-{
-	const auto found = made.find(number);
-	return found != made.end() ? found->second : entt::null;
 }
 
 /// The game clears the map before it reads the world of a file. The import removes the villagers of the land, and the
@@ -139,7 +124,17 @@ entt::entity PutTown(ecs::Registry& registry, const world_import::ImportedTown& 
 
 } // namespace
 
-bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world)
+glm::vec3 openblack::ecs::systems::vanilla_import::GroundPosition(const gamesave::MapCoords& position)
+{
+	const map_coords::MapCoords coords {position.x, position.z, position.altitude};
+	if (Locator::terrainSystem::has_value())
+	{
+		return map_coords::ToWorld(Locator::terrainSystem::value(), coords);
+	}
+	return {map_coords::ToMetres(coords.x), coords.altitude, map_coords::ToMetres(coords.z)};
+}
+
+bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made)
 {
 	const auto imported = world_import::ReadTowns(world);
 	for (const auto& why : imported.skipped)
@@ -158,7 +153,6 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world)
 
 	RemoveLandTownsContents(registry);
 
-	std::unordered_map<uint32_t, entt::entity> made;
 	std::unordered_map<uint32_t, uint32_t> townIds;
 	for (const auto& town : imported.towns)
 	{

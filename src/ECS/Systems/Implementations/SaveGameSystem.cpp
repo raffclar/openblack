@@ -1523,7 +1523,10 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	SPDLOG_LOGGER_INFO(Log(), "The game's file of slot {} has {} objects at turn {}", slot, read.world->Records().size(),
 	                   data.has_value() ? data->gameTurn : 0);
 	// The towns and the villagers of the file replace the towns and the villagers of the land
-	ImportVanillaTowns(*read.world);
+	VanillaMade made;
+	ImportVanillaTowns(*read.world, made);
+	// The forests, the big forests and the trees of the file replace those of the land
+	ImportVanillaForests(*read.world, made);
 	// The game data of the file has the two seeds of the random draws. After the load, the draws continue from them
 	// as the game's draws do. The creatures and the towns are made first, because the creation of a thing can draw.
 	if (data.has_value() && Locator::gameRandom::has_value())

@@ -43,6 +43,8 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> ForestLair(AnimalInfo kind, glm::vec3 from) const override;
 	void MakeScenicForests() override;
 	void JoinForest(entt::entity tree, uint32_t forest) override;
+	void ListInForest(entt::entity tree, uint32_t forest, bool growing) override;
+	void ResumeCounts(uint32_t lastTreeAddedTurn, uint32_t nextLandForestId) override;
 	void GrowForests() override;
 	void ProcessTurn() override;
 	void Reset() override;

@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -23,6 +24,7 @@
 #include <VanillaWorld.h>
 #include <gtest/gtest.h>
 
+#include "ECS/VanillaSceneryImport.h"
 #include "ECS/VanillaWorldImport.h"
 
 using namespace openblack;
@@ -364,4 +366,263 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneImportWhole)
 		EXPECT_EQ(static_cast<uint32_t>(inside), present) << entry.path();
 	}
 	EXPECT_GT(files, 0U);
+}
+
+namespace
+{
+
+/// Calls the function with each world file of Land 1 in the copy of a Profiles folder that OPENBLACK_VANILLA_SAVES
+/// gives. Gives the number of files, or nothing when there is no such folder.
+template <typename Check>
+std::optional<uint32_t> ForEachLandOneSave(Check&& check)
+{
+	const char* saves = std::getenv("OPENBLACK_VANILLA_SAVES"); // NOLINT(concurrency-mt-unsafe)
+	std::error_code error;
+	if (saves == nullptr || !std::filesystem::is_directory(saves, error))
+	{
+		return std::nullopt;
+	}
+	uint32_t files = 0;
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(saves))
+	{
+		const auto name = entry.path().filename().string();
+		if (!entry.is_regular_file() || entry.path().extension() != ".sav" || name.starts_with("Script"))
+		{
+			continue;
+		}
+		std::ifstream stream(entry.path(), std::ios::binary);
+		const std::vector<uint8_t> bytes {std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+		const auto read = ReadVanillaWorld(bytes);
+		EXPECT_TRUE(read.world.has_value()) << entry.path();
+		if (!read.world.has_value() || read.world->Framing().landscape.find("Land1.lnd") == std::string::npos)
+		{
+			continue;
+		}
+		++files;
+		check(entry.path(), *read.world);
+	}
+	return files;
+}
+
+/// The record types of the animals of Land 1 and the row of the table of animals that each has
+constexpr std::array<std::pair<uint32_t, AnimalInfo>, 9> k_LandOneAnimals = {{
+    {0x82, AnimalInfo::Cow},
+    {0x83, AnimalInfo::Sheep},
+    {0x85, AnimalInfo::Horse},
+    {0x87, AnimalInfo::Pig},
+    {0x88, AnimalInfo::Tortoise},
+    {0x8E, AnimalInfo::Dove},
+    {0x91, AnimalInfo::Swallow},
+    {0x93, AnimalInfo::Seagull},
+    {0x94, AnimalInfo::Bat},
+}};
+
+} // namespace
+
+TEST(VanillaSceneryImport, RowNumbersCountBackFromTheFirstRowOfEachTable)
+{
+	EXPECT_EQ(world_import::TreeRowOf(2115), TreeInfo::Beech);
+	EXPECT_EQ(world_import::TreeRowOf(2093), TreeInfo::Burnt);
+	EXPECT_EQ(world_import::TreeRowOf(2092), std::nullopt);
+	EXPECT_EQ(world_import::TreeRowOf(2116), std::nullopt);
+	EXPECT_EQ(world_import::FeatureRowOf(2064), FeatureInfo::AztcOlmechead);
+	EXPECT_EQ(world_import::AnimatedStaticRowOf(1986), AnimatedStaticInfo::NorseGate);
+	EXPECT_EQ(world_import::MobileObjectRowOf(1970), MobileObjectInfo::EgyptBarrel);
+	EXPECT_EQ(world_import::MobileStaticRowOf(1937), MobileStaticInfo::CeltFenceShort);
+	EXPECT_EQ(world_import::PotRowOf(1874), PotInfo::StoragePitFoodPile);
+	EXPECT_EQ(world_import::FieldTypeRowOf(1765), FieldTypeInfo::Wheat);
+	EXPECT_EQ(world_import::AnimalRowOf(2548), AnimalInfo::Lion);
+	EXPECT_EQ(world_import::AnimalRowOf(2538), AnimalInfo::Pig);
+	EXPECT_EQ(world_import::BigForestRowOf(369), BigForestInfo::Info1);
+	EXPECT_EQ(world_import::BigForestRowOf(365), std::nullopt);
+	EXPECT_EQ(world_import::TotemStatueRowOf(378), 0U);
+	EXPECT_EQ(world_import::TotemStatueRowOf(370), 8U);
+	EXPECT_EQ(world_import::TotemStatueRowOf(369), std::nullopt);
+}
+
+TEST(VanillaSceneryImport, ReadsTheForestsInTheOrderOfTheGameList)
+{
+	FakeWorld fake;
+	// 1: the game object, with five lists. The fifth list has the forests.
+	fake.Record(VanillaType::Game)
+	    .Refs("lists", {})
+	    .Refs("lists", {})
+	    .Refs("lists", {})
+	    .Refs("lists", {})
+	    .Refs("lists", {5, 2});
+	// 2: a forest with a big forest
+	fake.Record(VanillaType::Forest)
+	    .Position(100, 200)
+	    .Value<uint32_t>("scenic", 0)
+	    .Value<uint32_t>("forestId", 1)
+	    .Refs("grownTrees", {})
+	    .Refs("growingTrees", {})
+	    .Ref("bigForest", 3)
+	    .Value<uint32_t>("lastTreeAddedTurn", 0)
+	    .Value<uint32_t>("nextForestId", 10);
+	// 3: the big forest
+	fake.Record(VanillaType::BigForest)
+	    .Position(110, 210)
+	    .Value("info", world_import::k_FirstBigForestRowNumber)
+	    .Value("life", 0.5f)
+	    .Value("scale", 1.0f)
+	    .Value("heading", 0.25f)
+	    .Value("wood", 15000.0f);
+	// 4: a tree of the forest of the town, which is full grown
+	fake.Record(VanillaType::Tree)
+	    .Position(300, 400)
+	    .Value("info", world_import::k_FirstTreeRowNumber - static_cast<uint32_t>(TreeInfo::Pine))
+	    .Value("life", 1.0f)
+	    .Value("scale", 0.9f)
+	    .Value("heading", 1.5f)
+	    .Value<uint16_t>("growthCountdown", 0)
+	    .Value("maxSize", 0.9f);
+	// 5: the forest of the lone trees of a town, with one tree that grows and one that is grown
+	fake.Record(VanillaType::Forest)
+	    .Position(500, 600)
+	    .Value<uint32_t>("scenic", 1)
+	    .Value<uint32_t>("forestId", 9)
+	    .Refs("grownTrees", {4})
+	    .Refs("growingTrees", {6})
+	    .Ref("bigForest", 0)
+	    .Value<uint32_t>("lastTreeAddedTurn", 1234)
+	    .Value<uint32_t>("nextForestId", 10);
+	// 6: a tree that grows
+	fake.Record(VanillaType::Tree)
+	    .Position(310, 410)
+	    .Value("info", world_import::k_FirstTreeRowNumber - static_cast<uint32_t>(TreeInfo::Oak))
+	    .Value("life", 1.0f)
+	    .Value("scale", 0.5f)
+	    .Value("heading", 0.0f)
+	    .Value<uint16_t>("growthCountdown", 17)
+	    .Value("maxSize", 1.25f);
+	// 7: a tree of a row that is not a tree
+	fake.Record(VanillaType::Tree).Position(0, 0).Value<uint32_t>("info", 1);
+
+	const auto imported = world_import::ReadForests(fake.Make());
+	ASSERT_EQ(imported.forests.size(), 2U);
+	// The game list has the forest of the town first
+	EXPECT_EQ(imported.forests[0].number, 5U);
+	EXPECT_EQ(imported.forests[0].id, 9U);
+	EXPECT_TRUE(imported.forests[0].scenic);
+	EXPECT_EQ(imported.forests[0].grown, std::vector<uint32_t> {4});
+	EXPECT_EQ(imported.forests[0].growing, std::vector<uint32_t> {6});
+	EXPECT_EQ(imported.forests[0].position.x, 500);
+	EXPECT_EQ(imported.forests[1].number, 2U);
+	EXPECT_FALSE(imported.forests[1].scenic);
+	EXPECT_EQ(imported.forests[1].bigForest, 3U);
+	EXPECT_EQ(imported.lastTreeAddedTurn, 1234U);
+	EXPECT_EQ(imported.nextForestId, 10U);
+
+	ASSERT_EQ(imported.bigForests.size(), 1U);
+	EXPECT_EQ(imported.bigForests[0].row, BigForestInfo::Info1);
+	EXPECT_FLOAT_EQ(imported.bigForests[0].wood, 15000.0f);
+	EXPECT_FLOAT_EQ(imported.bigForests[0].life, 0.5f);
+	EXPECT_FLOAT_EQ(imported.bigForests[0].heading, 0.25f);
+
+	ASSERT_EQ(imported.trees.size(), 2U);
+	EXPECT_EQ(imported.trees[0].row, TreeInfo::Pine);
+	EXPECT_FLOAT_EQ(imported.trees[0].heading, 1.5f);
+	EXPECT_EQ(imported.trees[1].row, TreeInfo::Oak);
+	EXPECT_FLOAT_EQ(imported.trees[1].scale, 0.5f);
+	EXPECT_FLOAT_EQ(imported.trees[1].maxSize, 1.25f);
+	EXPECT_EQ(imported.trees[1].growthCountdown, 17U);
+	ASSERT_EQ(imported.skipped.size(), 1U);
+	EXPECT_NE(imported.skipped[0].find("object 7"), std::string::npos);
+}
+
+/// Each info number of the things of Land 1 is a row of the table of its kind, and each animal has the row of its
+/// record type
+TEST(VanillaSceneryImport, SavedGamesOfLandOneHaveRowsOfTheTables)
+{
+	const auto files = ForEachLandOneSave([](const std::filesystem::path& path, const VanillaWorld& world) {
+		for (const auto& record : world.Records())
+		{
+			const auto info = world.Word(record, "info");
+			if (!info.has_value())
+			{
+				continue;
+			}
+			switch (record.type)
+			{
+			case 0x4F:
+				EXPECT_TRUE(world_import::TreeRowOf(*info).has_value()) << path << " " << record.number;
+				break;
+			case 0x74:
+				EXPECT_TRUE(world_import::FeatureRowOf(*info).has_value()) << path << " " << record.number;
+				break;
+			case 0x75:
+				EXPECT_TRUE(world_import::AnimatedStaticRowOf(*info).has_value()) << path << " " << record.number;
+				break;
+			case 0x53:
+				EXPECT_TRUE(world_import::MobileObjectRowOf(*info).has_value()) << path << " " << record.number;
+				break;
+			case 0x54:
+			case 0x6F:
+			case 0x70:
+			case 0x72:
+			case 0xFE:
+				EXPECT_TRUE(world_import::MobileStaticRowOf(*info).has_value()) << path << " " << record.number;
+				break;
+			case 0x1F:
+			case 0x59:
+			case 0x5A:
+				EXPECT_TRUE(world_import::PotRowOf(*info).has_value()) << path << " " << record.number;
+				break;
+			case 0x5B:
+				EXPECT_EQ(*info, world_import::k_FirstFishFarmRowNumber) << path << " " << record.number;
+				break;
+			case 0x4D:
+				EXPECT_TRUE(world_import::BigForestRowOf(*info).has_value()) << path << " " << record.number;
+				break;
+			case 0x7F:
+				EXPECT_TRUE(world_import::TotemStatueRowOf(*info).has_value()) << path << " " << record.number;
+				break;
+			default:
+			{
+				const auto animal = std::ranges::find(k_LandOneAnimals, record.type, &std::pair<uint32_t, AnimalInfo>::first);
+				if (animal != k_LandOneAnimals.end())
+				{
+					EXPECT_EQ(world_import::AnimalRowOf(*info), animal->second) << path << " " << record.number;
+				}
+			}
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(*files, 0U);
+}
+
+/// Each tree of a saved game of Land 1 is in one forest at most, and the import takes every forest and tree
+TEST(VanillaSceneryImport, SavedGamesOfLandOneImportTheirForests)
+{
+	const auto files = ForEachLandOneSave([](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadForests(world);
+		EXPECT_TRUE(imported.skipped.empty()) << path;
+		EXPECT_EQ(imported.trees.size(), world.OfType(VanillaType::Tree).size()) << path;
+		EXPECT_EQ(imported.forests.size(), world.OfType(VanillaType::Forest).size()) << path;
+		EXPECT_EQ(imported.bigForests.size(), world.OfType(VanillaType::BigForest).size()) << path;
+		std::vector<uint32_t> members;
+		for (const auto& forest : imported.forests)
+		{
+			members.insert(members.end(), forest.grown.begin(), forest.grown.end());
+			members.insert(members.end(), forest.growing.begin(), forest.growing.end());
+		}
+		std::ranges::sort(members);
+		EXPECT_EQ(std::ranges::adjacent_find(members), members.end()) << path;
+		for (const auto number : members)
+		{
+			EXPECT_TRUE(std::ranges::any_of(imported.trees,
+			                                [number](const world_import::ImportedTree& tree) { return tree.number == number; }))
+			    << path << " " << number;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(*files, 0U);
 }
