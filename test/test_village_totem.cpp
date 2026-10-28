@@ -176,6 +176,7 @@ public:
 		reactions.push_back({totem, player, position});
 	}
 	void EmpathiseWithPlayer(PlayerNames player, glm::vec3 position) override { empathies.push_back({player, position}); }
+	void Reinsert(entt::entity totem) override { reinserted.push_back(totem); }
 	void FloatNumber(glm::vec3 position, float value, uint32_t colour) override
 	{
 		numbers.push_back({position, value, colour});
@@ -205,6 +206,7 @@ public:
 	bool heart {true};
 	float life {1.0f};
 	std::vector<bool> moving;
+	std::vector<entt::entity> reinserted;
 	entt::id_type playerOneIcon {k_ApeIcon};
 	int bells {0};
 };
@@ -601,4 +603,39 @@ TEST(VillageTotemSystem, AComputerGodRaisesItWithNoSlideAndNoNumber)
 	system.RaiseByGod(PlayerNames::PLAYER_TWO, village.totem, 0.0f);
 	EXPECT_EQ(village.world->empathies.size(), 2u);
 	EXPECT_FLOAT_EQ(village.world->registry.Get<Town>(village.town).worshipShare, 0.0f);
+}
+
+TEST(VillageTotemSystem, ATotemGoesIntoTheMapCellsAgainWhenItTurnsAndWhenItTakesANewIcon)
+{
+	// A worship site with no place does not turn it: only its new icon puts it into the cells again
+	auto still = MakeVillage(true);
+	EXPECT_EQ(still.world->reinserted, (std::vector {still.totem}));
+	// A worship site to the east turns it to face the site, side on, and then its icon puts it in again
+	auto village = MakeVillage(false);
+	auto& registry = village.world->registry;
+	const auto site = registry.Create();
+	registry.Assign<Transform>(site, glm::vec3(50.0f, 0.0f, 5.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Get<Town>(village.town).worshipSite = site;
+	village.world->reinserted.clear();
+	village.system->AddToPlayer(village.totem);
+	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem, village.totem}));
+	// Turned the same way again, it goes in again only for its icon
+	village.world->reinserted.clear();
+	village.system->AddToPlayer(village.totem);
+	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem}));
+	// A new creature of its player gives it a new icon, which puts it in again; that of another player does not
+	village.world->reinserted.clear();
+	village.system->RefreshIcons(PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(village.world->reinserted.empty());
+	village.system->RefreshIcons(PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(village.world->reinserted, (std::vector {village.totem}));
+}
+
+TEST(VillageTotemSystem, ATotemWithNoTownStaysInTheMapCellsAsItIs)
+{
+	auto village = MakeVillage(true);
+	village.world->reinserted.clear();
+	village.world->registry.Get<VillageTotem>(village.totem).townCentre = entt::null;
+	village.system->AddToPlayer(village.totem);
+	EXPECT_TRUE(village.world->reinserted.empty());
 }

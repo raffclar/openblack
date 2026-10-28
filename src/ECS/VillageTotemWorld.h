@@ -65,6 +65,8 @@ public:
 	virtual void FloatNumber(glm::vec3 position, float value, uint32_t colour) = 0;
 	/// A town's worship share has just been set: it sends people to worship, or calls them back, to match it
 	virtual void ShareSet(entt::entity /*town*/) {}
+	/// The totem goes out of the map's cells and in again, to the front of their lists, with its outline made again
+	virtual void Reinsert(entt::entity /*totem*/) {}
 	/// Sends a command of the player, which the world does at the start of a later turn. False where the world has no
 	/// commands: then the system does it at once.
 	virtual bool SendCommand(const player_commands::Action& /*action*/) { return false; }

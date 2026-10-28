@@ -34,6 +34,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingModel.h"
@@ -141,6 +142,12 @@ float object_measures::TwoDRadius(const Registry& registry, entt::entity entity)
 	if (registry.AllOf<TeleportStone>(entity))
 	{
 		return creature_obstacles::k_TeleportStoneWidth;
+	}
+	// A town centre's totem is as wide as the icon on its plinth
+	if (const auto* totem = registry.TryGet<const VillageTotem>(entity); totem != nullptr && registry.Valid(totem->icon))
+	{
+		const auto icon = HalfExtentsOf(registry, totem->icon);
+		return icon.has_value() ? std::max(icon->x, icon->z) : 0.0f;
 	}
 	const auto half = HalfExtentsOf(registry, entity);
 	return half.has_value() ? std::max(half->x, half->z) : 0.0f;

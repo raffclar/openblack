@@ -188,6 +188,15 @@ float magic::piles::PotScale(uint32_t amount, uint32_t scaleEvery)
 	return std::min(static_cast<float>(amount) / static_cast<float>(scaleEvery) + k_Least, k_Most);
 }
 
+std::optional<float> magic::piles::SizeAfterChange(PotType type, uint32_t amount, uint32_t scaleEvery)
+{
+	if (type != PotType::Pot)
+	{
+		return std::nullopt;
+	}
+	return PotScale(amount, scaleEvery);
+}
+
 float magic::piles::Life(uint32_t amount, uint32_t fullAmount)
 {
 	// The game works its turns out in single precision, so each step here is rounded to a float as it was

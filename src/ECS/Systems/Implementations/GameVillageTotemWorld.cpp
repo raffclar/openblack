@@ -21,6 +21,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/CreatureSight.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -171,4 +172,12 @@ bool GameVillageTotemWorld::SendCommand(const player_commands::Action& action)
 void GameVillageTotemWorld::ShareSet(entt::entity town)
 {
 	ecs::villager_worship::ShareSet(town);
+}
+
+void GameVillageTotemWorld::Reinsert(entt::entity totem)
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Reinsert(totem);
+	}
 }
