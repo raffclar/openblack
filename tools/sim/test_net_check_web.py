@@ -253,18 +253,23 @@ class BoxBack(unittest.TestCase):
               "The land information box: Back leaves the network game", "The player leaves the network game"]
     SERVER = ["The player of slot 1 leaves the game"]
 
-    def test_back_leaves_the_network_game_and_the_server_sees_one_slot_leave(self):
-        result = net_check.box_back_leave(self.CLIENT, self.SERVER)
+    def test_back_leaves_the_network_game_and_the_server_sees_the_slot_leave_first(self):
+        result = net_check.box_back_leave(self.CLIENT, self.SERVER, 1)
         self.assertTrue(result["same"])
         self.assertEqual(result["server_slots"], [1])
+        # The god that stays wins the game of two gods, and its client stops and leaves after
+        self.assertTrue(net_check.box_back_leave(self.CLIENT, self.SERVER + ["The player of slot 0 leaves the game"], 1)
+                        ["same"])
 
     def test_back_that_did_not_leave_fails(self):
         # The box did not show, Back only closed the box, the leave did not go out, or the server saw no leave
         for missing in range(len(self.CLIENT)):
             lines = self.CLIENT[:missing] + self.CLIENT[missing + 1:]
-            self.assertFalse(net_check.box_back_leave(lines, self.SERVER)["same"], missing)
-        self.assertFalse(net_check.box_back_leave(self.CLIENT, [])["same"])
-        self.assertFalse(net_check.box_back_leave(self.CLIENT, self.SERVER * 2)["same"])
+            self.assertFalse(net_check.box_back_leave(lines, self.SERVER, 1)["same"], missing)
+        self.assertFalse(net_check.box_back_leave(self.CLIENT, [], 1)["same"])
+        # Another slot left first: the leave of the client did not reach the server first
+        self.assertFalse(net_check.box_back_leave(self.CLIENT, ["The player of slot 0 leaves the game"] + self.SERVER, 1)
+                         ["same"])
 
 
 @unittest.skipIf(net_check is None, "net_check needs the cryptography package")

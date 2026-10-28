@@ -1044,23 +1044,24 @@ def leash_result(leash, server_log, logs):
 SLOT_LEAVES = re.compile(r"The player of slot (\d+) leaves the game")
 
 
-def box_back_leave(client_lines, server_lines):
+def box_back_leave(client_lines, server_lines, slot):
     """Whether a click of Back in the information box of the land left the network game as Leave Game does. The client
-    clicked Back while the box showed, Back left the network game, and the server saw the leave of exactly one slot.
-    Gives the result and the slot that left, None when no slot left."""
+    clicked Back while the box showed, Back left the network game, and the first slot that the server saw leave is the
+    slot of the client. A god that stays can win a game of two gods: its client then stops and leaves after."""
     pressed = any("Tests: the player presses Back in the land information box" in line for line in client_lines)
     back_left = any("The land information box: Back leaves the network game" in line for line in client_lines)
     left = any("The player leaves the network game" in line for line in client_lines)
     slots = [int(match.group(1)) for line in server_lines if (match := SLOT_LEAVES.search(line))]
     return {"pressed": pressed, "back_left": back_left, "left": left, "server_slots": slots,
-            "same": pressed and back_left and left and len(slots) == 1}
+            "same": pressed and back_left and left and slots[:1] == [slot]}
 
 
 def box_back_result(client_log, server_log, client):
-    """What the client that clicked Back and the server wrote of the leave"""
+    """What the client that clicked Back and the server wrote of the leave. The desktop gods join in the order of their
+    numbers, so the client from 0 plays the slot of the same number."""
     result = box_back_leave(lines_with(client_log, ["Tests: the player presses Back", "Back leaves the network game",
                                                     "The player leaves the network game"]),
-                            lines_with(server_log, ["leaves the game"]))
+                            lines_with(server_log, ["leaves the game"]), client)
     result["client"] = client + 1
     return result
 
