@@ -294,6 +294,9 @@ public:
 		std::vector<std::u16string> lines;
 		/// From 0 to 255
 		uint8_t alpha;
+		/// Words that start a line's height below the top line, broken into lines across the middle half of the screen.
+		/// The temple's save game room writes the name of a save here.
+		std::u16string details;
 	};
 	void SetCaption(std::optional<Caption> caption) { _caption = std::move(caption); }
 

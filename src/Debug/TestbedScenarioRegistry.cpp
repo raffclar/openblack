@@ -4034,6 +4034,25 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.save_room_close_look_words",
+	    .name = "The temple's save game room writes a save's date and name over its picture",
+	    .facet = Facet::Story,
+	    .description = "The game is saved into slots 0 and 1 with the name Testbed. Then the player goes through the "
+	                   "temple's main room into the save game room. Click the picture of slot 0, then the picture of an "
+	                   "empty land slot, for example Quick Save.",
+	    .expected = "While the camera comes close to the picture of slot 0, the date and the time of the save show at the "
+	                "top of the screen, and Testbed shows below them, both in yellow over a black shadow. The words get "
+	                "stronger as the camera comes closer. An empty land slot shows only its label, such as Quick Save or "
+	                "Auto Save Land: and the land's number, a line below the top. An empty slot of the player shows no "
+	                "words.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 1.0f, .value = 0},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
+	});
+
+	all.push_back({
 	    .id = "temple.future_room_turn",
 	    .name = "The temple's future room turns by itself under its words",
 	    .facet = Facet::Story,

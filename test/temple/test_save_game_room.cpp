@@ -237,3 +237,65 @@ TEST(SaveGameRoom, AfterASaveThePictureInHighDetailIsReadAgain)
 	EXPECT_EQ(rules::PicturesAfterSave(4, 4u), (rules::PicturesToRead {.smallPictures = true, .largePicture = true}));
 	EXPECT_EQ(rules::PicturesAfterSave(0, 0u), (rules::PicturesToRead {.smallPictures = true, .largePicture = true}));
 }
+
+TEST(SaveGameRoom, TheCloseLookAtASaveGivesItsDateAndName)
+{
+	const rules::HelpTextFn helpText = [](uint32_t number) { return number == 6690 ? u"Auto Save Land: %3.0f" : u"Text"; };
+	const auto words =
+	    rules::CloseLookWordsOf(3, rules::SaveWords {.date = u"10:00:00 Monday", .name = u"My Save"}, 1, helpText);
+	ASSERT_TRUE(words.has_value());
+	EXPECT_EQ(words->title, std::u16string(u"10:00:00 Monday"));
+	EXPECT_EQ(words->details, u"My Save");
+	// A save in a slot that has a label also gives its date and name
+	const auto landSave = rules::CloseLookWordsOf(15, rules::SaveWords {.date = u"Date", .name = u""}, 2, helpText);
+	ASSERT_TRUE(landSave.has_value());
+	EXPECT_EQ(landSave->title, std::u16string(u"Date"));
+	EXPECT_EQ(landSave->details, u"");
+}
+
+TEST(SaveGameRoom, TheCloseLookAtAnEmptySlotGivesItsLabel)
+{
+	const rules::HelpTextFn helpText = [](uint32_t number) -> std::u16string {
+		switch (number)
+		{
+		case 6688:
+			return u"Previous Land";
+		case 6689:
+			return u"Next Land";
+		case 6690:
+			return u"Auto Save Land: %3.0f";
+		case 6661:
+			return u"Quick Save";
+		case 6691:
+			return u"Auto Save On Exit";
+		default:
+			return u"Wrong";
+		}
+	};
+	const std::array<std::u16string, 7> expected {u"Previous Land",       u"Auto Save Land:   2", u"Auto Save Land:   2",
+	                                              u"Auto Save Land:   2", u"Next Land",           u"Quick Save",
+	                                              u"Auto Save On Exit"};
+	for (uint32_t slot = rules::k_FirstLabelSlot; slot < rules::k_Slots; ++slot)
+	{
+		const auto words = rules::CloseLookWordsOf(slot, std::nullopt, 2, helpText);
+		ASSERT_TRUE(words.has_value()) << slot;
+		EXPECT_FALSE(words->title.has_value()) << slot;
+		EXPECT_EQ(words->details, expected.at(slot - rules::k_FirstLabelSlot)) << slot;
+	}
+	// The slots that the player saves into have no label
+	EXPECT_FALSE(rules::CloseLookWordsOf(0, std::nullopt, 2, helpText).has_value());
+	EXPECT_FALSE(rules::CloseLookWordsOf(rules::k_LastPlayerSlot, std::nullopt, 2, helpText).has_value());
+	EXPECT_FALSE(rules::CloseLookWordsOf(rules::k_Slots, std::nullopt, 2, helpText).has_value());
+}
+
+TEST(SaveGameRoom, TheCloseLookDetailsGoAcrossTheMiddleHalf)
+{
+	EXPECT_EQ(rules::DetailsSpanOf(0, 800), (rules::DetailsSpan {.left = 200.0f, .right = 600.0f}));
+	// The quarter is rounded down
+	EXPECT_EQ(rules::DetailsSpanOf(0, 1023), (rules::DetailsSpan {.left = 255.0f, .right = 765.0f}));
+	// The middle of a wide screen
+	EXPECT_EQ(rules::DetailsSpanOf(640, 1920), (rules::DetailsSpan {.left = 1120.0f, .right = 2080.0f}));
+	// Each line is centred in the span
+	EXPECT_FLOAT_EQ(rules::DetailsLineLeft({.left = 200.0f, .right = 600.0f}, 100.0f), 350.0f);
+	EXPECT_FLOAT_EQ(rules::DetailsLineLeft({.left = 200.0f, .right = 600.0f}, 401.0f), 199.5f);
+}
