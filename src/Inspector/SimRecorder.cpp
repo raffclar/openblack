@@ -47,8 +47,8 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
-#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EntityDescription.h"
@@ -642,7 +642,7 @@ void SimProvider::TurnEnded(uint32_t turn)
 	}
 	// The hash of the entities and of every saved component, but for the parts that only show the world on this computer
 	const auto synced = synced_state::HashOf(registry->Underlying(), _context, synced_state::PresentationParts(),
-	                                         _hashParts == sim_run::HashDetail::Fields);
+	                                         _hashParts == sim_run::HashDetail::Fields, {}, nullptr, nullptr, &_hashMemo);
 	Json parts = Json::object();
 	for (const auto& [name, part] : synced.parts)
 	{

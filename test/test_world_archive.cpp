@@ -1175,6 +1175,45 @@ TEST(WorldArchive, TheHashOfEachFieldShowsWhichFieldChanged)
 	EXPECT_TRUE(HashWorld(registry, context).fields.empty());
 }
 
+// The memo of the last hash never changes a hash: after a change, an addition and a removal of rows, the hash with the
+// memo is the same as the hash without it
+TEST(WorldArchive, TheHashMemoDoesNotChangeTheHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(4);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakeWalker>(entity, SampleWalker(entity, made[0]));
+	}
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto plain = HashWorld(registry, context);
+		const auto remembered = HashWorld(registry, context, {}, false, {}, nullptr, nullptr, &memo);
+		EXPECT_EQ(plain.entities, remembered.entities);
+		EXPECT_EQ(plain.components, remembered.components);
+	};
+	expectSame();
+	// The same world again: each row comes from the memo
+	expectSame();
+	// A change in a row in the middle
+	registry.get<FakeWalker>(made[2]).name = "Tom";
+	expectSame();
+	// A longer row at the start
+	registry.get<FakeWalker>(made[0]).name = "A much longer name than before";
+	expectSame();
+	// One more row, then one row less
+	const auto added = registry.create();
+	registry.emplace<FakeWalker>(added, SampleWalker(added, added));
+	expectSame();
+	registry.destroy(made[1]);
+	expectSame();
+	registry.destroy(added);
+	expectSame();
+}
+
 // A footpath that the game still looks for keeps its search in a world state. A loaded search goes on to the same route
 // as the search that was saved.
 TEST(WorldArchive, AFootpathSearchContinuesAfterALoad)

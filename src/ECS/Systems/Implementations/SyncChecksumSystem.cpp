@@ -78,8 +78,9 @@ void SyncChecksumSystem::ProcessTurn()
 		rows = &keptRows;
 	}
 #endif
-	const auto hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
-	                                       synced_state::PresentationParts(), _keepParts && _byField, visit, _pool.get(), rows);
+	const auto hash =
+	    synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection, synced_state::PresentationParts(),
+	                         _keepParts && _byField, visit, _pool.get(), rows, &_memo);
 	// The music that the scripts start is synced too: its piece, its lyrics and its clock
 	auto stateHash = hash.hash;
 	if (Locator::scriptMusicSystem::has_value())
