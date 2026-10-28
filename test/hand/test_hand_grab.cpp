@@ -10,8 +10,10 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <bit>
+#include <chrono>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -180,15 +182,22 @@ TEST(HandGrab, TheHandRisesForWhatItHolds)
 	EXPECT_FLOAT_EQ(CursorRaise(3.0f), 1.8f);
 }
 
-// A frame at the 60 Hz screen refresh the game drew at
-constexpr float k_RefreshMs = 1000.0f / 60.0f;
+// The steps of the input of one frame at the 60 Hz screen refresh the game drew at
+constexpr auto k_Refresh = input_steps::Steps::One();
+constexpr input_steps::Steps k_NoRefresh {};
+
+// A frame of the spring at a target that stands still
+void SpringFrame(HandSpring& spring, uint32_t gameMs, const input_steps::Steps& refreshes, glm::vec3 target)
+{
+	spring.Count(gameMs);
+	spring.Step(target, target, refreshes);
+}
 
 TEST(HandGrab, TheSpringStepsAtLeastOnceARefresh)
 {
 	HandSpring spring;
 	spring.Start({0.0f, 0.0f, 0.0f});
-	spring.Count(0, k_RefreshMs);
-	spring.Step({1.0f, 0.0f, 0.0f});
+	SpringFrame(spring, 0, k_Refresh, {1.0f, 0.0f, 0.0f});
 	// One step of 10 ms: v = 260 * 1 * 0.01, then x = v * 0.01
 	EXPECT_EQ(spring.StepsTaken(), 1u);
 	EXPECT_FLOAT_EQ(spring.Velocity().x, 2.6f);
@@ -197,10 +206,7 @@ TEST(HandGrab, TheSpringStepsAtLeastOnceARefresh)
 
 TEST(HandGrab, TheSpringTakesAsManyStepsAsTheGameTimeAllows)
 {
-	const auto frame = [](HandSpring& spring, uint32_t ms) {
-		spring.Count(ms, k_RefreshMs);
-		spring.Step({1.0f, 0.0f, 0.0f});
-	};
+	const auto frame = [](HandSpring& spring, uint32_t ms) { SpringFrame(spring, ms, k_Refresh, {1.0f, 0.0f, 0.0f}); };
 	HandSpring once;
 	once.Start({0.0f, 0.0f, 0.0f});
 	frame(once, 30);
@@ -227,16 +233,14 @@ TEST(HandGrab, TheSpringCatchesUpWithTheTimeHeldBeforeItTookHold)
 	HandSpring spring;
 	for (int i = 0; i < 50; ++i)
 	{
-		spring.Count(10, 10.0f);
+		spring.Count(10);
 	}
 	spring.Start({0.0f, 0.0f, 0.0f});
-	spring.Count(10, 10.0f);
-	spring.Step({1.0f, 0.0f, 0.0f});
+	SpringFrame(spring, 10, k_NoRefresh, {1.0f, 0.0f, 0.0f});
 	EXPECT_EQ(spring.StepsTaken(), 51u);
 	// Taking hold again keeps the time counted
 	spring.Start({0.0f, 0.0f, 0.0f});
-	spring.Count(10, 10.0f);
-	spring.Step({1.0f, 0.0f, 0.0f});
+	SpringFrame(spring, 10, k_NoRefresh, {1.0f, 0.0f, 0.0f});
 	EXPECT_EQ(spring.StepsTaken(), 1u);
 }
 
@@ -245,11 +249,11 @@ TEST(HandGrab, ShortFramesTakeNoStepsBeyondTheGameTime)
 	// Frames of 2 ms take a step only every fifth frame, as the game time owes one
 	HandSpring spring;
 	spring.Start({0.0f, 0.0f, 0.0f});
+	input_steps::Clock clock;
 	uint32_t steps = 0;
 	for (int i = 0; i < 100; ++i)
 	{
-		spring.Count(2, 2.0f);
-		spring.Step({1.0f, 0.0f, 0.0f});
+		SpringFrame(spring, 2, clock.Advance(std::chrono::milliseconds(2)), {1.0f, 0.0f, 0.0f});
 		steps += spring.StepsTaken();
 	}
 	EXPECT_EQ(steps, 20u);
@@ -258,37 +262,54 @@ TEST(HandGrab, ShortFramesTakeNoStepsBeyondTheGameTime)
 
 TEST(HandGrab, AStoppedGameStillStepsTheSpringOnceARefresh)
 {
-	// No game time at all, and frames of 4 ms: one step for every sixtieth of a second of real time
+	// No game time at all: one step for every sixtieth of a second of real time, at any frame rate
+	for (const int frameUs : {4'000, 16'667, 33'333, 50'000})
+	{
+		HandSpring spring;
+		spring.Start({0.0f, 0.0f, 0.0f});
+		input_steps::Clock clock;
+		uint32_t steps = 0;
+		for (int frame = 0; frame < (1'000'000 + frameUs / 2) / frameUs; ++frame)
+		{
+			SpringFrame(spring, 0, clock.Advance(std::chrono::microseconds(frameUs)), {1.0f, 0.0f, 0.0f});
+			steps += spring.StepsTaken();
+		}
+		EXPECT_NEAR(steps, 60u, 1u) << frameUs << " us frames, " << steps << " steps";
+	}
+}
+
+namespace
+{
+// The hand's target sweeps across at 20 units a second for 0.4 s, in frames of some microseconds with the game time in
+// whole milliseconds. The spring's speed then is the throw's.
+float ThrowSpeed(int frameUs)
+{
 	HandSpring spring;
 	spring.Start({0.0f, 0.0f, 0.0f});
-	uint32_t steps = 0;
-	for (int i = 0; i < 251; ++i)
+	input_steps::Clock clock;
+	int lastMs = 0;
+	// The last frame ends at 0.4 s at every frame rate
+	for (int us = frameUs; lastMs < 400; us += frameUs)
 	{
-		spring.Count(0, 4.0f);
-		spring.Step({1.0f, 0.0f, 0.0f});
-		steps += spring.StepsTaken();
+		const int ms = std::min(us / 1000, 400);
+		const auto targetAt = [](int atMs) { return glm::vec3(0.02f * static_cast<float>(atMs), 0.0f, 0.0f); };
+		spring.Count(static_cast<uint32_t>(ms - lastMs));
+		const auto refreshes = clock.Advance(std::chrono::milliseconds(ms - lastMs));
+		spring.Step(targetAt(lastMs), targetAt(ms), refreshes);
+		lastMs = ms;
 	}
-	EXPECT_EQ(steps, 60u);
+	return spring.Velocity().x;
 }
+} // namespace
 
 TEST(HandGrab, AThrowLeavesTheHandAtTheSameSpeedAtAnyFrameRate)
 {
-	// The hand's target sweeps across at 20 units a second for 0.4 s; the spring's speed then is the throw's
-	const auto throwSpeed = [](uint32_t frameMs) {
-		HandSpring spring;
-		spring.Start({0.0f, 0.0f, 0.0f});
-		for (uint32_t t = frameMs; t <= 400; t += frameMs)
-		{
-			spring.Count(frameMs, static_cast<float>(frameMs));
-			spring.Step({0.02f * static_cast<float>(t), 0.0f, 0.0f});
-		}
-		return spring.Velocity().x;
-	};
-	const float atRefresh = throwSpeed(16);
+	// Frames at 60 a second, and at 30, 144 and 300 a second
+	const float atRefresh = ThrowSpeed(16'667);
 	EXPECT_GT(atRefresh, 18.0f);
-	for (const uint32_t frameMs : {1u, 2u, 4u, 7u, 33u})
+	for (const int frameUs : {33'333, 6'944, 3'333, 1'000, 4'000})
 	{
-		EXPECT_NEAR(throwSpeed(frameMs), atRefresh, 0.5f) << frameMs << " ms frames";
+		EXPECT_NEAR(ThrowSpeed(frameUs), atRefresh, 1e-3f) << frameUs << " us frames";
 	}
 }
 
@@ -298,15 +319,13 @@ TEST(HandGrab, TheSpringSettlesOnItsTargetAndIsCapped)
 	spring.Start({0.0f, 0.0f, 0.0f});
 	for (int i = 0; i < 200; ++i)
 	{
-		spring.Count(10, 10.0f);
-		spring.Step({3.0f, 1.0f, -2.0f});
+		SpringFrame(spring, 10, k_NoRefresh, {3.0f, 1.0f, -2.0f});
 	}
 	EXPECT_NEAR(spring.Position().x, 3.0f, 1e-3f);
 	EXPECT_NEAR(spring.Position().z, -2.0f, 1e-3f);
 	HandSpring far;
 	far.Start({0.0f, 0.0f, 0.0f});
-	far.Count(10, 10.0f);
-	far.Step({10000.0f, 0.0f, 0.0f});
+	SpringFrame(far, 10, k_NoRefresh, {10000.0f, 0.0f, 0.0f});
 	EXPECT_FLOAT_EQ(glm::length(far.Velocity()), k_MaxThrowSpeed);
 }
 

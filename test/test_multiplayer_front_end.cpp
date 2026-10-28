@@ -13,12 +13,14 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <map>
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <LobbyApiJson.h>
@@ -26,11 +28,14 @@
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Gui/MultiplayerBoxes.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
+#include "Gui/ScreenFit.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkSession.h"
+#include "gui/FakeGameFont.h"
 #include "online/FakeWebSocketClient.h"
 
 using namespace openblack;
@@ -1100,7 +1105,7 @@ TEST_F(FrontEndTest, TheStepsOfTheStartShowTheGamesBoxes)
 	EXPECT_EQ(frontEnd->GetMessage(), Message::SendingStartData);
 	EXPECT_EQ(ButtonsOf(Message::SendingStartData), MessageButtons::None);
 	// The player of the test has no creature: an empty file goes to the server
-	EXPECT_EQ(socket.sent.back().Text(), R"({"file":"","type":"start.creature"})");
+	EXPECT_EQ(socket.sent.back().Text(), R"({"alignment":0.0,"file":"","type":"start.creature"})");
 	ServerSends(sockets, game_socket::StartCreature {.slot = 1, .file = {}});
 	ServerSends(sockets, game_socket::Start {.land = {}, .testbed = true, .seed = 3, .turn = 0, .opening = {}});
 	Step();
@@ -1202,4 +1207,154 @@ TEST_F(FrontEndTest, ThePickStaysOnItsGameWhenTheListChanges)
 	lobby.known.erase(lobby.known.begin() + 1);
 	frontEnd->Update();
 	EXPECT_FALSE(frontEnd->GetSelectedGame().has_value());
+}
+
+namespace
+{
+
+/// The texts of the buttons, the check boxes and the tabs of the boxes. A control with no text has no name, and the
+/// check below sees only the controls with a name.
+TextDatabase ButtonTexts()
+{
+	constexpr std::array k_Names = {
+	    u"HELP_TEXT_DIALOG_BACK",
+	    u"HELP_TEXT_DIALOG_ADDITION_96",
+	    u"HELP_TEXT_DIALOG_TATOOBACK",
+	    u"HELP_TEXT_DIALOG_ADDITION_76",
+	    u"HELP_TEXT_PATCH_09",
+	    u"HELP_TEXT_DIALOG_ADDITION_104",
+	    u"HELP_TEXT_DIALOG_ADDITION_105",
+	    u"HELP_TEXT_DIALOG_ADDITION_142",
+	    u"HELP_TEXT_DIALOG_ADDITION_49",
+	    u"HELP_TEXT_MULTIPLAYER_TOCHAT",
+	    u"HELP_TEXT_MULTIPLAYER_READY",
+	    u"HELP_TEXT_PAUSE_STATS_126",
+	    u"HELP_TEXT_PAUSE_STATS_127",
+	    u"HELP_TEXT_PAUSE_STATS_128",
+	    u"HELP_TEXT_DIALOG_ADDITION_110",
+	};
+	std::u16string script;
+	for (const auto* name : k_Names)
+	{
+		// Each text is the end of its name, so that each control has a name of its own
+		const std::u16string_view view(name);
+		script.append(u"ADD_TEXT(1, N, \"").append(view).append(u"\", \"A").append(view.substr(10)).append(u"\")\n");
+	}
+	TextDatabase database;
+	database.AddScript(gui::test::Utf16Script(script));
+	return database;
+}
+
+/// The controls that act in the boxes, which are not in the frame of the box
+std::vector<std::u16string> ControlsOutOfTheFrame(const MultiplayerBoxes& boxes)
+{
+	const auto frame = MultiplayerBoxes::FrameOf(boxes.GetFrontEnd()->GetBox());
+	std::vector<std::u16string> outside;
+	const auto controls = boxes.GetNamedControls();
+	// Each box has Back at its bottom left
+	EXPECT_TRUE(std::ranges::any_of(controls, [](const auto& control) { return control.name.starts_with(u"ADIALOG"); }));
+	for (const auto& control : controls)
+	{
+		// The tabs of the game room stand on the top edge of the frame, out of it
+		auto rect = control.rect;
+		if (control.kind == "tab" && rect.max.y == frame.min.y)
+		{
+			rect.min.y = frame.min.y;
+		}
+		if (rect.min.x < frame.min.x || rect.min.y < frame.min.y || rect.max.x > frame.max.x || rect.max.y > frame.max.y)
+		{
+			outside.push_back(control.name);
+		}
+	}
+	return outside;
+}
+
+} // namespace
+
+TEST(MultiplayerBoxes, TheFrameOfEachBoxIsAsTallAsTheFrameOfTheGameRoom)
+{
+	// The game draws the frame of every box of the front end 40 below the box, as for a box with tabs
+	EXPECT_EQ(MultiplayerBoxes::k_Box.min, glm::ivec2(10, 50));
+	EXPECT_EQ(MultiplayerBoxes::k_Box.max, glm::ivec2(790, 590));
+	EXPECT_EQ(MultiplayerBoxes::FrameOf(Box::GameList).max, MultiplayerBoxes::k_RoomBox.max);
+	EXPECT_EQ(MultiplayerBoxes::FrameOf(Box::Conditions).max, MultiplayerBoxes::k_RoomBox.max);
+}
+
+TEST_F(FrontEndTest, EveryControlOfEachBoxIsInTheFrameOfTheBox)
+{
+	const auto texts = ButtonTexts();
+	const auto font = gui::test::LoadFont();
+	MultiplayerBoxes boxes {texts, font};
+
+	// The boxes before the login
+	Make();
+	boxes.Open(std::move(frontEnd));
+	EXPECT_EQ(boxes.GetFrontEnd()->GetBox(), Box::ChooseConnection);
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+	boxes.GetFrontEnd()->Next();
+	boxes.Update(0.0f);
+	EXPECT_EQ(boxes.GetFrontEnd()->GetBox(), Box::FindGames);
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+	boxes.GetFrontEnd()->SetLobbyKind(LobbyKind::Internet);
+	boxes.GetFrontEnd()->Next();
+	boxes.Update(0.0f);
+	EXPECT_EQ(boxes.GetFrontEnd()->GetBox(), Box::Login);
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+
+	// The game list
+	ToGameList();
+	boxes.Open(std::move(frontEnd));
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+
+	// Each tab of the game room, then the conditions
+	ToRoom();
+	boxes.Open(std::move(frontEnd));
+	for (size_t tab = 0; tab < k_RoomTabCount; ++tab)
+	{
+		boxes.GetFrontEnd()->SelectTab(static_cast<RoomTab>(tab));
+		boxes.Update(0.0f);
+		EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {}) << "tab " << tab;
+	}
+	boxes.GetFrontEnd()->Next();
+	boxes.Update(0.0f);
+	EXPECT_EQ(boxes.GetFrontEnd()->GetBox(), Box::Conditions);
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+}
+
+TEST_F(FrontEndTest, NoControlOfTheGameListGoesUnderRefreshList)
+{
+	const auto texts = ButtonTexts();
+	const auto font = gui::test::LoadFont();
+	MultiplayerBoxes boxes {texts, font};
+	ToGameList();
+	boxes.Open(std::move(frontEnd));
+	const auto check = [&boxes](std::string_view when) {
+		const auto controls = boxes.GetNamedControls();
+		const auto refresh = std::ranges::find(controls, std::u16string(u"APATCH_09"), &Dialog::NamedControl::name);
+		ASSERT_NE(refresh, controls.end()) << when;
+		const auto crosses = [](const DialogRect& a, const DialogRect& b) {
+			return a.min.x < b.max.x && b.min.x < a.max.x && a.min.y < b.max.y && b.min.y < a.max.y;
+		};
+		const auto rects = boxes.GetVisibleRects();
+		// Only the button itself is in its place, on the default screen and on the screens of the looks
+		EXPECT_EQ(std::ranges::count_if(rects, [&](const DialogRect& rect) { return crosses(rect, refresh->rect); }), 1)
+		    << when;
+		for (const auto& [width, height] : {std::pair {1280, 1024}, std::pair {1920, 1080}})
+		{
+			const auto space = FrontEndSpace(width, height);
+			const auto onScreen = [&space](const DialogRect& rect) {
+				return std::pair {space.ToScreen(glm::vec2(rect.min)), space.ToScreen(glm::vec2(rect.max))};
+			};
+			const auto [buttonMin, buttonMax] = onScreen(refresh->rect);
+			const auto count = std::ranges::count_if(rects, [&](const DialogRect& rect) {
+				const auto [min, max] = onScreen(rect);
+				return min.x < buttonMax.x && buttonMin.x < max.x && min.y < buttonMax.y && buttonMin.y < max.y;
+			});
+			EXPECT_EQ(count, 1) << when << " " << width << "x" << height;
+		}
+	};
+	check("no game picked");
+	boxes.GetFrontEnd()->SelectGame(0);
+	boxes.Update(0.0f);
+	check("a game picked");
 }

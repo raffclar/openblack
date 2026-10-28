@@ -65,7 +65,8 @@ struct DiscipleInspect
 	entt::entity thing {entt::null};
 };
 
-/// A sprite drawn over a disciple: its glow, or the symbol of its work shown in or under the hand
+/// A sprite drawn over a disciple: its glow, or the symbol of its work shown in or under the hand. It is a thing of the
+/// drawn registry, and `villager` is a thing of the land.
 struct DiscipleMark
 {
 	entt::entity villager {entt::null};

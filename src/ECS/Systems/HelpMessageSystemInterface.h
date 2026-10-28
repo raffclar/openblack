@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "Commands/PlayerCommands.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Help/HelpMessages.h"
 
@@ -57,10 +58,21 @@ public:
 	virtual bool RunMessageSet(size_t set, std::optional<help_messages::Texts> thing = std::nullopt) = 0;
 	/// A kind of help counts as given now
 	virtual void TriggerCategory(uint32_t category) = 0;
-	/// The Help key: about what is in the hand, else what the hand is over, else the ground
+	/// The Help key: the computer of the player finds what is in the hand, else what the hand is over, else the ground.
+	/// It sends that to the turn (player_commands::HelpQuery).
 	virtual void HelpQuery() = 0;
+	/// At the turn: the Help key of this computer's player. The advisors tell the player about the thing, else about
+	/// the ground. Nothing occurs while a script's cut scene has the controls of the player.
+	virtual void DoHelpQuery(const player_commands::HelpQuery& query) = 0;
 	/// Once a game turn: the banter, while the help system is on
 	virtual void ProcessTurn() = 0;
+
+	/// The random numbers of the local help: the banter, the texts of a set, the guidance and the spirits of the scripts.
+	/// The help draws them only in the turns, and no frame draws them, thus the help says the same things at the same
+	/// turns at all frame rates. The draw is as LocalRand: 0 for 0 without a draw, else LHRand(n) on the seed of the help.
+	virtual uint32_t HelpRand(int32_t n) = 0;
+	/// FloatRand(x) on the seed of the help
+	virtual float HelpFloatRand(float x) = 0;
 
 	[[nodiscard]] virtual const help_messages::SetCounts& GetSentCounts() const = 0;
 	[[nodiscard]] virtual const std::vector<Started>& GetStarted() const = 0;

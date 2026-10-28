@@ -14,6 +14,9 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
+
+#include <glm/vec4.hpp>
 
 #include "Common/Zoomer.h"
 #include "Dialog.h"
@@ -30,6 +33,14 @@ namespace statistics_box
 class BarGraph;
 class LineGraph;
 class CreatureViews;
+
+/// Adds a line graph of the players' histories to a dialog: the box of the Player Stats tab, which other boxes use too.
+/// A click on it changes it from shares to values, or back.
+LineGraph& AddLineGraph(Dialog& dialog, DialogRect rect, std::u16string caption, bool shares);
+/// Gives a line graph its lines, one for each player in its colour. With no scale, the scale goes from the lowest point
+/// of the lines to the highest.
+void SetLines(LineGraph& graph, std::vector<std::vector<float>> lines, std::vector<glm::vec4> colours,
+              std::optional<LineScale> scale);
 } // namespace statistics_box
 
 /// The Game Statistics box: six tabs along its top, of which the first returns to the box it was opened from and the

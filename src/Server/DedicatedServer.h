@@ -21,6 +21,7 @@
 
 #include <spdlog/common.h>
 
+#include "Common/DeveloperTools.h"
 #include "Debug/SimRun.h"
 #include "EngineConfig.h"
 #include "Simulation/WorldStart.h"
@@ -37,6 +38,20 @@ constexpr double k_DefaultFrameMilliseconds = 100.0;
 /// network map
 inline constexpr std::string_view k_ServerDefaultLand = "Online Maps/mpm_2p_1.map";
 
+/// The seed of the world of a room when no tool gives one. Every room starts from this seed.
+constexpr uint32_t k_RoomSeed = 1;
+
+/// How the world of the server starts its random numbers and its date
+struct RoomStart
+{
+	/// The seed of every random number of the world, which the clients get in the start of the game
+	uint32_t seed {k_RoomSeed};
+	/// The date of the world for a run of a tool. None: each computer reads the date from its own clock.
+	std::optional<int64_t> pinnedDate;
+
+	bool operator==(const RoomStart&) const = default;
+};
+
 /// The game role of the server: the game socket that the clients join with a ticket of the lobby
 struct NetworkSettings
 {
@@ -52,10 +67,13 @@ struct NetworkSettings
 	/// The keys that sign the tickets: the https:// address of the lobby's /api/v1/ticket-keys, or a file with the same
 	/// JSON
 	std::string ticketKeys;
-	/// The game starts when this many gods joined and are ready
-	uint32_t godsToStart {1};
+	/// The fewest gods with a player that start the game. The game starts when each god in the room is ready and the room
+	/// has this many gods at least. The room has a slot for each citadel of the land, which can be more.
+	uint32_t minGods {1};
 	/// How long a god's player can be away before the god is defeated
 	uint32_t comeBackSeconds {300};
+	/// Tests: the server lets through the commands of the test tools (player_commands::CreatureFightCheat)
+	bool testCommands {false};
 	/// The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room
 	/// every 5 seconds, so that the lobby lists the server and gives tickets for it.
 	std::string lobbyApi;
@@ -82,20 +100,27 @@ struct ServerSettings
 	std::optional<std::string> scenario;
 	/// The network map for 32 gods in place of a land
 	bool godsRingMap {false};
+	/// Tools: the modes of the AI soak. Every client takes them from the start of the game.
+	developer_tools::SoakTools soak;
 	/// How the new game on the first land starts, as the game's --skip-opening gives it
 	std::optional<new_game_choice::NewGameStart> opening;
 	/// The text of --skip-opening, which the game server sends to the clients in the start of the game
 	std::string openingName;
-	/// The seed of every random number of the world. The date of the world is pinned with it.
-	uint32_t seed {1};
+	/// Tools: the seed of every random number of the world. A seed from a tool also pins the date of the world. With
+	/// none, the world starts from the seed of a room and reads the date from the clock of the computer.
+	std::optional<uint32_t> seed;
 	/// The server stops when the world gets to this turn. None for a server that runs until a signal stops it.
 	std::optional<uint32_t> turns;
+	/// Tests: the loss of a temple at a turn, which every client of the network game must also have
+	std::optional<sim_run::TempleLoss> templeLoss;
+	/// Tests: a god with no temple stays in the game, which every client of the network game must also have
+	bool godsNeedNoTemple {false};
 	/// The game time of each frame in milliseconds
 	double frameMilliseconds {k_DefaultFrameMilliseconds};
 	/// Tools: play the frames one after the other with no wait for the wall clock
 	bool fast {false};
-	/// The folder of the server's own profile. It is never a folder of a player. With none, the server plays as the
-	/// profile of a tool's run, in the Profiles folder of its working folder.
+	/// A folder for the server's profile. The server does not use it: it plays as a profile in memory and writes no
+	/// profile, no saved game and no player data. The server only says in its log that it did not use the folder.
 	std::optional<std::filesystem::path> profileFolder;
 	/// Tools: the server writes the run record of each turn to this file, as the game's --sim-record does, with the hash
 	/// of each component. It starts the inspector on a free port of 127.0.0.1.
@@ -120,6 +145,8 @@ struct ServerSettings
 	std::optional<NetworkSettings> network;
 	std::string logFile {"stdout"};
 	spdlog::level::level_enum logLevel {spdlog::level::info};
+	/// Tools: write the checksum of each turn to the log. A deployed server does not: its log would fill the disk.
+	bool logChecksums {false};
 };
 
 /// The configuration of the engine for the server: no window, no device for the renderer or the audio
@@ -128,6 +155,27 @@ struct ServerSettings
 /// The clock of the server: each frame takes a fixed game time and, unless the run is fast, waits until the wall clock
 /// gives that time. No pointer moves the hand.
 [[nodiscard]] sim_run::Request SimulationFor(const ServerSettings& settings);
+
+/// The seed and the date of the world: those of a tool when it gives a seed, else the seed of a room and the clock of the
+/// computer
+[[nodiscard]] RoomStart RoomStartFor(const ServerSettings& settings);
+
+/// The line of the log that tells the seed and the date of the world
+[[nodiscard]] std::string RoomStartLine(const RoomStart& start);
+
+/// What the server does with the commands of its own player at the end of a frame
+enum class OwnCommands
+{
+	/// The next turn does them
+	Send,
+	/// No turn does them
+	Drop,
+};
+
+/// The commands of the own player of a server that plays the commands of a file. The file has all the commands of the
+/// game, also the commands of the game's testbed scenario. Thus the server drops the same commands of its own scenario,
+/// and each command occurs one time only.
+[[nodiscard]] OwnCommands OwnCommandsOf(const ServerSettings& settings);
 
 /// The line of the log for the checksum of one turn, which the tools read
 [[nodiscard]] std::string ChecksumLine(uint32_t turn, uint64_t checksum);

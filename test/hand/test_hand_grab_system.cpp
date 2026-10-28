@@ -26,6 +26,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
@@ -104,6 +105,16 @@ public:
 		return hand;
 	}
 	[[nodiscard]] PlayerNames HandPlayer() const override { return acting.value_or(PlayerNames::PLAYER_ONE); }
+	[[nodiscard]] bool IsOtherPlayersHand(entt::entity of) const override { return otherHands.contains(of); }
+	[[nodiscard]] std::optional<PlayerNames> PlayerOfHand(entt::entity of) const override
+	{
+		return of == secondHand ? std::optional(PlayerNames::PLAYER_TWO) : std::nullopt;
+	}
+	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity of) const override
+	{
+		const auto found = reportedPlaces.find(of);
+		return found != reportedPlaces.end() ? found->second : ReportedHandPlace();
+	}
 	void SetActingPlayer(std::optional<PlayerNames> player) override { acting = player; }
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return acting; }
 	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override { return ownHandPlayer; }
@@ -114,9 +125,10 @@ public:
 	{
 		return reportedCollide.has_value() ? reportedCollide : pickedPoint;
 	}
-	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3 point) const override
+	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override
 	{
-		return influence && (!borderX.has_value() || point.x < *borderX);
+		return influence && (!influenceOnlyOf.has_value() || player == *influenceOnlyOf) &&
+		       (!borderX.has_value() || point.x < *borderX);
 	}
 	void HeldThingUsedOnLand(PlayerNames player) override { usedOnLand.push_back(player); }
 	[[nodiscard]] bool InBounds(glm::vec3) const override { return true; }
@@ -434,6 +446,9 @@ public:
 	entt::entity hand {entt::null};
 	/// The hand of the second player, which a command of that player acts with
 	entt::entity secondHand {entt::null};
+	/// The hands of the other gods of a network game, and where each last reported its hand
+	std::set<entt::entity> otherHands;
+	std::map<entt::entity, glm::vec3> reportedPlaces;
 	/// The second player has hands only once a network game gave them
 	bool secondPlayerHasHands {false};
 	std::optional<PlayerNames> acting;
@@ -442,6 +457,8 @@ public:
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> nearHand;
 	bool influence {true};
+	/// When set, only this player has influence anywhere
+	std::optional<PlayerNames> influenceOnlyOf;
 	/// The point picked under the cursor, and with a border the influence reaches only west of it
 	std::optional<glm::vec3> pickedPoint {glm::vec3(0.0f)};
 	/// The point that the last report of the hand's player picked; the picked point of this computer when none
@@ -571,7 +588,7 @@ protected:
 			    }
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandGive>)
 			    {
-				    system->DoGive(player, command.creature, command.object);
+				    system->DoGive(player, command.creature, command.object, command.leftHand);
 			    }
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandTwist>)
 			    {
@@ -592,6 +609,10 @@ protected:
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandClick>)
 			    {
 				    system->DoClick(player, command, commandTurn);
+			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::GiveCallOff>)
+			    {
+				    system->DoGiveCallOff(player, command.creature);
 			    }
 		    },
 		    action);
@@ -987,6 +1008,7 @@ TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
 	world->underCursor = rock;
 	// Even out of the influence, where it isn't tapped
 	world->influence = false;
+	commandTurn = now / 100;
 	EXPECT_FALSE(Press());
 	const auto* clicked = world->registry.TryGet<const HandClicked>(world->hand);
 	ASSERT_NE(clicked, nullptr);
@@ -1025,11 +1047,13 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
-	system->ClickReleased(7);
+	commandTurn = 7;
+	system->ClickReleased();
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	world->underCursor.reset();
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
-	system->ClickReleased(8);
+	commandTurn = 8;
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
@@ -1037,13 +1061,12 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 	EXPECT_EQ(clicked.placeTurn, 8u);
 }
 
-TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
+TEST_F(HandGrabSystemWithWorld, TheTurnWritesTheClicks)
 {
-	world->networkGame = true;
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
 	commandTurn = 12;
-	system->ClickThing(rock, 7);
+	system->ClickThing(rock);
 	ASSERT_EQ(world->sent.size(), 1u);
 	EXPECT_EQ(std::get<player_commands::HandClick>(world->sent[0]).thing, rock);
 	// The click has the number of the turn that wrote it, not of the frame that sent it
@@ -1053,7 +1076,7 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
 	world->underCursor.reset();
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
 	commandTurn = 13;
-	system->ClickReleased(8);
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
@@ -1063,7 +1086,7 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
 	world->underCursor = gone;
 	waiting.clear();
 	world->onCommand = [this](const player_commands::Action& action) { waiting.push_back(action); };
-	system->ClickReleased(9);
+	system->ClickReleased();
 	world->registry.Destroy(gone);
 	RunWaiting();
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
@@ -1076,12 +1099,13 @@ TEST_F(HandGrabSystemWithWorld, ARewardWithTheLeashLooseInTheHandIsTheLand)
 	world->underCursor = chest;
 	world->looseLeash = true;
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
-	system->ClickReleased(8);
+	commandTurn = 8;
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.placeTurn, 8u);
 	world->looseLeash = false;
-	system->ClickReleased(9);
+	system->ClickReleased();
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, chest);
 }
 
@@ -1089,11 +1113,16 @@ TEST_F(HandGrabSystemWithWorld, ClicksAreForgottenAfterFifteenSeconds)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
-	system->ClickReleased(now / 100);
-	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more
+	commandTurn = now / 100;
+	system->ClickReleased();
+	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more.
+	// The turn forgets the clicks, not the frames.
 	Frame(14900);
+	system->InterfaceTurn(now, now / 100);
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	Frame(100);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	system->InterfaceTurn(now, now / 100);
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
 }
 
@@ -1268,6 +1297,80 @@ TEST_F(HandGrabSystemWithWorld, ATreeThatThePullFreedIsTakenWhenTheButtonIsLetGo
 	EXPECT_EQ(std::get<player_commands::HandTake>(world->sent.front()).object, tree);
 	RunWaiting();
 	EXPECT_EQ(system->GetHeld(), std::optional(tree));
+}
+
+class HandGrabShortTreePress: public HandGrabSystemWithWorld
+{
+protected:
+	/// A press of eight frames of 20 ms on a light tree, with the hand far above its grip. Gives the thing that the hand
+	/// holds after the turn that does the commands.
+	std::optional<entt::entity> PressEightFrames(entt::entity tree)
+	{
+		deferCommands = true;
+		world->underCursor = tree;
+		EXPECT_TRUE(Press());
+		// The hand fades into its pull for 0.13 s, and the pull starts on the frame after the fade
+		for (int i = 0; i < 7; ++i)
+		{
+			Frame(20, {0.0f, 50.0f, 0.0f});
+			EXPECT_TRUE(world->holes.empty()) << "frame " << i;
+		}
+		// The first frame of the pull pulls harder than the tree weighs, thus the tree comes free at once
+		Frame(20, {0.0f, 50.0f, 0.0f});
+		EXPECT_EQ(world->holes, std::vector<entt::entity> {tree});
+		// The button comes up after the pull freed the tree: the hand sends the take, not a tap
+		EXPECT_FALSE(Release().has_value());
+		EXPECT_EQ(world->sent.size(), 1u);
+		RunWaiting();
+		return system->GetHeld();
+	}
+};
+
+TEST_F(HandGrabShortTreePress, InASinglePlayerGameAShortPressTakesALightTree)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	EXPECT_EQ(PressEightFrames(tree), std::optional(tree));
+	EXPECT_TRUE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabShortTreePress, InANetworkGameTheSameShortPressTakesTheTreeAtTheSameFrame)
+{
+	world->networkGame = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	EXPECT_EQ(PressEightFrames(tree), std::optional(tree));
+	EXPECT_TRUE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabShortTreePress, APressOnATreeOutsideTheInfluenceIsAClickAndDoesNotPull)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	world->influence = false;
+	EXPECT_FALSE(Press());
+	for (int i = 0; i < 8; ++i)
+	{
+		Frame(20, {0.0f, 50.0f, 0.0f});
+	}
+	EXPECT_FALSE(system->GetPullPose().has_value());
+	EXPECT_FALSE(world->registry.AllOf<HandPulled>(tree));
+	EXPECT_TRUE(world->holes.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameTheInterfaceAsksTheInfluenceOfItsOwnHand)
+{
+	world->networkGame = true;
+	world->ownHandPlayer = PlayerNames::PLAYER_TWO;
+	world->influenceOnlyOf = PlayerNames::PLAYER_TWO;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	// What the hand offers and why it would not take a thing are of the hand of this computer, not of the first player
+	EXPECT_TRUE(system->IsInInfluence());
+	EXPECT_EQ(system->WhyNotTake(tree), "");
+	EXPECT_FALSE(system->IsInInfluenceOf(PlayerNames::PLAYER_ONE));
+	world->influenceOnlyOf = PlayerNames::PLAYER_ONE;
+	EXPECT_FALSE(system->IsInInfluence());
+	EXPECT_NE(system->WhyNotTake(tree), "");
 }
 
 TEST_F(HandGrabSystemWithWorld, ALightTreeIsUprootedAndCreaks)
@@ -2077,6 +2180,26 @@ TEST_F(HandGrabSystemGiving, TheGiveOfThePressIsACommandThatWaitsForItsTurn)
 	EXPECT_EQ(world->given.front().creature, creature);
 }
 
+TEST_F(HandGrabSystemGiving, TheTurnGivesWithTheSideOfTheHandOfTheComputerThatSentTheGive)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	deferCommands = true;
+	// The giver has a right hand
+	world->rightHanded = true;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(waiting.size(), 1u);
+	EXPECT_FALSE(std::get<player_commands::HandGive>(waiting.front()).leftHand);
+	// Another computer, with a left hand, does the turn: the creature takes it with the giver's side
+	world->rightHanded = false;
+	RunWaiting();
+	ASSERT_EQ(world->given.size(), 1u);
+	EXPECT_EQ(world->given.front().held, rock);
+	EXPECT_FALSE(world->given.front().leftHand);
+}
+
 TEST_F(HandGrabSystemGiving, WhileTheCreatureReachesTheHandMeetsItsHandAtTheMomentOfTaking)
 {
 	const auto rock = HoldRock();
@@ -2112,6 +2235,33 @@ TEST_F(HandGrabSystemGiving, MovingTheHandFifteenSizesFromTheReachingCreatureCal
 	EXPECT_TRUE(world->calledOff.empty());
 	Frame(16, {40.0f, 0.0f, 0.0f});
 	Frame(16, {40.0f, 0.0f, 0.0f});
+	EXPECT_EQ(world->calledOff, std::vector<entt::entity> {creature});
+	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+}
+
+TEST_F(HandGrabSystemGiving, TheTurnCallsOffTheGiftThatTheHandSentOneTime)
+{
+	HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	Press();
+	Frame(230);
+	world->underCursor.reset();
+	world->takePoint = glm::vec3(0.0f, 0.0f, 0.0f);
+	deferCommands = true;
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	// The frames send the call off one time, and do not call off the creature or forget the gift
+	const auto callOffs = std::ranges::count_if(waiting, [](const player_commands::Action& action) {
+		return std::holds_alternative<player_commands::GiveCallOff>(action);
+	});
+	EXPECT_EQ(callOffs, 1);
+	EXPECT_TRUE(world->calledOff.empty());
+	EXPECT_TRUE(system->GetOfferedCreature().has_value());
+	// The turn calls it off
+	RunWaiting();
 	EXPECT_EQ(world->calledOff, std::vector<entt::entity> {creature});
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
 }
@@ -2353,8 +2503,14 @@ TEST_F(HandGrabSystemWithWorld, ATapWaitsForTheTurnThatDoesItsCommand)
 	Frame(50);
 	Release();
 	EXPECT_TRUE(world->tapped.empty());
-	ASSERT_EQ(world->sent.size(), 1u);
-	EXPECT_TRUE(std::holds_alternative<player_commands::HandTap>(world->sent.front()));
+	// The tap and the click of the thing under the hand go to the turn
+	ASSERT_EQ(world->sent.size(), 2u);
+	EXPECT_EQ(std::ranges::count_if(
+	              world->sent, [](const auto& action) { return std::holds_alternative<player_commands::HandTap>(action); }),
+	          1);
+	EXPECT_EQ(std::ranges::count_if(
+	              world->sent, [](const auto& action) { return std::holds_alternative<player_commands::HandClick>(action); }),
+	          1);
 	RunWaiting();
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), rock);
@@ -2462,6 +2618,40 @@ TEST_F(HandGrabSystemWithWorld, TheLockAndItsEndOfAnotherPlayerScoopWithThatPlay
 	EXPECT_FALSE(world->acting.has_value());
 }
 
+// The questions of this computer are about the hand of its own god; the turn asks about the hand of a player by name
+TEST_F(HandGrabSystemWithWorld, ThisComputerAsksAboutTheHandOfItsOwnGod)
+{
+	world->networkGame = true;
+	world->secondPlayerHasHands = true;
+	world->ownHandPlayer = PlayerNames::PLAYER_TWO;
+	const auto first = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoTake(PlayerNames::PLAYER_ONE, first);
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	system->DoLock(PlayerNames::PLAYER_TWO, pile);
+	const auto handful = world->registry.Get<const HandGrab>(world->secondHand).object;
+	EXPECT_EQ(system->GetHeld(), std::optional(handful));
+	EXPECT_EQ(system->GetLockedOn(), std::optional(pile));
+	EXPECT_EQ(system->GetHeldOf(PlayerNames::PLAYER_ONE), std::optional(first));
+	EXPECT_FALSE(system->GetLockedOnOf(PlayerNames::PLAYER_ONE).has_value());
+	EXPECT_EQ(system->GetLockedOnOf(PlayerNames::PLAYER_TWO), std::optional(pile));
+	// The questions leave no acting player behind them
+	EXPECT_FALSE(world->acting.has_value());
+}
+
+// A creature takes a gift from the hand that holds it, whichever god's hand that is
+TEST_F(HandGrabSystemWithWorld, ACreatureTakesTheGiftFromTheHandOfTheGodThatHoldsIt)
+{
+	world->secondPlayerHasHands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoTake(PlayerNames::PLAYER_TWO, rock);
+	ASSERT_EQ(system->GetHeldOf(PlayerNames::PLAYER_TWO), std::optional(rock));
+	EXPECT_TRUE(system->HandOver(rock));
+	EXPECT_FALSE(system->GetHeldOf(PlayerNames::PLAYER_TWO).has_value());
+	EXPECT_FALSE(world->acting.has_value());
+}
+
 TEST_F(HandGrabSystemWithWorld, TheEndOfTheLockOfAnotherThingLeavesTheScoop)
 {
 	const auto pile = world->registry.Create();
@@ -2474,4 +2664,24 @@ TEST_F(HandGrabSystemWithWorld, TheEndOfTheLockOfAnotherThingLeavesTheScoop)
 	system->DoUnlock(world->HandPlayer(), *handful);
 	system->ProcessTurn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u + 8u);
+}
+
+TEST_F(HandGrabSystemWithWorld, TheSeedInTheHandOfAnotherGodIsDrawnAtTheHandItReported)
+{
+	auto& registry = world->registry;
+	const auto seed = registry.Create();
+	registry.Assign<Transform>(seed, glm::vec3(1.0f, 2.0f, 3.0f), glm::mat3(2.0f), glm::vec3(1.0f));
+	registry.Assign<HandHeldSeed>(world->secondHand, HandHeldSeed {.seed = seed});
+	const auto ownSeed = registry.Create();
+	registry.Assign<Transform>(ownSeed, glm::vec3(7.0f, 8.0f, 9.0f), glm::mat3(2.0f), glm::vec3(1.0f));
+	registry.Assign<HandHeldSeed>(world->hand, HandHeldSeed {.seed = ownSeed});
+	world->otherHands.insert(world->secondHand);
+	world->reportedPlaces[world->secondHand] = glm::vec3(40.0f, 5.0f, 60.0f);
+	system->PlaceOthersHeldForFrame(20);
+	// Upright at the reported hand, as another god's held thing is
+	const auto& placed = registry.Get<const Transform>(seed);
+	EXPECT_EQ(placed.position, glm::vec3(40.0f, 5.0f, 60.0f));
+	EXPECT_EQ(placed.rotation, glm::mat3(1.0f));
+	// The seed of the own hand is where the hand's pose puts it
+	EXPECT_EQ(registry.Get<const Transform>(ownSeed).position, glm::vec3(7.0f, 8.0f, 9.0f));
 }

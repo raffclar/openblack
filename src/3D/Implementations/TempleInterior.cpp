@@ -16,6 +16,7 @@
 #include <ctime>
 
 #include <array>
+#include <chrono>
 #include <unordered_map>
 #include <utility>
 
@@ -67,11 +68,14 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
@@ -89,6 +93,7 @@
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple/TempleControlNames.h"
 #include "Temple/TempleHelpScripts.h"
@@ -264,8 +269,7 @@ TempleScrolls::Facts GatherScrollFacts()
 		facts.bindings.assign(bindings.begin(), bindings.end());
 	}
 	// The world scroll tells the player at this machine of the world and their people
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const auto world = player_statistics::World(local);
 	facts.population = world.population;
 	facts.believersPercent = world.believersPercent;
@@ -473,11 +477,11 @@ void TempleInterior::ListSavedGames()
 
 temple::save_game_room::View TempleInterior::SaveGameRoomView() const
 {
-	// openblack has no network game: the player is never in one
+	// A network game never saves
 	return {.closeUp = _cameraModel != nullptr && _cameraModel->GetSubMeshZoom() == 1.0f,
 	        .pictureLookedAt = _saveGameRoom != nullptr && _saveGameRoom->IsPictureLookedAt(),
 	        .keptInRoom = _lock.GetRoom().has_value(),
-	        .multiplayer = false};
+	        .multiplayer = Locator::time::has_value() && Locator::time::value().IsNetworkGame()};
 }
 
 void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t slot)
@@ -526,7 +530,8 @@ void TempleInterior::UpdateSaveGameRoom()
 	// The empty pictures show the half for the player's alignment
 	if (Locator::playerSystem::has_value() && Locator::alignmentSystem::has_value())
 	{
-		const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		const auto local =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		_saveGameRoom->SetAlignment(Locator::alignmentSystem::value().GetPlayerAlignment(local));
 	}
 	auto& boxes = _interface->GetSaveGameBoxes();
@@ -946,7 +951,7 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	        (inChallengeRoom && _challengeRoom->IsPictureLookedAt()) || (inSaveGameRoom && _saveGameRoom->IsPictureLookedAt()),
 	    .savedGames = savedGames,
 	    .savedGameHighDetail = inSaveGameRoom ? _saveGameRoom->GetHighDetailSlot() : std::nullopt,
-	    .multiplayer = false,
+	    .multiplayer = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
 	};
 	std::u16string savedGameName;
 	UpdateTempleToolTip(_toolTip, input, &savedGameName);
@@ -1044,7 +1049,7 @@ void TempleInterior::FadeIntoRoom()
 	}
 }
 
-void TempleInterior::UpdateCaveTrophies(float seconds)
+void TempleInterior::UpdateCaveTrophies(float gameSeconds)
 {
 	using namespace CreatureCaveTrophies;
 	_caveTrophies.clear();
@@ -1143,18 +1148,22 @@ void TempleInterior::UpdateCaveTrophies(float seconds)
 			continue;
 		}
 		auto& seed = place->seed;
-		seed.spin = std::fmod(seed.spin + (magic::k_OrbSeedSpin * seconds), glm::two_pi<float>());
+		std::optional<int> receiveType;
 		if (magic::visuals::IsPhialSeed(seed.seed))
 		{
 			const auto* spell =
 			    magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, magic::GetSpellSeedInfo(info, seed.seed).magicTypes[0]);
-			const int receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
-			seed.phialFrame = magic::visuals::StepPhialFrame(seed.phialFrame, seconds);
-			seed.phialPhase = std::fmod(seed.phialPhase + (magic::visuals::PhialPulseSpeed(receiveType) * seconds), 1.0f);
+			receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
 		}
-		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect)
+		const auto turn = magic::visuals::TurnSeed(
+		    {.spin = seed.spin, .phialFrame = seed.phialFrame, .phialPhase = seed.phialPhase}, receiveType, gameSeconds);
+		seed.spin = turn.spin;
+		seed.phialFrame = turn.phialFrame;
+		seed.phialPhase = turn.phialPhase;
+		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect &&
+		    _caveEffectStep.has_value())
 		{
-			particles->ProcessByFrame(place->holderEffect, seconds);
+			particles->ProcessByFrame(place->holderEffect, *_caveEffectStep);
 		}
 		_caveSeeds.push_back(seed);
 	}
@@ -1335,7 +1344,7 @@ void TempleInterior::UpdateMapSpells()
 	const auto gameTime =
 	    Locator::time::has_value() ? std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count() : 0.0f;
 	auto effects = GameMapSpellEffects();
-	_mapSpells.Update(casts, gameTime, effects);
+	_mapSpells.Update(casts, gameTime, _mapEffectStep, effects);
 }
 
 void TempleInterior::ClearMapSpells()
@@ -1384,6 +1393,10 @@ std::optional<float> TempleInterior::GetWayOutSeconds() const
 
 bool TempleInterior::IsRoomDrawn(TempleRoom room) const
 {
+	if (_warmUpVisit)
+	{
+		return true;
+	}
 	if (room == _currentRoom || room == _transitionRoom)
 	{
 		return true;
@@ -1604,6 +1617,14 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			_roomsOpened = true;
 		}
 		const float milliseconds = std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(dt).count();
+		// The effects of the seeds step at the pace of the screen's refresh: in the creature's room by the real time, over
+		// the map by the game's time. The seeds themselves turn by the game's time in both.
+		const auto realTime = Locator::time::has_value() ? Locator::time::value().GetFrameRealTime()
+		                                                 : std::chrono::duration_cast<std::chrono::milliseconds>(dt);
+		const auto gameTime =
+		    Locator::time::has_value() ? Locator::time::value().GetFrameGameTime() : std::chrono::milliseconds {0};
+		_caveEffectStep = particles::drawn_steps::StepSeconds(_caveEffectPace, realTime, realTime, true);
+		_mapEffectStep = particles::drawn_steps::StepSeconds(_mapEffectPace, realTime, gameTime, true);
 		_waterfallSlide += milliseconds * k_WaterfallSlidePerMillisecond;
 		_waterfallSlide -= std::floor(_waterfallSlide);
 
@@ -1648,6 +1669,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		// As the rooms are drawn, the scroll the camera is close to has its text drawn in front of it, and the signs
 		// their labels
 		_text.clear();
+		_scrollPictures.clear();
 		if (_scrolls != nullptr && _cameraModel != nullptr)
 		{
 			const auto facts = GatherScrollFacts();
@@ -1663,6 +1685,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 				}
 			}
 			_scrolls->AppendFocusedText(_text, facts);
+			_scrolls->AppendFocusedPictures(_scrollPictures, facts);
 		}
 		if (_signs != nullptr)
 		{
@@ -1697,10 +1720,11 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		                         static_cast<uint32_t>(machine_clock::Ticks()));
 		// The room the player is in sets how thick the fog is, and the light its colour
 		_fog = TempleFog::In(_currentRoom == TempleRoom::CreatureCave, _light);
-		// The creature's room chooses the belts and medals every frame
+		// The creature's room chooses the belts and medals every frame. Its seeds turn and pulse by the game's time of the
+		// frame, which stops while the player is in the temple.
 		if (IsRoomDrawn(TempleRoom::CreatureCave))
 		{
-			UpdateCaveTrophies(milliseconds / 1000.0f);
+			UpdateCaveTrophies(static_cast<float>(gameTime.count()) * 0.001f);
 		}
 		else
 		{
@@ -1790,6 +1814,17 @@ void TempleInterior::Activate(TempleRoom room)
 	{
 		return;
 	}
+	// The player of this computer goes into the temple with the leash of their creature held: a command takes the leash
+	// off in a later game turn, on every computer
+	if (Locator::leashSystem::has_value() && Locator::playerCommandSystem::has_value())
+	{
+		const auto player =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		if (Locator::leashSystem::value().ComesOffAtTemple(player))
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::TempleLeashOff {});
+		}
+	}
 	// The help of the world stops. The temple keeps the dialogue of a script until the player leaves.
 	{
 		temple_help::GameScripts scripts;
@@ -1860,6 +1895,35 @@ void TempleInterior::Activate(TempleRoom room)
 	camera.SetFocus(_cameraModel->GetTargetFocus());
 	ApplyLens();
 	CreateScrolls();
+}
+
+void TempleInterior::WarmUpVisit(const std::function<void()>& draw)
+{
+	if (_active || !Locator::rendereringSystem::has_value())
+	{
+		return;
+	}
+	// The rooms of the warm-up are in a registry of their own, as a visit makes them
+	auto rooms = std::make_unique<ecs::Registry>();
+	const auto rotation = portable_math::EulerAngleY(_templeRotation.y);
+	for (const auto& [roomType, assetName] : k_TempleInteriorParts)
+	{
+		addRoomToRegistry(*rooms, assetName, roomType, _templePosition, rotation, glm::vec3(1.0f));
+	}
+	for (const auto& [roomType, assetName] : k_TempleInteriorGlows)
+	{
+		addGlowsToRegistry(*rooms, roomType);
+	}
+	std::swap(_rooms, rooms);
+	const auto island = Locator::rendereringSystem::handle();
+	Locator::rendereringSystem::emplace<ecs::systems::RenderingSystemTemple>();
+	_active = true;
+	_warmUpVisit = true;
+	draw();
+	_warmUpVisit = false;
+	_active = false;
+	Locator::rendereringSystem::reset(island);
+	std::swap(_rooms, rooms);
 }
 
 void TempleInterior::EnterLockedRoom(TempleRoom room)

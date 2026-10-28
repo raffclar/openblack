@@ -79,26 +79,28 @@ Json After(const GuiTargetInterface& gui, std::string_view name)
 std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTargetInterface& gui)
 {
 	auto provider = std::make_unique<FunctionProvider>("gui");
-	provider->Add({.name = "windows",
-	               .description = "The debug windows and the game's own (its menu, the start-of-game question skip_box, "
-	                              "the tattoo_editor, the custom music controls music_player, the multiplayer front end "
-	                              "multiplayer, the Creature Cave): name, kind, open; the menu's page (or question), the "
-	                              "multiplayer box (choose_connection, find_games, login, game_list, room, conditions, or "
-	                              "message: its text), "
-	                              "the controls of the game's dialogs that can be pressed by name, the skip box's "
-	                              "answer picked, and the multiplayer lines (the games of game_list, or the last 10 "
-	                              "lines of the room's chat)",
-	               .parameters = {},
-	               .kind = ResultKind::List,
-	               .needsNear = false},
-	              [&gui](const QueryContext& /*context*/) {
-		              Json items = Json::array();
-		              for (const auto& window : gui.Windows())
-		              {
-			              items.push_back(WindowJson(window));
-		              }
-		              return QueryResult::Value(std::move(items));
-	              });
+	provider->Add(
+	    {.name = "windows",
+	     .description =
+	         "The debug windows and the game's own (its menu, the start-of-game question skip_box, "
+	         "the tattoo_editor, the custom music controls music_player, the multiplayer front end "
+	         "multiplayer, the end box end_box, the Creature Cave): name, kind, open; the menu's page (or question), the "
+	         "multiplayer box (choose_connection, find_games, login, game_list, room, conditions, or "
+	         "message: its text), "
+	         "the controls of the game's dialogs that can be pressed by name, the skip box's "
+	         "answer picked, and the multiplayer lines (the games of game_list, or the last 10 "
+	         "lines of the room's chat)",
+	     .parameters = {},
+	     .kind = ResultKind::List,
+	     .needsNear = false},
+	    [&gui](const QueryContext& /*context*/) {
+		    Json items = Json::array();
+		    for (const auto& window : gui.Windows())
+		    {
+			    items.push_back(WindowJson(window));
+		    }
+		    return QueryResult::Value(std::move(items));
+	    });
 	const auto openOrClose = [&gui](bool open) {
 		return [&gui, open](const QueryContext& context) {
 			const auto name = StringMember(context.params, "window").value_or("");
@@ -129,7 +131,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 	          "radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The "
 	          "multiplayer front end (multiplayer): the controls of its box, or of its message, by name. The "
 	          "music_player: its buttons by name (Music, Play, Pause, Stop, Previous, Next, Rewind, Fast Forward, "
-	          "Shuffle, Repeat, Play List) while they show. The "
+	          "Shuffle, Repeat, Play List) while they show. The end box (end_box): its tabs and arrows by name. The "
 	          "game's dialogs are clicked through the game's input, in order behind any input still to come. A debug "
 	          "window's button inside a table row or another scope its window pushed needs path: the labels and numbers "
 	          "leading to it. The press is made at the window's next frame; read what it changed after. When another dialog "

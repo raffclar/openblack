@@ -11,39 +11,57 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "3D/L3DMesh.h"
 #include "3D/MapCoords.h"
-#include "Camera/Camera.h"
+#include "Camera/CameraLens.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "Graphics/MeshDetail.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
-#include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
 
-std::optional<screen_pick::View> ecs::thing_on_screen::ScreenView()
+screen_pick::View ecs::thing_on_screen::ViewOf(const ViewInputs& inputs)
 {
-	if (!Locator::camera::has_value() || !Locator::windowing::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto size = Locator::windowing::value().GetSize();
-	if (size.x <= 0 || size.y <= 0)
-	{
-		return std::nullopt;
-	}
-	const auto& camera = Locator::camera::value();
+	// The same perspective and view as the camera makes them
+	const auto projection =
+	    glm::infinitePerspective(camera_lens::VerticalFieldOfView(inputs.lens, inputs.aspect), inputs.aspect, inputs.nearClip);
+	const auto view = glm::lookAt(inputs.eye, inputs.focus, glm::vec3(0.0f, 1.0f, 0.0f));
 	return screen_pick::FourByThreeMiddle({
-	    .worldToClip = camera.GetViewProjectionMatrix(),
-	    .resolution = glm::vec2(size),
-	    .near = camera.GetNearClip(),
-	    .xScale = camera.GetProjectionMatrix()[0][0],
-	    .camera = glm::vec3(glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current))[3]),
+	    .worldToClip = projection * view,
+	    .resolution = inputs.resolution,
+	    .near = inputs.nearClip,
+	    .xScale = projection[0][0],
+	    .camera = glm::vec3(glm::inverse(view)[3]),
+	});
+}
+
+std::optional<screen_pick::View> ecs::thing_on_screen::ScreenView(PlayerNames player)
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	// The window of the player who reported the view, on every computer and on the game server. A player with no window
+	// sees nothing on the screen.
+	const auto reported = Locator::handSystem::value().GetReportedView(player);
+	if (!reported.has_value() || reported->screen.x <= 0 || reported->screen.y <= 0)
+	{
+		return std::nullopt;
+	}
+	return ViewOf({
+	    .eye = reported->eye,
+	    .focus = reported->focus,
+	    .lens = reported->lens,
+	    .nearClip = reported->nearClip,
+	    .aspect = reported->aspect,
+	    .resolution = glm::vec2(reported->screen),
 	});
 }
 
@@ -69,6 +87,16 @@ bool ecs::thing_on_screen::OnScreen(const screen_pick::View& view, entt::entity 
 		const auto centre = transform->position + transform->rotation * (transform->scale * box.Center());
 		const float radius = openblack::graphics::mesh_detail::HalfDiagonal(box.Size()) * transform->scale.x;
 		return screen_pick::SphereOnScreen(view, centre, radius, transform->position);
+	}
+	return PlaceOnScreen(view, thing);
+}
+
+bool ecs::thing_on_screen::PlaceOnScreen(const screen_pick::View& view, entt::entity thing)
+{
+	const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(thing);
+	if (transform == nullptr)
+	{
+		return false;
 	}
 	// Where it stands, across the land as a map position holds it
 	const auto at = glm::vec3(map_coords::Quantise(transform->position.x), transform->position.y,
