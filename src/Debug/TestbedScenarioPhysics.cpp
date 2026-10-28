@@ -218,6 +218,26 @@ void AddBuildingBreak(std::vector<Scenario>& all)
 	    .objects = objects,
 	    .throws = snowThrows,
 	});
+
+	// One hut in snow, seen from close by after two boulders break it: its faces, back faces and broken edges
+	const glm::vec2 hut = objects.at(1).offset;
+	all.push_back({
+	    .id = "light.snow_on_broken_faces",
+	    .name = "Snow on the faces of a broken hut, from close by",
+	    .facet = Facet::Light,
+	    .description = "Snow lies over the whole island. Three huts stand in a row. After the snow settles on them, two "
+	                   "boulders hit each hut from the south, one time. The camera looks at the middle hut from the "
+	                   "south east, from close by.",
+	    .expected = "The broken hut shows white snow on the faces that point up, in the light and colour of the faces. "
+	                "The snow lies in patches that do not move with the camera. The back faces and the broken edges "
+	                "show snow only where the snow is deep. The pieces that fly off keep their snow.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 120.0f},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = glm::vec3(hut.x + 14.0f, 9.0f, hut.y - 14.0f),
+	                .look = glm::vec3(hut.x, 3.0f, hut.y)},
+	    .objects = objects,
+	    .throws = snowThrows,
+	});
 }
 
 // Buildings that follow the land, half built on the steep bank of the lake, seen from the side

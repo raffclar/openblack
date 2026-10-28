@@ -202,6 +202,7 @@ public:
 		made.push_back(name);
 		const auto id = entt::hashed_string(name.c_str()).value();
 		models[id] = parts.size();
+		drawnParts[id].assign(parts.begin(), parts.end());
 		return id;
 	}
 	void EraseModel(entt::id_type mesh) override
@@ -272,6 +273,8 @@ public:
 	std::map<entt::entity, PlayerNames> players;
 	std::vector<std::string> made;
 	std::map<entt::id_type, size_t> models;
+	/// The faces of each model made
+	std::map<entt::id_type, std::vector<building_world::DrawnPart>> drawnParts;
 	std::vector<entt::id_type> erased;
 	std::vector<std::vector<int32_t>> sounds;
 	std::vector<entt::entity> removed;
@@ -408,6 +411,32 @@ TEST(BuildingDamageSystem, ABreakingRockBreaksAHoleWhereItStrikesAsItsThrowersHa
 	EXPECT_EQ(effect.source.appliedBy, std::optional(impact.hitBy));
 	// The house's own resting body came from no hand, so no creature learns from the throw
 	EXPECT_TRUE(f.world->deeds.empty());
+}
+
+TEST(BuildingDamageSystem, TheBrokenModelMarksTheCornersOfItsBackFacesForTheSnow)
+{
+	Fixture f;
+	f.RockStrikes(k_HousePosition + glm::vec3(0.0f, 2.0f, 0.0f), damage::k_BreakingMomentum + 1.0f, PlayerNames::PLAYER_ONE);
+	const auto* broken = f.world->registry.TryGet<const BuildingDamage>(f.house);
+	ASSERT_NE(broken, nullptr);
+	const auto& parts = f.world->drawnParts.at(broken->drawMesh);
+	ASSERT_FALSE(parts.empty());
+	for (const auto& part : parts)
+	{
+		ASSERT_GE(part.indices.size(), 6U);
+		// Each triangle starts with its front face, then its back face, which faces the other way
+		for (size_t i = 0; i < 3; ++i)
+		{
+			const auto& front = part.vertices.at(part.indices.at(i));
+			const auto& back = part.vertices.at(part.indices.at(i + 3));
+			EXPECT_FALSE(front.back);
+			EXPECT_TRUE(back.back);
+			EXPECT_EQ(back.normal, -front.normal);
+		}
+		// A wall has two corners of each face, so the faces have as many corners as each other
+		const auto backCorners = std::ranges::count_if(part.vertices, [](const auto& vertex) { return vertex.back; });
+		EXPECT_EQ(static_cast<size_t>(backCorners) * 2, part.vertices.size());
+	}
 }
 
 TEST(BuildingDamageSystem, ACreatureMayLearnFromAThrowAtABuildingThatCameFromAHand)
