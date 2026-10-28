@@ -36,10 +36,17 @@ public:
 	[[nodiscard]] Hands GetPlayerHands() const noexcept override { return {entt::null, entt::null}; }
 	[[nodiscard]] HandPositions GetPlayerHandPositions() const noexcept override { return {}; }
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> /*picked*/, bool /*holdPoint*/) override {}
-	void SetOwnPlayer(PlayerNames player) override { own = player; }
+	void SetOwnPlayer(PlayerNames player) override
+	{
+		own = player;
+		hasOwn = true;
+	}
+	void ClearOwnPlayer() override { hasOwn = false; }
 	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return own; }
+	[[nodiscard]] bool IsOwnPlayer(PlayerNames player) const noexcept override { return hasOwn && player == own; }
 
 	PlayerNames own {PlayerNames::PLAYER_ONE};
+	bool hasOwn {true};
 };
 
 } // namespace
@@ -62,4 +69,26 @@ TEST(LocalInputPlayer, InANetworkGameTheInputActsForTheGodOfTheSlotOfThisCompute
 	EXPECT_EQ(input::LocalPlayer(&hands), PlayerNames::PLAYER_TWO);
 	hands.SetOwnPlayer(PlayerNames::PLAYER_FOUR);
 	EXPECT_EQ(input::LocalPlayer(&hands), PlayerNames::PLAYER_FOUR);
+}
+
+TEST(LocalInputPlayer, WithNoHandsOnlyTheFirstPlayerIsTheGodOfThisComputer)
+{
+	EXPECT_TRUE(input::IsLocalPlayer(nullptr, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(input::IsLocalPlayer(nullptr, PlayerNames::PLAYER_TWO));
+}
+
+TEST(LocalInputPlayer, InANetworkGameOnlyTheGodOfTheSlotOfThisComputerIsItsGod)
+{
+	FakeHands hands;
+	hands.SetOwnPlayer(PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(input::IsLocalPlayer(&hands, PlayerNames::PLAYER_TWO));
+	EXPECT_FALSE(input::IsLocalPlayer(&hands, PlayerNames::PLAYER_ONE));
+}
+
+TEST(LocalInputPlayer, TheGameServerHasNoGodOfItsOwn)
+{
+	FakeHands hands;
+	hands.ClearOwnPlayer();
+	EXPECT_FALSE(input::IsLocalPlayer(&hands, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(input::IsLocalPlayer(&hands, PlayerNames::PLAYER_TWO));
 }
