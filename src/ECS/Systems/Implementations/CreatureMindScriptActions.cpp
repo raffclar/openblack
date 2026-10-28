@@ -137,12 +137,11 @@ void CreatureMindSystem::StopForScript(entt::entity creature)
 		Locator::creatureFightSystem::value().TakeForScript(creature);
 	}
 	// The step that the creature does stops as a failure. Thus a walk to a thing that the hands act on also stops, and
-	// does not start again on the next turn. A catch or a let-go that plays its clip is the body's own, and it plays on.
+	// does not start again on the next turn. An action that the body started plays on, and a point plays its end.
 	if (Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature);
 	}
 }
 
@@ -209,12 +208,12 @@ void CreatureMindSystem::ForceFinish(entt::entity creature)
 	{
 		Locator::creatureAnimationSystem::value().Hurry(creature);
 	}
-	// What it was doing stops as a failure: it stops as the game stops a walk, drops what it does with a thing, and
-	// forgets its agenda
+	// What it was doing stops as a failure: it stops as the game stops a walk, and it forgets its agenda. An action that
+	// the body started plays on, and a point plays its end.
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature);
 	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
