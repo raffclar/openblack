@@ -2494,6 +2494,12 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		return PlayTurns();
 	}
 	case Step::SendCommands:
+		// A quick load that a command of the turns asked for loads now, after the turns of the frame. The load forgets
+		// the commands of the old world.
+		if (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().LoadAskedSlot())
+		{
+			break;
+		}
 		// A tool's run that plays the commands of a file does no command of its own player
 		if (_simulation.has_value() && _simulation->playCommandsPath.has_value())
 		{

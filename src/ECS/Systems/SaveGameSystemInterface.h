@@ -107,9 +107,18 @@ public:
 	[[nodiscard]] virtual bool HasExitSave() const = 0;
 	/// The end of a game turn: the game autosaves when an autosave is due
 	virtual void EndTurn() = 0;
-	/// The keys of the quick save and the quick load. Returns whether the game saved or loaded.
-	virtual bool QuickSave() = 0;
-	virtual bool QuickLoad() = 0;
+	/// The quick save key. When the rules let the key save, it keeps the turn of the key and returns true. Then the
+	/// key sends the command of the quick save.
+	virtual bool PressQuickSave() = 0;
+	/// The quick load key. Returns true when the rules let the key load. Then the key sends the command of the quick load.
+	virtual bool PressQuickLoad() = 0;
+	/// The command of the quick save, at its turn: the game saves into the quick save slot. Returns whether it wrote
+	/// every file of the world.
+	virtual bool DoQuickSave() = 0;
+	/// The command of the quick load, at its turn: the game loads the quick save slot after the turns of the frame
+	virtual void DoQuickLoad() = 0;
+	/// After the turns of the frame: the game loads the slot that a command asked for. Returns whether it loaded.
+	virtual bool LoadAskedSlot() = 0;
 	/// A new land starts: the turns go from zero again, so the turn of the last autosave does too
 	virtual void NewLand() = 0;
 	/// Whether a picture of the screen that the system asked for is not back yet
