@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include <optional>
 #include <utility>
+#include <vector>
 
 #include "ECS/GameEndConditions.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
@@ -32,6 +34,8 @@ public:
 	[[nodiscard]] std::vector<GodStanding> Standings() const override;
 	void SetTimeLimit(uint32_t minutes) override { _timeLimitMinutes = minutes; }
 	[[nodiscard]] uint32_t GetTimeLimit() const override;
+	void SetConditions(std::vector<game_end::ConditionPick> picks) override { _conditions = std::move(picks); }
+	void GiveConditions() override;
 	void AddToCondition(std::optional<PlayerNames> player, game_end::Condition condition, int32_t amount) override;
 	void MeasureConditions(PlayerNames player) override;
 	void BuildingWorks(entt::entity building) override;
@@ -39,6 +43,8 @@ public:
 private:
 	/// The time limit that the game server sent. None: the time limit of a test switch, or the default time limit.
 	std::optional<uint32_t> _timeLimitMinutes;
+	/// The winning conditions that the game server sent. None: the conditions of a test switch, or none.
+	std::optional<std::vector<game_end::ConditionPick>> _conditions;
 	std::vector<game_end::Event> _events;
 	/// The events that the view did not take yet
 	std::vector<game_end::Event> _eventsToShow;

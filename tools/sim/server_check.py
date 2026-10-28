@@ -182,6 +182,8 @@ def main():
     parser.add_argument("--server-args", default="", help="more arguments for the server, such as \"--reload-at 50\"")
     parser.add_argument("--run-limit", type=int, default=RUN_LIMIT_SECONDS,
                         help="the seconds that the server and the game each have to finish (a long run past turn 18000 needs more)")
+    parser.add_argument("--conditions", help="the winning conditions of the network game on both, as the server's "
+                        "--conditions and the game's --sim-conditions: [LAND:]NAME=VALUE,...")
     parser.add_argument("--server-fast", action="store_true", help="the server too plays with no wait")
     parser.add_argument("--hash-parts", action="store_true",
                         help="both runs record the hash of each component, to find what made them part")
@@ -243,6 +245,8 @@ def main():
         server_command += ["--ai-seed", str(options.ai_seed)]
     if options.server_fast:
         server_command.append("--fast")
+    if options.conditions:
+        server_command += ["--conditions", options.conditions]
     if options.hash_parts or options.hash_fields:
         server_command += ["--record", local(os.path.join(server_dir, "record.jsonl"))]
     if options.hash_fields:
@@ -262,6 +266,8 @@ def main():
         game_command.append("--sim-all-computer-gods")
     if options.ai_seed is not None:
         game_command += ["--sim-ai-seed", str(options.ai_seed)]
+    if options.conditions:
+        game_command += ["--sim-conditions", options.conditions]
     if events is None:
         game_command.append("--sim-still-hand")
     else:
@@ -349,6 +355,17 @@ def main():
         summary["same"] = False
         print(f"the hand did not do what its input expects: {missing}" if missing
               else f"the game and the server count other deeds of the hand: game {game_deeds}, server {server_deeds}")
+    # The winning conditions: each god gets them, completes them and wins at the same turns on the game and the server
+    if options.conditions:
+        game_events = sim_report.condition_events_in_file(game_log, last_compared)
+        server_events = sim_report.condition_events_in_file(server_log, last_compared)
+        summary["conditions"] = sim_report.condition_summary(server_events)
+        summary["condition_events"] = len(server_events)
+        summary["condition_events_same"] = game_events == server_events
+        if game_events != server_events or not server_events:
+            summary["same"] = False
+            print(f"the game and the server tell other events of the winning conditions: game {game_events[:10]}, "
+                  f"server {server_events[:10]}")
     # A component with no registration is left out of the checksum: a change in it would never show here
     unregistered = sim_report.unregistered_in_files(server_log, game_log, record,
                                                     os.path.join(server_dir, "record.jsonl"))

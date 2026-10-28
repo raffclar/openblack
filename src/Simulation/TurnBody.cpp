@@ -595,6 +595,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::worshipSiteSystem::value().UpdateTurn();
 		}
 		break;
+	case Step::GameConditions:
+		// At the first turn of a network game, each god gets the winning conditions of the game
+		if (Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().GiveConditions();
+		}
+		break;
 	case Step::GameEnd:
 		// A god with no temple is out of a skirmish or a network game, and the game is decided when one god is left
 		if (Locator::gameEndSystem::has_value())
