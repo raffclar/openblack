@@ -259,10 +259,10 @@ public:
 	[[nodiscard]] virtual bool IsTakingFromHand(entt::entity /*creature*/) const { return false; }
 	/// Whether the creature lies dead, knocked out or doing one of the actions of lying dead for now or for good
 	[[nodiscard]] virtual bool IsLyingDead(entt::entity /*creature*/) { return false; }
-	/// Before a faint that does not come from its mind starts, the creature checks its hands as before any step that
-	/// needs empty hands. With a thing in the hand, it starts to let go of the thing when its body and hands are free.
-	/// This tells what the check did on this turn.
-	virtual creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity /*creature*/)
+	/// Before an action that needs empty hands and that does not come from its mind starts, the creature checks its
+	/// hands as before a step of the mind. A faint and the taunt before a fight do this check. With a thing in the hand,
+	/// it starts to let go of the thing when its body and hands are free. This tells what the check did on this turn.
+	virtual creature_mind::HandsCheck CheckHandsBeforeAction(entt::entity /*creature*/)
 	{
 		return creature_mind::HandsCheck::Free;
 	}

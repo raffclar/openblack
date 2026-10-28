@@ -84,6 +84,8 @@ struct CreatureFighting
 	bool taunted {false};
 	/// Whether its taunt before the fight is the rude gesture, chosen as the fight starts
 	bool rude {false};
+	/// Whether it started to let go of the thing that it held before its taunt
+	bool handsChecked {false};
 	/// Whether its life has paid for the fight and its mind learnt from it
 	bool ended {false};
 	/// Whether the hand took hold of it in the fight. Its fight steps wait while the hand holds it. When the hand lets go

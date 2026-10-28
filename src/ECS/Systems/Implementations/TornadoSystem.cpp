@@ -36,6 +36,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -362,14 +363,15 @@ void TornadoSystem::LetGo(entt::entity object, const particles::CarriedObject& c
 		world_objects::Remove(object);
 		return;
 	}
-	// The living are put down on the land where they were flung, and the miracle kills them there
+	// The living are put down on the land where they were flung, and the miracle kills them there. A living thing does not
+	// lean, thus it stands upright with the angle about y of its turn in the tornado.
 	auto& transform = registry.Get<Transform>(object);
 	transform.position = carried.position;
 	if (Locator::terrainSystem::has_value())
 	{
 		transform.position.y = Locator::terrainSystem::value().GetHeightAt({carried.position.x, carried.position.z});
 	}
-	transform.rotation = carried.rotation;
+	transform.rotation = ecs::placed_turn::TurnFromBody(carried.rotation, ecs::placed_turn::CanLean(registry, object)).turn;
 	if (registry.AnyOf<Villager>(object))
 	{
 		villager_fire::DieByEffect(object);
