@@ -18,7 +18,9 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Shark.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Registry.h"
+#include "Nature/Fireflies.h"
 
 namespace openblack::ecs
 {
@@ -68,10 +70,17 @@ components::Transform drawn_place::DrawnTransformOf(const Registry& registry, en
 	{
 		return {.position = chest->drawn->position, .rotation = chest->drawn->rotation, .scale = transform.scale};
 	}
-	// A firefly out of hiding drifts about its place, where the frames last drew it
+	// A town's flag that shows turns to the camera, at the height and size of its level, where the frames last drew it
+	if (const auto* flag = registry.TryGet<const components::TownDesireFlag>(entity); flag != nullptr && flag->shown)
+	{
+		return {.position = flag->drawnPosition, .rotation = flag->drawnRotation, .scale = glm::vec3(flag->drawnScale)};
+	}
+	// A firefly out of hiding drifts about its place, where the frames last drew it, at the size of its sprite
 	if (const auto* firefly = registry.TryGet<const components::Firefly>(entity); firefly != nullptr)
 	{
-		return {.position = firefly->drawn, .rotation = transform.rotation, .scale = transform.scale};
+		return {.position = firefly->drawn,
+		        .rotation = transform.rotation,
+		        .scale = glm::vec3(fireflies::k_SpriteHalfSize, fireflies::k_SpriteHalfSize, 1.0f)};
 	}
 	// A town's totem and its icon rise and sink by the computer's clock, at the height where the frames last put them
 	if (const auto* height = registry.TryGet<const components::DrawnHeight>(entity); height != nullptr)

@@ -169,8 +169,8 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	                   "past dusk.",
 	    .expected = "At the first turn the land is topped up: 50 coin tosses, each tails hiding a firefly in a random tree "
 	                "and heads looking for a rock, of which there are none, so about 25 are made. Then one a turn comes out of "
-	                "the tree it hides in, unless another shares its tree, "
-	                "in which case it is gone: so one firefly a tree comes out. Each flies, easing in and out, to roughly "
+	                "the tree it hides in, also when others hide in the same tree: every firefly comes out. Each flies, "
+	                "easing in and out, to roughly "
 	                "the nearest hut and hovers 2 m above its roof, drifting on a slow loop 8 m across and a quick one "
 	                "1 m across, its drift growing over the first fifth of its flight. Each is a small white glow 0.6 m "
 	                "across, at three quarters brightness within 100 m and fading out by 300 m.",

@@ -105,6 +105,14 @@ std::vector<entt::entity> GameFireflyWorld::ThingsInCell(glm::ivec2 cell) const
 	return Locator::entitiesMap::value().GetAllInCell(cell);
 }
 
+void GameFireflyWorld::Moved(entt::entity thing)
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Moved(thing);
+	}
+}
+
 std::optional<map_coords::MapCoords> GameFireflyWorld::SpotOf(entt::entity thing) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();

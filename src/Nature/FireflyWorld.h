@@ -58,6 +58,8 @@ public:
 
 	/// The things in a cell, in the order a search meets them
 	[[nodiscard]] virtual std::vector<entt::entity> ThingsInCell(glm::ivec2 cell) const = 0;
+	/// Puts a thing that moved into the map cell of its new spot
+	virtual void Moved(entt::entity thing) = 0;
 	/// A thing's map position, none for one no longer there
 	[[nodiscard]] virtual std::optional<map_coords::MapCoords> SpotOf(entt::entity thing) const = 0;
 	/// A rock (a bonfire too) or any kind of tree, living, dead or felled: where a firefly hides
