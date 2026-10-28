@@ -128,6 +128,110 @@ std::string Skip(const VanillaRecord& record, std::string_view why)
 	return "object " + std::to_string(record.number) + " of type " + std::to_string(record.type) + ": " + std::string(why);
 }
 
+/// The belief of a town keeps the values for each player at these places, from the start of its bytes
+constexpr size_t k_BeliefAt = 0x08;
+constexpr size_t k_RecentAt = 0x28;
+constexpr size_t k_CapAt = 0x68;
+constexpr size_t k_PendingAt = 0xC8;
+constexpr size_t k_BoredomAt = 0xE8;
+constexpr size_t k_DesireLevelAt = 0x18C;
+constexpr size_t k_BeliefSize = 464;
+/// The statistics of a town keep the running counts of its food and wood at these places
+constexpr size_t k_FoodUsedAt = 0xE8;
+constexpr size_t k_WoodUsedAt = 0xEC;
+constexpr size_t k_FoodCarriedAt = 0xF8;
+constexpr size_t k_WoodCarriedAt = 0xFC;
+constexpr size_t k_WoodAtSitesAt = 0x100;
+constexpr size_t k_StatsSize = 280;
+
+template <typename T, size_t N>
+std::array<T, N> ValuesAt(std::span<const uint8_t> bytes, size_t at)
+{
+	std::array<T, N> values {};
+	std::memcpy(values.data(), bytes.data() + at, sizeof(values));
+	return values;
+}
+
+float FloatAt(std::span<const uint8_t> bytes, size_t at)
+{
+	return ValuesAt<float, 1>(bytes, at)[0];
+}
+
+/// The values of an array of the town that has a value for each desire
+template <typename T>
+std::optional<std::array<T, k_ImportedDesires>> DesireArray(const VanillaWorld& world, const VanillaRecord& record,
+                                                            std::string_view name)
+{
+	const auto* field = world.Field(record, name);
+	if (field == nullptr || field->count != k_ImportedDesires || field->size != sizeof(T) ||
+	    field->at + sizeof(T) * k_ImportedDesires > world.Bytes().size())
+	{
+		return std::nullopt;
+	}
+	return ValuesAt<T, k_ImportedDesires>(world.Bytes(), field->at);
+}
+
+std::optional<ImportedBelief> ReadBelief(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto bytes = world.Raw(record, "belief");
+	if (bytes.size() != k_BeliefSize)
+	{
+		return std::nullopt;
+	}
+	return ImportedBelief {.belief = ValuesAt<float, k_ImportedPlayers>(bytes, k_BeliefAt),
+	                       .recent = ValuesAt<float, k_ImportedPlayers>(bytes, k_RecentAt),
+	                       .cap = ValuesAt<float, k_ImportedPlayers>(bytes, k_CapAt),
+	                       .pending = ValuesAt<float, k_ImportedPlayers>(bytes, k_PendingAt),
+	                       .boredom = ValuesAt<float, k_ImportedReactions>(bytes, k_BoredomAt),
+	                       .desireLevel = ValuesAt<float, k_ImportedDesires>(bytes, k_DesireLevelAt)};
+}
+
+std::optional<ImportedDesire> ReadDesire(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto cheat = DesireArray<float>(world, record, "desireCheat");
+	const auto boost = DesireArray<float>(world, record, "desireBoost");
+	const auto desire = DesireArray<float>(world, record, "desire");
+	const auto raw = DesireArray<float>(world, record, "desireRaw");
+	const auto sorted = DesireArray<ImportedDesireSort>(world, record, "desireSorted");
+	const auto sortedRaw = DesireArray<ImportedDesireSort>(world, record, "desireSortedRaw");
+	const auto turns = DesireArray<uint32_t>(world, record, "desireTurnsOverAlignment");
+	const auto doingAtStart = DesireArray<float>(world, record, "desireDoingAtStart");
+	const auto doingCountAtStart = DesireArray<float>(world, record, "desireDoingCountAtStart");
+	const auto doing = DesireArray<float>(world, record, "desireDoing");
+	const auto doingCount = DesireArray<float>(world, record, "desireDoingCount");
+	if (!cheat || !boost || !desire || !raw || !sorted || !sortedRaw || !turns || !doingAtStart || !doingCountAtStart ||
+	    !doing || !doingCount)
+	{
+		return std::nullopt;
+	}
+	return ImportedDesire {.cheat = *cheat,
+	                       .boost = *boost,
+	                       .desire = *desire,
+	                       .population = world.Float(record, "desirePopulation").value_or(0.0f),
+	                       .raw = *raw,
+	                       .sorted = *sorted,
+	                       .sortedRaw = *sortedRaw,
+	                       .turnsOverAlignment = *turns,
+	                       .doingAtStart = *doingAtStart,
+	                       .doingCountAtStart = *doingCountAtStart,
+	                       .doing = *doing,
+	                       .doingCount = *doingCount};
+}
+
+std::optional<ImportedTally> ReadTally(const VanillaWorld& world, const VanillaRecord& record)
+{
+	const auto bytes = world.Raw(record, "stats");
+	if (bytes.size() != k_StatsSize)
+	{
+		return std::nullopt;
+	}
+	return ImportedTally {.foodUsed = FloatAt(bytes, k_FoodUsedAt),
+	                      .woodUsed = FloatAt(bytes, k_WoodUsedAt),
+	                      .foodCarried = FloatAt(bytes, k_FoodCarriedAt),
+	                      .woodCarried = FloatAt(bytes, k_WoodCarriedAt),
+	                      .woodAtSites = FloatAt(bytes, k_WoodAtSitesAt)};
+}
+
 std::optional<ImportedTown> ReadTown(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
 {
 	const auto position = PositionOf(world, record);
@@ -152,7 +256,13 @@ std::optional<ImportedTown> ReadTown(const VanillaWorld& world, const VanillaRec
 	                   .position = *position,
 	                   .cannotBuildWorshipSite = world.Word(record, "cannotBuildWorshipSite").value_or(0) != 0,
 	                   .uninhabitable = world.Word(record, "uninhabitable").value_or(0) != 0,
-	                   .emptyTownTimer = world.Word(record, "emptyTownTimer").value_or(0)};
+	                   .emptyTownTimer = world.Word(record, "emptyTownTimer").value_or(0),
+	                   .worshipShare = world.Float(record, "worshipShare").value_or(0.0f),
+	                   .beliefInNeutral = world.Float(record, "beliefInNeutral").value_or(0.0f),
+	                   .beliefScale = world.Float(record, "balanceBeliefScale").value_or(1.0f),
+	                   .belief = ReadBelief(world, record),
+	                   .desire = ReadDesire(world, record),
+	                   .tally = ReadTally(world, record)};
 	const auto abodes = world.Refs(record, "abodes");
 	town.abodes.assign(abodes.begin(), abodes.end());
 	const auto homeless = world.Refs(record, "homeless");

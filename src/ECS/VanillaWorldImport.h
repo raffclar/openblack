@@ -112,6 +112,61 @@ struct ImportedWalk
 /// A speed in metres a second that gives the whole map units a turn of the file again
 [[nodiscard]] float WalkSpeedOf(uint16_t wholeSpeed);
 
+/// The number of players, of kinds of reaction and of things that a town wants, as the file keeps them
+inline constexpr size_t k_ImportedPlayers = 8;
+inline constexpr size_t k_ImportedReactions = 41;
+inline constexpr size_t k_ImportedDesires = 17;
+
+/// The belief of a town in the file
+struct ImportedBelief
+{
+	/// What the town believes in each player, what it was given lately, the most it believes in each player and what
+	/// it will believe at its next turn
+	std::array<float, k_ImportedPlayers> belief {};
+	std::array<float, k_ImportedPlayers> recent {};
+	std::array<float, k_ImportedPlayers> cap {};
+	std::array<float, k_ImportedPlayers> pending {};
+	/// How weary the town is of each kind of reaction, 1 when it has never seen one
+	std::array<float, k_ImportedReactions> boredom {};
+	/// For each thing that the town wants, the level above which the want costs its owner belief
+	std::array<float, k_ImportedDesires> desireLevel {};
+};
+
+/// One place in the order of the desires of a town in the file
+struct ImportedDesireSort
+{
+	float boosts {0.0f};
+	float value {0.0f};
+	uint32_t index {0};
+};
+
+/// What a town wants in the file
+struct ImportedDesire
+{
+	std::array<float, k_ImportedDesires> cheat {};
+	std::array<float, k_ImportedDesires> boost {};
+	std::array<float, k_ImportedDesires> desire {};
+	float population {0.0f};
+	std::array<float, k_ImportedDesires> raw {};
+	std::array<ImportedDesireSort, k_ImportedDesires> sorted {};
+	std::array<ImportedDesireSort, k_ImportedDesires> sortedRaw {};
+	std::array<uint32_t, k_ImportedDesires> turnsOverAlignment {};
+	std::array<float, k_ImportedDesires> doingAtStart {};
+	std::array<float, k_ImportedDesires> doingCountAtStart {};
+	std::array<float, k_ImportedDesires> doing {};
+	std::array<float, k_ImportedDesires> doingCount {};
+};
+
+/// The running counts of the food and the wood of a town in the file
+struct ImportedTally
+{
+	float foodUsed {0.0f};
+	float woodUsed {0.0f};
+	float foodCarried {0.0f};
+	float woodCarried {0.0f};
+	float woodAtSites {0.0f};
+};
+
 struct ImportedTown
 {
 	/// The number of the object in the file
@@ -124,6 +179,14 @@ struct ImportedTown
 	bool cannotBuildWorshipSite {false};
 	bool uninhabitable {false};
 	uint32_t emptyTownTimer {0};
+	/// The share of its people that it wants at worship
+	float worshipShare {0.0f};
+	/// What it believes in the neutral player, and what its pending belief is multiplied by
+	float beliefInNeutral {0.0f};
+	float beliefScale {1.0f};
+	std::optional<ImportedBelief> belief;
+	std::optional<ImportedDesire> desire;
+	std::optional<ImportedTally> tally;
 	/// The numbers of the objects of its buildings and of its homeless villagers, in the order of the file
 	std::vector<uint32_t> abodes;
 	std::vector<uint32_t> homeless;

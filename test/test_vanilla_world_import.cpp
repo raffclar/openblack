@@ -814,3 +814,50 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepWalksAndWork)
 	std::cout << "Kept " << kept << " villagers, " << walking << " walking and " << working << " working, " << lostGoals
 	          << " goals that metres do not give" << std::endl;
 }
+
+/// Each town of a saved game of Land 1 has its belief, its desires and its running counts. The food and the wood that
+/// its villagers hold add up to its counts of food and wood carried, and its desires are sorted in full.
+TEST(VanillaWorldImport, SavedGamesOfLandOneKeepTheBeliefAndTheDesiresOfTheTowns)
+{
+	const auto files = ForEachLandOneSave([](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadTowns(world);
+		for (const auto& town : imported.towns)
+		{
+			ASSERT_TRUE(town.belief.has_value()) << path << " " << town.number;
+			ASSERT_TRUE(town.desire.has_value()) << path << " " << town.number;
+			ASSERT_TRUE(town.tally.has_value()) << path << " " << town.number;
+			for (const float cap : town.belief->cap)
+			{
+				EXPECT_GT(cap, 0.0f) << path << " " << town.number;
+			}
+			for (const auto& sorted : {town.desire->sorted, town.desire->sortedRaw})
+			{
+				std::vector<uint32_t> indices;
+				std::ranges::transform(sorted, std::back_inserter(indices),
+				                       [](const world_import::ImportedDesireSort& entry) { return entry.index; });
+				std::ranges::sort(indices);
+				for (uint32_t i = 0; i < indices.size(); ++i)
+				{
+					EXPECT_EQ(indices[i], i) << path << " " << town.number;
+				}
+			}
+			float food = 0.0f;
+			float wood = 0.0f;
+			for (const auto& villager : imported.villagers)
+			{
+				if (villager.town == town.number)
+				{
+					food += static_cast<float>(villager.foodHeld);
+					wood += static_cast<float>(villager.woodHeld);
+				}
+			}
+			EXPECT_FLOAT_EQ(town.tally->foodCarried, food) << path << " " << town.number;
+			EXPECT_FLOAT_EQ(town.tally->woodCarried, wood) << path << " " << town.number;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(*files, 0U);
+}

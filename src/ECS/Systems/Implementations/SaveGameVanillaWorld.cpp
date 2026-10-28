@@ -27,7 +27,9 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerWork.h"
@@ -104,6 +106,58 @@ void RemoveLandTownsContents(ecs::Registry& registry)
 	registry.SetDirty();
 }
 
+/// The town takes its belief in each player from the file, and how weary it is of each kind of reaction
+void PutBelief(ecs::Registry& registry, entt::entity entity, const world_import::ImportedTown& imported)
+{
+	auto& impression = registry.Get<TownImpression>(entity);
+	auto& belief = impression.belief;
+	belief.neutral = imported.beliefInNeutral;
+	belief.scale = imported.beliefScale;
+	if (!imported.belief.has_value())
+	{
+		return;
+	}
+	const auto& file = *imported.belief;
+	belief.belief = file.belief;
+	belief.recent = file.recent;
+	belief.cap = file.cap;
+	belief.pending = file.pending;
+	belief.desireLevel = file.desireLevel;
+	// A kind of reaction that the town has never seen has a weariness of 1, as a kind that the town does not list
+	impression.boredom.clear();
+	for (size_t index = 0; index < file.boredom.size(); ++index)
+	{
+		if (file.boredom.at(index) != 1.0f)
+		{
+			impression.boredom.emplace(static_cast<Reaction>(index), file.boredom.at(index));
+		}
+	}
+}
+
+/// The desires of the town, as the file keeps them
+void PutDesire(TownDesire& desire, const world_import::ImportedDesire& file)
+{
+	const auto sorts = [](const auto& entries) {
+		std::array<DesireSort, k_TownDesireCount> sorted {};
+		std::ranges::transform(entries, sorted.begin(), [](const world_import::ImportedDesireSort& entry) {
+			return DesireSort {.boosts = entry.boosts, .value = entry.value, .index = entry.index};
+		});
+		return sorted;
+	};
+	desire.boostA = file.cheat;
+	desire.boost = file.boost;
+	desire.desire = file.desire;
+	desire.population = file.population;
+	desire.raw = file.raw;
+	desire.sorted = sorts(file.sorted);
+	desire.sortedRaw = sorts(file.sortedRaw);
+	desire.doingNow = file.doing;
+	desire.doingNowCount = file.doingCount;
+	desire.doingNowAtStart = file.doingAtStart;
+	desire.doingNowCountAtStart = file.doingCountAtStart;
+	desire.turnsOverAlignmentLevel = file.turnsOverAlignment;
+}
+
 /// The town of the file: the town of the land with the same number, or a new town
 entt::entity PutTown(ecs::Registry& registry, const world_import::ImportedTown& imported)
 {
@@ -118,6 +172,20 @@ entt::entity PutTown(ecs::Registry& registry, const world_import::ImportedTown& 
 	town.uninhabitable = imported.uninhabitable;
 	town.cannotHaveWorshipSite = imported.cannotBuildWorshipSite;
 	town.emptyTownTimer = imported.emptyTownTimer;
+	town.worshipShare = imported.worshipShare;
+	PutBelief(registry, entity, imported);
+	if (imported.desire.has_value())
+	{
+		PutDesire(registry.AssignOrReplace<TownDesire>(entity), *imported.desire);
+	}
+	if (imported.tally.has_value())
+	{
+		registry.AssignOrReplace<TownResourceTally>(entity, TownResourceTally {.foodCarried = imported.tally->foodCarried,
+		                                                                       .woodCarried = imported.tally->woodCarried,
+		                                                                       .woodAtSites = imported.tally->woodAtSites,
+		                                                                       .woodUsed = imported.tally->woodUsed,
+		                                                                       .foodUsed = imported.tally->foodUsed});
+	}
 	registry.AssignOrReplace<Tribe>(entity, imported.tribe);
 	if (auto* transform = registry.TryGet<Transform>(entity))
 	{

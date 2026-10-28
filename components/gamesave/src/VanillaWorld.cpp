@@ -663,22 +663,25 @@ void ReadCitadel(WorldReader& r)
 
 void ReadTownDesire(WorldReader& r)
 {
-	for (int i = 0; i < 5; ++i)
+	// Two lists that openblack does not use, the boosts of a cheat and of the scripts, and the desires
+	for (const std::string_view name : {"", "", "desireCheat", "desireBoost", "desire"})
 	{
-		r.Array(4);
+		r.Array(4, name);
 	}
 	r.Word();
 	r.Ref();
-	r.Word();
-	for (int i = 0; i < 4; ++i)
+	r.Word("desirePopulation");
+	// The raw desires, then three lists that the town makes again each turn
+	for (const std::string_view name : {"desireRaw", "", "", ""})
 	{
-		r.Array(4);
+		r.Array(4, name);
 	}
-	r.Array(12);
-	r.Array(12);
-	for (int i = 0; i < 5; ++i)
+	r.Array(12, "desireSorted");
+	r.Array(12, "desireSortedRaw");
+	for (const std::string_view name :
+	     {"desireTurnsOverAlignment", "desireDoingAtStart", "desireDoingCountAtStart", "desireDoing", "desireDoingCount"})
 	{
-		r.Array(4);
+		r.Array(4, name);
 	}
 }
 
@@ -715,7 +718,7 @@ void ReadTown(WorldReader& r)
 	}
 	r.Refs("pots");
 	r.Refs("forests");
-	r.Bytes(280);
+	r.Bytes(280, "stats");
 	r.Bytes(12, "areaMin");
 	r.Bytes(12, "areaMax");
 	r.Ref("creche");
