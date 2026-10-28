@@ -426,6 +426,25 @@ RESUMES = re.compile(r"Back in the game at turn")
 PARTS_AT = re.compile(r"parts from the server's world at turn (\d+)")
 
 
+# The compares with the server that one part on purpose (--part-second-at) makes different
+PURPOSEFUL_PART_COMPARES = 1
+RECOVERED_AT = re.compile(r"of turn (\d+)")
+
+
+def recovery_turns(lines):
+    """The turns of the server's worlds that a client went on from, in the order of the log"""
+    return [int(match.group(1)) for line in lines if (match := RECOVERED_AT.search(line))]
+
+
+def purposeful_part_left_out(different, recoveries, part_at):
+    """The different turns of a client without those of its part on purpose: from the turn of the part up to the first
+    world that it went on from after it. A part after that recovery is a real part, also when a later recovery hides it."""
+    back_at = next((turn for turn in recoveries if turn >= part_at), None)
+    if back_at is None:
+        return different
+    return [turn for turn in different if not part_at <= turn <= back_at]
+
+
 def session_counts(log):
     """The last counts of the compares that the client's session wrote: compared, the same, and the resumes"""
     if not os.path.exists(log):
@@ -1663,8 +1682,7 @@ def main():
         parted_on_purpose = index == options.part_client - 1 and options.part_second_at is not None and not options.part_second_again
         recovered = lines_with(os.path.join(client_dir, "client.log"), ["The world goes on from the server's world"])
         if parted_on_purpose and recovered:
-            back_at = int(re.search(r"of turn (\d+)", recovered[-1]).group(1))
-            different = [turn for turn in different if turn > back_at]
+            different = purposeful_part_left_out(different, recovery_turns(recovered), options.part_second_at)
         expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
         is_observer = index >= options.clients
         if is_observer and client_turns:
@@ -1687,7 +1705,7 @@ def main():
         # the last turn of each frame: its session counts every turn
         enough = counts is not None and counts[0] >= expected // 2 if is_observer else len(compared) >= expected // 2
         same = (not different and enough and counts is not None
-                and (counts[0] - counts[1] <= (counts[2] if parted_on_purpose else 0))
+                and (counts[0] - counts[1] <= (PURPOSEFUL_PART_COMPARES if parted_on_purpose else 0))
                 and (left or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         draws = None
