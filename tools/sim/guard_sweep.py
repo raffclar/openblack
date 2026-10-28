@@ -56,6 +56,7 @@ LANDS = {
     "ring32": ["--gods-ring-map", "--sim-network-game", "--sim-all-computer-gods", "--sim-ai-seed", "1"],
 }
 LAND_PREFIX = "land:"
+SCENARIO_ID = re.compile(r"^[a-z0-9_]+[.][a-z0-9_.]+$")
 # The launch switches of the game: the game finds them anywhere on its command line after a "-" or a "/"
 SWITCH_IN_PATH = re.compile(r"[-/\\](skirmish|newgame|multiplayer|land|convert|version|editor|noloadmusic|"
                             r"preintrovideo|forceinetconn|noinetconn|settings:)", re.IGNORECASE)
@@ -97,7 +98,8 @@ def scenario_ids(game, argument):
     if argument == "all":
         output = subprocess.run([game, "--list-scenarios"], capture_output=True, text=True, check=True,
                                 stdin=subprocess.DEVNULL).stdout
-        return [line.strip() for line in output.splitlines() if line.strip()]
+        # The game writes its banner first; an id is a facet and a name with a dot between them
+        return [line.strip() for line in output.splitlines() if SCENARIO_ID.match(line.strip())]
     if argument.startswith("@"):
         with open(argument[1:], encoding="utf-8") as file:
             return [line.strip() for line in file if line.strip() and not line.startswith("#")]
