@@ -70,6 +70,16 @@ struct BodyTurn
 	return {.angles = kept, .turn = TurnOf(kept, canLean)};
 }
 
+/// The angles and the turn of a thing that a creature releases from its hand:
+/// - The game finds the angles of the turn in the hand, with the scale of the thing in each value.
+/// - A thrown thing takes the turn that its kept angles make.
+/// - A thing that the creature lets go of keeps the turn that it had in the hand.
+[[nodiscard]] inline BodyTurn TurnFromHeld(const glm::mat3& held, float scale, bool canLean, bool thrown)
+{
+	const auto kept = KeptAngles(x87::GameTurnMatrixAngles(held * scale), canLean);
+	return {.angles = kept, .turn = thrown ? TurnOf(kept, canLean) : held};
+}
+
 /// The angles of a thing with this turn. The kept angles are correct while the thing has the turn that they made. When
 /// a different turn replaces it, the angles come from the turn, as the game finds the angles of a matrix.
 [[nodiscard]] inline glm::vec3 AnglesOf(const components::TurnAngles* kept, const glm::mat3& turn, bool canLean)
