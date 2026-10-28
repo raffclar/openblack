@@ -31,7 +31,6 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
-#include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
@@ -63,6 +62,7 @@
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/UndrawnPicks.h"
 #include "ECS/WorldObjects.h"
@@ -391,11 +391,6 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		{
 			continue;
 		}
-		// The apple barrel and its worm are only drawn: the cursor meets the land behind them
-		if (registry.AnyOf<AppleBarrel, AppleBarrelWorm>(entity))
-		{
-			continue;
-		}
 		// So are the lanterns at a temple's entrance, by its creature's pen, the lanterns on the Norse gate and the
 		// explorers' boat film: the cursor meets what is behind them
 		if (registry.AnyOf<TempleLantern, GateLantern, BoatFilmPart>(entity))
@@ -627,9 +622,11 @@ void PickingSystem::AddBubbles(glm::vec3 camera)
 	}
 	const auto box = meshes.Handle(bubbleMesh)->GetBoundingBox();
 	const auto halfExtents = box.Size() * 0.5f;
+	// The draw of a globe picks it, so a globe that the land's draw list does not draw is not picked
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
 	registry.Each<const OneOffSpellSeed, const Transform>(
 	    [&](entt::entity entity, const OneOffSpellSeed& globe, const Transform& transform) {
-		    if (registry.AnyOf<InHand, SeeThrough>(entity))
+		    if (registry.AnyOf<InHand, SeeThrough>(entity) || (drawList != nullptr && !drawList->Drawn(registry, entity)))
 		    {
 			    return;
 		    }

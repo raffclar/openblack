@@ -58,6 +58,7 @@ public:
 	/// The clicks that the scripts read are forgotten some seconds of turns after they were made
 	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
+	void ForceDropFromEveryHand(entt::entity object) override;
 	void DoShakeOff(PlayerNames player) override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;

@@ -379,16 +379,19 @@ void HandSystem::UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picke
 	{
 		return;
 	}
-	const auto alignment = Locator::alignmentSystem::value().GetPlayerAlignment(PlayerNames::PLAYER_ONE);
+	// Only the hands of the player at this computer are drawn, so only they show an alignment: the alignment of their own
+	// player, and the influence of that player at the point that this computer picks
+	const auto player = GetOwnPlayer();
+	const auto alignment = Locator::alignmentSystem::value().GetPlayerAlignment(player);
 	auto& files = Locator::resources::value().GetL3DFiles();
 	const auto fileOf = [&files](size_t index) -> const l3d::L3DFile* {
 		const auto id = HandMorph::k_SkinFileIds.at(index);
 		return files.Contains(id) ? &*files.Handle(id) : nullptr;
 	};
 	auto& registry = Locator::entitiesRegistry::value();
-	for (const auto entity : _hands)
+	for (const auto entity : GetOwnHands())
 	{
-		auto* morph = registry.TryGet<HandMorph>(entity);
+		auto* morph = registry.Valid(entity) ? registry.TryGet<HandMorph>(entity) : nullptr;
 		if (morph == nullptr)
 		{
 			continue;
@@ -398,8 +401,7 @@ void HandSystem::UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picke
 		morph->point = hand_morph::NextPoint(morph->point, picked, holdPoint);
 		if (Locator::influenceSystem::has_value())
 		{
-			morph->pointInInfluence =
-			    Locator::influenceSystem::value().HandPointInfluence(PlayerNames::PLAYER_ONE, morph->point) > 0.0f;
+			morph->pointInInfluence = Locator::influenceSystem::value().HandPointInfluence(player, morph->point) > 0.0f;
 		}
 		if (change.shape)
 		{

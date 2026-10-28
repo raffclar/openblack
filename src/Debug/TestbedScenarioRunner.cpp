@@ -25,6 +25,7 @@
 #include <system_error>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -626,6 +627,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	if (object.immovable)
 	{
 		registry.AssignOrReplace<ecs::components::Immovable>(entity);
+	}
+	// A building is held by a script as a script holds a thing that one of its variables names
+	if (object.inScript && registry.AnyOf<ecs::components::Abode, ecs::components::SpellDispenser>(entity))
+	{
+		registry.AssignOrReplace<ecs::components::InScript>(entity);
 	}
 	if (object.inScript && registry.AllOf<ecs::components::Villager>(entity) && Locator::livingActionSystem::has_value())
 	{
@@ -1317,6 +1323,11 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	{
 		Locator::alignmentSystem::value().SetPlayerAlignment(PlayerNames::PLAYER_ONE,
 		                                                     environment.playerAlignment.value_or(0.0f));
+	}
+	// A scenario starts with the first player as the god of this computer, after a scenario that changed it
+	if (std::exchange(_ownGodChanged, false) && Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().SetOwnPlayer(PlayerNames::PLAYER_ONE);
 	}
 	// The player's prayer power: as much as the scenario gives, or plenty
 	if (Locator::entitiesRegistry::has_value())
@@ -2090,7 +2101,9 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		return Locator::abodeKnockSystem::value().Tap(*object, at, true) ? "knocked" : "not knocked";
 	}
 	case Kind::UntieLeash:
+		// As the hand unties it, the leash goes back to the hand with the attach sound
 		leashes.UntieToHand(creature);
+		leashes.PlayHandAttachSound(creature);
 		return {};
 	case Kind::TakeOffLeash:
 		leashes.TakeOff(creature);
@@ -2180,6 +2193,18 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		ecs::world_objects::Remove(*object);
 		return "removed";
+	}
+	case Kind::OwnGod:
+	{
+		if (!Locator::handSystem::has_value())
+		{
+			return "no hands";
+		}
+		auto& hands = Locator::handSystem::value();
+		std::ignore = hands.MakeHandsOf(command.player);
+		hands.SetOwnPlayer(command.player);
+		_ownGodChanged = true;
+		return fmt::format("this computer is the god of player {}", static_cast<int>(command.player));
 	}
 	case Kind::OtherGodHand:
 	{
@@ -2970,7 +2995,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey ||
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
 	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
-	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::BringCreature)
+	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod ||
+	    command.kind == Kind::BringCreature)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3753,6 +3779,7 @@ void Runner::Give(const Command& command)
 	case Kind::OpenMultiplayerBox:
 	case Kind::EndBox:
 	case Kind::OtherGodHand:
+	case Kind::OwnGod:
 	case Kind::JoinOnline:
 	case Kind::BringCreature:
 	case Kind::HandGripTotem:

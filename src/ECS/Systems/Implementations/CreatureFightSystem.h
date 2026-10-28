@@ -49,10 +49,12 @@ public:
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
-	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent) override;
+	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool agreed) override;
 	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
 	void CallOff(entt::entity creature) override;
+	void HandTookHold(entt::entity creature) override;
+	void HandLetGo(entt::entity creature) override;
 	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
 	[[nodiscard]] bool IsDuelling(entt::entity creature) const override;
@@ -107,6 +109,8 @@ public:
 	void LoseFightHealth(entt::entity creature, float damage) override;
 
 private:
+	/// The start of a fight. When ask is false, the other creature agreed before and is not asked again.
+	StartResult Start(entt::entity creature, entt::entity opponent, bool ask);
 	/// The turn's parts: fights started by the leash, the stages before and after the
 	/// duel, the duel's moves, and the creatures knocked out
 	void StartFightsFromMinds();
@@ -160,7 +164,11 @@ private:
 	void WinByOpponentsLife(entt::entity winner, entt::entity loser);
 	/// The fight ends for a creature: its life pays for it and it learns from it
 	/// The creature's fight is over: won or lost, or called off with neither (when its mind isn't told it fought)
-	void EndFightFor(entt::entity creature, std::optional<bool> won);
+	/// Its life pays for the fight only when paysLife is true.
+	void EndFightFor(entt::entity creature, std::optional<bool> won, bool paysLife = true);
+	/// The fight of the creature stops with no response, as when its partner tells it to stop. In the steps before the
+	/// duel it leaves the fight at once. Else it finishes its move and then leaves the fight.
+	void StopFight(entt::entity creature, std::optional<bool> won, std::string_view why);
 	void BeginDuel(entt::entity creature);
 	void MeasureBlows(entt::entity creature);
 	/// Faints and lies out cold, to be taken home later

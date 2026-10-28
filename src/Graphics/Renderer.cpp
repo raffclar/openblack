@@ -1065,8 +1065,13 @@ constexpr float k_InnerWall = 0.35f;
 constexpr size_t k_MostCaps = 512;
 } // namespace
 
-const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height) const
+const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height,
+                                     const std::optional<glm::mat4>& landPlacement) const
 {
+	if (landPlacement.has_value())
+	{
+		return LandCapOf(subMesh, primitive, height, *landPlacement);
+	}
 	const auto key = std::make_pair(primitive.key, height);
 	if (const auto found = _caps.find(key); found != _caps.end())
 	{
@@ -1086,6 +1091,29 @@ const Renderer::Cap& Renderer::CapOf(const L3DSubMesh& subMesh, const CapPrimiti
 	                                         InsetOf(primitive.twoSided)),
 	};
 	return _caps.emplace(key, std::move(cap)).first->second;
+}
+
+const Renderer::Cap& Renderer::LandCapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height,
+                                         const glm::mat4& placement) const
+{
+	// The land under a model can differ from frame to frame, so a cap of a model that follows the land lasts one frame
+	const auto key = std::make_tuple(primitive.key, height, placement[3].x, placement[3].y, placement[3].z);
+	if (const auto found = _landCaps.find(key); found != _landCaps.end())
+	{
+		return found->second;
+	}
+	const auto& surface = subMesh.GetSurface();
+	std::span<const uint16_t> indices(surface.indices);
+	const auto first = std::min<size_t>(primitive.indicesOffset, indices.size());
+	indices = indices.subspan(first, std::min<size_t>(primitive.indicesCount, indices.size() - first));
+	const auto& land = Locator::terrainSystem::value();
+	const auto risen = partial_build_cap::RisenWithLand(surface.positions, placement,
+	                                                    [&land](glm::vec2 point) { return land.GetHeightAt(point); });
+	Cap cap {
+	    .drawsBelow = partial_build_cap::DrawsAnythingBelow(risen, indices, height),
+	    .vertices = partial_build_cap::Build(risen, surface.uvs, surface.normals, indices, height, InsetOf(primitive.twoSided)),
+	};
+	return _landCaps.emplace(key, std::move(cap)).first->second;
 }
 
 bool Renderer::BindCap(const std::vector<partial_build_cap::CapVertex>& cap)
@@ -1279,7 +1307,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			                          .indicesOffset = prim.indicesOffset,
 			                          .indicesCount = prim.indicesCount,
 			                          .twoSided = prim.twoSided},
-			                         *desc.modelCutHeight);
+			                         *desc.modelCutHeight, desc.landPlacement);
 			if (!made.drawsBelow || (desc.cap && made.vertices.empty()))
 			{
 				lastPreserveState = false;
@@ -5158,7 +5186,23 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	std::ranges::for_each(Locator::explosionSystem::value().Ghosts(), [&](const ecs::components::DestructionGhost& ghost) {
+	// A warm-up draws a ghost of each building model that is loaded, at no size. Thus the first building that goes makes
+	// no new states of the graphics card, also when the building comes after the load.
+	std::vector<ecs::components::DestructionGhost> warmUpGhosts;
+	if (_warmingUp && Locator::infoConstants::has_value())
+	{
+		for (const auto& info : Locator::infoConstants::value().abode)
+		{
+			const auto id = resources::HashIdentifier(info.meshId);
+			if (meshes.Contains(id) && std::ranges::none_of(warmUpGhosts, [id](const auto& ghost) { return ghost.mesh == id; }))
+			{
+				warmUpGhosts.push_back({.mesh = id, .model = glm::mat4(0.0f)});
+			}
+		}
+	}
+	const auto ghosts = _warmingUp ? std::span<const ecs::components::DestructionGhost>(warmUpGhosts)
+	                               : Locator::explosionSystem::value().Ghosts();
+	std::ranges::for_each(ghosts, [&](const ecs::components::DestructionGhost& ghost) {
 		if (!meshes.Contains(ghost.mesh))
 		{
 			return;
@@ -6782,12 +6826,19 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				RenderContext::InstancedDrawDesc placers {0, 1, build.morphWithTerrain};
 				placers.instanceAlpha = build.fading;
+				// A model that follows the land is cut and capped where its corners rise to with the land
+				const auto& instances = renderCtx.partialBuildInstances;
+				const auto landPlacement = build.morphWithTerrain && !hidden.has_value() && build.instance < instances.size()
+				                               ? std::optional(instances.at(build.instance).model)
+				                               : std::nullopt;
 				// A part cut at a height is drawn from both sides; a scaffold standing whole, only sunk into the land, is
 				// drawn as the building's own model is
 				const auto drawPart = [&](uint32_t instance, std::optional<float> cut, std::optional<uint32_t> status,
 				                          bool innerWalls) {
 					submitDesc.cutAbove = cut;
-					submitDesc.modelCutHeight = status.has_value() || build.morphWithTerrain ? std::nullopt : build.capHeight;
+					const bool landCut = build.morphWithTerrain && !landPlacement.has_value();
+					submitDesc.modelCutHeight = status.has_value() || landCut ? std::nullopt : build.capHeight;
+					submitDesc.landPlacement = status.has_value() ? std::nullopt : landPlacement;
 					submitDesc.twoSided = cut.has_value();
 					submitDesc.innerWalls = innerWalls;
 					submitDesc.innerWallInset = build.innerWallInset;
@@ -6796,6 +6847,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					              hidden.value_or(renderCtx.partialBuildInstanceBuffer));
 					submitDesc.cutAbove.reset();
 					submitDesc.modelCutHeight.reset();
+					submitDesc.landPlacement.reset();
 					submitDesc.twoSided = false;
 					submitDesc.innerWalls = false;
 					submitDesc.innerWallInset.reset();
@@ -6805,14 +6857,16 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					drawPart(build.instance, build.modelCut, std::nullopt, false);
 					drawPart(build.instance, build.modelCut, std::nullopt, true);
-					// Then the cap over the cut walls, joining the outer to the inner
-					// TODO(physics): the game caps a model that follows the land too, the land under each of its corners
-					// moving its cut; openblack caps only the rest
-					if (!build.morphWithTerrain)
+					// Then the cap over the cut walls, joining the outer to the inner. The cap of a model that follows the
+					// land already rises with the land, thus the renderer draws it as the cap of a model that does not.
+					if (!build.morphWithTerrain || landPlacement.has_value())
 					{
+						const bool followsLand = placers.morphWithTerrain;
+						placers.morphWithTerrain = false;
 						submitDesc.cap = true;
 						drawPart(build.instance, build.modelCut, std::nullopt, false);
 						submitDesc.cap = false;
+						placers.morphWithTerrain = followsLand;
 					}
 				}
 				if (build.scaffoldStatus.has_value())
@@ -7247,9 +7301,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				});
 			};
 			// The gates and other scenery the scripts open and close, each posed by its own clip: those fading out in the
-			// distance and those that blend by their materials (an opened reward chest) with the blended things
-			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool blended) {
-				const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity);
+			// distance and those that blend by their materials (an opened reward chest) with the blended things. `from`
+			// is the registry of the thing: the land's, or the drawn registry.
+			const auto drawPosedStillOf = [&](const ecs::Registry& from, entt::entity entity, uint32_t instance, bool blended) {
+				const auto* still = from.TryGet<const ecs::components::AnimatedStaticPose>(entity);
 				if (still == nullptr)
 				{
 					return;
@@ -7258,7 +7313,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// The sea mirrors none of the explorers' boat film this way, even one sharing its model with things it
 				// mirrors
 				const bool reflection = desc.viewId == RenderPass::Reflection;
-				if (reflection && desc.entities.AllOf<ecs::components::BoatFilmPart>(entity))
+				if (reflection && from.AllOf<ecs::components::BoatFilmPart>(entity))
 				{
 					return;
 				}
@@ -7285,6 +7340,30 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				drawInstances(meshId, *placers, fading ? false : placers->materialBlending, instance, 1, &entityPose);
 				submitDesc.detailLevel = 1;
+			};
+			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool blended) {
+				drawPosedStillOf(desc.entities, entity, instance, blended);
+			};
+			// The posed things that only the frames make, as the worm on the apple barrel, are in the first segment
+			const auto drawDrawnPosedStills = [&](bool blended) {
+				if (!Locator::drawnRegistry::has_value())
+				{
+					return;
+				}
+				const auto& drawn = Locator::drawnRegistry::value();
+				for (const auto& [entity, instance] : renderCtx.drawnEntityDraws)
+				{
+					if (instance >= renderCtx.instanceUniforms.size() || mirroredWithHand(instance))
+					{
+						continue;
+					}
+					if (blended)
+					{
+						submitDesc.sortDepth =
+						    zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
+					}
+					drawPosedStillOf(drawn, entity, instance, blended);
+				}
 			};
 			// The animals of a model drawn at once, in their light: the brightest of the land's, or white
 			for (const auto& [meshId, group] : _animalBoneGroups)
@@ -7314,6 +7393,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.objectLook.reset();
 				submitDesc.boneTexture = nullptr;
 			}
+			drawDrawnPosedStills(false);
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
 				if (mirroredWithHand(instance))
@@ -7460,6 +7540,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						drawPartialBuild(build);
 					}
 				}
+				drawDrawnPosedStills(true);
 				for (const auto& [entity, instance] : renderCtx.entityDraws)
 				{
 					if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
@@ -8058,6 +8139,7 @@ void Renderer::Frame() noexcept
 	// In a warm-up's frame the loading screen's view first clears all of the window as the main view clears it. This is
 	// set after every draw of the frame, as the loading screen sets its view too.
 	const bool warmUp = std::exchange(_warmUpInFrame, false);
+	_landCaps.clear();
 	if (warmUp)
 	{
 		const auto cover = static_cast<bgfx::ViewId>(warm_up::k_CoverView);

@@ -195,6 +195,51 @@ void AddBuildingBreak(std::vector<Scenario>& all)
 	    .objects = objects,
 	    .throws = throws,
 	});
+
+	// The same huts in deep snow, struck once the snow has settled on them
+	auto snowThrows = throws;
+	for (auto& thrown : snowThrows)
+	{
+		thrown.delaySeconds += 6.0f;
+		thrown.repeatSeconds.reset();
+	}
+	all.push_back({
+	    .id = "light.snow_on_broken_huts",
+	    .name = "Snow on huts broken by thrown boulders",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island. Three huts stand in a row. After the snow settles on them, "
+	                   "two boulders hit each hut from the south, one time.",
+	    .expected = "The snow shows on the huts in about four seconds. When a boulder breaks a hut, the broken hut keeps "
+	                "its snow. Each piece that flies off shows the snow that the hut had, and keeps it where it lands.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}},
+	                .distance = k_WithinEarshot},
+	    .objects = objects,
+	    .throws = snowThrows,
+	});
+}
+
+// Buildings that follow the land, half built on the steep bank of the lake, seen from the side
+void AddUnbuiltOnBank(std::vector<Scenario>& all)
+{
+	constexpr glm::vec2 k_Lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
+	constexpr float k_Bank = k_Lake.y - flat_land::k_LakeHalfExtent.y - 26.0f;
+	all.push_back({
+	    .id = "physics.unbuilt_on_bank",
+	    .name = "Buildings that follow the land, half built on a slope",
+	    .facet = Facet::Physics,
+	    .description = "A Celtic hut, a Celtic storage pit and a Celtic graveyard stand half built on the steep bank of "
+	                   "the lake. The camera looks at them from the side.",
+	    .expected = "Each building shows only its lower half. The flat top of each wall stays at the same height above "
+	                "the land under it, so the top goes down the slope with the land. No wall shows a gap or a spike "
+	                "at its top.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Lake.x + 20.0f, 30.0f, k_Bank - 60.0f}, .look = {k_Lake.x, 2.0f, k_Bank}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {k_Lake.x - 40.0f, k_Bank}, .built = 0.5f},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {k_Lake.x, k_Bank}, .built = 0.5f},
+	                {.type = AbodeInfo::CelticGraveyard, .offset = {k_Lake.x + 40.0f, k_Bank}, .built = 0.5f}},
+	});
 }
 
 void AddRockSplit(std::vector<Scenario>& all)
@@ -506,6 +551,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddThrownAngles(all);
 	AddCrowdThrow(all);
 	AddBuildingBreak(all);
+	AddUnbuiltOnBank(all);
 	AddRockSplit(all);
 	AddCreatureHit(all);
 	AddCreatureCatch(all);

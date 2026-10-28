@@ -366,6 +366,8 @@ private:
 	benchmark::Results _liveResults;
 	uint32_t _framesSinceSummary {0};
 	bool _saved {false};
+	/// A scenario made another player the god of this computer (see Command::Kind::OwnGod)
+	bool _ownGodChanged {false};
 
 	std::optional<Shot> _shot;
 	size_t _shotCreature {0};

@@ -1307,7 +1307,7 @@
   "query": "living.animated_statics"
  },
  {
-  "description": "The apple barrel beside the local player's storage pit nearest their temple: the pit, the barrel and its worm, where they stand and the worm's place in its clip; none while no pit carries it",
+  "description": "The apple barrel beside the storage pit of the player at this computer nearest their temple: the pit (an entity of the land), the barrel and its worm (entities of the drawn registry), where they stand and the worm's place in its clip; none while no pit carries it",
   "kind": "object",
   "parameters": [],
   "query": "living.apple_barrel"

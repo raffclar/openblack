@@ -54,7 +54,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Shark", .field = "heading", .marker = ""},
     {.component = "Shark", .field = "drawn", .marker = ""},
     {.component = "AnimatedStaticPose", .field = "", .marker = ""},
-    {.component = "AppleBarrelWorm", .field = "place", .marker = ""},
     // The villagers are drawn gliding between their turns
     {.component = "VillagerPose", .field = "place", .marker = ""},
     {.component = "VillagerPose", .field = "groundCarry", .marker = ""},
@@ -268,10 +267,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ShownRoots", .field = "", .marker = ""},
     // The snow that a thing shows eases only while this computer draws the thing. Only the draw reads it.
     {.component = "SnowLevel", .field = "", .marker = ""},
-    // The flags over the stores and the apple barrel move in the frames
+    // The flags over the stores move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
-    {.component = "Transform", .field = "", .marker = "AppleBarrel"},
-    {.component = "Transform", .field = "", .marker = "AppleBarrelWorm"},
     // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.
     // The world reads the hand only from the reports of its player (ReportedHand).
     {.component = "Transform", .field = "", .marker = "Hand"},

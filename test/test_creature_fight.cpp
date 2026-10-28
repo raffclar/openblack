@@ -804,6 +804,19 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_EQ(Response(0.4f, 0.5f), animations::k_Sad);
 }
 
+TEST(CreatureFight, LifePaysForTheFightAtItsStopOnlyInAStateOfTheFight)
+{
+	for (const auto state : {State::Start, State::Stance, State::Action, State::BlockStart, State::Block, State::BlockEnd,
+	                         State::CastStart, State::Cast, State::CastEnd})
+	{
+		EXPECT_TRUE(LifePaysAtStop(state));
+	}
+	for (const auto state : {State::Idle, State::Finish, State::BlockRecoil, State::Faint, State::GetUp, State::Lying})
+	{
+		EXPECT_FALSE(LifePaysAtStop(state));
+	}
+}
+
 TEST(CreatureFight, AnOpponentWithNoLifeLeftLosesTheDuel)
 {
 	EXPECT_TRUE(WinsByOpponentsLife(0.0f, false));

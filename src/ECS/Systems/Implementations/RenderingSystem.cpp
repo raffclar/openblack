@@ -38,6 +38,7 @@
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/BoatFilm.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/ChangedMaterials.h"
 #include "ECS/Components/Creature.h"
@@ -642,6 +643,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 
 	// Set transforms for instanced draw at offsets
 	_renderContext.entityDraws.clear();
+	_renderContext.drawnEntityDraws.clear();
 	_renderContext.drawnObjects.clear();
 	_renderContext.animalDraws.clear();
 	_renderContext.highDetailDraws.clear();
@@ -732,10 +734,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    bool gone = false;
 		    const auto* detail = registry.TryGet<const DetailMeshes>(entity);
 		    // On a frame that draws all of the land's draw list, note which listed things stay drawn while the camera
-		    // stands still. A thing of several meshes uses the box of its standard mesh. Another thing uses its own mesh.
+		    // stands still. A thing of several meshes uses the box of its standard mesh. Another thing uses its own mesh,
+		    // also a broken building, which shows its broken model.
 		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->Listed(entity);
 		    const auto keptBox =
-		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : drawnMesh;
+		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : mesh.id;
 		    bool noted = false;
 		    if (drawList != nullptr && !drawList->Drawn(registry, entity))
 		    {
@@ -877,9 +880,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 		    // A home with someone in lights its windows at night
 		    const auto* abode = registry.TryGet<const Abode>(entity);
-		    // The w is the snow that the thing shows
+		    // The w is the snow that the thing shows. A broken building shows the snow of its broken model.
 		    glm::vec4 look {abode != nullptr && abode->presentAtHome > 0 ? 1.0f : 0.0f, 0.0f, 0.0f,
-		                    static_cast<float>(openblack::ecs::snow_levels::LevelOf(registry, entity))};
+		                    static_cast<float>(openblack::ecs::snow_levels::ShownLevelOf(registry, entity))};
 		    // A field's crop shows once it has grown a little, in its colour for how ripe it is, sunk into the ground by
 		    // how empty it is, and sways once ripe
 		    if (const auto* field = registry.TryGet<const Field>(entity); field != nullptr)
@@ -1064,16 +1067,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // The worm on the apple barrel takes the land's light of the point where the barrel stands
-		    if (const auto* worm = registry.TryGet<const AppleBarrelWorm>(entity);
-		        worm != nullptr && registry.Valid(worm->barrel))
-		    {
-			    if (const auto* barrelTransform = registry.TryGet<const Transform>(worm->barrel); barrelTransform != nullptr)
-			    {
-				    lightOffset = apple_barrel::WormLightOffset(barrelTransform->position, transform.position);
-			    }
-		    }
-
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
 		    if (!placed.has_value())
 		    {
@@ -1167,6 +1160,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    {
 						    auto heldLook = look;
 						    heldLook.z = alpha.has_value() ? -(1.0f - (static_cast<float>(*alpha) / 255.0f)) : 0.0f;
+						    // What a villager carries is one model for all the villagers, which the land never gives
+						    // snow
+						    heldLook.w = 0.0f;
 						    _heldThings.push_back({.meshId = heldId,
 						                           .fading = alpha.has_value(),
 						                           .reflected = registry.AllOf<InPhysics>(entity),
@@ -1447,8 +1443,23 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 			look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
 		}
 		const uint32_t idx = slots->second.offset + slots->second.filled;
-		_renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
+		// The worm on the apple barrel takes the land's light of the point where the barrel stands
+		auto instanceModel = modelMatrix;
+		if (const auto* worm = drawn.TryGet<const AppleBarrelWorm>(entity); worm != nullptr && drawn.Valid(worm->barrel))
+		{
+			if (const auto* barrelTransform = drawn.TryGet<const Transform>(worm->barrel); barrelTransform != nullptr)
+			{
+				graphics::instance_light::SetLightOffset(
+				    instanceModel, apple_barrel::WormLightOffset(barrelTransform->position, transform.position));
+			}
+		}
+		_renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
 		_renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
+		// One posed by its own clip, as the worm, is drawn by itself
+		if (slots->second.perEntity)
+		{
+			_renderContext.drawnEntityDraws.push_back({.entity = entity, .instance = idx});
+		}
 		// A gate stone that the cursor can find is the plinth that holds it to the cursor
 		if (const auto* stone = drawn.TryGet<const PlinthStone>(entity); stone != nullptr && stone->pickable)
 		{
@@ -1937,10 +1948,18 @@ bool RenderingSystem::FizzesInList(const Registry& registry, const ObjectDrawLis
 void RenderingSystem::NoteKept(ObjectDrawListSystemInterface& drawList, const Registry& registry, entt::entity entity,
                                const glm::mat4& model, float scale, entt::id_type boxMesh, bool fadedOut)
 {
-	// Villagers and creatures stay drawn wherever they are
-	const bool alwaysDrawn = registry.AnyOf<Villager, Creature>(entity);
+	// Villagers and creatures stay drawn wherever they are. A building that its site draws, or a broken building, has
+	// no fade test.
+	const auto test = object_draw_list::KeptTestOf({
+	    .alwaysDrawn = registry.AnyOf<Villager, Creature>(entity),
+	    .broken = registry.AllOf<BuildingDamage>(entity),
+	    .drawnWhole = DrawnWhole(entity),
+	    .partlyShown = Locator::buildingDamageSystem::has_value() &&
+	                   Locator::buildingDamageSystem::value().PartialShare(entity).has_value(),
+	});
+	const bool fadeCounts = test == object_draw_list::KeptTest::SphereAndFade && fadedOut;
 	bool onScreen = true;
-	if (!alwaysDrawn && !fadedOut && drawList.GetView().has_value())
+	if (test != object_draw_list::KeptTest::Always && !fadeCounts && drawList.GetView().has_value())
 	{
 		if (const auto& box = MeshBox(boxMesh); box.has_value())
 		{
@@ -1949,7 +1968,7 @@ void RenderingSystem::NoteKept(ObjectDrawListSystemInterface& drawList, const Re
 			onScreen = object_draw_list::SphereOnScreen(*drawList.GetView(), glm::vec3(model[3]), centre, radius);
 		}
 	}
-	drawList.NoteFullFrame(entity, object_draw_list::StaysDrawn(alwaysDrawn, onScreen, fadedOut));
+	drawList.NoteFullFrame(entity, object_draw_list::StaysDrawn(test, onScreen, fadedOut));
 }
 
 const std::optional<openblack::AxisAlignedBoundingBox>& RenderingSystem::MeshBox(entt::id_type mesh)

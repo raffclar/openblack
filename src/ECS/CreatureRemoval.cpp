@@ -79,11 +79,10 @@ public:
 		{
 			Locator::creatureHandSystem::value().Release();
 		}
-		// The turn asks about the first player's hand, which ForceDrop empties
-		if (Locator::handGrabSystem::has_value() &&
-		    Locator::handGrabSystem::value().GetHeldOf(PlayerNames::PLAYER_ONE) == creature)
+		// The hand of each player that holds it lets go, as the game lets go of a thing that is no longer there
+		if (Locator::handGrabSystem::has_value())
 		{
-			Locator::handGrabSystem::value().ForceDrop();
+			Locator::handGrabSystem::value().ForceDropFromEveryHand(creature);
 		}
 	}
 

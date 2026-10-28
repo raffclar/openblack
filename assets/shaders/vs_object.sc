@@ -178,6 +178,10 @@ void main()
 	normal = normalize(normal);
 #endif // USE_MORPH
 
+#ifdef USE_HEIGHT_MAP
+	// A vertex of an inner wall rises with the land as its vertex on the outer wall does
+	vec2 landPoint = TO_WORLD(vec4(position, 1.0f)).xz;
+#endif // USE_HEIGHT_MAP
 	// A building's inner walls: every vertex moved in along its normal across the ground, its height kept
 	position.xz -= normal.xz * u_inset.x;
 	v_position = TO_WORLD(vec4(position, 1.0f));
@@ -376,7 +380,7 @@ void main()
 	vec3 modelUp = u_model[modelIndex][1].xyz;
 	float modelScale = length(u_model[modelIndex][0].xyz);
 #endif // USE_INSTANCING
-	float rise = LandAltitude(v_position.xz) - LandAltitude(modelOrigin.xz);
+	float rise = LandAltitude(landPoint) - LandAltitude(modelOrigin.xz);
 	if (modelUp.x == 0.0f && modelUp.z == 0.0f)
 	{
 		v_position.y += rise;

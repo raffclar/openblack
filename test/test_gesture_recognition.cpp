@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
 #include <cstdlib>
 
 #include <algorithm>
@@ -568,4 +569,39 @@ TEST(GestureRequests, TheSpiralsSayWhoseMiraclesTheyOpen)
 	EXPECT_EQ(requests[0], (Request {.gesture = GestureType::Spiral, .purpose = Purpose::OpenSelection}));
 	EXPECT_EQ(requests[1],
 	          (Request {.gesture = GestureType::InverseSpiral, .purpose = Purpose::OpenSelection, .forCreature = true}));
+}
+
+// The help counts each step of the miracle selection and the R: a choice counts as a step of the chain first. A gesture
+// that does nothing counts nothing.
+TEST(GestureRequests, TheHelpCountsTheStepsOfTheMiracleSelection)
+{
+	namespace profile = help::profile;
+	using Events = std::vector<uint32_t>;
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Opened), Events {profile::k_GestureOpenSelection});
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Advanced), Events {profile::k_GestureSelectionStep});
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Chosen),
+	          (Events {profile::k_GestureSelectionStep, profile::k_GestureSelectionChosen}));
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Closed), Events {profile::k_GestureCloseSelection});
+	EXPECT_EQ(HelpEventsOf(SelectionStep::Repeated), Events {profile::k_GestureRepeatMiracle});
+	EXPECT_TRUE(HelpEventsOf(SelectionStep::Nothing).empty());
+	// The game's numbers for these events
+	EXPECT_EQ(profile::k_GestureRepeatMiracle, 14u);
+	EXPECT_EQ(profile::k_GestureOpenSelection, 15u);
+	EXPECT_EQ(profile::k_GestureSelectionStep, 16u);
+	EXPECT_EQ(profile::k_GestureSelectionChosen, 17u);
+	EXPECT_EQ(profile::k_GestureCloseSelection, 21u);
+}
+
+// Each step of the selection also counts as a gesture and as an action of the player, once a turn
+TEST(GestureRequests, AStepOfTheSelectionAlsoCountsAsAGesture)
+{
+	help::profile::HelpProfile profile;
+	for (const auto event : HelpEventsOf(SelectionStep::Chosen))
+	{
+		profile.Trigger(event);
+	}
+	EXPECT_EQ(profile.Count(help::profile::k_GestureSelectionStep).Total(), 1u);
+	EXPECT_EQ(profile.Count(help::profile::k_GestureSelectionChosen).Total(), 1u);
+	EXPECT_EQ(profile.Count(24).Total(), 1u);
+	EXPECT_EQ(profile.Count(help::profile::k_AnyEvent).Total(), 1u);
 }

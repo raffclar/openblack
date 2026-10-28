@@ -70,6 +70,11 @@ bool creature_object_actions::Hurries(Kind kind)
 	return false;
 }
 
+bool creature_object_actions::PlaysOnWhenPlanStops(Kind kind)
+{
+	return kind == Kind::Catch || kind == Kind::PutDown || kind == Kind::Discard;
+}
+
 bool creature_object_actions::ShowsHoldPose(std::optional<Kind> playing)
 {
 	if (!playing.has_value())

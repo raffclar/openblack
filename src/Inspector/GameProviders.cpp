@@ -1016,25 +1016,28 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	    }));
 	provider->Add(
 	    Query("apple_barrel",
-	          "The apple barrel beside the local player's storage pit nearest their temple: the pit, the barrel and its "
-	          "worm, where they stand and the worm's place in its clip; none while no pit carries it",
+	          "The apple barrel beside the storage pit of the player at this computer nearest their temple: the pit (an "
+	          "entity of the land), the barrel and its worm (entities of the drawn registry), where they stand and the "
+	          "worm's place in its clip; none while no pit carries it",
 	          {}),
-	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+	    ServeRegistry([](const ecs::Registry& /*registry*/, const QueryContext& /*c*/) {
+		    const auto* drawn = DrawnRegistry();
 		    const auto barrel =
 		        Locator::appleBarrelSystem::has_value() ? Locator::appleBarrelSystem::value().GetBarrel() : entt::null;
-		    if (barrel == entt::null || !registry.Valid(barrel) || !registry.AllOf<AppleBarrel, Transform>(barrel))
+		    if (drawn == nullptr || barrel == entt::null || !drawn->Valid(barrel) ||
+		        !drawn->AllOf<AppleBarrel, Transform>(barrel))
 		    {
 			    return Json(nullptr);
 		    }
-		    const auto& found = registry.Get<const AppleBarrel>(barrel);
+		    const auto& found = drawn->Get<const AppleBarrel>(barrel);
 		    Json result = {{"barrel", Id(barrel)},
 		                   {"store", Id(found.store)},
 		                   {"worm", Id(found.worm)},
-		                   {"position", Point(registry.Get<const Transform>(barrel).position)}};
-		    if (registry.Valid(found.worm) && registry.AllOf<AppleBarrelWorm, Transform>(found.worm))
+		                   {"position", Point(drawn->Get<const Transform>(barrel).position)}};
+		    if (drawn->Valid(found.worm) && drawn->AllOf<AppleBarrelWorm, Transform>(found.worm))
 		    {
-			    result["worm_position"] = Point(registry.Get<const Transform>(found.worm).position);
-			    result["worm_place"] = registry.Get<const AppleBarrelWorm>(found.worm).place;
+			    result["worm_position"] = Point(drawn->Get<const Transform>(found.worm).position);
+			    result["worm_place"] = drawn->Get<const AppleBarrelWorm>(found.worm).place;
 		    }
 		    return result;
 	    }));
@@ -3399,8 +3402,8 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		}
 		auto& fights = Locator::creatureFightSystem::value();
 		using Start = ecs::systems::CreatureFightSystemInterface::StartResult;
-		constexpr std::array<std::string_view, 6> k_Results {"started",  "no_opponent", "busy",
-		                                                     "too_weak", "no_arena",    "refused"};
+		constexpr std::array<std::string_view, 7> k_Results {"started",  "no_opponent", "busy",     "too_weak",
+		                                                     "no_arena", "refused",     "finishing"};
 		const auto started = fights.StartFight(*creature, *opponent);
 		const auto index = std::min(static_cast<size_t>(started), k_Results.size() - 1);
 		if (started != Start::Started)

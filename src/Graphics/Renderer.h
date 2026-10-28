@@ -21,6 +21,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -434,7 +435,11 @@ private:
 		uint32_t indicesCount;
 		bool twoSided;
 	};
-	[[nodiscard]] const Cap& CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height) const;
+	[[nodiscard]] const Cap& CapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height,
+	                               const std::optional<glm::mat4>& landPlacement) const;
+	/// The same for a model that follows the land, placed in the world: each corner rises with the land under it
+	[[nodiscard]] const Cap& LandCapOf(const L3DSubMesh& subMesh, const CapPrimitive& primitive, float height,
+	                                   const glm::mat4& placement) const;
 	/// Binds a cap's corners as the vertices of the next draw; false when there is no room for them this frame
 	[[nodiscard]] static bool BindCap(const std::vector<partial_build_cap::CapVertex>& cap);
 	void DrawPass(const DrawSceneDesc& desc) const;
@@ -620,6 +625,8 @@ private:
 	mutable std::unordered_map<entt::entity, KeptGroundShadow> _keptGroundShadows;
 	/// The caps over the broken buildings' cut walls, by primitive and cut height; made afresh when a cut moves
 	mutable std::map<std::pair<const void*, float>, Cap> _caps;
+	/// The caps of the models that follow the land, made again each frame
+	mutable std::map<std::tuple<const void*, float, float, float, float>, Cap> _landCaps;
 	/// The land's light this frame, and the 256 by 1 texture the terrain reads it from
 	mutable std::unique_ptr<LandLightTable> _landLightTable;
 	/// The sea's ripple, moving on with the frames the sea's rows are drawn in while the game's time goes on

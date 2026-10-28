@@ -2896,6 +2896,36 @@ void AddLight(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-4.0f, 4.0f}, .joinTown = true},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-8.0f, 6.0f}, .joinTown = true}},
 	});
+
+	all.push_back({
+	    .id = "light.snow_on_carried_things",
+	    .name = "Snow on villagers, not on what they carry",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island. Two villagers carry wood and one villager carries food. "
+	                   "They walk to and fro in front of the camera.",
+	    .expected = "The snow shows on the villagers in about four seconds. The wood and the food that they carry show "
+	                "no snow.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -10.0f}, .look = {0.0f, 1.5f, 8.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {-4.0f, 6.0f},
+	                 .walkTo = glm::vec2 {4.0f, 6.0f},
+	                 .walkRepeatSeconds = 6.0f,
+	                 .walkFinal = VillagerStates::ArrivesAtStoragePitForDropOff,
+	                 .woodHeld = 250},
+	                {.type = VillagerInfo::CelticForesterMale,
+	                 .offset = {4.0f, 10.0f},
+	                 .walkTo = glm::vec2 {-4.0f, 10.0f},
+	                 .walkRepeatSeconds = 6.0f,
+	                 .walkFinal = VillagerStates::ArrivesAtStoragePitForDropOff,
+	                 .woodHeld = 250},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {-3.0f, 3.0f},
+	                 .walkTo = glm::vec2 {3.0f, 3.0f},
+	                 .walkRepeatSeconds = 6.0f,
+	                 .walkFinal = VillagerStates::HousewifeReturnHomeWithFood,
+	                 .foodHeld = 150}},
+	});
 }
 
 void AddMovement(std::vector<Scenario>& all)
@@ -5450,6 +5480,72 @@ void AddObjects(std::vector<Scenario>& all)
 	                 Go(Kind::ThrowAt, 0, {-40.0f, -10.0f}, 1.5f)},
 	});
 
+	// A leash order stops the plan while the tiger puts the villager down. The put-down continues and lets her go at its
+	// moment.
+	all.push_back({
+	    .id = "creature.put_down_through_an_order",
+	    .name = "A put-down that continues through a leash order",
+	    .facet = Facet::Objects,
+	    .description = "A tiger on the learning leash picks up the villager in front of it and starts to put her down. "
+	                   "A fifth of a second later, the player tells it with the leash to go to a point to the north.",
+	    .expected = "The order does not cut the put-down, and it does not hurry it, because the tiger holds her. The "
+	                "tiger lets her go at the moment of the put-down, with no speed, and she stands on the land. When the "
+	                "put-down ends, the tiger walks to the point. It does not carry her there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::PutDown, 0, 1.5f, true),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, 40.0f}, 0.2f, false)},
+	});
+
+	// The hand strokes the tiger and lets it go while the tiger puts the villager down. The feedback stops the plan, but
+	// the put-down continues and lets her go at its moment.
+	all.push_back({
+	    .id = "creature.put_down_through_a_stroke",
+	    .name = "A put-down that continues through a stroke",
+	    .facet = Facet::Objects,
+	    .description = "A tiger picks up the villager in front of it and starts to put her down. A tenth of a second later, "
+	                   "the hand takes hold of the tiger to stroke its head. The put-down is too new for the stroke, so only "
+	                   "the hold counts. A tenth of a second after that, the hand lets go.",
+	    .expected = "The feedback of the hand stops what the tiger does, but not the put-down. The tiger lets the villager "
+	                "go at the moment of the put-down, with no speed, and she stands on the land. The tiger does not keep "
+	                "her in its hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f),
+	                 Act(Kind::PutDown, 0, 1.5f, true),
+	                 {.kind = Kind::HandStroke,
+	                  .delaySeconds = 0.1f,
+	                  .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
+	                 Act(Kind::HandLetGo, 0, 0.1f)},
+	});
+
+	// A script takes the tiger while it puts the villager down. The put-down continues, and the action of the script
+	// waits.
+	{
+		constexpr uint32_t k_HappyAnimation = 55;
+		all.push_back({
+		    .id = "creature.put_down_through_a_script",
+		    .name = "A put-down that continues when a script takes the creature",
+		    .facet = Facet::Objects,
+		    .description = "A tiger picks up the villager in front of it and starts to put her down. A fifth of a second "
+		                   "later, a script takes the tiger and tells it to play the happy animation two times.",
+		    .expected = "The script does not cut the put-down. The tiger lets the villager go at the moment of the "
+		                "put-down, with no speed, and she stands on the land. When the put-down ends, the tiger plays the "
+		                "happy animation.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+		    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+		    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}}},
+		    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f),
+		                 Act(Kind::PutDown, 0, 1.5f, true),
+		                 {.kind = Kind::ScriptPlay, .delaySeconds = 0.2f, .value = k_HappyAnimation, .amount = 2.0f}},
+		});
+	}
+
 	auto hungryAtTheGive = hungryThinking;
 	hungryAtTheGive.pauseMind = true;
 	hungryAtTheGive.thinksAfterSeconds = k_ThinksBeforeTheGive;
@@ -6881,6 +6977,23 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.hand_attach_sounds",
+	    .name = "Attach sounds of the leash in the hand",
+	    .facet = Facet::Leash,
+	    .description = "A tiger on the learning leash is tied to a tree and untied back to the hand two times, every "
+	                   "four seconds.",
+	    .expected = "Each tie and each return to the hand plays a leash-attach sound. The two sounds play in turn. The "
+	                "first return to the hand plays the first sound, and the second return plays the second sound.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 10.0f}, {0.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 10.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false),
+	                 Act(Kind::UntieLeash, 0, 4.0f), OnObject(Kind::TieLeash, 0, 0, 4.0f, false),
+	                 Act(Kind::UntieLeash, 0, 4.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "leash.tied_thrown",
 	    .name = "Tied to a thrown rock",
 	    .facet = Facet::Leash,
@@ -8072,8 +8185,9 @@ void AddCombat(std::vector<Scenario>& all)
 		                   "When the duel is on, a script sets the life of the blue tiger to zero. Its fight health stays.",
 		    .expected = "On its next turn, the red tiger wins. It finishes its move, stands and plays the happy response. "
 		                "An advisor says one of the lines for good news, because the place of the red tiger is on screen. "
-		                "The blue tiger does not faint. It stops and plays the sad response. The fight view ends a few "
-		                "seconds later. The fight transcript shows a win with by_blow false.",
+		                "The blue tiger does not faint. It stays in its stance and faces the red tiger. When the red tiger "
+		                "finishes its response, the blue tiger stops with no response. The fight view ends a few seconds "
+		                "after the win. The fight transcript shows a win with by_blow false.",
 		    .environment = {.fainting = false},
 		    .framing = ringside,
 		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), loser},
@@ -8089,6 +8203,26 @@ void AddCombat(std::vector<Scenario>& all)
 		                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
 		});
 	}
+
+	all.push_back({
+	    .id = "combat.held_in_duel",
+	    .name = "The hand holds a creature in its duel",
+	    .facet = Facet::Combat,
+	    .description = "The red tiger of the player and a blue tiger fight by themselves. When the duel is on, the hand "
+	                   "holds the red tiger and strokes its head. Two seconds later the hand lets go.",
+	    .expected = "When the hand takes hold, the red tiger leaves the duel. It finishes its move and stands. The blue tiger "
+	                "stays in its stance and faces the red tiger. When the hand lets go, both tigers stop with no "
+	                "response. The fight transcript shows held_by_hand, let_go_by_hand and partner_stopped.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+	                 Fight(Kind::StartFight, 0, 1, 0.5f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 {.kind = Kind::HandStroke,
+	                  .delaySeconds = 12.0f,
+	                  .bodyPart = static_cast<size_t>(creature_feedback::BodyPart::Head)},
+	                 Act(Kind::HandLetGo, 0, 2.0f)},
+	});
 
 	{
 		// Blows strike the shapes round the bones of the body: a tiger against a horse, which has a body of a different
@@ -10884,6 +11018,30 @@ void AddSwayAndFrightScenarios(std::vector<Scenario>& all)
 	        {{.object = 0, .height = 14.0f, .velocity = {14.0f, 4.0f, 0.0f}, .delaySeconds = 2.0f, .repeatSeconds = 5.0f}},
 	});
 
+	// Rocks that a script makes go into the physics
+	const auto create = [](float delay, int32_t type, glm::vec2 point, float height) {
+		return Command {
+		    .kind = Kind::CallNative,
+		    .delaySeconds = delay,
+		    .script = "CREATE",
+		    .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = static_cast<float>(type)},
+		                        {.kind = ScriptArgument::Kind::Integer, .number = static_cast<float>(MobileStaticInfo::Rock)},
+		                        {.kind = ScriptArgument::Kind::Position, .point = point, .height = height}}};
+	};
+	all.push_back({
+	    .id = "objects.script_rock_falls",
+	    .name = "A rock that a script makes falls onto the land",
+	    .facet = Facet::Objects,
+	    .description = "After one second, CREATE makes a rock as a mobile static 10 metres above the land, 10 metres "
+	                   "west of the middle. Two seconds later, CREATE makes a rock by the rock type at the same height, "
+	                   "10 metres east of the middle.",
+	    .expected = "The first rock falls from the height that the script gave and comes to rest on the land. The "
+	                "second rock shows on the land at once, turned to the slope, and stays there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 0.0f}, {15.0f, 0.0f}}},
+	    .commands = {create(1.0f, 8, {-10.0f, 0.0f}, 10.0f), create(2.0f, 33, {10.0f, 0.0f}, 10.0f)},
+	});
+
 	all.push_back({
 	    .id = "senses.creature_runs_from_a_wolf",
 	    .name = "A wolf frightens the creature",
@@ -11170,8 +11328,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox ||
-	       kind == Kind::BringCreature || IsPointerCommand(kind);
+	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
+	       kind == Kind::EndBox || kind == Kind::BringCreature || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -11199,7 +11357,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 184> k_Names {
+	constexpr std::array<std::string_view, 185> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -11381,6 +11539,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "build the worship sites",
 	    "press a key on the keyboard",
 	    "show another god's hand",
+	    "be the god of a player at this computer",
 	    "press Join Online Game of the page",
 	    "end box",
 	    "bring a creature into a network game",

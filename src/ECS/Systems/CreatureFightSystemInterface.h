@@ -46,6 +46,9 @@ public:
 		/// The other creature, asked first, won't fight it: it is less than half or more than twice its height, it lies
 		/// dead, or only one of the two is under a script's control
 		Refused,
+		/// The other creature agreed, but one of the two still finishes the move of a fight that stopped. Nothing
+		/// starts: try again on a later turn, with the answer that the other creature gave.
+		Finishing,
 	};
 
 	virtual ~CreatureFightSystemInterface() = default;
@@ -76,8 +79,8 @@ public:
 	/// is over.
 	virtual StartResult StartFight(entt::entity creature, entt::entity opponent) = 0;
 	/// A fight that the first creature's own plan starts. That creature can give up the fight for a plan it wants much
-	/// more.
-	virtual StartResult StartPlannedFight(entt::entity creature, entt::entity opponent)
+	/// more. When the other creature agreed on an earlier turn of the same step, it is not asked again: its answer stays.
+	virtual StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool /*agreed*/)
 	{
 		return StartFight(creature, opponent);
 	}
@@ -90,6 +93,13 @@ public:
 	/// winner. Both creatures finish the move they are making and stand, without celebrating or sulking, and each loses
 	/// from its life a quarter of the fight health it lost. A fight still being set up is simply left.
 	virtual void CallOff(entt::entity creature) { AbortFight(creature); }
+	/// The hand took hold of the creature. The fights call it on the first turn of the hold. In a duel, the creature
+	/// leaves the duel: its life pays for the fight, and it finishes its move. Its opponent stays in the duel against it.
+	/// The fight steps of the creature wait while the hand holds it.
+	virtual void HandTookHold(entt::entity /*creature*/) {}
+	/// The hand let go of the creature, and the creature starts its plan again. Its fight stops with no response, and the
+	/// fight of its opponent stops too.
+	virtual void HandLetGo(entt::entity /*creature*/) {}
 	/// Whether the creature is in a fight's setup, going to the arena before the duel: it takes no leash orders then
 	[[nodiscard]] virtual bool IsSettingUpFight(entt::entity /*creature*/) const { return false; }
 	[[nodiscard]] virtual bool IsFighting(entt::entity creature) const = 0;

@@ -795,6 +795,29 @@ void world_objects::LeaveGhost(entt::entity object)
 	}
 }
 
+void world_objects::KeepForScript(entt::entity building)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (construction::BroughtWoodSite(building) == nullptr)
+	{
+		// A building of no town stays as it is, its fire too
+		if (!IsAbodeOfATown(registry, building))
+		{
+			return;
+		}
+		construction::OpenSite(building, 0.0f);
+	}
+	// A building that is not finished gets all of its life again
+	if (!construction::IsBuilt(building))
+	{
+		SetLife(building, 1.0f);
+	}
+	if (Locator::fireSystem::has_value())
+	{
+		Locator::fireSystem::value().Forget(building);
+	}
+}
+
 void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& death)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -818,8 +841,13 @@ void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& de
 	}
 	if (registry.AnyOf<Abode, SpellDispenser>(object))
 	{
-		// A ghost of it flickers out where it stood, and it goes
+		// A ghost of it flickers out where it stood, also when it stays
 		LeaveGhost(object);
+		if (registry.AllOf<InScript>(object))
+		{
+			KeepForScript(object);
+			return;
+		}
 		Remove(object);
 		return;
 	}

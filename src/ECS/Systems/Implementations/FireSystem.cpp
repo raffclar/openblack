@@ -20,6 +20,8 @@
 #include <LNDFile.h>
 #include <entt/core/hashed_string.hpp>
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/matrix.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
@@ -36,6 +38,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -311,15 +314,34 @@ const graphics::L3DMesh* MeshOf(entt::entity object)
 
 /// A random point of a random triangle of the model's first detail, in its own frame; a random bone's place, as the
 /// bones are posed now, for a model moved by bones. A tree's flames keep to its middle half. On a creature's body, the
-/// point also keeps its bone: the game draws the body bone by bone, and the point stays at that bone.
+/// point also keeps its bone: the game draws the body bone by bone, and the point stays at that bone. A broken building
+/// takes the point from its broken model when that gives one.
 std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 {
-	const auto* mesh = MeshOf(object);
-	if (mesh == nullptr || !Locator::gameRandom::has_value())
+	if (!Locator::gameRandom::has_value())
 	{
 		return std::nullopt;
 	}
 	auto& random = Locator::gameRandom::value();
+	const auto& registry = Entities();
+	const auto* broken = registry.TryGet<const BuildingDamage>(object);
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (broken != nullptr && transform != nullptr && registry.AnyOf<Abode, SpellDispenser>(object))
+	{
+		const auto drawn = ecs::drawn_place::DrawnTransformOf(registry, object, *transform);
+		const auto placement = glm::translate(glm::mat4(1.0f), drawn.position) * glm::mat4(drawn.rotation) *
+		                       glm::scale(glm::mat4(1.0f), drawn.scale);
+		if (const auto point = physics::damage::FlamePointOnModel(
+		        broken->mesh, glm::inverse(placement), [&random](float limit) { return random.LocalFloatRand(limit); }))
+		{
+			return fire::graphic::Anchor {.point = *point};
+		}
+	}
+	const auto* mesh = MeshOf(object);
+	if (mesh == nullptr)
+	{
+		return std::nullopt;
+	}
 	if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
 	{
 		const auto bones = ecs::posed_model::BonesOf(Entities(), object, *mesh);
