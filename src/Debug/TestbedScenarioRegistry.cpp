@@ -5377,7 +5377,8 @@ void AddObjects(std::vector<Scenario>& all)
 	    .name = "A put-down that continues through a stroke",
 	    .facet = Facet::Objects,
 	    .description = "A tiger picks up the villager in front of it and starts to put her down. A tenth of a second later, "
-	                   "the hand strokes the head of the tiger. A tenth of a second after that, the hand lets go.",
+	                   "the hand takes hold of the tiger to stroke its head. The put-down is too new for the stroke, so only "
+	                   "the hold counts. A tenth of a second after that, the hand lets go.",
 	    .expected = "The feedback of the hand stops what the tiger does, but not the put-down. The tiger lets the villager "
 	                "go at the moment of the put-down, with no speed, and she stands on the land. The tiger does not keep "
 	                "her in its hand.",
