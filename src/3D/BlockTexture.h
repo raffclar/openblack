@@ -107,6 +107,9 @@ void BuildBlockTexels(std::span<const lnd::LNDCell> cells, const Sources& source
 /// Paints the texels of a rectangle of a block's cells as PaintCells does, into ARGB words at 4 bits a channel
 void PaintCellTexels(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell, glm::ivec2 cellCount,
                      std::span<uint16_t> texels);
+/// Puts the texels of a rectangle of cells, as PaintCellTexels paints them, into their place in a block's texels (k_Side
+/// by k_Side, a row for each texel along x)
+void PutCellTexels(std::span<const uint16_t> part, glm::ivec2 firstCell, glm::ivec2 cellCount, std::span<uint16_t> block);
 /// ARGB words at 4 bits a channel as RGBA8 texels, each 4-bit channel times 17
 void ToRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba);
 /// Paints the texels of a rectangle of a block's cells, cellCount (along x, along z) from firstCell, as BuildBlock

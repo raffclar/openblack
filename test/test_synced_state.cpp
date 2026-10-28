@@ -135,6 +135,16 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+TEST(SyncedState, TheDustOfARewardChestIsNotSynced)
+{
+	// The C library's random numbers place the dust, and the frames fade it. The game server draws neither.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dust"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dustMilliseconds"));
+	// The turn reads the state of the chest
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
+}
+
 // Only the frames of this computer change the hum and the mana path of the hand past the border. The turns change the
 // strength that the hand keeps.
 TEST(SyncedState, TheHumAndTheManaPathOfTheHandPastTheBorderAreNotSynced)

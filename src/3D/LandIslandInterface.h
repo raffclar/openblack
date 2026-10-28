@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -94,9 +95,23 @@ public:
 	virtual void PaintBlockTexels(size_t /*block*/, std::span<uint16_t> /*texels*/) const {}
 	/// Puts ARGB texels at 4 bits a channel in place of a block's texture, for example with its footprints painted in
 	virtual void SetBlockTexels(size_t /*block*/, std::span<const uint16_t> /*texels*/) {}
-	/// The blocks whose textures the land painted again with no footprints since the last call: each block after a land
-	/// loads, and the blocks that change height
-	[[nodiscard]] virtual std::vector<size_t> TakeRepaintedBlocks() { return {}; }
+	/// A block whose texture the land painted again with no footprints
+	struct RepaintedBlock
+	{
+		/// The texels of a rectangle of the block's cells, as the land painted them (see block_texture::PaintCellTexels)
+		struct Cells
+		{
+			glm::ivec2 first {0};
+			glm::ivec2 count {0};
+			std::vector<uint16_t> texels;
+		};
+		size_t block {0};
+		/// The cells that the land painted again, or none when it painted the whole block
+		std::optional<Cells> cells;
+	};
+	/// The blocks whose textures the land painted again with no footprints since the last call, in the order it painted
+	/// them: each block after a land loads, and the cells of the blocks that change height
+	[[nodiscard]] virtual std::vector<RepaintedBlock> TakeRepaintedBlocks() { return {}; }
 
 	[[nodiscard]] virtual U16Extent2 GetIndexExtent() const = 0;
 	[[nodiscard]] virtual glm::mat4 GetOrthoView() const = 0;
