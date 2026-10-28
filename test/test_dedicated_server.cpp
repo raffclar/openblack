@@ -13,16 +13,22 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Server/DedicatedServer.h"
 #include "TestTempFolder.h"
 
 using openblack::server::ChecksumLine;
+using openblack::server::k_RoomSeed;
 using openblack::server::ParseChecksumLine;
+using openblack::server::RoomStart;
+using openblack::server::RoomStartFor;
+using openblack::server::RoomStartLine;
 using openblack::server::ServerConfig;
 using openblack::server::ServerSettings;
 using openblack::server::SimulationFor;
@@ -80,6 +86,30 @@ TEST(DedicatedServer, AFastRunDoesNotWaitAndARunWithNoTurnsHasNoEnd)
 	EXPECT_FALSE(simulation.settings.untilTurn.has_value());
 }
 
+TEST(DedicatedServer, ARoomWithNoSeedOfAToolReadsTheDateFromTheClockOfTheComputer)
+{
+	const auto start = RoomStartFor(ServerSettings {.gamePath = "data"});
+	EXPECT_EQ(start, (RoomStart {.seed = k_RoomSeed, .pinnedDate = std::nullopt}));
+	EXPECT_EQ(RoomStartLine(start), "The seed of the world: 1, date from the clock of the computer");
+}
+
+TEST(DedicatedServer, TheSeedOfAToolAlsoPinsTheDate)
+{
+	const auto start = RoomStartFor(ServerSettings {.gamePath = "data", .seed = 7});
+	EXPECT_EQ(start.seed, 7u);
+	EXPECT_EQ(start.pinnedDate, openblack::ecs::systems::TimeSystemInterface::k_DeterministicDate);
+	EXPECT_EQ(RoomStartLine(start), "The seed of the world: 7 (from a tool), date pinned");
+}
+
+// The commands file of the game has the commands of its testbed scenario. The server drops the same commands of its
+// own scenario, so that each command occurs one time only.
+TEST(DedicatedServer, AServerThatPlaysTheCommandsOfAFileDropsTheCommandsOfItsOwnPlayer)
+{
+	using openblack::server::OwnCommands;
+	EXPECT_EQ(openblack::server::OwnCommandsOf(ServerSettings {}), OwnCommands::Send);
+	EXPECT_EQ(openblack::server::OwnCommandsOf(ServerSettings {.commandsPath = "commands.jsonl"}), OwnCommands::Drop);
+}
+
 TEST(DedicatedServer, TheToolsReadTheTurnAndTheChecksumFromTheLineOfTheLog)
 {
 	const auto line = ChecksumLine(42, 0x0123456789abcdefull);
@@ -118,4 +148,19 @@ TEST(DedicatedServer, AStopBeforeTheFirstFrameEndsTheServerWithNoTurn)
 	                                             [&count](uint32_t /*turn*/, uint64_t /*checksum*/) { ++count; });
 	EXPECT_EQ(exitCode, EXIT_SUCCESS);
 	EXPECT_EQ(count, 0u);
+}
+
+TEST(DedicatedServer, TheServerWritesNothingInTheProfileFolderItIsGiven)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [](uint32_t /*turn*/, uint64_t /*checksum*/) {});
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	std::vector<std::filesystem::path> files;
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(profileFolder.Path()))
+	{
+		files.push_back(entry.path());
+	}
+	EXPECT_TRUE(files.empty());
 }

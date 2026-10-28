@@ -34,10 +34,16 @@ struct Sample
 	uint64_t syncedDraws {0};
 	/// With the fields: the hash of each field of each entity, by "component.field" and then by the entity
 	std::unordered_map<std::string, std::unordered_map<uint32_t, uint64_t>> rows;
+	/// With the fields: the hash of each value that each system saves, in the order of its save, by the name of its part
+	std::unordered_map<std::string, std::vector<uint64_t>> systemValues;
 };
 
 /// The first entity whose field differs between two samples, none when no row differs
 [[nodiscard]] std::optional<uint32_t> ChangedEntity(const Sample& before, const Sample& after, const std::string& part);
+
+/// The numbers (from 0, in the order of the save) of the values of a system part that differ between two samples. A
+/// value that only one sample has also differs.
+[[nodiscard]] std::vector<size_t> ChangedValues(const Sample& before, const Sample& after, const std::string& part);
 
 /// The name that a sample gives to the count of synced random numbers, when it changes
 inline constexpr std::string_view k_SyncedDrawsPart = "synced random draws";

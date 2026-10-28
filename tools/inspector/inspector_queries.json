@@ -87,6 +87,93 @@
   "query": "ecs.references"
  },
  {
+  "description": "Entities by component, kind or label: ids, kinds, labels and places",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "Only entities with this component (or all of these), by name, e.g. Tree",
+    "name": "component",
+    "type": "string or array"
+   },
+   {
+    "description": "Only entities of this kind, e.g. Villager, Abode, Tree, Animal, Creature",
+    "name": "kind",
+    "type": "string"
+   },
+   {
+    "description": "Only entities whose label holds this text, in any case",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "drawn.entities"
+ },
+ {
+  "description": "One entity: its kind, label, place and component names; their fields on request",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The components to write out with their fields, by name",
+    "name": "components",
+    "type": "array or \"all\""
+   }
+  ],
+  "query": "drawn.entity"
+ },
+ {
+  "description": "The component types there are, how many entities have each, and whether their fields are known",
+  "kind": "list",
+  "parameters": [],
+  "query": "drawn.components"
+ },
+ {
+  "description": "The component types that have entities but no registration with the reflection, so the sync checksum and the saves leave them out. A correct game gives an empty list.",
+  "kind": "list",
+  "parameters": [],
+  "query": "drawn.unregistered"
+ },
+ {
+  "description": "A hash of where every entity is (its id and transform), and of a component's fields when one is named, to tell whether two runs ended the same",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Also hash this component's fields on each entity that has it",
+    "name": "component",
+    "type": "string"
+   },
+   {
+    "description": "Leave out the entities with any of these components, e.g. [\"HandGrab\"]: the hand eases towards the pointer every frame drawn, paused or not",
+    "name": "exclude",
+    "type": "array"
+   },
+   {
+    "description": "false: leave out the ids, so that two loads of a land give the same hash although the registry gave the entities other ids (true by default)",
+    "name": "ids",
+    "type": "boolean"
+   }
+  ],
+  "query": "drawn.hash"
+ },
+ {
+  "description": "Every component field that holds an entity (an entity, an optional one or a list of them), gone or not: the holder, its label, the component and the field's path",
+  "kind": "list",
+  "parameters": [
+   {
+    "description": "The entity's id",
+    "name": "id",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "drawn.references"
+ },
+ {
   "description": "Objects within the radius of a point, nearest first, by component, kind or label",
   "kind": "list",
   "needs_near": true,
@@ -483,6 +570,54 @@
   "query": "creature.plan"
  },
  {
+  "description": "The clips that a creature's body plays now: for each, its layer (body, blend, face, gesture, wobble), the clip's place and name in the creature spec file, the time in it, its speed (clip milliseconds for each millisecond of the turn), whether it loops, its weight and pair blend, and what asked for it (the mind's activity, plan and agenda step, the action with a thing, the fight)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.animation"
+ },
+ {
+  "description": "The clips that a creature's body played and that stopped, the newest last: each with the turn that it started, the turn that it stopped, its speed and what asked for it. The log keeps the newest 256.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "How many of the newest clips (all by default)",
+    "name": "last",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.animation_history"
+ },
+ {
+  "description": "The clips that something asked a creature's body for that did not play: missing (the species has no such clip, so the body showed the stand or the action ended at once) or refused (the body played another action), with the turn, what asked and how many turns in a row it came again",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.animation_problems"
+ },
+ {
+  "description": "Removes the logs of the clips of all the creatures. The logs start again.",
+  "kind": "object",
+  "parameters": [],
+  "query": "creature.animation_clear",
+  "writes": true
+ },
+ {
   "description": "The cells about a point that are not clear for a creature to go to (land it can't walk on, or things in its way), and the middle of the nearest clear area so wide, as its search for a place to cast, sit or get away finds it",
   "kind": "object",
   "parameters": [
@@ -622,7 +757,7 @@
   "kind": "object",
   "parameters": [
    {
-    "description": "The player's number, 0 (the first) by default",
+    "description": "The player's number, the player of this computer by default",
     "name": "player",
     "type": "integer"
    }
@@ -1123,7 +1258,7 @@
   "query": "land.storm_clouds"
  },
  {
-  "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm and the background weather",
+  "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm, the place of its message and the background weather",
   "kind": "object",
   "parameters": [],
   "query": "land.real_weather"
@@ -1233,7 +1368,7 @@
   "query": "living.action"
  },
  {
-  "description": "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, and a grazer's needs",
+  "description": "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, and a grazer's needs",
   "kind": "object",
   "parameters": [
    {
@@ -1471,7 +1606,7 @@
   "query": "players.game_end"
  },
  {
-  "description": "This computer's hands: where they are, and what the hand holds or takes",
+  "description": "This computer's hands, the hands of its own god that it moves and draws: the player, where the hands are, and what the hand holds or takes",
   "kind": "object",
   "parameters": [],
   "query": "players.hand"
@@ -1660,6 +1795,18 @@
   "query": "view.pause_text"
  },
  {
+  "description": "The incoming messages at the bottom left of the screen: the list in order (kind, text, weather picture, the real time it started to show), the real time now, and whether the button shows with its look",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.incoming_messages"
+ },
+ {
+  "description": "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the players that get them, text or taunt, shown in the incoming messages), the speech bubbles over the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, the typed line, the list of players and who gets a line)",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.chat"
+ },
+ {
   "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, whether films are on, and the 16-bit surface of the films",
   "kind": "object",
   "parameters": [],
@@ -1768,6 +1915,13 @@
    }
   ],
   "query": "creatures.fight",
+  "writes": true
+ },
+ {
+  "description": "Sends the fight cheat of the player of this computer as a command: at the turn, the player's creature fights the nearest creature, or stops the duel that it is in. A game server takes the command only with its test commands on",
+  "kind": "object",
+  "parameters": [],
+  "query": "creatures.fight_cheat",
   "writes": true
  },
  {
@@ -2006,7 +2160,7 @@
   "query": "help.bubble"
  },
  {
-  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record it is at, whether it holds at a mark, and the camera and hints it has",
+  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record the turns are at, whether it holds at a mark, the record the frames are at, and the camera and hints it has",
   "kind": "object",
   "parameters": [],
   "query": "help.hand_demo"
@@ -2048,6 +2202,31 @@
    }
   ],
   "query": "saves.load",
+  "writes": true
+ },
+ {
+  "description": "Loads a slot and then saves the game into a second slot in the same call, with no frame and no turn between. A save of a loaded world must have the same bytes as the save that the game loaded (tools/sim/save_diff.py compares the two files)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The slot, 0 to 20",
+    "name": "slot",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The slot of the second save, 0 to 20",
+    "name": "into",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The name of the second save",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "saves.load_and_save",
   "writes": true
  },
  {

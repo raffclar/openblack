@@ -71,12 +71,12 @@ HeadingPitch HeadingPitchOf(glm::vec3 point, glm::vec3 centre)
 	return {.heading = std::atan2(offset.x, offset.z), .pitch = std::atan2(offset.y, across)};
 }
 
-View Start(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height)
+View Start(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height, StartDistance start)
 {
 	const auto turned = HeadingPitchOf(cameraOrigin, cameraFocus);
 	auto distance = ViewingDistance(height);
 	const glm::vec2 across {creature.x - cameraOrigin.x, creature.z - cameraOrigin.z};
-	if (glm::length(across) < k_CloseAcross)
+	if (start == StartDistance::KeepWhenClose && glm::length(across) < k_CloseAcross)
 	{
 		// Already close, it stays about as far as it is, but no nearer than twice the creature's height and no further
 		// than it would start

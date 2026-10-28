@@ -51,9 +51,13 @@ double TicksPerMillisecond()
 
 /// The time that this thread was on a processor since it started, in milliseconds. A frame that takes much more time
 /// than this waited: for the renderer, or for the system, which gave the processor to other programs.
-double ThreadCpuMilliseconds()
+/// The time that the game thread was on a processor. A web browser does not give this time: its thread clock is the
+/// wall clock, which also counts the wait for the display frame.
+std::optional<double> ThreadCpuMilliseconds()
 {
-#ifdef _WIN32
+#if defined(__EMSCRIPTEN__)
+	return std::nullopt;
+#elif defined(_WIN32)
 	static const double k_TicksPerMillisecond = TicksPerMillisecond();
 	ULONG64 cycles = 0;
 	QueryThreadCycleTime(GetCurrentThread(), &cycles);
@@ -113,20 +117,62 @@ std::string Megabytes(int64_t bytes)
 namespace openblack::debug
 {
 
-FrameStatsLog::FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade)
+FrameStatsLog::FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade, std::filesystem::path out)
     : _interval(std::max<uint32_t>(interval, 1))
     , _views(views)
     , _lastPipelinesMade(pipelinesMade)
     , _lastCpuMilliseconds(ThreadCpuMilliseconds())
 {
+	_out = std::move(out);
+	if (!_out.empty())
+	{
+		_records.reserve(100000);
+	}
 }
 
-void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profiler, uint32_t pipelinesMade)
+FrameStatsLog::~FrameStatsLog()
 {
+	const auto run = _run.Peek();
+	if (auto logger = spdlog::get("game"); logger && run.count > 0)
+	{
+		SPDLOG_LOGGER_INFO(
+		    logger,
+		    "Frame stats of the run: {} frames, avg {:.2f} ms p95 {:.2f} p99 {:.2f} max {:.2f}; {} frames of {:.0f} ms or more",
+		    run.count, run.average, run.p95, run.p99, run.max, run.slow, k_SpikeMilliseconds);
+	}
+	if (!_out.empty())
+	{
+		std::ofstream file(_out, std::ios::binary | std::ios::trunc);
+		const auto text = frame_stats::ToCsv(_records);
+		file.write(text.data(), static_cast<std::streamsize>(text.size()));
+	}
+}
+
+void FrameStatsLog::Frame(FrameTime time, const openblack::Profiler& profiler, uint32_t pipelinesMade)
+{
+	const auto milliseconds = time.milliseconds;
 	_frames.Add(milliseconds);
+	_run.Add(milliseconds);
+	_work.Add(time.workMilliseconds);
+	const bool turnFrame = time.playedTurn;
+	if (turnFrame)
+	{
+		_turnWork.Add(time.workMilliseconds);
+	}
 	++_frameNumber;
 	const auto cpuMilliseconds = ThreadCpuMilliseconds();
-	const auto onCpu = cpuMilliseconds - std::exchange(_lastCpuMilliseconds, cpuMilliseconds);
+	const auto lastCpuMilliseconds = std::exchange(_lastCpuMilliseconds, cpuMilliseconds);
+	const auto onCpuMilliseconds = cpuMilliseconds.has_value() && lastCpuMilliseconds.has_value()
+	                                   ? std::optional<double>(*cpuMilliseconds - *lastCpuMilliseconds)
+	                                   : std::nullopt;
+	const auto onCpu = onCpuMilliseconds.has_value() ? fmt::format("{:.2f} ms", *onCpuMilliseconds) : std::string("unknown");
+	if (!_out.empty())
+	{
+		_records.push_back({.milliseconds = milliseconds,
+		                    .processorMilliseconds = static_cast<float>(onCpuMilliseconds.value_or(0.0)),
+		                    .turn = time.turn,
+		                    .played = turnFrame});
+	}
 	std::string spikeStages;
 
 	// The stages timed in this frame: those that started since the frame did
@@ -162,12 +208,13 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 	if (milliseconds >= k_SpikeMilliseconds)
 	{
 		// A slow frame: which stages took its time, and what the renderer waited for
-		SPDLOG_LOGGER_INFO(
-		    spdlog::get("game"),
-		    "Frame spike: frame {} took {:.2f} ms, {:.2f} ms of it on the processor; render submit {:.2f} wait {:.2f}; "
-		    "{} draws; {} new resources; {} new pipelines; stages (ms):{}",
-		    _frameNumber, milliseconds, onCpu, static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
-		    static_cast<double>(stats->waitRender) * toMsCpu, stats->numDraw, newResources, newPipelines, spikeStages);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "Frame spike: frame {} took {:.2f} ms, {} of it on the processor, {:.2f} ms of work; turn {}{}; "
+		                   "render submit {:.2f} wait {:.2f}; {} draws; {} new resources; {} new pipelines; stages (ms):{}",
+		                   _frameNumber, milliseconds, onCpu, time.workMilliseconds, time.turn, turnFrame ? " played" : "",
+		                   static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
+		                   static_cast<double>(stats->waitRender) * toMsCpu, stats->numDraw, newResources, newPipelines,
+		                   spikeStages);
 	}
 	if (_views)
 	{
@@ -189,14 +236,19 @@ void FrameStatsLog::Report()
 	const auto count = static_cast<double>(_frames.Count());
 	const auto frames = _frames.Take();
 	const auto gpu = _gpu.Take();
+	const auto work = _work.Take();
+	const auto turnWork = _turnWork.Take();
 	auto logger = spdlog::get("game");
 	++_reports;
-	SPDLOG_LOGGER_INFO(logger,
-	                   "Frame stats #{}: {} frames, frame avg {:.2f} ms p95 {:.2f} max {:.2f} ({:.1f} FPS); GPU avg {:.2f} "
-	                   "p95 {:.2f}; render submit {:.2f} wait {:.2f}; {:.0f} draws; {} new pipelines",
-	                   _reports, frames.count, frames.average, frames.p95, frames.max, 1000.0f / frames.average, gpu.average,
-	                   gpu.p95, _submitTotal / count, _waitRenderTotal / count, static_cast<double>(_drawCallTotal) / count,
-	                   std::exchange(_pipelinesSinceReport, 0u));
+	SPDLOG_LOGGER_INFO(
+	    logger,
+	    "Frame stats #{}: {} frames, frame avg {:.2f} ms p95 {:.2f} max {:.2f} ({:.1f} FPS); GPU avg {:.2f} "
+	    "p95 {:.2f}; render submit {:.2f} wait {:.2f}; {:.0f} draws; {} new pipelines; work avg {:.2f} p95 {:.2f} "
+	    "max {:.2f}; {} frames with a turn: work avg {:.2f} max {:.2f}",
+	    _reports, frames.count, frames.average, frames.p95, frames.max, 1000.0f / frames.average, gpu.average, gpu.p95,
+	    _submitTotal / count, _waitRenderTotal / count, static_cast<double>(_drawCallTotal) / count,
+	    std::exchange(_pipelinesSinceReport, 0u), work.average, work.p95, work.max, turnWork.count, turnWork.average,
+	    turnWork.max);
 
 	// How much memory the game holds, and the graphics memory that the renderer knows of
 	const auto* stats = bgfx::getStats();

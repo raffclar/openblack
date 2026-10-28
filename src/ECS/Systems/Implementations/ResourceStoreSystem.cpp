@@ -80,6 +80,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
@@ -970,11 +971,19 @@ float ScaleOf(entt::entity object)
 	return transform != nullptr ? transform->scale.x : 1.0f;
 }
 
+/// A rock or a fallen trunk takes a size. One in the map's cells that changes its size comes out of them and goes in
+/// again.
 void SetScale(entt::entity object, float scale)
 {
 	auto& registry = Entities();
-	registry.Get<Transform>(object).scale = glm::vec3(scale);
+	auto& transform = registry.Get<Transform>(object);
+	const bool resized = transform.scale.x != scale;
+	transform.scale = glm::vec3(scale);
 	registry.SetDirty();
+	if (resized)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
 }
 } // namespace
 
@@ -1187,8 +1196,7 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 			registry.SetLayoutDirty();
 			return take.taken;
 		}
-		registry.Get<Transform>(object).scale = glm::vec3(*take.scale);
-		registry.SetDirty();
+		SetScale(object, *take.scale);
 		return take.taken;
 	}
 	if (registry.AllOf<BigForest>(object))

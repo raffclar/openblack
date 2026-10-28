@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <chrono>
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
@@ -27,6 +28,7 @@
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Graphics/GraphicsHandle.h"
+#include "Temple/ScrollPictureLine.h"
 
 namespace openblack
 {
@@ -181,6 +183,9 @@ public:
 	/// The text written in the rooms this frame, the signs' labels and the text of the scroll the camera is close to, in
 	/// triangles of the font's texture, in the temple
 	[[nodiscard]] virtual const std::vector<OrientedTextVertex>& GetText() const = 0;
+	/// The lines of the scroll the camera is close to that hold a gesture's or a control's picture this frame, in the
+	/// world
+	[[nodiscard]] virtual const std::vector<temple::scroll_pictures::WorldPicture>& GetScrollPictures() const = 0;
 	/// The font's texture the text is drawn from, null without the game's interface
 	[[nodiscard]] virtual const graphics::Texture2D* GetTextTexture() const = 0;
 	/// The island over the main room's pool this frame, in triangles in the room, textured with the land seen from above
@@ -265,5 +270,9 @@ public:
 	/// After a load of a saved game: the temple gives back the dialogue that the save kept for it, if nobody has the
 	/// dialogue now. Then, kept or not, the box shows its texts again and the newest starts its reading time again.
 	virtual void ShowHelpAfterLoad() = 0;
+	/// The warm-up of a load calls draw while the temple shows a visit: all the rooms are there and the temple draws all of
+	/// them. After the draw, the rooms go and the island draws again. Nothing that the game keeps or saves changes. When
+	/// the player is in the temple, this does nothing.
+	virtual void WarmUpVisit(const std::function<void()>& draw) = 0;
 };
 } // namespace openblack

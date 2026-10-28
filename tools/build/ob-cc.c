@@ -19,7 +19,11 @@
  * another known worktree to this worktree and every path under another build folder to this build folder, so Ninja
  * always records this folder's own headers.
  *
- * The roots file lists one root per line: "S <path>" for a worktree, "B <path>" for a build folder.
+ * The roots file lists one root per line: "S <path>" for a worktree, "B <path>" for a build folder. A line
+ * "SW <folder>" or "BW <folder>" makes each folder directly in <folder> a worktree root or a build folder root. These
+ * lines keep the paths of deleted folders correct after ob-build removes them from the file, because the cache can
+ * still hold objects that a deleted folder compiled. ob-cc ignores all other lines, so ob-build can add other kinds.
+ * There is no limit on the number of roots. ob-cc writes a warning when it cannot read the file or a line is too long.
  * The first four arguments must not contain double quotes.
  */
 #define WIN32_LEAN_AND_MEAN
@@ -31,12 +35,14 @@
 typedef struct
 {
 	char kind;
+	int isParent; /* 1 when each folder directly in path is a root */
 	char* path;
 	size_t length;
 } Root;
 
-static Root g_roots[4096];
+static Root* g_roots;
 static size_t g_rootCount;
+static size_t g_rootCapacity;
 static const char* g_sourceRoot;
 static const char* g_buildRoot;
 
@@ -78,10 +84,46 @@ static int StartsWithPath(const char* text, size_t textLength, const char* root,
 	return textLength == rootLength || text[rootLength] == '/' || text[rootLength] == '\\';
 }
 
-static int CompareRootLength(const void* a, const void* b)
+static int EndsPathPart(char c)
+{
+	return c == '/' || c == '\\' || c == '"' || c == '\'' || c == '\r' || c == '\n' || c == '\t' || c == ' ' ||
+	       c == ')' || c == '>' || c == ':';
+}
+
+/* Gives the length of "<parent>/<folder>" at the start of the text, or 0 when the text is not in a folder of parent */
+static size_t MatchInParent(const char* text, size_t textLength, const Root* parent)
+{
+	if (textLength <= parent->length + 1 || !StartsWithPath(text, textLength, parent->path, parent->length))
+	{
+		return 0;
+	}
+	size_t end = parent->length + 1;
+	while (end < textLength && !EndsPathPart(text[end]))
+	{
+		++end;
+	}
+	return end > parent->length + 1 ? end : 0;
+}
+
+/* Gives the length of the root at the start of the text, or 0 when the text does not start with the root */
+static size_t MatchRoot(const char* text, size_t textLength, const Root* root)
+{
+	if (root->isParent)
+	{
+		return MatchInParent(text, textLength, root);
+	}
+	return StartsWithPath(text, textLength, root->path, root->length) ? root->length : 0;
+}
+
+/* Puts the single roots before the parent folders, and the longest root first in each group */
+static int CompareRoots(const void* a, const void* b)
 {
 	const Root* left = (const Root*)a;
 	const Root* right = (const Root*)b;
+	if (left->isParent != right->isParent)
+	{
+		return left->isParent - right->isParent;
+	}
 	return left->length < right->length ? 1 : (left->length > right->length ? -1 : 0);
 }
 
@@ -95,28 +137,91 @@ static void TrimSeparators(char* path)
 	}
 }
 
+static void AddRoot(char kind, int isParent, const char* path)
+{
+	if (g_rootCount == g_rootCapacity)
+	{
+		const size_t capacity = g_rootCapacity == 0 ? 256 : g_rootCapacity * 2;
+		Root* grown = (Root*)realloc(g_roots, capacity * sizeof(Root));
+		if (grown == NULL)
+		{
+			fprintf(stderr, "ob-cc: warning: no memory for more than %zu roots; ob-cc ignores the remaining roots\n",
+			        g_rootCount);
+			return;
+		}
+		g_roots = grown;
+		g_rootCapacity = capacity;
+	}
+	Root* root = &g_roots[g_rootCount++];
+	root->kind = kind;
+	root->isParent = isParent;
+	root->path = _strdup(path);
+	root->length = strlen(root->path);
+}
+
+/* Removes each single root that a parent folder root of the same kind covers, so ob-cc compares fewer roots */
+static void DropCoveredRoots(void)
+{
+	size_t kept = 0;
+	for (size_t i = 0; i < g_rootCount; ++i)
+	{
+		const Root* root = &g_roots[i];
+		int covered = 0;
+		for (size_t p = 0; p < g_rootCount && !root->isParent && !covered; ++p)
+		{
+			const Root* parent = &g_roots[p];
+			covered = parent->isParent && parent->kind == root->kind &&
+			          MatchInParent(root->path, root->length, parent) == root->length;
+		}
+		if (!covered)
+		{
+			g_roots[kept++] = *root;
+		}
+	}
+	g_rootCount = kept;
+}
+
 static void LoadRoots(const char* file)
 {
 	FILE* handle = fopen(file, "rb");
 	if (handle == NULL)
 	{
+		fprintf(stderr, "ob-cc: warning: cannot read the roots file %s; paths from other folders stay as they are\n",
+		        file);
 		return;
 	}
-	char line[2048];
-	while (g_rootCount < sizeof(g_roots) / sizeof(g_roots[0]) && fgets(line, sizeof(line), handle) != NULL)
+	char line[4096];
+	while (fgets(line, sizeof(line), handle) != NULL)
 	{
+		const size_t length = strlen(line);
+		if (length == sizeof(line) - 1 && line[length - 1] != '\n' && !feof(handle))
+		{
+			fprintf(stderr, "ob-cc: warning: a line in %s has more than %zu characters; ob-cc ignores the line\n", file,
+			        sizeof(line) - 2);
+			int c = 0;
+			while (c != EOF && c != '\n')
+			{
+				c = fgetc(handle);
+			}
+			continue;
+		}
 		TrimSeparators(line);
-		if ((line[0] != 'S' && line[0] != 'B') || line[1] != ' ' || line[2] == '\0')
+		if (line[0] != 'S' && line[0] != 'B')
 		{
 			continue;
 		}
-		Root* root = &g_roots[g_rootCount++];
-		root->kind = line[0];
-		root->path = _strdup(line + 2);
-		root->length = strlen(root->path);
+		if (line[1] == ' ' && line[2] != '\0')
+		{
+			AddRoot(line[0], 0, line + 2);
+		}
+		else if (line[1] == 'W' && line[2] == ' ' && line[3] != '\0')
+		{
+			AddRoot(line[0], 1, line + 3);
+		}
 	}
 	fclose(handle);
-	qsort(g_roots, g_rootCount, sizeof(g_roots[0]), CompareRootLength);
+	DropCoveredRoots();
+	qsort(g_roots, g_rootCount, sizeof(g_roots[0]), CompareRoots);
 }
 
 static void WriteAll(HANDLE handle, const char* data, size_t length)
@@ -136,6 +241,8 @@ static void WriteAll(HANDLE handle, const char* data, size_t length)
 /* Writes the compiler's output with every path under another folder's root moved to this folder's root */
 static void WriteRewritten(HANDLE out, const char* text, size_t length)
 {
+	const size_t sourceLength = strlen(g_sourceRoot);
+	const size_t buildLength = strlen(g_buildRoot);
 	size_t copied = 0;
 	for (size_t i = 0; i < length; ++i)
 	{
@@ -148,20 +255,21 @@ static void WriteRewritten(HANDLE out, const char* text, size_t length)
 		for (size_t r = 0; r < g_rootCount; ++r)
 		{
 			const Root* root = &g_roots[r];
-			if (!StartsWithPath(text + i, length - i, root->path, root->length))
+			const size_t matched = MatchRoot(text + i, length - i, root);
+			if (matched == 0)
 			{
 				continue;
 			}
 			const char* own = root->kind == 'S' ? g_sourceRoot : g_buildRoot;
-			const size_t ownLength = strlen(own);
-			const int isOwn = root->length == ownLength && StartsWithPath(root->path, root->length, own, ownLength);
+			const size_t ownLength = root->kind == 'S' ? sourceLength : buildLength;
+			const int isOwn = matched == ownLength && StartsWithPath(text + i, matched, own, ownLength);
 			if (!isOwn)
 			{
 				WriteAll(out, text + copied, i - copied);
-				WriteAll(out, own, strlen(own));
-				copied = i + root->length;
+				WriteAll(out, own, ownLength);
+				copied = i + matched;
 			}
-			i += root->length - 1;
+			i += matched - 1;
 			break;
 		}
 	}

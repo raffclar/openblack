@@ -30,7 +30,7 @@
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
-#include "Common/BuildVersionFile.h"
+#include "Common/BuildVersion.h"
 #include "Common/LoadTimer.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
@@ -116,6 +116,10 @@ namespace frame_write_guard
 {
 class Guard;
 }
+namespace player_commands
+{
+struct ViewReport;
+}
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
@@ -169,6 +173,8 @@ struct Arguments
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
+	std::string frameStatsOut;
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
 	/// The https:// origin of the lobby, none for no online services
@@ -176,6 +182,8 @@ struct Arguments
 	std::optional<std::string> lobbyTestAuthorities;
 	/// The real-world weather changes the weather of a single-player game (on by default)
 	bool useInternetWeather {true};
+	/// A network game shows the player's own ping (off by default)
+	bool showPing {false};
 	bool dynamicTreeShadows {false};
 	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
 	/// through the inspector does not wait on a busy graphics card
@@ -225,6 +233,9 @@ struct Arguments
 	/// Tools: play the world as a network game does, with no network: the clock never stops for the player, and the
 	/// turns read no part of a frame
 	bool networkGame {false};
+	/// Tools: a fixed latency in milliseconds for the reports of the hand, so that the lead of each throw is the same in
+	/// each run. None measures the latency on the clock.
+	std::optional<uint32_t> throwLeadLatencyMs;
 	/// Join a game server once the land loaded: the world then turns only with the turns of the server
 	std::optional<ecs::systems::NetworkJoin> networkJoin;
 	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
@@ -286,6 +297,14 @@ public:
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// The audio of a turn of the temple
 	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
+	/// The tools that act before each turn: the testbed scenario of a network game
+	void BeforeTurn() override
+	{
+		if (_scenarioTurn)
+		{
+			_scenarioTurn();
+		}
+	}
 	/// The parts of the land's loads that the view of the player does
 	void ShowLoadingFrame() override;
 	bool WithdrawSkipBox() override;
@@ -370,6 +389,11 @@ public:
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
 	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
 	void ReportHand();
+	/// With the report of the hand: reports the view that the scripts and the advisors' remarks read, when it changed
+	void ReportView();
+	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
+	/// world camera, when they changed
+	void ReportHelp();
 	/// The things in view are made ready for the draw of this frame
 	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
 	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
@@ -457,6 +481,9 @@ public:
 	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
 	/// starts, so that only a load or a turn changes the world. None: the window is gone.
 	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
+	/// The scenarios' window sets the work that a scenario does before each turn of a network game. None: the window is
+	/// gone.
+	void SetScenarioTurn(std::function<void()> turn) { _scenarioTurn = std::move(turn); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
@@ -483,6 +510,9 @@ public:
 	[[nodiscard]] const std::optional<std::filesystem::path>& GetScreenshotRoot() const noexcept { return _screenshotRoot; }
 	/// The game's own interface (its menu), once it is made
 	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
+	/// For the testbed: the ping line shows this round trip in microseconds, as --show-ping does in a network game.
+	/// None gives the line back to the network game.
+	void SetDemoRoundTrip(std::optional<uint64_t> microseconds) noexcept { _demoRoundTrip = microseconds; }
 	/// The multiplayer front end with the game's own services: the lobby client, the game socket and the search of
 	/// the local network
 	[[nodiscard]] std::unique_ptr<gui::MultiplayerFrontEnd> MakeMultiplayerFrontEnd();
@@ -529,6 +559,7 @@ private:
 	bool RenderLoadingFrame(bool drawNow = false, const std::function<void()>& drawUnder = nullptr);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen() override;
+	void EndLoadWithoutScreen() override;
 	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources. Then it does
 	/// the work of the first frame that the game can do before, and draws one more loading frame.
 	void FinishLoadingBehindScreen();
@@ -598,6 +629,7 @@ private:
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
 	std::function<void()> _scenarioStager;
+	std::function<void()> _scenarioTurn;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
 	std::optional<FightAutopilotRequest> _fightAutopilot;
@@ -618,11 +650,13 @@ private:
 	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
 	bool _networkGame {false};
+	std::optional<uint32_t> _throwLeadLatencyMs;
 	std::optional<ecs::systems::NetworkJoin> _networkJoin;
 	/// The game joined a game server from the command line, and stops when that network game ends
 	bool _joinedFromCommandLine {false};
 	/// A join from the command line waits for the server's land: the land of the start of the game only stands in for it
 	bool _networkLandPending {false};
+	std::optional<uint64_t> _demoRoundTrip;
 	/// The out-of-sync box was asked; the player answered No to it
 	bool _outOfSyncAsked {false};
 	bool _leaveNetworkGame {false};
@@ -721,9 +755,13 @@ private:
 	/// The values are as in player_commands::HandReport: the collide point, the hand, the camera and its focus
 	std::array<glm::vec3, 4> _lastHandReport {};
 	entt::entity _reportedHand {entt::null};
-	/// The thing under the cursor that the last player_commands::HandPick sent, in a network game
+	/// The thing under the cursor that the last player_commands::HandPick sent
 	entt::entity _lastHandPick {entt::null};
 	std::optional<uint32_t> _handReportTurn;
+	/// The last report of the view that this computer sent (player_commands::ViewReport), none before the first
+	std::unique_ptr<player_commands::ViewReport> _lastViewReport;
+	/// The turn of the last report of the help that this computer sent
+	std::optional<uint32_t> _helpReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land
@@ -750,11 +788,15 @@ private:
 	uint32_t _handInWaterSample {0};
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
-	/// What the hand steps by this frame, in seconds
+	/// What the drawn fades of the hand step by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
 	/// What the camera and the hand step by this frame: the frame's real time in whole milliseconds, or the game's time
 	/// while a script holds the widescreen
 	[[nodiscard]] std::chrono::milliseconds CameraStepTime() const;
+	/// Whether a script holds the widescreen for a cut scene, when the camera and the hand keep to the game's time
+	[[nodiscard]] bool ScriptHoldsCamera() const;
+	/// The time that the steps of the input go by in this frame (see input_steps), from the real time of the frame
+	[[nodiscard]] std::chrono::microseconds InputStepTime(std::chrono::microseconds frameTime) const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The hand's debugging trace keeps the frame: where the hand was placed and drawn, where it shows, on the screen
@@ -763,9 +805,9 @@ private:
 	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
-	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
-	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
-	                float deltaSeconds);
+	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it. Its up
+	/// eases at the fixed steps of the input.
+	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp);
 	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
 	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
 	/// The camera's helper icons by the hand while a tutorial demonstration plays, from where the hand is drawn; none

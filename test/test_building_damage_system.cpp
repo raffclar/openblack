@@ -13,6 +13,8 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstddef>
+
 #include <algorithm>
 #include <map>
 #include <memory>
@@ -148,8 +150,9 @@ public:
 		}
 		cube.faces = {{0, 1, 3}};
 		cube.radius = glm::length(glm::vec3(1.0f));
-		entry.body =
-		    std::make_unique<physics::Body>(physics::BodySetup {.scale = 1.0f, .halfHeight = 1.0f, .mass = 10.0f}, cube);
+		entry.body = std::make_unique<physics::Body>(
+		    physics::BodySetup {.scale = 1.0f, .halfHeight = 1.0f, .mass = 10.0f, .material = {.spinKeptPerSecond = 0.5f}},
+		    cube);
 		entry.body->SetUpPose({.axes = glm::mat3(1.0f), .origin = centre});
 		entry.body->velocity = velocity;
 		return entry;
@@ -491,4 +494,28 @@ TEST(BuildingDamageSystem, ARockThatGoesIsForgottenAndAResetForgetsEveryBrokenBu
 	EXPECT_FALSE(registry.AllOf<BuildingDamage>(f.house));
 	EXPECT_NE(std::ranges::find(f.world->erased, model), f.world->erased.end());
 	EXPECT_EQ(f.system->DrawnMesh(f.house, k_House), k_House);
+}
+
+// After a load the broken building gets its model again under the version that the save keeps. The synced fields of the
+// damage stay as they were before the save.
+TEST(BuildingDamageSystem, ALoadMakesTheModelOfABrokenBuildingAgainUnderTheSameVersion)
+{
+	Fixture f;
+	const auto creature = f.world->registry.Create();
+	f.system->Smash(f.house, creature, 1.0f);
+	ASSERT_TRUE(f.world->registry.AllOf<BuildingDamage>(f.house));
+	const auto before = f.world->registry.Get<const BuildingDamage>(f.house);
+	ASSERT_NE(before.drawMesh, 0U);
+	const auto madeBefore = f.world->made.size();
+
+	f.system->RemakeModelsAfterLoad();
+
+	const auto& after = f.world->registry.Get<const BuildingDamage>(f.house);
+	EXPECT_EQ(after.version, before.version);
+	EXPECT_EQ(after.drawMesh, before.drawMesh);
+	// The model of the building has the same name as before; the pieces get their models too
+	const auto name = fmt::format("broken/{}/{}", entt::to_integral(f.house), before.version);
+	const auto again = std::count(f.world->made.begin() + static_cast<std::ptrdiff_t>(madeBefore), f.world->made.end(), name);
+	EXPECT_EQ(again, 1);
+	EXPECT_TRUE(f.world->models.contains(after.drawMesh));
 }

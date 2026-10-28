@@ -59,6 +59,8 @@ enum class WindowBuffers : uint8_t
 	DroppedWhenMinimised,
 	/// Only the pixels that no other window covers; the other pixels have no defined value (OpenGL)
 	UncoveredOnly,
+	/// No buffer after the browser shows the frame: the browser gives the canvas a new texture for each frame (WebGPU)
+	ReleasedAfterPresent,
 };
 
 /// How to read a picture of the frame being made: from the screen when the window's buffers hold the whole frame now,
@@ -143,6 +145,11 @@ public:
 	                                              RenderPass::GestureHintCollar0,
 	                                              RenderPass::GestureHintCollar1,
 	                                              RenderPass::GestureHintCollar2,
+	                                              RenderPass::GestureHintSeed0,
+	                                              RenderPass::GestureHintSeed1,
+	                                              RenderPass::GestureHintSeed2,
+	                                              RenderPass::GestureHintSeed3,
+	                                              RenderPass::GestureHintSeed4,
 	                                              RenderPass::GestureHints,
 	                                              RenderPass::CinemaBars,
 	                                              RenderPass::Advisors,
