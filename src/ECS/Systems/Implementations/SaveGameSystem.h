@@ -17,10 +17,13 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <SavedObjects.h>
 #include <VanillaSaveFile.h>
+#include <VanillaWorld.h>
 #include <WorldFile.h>
 #include <entt/entity/fwd.hpp>
 #include <entt/meta/context.hpp>
@@ -29,6 +32,7 @@
 #include "ECS/SaveFileWriter.h"
 #include "ECS/SaveGameFiles.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
+#include "ECS/VanillaWorldImport.h"
 #include "ECS/WorldSave.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -120,8 +124,21 @@ private:
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
-	/// Takes the seeds of the random draws from the game data of a world file of the game
-	void ImportVanillaSeeds(uint32_t slot, std::span<const uint8_t> bytes);
+	/// Reads the whole world file of the game. Puts its turn, its towns, buildings, villagers, forests, trees, fields and fish
+	/// farms into the world, then takes the seeds of the random draws. Returns whether the file reads as a whole world.
+	bool ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes);
+	/// The entity that each object number of a world file of the game became
+	using VanillaMade = std::unordered_map<uint32_t, entt::entity>;
+	/// Each villager that keeps the work of a state of the file: a field or a fish farm, and a spot in a field
+	using VanillaWorks = std::vector<std::pair<entt::entity, ecs::vanilla_world_import::ImportedWork>>;
+	/// Puts the turn, the towns, the buildings of the towns and the villagers of the world file into the world
+	bool ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works);
+	/// Puts the forests, the big forests and the trees of the world file into the world, in the place of those of the
+	/// land. Each town of the file takes its list of forests.
+	void ImportVanillaForests(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// Puts the fields and the fish farms of the world file into the world, in the place of those of the land. Each
+	/// villager that keeps its work takes its field or fish farm, and each field and farm takes its workers of the file.
+	void ImportVanillaFarms(const gamesave::VanillaWorld& world, VanillaMade& made, const VanillaWorks& works);
 	/// The world file in the game's layout of a save of a game that came from such a file
 	[[nodiscard]] std::vector<ecs::save_files::SaveFile> VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
 	                                                                  std::span<const gamesave::SavedCreature> saved,

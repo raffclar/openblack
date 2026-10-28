@@ -9,6 +9,8 @@
 
 #include "BigForestArchetype.h"
 
+#include <optional>
+
 #include <glm/gtx/euler_angles.hpp>
 
 #include "Common/PortableRotations.h"
@@ -31,8 +33,11 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-entt::entity BigForestArchetype::Create(const glm::vec3& position, BigForestInfo type, [[maybe_unused]] uint32_t unknown,
-                                        float yAngleRadians, float scale)
+namespace
+{
+/// The parts that every big forest has, with the wood that it holds
+entt::entity MakeBigForest(const glm::vec3& position, BigForestInfo type, float yAngleRadians, float scale,
+                           std::optional<float> wood)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
@@ -44,12 +49,20 @@ entt::entity BigForestArchetype::Create(const glm::vec3& position, BigForestInfo
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);
 	registry.Assign<Forest>(entity);
-	registry.Assign<BigForest>(
-	    entity, BigForest {.type = static_cast<int>(type), .wood = big_forest::StartWood(scale, info.woodValue)});
+	registry.Assign<BigForest>(entity, BigForest {.type = static_cast<int>(type),
+	                                              .wood = wood.value_or(big_forest::StartWood(scale, info.woodValue))});
 	registry.Assign<MorphWithTerrain>(entity);
 	registry.Assign<Unlit>(entity);
 	const auto resourceId = resources::HashIdentifier(info.meshId);
 	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(1));
+	return entity;
+}
+} // namespace
+
+entt::entity BigForestArchetype::Create(const glm::vec3& position, BigForestInfo type, [[maybe_unused]] uint32_t unknown,
+                                        float yAngleRadians, float scale)
+{
+	const auto entity = MakeBigForest(position, type, yAngleRadians, scale, std::nullopt);
 	// A big forest is the forest of its own trees, made about its place
 	if (Locator::forestSystem::has_value())
 	{
@@ -57,6 +70,14 @@ entt::entity BigForestArchetype::Create(const glm::vec3& position, BigForestInfo
 	}
 
 	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
+	return entity;
+}
+
+entt::entity BigForestArchetype::CreateLoaded(const glm::vec3& position, BigForestInfo type, float yAngleRadians, float scale,
+                                              float wood)
+{
+	const auto entity = MakeBigForest(position, type, yAngleRadians, scale, wood);
 	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }
