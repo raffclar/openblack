@@ -1038,8 +1038,7 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 /// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off
 bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
 {
-	return registry.AllOf<MapCellResident>(thing) &&
-	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
+	return ecs::InMapCells(registry, thing) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
 }
 
 /// One game turn of walking or turning up to what the creature acts on
@@ -2500,7 +2499,7 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 	// In the map: in its cells, and out of any hand, flight or tornado
 	const auto* holder = registry.TryGet<const HeldByCreature>(object);
 	const bool inMap =
-	    registry.AllOf<MapCellResident>(object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
+	    ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
 	const bool heldByThisCreature = holder != nullptr && holder->creature == creature;
 	const auto* leash = registry.Valid(creature) ? registry.TryGet<const CreatureLeash>(creature) : nullptr;
 	const bool leashTied = leash != nullptr && leash->worn.has_value() && leash->worn->tiedTo == object;
@@ -2663,7 +2662,7 @@ bool CreatureObjectActionSystem::CanStompOn(entt::entity creature, entt::entity 
 		return StompRule::Short;
 	}();
 	const bool onMap =
-	    registry.AllOf<MapCellResident>(target) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(target);
+	    ecs::InMapCells(registry, target) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(target);
 	return creature_stomp::CanBeStompedOn(
 	    {
 	        .rule = rule,

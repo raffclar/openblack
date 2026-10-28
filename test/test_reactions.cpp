@@ -19,6 +19,7 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureTeleportAgendas.h"
 #include "ECS/Components/Animal.h"
@@ -1953,7 +1954,10 @@ TEST_F(Reactions, AnAnimalLooksAtAThingToLookAt)
 	animals.available = true;
 	const auto cow = registry.Create();
 	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	auto& cowAnimal = registry.Assign<Animal>(cow);
+	cowAnimal.type = AnimalInfo::Cow;
+	// The map puts an animal in the cell of its map position, which is where it stands
+	cowAnimal.move.position = {map_coords::ToFixed(k_Here.x + 10.0f), map_coords::ToFixed(k_Here.z)};
 	Locator::entitiesMap::value().Sync();
 	_reactions.Create(Miracle(Reaction::LookAtObject));
 	EXPECT_EQ(animals.lookedAt, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
@@ -1970,7 +1974,10 @@ TEST_F(Reactions, AnAnimalGoesOnlyToFoodThatInterestsIt)
 	animals.available = true;
 	const auto cow = registry.Create();
 	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	auto& cowAnimal = registry.Assign<Animal>(cow);
+	cowAnimal.type = AnimalInfo::Cow;
+	// The map puts an animal in the cell of its map position, which is where it stands
+	cowAnimal.move.position = {map_coords::ToFixed(k_Here.x + 10.0f), map_coords::ToFixed(k_Here.z)};
 	Locator::entitiesMap::value().Sync();
 	_reactions.Create(Miracle(Reaction::ReactToFood));
 	EXPECT_TRUE(animals.wentTo.empty());
