@@ -385,6 +385,9 @@ public:
 	void LeaveNetworkGame();
 	/// Tests: the player leaves the network game through the menu and the question to leave, as a player does
 	void LeaveAsAPlayerDoes();
+	/// A run of the tools that stops: an observer leaves the network game at once, so that the server does not wait
+	/// for it to come back
+	void LeaveAsObserverAtTheEndOfTheRun();
 	/// The god of this computer for the end of the game: player seven for a looker-on of a network game
 	[[nodiscard]] PlayerNames LocalGodForGameEnd() const;
 	/// After the player left a network game: the start land loads as a plain start does, and the multiplayer front end

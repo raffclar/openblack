@@ -168,7 +168,10 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 			}
 		}
 		// An observer that leaves cannot come back with its session
-		std::erase_if(_watchers, [connection](const Watcher& watcher) { return watcher.connection == connection; });
+		if (std::erase_if(_watchers, [connection](const Watcher& watcher) { return watcher.connection == connection; }) > 0)
+		{
+			Log(spdlog::level::info, "An observer leaves the game");
+		}
 		_sockets.Close(connection, server_close::k_Normal);
 		_peers.erase(connection);
 	}
@@ -406,6 +409,11 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 	}
 	Log(spdlog::level::info,
 	    fmt::format("The server sends its world of turn {} ({} bytes) to connection {}", _turnsDone, state.size(), connection));
+	// A client that was away when the turns stopped did not get the stop. No turn comes after this world.
+	if (_stoppedAfter.has_value())
+	{
+		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
+	}
 	return true;
 }
 
@@ -599,9 +607,12 @@ void LockstepHost::Update()
 {
 	const auto now = _clock();
 	// An observer that does not come back in the time to come back loses its session
-	std::erase_if(_watchers, [this, now](const Watcher& watcher) {
-		return !watcher.connection.has_value() && now - watcher.awaySince > _settings.comeBackMicroseconds;
-	});
+	if (std::erase_if(_watchers, [this, now](const Watcher& watcher) {
+		    return !watcher.connection.has_value() && now - watcher.awaySince > _settings.comeBackMicroseconds;
+	    }) > 0)
+	{
+		Log(spdlog::level::info, "An observer did not come back: its session ends");
+	}
 	if (AllComputerGods())
 	{
 		// A room with no human god starts at once. The observers join the running game and get its world.
@@ -852,8 +863,9 @@ bool LockstepHost::GameOver() const
 {
 	if (AllComputerGods())
 	{
-		// A room with no human god is over when the observers that joined all left
-		return _started && _observerSeen && Observers() == 0;
+		// A room with no human god is over when the observers that joined all left. An observer that lost its socket can
+		// come back for a time, so the room stays open until it is back or its session ends.
+		return _started && _observerSeen && Observers() == 0 && _watchers.empty();
 	}
 	// After the turns stop, the defeat of a god that left comes at no turn
 	return _started && (_leaving.empty() || _stoppedAfter.has_value()) && std::ranges::none_of(_seats, [](const Seat& seat) {

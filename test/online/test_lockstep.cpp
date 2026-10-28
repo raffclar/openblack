@@ -168,7 +168,7 @@ protected:
 	}
 
 	/// A room with no human god (tools): the game starts at once, and the world turns when this many observers joined
-	void MakeAllComputerHost(uint32_t observers)
+	void MakeAllComputerHost(uint32_t observers, int64_t comeBack = 5LL * 60 * 1'000'000)
 	{
 		game_socket::Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
 		start.allComputerGods = true;
@@ -179,7 +179,7 @@ protected:
 		                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
 		                          .minGods = observers,
 		                          .godSlots = 7,
-		                          .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+		                          .comeBackMicroseconds = comeBack,
 		                          .keptTurns = 3200});
 	}
 
@@ -233,6 +233,21 @@ protected:
 		{
 			Frame(computers);
 		}
+	}
+
+	/// The world of the away client parts, and the client drops its socket. The god of the stopper stops the turns before
+	/// the away client comes back with the world of the server. Returns the last turn of the game.
+	uint32_t StopWhileAClientComesBackWithTheWorld(Computer& stopper, Computer& away)
+	{
+		away.world.partsAfter = away.world.turns + 2;
+		for (int i = 0; i < 20 && away.session.GetState() == NetworkSession::State::Playing; ++i)
+		{
+			Frame({&stopper, &away});
+		}
+		EXPECT_EQ(away.session.GetState(), NetworkSession::State::Reconnecting);
+		stopper.session.StopGame();
+		Frames({&stopper}, 5);
+		return stopper.session.StoppedAfter().value_or(0);
 	}
 
 	int64_t now {1'000'000};
@@ -912,14 +927,60 @@ TEST_F(LockstepTest, ARoomWithNoHumanGodIsOverWhenTheObserversThatJoinedAllLeft)
 {
 	MakeAllComputerHost(1);
 	GiveWorldState();
+	Computer watcher(network, now, "observer:one");
+	Frames({&watcher}, 20);
+	ASSERT_EQ(host->Observers(), 1u);
+	EXPECT_FALSE(host->GameOver());
+	// An observer that leaves cannot come back, so the room ends at once
+	watcher.session.Leave();
+	Frames({&watcher}, 2);
+	EXPECT_EQ(host->Observers(), 0u);
+	EXPECT_TRUE(host->Watchers().empty());
+	EXPECT_TRUE(host->GameOver());
+}
+
+TEST_F(LockstepTest, ARoomWithNoHumanGodWaitsForItsLastObserverToComeBack)
+{
+	MakeAllComputerHost(1);
+	GiveWorldState();
+	Computer watcher(network, now, "observer:one");
+	Frames({&watcher}, 20);
+	ASSERT_GT(serverWorld.turns, 0u);
+
+	// The socket of the only observer closes: the room stays open, and the observer gets the turns that it missed
+	network.Cut(watcher.sockets->Ids().back());
+	Frames({}, 10);
+	EXPECT_EQ(host->Observers(), 0u);
+	EXPECT_FALSE(host->GameOver());
+	Frames({&watcher}, 10);
+	EXPECT_EQ(host->Observers(), 1u);
+	EXPECT_EQ(watcher.session.GetState(), NetworkSession::State::Playing);
+
+	// The world of the only observer parts: it comes back with the world of the server and stays in step
+	watcher.world.partsAfter = watcher.world.turns + 3;
+	Frames({&watcher}, 60);
+	EXPECT_FALSE(host->GameOver());
+	EXPECT_EQ(watcher.loads, 2u);
+	EXPECT_EQ(watcher.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(watcher.world.turns, serverWorld.turns);
+	EXPECT_EQ(watcher.world.hash, serverWorld.hash);
+	ASSERT_EQ(host->Watchers().size(), 1u);
+	EXPECT_EQ(host->Watchers()[0].resumes, 2u);
+}
+
+TEST_F(LockstepTest, ARoomWithNoHumanGodEndsWhenItsLastObserverDoesNotComeBackInTime)
+{
+	MakeAllComputerHost(1, 3 * 1'000'000);
+	GiveWorldState();
 	auto watcher = std::make_unique<Computer>(network, now, "observer:one");
 	Frames({watcher.get()}, 20);
 	ASSERT_EQ(host->Observers(), 1u);
-	EXPECT_FALSE(host->GameOver());
 	network.Cut(watcher->sockets->Ids().back());
 	watcher.reset();
-	Frames({}, 5);
-	EXPECT_EQ(host->Observers(), 0u);
+	Frames({}, 20);
+	EXPECT_FALSE(host->GameOver());
+	Frames({}, 20);
+	EXPECT_TRUE(host->Watchers().empty());
 	EXPECT_TRUE(host->GameOver());
 }
 
@@ -1144,4 +1205,57 @@ TEST_F(LockstepTest, TheSessionOfAnObserverDoesNotTakeAGod)
 	EXPECT_EQ(host->Seats()[1].resumes, 0u);
 	EXPECT_FALSE(watcher.session.GetJoined()->slot.has_value());
 	EXPECT_EQ(watcher.session.GetJoined()->role, game_socket::Role::Observer);
+}
+
+TEST_F(LockstepTest, AGodThatComesBackWithTheWorldAfterTheStopGetsTheStop)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto last = StopWhileAClientComesBackWithTheWorld(alice, bob);
+	ASSERT_EQ(host->StoppedAfter(), std::optional<uint32_t>(last));
+	EXPECT_FALSE(bob.session.StoppedAfter().has_value());
+	Frames({&alice, &bob}, 20);
+	EXPECT_EQ(bob.loads, 1u);
+	EXPECT_EQ(bob.session.StoppedAfter(), std::optional<uint32_t>(last));
+	EXPECT_EQ(bob.world.turns, last + 1);
+	EXPECT_EQ(bob.world.hash, serverWorld.hash);
+	EXPECT_EQ(serverWorld.turns, last + 1);
+}
+
+TEST_F(LockstepTest, AnObserverThatComesBackWithTheWorldAfterTheStopGetsTheStop)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Computer watcher(network, now, "observer:carol");
+	Frames({&alice, &watcher}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto last = StopWhileAClientComesBackWithTheWorld(alice, watcher);
+	ASSERT_EQ(host->StoppedAfter(), std::optional<uint32_t>(last));
+	EXPECT_FALSE(watcher.session.StoppedAfter().has_value());
+	Frames({&alice, &watcher}, 20);
+	EXPECT_EQ(watcher.loads, 1u);
+	EXPECT_EQ(watcher.session.StoppedAfter(), std::optional<uint32_t>(last));
+	EXPECT_EQ(watcher.world.turns, last + 1);
+	EXPECT_EQ(watcher.world.hash, serverWorld.hash);
+}
+
+TEST_F(LockstepTest, AnObserverThatJoinsAfterTheStopGetsTheStopWithTheWorld)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 30);
+	alice.session.StopGame();
+	Frames({&alice}, 5);
+	ASSERT_TRUE(host->StoppedAfter().has_value());
+	Computer late(network, now, "observer:late");
+	Frames({&alice, &late}, 10);
+	EXPECT_EQ(late.loads, 1u);
+	EXPECT_EQ(late.session.StoppedAfter(), host->StoppedAfter());
+	EXPECT_EQ(late.world.turns, serverWorld.turns);
 }

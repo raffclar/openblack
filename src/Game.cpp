@@ -2396,6 +2396,7 @@ bool Game::Update() noexcept
 	if (sim_run::Finished(Locator::simulation::value().GetSettings(), Locator::time::value().GetTurn()))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The simulation run is at its last turn, {}", Locator::time::value().GetTurn());
+		LeaveAsObserverAtTheEndOfTheRun();
 		return false;
 	}
 	// A game that joined from the command line stops when its network game ends: its world turns no more
@@ -2415,6 +2416,7 @@ bool Game::Update() noexcept
 			// The log names the last turn by the number of the world, as the line of the decision does
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the network game stopped after turn {}: the game stops",
 			                   *last + 1);
+			LeaveAsObserverAtTheEndOfTheRun();
 			return false;
 		}
 	}
@@ -5706,6 +5708,25 @@ void Game::ExitOnlineGame()
 		}
 	}
 	AskToLeaveNetworkGame();
+}
+
+void Game::LeaveAsObserverAtTheEndOfTheRun()
+{
+	if (!Locator::networkGame::has_value())
+	{
+		return;
+	}
+	auto& network = Locator::networkGame::value();
+	const auto* session = network.Session();
+	if (session == nullptr || session->GetState() == online::NetworkSession::State::Ended ||
+	    !session->GetJoined().has_value() || session->GetJoined()->role != game_socket::Role::Observer)
+	{
+		return;
+	}
+	// The update closes the socket after the leave, so the leave goes before the game stops
+	network.Leave();
+	network.Update();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The observer leaves the network game at the end of the run");
 }
 
 void Game::LeaveNetworkGame()
