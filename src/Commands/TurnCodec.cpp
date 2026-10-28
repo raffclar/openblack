@@ -324,7 +324,12 @@ DecodeError ReadAction(Reader& in, Action& action)
 	{
 		const auto creature = in.Entity();
 		const auto object = in.Entity();
-		action = HandGive {.creature = creature, .object = object, .leftHand = in.Byte() != 0};
+		const auto side = in.Byte();
+		if (side > 1)
+		{
+			return DecodeError::Value;
+		}
+		action = HandGive {.creature = creature, .object = object, .leftHand = side != 0};
 		return DecodeError::None;
 	}
 	case CommandTag::LeashOrder:
