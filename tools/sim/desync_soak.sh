@@ -31,7 +31,7 @@
 # The load rules: ai_soak.py starts a game only when the computer allows it (the PC: processor under 75 %, 16 GB free
 # memory, 150 GB free disk; the Mac: processor under 75 %, 6 GB free memory, 30 GB free disk, at most 4 game programs of
 # all lanes with the new game's). Only one soak runs on a computer at a time (a lock file with the process id). The script
-# stops only the processes that it started, by their process ids. Every game runs with --background.
+# stops only the processes that it started, by their process ids. Every game runs with --background and with no sound (ALSOFT_CONF, the null driver of OpenAL).
 #
 # Exit codes: 0 every game and every server_check stayed in step; 1 a game parted or failed; 2 a wrong command line or a
 # missing build; 3 another soak runs.
@@ -111,6 +111,17 @@ run_local() {
 	[ -x "$PY" ] || command -v "$PY" >/dev/null || { echo "desync_soak: no Python $PY (the Mac needs cache/simvenv)"; exit 2; }
 	[ -f "$BIN/openblack$EXE" ] && [ -f "$BIN/openblack-server$EXE" ] || { echo "desync_soak: no openblack and openblack-server in $BIN"; exit 2; }
 	mkdir -p "$OUT"
+	# The games of a soak play no sound: OpenAL gets its null driver from a configuration file of this soak (no system
+	# setting changes). ALSOFT_CONF from the caller is kept.
+	if [ -z "${ALSOFT_CONF:-}" ]; then
+		if [ "$EXE" = ".exe" ] && [ -f E:/openblack/tools/audio/alsoft_silent.ini ]; then
+			export ALSOFT_CONF=E:/openblack/tools/audio/alsoft_silent.ini
+		else
+			printf '[general]\ndrivers=null\n' >"$OUT/alsoft-silent.conf"
+			export ALSOFT_CONF="$OUT/alsoft-silent.conf"
+		fi
+	fi
+	echo "desync_soak: the games play no sound (ALSOFT_CONF=$ALSOFT_CONF)"
 	local lock="$OUT/soak.lock"
 	if [ -f "$lock" ] && alive "$(cat "$lock")"; then
 		echo "desync_soak: another soak runs (pid $(cat "$lock"))"
