@@ -945,10 +945,15 @@ def desktop_leash_step(leash, done, pid, log):
             return False
         time.sleep(before)
         if not done:
-            # The information box of the land keeps the keys from the controls while it shows: the player clicks Go!
+            # The information box of the land keeps the keys from the controls while it shows. The Escape key closes
+            # it, as Go! does: the inspector presses no button of a window in a network game.
             windows = items_of(inspector_call(pid, "gui.windows", {}))
-            if any(window.get("name") == "land_info_box" and window.get("open") for window in windows):
-                inspector_call(pid, "gui.press", {"params": {"window": "land_info_box", "button": "Go!"}})
+            box = any(window.get("name") == "land_info_box" and window.get("open") for window in windows)
+            print(f"leash: the information box of the land shows on the client with pid {pid}: {box}")
+            if box:
+                inspector_call(pid, "input.key", {"params": {"key": "Escape", "how": "press"}})
+                time.sleep(0.5)
+                inspector_call(pid, "input.key", {"params": {"key": "Escape", "how": "release"}})
                 time.sleep(2.0)
         # A tap of the inspector (down for one frame) does not show to the actions of the controls: the key stays down
         # for half a second, as a player presses it
