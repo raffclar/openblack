@@ -70,6 +70,20 @@ inline constexpr int32_t k_ObjectRate = 255;
 [[nodiscard]] int32_t ObjectLevel(float depth, int32_t rate, int32_t cap);
 /// Objects show snow from this much of it
 inline constexpr int32_t k_ObjectLevelShown = 5;
+/// A tree that the game drew out of the land one time carries less snow from then on: this rate of 256, and this
+/// maximum level
+inline constexpr int32_t k_OutOfLandTreeRate = 128;
+inline constexpr int32_t k_OutOfLandTreeCap = 64;
+/// How much snow shows on the broken model of a building where the snow is `depth` deep, 0 to 255: the whole metres
+/// of the depth less 20
+[[nodiscard]] int32_t BrokenModelLevel(float depth);
+/// The broken model of a building, and each piece that broke off it, shows snow from this much of it
+inline constexpr int32_t k_BrokenModelLevelShown = 6;
+/// The level of snow that the broken model shows at `level`: none below k_BrokenModelLevelShown
+[[nodiscard]] constexpr int32_t BrokenModelShownLevel(int32_t level)
+{
+	return level < k_BrokenModelLevelShown ? 0 : level;
+}
 /// A thing's level of snow moves towards the level of the snow where it stands. In each step it moves by this much at
 /// most: the game time of the step in milliseconds, divided by 16. A step at 60 steps a second moves it by 1, so a thing
 /// takes about 4 seconds to change from no snow to all of it.

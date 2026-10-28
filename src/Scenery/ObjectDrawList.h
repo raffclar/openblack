@@ -244,6 +244,65 @@ struct OwnDraw
 	return alwaysDrawn || (onScreen && !fadedOut);
 }
 
+/// The test that the draw of a listed thing does on a full frame, which decides whether the thing stays drawn
+enum class KeptTest : uint8_t
+{
+	/// The sphere of the thing is on the screen and the thing did not fade out completely
+	SphereAndFade,
+	/// Only the sphere of the thing is on the screen. A building that its site draws, or a broken building, has no fade
+	/// test.
+	Sphere,
+	/// The draw does no test, so the thing stays drawn
+	Always,
+};
+
+/// What decides the test of a listed thing
+struct KeptThing
+{
+	/// A villager or a creature
+	bool alwaysDrawn {false};
+	/// A broken building, drawn as its broken model
+	bool broken {false};
+	/// Not a building that its site of building or repair draws only as far up as it stands
+	bool drawnWhole {true};
+	/// A building that its site draws, of which some part shows
+	bool partlyShown {false};
+};
+
+/// The test that the draw of a listed thing does:
+/// - A villager or a creature: no test.
+/// - A broken building: the sphere of its whole model.
+/// - A building with a site that shows a part of it: the sphere of its whole model.
+/// - A building with a site that shows no part of it: no test. Its site draws nothing.
+/// - Another thing: the sphere and the fade.
+[[nodiscard]] constexpr KeptTest KeptTestOf(const KeptThing& thing)
+{
+	if (thing.alwaysDrawn)
+	{
+		return KeptTest::Always;
+	}
+	if (thing.broken || thing.partlyShown)
+	{
+		return KeptTest::Sphere;
+	}
+	return thing.drawnWhole ? KeptTest::SphereAndFade : KeptTest::Always;
+}
+
+/// Whether a listed thing stays drawn on the next frames that do not draw all of the list, by the test of its draw
+[[nodiscard]] constexpr bool StaysDrawn(KeptTest test, bool onScreen, bool fadedOut)
+{
+	switch (test)
+	{
+	case KeptTest::Always:
+		return true;
+	case KeptTest::Sphere:
+		return onScreen;
+	case KeptTest::SphereAndFade:
+		return onScreen && !fadedOut;
+	}
+	return true;
+}
+
 /// The frames that make the list again because an event asks. The game keeps one count of frames. Each request sets
 /// the count, so a later request replaces an earlier one, also a larger one. Each frame that makes the list again
 /// decreases the count by one, for all causes.

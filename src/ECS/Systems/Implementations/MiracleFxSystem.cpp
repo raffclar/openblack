@@ -208,6 +208,37 @@ void MiracleFxSystem::UpdatePiles(float gameSeconds)
 	    });
 }
 
+void MiracleFxSystem::UpdateDrawnGlobes(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameGameTime)
+{
+	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto bubble = OneOffSpellSeed::k_MeshId.value();
+	const bool haveBubble = meshes.Contains(bubble);
+	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
+	const float seconds = std::chrono::duration<float>(std::chrono::duration<float, std::milli>(frameGameTime)).count();
+	const bool fullFrame = drawList.GetFrame().drawAll;
+	registry.Each<OneOffSpellSeed, const Transform>(
+	    [&](entt::entity entity, OneOffSpellSeed& globe, const Transform& transform) {
+		    // A globe that the list does not draw does not run its glint on
+		    if (!drawList.Drawn(registry, entity))
+		    {
+			    return;
+		    }
+		    globe.glintFrame = visuals::StepGlint(globe.glintFrame, seconds);
+		    // The draw of a globe tests its sphere, pulled towards the camera by its radius, and no fade
+		    if (fullFrame && drawList.Listed(entity))
+		    {
+			    const auto origin = globe.drawnModel.has_value() ? glm::vec3((*globe.drawnModel)[3]) : transform.position;
+			    drawList.NoteFullFrame(
+			        entity, !haveBubble || GlobeOnScreen(origin, transform.scale.x, globe.middle, *meshes.Handle(bubble), eye));
+		    }
+	    });
+}
+
 void MiracleFxSystem::PlacePilesOnLand()
 {
 	if (!Locator::terrainSystem::has_value())
@@ -246,7 +277,6 @@ void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std:
 		    globes.push_back(entity);
 		    globe.spin = std::fmod(globe.spin + magic::k_OrbSeedSpin * seconds, k_TwoPi);
 		    globe.ringSpin = std::fmod(globe.ringSpin + visuals::k_RingSpin * seconds, k_TwoPi);
-		    globe.glintFrame = visuals::StepGlint(globe.glintFrame, seconds);
 		    // The dome's top faces the camera, turning about the middle of the globe where it is now, so that a globe thrown
 		    // about turns where it flies. Only the draw turns it: the world keeps the globe where the turns put it, so the
 		    // camera does not change the world.

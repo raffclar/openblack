@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 namespace openblack::ecs::components
 {
 
@@ -19,6 +21,13 @@ namespace openblack::ecs::components
 struct SnowLevel
 {
 	int32_t level {0};
+	/// The snow on the broken model of a broken building. It starts at the level of the building when the building
+	/// breaks. While the building is broken, its own level does not change.
+	std::optional<int32_t> broken;
+	/// A piece that broke off a building. It keeps the snow of the broken model at the time when it broke off.
+	bool piece {false};
+	/// A tree that the game drew out of the land one time. From then on it carries less snow.
+	bool drawnOutOfLand {false};
 };
 
 } // namespace openblack::ecs::components

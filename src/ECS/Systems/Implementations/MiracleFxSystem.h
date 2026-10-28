@@ -54,6 +54,7 @@ public:
 	[[nodiscard]] entt::id_type BandMesh() override;
 	void UpdateGlobes(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
 	                  bool landDrawn) override;
+	void UpdateDrawnGlobes(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameGameTime) override;
 	void PlacePilesOnLand() override;
 
 private:

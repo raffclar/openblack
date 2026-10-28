@@ -128,6 +128,11 @@ int32_t ObjectLevel(float depth, int32_t rate, int32_t cap)
 	return std::min((beyond * rate) >> 8, cap);
 }
 
+int32_t BrokenModelLevel(float depth)
+{
+	return std::clamp(static_cast<int32_t>(depth) - static_cast<int32_t>(k_ObjectLeast), 0, 255);
+}
+
 int32_t LevelStep(int32_t gameMilliseconds)
 {
 	return gameMilliseconds >> 4;

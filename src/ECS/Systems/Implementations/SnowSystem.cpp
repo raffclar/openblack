@@ -14,13 +14,28 @@
 #include <algorithm>
 #include <iterator>
 
+#include "3D/L3DMesh.h"
+#include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/Mesh.h"
+#include "ECS/Components/SnowLevel.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowLevels.h"
+#include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "Graphics/MeshDetail.h"
+#include "Locator.h"
+#include "Resources/ResourcesInterface.h"
+#include "Scenery/ObjectDrawList.h"
 
 using namespace openblack::ecs::systems;
+using openblack::ecs::components::BuildingDamage;
+using openblack::ecs::components::BuildingPiece;
+using openblack::ecs::components::Mesh;
+using openblack::ecs::components::SnowLevel;
 using openblack::ecs::components::Storm;
+using openblack::ecs::components::Transform;
 
 namespace
 {
@@ -87,14 +102,82 @@ void SnowSystem::Cover(float depth)
 void SnowSystem::StepObjects(Registry& registry, const ObjectDrawListSystemInterface& drawList,
                              std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)
 {
+	// In each frame: a building that breaks gives its snow to its broken model, and a new piece takes the snow of the
+	// broken model that it broke off. A tree that the frame draws out of the land carries less snow from then on.
+	registry.Each<const BuildingDamage>(
+	    [&registry](entt::entity building, const BuildingDamage&) { snow_levels::FollowBreak(registry, building, true); });
+	registry.Each<SnowLevel>([&registry](entt::entity entity, SnowLevel& snow) {
+		if (snow.broken.has_value() && !registry.AllOf<BuildingDamage>(entity))
+		{
+			snow.broken.reset();
+		}
+	});
+	_newPieces.clear();
+	registry.Each<const BuildingPiece>([this, &registry](entt::entity piece, const BuildingPiece& part) {
+		if (!registry.AllOf<SnowLevel>(piece))
+		{
+			_newPieces.emplace_back(piece, part.parent);
+		}
+	});
+	for (const auto& [piece, building] : _newPieces)
+	{
+		snow_levels::TakePieceSnow(registry, piece, building);
+	}
+	snow_levels::NoteTreesOutOfLand(registry);
+
 	const auto gameTime = water_rings::Step(_objectPace, frameRealTime, frameGameTime);
 	const auto step = snow_cover::LevelStep(static_cast<int32_t>(gameTime.count()));
 	if (step <= 0 || !drawList.GetView().has_value())
 	{
 		return;
 	}
+	const auto* buildings = Locator::buildingDamageSystem::has_value() ? &Locator::buildingDamageSystem::value() : nullptr;
 	_drawn.clear();
-	std::ranges::copy_if(drawList.GetList(), std::back_inserter(_drawn),
-	                     [&registry, &drawList](entt::entity entity) { return drawList.Drawn(registry, entity); });
-	snow_levels::Step(registry, _drawn, [this](glm::vec2 xz) { return GetDepth(xz); }, step);
+	_broken.clear();
+	for (const auto entity : drawList.GetList())
+	{
+		if (!drawList.Drawn(registry, entity))
+		{
+			continue;
+		}
+		// A broken building keeps its own snow. Only the snow of its broken model changes, while the model shows on the
+		// screen.
+		if (registry.AllOf<BuildingDamage>(entity))
+		{
+			if (BrokenModelOnScreen(registry, *drawList.GetView(), entity))
+			{
+				_broken.push_back(entity);
+			}
+			continue;
+		}
+		// The site of a building draws it only as far up as it stands, and keeps its snow as it is
+		if (buildings != nullptr && !buildings->DrawsWhole(entity))
+		{
+			continue;
+		}
+		_drawn.push_back(entity);
+	}
+	const auto depthAt = [this](glm::vec2 xz) { return GetDepth(xz); };
+	snow_levels::Step(registry, _drawn, depthAt, step);
+	snow_levels::StepBroken(registry, _broken, depthAt, step);
+}
+
+bool SnowSystem::BrokenModelOnScreen(const Registry& registry, const object_draw_list::View& view, entt::entity building)
+{
+	// The sphere of the whole model of the building, as the building stands
+	const auto* mesh = registry.TryGet<const Mesh>(building);
+	const auto* transform = registry.TryGet<const Transform>(building);
+	if (mesh == nullptr || transform == nullptr || !Locator::resources::has_value())
+	{
+		return true;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(mesh->id))
+	{
+		return true;
+	}
+	const auto box = meshes.Handle(mesh->id)->GetBoundingBox();
+	const auto centre = transform->position + transform->rotation * (transform->scale * box.Center());
+	const float radius = std::abs(transform->scale.x) * graphics::mesh_detail::HalfDiagonal(box.Size());
+	return object_draw_list::SphereOnScreen(view, transform->position, centre, radius);
 }
