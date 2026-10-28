@@ -44,6 +44,12 @@ constexpr std::array<MagicType, 4> k_AlwaysKnown {MagicType::Heal, MagicType::Fo
 /// A land script switches the mind on or off. Switched on, the mind also marks the player as a computer player.
 void SwitchOn(ecs::components::ComputerPlayer& player, bool on);
 
+/// The computer player after the load of a saved game, as the game loads it:
+/// - The mind starts again, with the parts that the save keeps.
+/// - The player that a land script named for the size of the creature goes.
+/// - A stronger need can stop the action of the hand again.
+void StartAgainAfterLoad(ecs::components::ComputerPlayer& player);
+
 /// The mind starts at its first turn while it is switched on, one time on each land
 [[nodiscard]] bool DueToStart(const ecs::components::ComputerPlayer& player);
 

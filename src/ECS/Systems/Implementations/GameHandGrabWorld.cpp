@@ -109,6 +109,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -486,6 +487,14 @@ void GameHandGrabWorld::HeatHeld(entt::entity object)
 	}
 }
 
+void GameHandGrabWorld::HeldTurn(entt::entity object)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().ProcessHeld(object);
+	}
+}
+
 void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 {
 	if (Locator::audio::has_value())
@@ -599,6 +608,14 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 	const auto type =
 	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(*info, component->seedType), component->powerUp);
 	player_miracles::MarkMagicTypeEverEnabled(data->miracles, type);
+}
+
+void GameHandGrabWorld::ScaffoldIntoHand(entt::entity scaffold, PlayerNames player)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().TakenByHand(scaffold, player);
+	}
 }
 
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
@@ -1426,6 +1443,19 @@ bool GameHandGrabWorld::TakesWhole(entt::entity target, entt::entity held) const
 bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
 {
 	return Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().LayGateStone(plinth, stone);
+}
+
+bool GameHandGrabWorld::JoinsScaffold(entt::entity target, entt::entity held) const
+{
+	return Locator::workshopSystem::has_value() && Locator::workshopSystem::value().CanJoin(held, target);
+}
+
+void GameHandGrabWorld::JoinScaffold(entt::entity target, entt::entity held)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().Join(held, target, ReportedHandPlace());
+	}
 }
 
 void GameHandGrabWorld::PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned)

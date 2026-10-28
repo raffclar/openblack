@@ -292,6 +292,7 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TreeRoots.h"
@@ -772,6 +773,7 @@ Game::Game(Arguments&& args) noexcept
 	config.numFramesToSimulate = args.numFramesToSimulate;
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
+	config.aiTimesEvery = args.aiTimesEvery;
 	config.frameStatsOut = args.frameStatsOut;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
 	config.lobbyOrigin = args.lobbyOrigin;
@@ -3805,6 +3807,15 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			// A thing that this computer threw shows on the flight of its lead until the turn of the command
 			Locator::handGrabSystem::value().DrawThrownForFrame();
 		}
+		// The phantom buildings of the scaffolds: at the drawn hand of the player, and on the building sites
+		if (Locator::workshopSystem::has_value())
+		{
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto* handTransform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity);
+			Locator::workshopSystem::value().PlaceGhostsForFrame(
+			    handTransform != nullptr ? std::optional(handTransform->position) : std::nullopt);
+		}
 		{
 			// The globes show their miracles where they are now, a globe in the hand where the hand holds it, each turned
 			// to face the camera as it is drawn
@@ -4830,6 +4841,10 @@ Game::RunStart Game::StartRun() noexcept
 	_frameCount = 0;
 	_frameLoop = std::make_unique<FrameLoop>();
 	_frameLoop->startTicks = Locator::time::value().GetTicks();
+	if (config.aiTimesEvery > 0 && Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetTimesReport(config.aiTimesEvery);
+	}
 	if (config.frameStatsInterval > 0)
 	{
 		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,

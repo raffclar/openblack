@@ -1063,6 +1063,8 @@ def main():
                              "start (the other clients use the ids 100 and up)")
     parser.add_argument("--clients", type=int, choices=(0, 1, 2, 3, 4), default=2,
                         help="the number of clients that play a god (a god slot each)")
+    parser.add_argument("--min-gods", type=int,
+                        help="the fewest gods that start the game (the server's --min-gods); the clients with none")
     parser.add_argument("--observers", type=int, choices=(0, 1, 2, 3, 4), default=0,
                         help="the number of desktop clients that join as observers (they watch and compare the "
                              "checksum of each turn)")
@@ -1079,9 +1081,6 @@ def main():
                         help="play until the game is decided, at most --turns turns (up to 18000)")
     parser.add_argument("--expect-ai-action", action="store_true",
                         help="the run fails when no computer god chose a need, did a deed of the hand or cast a miracle")
-    parser.add_argument("--min-gods", type=int,
-                        help="the fewest gods that start the game (the server's --min-gods); the clients with none. With "
-                             "--all-computer-gods it is the number of observers that the world waits for")
     parser.add_argument("--trace-draws", action="store_true",
                         help="the server and the clients write a draw trace, and the summary shows the first draw where "
                              "each client is not the same as the server")
@@ -1175,14 +1174,12 @@ def main():
         "--seed", str(options.seed), "-n", str(options.turns + 3000), "-l", server_log, "--log-checksums",
         "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
         "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--come-back-seconds", str(options.come_back_seconds)]
-    # The fewest gods that start the game: each client by default. The old name --gods also works on an older server.
-    # In a room with no human god it is the number of observers that the world waits for.
+    # The fewest gods that start the game: each client by default, and in a room of computer gods the observers to wait
+    # for. The old name --gods also works on an older server.
     if options.min_gods is not None:
         server_command += ["--min-gods", str(options.min_gods)]
-    elif options.all_computer_gods:
-        server_command += ["--min-gods", str(waited_observers)]
     else:
-        server_command += ["--gods", str(options.clients)]
+        server_command += ["--gods", str(waited_observers if options.all_computer_gods else options.clients)]
     if options.all_computer_gods:
         server_command.append("--all-computer-gods")
     if options.slot_fight:
@@ -1360,6 +1357,15 @@ def main():
                         [f"Network game: {options.hold_after} turns compared"]):
                     hold_creature(clients[index].pid, near, options.hold_slaps)
                     held.add(index)
+            slot = (options.slot_miracle or 0) - 1
+            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
+                    os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
+                miracle_done = slot_miracle(clients[slot].pid, slot)
+            if (options.slot_fight and fight_done is None and len(clients) == 2
+                    and all(client.poll() is None for client in clients) and lines_with(
+                        os.path.join(client_dirs[0], "client.log"),
+                        [f"Network game: {options.hold_after} turns compared"])):
+                fight_done = slot_fight([client.pid for client in clients], options.slot_fight)
             for index, client in enumerate(clients):
                 camera = client_cameras[index]
                 if (camera and options.camera_again_after is not None and index not in cameras_again
@@ -1370,15 +1376,6 @@ def main():
                         print(f"the camera of client {index + 1} was not set again; see {client_dirs[index]}")
                         return 1
                     cameras_again.add(index)
-            slot = (options.slot_miracle or 0) - 1
-            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
-                    os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
-                miracle_done = slot_miracle(clients[slot].pid, slot)
-            if (options.slot_fight and fight_done is None and len(clients) == 2
-                    and all(client.poll() is None for client in clients) and lines_with(
-                        os.path.join(client_dirs[0], "client.log"),
-                        [f"Network game: {options.hold_after} turns compared"])):
-                fight_done = slot_fight([client.pid for client in clients], options.slot_fight)
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])

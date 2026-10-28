@@ -48,6 +48,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
@@ -61,6 +62,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/GameEndConditions.h"
@@ -284,6 +286,11 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	if (registry.AllOf<Ball>(object))
 	{
 		return &info.ball;
+	}
+	// A scaffold has the one row of the scaffolds
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return &info.scaffold;
 	}
 	return nullptr;
 }
@@ -931,6 +938,12 @@ void world_objects::Remove(entt::entity object)
 			world_objects::Remove(pile);
 		}
 	}
+	// A workshop that goes removes its wood pile
+	if (const auto* workshop = registry.TryGet<const Workshop>(object);
+	    workshop != nullptr && registry.Valid(workshop->woodPile))
+	{
+		world_objects::Remove(workshop->woodPile);
+	}
 	// A graveyard going hands its town's dead over to another of the town's graveyards
 	graveyards::Lost(object);
 	// A crèche going hands its town's children over to another of the town's buildings
@@ -956,8 +969,8 @@ void world_objects::Remove(entt::entity object)
 	registry.SetDirty();
 }
 
-void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature,
-                               std::optional<guidance::TownAttackVoice> cry)
+void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
+                               bool byCreature, std::optional<guidance::TownAttackVoice> cry)
 {
 	if (!Locator::infoConstants::has_value())
 	{
@@ -1023,7 +1036,8 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	}
 	const bool owner = registry.Get<const Town>(town).owner == aggressor;
 	const uint32_t turn = Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
-	ecs::town_aggression::Attacked(aggression->record, aggressor, owner, amount, info.town.firstTimeDamageDoneAddition, turn);
+	ecs::town_aggression::Attacked(aggression->record, aggressor, owner, amount, info.town.firstTimeDamageDoneAddition, turn,
+	                               harm);
 	// The advisors of the player at this machine may remark on the player attacking a town
 	if (Locator::guidanceSystem::has_value())
 	{

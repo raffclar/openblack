@@ -14,6 +14,7 @@
 #include <cassert>
 
 #include <algorithm>
+#include <chrono>
 #include <optional>
 
 #include <spdlog/spdlog.h>
@@ -144,6 +145,8 @@ bool GameMindWorld::Perform(computer_mind::Mind& mind, uint16_t node)
 {
 	const auto rule = RuleOf(mind, node).perform;
 	const bool started = rule != nullptr && rule(_context, mind, node);
+	// The start of an action can change the world, so the searches ask for the influence again
+	_context.searchCells.clear();
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Computer god {} action {} ({:.3f}) started {}", static_cast<int>(_player),
 	                    computer_mind::InfoOf(mind.nodes[node].kind).name, mind.nodes[0].value, started);
 	if (started)
@@ -161,9 +164,16 @@ bool GameMindWorld::ActionBusy() const
 bool GameMindWorld::StepAction()
 {
 	// The god reports the place of its hand before the step, and its camera after it
+	const auto start = _timeHand ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
 	const auto hand = _state.hand.hand;
 	const bool ended = computer_hand::Process(_state.hand, _hand);
+	// The step can change the world, so the searches ask for the influence again
+	_context.searchCells.clear();
 	computer_world::ReportHand(_player, hand, _state.hand.camera);
+	if (_timeHand)
+	{
+		_handMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+	}
 	return ended;
 }
 
@@ -202,6 +212,28 @@ std::optional<glm::vec3> GameMindWorld::MarkerPlace(entt::entity thing) const
 bool GameMindWorld::HeldByHelp() const
 {
 	return computer_world::HeldByHelp(_state);
+}
+
+const computer_mind::NodeNames& GameMindWorld::Names() const
+{
+	return SharedNodeNames();
+}
+
+const computer_mind::NodeNames& computer_world::SharedNodeNames()
+{
+	auto& registry = Entities().Underlying();
+	const auto view = registry.view<const ComputerNodeNames>();
+	return view.empty() ? computer_mind::FirstNodeNames() : view.get<const ComputerNodeNames>(view.front()).names;
+}
+
+computer_mind::NodeNames& computer_world::SharedNodeNamesToChange()
+{
+	auto& registry = Entities();
+	if (const auto view = registry.Underlying().view<ComputerNodeNames>(); !view.empty())
+	{
+		return view.get<ComputerNodeNames>(view.front()).names;
+	}
+	return registry.Assign<ComputerNodeNames>(registry.Create(), computer_mind::MakeNodeNames()).names;
 }
 
 bool computer_world::Available(entt::entity thing)

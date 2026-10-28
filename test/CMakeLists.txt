@@ -1965,3 +1965,143 @@ endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
 openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
 openblack_setup_and_add_test(test_side_thread test_side_thread.cpp)
+  add_test(
+    NAME test_text_encoding
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_text_encoding.py
+            ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME test_text_encoding_self
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_text_encoding.py --test
+  )
+openblack_setup_and_add_test(
+  test_oracle_computer_creature_care oracle/test_oracle_computer_creature_care.cpp
+)
+set_tests_properties(
+  test_oracle_computer_creature_care
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_creature_play oracle/test_oracle_computer_creature_play.cpp
+)
+set_tests_properties(
+  test_oracle_computer_creature_play
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_town_threat oracle/test_oracle_computer_town_threat.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_worship oracle/test_oracle_computer_worship.cpp
+)
+set_tests_properties(
+  test_oracle_computer_worship
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_debug_computer_actions test_debug_computer_actions.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_creature_teach oracle/test_oracle_computer_creature_teach.cpp
+)
+set_tests_properties(
+  test_oracle_computer_creature_teach
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_workshop_rules test_workshop_rules.cpp)
+openblack_setup_and_add_test(test_scaffold_offer_rules test_scaffold_offer_rules.cpp)
+openblack_setup_and_add_test(test_scaffold_ghost_rules test_scaffold_ghost_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_workshop_yard oracle/test_oracle_workshop_yard.cpp
+)
+set_tests_properties(
+  test_oracle_workshop_yard
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_attitudes oracle/test_oracle_computer_attitudes.cpp
+)
+set_tests_properties(
+  test_oracle_computer_attitudes
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_town_goods oracle/test_oracle_computer_town_goods.cpp
+)
+set_tests_properties(
+  test_oracle_computer_town_goods
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_forest_wood oracle/test_oracle_computer_forest_wood.cpp
+)
+set_tests_properties(
+  test_oracle_computer_forest_wood
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_scaffold_desire oracle/test_oracle_scaffold_desire.cpp
+)
+set_tests_properties(
+  test_oracle_scaffold_desire
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_scaffold_impression_rules test_scaffold_impression_rules.cpp)
+openblack_setup_and_add_test(test_need_flag_rules test_need_flag_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_workshop_wood_flag oracle/test_oracle_workshop_wood_flag.cpp
+)
+set_tests_properties(
+  test_oracle_workshop_wood_flag
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_scaffold_impression oracle/test_oracle_scaffold_impression.cpp
+)
+set_tests_properties(
+  test_oracle_scaffold_impression
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_conquest oracle/test_oracle_computer_conquest.cpp
+)
+set_tests_properties(
+  test_oracle_computer_conquest
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_computer_mind_scaffolds test_computer_mind_scaffolds.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_scaffolds oracle/test_oracle_computer_scaffolds.cpp
+)
+set_tests_properties(
+  test_oracle_computer_scaffolds
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_defence oracle/test_oracle_computer_defence.cpp
+)
+set_tests_properties(
+  test_oracle_computer_defence
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_war oracle/test_oracle_computer_war.cpp
+)
+set_tests_properties(
+  test_oracle_computer_war
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_computer_god_times test_computer_god_times.cpp)
+openblack_setup_and_add_test(test_hash_identifier test_hash_identifier.cpp)

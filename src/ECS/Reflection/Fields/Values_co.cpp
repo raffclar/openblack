@@ -56,6 +56,7 @@ void openblack::ecs::reflection::RegisterFields_Values_co(entt::meta_ctx& contex
 	    .Field<&openblack::computer_mind::Mind::scriptHold>("scriptHold")
 	    .Field<&openblack::computer_mind::Mind::workedOut>("workedOut")
 	    .Field<&openblack::computer_mind::Mind::castRequested>("castRequested")
+	    .Field<&openblack::computer_mind::Mind::untaughtSends>("untaughtSends")
 	    .Field<&openblack::computer_mind::Mind::queue>("queue")
 	    .Field<&openblack::computer_mind::Mind::scriptHand>("scriptHand");
 	Reflect<openblack::computer_mind::Node>(context, ValueOnly {})
@@ -70,6 +71,7 @@ void openblack::ecs::reflection::RegisterFields_Values_co(entt::meta_ctx& contex
 	    .Field<&openblack::computer_mind::Node::value>("value")
 	    .Field<&openblack::computer_mind::Node::bestLeaf>("bestLeaf")
 	    .Field<&openblack::computer_mind::Node::object>("object")
+	    .Field<&openblack::computer_mind::Node::siteTown>("siteTown")
 	    .Field<&openblack::computer_mind::Node::amount>("amount")
 	    .Field<&openblack::computer_mind::Node::argument>("argument")
 	    .Field<&openblack::computer_mind::Node::place>("place");

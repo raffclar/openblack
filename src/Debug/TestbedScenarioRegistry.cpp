@@ -11360,6 +11360,139 @@ void AddStoreScenarios(std::vector<Scenario>& all)
 	});
 }
 
+void AddWorkshopScenarios(std::vector<Scenario>& all)
+{
+	constexpr glm::vec2 k_Workshop {-30.0f, 30.0f};
+	all.push_back({
+	    .id = "objects.workshop_makes_scaffolds",
+	    .name = "A workshop makes scaffolds from its wood",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop that holds 10000 wood, the wood of "
+	                   "four scaffolds. The yard of the workshop faces the camera.",
+	    .expected = "A pile of logs stands at the back of the workshop and holds its wood. The workshop uses the wood of "
+	                "one scaffold from the pile, and the pile becomes smaller. The work sound starts. When the time to make a "
+	                "scaffold is over, a small scaffold appears in the first free place of the yard, a horn sounds and "
+	                "the work sound stops. The workshop makes scaffolds until it has three in its yard. The hand can "
+	                "take a scaffold from the yard, and the workshop then makes one more.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {15.0f}, k_Workshop + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 10000}},
+	});
+
+	// The scenario turns the workshop so that its yard faces the camera. The first place of the Celtic workshop's yard is
+	// 7.8 m in front of the workshop.
+	constexpr glm::vec2 k_FirstPlace = k_Workshop + glm::vec2 {0.0f, -7.8f};
+	all.push_back({
+	    .id = "objects.scaffold_snaps_into_yard",
+	    .name = "A scaffold put down near a workshop's yard goes into its place",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop with no wood, its yard towards the "
+	                   "camera, and a loose "
+	                   "scaffold that no workshop counts. After one second the scaffold is lifted and let go one metre "
+	                   "from the first place of the yard, as the hand puts one down.",
+	    .expected = "The scaffold comes to rest and moves into the first place of the yard, turned as the place is "
+	                "turned. No puff shows. The workshop now counts the scaffold as its own (the inspector shows it), "
+	                "and the physics does not move the scaffold while it stands there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 0},
+	                {.type = ScaffoldInfo::Normal, .offset = k_Workshop + glm::vec2 {10.0f, 10.0f}, .scale = 0.7f}},
+	    .throws = {{.object = 2,
+	                .from = k_FirstPlace + glm::vec2 {0.7f, -0.7f},
+	                .height = 1.0f,
+	                .velocity = {0.0f, -1.0f, 0.0f},
+	                .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
+	    .id = "objects.workshop_wood_by_hand",
+	    .name = "The hand takes wood from a workshop's pile and gives it back",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop that holds 1000 wood, less "
+	                   "than the wood of one scaffold, so the workshop makes no scaffold. The pile of logs of the "
+	                   "workshop faces the camera. The input tools/sim/hand_inputs/workshop_wood.json moves the hand.",
+	    .expected = "With a held press on the pile, the hand takes logs from it, and the pile becomes smaller. The "
+	                "tooltip of the workshop shows less wood. When the hand lets the logs go on the workshop, the "
+	                "workshop takes them into its pile again, and the tooltip shows the wood that it had at the start.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000}},
+	});
+
+	all.push_back({
+	    .id = "objects.workshop_wood_flag",
+	    .name = "The flag of a workshop shows the wood that the workshop needs for a scaffold",
+	    .facet = Facet::Objects,
+	    .description = "The town and the workshop of objects.workshop_wood_by_hand: the workshop holds 1000 wood, less "
+	                   "than the wood of one scaffold. The input tools/sim/hand_inputs/workshop_wood.json moves the hand: "
+	                   "it takes logs from the pile of the workshop, then gives them back.",
+	    .expected = "The wood flag flies beside the workshop and turns to face the camera. When the hand takes logs, the "
+	                "flag moves up smoothly, because the workshop needs more wood. When the hand gives the logs back, the "
+	                "flag moves down to its first height.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000}},
+	});
+
+	constexpr glm::vec2 k_LooseScaffold {-25.0f, 30.0f};
+	constexpr glm::vec2 k_BuildPlace {-5.0f, 25.0f};
+	all.push_back({
+	    .id = "objects.scaffold_starts_building",
+	    .name = "A scaffold put down near a town starts the building that it offers",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a loose scaffold of the value of one "
+	                   "scaffold. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
+	                   "scaffold, holds it still near the village centre, and puts it down.",
+	    .expected = "While the hand holds the scaffold still near the village centre, the phantom of the building that "
+	                "the town wants grows below the scaffold and turns slowly. When the hand puts the scaffold down, no "
+	                "puff shows, a sound plays, and a building site of that building opens where the scaffold is. The "
+	                "scaffold stays on the site. While nothing of the building is built, the hand can take the scaffold "
+	                "again, and the site then goes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	});
+
+	constexpr glm::vec2 k_ImpressedHut {-25.0f, 47.0f};
+	all.push_back({
+	    .id = "objects.scaffold_impresses_town",
+	    .name = "A scaffold that the player puts down impresses the people of the near town",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building, with a hut of four "
+	                   "villagers of the town beside the village centre. The input tools/sim/hand_inputs/scaffold_build.json "
+	                   "moves the hand: it takes the scaffold, holds it still near the village centre, and puts it down.",
+	    .expected = "When the hand puts the scaffold down, a building site opens. At the same time, symbols of belief in "
+	                "the player rise from the first villagers of the hut: from a part of the town, and from one villager "
+	                "at least. The belief of the town in the player becomes larger.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f},
+	                {.type = AbodeInfo::CelticHut, .offset = k_ImpressedHut},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_ImpressedHut + glm::vec2 {-6.0f, -6.0f},
+	                 .joinTown = true,
+	                 .homeIn = 2},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = k_ImpressedHut + glm::vec2 {-3.0f, -7.0f},
+	                 .joinTown = true,
+	                 .homeIn = 2},
+	                {.type = VillagerInfo::CelticForesterMale,
+	                 .offset = k_ImpressedHut + glm::vec2 {3.0f, -7.0f},
+	                 .joinTown = true,
+	                 .homeIn = 2},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = k_ImpressedHut + glm::vec2 {6.0f, -6.0f},
+	                 .joinTown = true,
+	                 .homeIn = 2}},
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -11433,6 +11566,7 @@ std::vector<Scenario> Build()
 	AddVillagerSizeAndReachScenarios(all);
 	AddSwayAndFrightScenarios(all);
 	AddStoreScenarios(all);
+	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
 	return all;
 }
@@ -11582,7 +11716,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
 	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
 	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
-	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat || IsPointerCommand(kind);
+	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
+	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -11610,7 +11745,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 190> k_Names {
+	constexpr std::array<std::string_view, 192> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -11801,6 +11936,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "show a made-up ping",
 	    "add an incoming message",
 	    "chat",
+	    "computer personality",
+	    "computer sends with no lesson",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

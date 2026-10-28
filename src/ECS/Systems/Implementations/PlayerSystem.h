@@ -41,6 +41,8 @@ public:
 	void ForgetKept() override;
 	[[nodiscard]] bool KeepAlignmentAt(uint32_t turn) override;
 	void TakeUpKept(entt::entity playerEntity) override;
+	void SetAlly(PlayerNames player, PlayerNames other, float strength) override;
+	[[nodiscard]] float AllyStrength(PlayerNames player, PlayerNames other) const override;
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override;
 	[[nodiscard]] bool IsHumanPlayer(PlayerNames name) const override;
 

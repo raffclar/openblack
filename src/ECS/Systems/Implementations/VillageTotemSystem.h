@@ -47,6 +47,7 @@ public:
 	void LetGo() override;
 	void DoGrip(PlayerNames player, entt::entity totem) override;
 	void DoShare(PlayerNames player, entt::entity totem, float share) override;
+	void RaiseByGod(PlayerNames player, entt::entity totem, float share) override;
 	[[nodiscard]] std::optional<entt::entity> GetGripped() const override;
 	[[nodiscard]] std::optional<HandHold> GetHandHold() const override;
 	[[nodiscard]] std::optional<ShareToolTip> TakeShareToolTip(PlayerNames player) override;
@@ -60,6 +61,8 @@ private:
 	[[nodiscard]] entt::entity TownOf(entt::entity totem) const;
 	/// The plinth and its icon are put where the share stands them
 	void Place(entt::entity totem);
+	/// The totem shows the share of its town, unless the hand of this computer holds it
+	void KeepShareShown(entt::entity totem);
 	/// At the turn: the totem's see-through second plinth and icon are made, hidden, if it has none, and its icon is
 	/// marked as its icon
 	void MakeParts(entt::entity totem);

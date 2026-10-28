@@ -154,6 +154,8 @@ public:
 	virtual void ForgetGesturePath() {}
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
+	/// The game turn of a held thing of its own, after the hand moved it: a scaffold looks for the building that it offers
+	virtual void HeldTurn(entt::entity /*object*/) {}
 	/// A sound of the in-game bank where something is
 	virtual void PlaySample(uint32_t sample, glm::vec3 position) = 0;
 	/// The hand taps a thing at a point, for a player, as a rock breaks when tapped; whether the thing took the tap
@@ -209,6 +211,8 @@ public:
 	virtual void ArtefactTaken(entt::entity object, PlayerNames player) = 0;
 	/// A one-shot miracle's globe goes into the hand: the player has now had its miracle within reach
 	virtual void GlobeIntoHand(entt::entity /*globe*/, PlayerNames /*player*/) {}
+	/// A scaffold goes into the hand: its workshop keeps its place in the yard free for it
+	virtual void ScaffoldIntoHand(entt::entity /*scaffold*/, PlayerNames /*player*/) {}
 	/// Pulling up a tree moves the player's alignment
 	virtual void TreeUprooted(PlayerNames player, entt::entity tree) = 0;
 	/// A big forest gives a tree for the hand, taking a tree's wood from it (which may shrink it or use it up): a full
@@ -344,6 +348,11 @@ public:
 	/// Whether a thing takes a held thing whole when the hand gives it: a worship site's altar that takes its kind, a
 	/// gate stone plinth that takes a gate stone, or a store that takes what it is worth. Nothing changes.
 	[[nodiscard]] virtual bool TakesWhole(entt::entity /*target*/, entt::entity /*held*/) const { return false; }
+	/// Whether the hand can join a held scaffold to a scaffold under it. Nothing changes.
+	[[nodiscard]] virtual bool JoinsScaffold(entt::entity /*target*/, entt::entity /*held*/) const { return false; }
+	/// The hand joins a held scaffold to the scaffold under it, and the held scaffold goes. The caller removes the held
+	/// scaffold from the hand first.
+	virtual void JoinScaffold(entt::entity /*target*/, entt::entity /*held*/) {}
 	/// Lays a gate stone in the gate stone plinth it is given to; false for anything else, which is left as it is
 	virtual bool LayGateStone(entt::entity plinth, entt::entity stone) = 0;
 	/// Some resource poured onto a point: to the stores and piles of it about the point, or a new pile
