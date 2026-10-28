@@ -10,6 +10,7 @@
 #include <array>
 #include <vector>
 
+#include <glm/gtc/matrix_transform.hpp>
 #include <gtest/gtest.h>
 
 #include "Graphics/PartialBuildCap.h"
@@ -76,4 +77,19 @@ TEST(PartialBuildCap, APrimitiveWithAnyCornerBelowTheCutHasWallsWithin)
 	EXPECT_TRUE(DrawsAnythingBelow(k_Positions, k_Indices, 1.5f));
 	// Cut at its foot, nothing of it is below: a corner on the cut is not below it
 	EXPECT_FALSE(DrawsAnythingBelow(k_Positions, k_Indices, 0.0f));
+}
+
+TEST(PartialBuildCap, AModelThatFollowsTheLandRisesWithTheLandUnderEachCorner)
+{
+	// At (10, 5, 20), twice its size, on land that rises one metre for each metre east
+	const auto placement = glm::scale(glm::translate(glm::mat4(1.0f), {10.0f, 5.0f, 20.0f}), glm::vec3(2.0f));
+	const std::array<glm::vec3, 3> corners {glm::vec3 {0.0f, 0.0f, 0.0f}, {1.0f, 3.0f, 0.0f}, {-1.0f, 0.0f, 4.0f}};
+	const auto risen = RisenWithLand(corners, placement, [](glm::vec2 point) { return point.x; });
+	ASSERT_EQ(risen.size(), corners.size());
+	// Two metres east is two metres higher: one unit of the model at twice its size
+	EXPECT_FLOAT_EQ(risen[0].y, 0.0f);
+	EXPECT_FLOAT_EQ(risen[1].y, 4.0f);
+	EXPECT_FLOAT_EQ(risen[2].y, -1.0f);
+	EXPECT_FLOAT_EQ(risen[1].x, 1.0f);
+	EXPECT_FLOAT_EQ(risen[2].z, 4.0f);
 }

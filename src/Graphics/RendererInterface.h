@@ -234,6 +234,9 @@ public:
 		/// Where a building's model is cut, in its own space: its inner walls and the cap over them are drawn only for a
 		/// primitive with a whole triangle below it
 		std::optional<float> modelCutHeight;
+		/// Where a cut model that follows the land is placed in the world. Its cut and the cap over it then rise with the
+		/// land under each corner, as its walls rise when it is drawn.
+		std::optional<glm::mat4> landPlacement;
 		/// In place of its triangles, each primitive draws the cap over its walls where they are cut, unlit in three
 		/// quarters of the object's colour
 		bool cap {false};

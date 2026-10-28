@@ -16,6 +16,7 @@
 #include <optional>
 #include <vector>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -187,6 +188,12 @@ inline constexpr float k_ScaffoldCutFrom = 0.8f;
 /// always taken), a triangle of it, and two shares across the triangle, folded back into it when they add up past one.
 /// None when the mesh or that primitive has nothing to land on.
 [[nodiscard]] std::optional<glm::vec3> RandomSurfacePoint(const Mesh& mesh, const std::function<float(float)>& random);
+
+/// Where a new flame of a broken building starts, in the frame of its model. The point comes from the broken model, by
+/// the same draws as RandomSurfacePoint. Then the inverse of the placement of the model moves it back into the frame of
+/// the model, one axis at a time in the order of the game. None when the broken model gives no point.
+[[nodiscard]] std::optional<glm::vec3> FlamePointOnModel(const Mesh& mesh, const glm::mat4& inversePlacement,
+                                                         const std::function<float(float)>& random);
 
 /// How much of a building's life a breaking blow takes, before its defences: down to what is left of its model
 [[nodiscard]] float BreakageShare(float life, float remaining);

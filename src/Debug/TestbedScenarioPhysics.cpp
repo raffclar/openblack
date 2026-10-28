@@ -220,6 +220,28 @@ void AddBuildingBreak(std::vector<Scenario>& all)
 	});
 }
 
+// Buildings that follow the land, half built on the steep bank of the lake, seen from the side
+void AddUnbuiltOnBank(std::vector<Scenario>& all)
+{
+	constexpr glm::vec2 k_Lake = flat_land::k_LakeCentre - flat_land::k_MapMiddle;
+	constexpr float k_Bank = k_Lake.y - flat_land::k_LakeHalfExtent.y - 26.0f;
+	all.push_back({
+	    .id = "physics.unbuilt_on_bank",
+	    .name = "Buildings that follow the land, half built on a slope",
+	    .facet = Facet::Physics,
+	    .description = "A Celtic hut, a Celtic storage pit and a Celtic graveyard stand half built on the steep bank of "
+	                   "the lake. The camera looks at them from the side.",
+	    .expected = "Each building shows only its lower half. The flat top of each wall stays at the same height above "
+	                "the land under it, so the top goes down the slope with the land. No wall shows a gap or a spike "
+	                "at its top.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Lake.x + 20.0f, 30.0f, k_Bank - 60.0f}, .look = {k_Lake.x, 2.0f, k_Bank}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {k_Lake.x - 40.0f, k_Bank}, .built = 0.5f},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = {k_Lake.x, k_Bank}, .built = 0.5f},
+	                {.type = AbodeInfo::CelticGraveyard, .offset = {k_Lake.x + 40.0f, k_Bank}, .built = 0.5f}},
+	});
+}
+
 void AddRockSplit(std::vector<Scenario>& all)
 {
 	std::vector<ObjectSetup> objects;
@@ -529,6 +551,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddThrownAngles(all);
 	AddCrowdThrow(all);
 	AddBuildingBreak(all);
+	AddUnbuiltOnBank(all);
 	AddRockSplit(all);
 	AddCreatureHit(all);
 	AddCreatureCatch(all);
