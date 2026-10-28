@@ -5341,6 +5341,29 @@ void AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	// The hand gives the food, then moves far away while the creature reaches for it
+	constexpr float k_CallOffSweepDelay = 0.3f;
+	constexpr float k_CallOffSweepSeconds = 0.2f;
+	auto callingOff = giving;
+	callingOff.push_back({.kind = Kind::PointerSweep,
+	                      .delaySeconds = k_CallOffSweepDelay,
+	                      .point = {0.45f, 0.0f},
+	                      .amount = k_CallOffSweepSeconds});
+	all.push_back({
+	    .id = "creature.give_called_off",
+	    .name = "Calling off a gift by moving the hand away",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand gives a pile of food to a hungry tiger. As the tiger reaches out for it, the "
+	                   "pointer moves fast to the side, and the hand moves with it.",
+	    .expected = "The tiger stops the gift: its hand closes on nothing, and the food stays in the player's hand.",
+	    .environment = {.cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {hungryThinking},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {-15.0f, -15.0f}}},
+	    .commands = callingOff,
+	    .hand = offering,
+	});
+
 	all.push_back({
 	    .id = "creature.give_animal_kept_at_home",
 	    .name = "Giving an animal from afar to a creature kept at home",

@@ -1913,3 +1913,12 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_drawn_effect_steps test_drawn_effect_steps.cpp)
 openblack_setup_and_add_test(test_command_log test_command_log.cpp)
 openblack_setup_and_add_test(test_game_end_conditions test_game_end_conditions.cpp)
+openblack_setup_and_add_test(
+  test_oracle_held_place oracle/test_oracle_held_place.cpp
+)
+set_tests_properties(
+  test_oracle_held_place
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_testbed_hand_sweep test_testbed_hand_sweep.cpp)

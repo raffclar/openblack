@@ -162,6 +162,43 @@ def missing_deeds(deeds, expected):
     return {name: [deeds.get(name, 0), least] for name, least in expected.items() if deeds.get(name, 0) < least}
 
 
+# A network game that is decided at its first turn had a god with no temple: Land 1 and the other story lands make no
+# temple at their start. Then the god is out, its creature goes and the end box takes the mouse, so a recorded input of
+# the hand does nothing. The hand checks of a network game use maps with temples (TwoGods, the online maps, the map for
+# 32 gods); Land 1 and the testbed are checks with a still hand.
+DECIDED_AT_START_TURN = 1
+
+
+DECIDED_LINE = re.compile(r"Turn (\d+):.*(?:and the game is decided|won the game)")
+
+
+def decided_at_turn_in_text(lines):
+    """The turn at which the log lines tell that the game was decided, or None"""
+    for line in lines:
+        match = DECIDED_LINE.search(line)
+        if match is not None:
+            return int(match.group(1))
+    return None
+
+
+def decided_at_turn_in_file(path):
+    """As decided_at_turn_in_text, for a log file; a missing file tells of none"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as file:
+            return decided_at_turn_in_text(file)
+    except OSError:
+        return None
+
+
+def hand_input_on_decided_game(has_input, decided_at_turn):
+    """The reason why a network check with a recorded input of the hand compares nothing of the hand, or None: the game
+    was decided at its first turn"""
+    if not has_input or decided_at_turn is None or decided_at_turn > DECIDED_AT_START_TURN:
+        return None
+    return (f"the game was decided at turn {decided_at_turn}, so the end box took the input of the hand: use a map with "
+            "temples (TwoGods, an online map, the map for 32 gods) for an input of the hand, and a still hand on Land 1")
+
+
 # What the log says of the computer gods (the AI soak). The server and the clients write these lines:
 #   Made creature <id> of species <n> for the computer god <god> at <x>, <z>   (the start of a computer god)
 #   The computer god <god> starts with the personality of AI seed <seed>

@@ -115,6 +115,7 @@ public:
 		const auto found = reportedPlaces.find(of);
 		return found != reportedPlaces.end() ? found->second : ReportedHandPlace();
 	}
+	[[nodiscard]] glm::vec3 HeldPlaceAt(glm::vec3 point) const override { return point + heldPlaceStep; }
 	void SetActingPlayer(std::optional<PlayerNames> player) override { acting = player; }
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return acting; }
 	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override { return ownHandPlayer; }
@@ -449,6 +450,8 @@ public:
 	/// The hands of the other gods of a network game, and where each last reported its hand
 	std::set<entt::entity> otherHands;
 	std::map<entt::entity, glm::vec3> reportedPlaces;
+	/// What the map position of a held thing adds to the reported point of the hand
+	glm::vec3 heldPlaceStep {0.0f};
 	/// The second player has hands only once a network game gave them
 	bool secondPlayerHasHands {false};
 	std::optional<PlayerNames> acting;
@@ -1712,6 +1715,16 @@ TEST_F(HandGrabSystemWithWorld, TheTurnHasAHeldThingAtTheReportedHandAtItsOwnTur
 	EXPECT_EQ(transform.position, world->ReportedHandPlace());
 	EXPECT_EQ(transform.rotation, held.rotation);
 	EXPECT_EQ(transform.scale, held.scale);
+}
+
+TEST_F(HandGrabSystemWithWorld, TheTurnHasAHeldThingAtTheMapPositionOfTheReportedHand)
+{
+	const auto rock = world->AddRock({5.0f, 0.0f, 5.0f});
+	system->DoTake(world->HandPlayer(), rock);
+	ASSERT_EQ(system->GetHeld(), rock);
+	world->heldPlaceStep = {0.25f, -0.5f, 0.125f};
+	system->PlaceHeldForTurn();
+	EXPECT_EQ(world->registry.Get<const Transform>(rock).position, world->ReportedHandPlace() + world->heldPlaceStep);
 }
 
 TEST_F(HandGrabSystemWithWorld, AVillagerOfTheHandsPlayerAlarmsThoseAboutIt)

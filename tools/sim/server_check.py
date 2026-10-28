@@ -7,7 +7,7 @@ the game sent them over the network. Each turn of the server must have the same 
 
     python tools/sim/server_check.py --turns 100
     python tools/sim/server_check.py --turns 100 --config RelWithDebInfo --out E:/runs/server
-    python tools/sim/server_check.py --turns 150 --frame-ms 20 --input tools/sim/hand_inputs/land1.json
+    python tools/sim/server_check.py --turns 2000 --land Playgrounds/TwoGods.txt --input tools/sim/hand_inputs/twogods.json
     python tools/sim/server_check.py --turns 2000 --testbed --server-fast --wsl-server /root/ob/bin/openblack-server
 
 With --wsl-server, the server is a Linux build that runs in WSL (wsl -d DISTRO): the script gives it the paths of the
@@ -16,6 +16,9 @@ same turns, and each turn's checksum must be the same.
 
 The hand of the game stays still, unless --input gives the game recorded input (--sim-input, from the first frame of
 the land): then the hand moves, takes, drops, throws and casts, and the server sees only the commands.
+An input of the hand needs a map with temples (TwoGods, the online maps, --gods-ring-map). Land 1 and the testbed
+are checks with a still hand: a story land makes no temple at its start, so its network game is decided at the first
+turn and the end box takes the input. A run with an input whose game was decided at its first turn is not the same.
 The input can also be an object with the list as "events" and a "camera" as camera.set takes it: the game puts its camera
 there before the first frame of the land, in place of the start view and its flight (tools/sim/hand_inputs/twogods.json).
 The object can also have an "expect", the least count of each deed of the hand ({"scoops": 1, "throws": 1}). The summary
@@ -380,13 +383,14 @@ def main():
     summary["hand_deeds_same"] = deeds_same
     summary["missing_deeds"] = missing
     # A land with no temple for the player's god (Land 1) decides the network game at its first turn: the
-    # god is out, its creature goes, and the end box takes the mouse, so a recorded input does nothing there
-    with open(game_log, encoding="utf-8", errors="replace") as file:
-        decided = [re.search(r"Turn (\d+):", line) for line in file
-                   if "and the game is decided" in line or "won the game" in line]
-    summary["decided_at_turn"] = int(decided[0].group(1)) if decided and decided[0] else None
-    if events is not None and summary["decided_at_turn"] is not None:
-        print(f"the game was decided at turn {summary['decided_at_turn']}: the end box takes the input of the hand")
+    # god is out, its creature goes, and the end box takes the mouse, so a recorded input does nothing there. Such a run
+    # is not the same: an input of the hand needs a map with temples
+    summary["decided_at_turn"] = sim_report.decided_at_turn_in_file(game_log)
+    decided_reason = sim_report.hand_input_on_decided_game(events is not None, summary["decided_at_turn"])
+    summary["hand_input_decided"] = decided_reason is not None
+    if decided_reason is not None:
+        summary["same"] = False
+        print(decided_reason)
     if missing or not deeds_same:
         summary["same"] = False
         print(f"the hand did not do what its input expects: {missing}" if missing
