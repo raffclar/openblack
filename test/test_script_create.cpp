@@ -79,6 +79,38 @@ TEST(ScriptCreate, AMobileStaticThatCanMoveInThePhysicsGoesOntoTheLand)
 	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Rock, static_cast<uint32_t>(MobileStaticInfo::SingingStoneBase)));
 }
 
+TEST(ScriptCreate, AMobileStaticOfTheRockKindKeepsTheScriptsHeight)
+{
+	const auto rock = static_cast<uint32_t>(MobileStaticInfo::Rock);
+	// Made as a mobile static, a rock stays at the height that the script gave, and the physics lets it fall
+	EXPECT_TRUE(KeepsScriptHeight(ScriptType::MobileStatic, rock, true));
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::MobileStatic, rock, false));
+	// Made by the rock type, it goes onto the land under its place
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Rock, rock, true));
+}
+
+TEST(ScriptCreate, ARockOfTheRockKindStartsInThePhysics)
+{
+	const auto rock = static_cast<uint32_t>(MobileStaticInfo::Rock);
+	// A mobile static of the rock kind starts in the physics, but is not put on the land first
+	const auto asMobileStatic = RockStartOf(ScriptType::MobileStatic, rock, true);
+	ASSERT_TRUE(asMobileStatic.has_value());
+	EXPECT_FALSE(asMobileStatic->settlesOnLand);
+	// Made by the rock type, the physics puts it on the land and turns it to the slope
+	const auto asRock = RockStartOf(ScriptType::Rock, rock, true);
+	ASSERT_TRUE(asRock.has_value());
+	EXPECT_TRUE(asRock->settlesOnLand);
+	// A row out of the rock kind, such as a singing stone, does not start in the physics
+	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::SingingStone_1), false));
+	// The rows that the physics can not move never start in it, whatever their kind
+	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::Bonfire), true));
+	EXPECT_FALSE(RockStartOf(ScriptType::Rock, static_cast<uint32_t>(MobileStaticInfo::SingingStoneBase), true));
+	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::StreetLantern), true));
+	EXPECT_FALSE(RockStartOf(ScriptType::MobileStatic, static_cast<uint32_t>(MobileStaticInfo::CountryLantern), true));
+	// Other types never do
+	EXPECT_FALSE(RockStartOf(ScriptType::Feature, rock, true));
+}
+
 TEST(ScriptCreate, AnglesAreGivenInDegrees)
 {
 	EXPECT_FLOAT_EQ(AngleFromDegrees(0.0f), 0.0f);
