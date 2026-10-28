@@ -588,7 +588,7 @@ void CreatureCaveSystem::HoverTattooSites(entt::entity copyEntity, glm::ivec2 po
 	    .xScale = camera.GetProjectionMatrix()[0][0],
 	    .camera = glm::vec3(glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current))[3]),
 	};
-	const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto model = cave_creature::Placement(transform->position, transform->rotation, transform->scale);
 	const auto& rest = mesh->GetBoneMatrices();
 	const auto bones = animation->boneMatrices.size() == rest.size() ? std::span<const glm::mat4>(animation->boneMatrices)
 	                                                                 : std::span<const glm::mat4>(rest);
@@ -669,7 +669,7 @@ bool CreatureCaveSystem::CursorOverCaveCreature(const screen_pick::View& view) c
 		return false;
 	}
 	const auto mesh = meshes.Handle(meshComponent->id);
-	const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto model = cave_creature::Placement(transform->position, transform->rotation, transform->scale);
 	// As the game finds what is under the cursor: by the body's bounding sphere, then its triangles as they are drawn
 	const auto box = mesh->GetBoundingBox();
 	const float scale = glm::length(glm::vec3(model[0]));

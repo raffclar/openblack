@@ -63,6 +63,7 @@
 #include "Common/FileDialog.h"
 #include "Common/MachineClock.h"
 #include "Common/PortableMath.h"
+#include "Creature/CaveCreature.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureFeedback.h"
@@ -5053,7 +5054,7 @@ std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
 	// From the creature's feet up to the middle of its body's bounding box, the first pixel where the cave finds the
 	// creature under the pointer, as it is posed now
 	const auto& camera = Locator::camera::value();
-	const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	const auto model = cave_creature::Placement(transform->position, transform->rotation, transform->scale);
 	const auto middle = glm::vec3(model * glm::vec4(meshes.Handle(mesh->id)->GetBoundingBox().Center(), 1.0f));
 	glm::vec3 feet;
 	glm::vec3 top;

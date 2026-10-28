@@ -22,7 +22,7 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
-#include "Creature/CreatureRig.h"
+#include "Creature/CaveCreature.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/Mesh.h"
@@ -419,7 +419,7 @@ void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 			    auto offset = uniformOffsets.insert(std::make_pair(*mesh, 0));
 			    const uint32_t idx = desc->second.offset + offset.first->second;
 			    _renderContext.instanceUniforms[idx] = {
-			        .model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale)};
+			        .model = cave_creature::Placement(transform.position, transform.rotation, transform.scale)};
 			    _renderContext.creatureCopyDraws.push_back(
 			        {.creature = copy.creature, .copy = entity, .instance = idx, .light = cave.light});
 			    offset.first->second++;
