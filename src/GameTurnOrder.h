@@ -250,9 +250,6 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The commands that the players sent come first in the turn, in the order that they went, before the hand does its
     // own work of the turn
     {.step = Step::PlayerCommands, .stage = Stage::Input},
-    // The humans of a network game join with the commands of its first turn. Then the gods are known, and each god gets
-    // the winning conditions of the game before a thing in the world can count for them.
-    {.step = Step::GameConditions, .stage = std::nullopt},
     // The hand's count of the turns that it stays still is part of the player's input
     {.step = Step::HandStillness, .stage = Stage::Input},
     // Then the hand does the work that it also does each frame: it takes a thing that it waited for, or gives what it
@@ -261,6 +258,9 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The speed of the hand, which blows the chimneys' smoke, comes from the same part of the player's input
     {.step = Step::ChimneySmoke, .stage = Stage::Input},
     {.step = Step::Clock, .stage = Stage::StartTurn},
+    // The humans of a network game join with the commands of its first turn. Then the gods are known, and each god gets
+    // the winning conditions of the game before a thing in the world can count for them.
+    {.step = Step::GameConditions, .stage = Stage::StartTurn},
     // The living's reactions count their times by the same turn count as the game
     {.step = Step::ReactionClock, .stage = Stage::StartTurn},
     // The places of the turn's start, which the frames draw from. Each thing goes into its new map cells as it moves,
