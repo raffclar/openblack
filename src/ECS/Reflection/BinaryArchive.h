@@ -14,6 +14,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -522,10 +523,16 @@ void Save(BinaryWriter& out, const Type& value)
 	}
 	else if constexpr (std::is_same_v<Type, std::vector<bool>>)
 	{
-		// The same bytes as a value of 1 or 0 for each element, in one block
+		// The same bytes as a value of 1 or 0 for each element, in one block. Most flags are false, and the search for the
+		// next true flag is quicker than a look at each flag.
 		out.WriteSize(value.size());
 		auto place = out.Extend(value.size());
-		std::ranges::transform(value, place.begin(), [](bool element) { return static_cast<uint8_t>(element ? 1 : 0); });
+		std::ranges::fill(place, uint8_t {0});
+		for (auto flag = std::find(value.begin(), value.end(), true); flag != value.end();
+		     flag = std::find(std::next(flag), value.end(), true))
+		{
+			place[static_cast<size_t>(flag - value.begin())] = 1;
+		}
 	}
 	else if constexpr (detail::k_IsListOfPlainLists<Type>)
 	{

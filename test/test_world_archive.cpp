@@ -1461,6 +1461,13 @@ TEST(WorldArchive, TheMixOfBytesIsTheHashOfEachByteInTurn)
 		bytes.insert(bytes.end(), run, uint8_t {0});
 		bytes.push_back(static_cast<uint8_t>(run + 1));
 	}
+	// Long runs, which take the powers of the prime for many words
+	for (const size_t run : {100U, 1000U, 4096U * 4U, 77777U})
+	{
+		bytes.insert(bytes.end(), run, uint8_t {0});
+		bytes.push_back(uint8_t {9});
+	}
+	bytes.insert(bytes.end(), 300, uint8_t {0});
 	for (size_t from = 0; from < 9; ++from)
 	{
 		const auto part = std::span<const uint8_t>(bytes).subspan(from);

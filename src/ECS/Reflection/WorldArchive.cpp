@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -1006,30 +1007,53 @@ std::optional<std::vector<NamedSection>> openblack::ecs::reflection::LoadSection
 
 void openblack::ecs::reflection::MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 {
-	// A byte of zero only multiplies the hash by the prime. Eight bytes of zero multiply it by the prime to the power of
-	// eight, which gives the same hash with one step. The rows of a world have many bytes of zero.
+	// A byte of zero only multiplies the hash by the prime. A run of bytes of zero multiplies it by the prime to the power
+	// of the length of the run, which gives the same hash with few steps. The rows of a world have long runs of zero.
 	constexpr size_t k_WordBytes = sizeof(uint64_t);
-	constexpr uint64_t k_HashPrimeToEight = [] {
+	// The prime to the power of eight times each power of two
+	constexpr auto k_ZeroWordPowers = [] {
+		std::array<uint64_t, 64> powers {};
 		uint64_t power = 1;
 		for (size_t i = 0; i < k_WordBytes; ++i)
 		{
 			power *= k_HashPrime;
 		}
-		return power;
+		for (auto& kept : powers)
+		{
+			kept = power;
+			power *= power;
+		}
+		return powers;
 	}();
-	size_t at = 0;
-	for (; at + k_WordBytes <= bytes.size(); at += k_WordBytes)
-	{
+	const auto wordAt = [&bytes](size_t at) {
 		uint64_t word = 0;
 		std::memcpy(&word, bytes.data() + at, k_WordBytes);
-		if (word == 0)
+		return word;
+	};
+	size_t at = 0;
+	while (at + k_WordBytes <= bytes.size())
+	{
+		if (wordAt(at) != 0)
 		{
-			hash *= k_HashPrimeToEight;
+			for (const auto byte : bytes.subspan(at, k_WordBytes))
+			{
+				hash = (hash ^ byte) * k_HashPrime;
+			}
+			at += k_WordBytes;
 			continue;
 		}
-		for (const auto byte : bytes.subspan(at, k_WordBytes))
+		size_t words = 1;
+		while (at + ((words + 1) * k_WordBytes) <= bytes.size() && wordAt(at + (words * k_WordBytes)) == 0)
 		{
-			hash = (hash ^ byte) * k_HashPrime;
+			++words;
+		}
+		at += words * k_WordBytes;
+		for (size_t bit = 0; words != 0; ++bit, words >>= 1U)
+		{
+			if ((words & 1U) != 0)
+			{
+				hash *= k_ZeroWordPowers.at(bit);
+			}
 		}
 	}
 	for (const auto byte : bytes.subspan(at))
