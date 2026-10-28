@@ -11,11 +11,14 @@
 
 #include "HandSystem.h"
 
+#include <span>
+
 #include <L3DFile.h>
 #include <glm/gtc/constants.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/HandMorph.h"
+#include "Common/MachineClock.h"
 #include "ECS/Archetypes/HandArchetype.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
@@ -159,8 +162,18 @@ std::optional<glm::vec3> HandSystem::GetDrawnHandPosition() const noexcept
 	return transform->position;
 }
 
+void HandSystem::ReportSent(const player_commands::HandReport& report)
+{
+	_reportLatency.Sent(report, machine_clock::Ticks());
+}
+
 void HandSystem::Report(PlayerNames player, const player_commands::HandReport& report)
 {
+	// A report of this computer gives the latency of its reports
+	if (IsOwnPlayer(player))
+	{
+		_reportLatency.Done(report, machine_clock::Ticks());
+	}
 	// The report moves the left hand of its player. A player with no hands yet has no report.
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto hands = GetHandsOf(player);
@@ -226,6 +239,61 @@ std::optional<HandSystemInterface::ReportedCamera> HandSystem::GetReportedCamera
 	return ReportedCamera {.origin = reported->camera, .focus = reported->focus};
 }
 
+void HandSystem::ReportView(PlayerNames player, const player_commands::ViewReport& report)
+{
+	// The view belongs to the left hand of its player. A player with no hands yet has no view.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hands = GetHandsOf(player);
+	const auto hand = hands.has_value() ? (*hands)[static_cast<size_t>(Side::Left)] : entt::null;
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	auto& reported = ReportedOf(registry, hand);
+	reported.viewReported = true;
+	reported.viewEye = report.eye;
+	reported.viewFocus = report.focus;
+	reported.viewLens = report.lens;
+	reported.viewNearClip = report.nearClip;
+	reported.viewScreenWidth = report.screenWidth;
+	reported.viewScreenHeight = report.screenHeight;
+	reported.viewAspect = report.aspect;
+	reported.inclusionDistance = report.inclusionDistance;
+	reported.cameraOrders = report.cameraOrders;
+	reported.cameraArrived = report.cameraArrived;
+	reported.gripsLand = report.gripsLand;
+	reported.otherButton = report.otherButton;
+}
+
+std::optional<HandSystemInterface::ReportedView> HandSystem::GetReportedView(PlayerNames player) const noexcept
+{
+	const auto hands = GetHandsOf(player);
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = (*hands)[static_cast<size_t>(Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	if (reported == nullptr || !reported->viewReported)
+	{
+		return std::nullopt;
+	}
+	return ReportedView {
+	    .eye = reported->viewEye,
+	    .focus = reported->viewFocus,
+	    .lens = reported->viewLens,
+	    .nearClip = reported->viewNearClip,
+	    .screen = glm::ivec2(reported->viewScreenWidth, reported->viewScreenHeight),
+	    .aspect = reported->viewAspect,
+	    .inclusionDistance = reported->inclusionDistance,
+	    .cameraOrders = reported->cameraOrders,
+	    .cameraArrived = reported->cameraArrived,
+	    .gripsLand = reported->gripsLand,
+	    .otherButton = reported->otherButton,
+	};
+}
+
 uint32_t HandSystem::GetHandStillTurns() const noexcept
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -247,31 +315,46 @@ std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>
 	return _hands;
 }
 
+namespace
+{
+/// Where the world has a pair of hands: the left hand from the last report, the right hand where its Transform puts it.
+/// A hand at the origin of the world is off the land, and has none.
+std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
+PositionsOf(std::span<const entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)> hands)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	// The left hand is where the reports put it. The right hand has no reports, and its Transform never moves.
+	const auto left = hands[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto right = hands[static_cast<size_t>(HandSystemInterface::Side::Right)];
+	const auto* reported = registry.Valid(left) ? registry.TryGet<const ReportedHand>(left) : nullptr;
+	const auto* rightAt = registry.Valid(right) ? registry.TryGet<const Transform>(right) : nullptr;
+	const auto onLand = [](const glm::vec3& point) {
+		return point == glm::zero<glm::vec3>() ? std::nullopt : std::optional(point);
+	};
+	return {
+	    reported != nullptr ? onLand(reported->handPoint) : std::nullopt,
+	    rightAt != nullptr ? onLand(rightAt->position) : std::nullopt,
+	};
+}
+} // namespace
+
 std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
 HandSystem::GetPlayerHandPositions() const noexcept
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hands = GetPlayerHands();
-	// The left hand is where the reports put it. The right hand has no reports, and its Transform never moves.
-	const auto left = hands[static_cast<size_t>(Side::Left)];
-	const auto right = hands[static_cast<size_t>(Side::Right)];
-	const auto* reported = registry.Valid(left) ? registry.TryGet<const ReportedHand>(left) : nullptr;
-	const auto* rightAt = registry.Valid(right) ? registry.TryGet<const Transform>(right) : nullptr;
-	std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)> result = {
-	    reported != nullptr ? reported->handPoint : glm::zero<glm::vec3>(),
-	    rightAt != nullptr ? rightAt->position : glm::zero<glm::vec3>(),
-	};
-	// TODO(#693): Hand Getter should return an optional if the hand doesn't have a valid position
-	// When the position is zero, it probably means it's not on the map (e.g. mouse is in the sky)
-	if (result[static_cast<size_t>(Side::Left)] == glm::zero<glm::vec3>())
-	{
-		result[static_cast<size_t>(Side::Left)] = std::nullopt;
-	}
-	if (result[static_cast<size_t>(Side::Right)] == glm::zero<glm::vec3>())
-	{
-		result[static_cast<size_t>(Side::Right)] = std::nullopt;
-	}
-	return result;
+	return PositionsOf(_hands);
+}
+
+std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
+HandSystem::GetHandPositionsOf(PlayerNames player) const noexcept
+{
+	const auto hands = GetHandsOf(player);
+	return hands.has_value() ? PositionsOf(*hands) : std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)> {};
+}
+
+std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
+HandSystem::GetOwnHandPositions() const noexcept
+{
+	return PositionsOf(GetOwnHands());
 }
 
 namespace

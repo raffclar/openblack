@@ -152,6 +152,9 @@ private:
 	uint32_t _lastAutosaveTurn {0};
 	uint32_t _lastQuickSaveTurn {0};
 	uint32_t _lastLoadTurn {0};
+	/// The turn of the last autosave that the game made, which a save keeps. After a load the next autosave waits from
+	/// the turn of the load, but a save still keeps the turn of the last real autosave.
+	uint32_t _autosaveTurnToSave {0};
 };
 
 } // namespace openblack::ecs::systems

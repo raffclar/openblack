@@ -79,5 +79,8 @@ struct Claim
 /// Whether a new creature becomes its owner's leashable one by itself: it does when it belongs to a player and none of
 /// the player's other creatures is leashable yet. A player's first creature is theirs to lead; extra ones are not.
 [[nodiscard]] bool ClaimsOnArrival(std::span<const Claim> others, PlayerNames owner);
+/// Whether the leash of the player's creature comes off when the player goes into their temple. It comes off only when
+/// the player holds the leash, in the hand or tied to a thing. The holder is none when the creature wears no leash.
+[[nodiscard]] bool ComesOffAtTemple(PlayerNames player, std::optional<PlayerNames> holder);
 
 } // namespace openblack::creature_leash

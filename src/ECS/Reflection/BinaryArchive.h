@@ -181,6 +181,20 @@ public:
 	}
 	[[nodiscard]] const std::set<UnsavedValue>& Unsaved() const { return _unsaved; }
 
+	/// For tools: the writer keeps where each value that the caller saves ends, so that a tool can find the values that
+	/// changed between two saves
+	void KeepValueEnds() { _keepValueEnds = true; }
+	[[nodiscard]] const std::vector<size_t>& ValueEnds() const { return _valueEnds; }
+	/// A value starts and ends. Only the ends of the outer values are kept.
+	void EnterValue() { ++_depth; }
+	void LeaveValue()
+	{
+		--_depth;
+		if (_depth == 0 && _keepValueEnds)
+		{
+			_valueEnds.push_back(Size());
+		}
+	}
 	/// The plan of a type by the hash of its type, none before the writer kept one
 	[[nodiscard]] const SavePlan* FindPlan(entt::id_type type) const
 	{
@@ -241,6 +255,9 @@ private:
 	}
 
 	const entt::meta_ctx* _context;
+	bool _keepValueEnds {false};
+	uint32_t _depth {0};
+	std::vector<size_t> _valueEnds;
 	/// The bytes written, and while the writer is open, room for more past them
 	mutable std::vector<uint8_t> _bytes;
 	/// While the writer is open: the count of the bytes written, which the list holds with room after them
@@ -426,6 +443,19 @@ template <typename Type>
 void Save(BinaryWriter& out, const Type& value)
 {
 	static_assert(!detail::k_IsRunHandle<Type>, "A save must not keep a pointer or a graphics handle: keep a stable key");
+	// The writer knows where each outer value ends
+	struct Value
+	{
+		BinaryWriter& out;
+		explicit Value(BinaryWriter& writer)
+		    : out(writer)
+		{
+			out.EnterValue();
+		}
+		Value(const Value&) = delete;
+		Value& operator=(const Value&) = delete;
+		~Value() { out.LeaveValue(); }
+	} const valueEnds(out);
 	if constexpr (std::is_same_v<Type, bool>)
 	{
 		out.WriteRaw(static_cast<uint8_t>(value ? 1 : 0));

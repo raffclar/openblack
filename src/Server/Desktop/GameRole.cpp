@@ -14,6 +14,7 @@
 #include <fstream>
 #include <iterator>
 #include <random>
+#include <set>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -26,6 +27,7 @@
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Server/Desktop/SocketWebSocketServer.h"
 #include "Server/Ed25519.h"
+#include "Server/LobbyBans.h"
 #include "Server/LobbyStatus.h"
 #include "Server/TicketCheck.h"
 
@@ -85,6 +87,8 @@ struct GameRole::Parts
 	std::chrono::steady_clock::time_point nextReport {};
 	bool reporting {false};
 	bool listed {false};
+	/// The bans of the server, which the server reads from the lobby with each status report
+	std::unique_ptr<lobby_bans::Reader> bans;
 
 	void Report(lobby_status::Phase phase)
 	{
@@ -99,6 +103,10 @@ struct GameRole::Parts
 		                             .url = statusAddress,
 		                             .headers = {{"Content-Type", "application/json"}},
 		                             .body = std::vector<uint8_t>(text.begin(), text.end())};
+		if (bans && phase != lobby_status::Phase::Exiting)
+		{
+			bans->Fetch();
+		}
 		lobby->Send(std::move(request), [this](online::HttpResponse&& response) {
 			reporting = false;
 			const bool ok = response.status == 200;
@@ -159,7 +167,8 @@ uint16_t GameRole::Port() const
 	return _parts->sockets.Port();
 }
 
-std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start, uint64_t landChecksum)
+std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start, uint64_t landChecksum,
+                                           uint8_t godSlots)
 {
 	auto& parts = *_parts;
 	if (settings.serverId.empty())
@@ -244,9 +253,21 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 			base.pop_back();
 		}
 		parts.statusAddress = base + "/servers/" + settings.serverId + "/status";
+		parts.bans = std::make_unique<lobby_bans::Reader>(
+		    *parts.lobby, lobby_bans::BansAddress(settings.lobbyApi, settings.serverId), [&parts](std::set<int64_t> banned) {
+			    if (!parts.host)
+			    {
+				    return;
+			    }
+			    if (banned != parts.host->Bans())
+			    {
+				    SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby bans {} accounts from the server", banned.size());
+			    }
+			    parts.host->SetBans(std::move(banned));
+		    });
 		parts.room = lobby_status::Room {.hostname = settings.roomName,
 		                                 .land = start.land,
-		                                 .maxGods = static_cast<int32_t>(settings.godsToStart),
+		                                 .maxGods = godSlots,
 		                                 .version = std::string(build_version::Semantic())};
 	}
 
@@ -254,10 +275,11 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	    parts.sockets, std::move(check), SteadyMicroseconds, MakeSecret,
 	    HostSettings {.start = std::move(start),
 	                  .landChecksum = landChecksum,
-	                  .godsToStart = settings.godsToStart,
-	                  .godSlots = 7,
+	                  .minGods = settings.minGods,
+	                  .godSlots = godSlots,
 	                  .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,
-	                  .keptTurns = settings.comeBackSeconds * 10 + 200});
+	                  .keptTurns = settings.comeBackSeconds * 10 + 200,
+	                  .testCommands = settings.testCommands});
 	return std::nullopt;
 }
 

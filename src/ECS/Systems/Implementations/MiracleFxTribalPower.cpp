@@ -43,8 +43,11 @@ glm::u8vec4 ColourOf(PlayerNames player)
 	        static_cast<uint8_t>(argb & 0xFF), 0xFF};
 }
 
-/// This computer's player
-constexpr auto k_LocalPlayer = PlayerNames::PLAYER_ONE;
+/// The player of this computer, whose colour the tribal power shows
+PlayerNames OwnPlayer()
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
 } // namespace
 
 std::u16string MiracleFxSystem::TribeName(Tribe tribe) const
@@ -60,7 +63,7 @@ std::u16string MiracleFxSystem::TribeName(Tribe tribe) const
 void MiracleFxSystem::StartTribalPowerRing(Tribe tribe)
 {
 	StopTribalPowerRing();
-	auto runner = std::make_unique<Runner>(TribeName(tribe), glm::vec3(0.0f), ColourOf(k_LocalPlayer), true);
+	auto runner = std::make_unique<Runner>(TribeName(tribe), glm::vec3(0.0f), ColourOf(OwnPlayer()), true);
 	_ring = runner.get();
 	_runners.push_back(std::move(runner));
 }
@@ -82,7 +85,7 @@ void MiracleFxSystem::ReleaseTribalPowerRing(Tribe tribe, glm::vec3 handPosition
 		_ring = nullptr;
 		return;
 	}
-	_runners.push_back(std::make_unique<Runner>(TribeName(tribe), handPosition, ColourOf(k_LocalPlayer), false));
+	_runners.push_back(std::make_unique<Runner>(TribeName(tribe), handPosition, ColourOf(OwnPlayer()), false));
 }
 
 void MiracleFxSystem::TribalPowerColumn(Tribe tribe, glm::vec3 position, PlayerNames player)
@@ -102,8 +105,8 @@ void MiracleFxSystem::UpdateTribalPower(float gameSeconds)
 		frame.camera = Locator::camera::value().GetOrigin();
 		frame.cameraFocus = Locator::camera::value().GetFocus();
 	}
-	// The hand as it is drawn: where it is, and its model's z axis with its size
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	// The hand of this computer as it is drawn: where it is, and its model's z axis with its size
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(hand))
 	{
 		frame.handPosition = transform->position;

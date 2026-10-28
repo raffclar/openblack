@@ -166,6 +166,8 @@ struct EngineConfig
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
+	std::string frameStatsOut;
 	/// Draw the first frame of a land once behind the loading screen, so that the renderer makes its pipelines and
 	/// render targets there and not in the first frames of the game
 	bool warmUpFirstFrame {true};
@@ -179,5 +181,8 @@ struct EngineConfig
 	/// The real-world weather of the player's place changes the weather of a single-player game. It is on unless the
 	/// player turns it off.
 	bool useInternetWeather {true};
+	/// A network game shows the round trip of this computer's game socket (deviation 143). It is off unless the player
+	/// turns it on.
+	bool showPing {false};
 };
 } // namespace openblack

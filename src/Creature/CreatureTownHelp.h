@@ -90,6 +90,11 @@ constexpr float k_NearHome = 2.0f;
 /// as done)
 [[nodiscard]] std::vector<Step> MoveTotem(uint32_t totem, bool raise);
 constexpr float k_NearTotem = 12.0f;
+/// The player who watches a creature, for the rule of the totem that it may move:
+/// - Each player of the land watches its own creatures. A computer god does this also, with no hands.
+/// - In a game alone, the local player watches a creature of no player.
+/// - In a network game, nobody watches a creature of no player.
+[[nodiscard]] std::optional<PlayerNames> WatchingPlayer(PlayerNames owner, bool networkGame, PlayerNames localPlayer);
 /// Each turn a creature moves a totem by this share of the town's people
 constexpr float k_TotemStep = 0.02f;
 /// One turn of moving a totem: the share it sets, and whether the totem is now all the way up or down

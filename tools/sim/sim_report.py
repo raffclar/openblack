@@ -33,6 +33,28 @@ ASSERT_WORD = re.compile(r"assert", re.IGNORECASE)
 UNREGISTERED_WORDS = "unregistered component storage: "
 
 
+def land_makes_no_temples(land, testbed=False, gods_ring_map=False, scenario=None):
+    """Whether a tool's network run plays a land that makes no temple for its gods at the start.
+
+    A story land makes the player's temple only later, from a plan, and the testbed makes none. In a network game a god
+    with no temple is out at once, so the game would end at its first turn. The network maps and the skirmish lands
+    make each god's temple at the start. A testbed scenario keeps the rule: it can test the end of the game.
+    """
+    if gods_ring_map or scenario:
+        return False
+    if testbed:
+        return True
+    name = land.replace("\\", "/").lower()
+    return not (name.startswith("online maps/") or name.startswith("playgrounds/") or name.endswith(".map"))
+
+
+def gods_need_no_temple_args(server, **land):
+    """The switch that keeps gods with no temple in a tool's network run, for the server or a game"""
+    if not land_makes_no_temples(**land):
+        return []
+    return ["--gods-need-no-temple"] if server else ["--sim-gods-need-no-temple"]
+
+
 def unregistered_in_text(lines):
     """The names of the unregistered components that lines of a log, a record or a checksum file tell of. A log tells
     them as the words and the names with commas between them; a record or a checksum line has an "unregistered" list."""
@@ -77,6 +99,113 @@ def unregistered_in_files(*paths):
 def unregistered_line(names):
     """The line that a tool prints for a failure: the words and the sorted names"""
     return UNREGISTERED_WORDS + ", ".join(sorted(names))
+
+
+# The log line of each thing that a turn does with the hand of a player, and the short name of each deed
+HAND_DEED = re.compile(r"Hand deed: the hand of player (\d+) (.+?) thing (\d+)(?: at turn (\d+))?")
+HAND_DEED_NAMES = {"takes": "takes", "scoops from": "scoops", "throws": "throws", "puts down": "puts_down",
+                   "pours": "pours", "uses what it holds on": "uses"}
+
+
+def hand_deeds_in_text(lines, until_turn=None):
+    """The count of each deed of the hand of each player that the log lines tell of, as {player: {deed: count}}. With
+    until_turn, a deed that a line tells to be after that turn is not counted: the server and a client can end on
+    different turns, and a deed of the last turn of one is not a difference."""
+    deeds = {}
+    for line in lines:
+        match = HAND_DEED.search(line)
+        if match is None:
+            continue
+        if until_turn is not None and match.group(4) is not None and int(match.group(4)) > until_turn:
+            continue
+        name = HAND_DEED_NAMES.get(match.group(2), match.group(2))
+        counts = deeds.setdefault(int(match.group(1)), {})
+        counts[name] = counts.get(name, 0) + 1
+    return deeds
+
+
+def hand_deeds_in_file(path, until_turn=None):
+    """As hand_deeds_in_text, for a log file; a missing file tells of none"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as file:
+            return hand_deeds_in_text(file, until_turn)
+    except OSError:
+        return {}
+
+
+def hand_deeds_of_both(first_path, second_path, last_turn):
+    """The deeds of the hand in two logs, each counted up to last_turn, and whether they are the same. The game can play
+    on a few turns after the last turn that it keeps a record of, so a deed after last_turn is not a difference."""
+    first = hand_deeds_in_file(first_path, last_turn)
+    second = hand_deeds_in_file(second_path, last_turn)
+    return first, second, first == second
+
+
+def expected_deeds(path):
+    """The deeds that a recorded input expects of its hand, as {deed: least count}: the "expect" of an input file in the
+    object form. A list of events expects none."""
+    if not path:
+        return {}
+    with open(path, encoding="utf-8") as file:
+        value = json.load(file)
+    return dict(value.get("expect", {})) if isinstance(value, dict) else {}
+
+
+def missing_deeds(deeds, expected):
+    """The expected deeds that the hand did fewer times than expected, as {deed: [count, least count]}"""
+    return {name: [deeds.get(name, 0), least] for name, least in expected.items() if deeds.get(name, 0) < least}
+
+
+# What the log says of the computer gods (the AI soak). The server and the clients write these lines:
+#   Made creature <id> of species <n> for the computer god <god> at <x>, <z>   (the start of a computer god)
+#   The computer god <god> starts with the personality of AI seed <seed>
+#   Computer god <god> chooses need <name>                                     (a need that the mind chose)
+#   Computer god <god> casts <miracle>                                         (a miracle that the god cast)
+# and the "Hand deed" lines of the hand of the god. A god number counts from 0, as the hand deeds do.
+COMPUTER_GOD_START = re.compile(r"for the computer god (\d+)|The computer god (\d+) starts with the personality")
+COMPUTER_GOD_NEED = re.compile(r"Computer god (\d+) chooses need (\S+)")
+COMPUTER_GOD_CAST = re.compile(r"Computer god (\d+) casts (\S+)")
+
+
+def ai_actions_in_text(lines):
+    """What the computer gods did, as the log lines tell: {"gods": [god numbers], "per_god": {god: {"needs": {name:
+    count}, "hand": {deed: count}, "casts": {miracle: count}}}, "acted": whether any god did anything}"""
+    lines = list(lines)
+    gods = set()
+    per_god = {}
+
+    def entry(god):
+        return per_god.setdefault(god, {"needs": {}, "hand": {}, "casts": {}})
+
+    for line in lines:
+        match = COMPUTER_GOD_START.search(line)
+        if match is not None:
+            gods.add(int(match.group(1) or match.group(2)))
+        match = COMPUTER_GOD_NEED.search(line)
+        if match is not None:
+            needs = entry(int(match.group(1)))["needs"]
+            needs[match.group(2)] = needs.get(match.group(2), 0) + 1
+        match = COMPUTER_GOD_CAST.search(line)
+        if match is not None:
+            casts = entry(int(match.group(1)))["casts"]
+            casts[match.group(2)] = casts.get(match.group(2), 0) + 1
+    # The hand deeds of the computer gods only: a human god's hand is not the mind's
+    for god, deeds in hand_deeds_in_text(lines).items():
+        if god in gods:
+            entry(god)["hand"] = deeds
+    for god in gods:
+        entry(god)
+    acted = any(item["needs"] or item["hand"] or item["casts"] for item in per_god.values())
+    return {"gods": sorted(gods), "per_god": {str(god): per_god[god] for god in sorted(per_god)}, "acted": acted}
+
+
+def ai_actions_in_file(path):
+    """As ai_actions_in_text, for a log file; a missing file tells of none"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as file:
+            return ai_actions_in_text(file)
+    except OSError:
+        return ai_actions_in_text([])
 
 
 def read_records(lines):
@@ -266,7 +395,9 @@ def compare(records_a, records_b):
         state_a = (record.get("creature") or {}).get("state_hash")
         state_b = (other.get("creature") or {}).get("state_hash")
         draws_same = record.get("seeds") == other.get("seeds") and record.get("draws") == other.get("draws")
-        if record.get("hash") != other.get("hash") or state_a != state_b or not draws_same:
+        # The checksum of the synced world also holds what the systems keep, such as the scripts' music
+        checksum_same = (record.get("synced") or {}).get("checksum") == (other.get("synced") or {}).get("checksum")
+        if record.get("hash") != other.get("hash") or state_a != state_b or not draws_same or not checksum_same:
             parts_a, parts_b = record.get("hash_parts", {}), other.get("hash_parts", {})
             parts = sorted(key for key in set(parts_a) | set(parts_b) if parts_a.get(key) != parts_b.get(key))
             return {
@@ -298,7 +429,7 @@ def compare_synced(records_a, records_b):
         if not synced_a or not synced_b:
             continue
         compared += 1
-        if (synced_a.get("hash"), synced_a.get("seed"), synced_a.get("draws")) !=                 (synced_b.get("hash"), synced_b.get("seed"), synced_b.get("draws")):
+        if (synced_a.get("hash"), synced_a.get("seed"), synced_a.get("draws"), synced_a.get("checksum")) !=                 (synced_b.get("hash"), synced_b.get("seed"), synced_b.get("draws"), synced_b.get("checksum")):
             parts_a, parts_b = synced_a.get("parts") or {}, synced_b.get("parts") or {}
             parts = sorted(key for key in set(parts_a) | set(parts_b) if parts_a.get(key) != parts_b.get(key))
             return {

@@ -32,6 +32,8 @@ void openblack::ecs::reflection::RegisterFields_Components_creatures(entt::meta_
 	    .Field<&components::CreatureTattoos::slots>("slots")
 	    .Field<&components::CreatureTattoos::pictures>("pictures")
 	    .Field<&components::CreatureTattoos::shown>("shown")
+	    .Field<&components::CreatureTattoos::picturesShown>("picturesShown")
+	    .Field<&components::CreatureTattoos::shownPictures>("shownPictures")
 	    .Field<&components::CreatureTattoos::revision>("revision");
 	Reflect<components::TattooMasks>(context).Field<&components::TattooMasks::masks>("masks");
 	Reflect<components::CreatureMarks>(context)

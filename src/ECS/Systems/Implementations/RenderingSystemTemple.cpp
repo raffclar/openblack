@@ -70,7 +70,7 @@ entt::entity PlayerHand()
 	{
 		return entt::null;
 	}
-	return openblack::Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	return openblack::Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 } // namespace
 
@@ -197,7 +197,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	std::map<entt::id_type, uint32_t> creatureCounts;
 	if (_loadedRooms.contains(TempleRoom::CreatureCave))
 	{
-		registry.Each<const CreatureCopy, const CaveCreature, const Transform>(
+		rooms.Each<const CreatureCopy, const CaveCreature, const Transform>(
 		    [&registry, &creatureCounts, &instanceCount](const CreatureCopy& copy, const CaveCreature& /*unused*/,
 		                                                 const Transform& /*unused*/) {
 			    if (const auto mesh = CopiedMesh(registry, copy); mesh.has_value())
@@ -406,7 +406,7 @@ void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 	_renderContext.creatureCopyDraws.clear();
 	if (_loadedRooms.contains(TempleRoom::CreatureCave))
 	{
-		registry.Each<const CreatureCopy, const CaveCreature, const Transform>(
+		rooms.Each<const CreatureCopy, const CaveCreature, const Transform>(
 		    [this, &registry, &uniformOffsets](const entt::entity entity, const CreatureCopy& copy, const CaveCreature& cave,
 		                                       const Transform& transform) {
 			    const auto mesh = CopiedMesh(registry, copy);

@@ -42,6 +42,13 @@ public:
 	/// Writes the bytes to a file in the folder of the player, and makes the folder first if it is missing. Returns
 	/// true when it wrote all the bytes.
 	virtual bool WritePlayerFile(std::u16string_view player, std::string_view file, std::span<const uint8_t> bytes) = 0;
+	/// Adds the bytes to the end of a file in the folder of the player. The call makes the folder and the file first if
+	/// they are missing. Returns true when it wrote all the bytes.
+	virtual bool AppendPlayerFile([[maybe_unused]] std::u16string_view player, [[maybe_unused]] std::string_view file,
+	                              [[maybe_unused]] std::span<const uint8_t> bytes)
+	{
+		return false;
+	}
 	/// Removes every file and folder in the folder of the player, as the player's profile is deleted. The empty folder
 	/// stays. Returns true when the folder is there and empty after the call.
 	virtual bool EmptyPlayerFolder([[maybe_unused]] std::u16string_view player) { return false; }

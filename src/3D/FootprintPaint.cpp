@@ -67,6 +67,8 @@ struct Span
 /// The spans of the rows of the block's texture, and the first and the last row that an edge reached
 struct Spans
 {
+	/// The texels along a side of the block's texture
+	int side {k_BlockTexels};
 	std::array<Span, k_BlockTexels> rows {};
 	int first {k_BlockTexels};
 	int last {-1};
@@ -90,7 +92,7 @@ struct Spans
 /// above it becomes its high end. The rows outside the block are not kept.
 void Reach(Spans& spans, int row, int column, float u, float v)
 {
-	if (row < 0 || row >= k_BlockTexels)
+	if (row < 0 || row >= spans.side)
 	{
 		return;
 	}
@@ -199,7 +201,7 @@ void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, 
 		}
 		float u = span.uLow;
 		float v = span.vLow;
-		const int last = std::min(span.high, k_BlockTexels - 1);
+		const int last = std::min(span.high, spans.side - 1);
 		for (int column = span.low; column <= last; ++column)
 		{
 			if (column >= 0)
@@ -207,7 +209,7 @@ void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, 
 				const int texelU = std::clamp(Nearest(u), 0, picture.width - 1);
 				const int texelV = std::clamp(Nearest(v), 0, picture.height - 1);
 				const auto texel = picture.texels[static_cast<size_t>((picture.width * texelV) + texelU)];
-				auto& land = block[static_cast<size_t>((row * k_BlockTexels) + column)];
+				auto& land = block[static_cast<size_t>((row * spans.side) + column)];
 				land = mix == Mix::Colour ? Paint(land, texel) : LowerAlpha(land, texel);
 			}
 			u = u + du;
@@ -215,34 +217,35 @@ void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, 
 		}
 		span.used = false;
 	}
-	spans.first = k_BlockTexels;
+	spans.first = spans.side;
 	spans.last = -1;
 }
 } // namespace
 
 void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Picture& picture,
-                    std::span<const Triangle> triangles, const Placement& placement, Mix mix)
+                    std::span<const Triangle> triangles, const Placement& placement, Mix mix, int side)
 {
-	if (block.size() < static_cast<size_t>(k_BlockTexels) * k_BlockTexels || picture.width <= 0 || picture.height <= 0 ||
+	if (side <= 0 || side > k_BlockTexels || block.size() < static_cast<size_t>(side) * static_cast<size_t>(side) ||
+	    picture.width <= 0 || picture.height <= 0 ||
 	    picture.texels.size() < static_cast<size_t>(picture.width) * static_cast<size_t>(picture.height))
 	{
 		return;
 	}
 	const float rowStart = static_cast<float>(blockIndex.x) * k_BlockUnits;
 	const float columnStart = static_cast<float>(blockIndex.y) * k_BlockUnits;
-	constexpr auto k_Texels = static_cast<float>(k_BlockTexels);
+	const auto texels = static_cast<float>(side);
 	// The game rounds each step to a float, in this order
 	const auto toBlock = [&](glm::vec2 ground, glm::vec2 texel) {
 		const float worldX = ((placement.xFromZ * ground.y + placement.xFromX * ground.x) + 0.0f) + placement.origin.x;
 		const float worldZ = ((placement.zFromX * ground.x + placement.zFromZ * ground.y) + 0.0f) + placement.origin.y;
 		return Corner {
-		    .row = ((worldX - rowStart) * k_Texels) * k_UnitPerBlock,
-		    .column = ((worldZ - columnStart) * k_Texels) * k_UnitPerBlock,
+		    .row = ((worldX - rowStart) * texels) * k_UnitPerBlock,
+		    .column = ((worldZ - columnStart) * texels) * k_UnitPerBlock,
 		    .u = texel.x,
 		    .v = texel.y,
 		};
 	};
-	Spans spans {};
+	Spans spans {.side = side, .first = side};
 	for (const auto& triangle : triangles)
 	{
 		std::array<Corner, 3> corners {};

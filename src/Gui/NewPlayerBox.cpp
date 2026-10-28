@@ -25,12 +25,6 @@ namespace
 {
 constexpr float k_FadeInSeconds = 0.5f;
 constexpr float k_FadeOutSeconds = 0.2f;
-/// The message comes up over half a second, dimming the box behind it to a quarter
-constexpr float k_MessageFadeSeconds = 0.5f;
-constexpr float k_MessageDims = 0.75f;
-/// The message's text starts at the big size and shrinks while it is 125 or more high, down to the small size
-constexpr int k_MessageWidth = 400;
-constexpr float k_MessageTallest = 125.0f;
 
 constexpr std::string_view k_QuestionText = "HELP_TEXT_DIALOG_PLEASETYPENAME";
 constexpr std::string_view k_PlayerText = "HELP_TEXT_DIALOG_PLAYER";
@@ -81,6 +75,7 @@ NewPlayerBox::NewPlayerBox(const TextDatabase& texts, const GameFont& font)
 
 	_name =
 	    &_dialog.Add<EditBox>(font, k_Name, std::u16string {}, player_profiles::k_NameBoxLength, DialogPainter::k_BigTextSize);
+	_message.onAnswer = [this] { CloseMessage(); };
 }
 
 NewPlayerBox::~NewPlayerBox() = default;
@@ -90,9 +85,7 @@ void NewPlayerBox::Show(bool canCancel)
 	_active = true;
 	_answer.reset();
 	_cancelled = false;
-	_message.reset();
-	_messageText = nullptr;
-	_messageFade.Reset(0.0f);
+	_message.Close();
 	_dialog.Reset();
 	// The name's box has the focus, empty; the first symbol is picked
 	_dialog.SetFocus(_name);
@@ -142,21 +135,12 @@ void NewPlayerBox::ShowMessage(std::u16string text)
 {
 	// The box behind loses the focus and lights nothing up
 	_dialog.Reset();
-	auto& message = _message.emplace();
-	_messageText = &message.Add<StaticText>(k_Message, std::move(text), StaticText::Layout::Wrapped);
-	_messageText->takesClicks = true;
-	auto& ok = message.Add<Button>(k_MessageOk, Text(_texts, k_OkText), DialogPainter::k_MidTextSize);
-	ok.onClick = [this] { CloseMessage(); };
-	_messageFade.Reset(0.0f);
-	_messageFade.SetDestination(1.0f, k_MessageFadeSeconds);
+	_message.Show(std::move(text), Text(_texts, k_OkText));
 }
 
 void NewPlayerBox::CloseMessage()
 {
 	// The box is back at once, nothing in it holding the focus
-	_message.reset();
-	_messageText = nullptr;
-	_messageFade.Reset(0.0f);
 	_fade.Reset(1.0f);
 	_dialog.Reset();
 }
@@ -167,9 +151,9 @@ void NewPlayerBox::MouseMove(glm::ivec2 point)
 	{
 		return;
 	}
-	if (_message.has_value())
+	if (_message.IsShown())
 	{
-		_message->MouseMove(point);
+		_message.MouseMove(point);
 		return;
 	}
 	_dialog.MouseMove(point);
@@ -181,9 +165,9 @@ void NewPlayerBox::MouseDown(glm::ivec2 point)
 	{
 		return;
 	}
-	if (_message.has_value())
+	if (_message.IsShown())
 	{
-		_message->MouseDown(point);
+		_message.MouseDown(point);
 		return;
 	}
 	_dialog.MouseDown(point);
@@ -195,16 +179,16 @@ bool NewPlayerBox::MouseUp(glm::ivec2 point)
 	{
 		return false;
 	}
-	if (_message.has_value())
+	if (_message.IsShown())
 	{
-		return _message->MouseUp(point);
+		return _message.MouseUp(point);
 	}
 	return _dialog.MouseUp(point);
 }
 
 void NewPlayerBox::TextInput(std::u16string_view text)
 {
-	if (_active && !_message.has_value())
+	if (_active && !_message.IsShown())
 	{
 		_dialog.TextInput(text);
 	}
@@ -216,13 +200,10 @@ void NewPlayerBox::KeyDown(int key)
 	{
 		return;
 	}
-	if (_message.has_value())
+	if (_message.IsShown())
 	{
 		// The message's OK answers Return and Escape
-		if (IsReturn(key) || key == SDLK_ESCAPE)
-		{
-			CloseMessage();
-		}
+		_message.KeyDown(key);
 		return;
 	}
 	if (IsReturn(key))
@@ -241,14 +222,9 @@ void NewPlayerBox::KeyDown(int key)
 void NewPlayerBox::Update(float deltaSeconds)
 {
 	_fade.Update(deltaSeconds);
-	_messageFade.Update(deltaSeconds);
-	if (!_active)
+	_message.Update(deltaSeconds);
+	if (!_active || _message.IsShown())
 	{
-		return;
-	}
-	if (_message.has_value())
-	{
-		_message->Update(deltaSeconds);
 		return;
 	}
 	_dialog.Update(deltaSeconds);
@@ -260,34 +236,19 @@ void NewPlayerBox::Draw(const DialogPainter& painter) const
 	{
 		return;
 	}
-	const auto alpha = std::clamp(_fade.GetValue() - (_messageFade.GetValue() * k_MessageDims), 0.0f, 1.0f);
+	const auto alpha = _message.BehindAlpha(_fade.GetValue());
 	painter.SetAlpha(alpha);
 	painter.DrawBackground(k_Box, glm::vec3(1.0f), false, DialogPainter::All);
 	painter.SetAlpha(alpha);
 	// Behind a message, or fading out, nothing lights up
-	_dialog.Draw(painter, _active && !_message.has_value());
-	if (_message.has_value())
-	{
-		// The message's text starts as large as it fits in under 125 high
-		auto size = DialogPainter::k_BigTextSize + 1;
-		do
-		{
-			--size;
-		} while (painter.GetTextHeight(k_MessageWidth, _messageText->text, size) >= k_MessageTallest &&
-		         size > DialogPainter::k_SmallTextSize);
-		_messageText->size = size;
-		const auto messageAlpha = std::clamp(_messageFade.GetValue(), 0.0f, 1.0f);
-		painter.SetAlpha(messageAlpha);
-		painter.DrawBackground(k_MessageBox, glm::vec3(1.0f), true, DialogPainter::All);
-		painter.SetAlpha(messageAlpha);
-		_message->Draw(painter, _active);
-	}
+	_dialog.Draw(painter, _active && !_message.IsShown());
+	_message.Draw(painter, _active);
 	painter.SetAlpha(1.0f);
 }
 
 std::vector<Dialog::NamedControl> NewPlayerBox::GetNamedControls() const
 {
-	return _message.has_value() ? _message->GetNamedControls() : _dialog.GetNamedControls();
+	return _message.IsShown() ? _message.GetNamedControls() : _dialog.GetNamedControls();
 }
 
 std::u16string_view NewPlayerBox::GetName() const

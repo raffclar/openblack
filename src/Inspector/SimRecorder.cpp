@@ -47,6 +47,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -660,6 +661,14 @@ void SimProvider::TurnEnded(uint32_t turn)
 			}
 		}
 	}
+	// The music that the scripts start is synced too
+	auto stateHash = synced.hash;
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		const auto music = Locator::scriptMusicSystem::value().GetMusic().SyncedValues();
+		value["script_music"] = music;
+		stateHash = synced_state::MixValues(stateHash, music);
+	}
 	if (Locator::gameRandom::has_value())
 	{
 		const auto& random = Locator::gameRandom::value();
@@ -667,7 +676,7 @@ void SimProvider::TurnEnded(uint32_t turn)
 		value["draws"] = random.GetSyncedDraws();
 		// The checksum that a network game compares each turn
 		value["checksum"] =
-		    fmt::format("{:016x}", synced_state::Checksum(synced.hash, random.GetSeeds().synced, random.GetSyncedDraws()));
+		    fmt::format("{:016x}", synced_state::Checksum(stateHash, random.GetSeeds().synced, random.GetSyncedDraws()));
 	}
 	if (_hashParts != sim_run::HashDetail::None)
 	{
@@ -833,6 +842,10 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 		}
 	}
 	record["entities"] = entities;
+	// How many entities the world made and lost since it started: a count that two computers do not share shows a step
+	// that made or removed an entity outside the turns
+	record["entities_made"] = registry->GetEntitiesMade();
+	record["entities_gone"] = registry->GetEntitiesGone();
 	record["hash"] = fmt::format("{:016x}", TransformHash(*registry));
 	// The hashes of the transforms of the entities of each component, to find what made two runs part
 	if (_hashParts != sim_run::HashDetail::None)

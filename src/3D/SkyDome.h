@@ -30,6 +30,11 @@ namespace openblack::sky_dome
 
 /// The rows of a dome's picture
 inline constexpr uint16_t k_Rows = 256;
+/// The rows of a dome at the low resolution textures of the lowest detail levels. The dome is then every second texel of
+/// the day's picture, and it does not follow the time of day.
+inline constexpr uint16_t k_LowRows = 128;
+/// The picture of each alignment that the low resolution dome shows: the day's, the third of the alignment's pictures
+inline constexpr uint8_t k_LowTime = 2;
 /// The rows built again each frame while the dome follows the sky
 inline constexpr uint16_t k_RowsPerFrame = 32;
 /// How far the sky moves on before the dome starts following it again

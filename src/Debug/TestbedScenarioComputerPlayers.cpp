@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include "TestbedScenarioComputerPlayers.h"
+
 #include <string_view>
 #include <vector>
 
@@ -18,13 +20,6 @@ using namespace openblack::testbed_scenarios;
 namespace
 {
 
-/// The lines of a skirmish land that give player two a computer mind and a creature from the computer's mind file. The
-/// size of that creature comes from the local player's creature.
-constexpr std::string_view k_ComputerPlayerScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
-CREATE_CREATURE_FROM_FILE("PLAYER_TWO", 3, "ComputerControlledCreature", "25.0,0.0")
-SET_COMPUTER_PLAYER_CREATURE_LIKE("PLAYER_TWO", "PLAYER_ONE")
-)";
-
 /// The line of the Island Wars land that makes an anti-influence of 20 m for player one, here 40 m north of the middle
 constexpr std::string_view k_AntiInfluenceRingScript = R"(CREATE_INFLUENCE_RING("0.0,40.0", 0, 20.000000, 202594004)
 )";
@@ -33,19 +28,54 @@ constexpr std::string_view k_AntiInfluenceRingScript = R"(CREATE_INFLUENCE_RING(
 
 void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 {
+	// Each part of the mind of a computer god adds its scenarios in its own file, in this order
+	AddComputerGodCoreScenarios(all);
+	AddComputerGodTownsScenarios(all);
+	AddComputerGodWorshipScenarios(all);
+	AddComputerGodMiraclesScenarios(all);
+	AddComputerGodCreatureCareScenarios(all);
+	AddComputerGodCreaturePlayScenarios(all);
+	AddComputerGodConquestScenarios(all);
+	AddComputerGodWarScenarios(all);
+	AddComputerGodDefenceScenarios(all);
+	AddComputerGodAttitudesScenarios(all);
+
 	all.push_back({
-	    .id = "mind.computer_player_start",
-	    .name = "A computer player's creature at the start of its mind",
-	    .facet = Facet::Mind,
-	    .description = "The player's tiger stands to the west at size 1. A temple of player two stands to the north. Lines "
-	                   "of a skirmish land switch on the computer mind of player two. They make a leopard for it from the "
-	                   "computer's mind file to the east, and name player one for the size of the leopard.",
-	    .expected = "At the first turn the leopard grows at once to 0.9 to 1.2 times the size of the tiger. The leopard "
-	                "knows heal, food, wood and water, and each miracle that player two can cast. The players.list query "
-	                "shows the computer mind of player two as switched on, marked and started.",
-	    .creatures = {{.label = "the player's", .species = CreatureType::Tiger, .offset = {-25.0f, 0.0f}, .size = 1.0f}},
+	    .id = "multiplayer.computer_slot_creature_name",
+	    .name = "The name of the creature of a computer god in an empty slot",
+	    .facet = Facet::Multiplayer,
+	    .description =
+	        "The player's tiger stands to the west at size 0.3. A temple of player two stands to the north, and no human or "
+	        "computer plays player two. As at the start of a network game, the empty slot of player two gets a "
+	        "computer god and a creature.",
+	    .expected = "A fully grown creature of a random species stands at the creature home of the temple of player two. "
+	                "Its name is the name of its species, for example \"Tiger\" or \"Polar bear\", not a line of help "
+	                "text. The game.entity query shows the name. Start a fight between the tiger and the creature: the fight "
+	                "view shows the name of each creature beside its bar.",
+	    .environment = {.dispenserGrid = false},
+	    .creatures = {{.label = "the player's", .species = CreatureType::Tiger, .offset = {-25.0f, 60.0f}, .size = 0.3f}},
 	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
-	    .landScript = k_ComputerPlayerScript,
+	    .fillEmptySlots = true,
+	});
+
+	all.push_back({
+	    .id = "multiplayer.computer_slot_creature_name_in_fight",
+	    .name = "The fight panel with the name of the creature of a computer god in an empty slot",
+	    .facet = Facet::Multiplayer,
+	    .description =
+	        "The player's tiger stands to the west at size 0.3. A temple of player two stands to the north, and no human or "
+	        "computer plays player two. The empty slot of player two gets a computer god and a creature, as at the start "
+	        "of a network game. After 1 second the tiger starts a fight with that creature. When the arena is there, 7 "
+	        "seconds after that, the camera flies to the fight.",
+	    .expected = "The camera shows the fight, and the fight panel is in the top-left corner of the screen. The first "
+	                "row has the name of the tiger and its bars. The second row has the name of the other creature, which "
+	                "is the name of its species, for example \"Tortoise\" or \"Polar bear\", and its bars.",
+	    .environment = {.dispenserGrid = false},
+	    .creatures = {{.label = "the player's", .species = CreatureType::Tiger, .offset = {-25.0f, 60.0f}, .size = 0.3f}},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Command::Kind::StartFight, .creature = 0, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Command::Kind::FightView, .creature = 0, .delaySeconds = 7.0f}},
+	    .fillEmptySlots = true,
 	});
 
 	all.push_back({

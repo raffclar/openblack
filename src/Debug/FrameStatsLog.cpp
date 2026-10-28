@@ -117,29 +117,62 @@ std::string Megabytes(int64_t bytes)
 namespace openblack::debug
 {
 
-FrameStatsLog::FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade)
+FrameStatsLog::FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade, std::filesystem::path out)
     : _interval(std::max<uint32_t>(interval, 1))
     , _views(views)
     , _lastPipelinesMade(pipelinesMade)
     , _lastCpuMilliseconds(ThreadCpuMilliseconds())
 {
+	_out = std::move(out);
+	if (!_out.empty())
+	{
+		_records.reserve(100000);
+	}
+}
+
+FrameStatsLog::~FrameStatsLog()
+{
+	const auto run = _run.Peek();
+	if (auto logger = spdlog::get("game"); logger && run.count > 0)
+	{
+		SPDLOG_LOGGER_INFO(
+		    logger,
+		    "Frame stats of the run: {} frames, avg {:.2f} ms p95 {:.2f} p99 {:.2f} max {:.2f}; {} frames of {:.0f} ms or more",
+		    run.count, run.average, run.p95, run.p99, run.max, run.slow, k_SpikeMilliseconds);
+	}
+	if (!_out.empty())
+	{
+		std::ofstream file(_out, std::ios::binary | std::ios::trunc);
+		const auto text = frame_stats::ToCsv(_records);
+		file.write(text.data(), static_cast<std::streamsize>(text.size()));
+	}
 }
 
 void FrameStatsLog::Frame(FrameTime time, const openblack::Profiler& profiler, uint32_t pipelinesMade)
 {
 	const auto milliseconds = time.milliseconds;
 	_frames.Add(milliseconds);
+	_run.Add(milliseconds);
 	_work.Add(time.workMilliseconds);
-	if (time.playedTurn)
+	const bool turnFrame = time.playedTurn;
+	if (turnFrame)
 	{
 		_turnWork.Add(time.workMilliseconds);
 	}
 	++_frameNumber;
 	const auto cpuMilliseconds = ThreadCpuMilliseconds();
 	const auto lastCpuMilliseconds = std::exchange(_lastCpuMilliseconds, cpuMilliseconds);
-	const auto onCpu = cpuMilliseconds.has_value() && lastCpuMilliseconds.has_value()
-	                       ? fmt::format("{:.2f} ms", *cpuMilliseconds - *lastCpuMilliseconds)
-	                       : std::string("unknown");
+	const auto onCpuMilliseconds = cpuMilliseconds.has_value() && lastCpuMilliseconds.has_value()
+	                                   ? std::optional<double>(*cpuMilliseconds - *lastCpuMilliseconds)
+	                                   : std::nullopt;
+	const auto onCpu = onCpuMilliseconds.has_value() ? fmt::format("{:.2f} ms", *onCpuMilliseconds) : std::string("unknown");
+	if (!_out.empty())
+	{
+		_records.push_back({.milliseconds = milliseconds,
+		                    .processorMilliseconds = static_cast<float>(onCpuMilliseconds.value_or(0.0)),
+		                    .turn = time.turn,
+		                    .played = turnFrame});
+	}
 	std::string spikeStages;
 
 	// The stages timed in this frame: those that started since the frame did
@@ -176,9 +209,9 @@ void FrameStatsLog::Frame(FrameTime time, const openblack::Profiler& profiler, u
 	{
 		// A slow frame: which stages took its time, and what the renderer waited for
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
-		                   "Frame spike: frame {} took {:.2f} ms, {} of it on the processor, {:.2f} ms of work; render submit "
-		                   "{:.2f} wait {:.2f}; {} draws; {} new resources; {} new pipelines; stages (ms):{}",
-		                   _frameNumber, milliseconds, onCpu, time.workMilliseconds,
+		                   "Frame spike: frame {} took {:.2f} ms, {} of it on the processor, {:.2f} ms of work; turn {}{}; "
+		                   "render submit {:.2f} wait {:.2f}; {} draws; {} new resources; {} new pipelines; stages (ms):{}",
+		                   _frameNumber, milliseconds, onCpu, time.workMilliseconds, time.turn, turnFrame ? " played" : "",
 		                   static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
 		                   static_cast<double>(stats->waitRender) * toMsCpu, stats->numDraw, newResources, newPipelines,
 		                   spikeStages);

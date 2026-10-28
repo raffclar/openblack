@@ -37,10 +37,25 @@ vcpkg_download_distfile(
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
 #   returns early makes a block that runs one time, which SPIRV-Cross writes as a do-while(false) loop. ANGLE on
 #   Direct3D compiled the land shader with these loops for more than a minute, and Chrome then lost the context.
+# A change to the Vulkan renderer:
+# - vulkan-one-pipeline-cache: the renderer reads the application's kept pipeline cache one time, when it starts, and
+#   makes all pipelines in that one cache. It gives the cache back one time, when it stops. Before, each new pipeline
+#   read all of the kept cache, gave all of it back and merged it, which took 10 to 30 ms for each pipeline with a
+#   cache of 30 MB and stopped the frame.
+# A change to the Direct3D 12 renderer only:
+# - d3d12-upload-pages: buffer and texture updates of 1 MB or less copy from mapped 4 MB upload pages that the
+#   command queue keeps. A full page is used again when the queue fence shows that the GPU is done with it.
+#   Without this change, each update makes an upload resource and releases it later. That took 6 to 8 ms of each
+#   frame on Land 1. Larger updates keep the old path. The same bytes are copied, thus the pictures stay the same.
+# - d3d12-screenshot-frame: a screenshot of the window reads the buffer that the frame of the request drew into.
+#   Without this change, the screenshot reads the buffer one place back in the ring. With three buffers, the index
+#   wraps incorrectly from place 0, thus a screenshot showed the frame of the request or the frame before it, by
+#   the number of frames that the window showed before. The wait before each flip had the same wrap.
 vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
   PATCHES
+    vulkan-one-pipeline-cache.patch
     webgpu-emscripten-renderer-on.patch
     webgpu-canvas-texture-each-frame.patch
     webgpu-yield-in-read-loops.patch
@@ -52,6 +67,8 @@ vcpkg_extract_source_archive(
     webgpu-one-submit-per-frame.patch
     webgpu-pipeline-by-content.patch
     essl-no-inline.patch
+    d3d12-upload-pages.patch
+    d3d12-screenshot-frame.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx
