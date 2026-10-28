@@ -66,7 +66,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::ScriptHighlight::radius>("radius")
 	    .Field<&components::ScriptHighlight::sparks>("sparks")
 	    .Field<&components::ScriptHighlight::sparkSprites>("sparkSprites")
-	    .Field<&components::ScriptHighlight::onScreen>("onScreen");
+	    .Field<&components::ScriptHighlight::onScreen>("onScreen")
+	    .Field<&components::ScriptHighlight::hidden>("hidden");
 	Reflect<components::ScriptHighlightGlow>(context).Field<&components::ScriptHighlightGlow::highlight>("highlight");
 	Reflect<components::ScriptRemind>(context)
 	    .Field<&components::ScriptRemind::returnTo>("returnTo")

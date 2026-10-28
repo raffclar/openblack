@@ -254,6 +254,13 @@ void UploadChanged(bgfx::DynamicVertexBufferHandle buffer, std::span<const Insta
 }
 
 /// The hand that the frame draws: the left hand of the god of this computer
+/// A script highlight that the frame does not draw
+bool HiddenHighlight(const openblack::ecs::Registry& registry, entt::entity entity)
+{
+	const auto* highlight = registry.TryGet<const ScriptHighlight>(entity);
+	return highlight != nullptr && highlight->hidden;
+}
+
 entt::entity DrawnHand()
 {
 	using openblack::ecs::systems::HandSystemInterface;
@@ -380,7 +387,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	const auto drawnHand = DrawnHand();
 	registry.Each<const Mesh, const Transform>(
 	    [&prep, &registry, drawnHand](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) {
-		    if (graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
+		    if (graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand) &&
+		        !HiddenHighlight(registry, entity))
 		    {
 			    prep(entity, mesh, false);
 		    }
@@ -688,6 +696,11 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	     drawnHand](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
+		    {
+			    return;
+		    }
+		    // A script highlight that its draw list did not select in this frame is not drawn
+		    if (HiddenHighlight(registry, entity))
 		    {
 			    return;
 		    }

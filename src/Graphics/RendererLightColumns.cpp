@@ -21,7 +21,6 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -160,19 +159,17 @@ void Renderer::DrawScrollBeams(const DrawSceneDesc& desc) const
 
 	// A started scroll stands in a beam the same shape as the temple's column, rising from its model's middle. A
 	// beam with no strength this frame would add nothing, so it isn't sent
-	desc.entities.Each<const ecs::components::ScriptHighlight>(
-	    [&](const ecs::components::ScriptHighlight& highlight) {
-		    if (!ecs::script_highlights::BeamShown(highlight.kind, highlight.active))
-		    {
-			    return;
-		    }
-		    const uint32_t colour = ecs::script_highlights::BeamColour(highlight.kind, pulseShare);
-		    if ((colour >> 24u) == 0)
-		    {
-			    return;
-		    }
-		    DrawLightShaft(desc, beam, highlight.centre,
-		                   light_column::Tint(colour & 0xFFFFFFu, static_cast<uint8_t>(colour >> 24u)));
-	    },
-	    entt::exclude<ecs::components::HiddenByState>);
+	desc.entities.Each<const ecs::components::ScriptHighlight>([&](const ecs::components::ScriptHighlight& highlight) {
+		if (highlight.hidden || !ecs::script_highlights::BeamShown(highlight.kind, highlight.active))
+		{
+			return;
+		}
+		const uint32_t colour = ecs::script_highlights::BeamColour(highlight.kind, pulseShare);
+		if ((colour >> 24u) == 0)
+		{
+			return;
+		}
+		DrawLightShaft(desc, beam, highlight.centre,
+		               light_column::Tint(colour & 0xFFFFFFu, static_cast<uint8_t>(colour >> 24u)));
+	});
 }

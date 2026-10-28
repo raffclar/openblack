@@ -22,7 +22,6 @@
 #include <gtest/gtest.h>
 
 #include "3D/AllMeshes.h"
-#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Sprite.h"
@@ -405,11 +404,11 @@ TEST(ScriptHighlights, HiddenScrollsAreNotDrawnButSignsAre)
 	const auto sign = system->Create(k_Sign, {20.0f, 0.0f, 0.0f}, 0);
 	world->scrollsDrawn = false;
 	system->UpdateFrame(16.0f, 0.0f, {0.0f, 20.0f, 30.0f}, k_FrameRealTime, true);
-	EXPECT_TRUE(world->registry.AllOf<ecs::components::HiddenByState>(scroll));
-	EXPECT_FALSE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
+	EXPECT_TRUE(world->registry.Get<const ecs::components::ScriptHighlight>(scroll).hidden);
+	EXPECT_FALSE(world->registry.Get<const ecs::components::ScriptHighlight>(sign).hidden);
 	world->scrollsDrawn = true;
 	system->UpdateFrame(16.0f, 0.0f, {0.0f, 20.0f, 30.0f}, k_FrameRealTime, true);
-	EXPECT_FALSE(world->registry.AllOf<ecs::components::HiddenByState>(scroll));
+	EXPECT_FALSE(world->registry.Get<const ecs::components::ScriptHighlight>(scroll).hidden);
 }
 
 TEST(ScriptHighlights, AShownScrollSpinsScalesAndGlows)
@@ -486,20 +485,20 @@ TEST(ScriptHighlights, ASignSpinsOnlyInTheFramesThatDrawIt)
 	world->inDrawList = false;
 	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_FLOAT_EQ(angle(), 0.0f);
-	EXPECT_TRUE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
+	EXPECT_TRUE(world->registry.Get<const ecs::components::ScriptHighlight>(sign).hidden);
 
 	// In the list, in a full frame, but off the screen: it spins in that frame
 	world->inDrawList = true;
 	world->onScreen = false;
 	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_NEAR(angle(), glm::half_pi<float>(), 1e-5f);
-	EXPECT_FALSE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
+	EXPECT_FALSE(world->registry.Get<const ecs::components::ScriptHighlight>(sign).hidden);
 
 	// The frames that draw only the things on the screen leave it
 	world->drawFrame = {.rebuilt = false, .drawAll = false};
 	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_NEAR(angle(), glm::half_pi<float>(), 1e-5f);
-	EXPECT_TRUE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
+	EXPECT_TRUE(world->registry.Get<const ecs::components::ScriptHighlight>(sign).hidden);
 
 	// On the screen in the next full frame, it spins in each frame after it
 	world->drawFrame = {.rebuilt = false, .drawAll = true};
