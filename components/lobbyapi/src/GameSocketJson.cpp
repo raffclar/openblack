@@ -260,6 +260,7 @@ void WriteStart(const Start& start, Json& object)
 	if (!start.names.empty())
 	{
 		object["names"] = start.names;
+	}
 	if (!start.gods.empty())
 	{
 		auto& gods = object["gods"] = Json::array();
