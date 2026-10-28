@@ -39,3 +39,34 @@ TEST(ComputerHandTotem, KindsOfThisPartThatAreNotMadeEndTheActionBadly)
 		EXPECT_FALSE(Busy(action)) << kind;
 	}
 }
+
+TEST(ComputerHandTotem, RaiseTotemSetsTheShareAtItsStartAndEndsInThreeTurns)
+{
+	FakeWorld world;
+	constexpr auto k_Totem = static_cast<entt::entity>(9);
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::RaiseTotem, {Argument {.object = k_Totem}, Argument {.value = 1.0f}});
+	EXPECT_TRUE(Process(action, world.view));
+	ASSERT_EQ(world.raised.size(), 1u);
+	EXPECT_EQ(world.raised[0].first, k_Totem);
+	EXPECT_EQ(world.raised[0].second, 1.0f);
+	EXPECT_TRUE(Busy(action));
+	EXPECT_TRUE(Process(action, world.view));
+	EXPECT_TRUE(Process(action, world.view));
+	EXPECT_FALSE(Busy(action));
+	EXPECT_EQ(world.raised.size(), 1u);
+}
+
+TEST(ComputerHandTotem, TheHandGoesToTheTotemFirst)
+{
+	FakeWorld world;
+	constexpr auto k_Totem = static_cast<entt::entity>(9);
+	world.places[k_Totem] = {100.0f, 0.0f};
+	HandAction action;
+	Add(action, StepKind::RaiseTotem, {Argument {.object = k_Totem}, Argument {.value = 1.0f}});
+	EXPECT_TRUE(Process(action, world.view));
+	ASSERT_EQ(action.steps.size(), 2u);
+	EXPECT_EQ(action.steps.front().kind, StepKind::MoveHandToObject);
+	EXPECT_TRUE(world.raised.empty());
+}

@@ -57,6 +57,10 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> MarkerPlace(entt::entity thing) const override;
 	[[nodiscard]] bool HeldByHelp() const override;
 	[[nodiscard]] const computer_mind::NodeNames& Names() const override;
+	/// Tools: the world adds the time of each step of the hand, for the developer log of the times of the gods
+	void TimeHand(bool on) { _timeHand = on; }
+	/// The time of the steps of the hand in this turn, in milliseconds
+	[[nodiscard]] double HandMs() const { return _handMs; }
 
 private:
 	PlayerNames _player;
@@ -68,6 +72,8 @@ private:
 	GameHandTotem _totem;
 	computer_hand::World _hand;
 	RuleContext _context;
+	bool _timeHand {false};
+	double _handMs {0.0};
 };
 
 /// Before the mind's turn: the god forgets its miracles, its seen things and its queued actions whose things are gone,

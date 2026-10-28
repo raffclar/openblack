@@ -14,6 +14,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -32,6 +33,7 @@ using namespace openblack::computer_hand;
 
 constexpr auto k_Icon = static_cast<entt::entity>(5);
 constexpr auto k_Store = static_cast<entt::entity>(6);
+constexpr auto k_Pot = static_cast<entt::entity>(70);
 
 /// A flat land with things at places that the test sets. It gives each part of the world of the steps.
 class FakeWorld final: public MovesWorld, public ObjectsWorld, public CastsWorld, public CreatureWorld, public TotemWorld
@@ -104,6 +106,35 @@ public:
 		held = entt::null;
 		droppedAt.push_back(hand);
 	}
+	[[nodiscard]] std::optional<uint32_t> HeldPotHolds(ResourceType type) const override
+	{
+		if (held != k_Pot || potType != type)
+		{
+			return std::nullopt;
+		}
+		return potAmount;
+	}
+	[[nodiscard]] uint32_t ResourceIn(entt::entity thing, ResourceType /*type*/) const override
+	{
+		const auto found = stock.find(thing);
+		return found == stock.end() ? 0u : found->second;
+	}
+	bool TakeFromContainer(entt::entity container, ResourceType type, uint32_t amount, glm::vec3 /*hand*/) override
+	{
+		stock[container] -= amount;
+		taken.push_back(amount);
+		if (held == k_Pot)
+		{
+			potAmount += amount;
+		}
+		else if (makesPot)
+		{
+			held = k_Pot;
+			potType = type;
+			potAmount = amount;
+		}
+		return held == k_Pot;
+	}
 
 	void ThrowHeld(glm::vec3 hand, glm::vec3 velocity) override
 	{
@@ -133,6 +164,30 @@ public:
 	}
 	void DrawForShortJourney() override { ++shortJourneyDraws; }
 	void SetRequiredSpeed(entt::entity creature, float speed) override { required[creature] = speed; }
+	[[nodiscard]] bool HasPlayer(entt::entity creature) const override { return !playerless.contains(creature); }
+	void SetLeashType(entt::entity creature, LeashType type) override { leashTypes.push_back({creature, type}); }
+	void TakeOffTiedLeash(entt::entity creature) override { takenOff.push_back(creature); }
+	bool TieLeash(entt::entity creature, entt::entity object) override
+	{
+		if (!places.contains(object))
+		{
+			return false;
+		}
+		tied.push_back({creature, object});
+		return true;
+	}
+	void Feedback(entt::entity creature, float feedback) override { feedbacks.push_back({creature, feedback}); }
+	[[nodiscard]] float DrawFeedbackSeconds() override
+	{
+		++feedbackDraws;
+		return feedbackDraw;
+	}
+	void LetGoForCast(MagicType type, const map_coords::MapCoords& hand) override
+	{
+		letGoTypes.push_back(type);
+		letGoHands.push_back(hand);
+	}
+	void RaiseTotem(entt::entity totem, float share) override { raised.push_back({totem, share}); }
 
 	/// An order that the god gave to a creature, and a desire that it made dominant
 	struct Order
@@ -153,6 +208,16 @@ public:
 	std::vector<Dominant> dominant;
 	int shortJourneyDraws {0};
 	std::map<entt::entity, float> required;
+	std::set<entt::entity> playerless;
+	std::vector<std::pair<entt::entity, LeashType>> leashTypes;
+	std::vector<entt::entity> takenOff;
+	std::vector<std::pair<entt::entity, entt::entity>> tied;
+	std::vector<std::pair<entt::entity, float>> feedbacks;
+	int feedbackDraws {0};
+	float feedbackDraw {0.0f};
+	std::vector<MagicType> letGoTypes;
+	std::vector<map_coords::MapCoords> letGoHands;
+	std::vector<std::pair<entt::entity, float>> raised;
 
 	std::map<entt::entity, glm::vec2> places;
 	std::vector<glm::vec3> castAt;
@@ -173,6 +238,11 @@ public:
 	int putDown {0};
 	std::vector<entt::entity> usedOn;
 	std::vector<glm::vec3> droppedAt;
+	std::map<entt::entity, uint32_t> stock;
+	std::vector<uint32_t> taken;
+	bool makesPot {true};
+	ResourceType potType {ResourceType::Food};
+	uint32_t potAmount {0};
 	/// The world of the steps, made of the parts of this fake
 	World view {.moves = *this, .objects = *this, .casts = *this, .creature = *this, .totem = *this};
 };

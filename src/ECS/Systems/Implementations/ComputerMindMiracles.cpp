@@ -597,8 +597,8 @@ float computer_world::BestSpellOfKind(RuleContext& context, SpellKind kind, cons
 	{
 		const auto type = static_cast<MagicType>(number);
 		const auto& effect = magic::GetMagicEffectInfo(info, type);
-		const float score =
-		    computer_mind_rules::KindScore(kind, effect.perceivedPlayerDesire.at(0), effect.cpImpressiveBalance);
+		const float score = computer_mind_rules::KindScore(kind, effect.perceivedPlayerDesire.at(0), effect.cpImpressiveBalance,
+		                                                   effect.aggressiveAttackValue);
 		if (score == 0.0f)
 		{
 			continue;
@@ -677,6 +677,23 @@ float computer_world::ImpressiveSpell(RuleContext& context, computer_mind::Mind&
 		}
 	}
 	return value * best;
+}
+
+std::optional<computer_world::ImpressSpot> computer_world::TownImpressPlace(entt::entity town,
+                                                                            const map_coords::MapCoords& hand)
+{
+	const auto place = ImpressPlaceOf(town, hand);
+	if (!place.has_value())
+	{
+		return std::nullopt;
+	}
+	return ImpressSpot {.value = place->value, .place = place->place};
+}
+
+std::optional<map_coords::MapCoords> computer_world::InfluenceEdgeOf(const RuleContext& context,
+                                                                     const map_coords::MapCoords& place)
+{
+	return InfluenceEdgeFor(context, place);
 }
 
 bool computer_world::OwnCastAt(const RuleContext& context, const map_coords::MapCoords& place, MagicType type)

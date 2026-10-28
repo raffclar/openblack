@@ -67,6 +67,7 @@
 #include "ECS/CreatureScars.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/GamePhysicsHooksWorld.h"
+#include "ECS/HandPlayer.h"
 #include "ECS/Map.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -237,8 +238,9 @@ bool SpreadsFrom(entt::entity object, const glm::vec3& position)
 	{
 		return false;
 	}
-	// The hands on the screen are the local player's
-	const auto holder = Locator::playerSystem::value().GetLocalPlayer();
+	// The player of the hand that holds it
+	const auto& registry = Entities();
+	const auto holder = ecs::HandPlayer(registry, registry.Get<const InHand>(object).hand);
 	return fire::SpreadsFrom(true, Locator::influenceSystem::value().PlayerInfluence(holder, position));
 }
 

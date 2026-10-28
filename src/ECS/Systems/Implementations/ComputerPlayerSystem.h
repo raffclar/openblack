@@ -12,9 +12,11 @@
 #include <cstdint>
 
 #include <memory>
+#include <optional>
 
 #include <entt/entity/entity.hpp>
 
+#include "Debug/ComputerGodTimes.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 
@@ -56,6 +58,8 @@ public:
 	void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) override;
 	void WaitForHumans() override;
 	void HumansJoined(std::span<const PlayerNames> humans) override;
+	void SetAiSeed(std::optional<uint32_t> seed) override { _aiSeed = seed; }
+	void SetTimesReport(uint32_t everyTurns) override { _timesEvery = everyTurns; }
 
 private:
 	/// The computer mind of the player, made with the player when the land has none
@@ -64,10 +68,16 @@ private:
 	components::ComputerPlayer* FindMind(PlayerNames player);
 	/// A land script gives the hand of the god one step to a place, and holds the hand
 	void ScriptHandStep(PlayerNames player, computer_hand::StepKind kind, glm::vec3 place, float speed);
-	/// The turn of the mind of one player, when the player has a mind
-	void MindTurn(PlayerNames name, entt::entity entity, uint32_t turn);
+	/// The turn of the mind of one player, when the player has a mind. True when the mind did its turn.
+	bool MindTurn(PlayerNames name, entt::entity entity, uint32_t turn);
 
 	std::unique_ptr<computer_player::World> _world;
+	std::optional<uint32_t> _aiSeed;
+	/// Tools: the times of the gods, for the developer log
+	uint32_t _timesEvery {0};
+	computer_god_times::Times _times;
+	double _seeMs {0.0};
+	double _handMs {0.0};
 };
 
 } // namespace openblack::ecs::systems

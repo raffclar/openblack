@@ -237,6 +237,19 @@ TEST(BoatLaunchRules, TheDeckCarriesTwoCowsGrainAndSixPeople)
 	ExpectNear(glm::vec3(rules::OnDeck(parts.at(3), boat)[3]), {99.86f, 13.213f, 180.343f});
 }
 
+TEST(BoatLaunchRules, EachDeckPartTakesTheLightOfTheBoatsPlace)
+{
+	const auto boat = glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, 3.0f, 200.0f));
+	for (const auto& part : rules::DeckParts())
+	{
+		const auto onDeck = rules::OnDeck(part, boat);
+		const auto offset = rules::DeckLightOffset(boat, onDeck);
+		// The point of the light is the boat's place on the ground, whatever the height of the part
+		EXPECT_FLOAT_EQ(onDeck[3].x + offset.x, 100.0f);
+		EXPECT_FLOAT_EQ(onDeck[3].z + offset.y, 200.0f);
+	}
+}
+
 TEST(BoatLaunchRules, TheWakeRunsBackFromTheBowAndFades)
 {
 	const auto boat = glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, -4.0f, 200.0f));

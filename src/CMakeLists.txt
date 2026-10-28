@@ -246,6 +246,8 @@ target_link_libraries(
          lobbyapi
          # The settings file of this computer
          computersettings
+         # The language file of the creature upload tool
+         creatureuploadcfg
          # The mind file's types are part of the creature mind component
          creaturemind
          # The saved game's files are part of the saved game component

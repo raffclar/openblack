@@ -48,6 +48,7 @@ void openblack::ecs::reflection::RegisterFields_Components_co(entt::meta_ctx& co
 	    .Field<&components::PlannedAbode::wasBuilt>("wasBuilt");
 	Reflect<components::BuildingSite>(context)
 	    .Field<&components::BuildingSite::town>("town")
+	    .Field<&components::BuildingSite::number>("number")
 	    .Field<&components::BuildingSite::desire>("desire")
 	    .Field<&components::BuildingSite::repair>("repair")
 	    .Field<&components::BuildingSite::takesBroughtWood>("takesBroughtWood")

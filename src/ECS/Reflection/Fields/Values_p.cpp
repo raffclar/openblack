@@ -16,6 +16,7 @@
 #include "ECS/Reflection/ComponentReflection.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Particles/RisingSparks.h"
+#include "Physics/Body.h"
 #include "Physics/DamageMesh.h"
 
 namespace openblack::ecs::reflection
@@ -38,6 +39,9 @@ void openblack::ecs::reflection::RegisterFields_Values_p(entt::meta_ctx& context
 	Reflect<openblack::particles::rising_sparks::Sparks>(context, ValueOnly {})
 	    .Field<&openblack::particles::rising_sparks::Sparks::sparks>("sparks")
 	    .Field<&openblack::particles::rising_sparks::Sparks::firstPicture>("firstPicture");
+	Reflect<openblack::physics::FlightPlace>(context, ValueOnly {})
+	    .Field<&openblack::physics::FlightPlace::axes>("axes")
+	    .Field<&openblack::physics::FlightPlace::centre>("centre");
 	Reflect<openblack::physics::damage::Corner>(context, ValueOnly {})
 	    .Field<&openblack::physics::damage::Corner::position>("position")
 	    .Field<&openblack::physics::damage::Corner::uv>("uv");

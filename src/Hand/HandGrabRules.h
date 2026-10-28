@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
+#include "Common/InputSteps.h"
 #include "Enums.h"
 
 /// The rules of the god hand taking hold of things, carrying them and letting them go: what it may pick up and how long
@@ -41,9 +42,6 @@ inline constexpr float k_SpringStiffness = 260.0f;
 inline constexpr float k_SpringDamping = 40.0f;
 /// The spring is stepped in steps of this many milliseconds of game time
 inline constexpr uint32_t k_SpringStepMs = 10;
-/// The game drew a frame at every 60 Hz screen refresh and stepped the spring at least once each; when this much real
-/// time goes by without a step, the spring takes one anyway
-inline constexpr float k_SpringFrameMs = 1000.0f / 60.0f;
 /// Nothing leaves the hand faster than this
 inline constexpr float k_MaxThrowSpeed = 124.0f;
 
@@ -210,19 +208,22 @@ struct HoldFacts
 /// The spring that drags the hand after where it should be while it is ready to throw. It takes a fixed step for every
 /// few milliseconds of game time, and what it holds leaves the hand at its speed. The game time the hand spends holding
 /// things is counted all along, the spring on or not, and the spring catches up with all of it when it next steps.
-/// The game stepped it at least once a frame, at the screen's 60 Hz refresh; so when a sixtieth of a second of real time
-/// goes by without a step (the game paused, or its time held back), it takes one anyway. A faster screen takes no more
-/// steps than the game time allows, so the hand's speed, and a throw's, is the same at any frame rate.
+/// The game stepped it at least once a frame, at the screen's 60 Hz refresh. So at each step of the player's input (a
+/// sixtieth of a second, see input_steps) with no step of the spring since the last, the spring takes one anyway: the
+/// game paused, or its time held back. A step of game time comes once the game time has run to its end, and goes towards
+/// the place of the hand at that time, between its places at the start and the end of the frame. So the hand's speed,
+/// and a throw's, is the same at any frame rate.
 class HandSpring
 {
 public:
 	/// The spring takes hold at the hand, at rest; the time counted so far is kept
 	void Start(glm::vec3 position);
-	/// A frame of holding goes by, some game and real milliseconds long, whether the spring is on or not
-	void Count(uint32_t frameGameMs, float frameRealMs);
-	/// The spring is stepped towards where the hand should be, as many steps as the game time counted allows, and one
-	/// if a sixtieth of a second has gone by without any
-	void Step(glm::vec3 target);
+	/// A frame of holding goes by, some game milliseconds long, whether the spring is on or not
+	void Count(uint32_t frameGameMs);
+	/// The spring steps towards where the hand should be. The hand goes from one place at the start of the frame to the
+	/// other at its end. The spring takes as many steps as the game time counted allows. It also takes one step at each
+	/// step of the input that has no step of the spring since the last.
+	void Step(glm::vec3 from, glm::vec3 to, const input_steps::Steps& refreshes);
 	[[nodiscard]] glm::vec3 Position() const { return _position; }
 	[[nodiscard]] glm::vec3 Velocity() const { return _velocity; }
 	[[nodiscard]] uint32_t StepsTaken() const { return _steps; }
@@ -237,8 +238,9 @@ private:
 	glm::vec3 _velocity {0.0f};
 	uint32_t _elapsedMs {0};
 	uint32_t _steppedMs {0};
-	/// Real time counted towards the next 60 Hz refresh, and whether the spring has stepped since the last one
-	float _sinceRefreshMs {0.0f};
+	/// The game time counted at the start of the frame, and whether the spring has stepped since the last step of the
+	/// input
+	uint32_t _frameStartMs {0};
 	bool _steppedSinceRefresh {false};
 	/// How many steps the last Step took
 	uint32_t _steps {0};
@@ -248,7 +250,7 @@ public:
 	template <typename Visitor>
 	static void VisitPlainFields(const HandSpring& self, Visitor&& visit)
 	{
-		visit(self._position, self._velocity, self._elapsedMs, self._steppedMs, self._sinceRefreshMs, self._steppedSinceRefresh,
+		visit(self._position, self._velocity, self._elapsedMs, self._steppedMs, self._frameStartMs, self._steppedSinceRefresh,
 		      self._steps);
 	}
 };

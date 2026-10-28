@@ -16,6 +16,7 @@
 #include <glm/mat4x4.hpp>
 
 #include "3D/AllMeshes.h"
+#include "Common/MainThreadQueue.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -32,7 +33,11 @@ public:
 	void SetDirty() override;
 	void SetLayoutDirty() override;
 	void PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams) override;
-	const RenderContext& GetContext() override { return _renderContext; }
+	const RenderContext& GetContext() override
+	{
+		MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::GetContext");
+		return _renderContext;
+	}
 
 private:
 	virtual void PrepareDrawDescs(bool drawBoundingBox) = 0;

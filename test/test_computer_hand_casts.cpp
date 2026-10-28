@@ -148,6 +148,21 @@ TEST(ComputerHand, GestureWithNoShapeTakesOneTurn)
 	EXPECT_FLOAT_EQ(GestureSharePerTurn(4.0f, 2.0f), 1.0f / 60.0f);
 }
 
+TEST(ComputerHandCasts, StepThatEndsTheMiracleDoesNothing)
+{
+	FakeWorld world;
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::CloseDownCurrentSpell, {});
+	// Each of its three parts takes one turn
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		EXPECT_TRUE(Process(action, world.view));
+	}
+	EXPECT_FALSE(Busy(action));
+	EXPECT_TRUE(world.cast.empty());
+}
+
 TEST(ComputerHandCasts, CastAtPlaceStaysForTheTimeOfTheCast)
 {
 	FakeWorld world;
@@ -244,4 +259,41 @@ TEST(ComputerHandCasts, CastAtPlaceMovesTheHandThereFirst)
 	ASSERT_EQ(action.steps.size(), 2u);
 	EXPECT_EQ(action.steps[0].kind, StepKind::MoveHandToPos);
 	EXPECT_EQ(action.steps[0].arguments[0].place, glm::vec3(50.0f, 0.0f, 60.0f));
+}
+
+TEST(ComputerHandCasts, EachCastStartCanLetGoOfTheLeash)
+{
+	FakeWorld world;
+	world.castWorks = true;
+	const auto cast = [&world](StepKind kind, MagicType type, int turns) {
+		HandAction action;
+		action.moveFirst = false;
+		action.hand = {30.0f, 0.0f, 40.0f};
+		std::vector<Argument> arguments {Argument {.place = {50.0f, 0.0f, 60.0f}},
+		                                 Argument {.number = static_cast<int32_t>(type)}, Argument {.value = 4.0f},
+		                                 Argument {.object = k_Icon}};
+		if (kind == StepKind::CastSpellAtObject)
+		{
+			arguments = {Argument {.object = k_Icon}, Argument {.number = static_cast<int32_t>(type)},
+			             Argument {.object = k_Icon}};
+		}
+		Add(action, kind, arguments);
+		for (int turn = 0; turn < turns; ++turn)
+		{
+			EXPECT_TRUE(Process(action, world.view));
+		}
+	};
+	// The let-go comes at the start of a cast at a thing, at a place or toward a place, and in the cast of a shield
+	cast(StepKind::CastSpellAtObject, MagicType::Heal, 1);
+	cast(StepKind::CastSpellAtPos, MagicType::Food, 1);
+	cast(StepKind::CastSpellTowardPos, MagicType::Water, 1);
+	EXPECT_EQ(world.letGoTypes.size(), 3u);
+	cast(StepKind::CastShieldAtPos, MagicType::Shield, 1);
+	EXPECT_EQ(world.letGoTypes.size(), 3u);
+	cast(StepKind::CastShieldAtPos, MagicType::Shield, 2);
+	ASSERT_EQ(world.letGoTypes.size(), 4u);
+	EXPECT_EQ(world.letGoTypes, (std::vector {MagicType::Heal, MagicType::Food, MagicType::Water, MagicType::Shield}));
+	// The god measures from the map position of the hand
+	EXPECT_EQ(world.letGoHands[0].x, map_coords::ToFixed(30.0f));
+	EXPECT_EQ(world.letGoHands[0].z, map_coords::ToFixed(40.0f));
 }

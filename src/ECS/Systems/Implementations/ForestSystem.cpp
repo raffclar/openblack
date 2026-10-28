@@ -626,7 +626,7 @@ void ForestSystem::GrowForests()
 		if (pick < grown.size())
 		{
 			const auto parent = grown[pick];
-			const auto added = PlantBeside(parent);
+			[[maybe_unused]] const auto added = PlantBeside(parent);
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: forest {} spread from tree #{} on turn {}: {}", turns.id,
 			                    entt::to_integral(parent), turn, added.has_value() ? "planted" : "no room");
 		}
@@ -674,6 +674,8 @@ void ForestSystem::ProcessForests()
 					return true;
 				}
 				Resize(tree, *after);
+				// A tree that withers comes out of the map's cells and goes in again. A tree that grows does not.
+				ecs::thing_map_place::Reinsert(tree);
 				return false;
 			});
 		}
@@ -766,7 +768,6 @@ float ForestSystem::WoodOf(entt::entity forest) const
 	{
 		return 0.0f;
 	}
-	const auto& info = Locator::infoConstants::value();
 	// The big forest's wood, then its growing trees', then its grown trees', none of it truncated
 	float wood = 0.0f;
 	if (record->bigForest != entt::null && registry.Valid(record->bigForest))
@@ -776,19 +777,30 @@ float ForestSystem::WoodOf(entt::entity forest) const
 			wood += big_forest::WoodValue(ecs::world_objects::LifeOf(record->bigForest), big->wood);
 		}
 	}
-	const float balance = registry.Context().mapScriptGlobals.landBalance.at(5);
 	for (const bool growing : {true, false})
 	{
 		for (const auto tree : TreesOf(forest, growing))
 		{
-			const auto& kind = registry.Get<const Tree>(tree);
-			const auto* magic = registry.TryGet<const MagicTree>(tree);
-			wood += ecs::store_rules::TreeWoodValue(
-			    ecs::world_objects::LifeOf(tree), magic != nullptr ? magic->woodMultiplier : 1.0f,
-			    info.tree.at(static_cast<size_t>(kind.type)).woodValue, registry.Get<const Transform>(tree).scale.x, balance);
+			wood += TreeWoodOf(tree);
 		}
 	}
 	return wood;
+}
+
+float ForestSystem::TreeWoodOf(entt::entity tree) const
+{
+	const auto& registry = EntityRegistry();
+	const auto* kind = registry.Valid(tree) ? registry.TryGet<const Tree>(tree) : nullptr;
+	const auto* transform = kind != nullptr ? registry.TryGet<const Transform>(tree) : nullptr;
+	if (transform == nullptr || !Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto* magic = registry.TryGet<const MagicTree>(tree);
+	return ecs::store_rules::TreeWoodValue(ecs::world_objects::LifeOf(tree), magic != nullptr ? magic->woodMultiplier : 1.0f,
+	                                       info.tree.at(static_cast<size_t>(kind->type)).woodValue, transform->scale.x,
+	                                       registry.Context().mapScriptGlobals.landBalance.at(5));
 }
 
 glm::vec3 ForestSystem::NearestPointOf(entt::entity forest, glm::vec3 to) const
@@ -854,10 +866,7 @@ uint32_t ForestSystem::TakeBigForestWood(entt::entity bigForest, uint32_t amount
 		transform.scale = glm::vec3(*taken.shrinksTo);
 		const auto [centre, radius] = ecs::archetypes::GetFixedObstacleBoundingCircle(kind.meshId, transform);
 		registry.AssignOrReplace<Fixed>(bigForest, centre, radius);
-		if (Locator::entitiesMap::has_value())
-		{
-			Locator::entitiesMap::value().Refile(bigForest);
-		}
+		ecs::thing_map_place::Reinsert(bigForest);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: big forest #{} shrinks to {:.3f} with {:.1f} wood left",
 		                    entt::to_integral(bigForest), *taken.shrinksTo, taken.woodLeft);
 		PlantPineAround(bigForest);
@@ -1070,13 +1079,15 @@ std::optional<entt::entity> ForestSystem::CentreTreeOf(entt::entity forest) cons
 	}
 	const auto grown = TreesOf(forest, false);
 	const auto growing = TreesOf(forest, true);
-	const auto centre = glm::xz(registry.Get<const Transform>(forest).position);
+	// The distances go through the map positions, as the lists of the forest measure them
+	const auto centre = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(forest).position));
 	const auto distanceTo = [&](const std::vector<entt::entity>& trees) -> std::optional<float> {
 		if (trees.empty())
 		{
 			return std::nullopt;
 		}
-		return glm::length(glm::xz(registry.Get<const Transform>(trees.front()).position) - centre);
+		return gutils::GetDistanceInMetres(
+		    map_coords::FromMetres(glm::xz(registry.Get<const Transform>(trees.front()).position)), centre);
 	};
 	const auto pick = ecs::villager_work::CentreTree(distanceTo(grown), distanceTo(growing));
 	if (!pick.has_value())

@@ -33,6 +33,7 @@
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
 #include "Common/FatalMessage.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/Platform.h"
 #include "Common/SystemLibraries.h"
 #include "Creature/BonusCreatures.h"
@@ -114,6 +115,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("new-game", "Start a new game on the first land, as the game's own new game option does, rather than continue from the save on exit.")
 		("lobby", "The https:// origin of the lobby for the online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>()->default_value("https://bw.zanidrak.com"))
 		("internet-weather", "The real-world weather of the place of the player's lobby account changes the weather of a single-player game, as the original game's internet weather did. It is on by default (--internet-weather=false turns it off). The game asks one time as a game starts and never waits; with no answer in 10 seconds, or no login, the land keeps its own weather.", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+		("show-ping", "Show the round trip of this computer's game socket in milliseconds in a network game, as \"ping 48\": after the player's own name in the room's player list. The original game shows no ping, so it is off by default.")
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket.", cxxopts::value<std::string>())
 		("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>())
@@ -130,6 +132,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
 		("frame-stats", "Log the average and 95th percentile frame time, the profiler stages and the memory in use every so many frames (0 for never), and each frame of 10 ms or more with its stages.", cxxopts::value<uint32_t>()->default_value("0"))
 		("frame-stats-views", "With --frame-stats, also profile and log the GPU time of each render view.")
+		("ai-times", "Tools: log the mean and longest time of the seen list, the mind and the hand of each computer god each time this many turns go by (0 for never).", cxxopts::value<uint32_t>()->default_value("0"))
+		("frame-stats-out", "With --frame-stats, write each frame of the run (its time, its time on the processor and the game turn) into this CSV file when the game ends.", cxxopts::value<std::string>())
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
 		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
 		("no-draw", "Tools: open the window but draw nothing on the graphics card, so that a long run that the inspector drives does not wait on a busy graphics card. Screenshots are black.")
@@ -154,6 +158,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("join-creature", "Tests: with --join, send this creature file before the start in place of the creature of the player's profile.", cxxopts::value<std::string>())
 		("join-part-again", "Tests: with --join-part-at, the world parts again after each load of the server's world, so that the resyncs do not work and the game shows the out-of-sync box.")
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
+		("throw-lead-latency-ms", "Tools: a fixed latency in milliseconds for the reports of the hand. A throw moves its start along the flight by one turn for each 100 ms, at most 5 turns. Without it the game measures the latency on its clock.", cxxopts::value<uint32_t>())
+		("sim-gods-need-no-temple", "Tests: a god with no temple stays in a network game, for a land that makes no temple at its start (a story land). Each computer of a network game needs the same switch.")
 		("sim-temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (for example 1:300, the player from 0). Each computer of a network game needs the same switch.", cxxopts::value<std::string>())
 		("sim-leave-at", "Tests: at this turn the player of a network game leaves it as a player does, by Escape, Exit Online Game and Leave Game.", cxxopts::value<uint32_t>())
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
@@ -165,13 +171,17 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-frame-guard-fields", "Tools: as --sim-frame-guard, and the fields of the components too.")
 		("sim-frame-guard-systems", "Tools: as --sim-frame-guard, and the saved state of each system too. A system can keep state that the turns read outside the registry.")
 		("sim-frame-guard-from", "Tools: the turn at which --sim-frame-guard starts to look (0 by default).", cxxopts::value<uint32_t>()->default_value("0"))
+		("sim-all-computer-gods", "Tools: every god with a citadel is a computer god, also the god of this computer, and no human plays (the AI soak). The hand of this computer does nothing.")
+		("sim-ai-seed", "Tools: the seed of the personalities of the computer gods (the AI soak).", cxxopts::value<uint32_t>())
 		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
 		("sim-trace-draws", "Tools: write each draw on the synced random seed to this file, with its turn and the place of its call in the source (tools/sim/draw_trace.py compares two files).", cxxopts::value<std::string>());
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	options.add_options("Developer")
 		("sim-row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("sim-row-dump-turn", "Tools: with --sim-row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
-		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"));
+		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"))
+		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
+		("turn-beside-draw", "Developers: the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later.");
 #endif
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options("Developer")
@@ -181,7 +191,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-hash-parts", "Tools: with --sim-record, also keep in each record the hash of the transforms of the entities of each component, to find what made two runs part.")
 		("sim-hash-fields", "Tools: as --sim-hash-parts, and the synced hash of each field of each component too. The records get large: use it with few records.")
 		("sim-record-input", "Tools: record the input that the game makes from the first frame of the first land on (also the input of the fight autopilot), and write it to this file as the game ends, as --sim-input reads it.", cxxopts::value<std::string>())
-		("sim-input", "Tools: the first land makes the recorded input of this file from its first frame on, as the inspector's input.replay. The file is a list of {frame, event}, as input.record answers it.", cxxopts::value<std::string>())
+		("sim-input", "Tools: works alone and starts the inspector on a free port when --inspect-port is not given. The first land makes the recorded input of this file from its first frame on, as the inspector's input.replay. The file is a list of {frame, event}, as input.record answers it.", cxxopts::value<std::string>())
 		("sim-commands", "Tools: write the commands of each turn to this file, as JSON lines, for a dedicated server that does the same commands (openblack-server --commands).", cxxopts::value<std::string>())
 		("sim-limits", "Tools: with --sim-record, the JSON table of how long a plan or an activity can stay the same (tools/sim/stuck_limits.json).", cxxopts::value<std::string>())
 		("inspect-port", "Start the debug inspector on this port of 127.0.0.1 (0 for any free port), for agents and tools to query and control the game. The player's mouse and keyboard are kept out while a client is connected; Ctrl+Alt+Shift+F12 takes the game back.", cxxopts::value<uint16_t>())
@@ -347,6 +357,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.seed = result["seed"].as<uint32_t>();
 		}
 		args.networkGame = result.count("sim-network-game") != 0;
+		if (result.count("throw-lead-latency-ms") != 0)
+		{
+			args.throwLeadLatencyMs = result["throw-lead-latency-ms"].as<uint32_t>();
+		}
 		if (result.count("join") != 0)
 		{
 			args.networkJoin = openblack::ecs::systems::NetworkJoin {
@@ -388,6 +402,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
 			}
 			simulation.settings.stillHand = result.count("sim-still-hand") != 0;
+			simulation.settings.godsNeedNoTemple = result.count("sim-gods-need-no-temple") != 0;
 			if (result.count("sim-temple-loss") != 0)
 			{
 				simulation.settings.templeLoss =
@@ -431,6 +446,11 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			                            ? openblack::sim_run::HashDetail::Components
 			                            : openblack::sim_run::HashDetail::None;
 			simulation.frameGuardFrom = result["sim-frame-guard-from"].as<uint32_t>();
+			simulation.soak.allComputerGods = result.count("sim-all-computer-gods") != 0;
+			if (result.count("sim-ai-seed") != 0)
+			{
+				simulation.soak.aiSeed = result["sim-ai-seed"].as<uint32_t>();
+			}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 			if (result.count("sim-row-dump") != 0)
 			{
@@ -453,6 +473,25 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.simulation = simulation;
 		}
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		if (result.count("turn-api-check") != 0)
+		{
+			const auto check = result["turn-api-check"].as<std::string>();
+			if (check == "report")
+			{
+				args.turnApiCheck = openblack::TurnApiCheck::Report;
+			}
+			else if (check == "fail")
+			{
+				args.turnApiCheck = openblack::TurnApiCheck::Fail;
+			}
+			else if (check != "off")
+			{
+				throw cxxopts::exceptions::parsing("--turn-api-check is off, report or fail");
+			}
+		}
+		args.turnBesideDraw = result.count("turn-beside-draw") != 0;
+#endif
 		if (result.count("screenshot-frame") != 0)
 		{
 			args.requestScreenshot = std::make_pair(result["screenshot-frame"].as<uint32_t>(),
@@ -481,6 +520,11 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.startGodsRingMap = result.count("gods-ring-map") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
+		args.aiTimesEvery = result["ai-times"].as<uint32_t>();
+		if (result.count("frame-stats-out") != 0)
+		{
+			args.frameStatsOut = result["frame-stats-out"].as<std::string>();
+		}
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;
 		args.lobbyOrigin = result["lobby"].as<std::string>();
 		if (result.count("lobby-test-ca") != 0)
@@ -488,6 +532,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.lobbyTestAuthorities = result["lobby-test-ca"].as<std::string>();
 		}
 		args.useInternetWeather = result["internet-weather"].as<bool>();
+		args.showPing = result.count("show-ping") != 0;
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
 		args.noDraw = result.count("no-draw") != 0;
 		args.background = result.count("background") != 0;
@@ -541,35 +586,43 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			        result.count("fight-autopilot-sequence") != 0 ? result["fight-autopilot-sequence"].as<std::string>() : "",
 			};
 		}
-		if (result.count("sim-record") != 0)
+		const bool simRecord = result.count("sim-record") != 0;
+		const bool simInput = result.count("sim-input") != 0;
+		const bool simCommands = result.count("sim-commands") != 0;
+		const bool simLimits = result.count("sim-limits") != 0;
+		if (simRecord || simInput || simCommands || simLimits)
 		{
 			if (!args.simulation.has_value())
 			{
 				args.simulation = openblack::sim_run::Request {};
 			}
-			args.simulation->recordPath = std::filesystem::path(result["sim-record"].as<std::string>());
-			args.simulation->recordEvery = std::max(1u, result["sim-record-every"].as<uint32_t>());
-			args.simulation->hashParts = result["sim-hash-fields"].as<bool>()  ? openblack::sim_run::HashDetail::Fields
-			                             : result["sim-hash-parts"].as<bool>() ? openblack::sim_run::HashDetail::Components
-			                                                                   : openblack::sim_run::HashDetail::None;
-			args.simulation->startPaused = result["sim-start-paused"].as<bool>();
-			if (result.count("sim-record-input") != 0)
+			if (simRecord)
 			{
-				args.simulation->recordInputPath = std::filesystem::path(result["sim-record-input"].as<std::string>());
+				args.simulation->recordPath = std::filesystem::path(result["sim-record"].as<std::string>());
+				args.simulation->recordEvery = std::max(1u, result["sim-record-every"].as<uint32_t>());
+				args.simulation->hashParts = result["sim-hash-fields"].as<bool>()  ? openblack::sim_run::HashDetail::Fields
+				                             : result["sim-hash-parts"].as<bool>() ? openblack::sim_run::HashDetail::Components
+				                                                                   : openblack::sim_run::HashDetail::None;
+				args.simulation->startPaused = result["sim-start-paused"].as<bool>();
+				if (result.count("sim-record-input") != 0)
+				{
+					args.simulation->recordInputPath = std::filesystem::path(result["sim-record-input"].as<std::string>());
+				}
 			}
-			if (result.count("sim-input") != 0)
+			if (simInput)
 			{
 				args.simulation->inputPath = std::filesystem::path(result["sim-input"].as<std::string>());
 			}
-			if (result.count("sim-commands") != 0)
+			if (simCommands)
 			{
 				args.simulation->commandsPath = std::filesystem::path(result["sim-commands"].as<std::string>());
 			}
-			if (result.count("sim-limits") != 0)
+			if (simLimits)
 			{
 				args.simulation->limitsPath = std::filesystem::path(result["sim-limits"].as<std::string>());
 			}
-			if (!args.inspectPort.has_value())
+			// The record and the input replay both go through the inspector
+			if ((simRecord || simInput) && !args.inspectPort.has_value())
 			{
 				args.inspectPort = 0;
 			}

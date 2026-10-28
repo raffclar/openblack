@@ -54,6 +54,7 @@ inline void StepHair(components::CreatureHair& hair, size_t groupCount, const Ha
 		group.halfWidth = shape.physics.halfWidth;
 		group.textured = shape.textured;
 		group.strands.resize(shape.strandCount);
+		const auto kept = creature_hair::KeptSpeed(shape.physics, seconds);
 		for (size_t s = 0; s < shape.strandCount; ++s)
 		{
 			const auto root = rootOf(g, s);
@@ -66,7 +67,7 @@ inline void StepHair(components::CreatureHair& hair, size_t groupCount, const Ha
 			{
 				strand = creature_hair::FromZero(shape.segmentCount);
 			}
-			creature_hair::Step(strand, *root, shape.physics, seconds);
+			creature_hair::Step(strand, *root, shape.physics, seconds, kept);
 		}
 	}
 	hair.started = true;

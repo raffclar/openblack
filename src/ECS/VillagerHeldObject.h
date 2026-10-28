@@ -38,6 +38,18 @@ inline constexpr size_t k_GripBone = 15;
 /// small thing does; nearer than that it takes the villager's own fading
 [[nodiscard]] std::optional<uint8_t> HeldAlpha(std::optional<uint8_t> ownFade, std::optional<uint8_t> villagerFade);
 
+/// Who holds a villager, if anyone
+enum class Holder : uint8_t
+{
+	None,
+	PlayersHand,
+	Creature,
+};
+
+/// Whether a villager's held thing is drawn with it. A hand or a creature that holds the villager takes it out of the
+/// map, and the draw of a held thing shows only the model of the villager. The villager keeps its load.
+[[nodiscard]] bool DrawsHeldThing(Holder holder);
+
 /// Whether a villager let go by a hand, launched or killed lets its wood fall as a log: only when it shows something in
 /// its hand and carries more wood than shows
 [[nodiscard]] bool DropsLog(CarriedObject shown, int16_t wood, uint32_t minWoodToShowGraphic);

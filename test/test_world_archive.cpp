@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <regex>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -38,12 +39,15 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameHeading.h"
+#include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreatureRouteFollow.h"
 #include "ECS/Components/AudioEmitter.h"
+#include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/PlayerStatistics.h"
+#include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/WallHug.h"
@@ -53,6 +57,7 @@
 #include "Enums.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/SpriteTextures.h"
+#include "Particles/LightSheet.h"
 #include "PlayerSlots.h"
 
 using namespace openblack;
@@ -461,6 +466,30 @@ TEST(WorldArchive, ValuesOutsideTheRegistryRoundTrip)
 	FakeWalker read;
 	ASSERT_TRUE(LoadValue(context, bytes, read, EntityRemap {}));
 	EXPECT_EQ(read, walker);
+}
+
+TEST(WorldArchive, TheCreaturesMapOfTheLandGoesWithTheWorld)
+{
+	// A computer that takes the world of another computer gets its map of the land, made from the towns at the start
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	openblack::creature_exploration::RegionMap map;
+	map.regions.resize(3);
+	map.regions[1] = {
+	    .highest = 12.5f, .highestCell = {9, 10}, .firstCoast = glm::ivec2 {8, 11}, .firstSea = std::nullopt, .kinds = 0x13};
+	map.highest = 12.5f;
+	std::set<UnsavedValue> unsaved;
+	const auto bytes = SaveValue(context, map, &unsaved);
+	EXPECT_TRUE(unsaved.empty());
+	openblack::creature_exploration::RegionMap read;
+	ASSERT_TRUE(LoadValue(context, bytes, read, EntityRemap {}));
+	ASSERT_EQ(read.regions.size(), 3u);
+	EXPECT_EQ(read.regions[1].highest, 12.5f);
+	EXPECT_EQ(read.regions[1].highestCell, glm::ivec2(9, 10));
+	EXPECT_EQ(read.regions[1].firstCoast, std::optional(glm::ivec2(8, 11)));
+	EXPECT_FALSE(read.regions[1].firstSea.has_value());
+	EXPECT_EQ(read.regions[1].kinds, 0x13);
+	EXPECT_EQ(read.highest, 12.5f);
 }
 
 TEST(WorldArchive, EveryComponentOfTheGameCanBeMadeForALoad)
@@ -1206,4 +1235,134 @@ TEST(WorldArchive, AFootpathSearchContinuesAfterALoad)
 		EXPECT_EQ(back->search->GetBest()[i].to, plan.search->GetBest()[i].to);
 		EXPECT_EQ(back->search->GetBest()[i].cost, plan.search->GetBest()[i].cost);
 	}
+}
+
+TEST(WorldArchive, ASoundTagAndAnArenaKeepNoValuesOfTheRun)
+{
+	// The emitter of a sound tag is an entity of the audio of the run, and the game makes the tags new at a load, so
+	// their count of turns starts again. The ring of an arena is made again after a load.
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	constexpr auto k_Sound = entt::hashed_string("G_Rustle");
+	entt::registry original;
+	const auto thing = original.create();
+	original.emplace<ecs::components::SoundTag>(
+	    thing,
+	    ecs::components::SoundTag {
+	        .sound = k_Sound.value(), .offset = {0.0f, 2.0f, 0.0f}, .active = true, .emitter = entt::entity {77}, .turns = 40});
+	const auto arena = original.create();
+	original.emplace<ecs::components::CreatureArena>(arena, ecs::components::CreatureArena {
+	                                                            .place = {10, 20},
+	                                                            .radius = 30.0f,
+	                                                            .ring = std::make_shared<particles::LightSheet>(),
+	                                                        });
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	const auto result = LoadWorld(loaded, context, bytes, WorldLoadMode::Exact);
+	ASSERT_TRUE(result.has_value());
+	const auto& tag = loaded.get<ecs::components::SoundTag>(thing);
+	EXPECT_EQ(tag.emitter, entt::entity {entt::null});
+	EXPECT_EQ(tag.turns, 0u);
+	EXPECT_EQ(tag.sound, k_Sound.value());
+	EXPECT_TRUE(tag.active);
+	EXPECT_EQ(loaded.get<ecs::components::CreatureArena>(arena).ring, nullptr);
+	EXPECT_FLOAT_EQ(loaded.get<ecs::components::CreatureArena>(arena).radius, 30.0f);
+	// A save of the loaded world has the same bytes
+	EXPECT_EQ(SaveWorld(loaded, context), bytes);
+}
+
+TEST(WorldArchive, AWriterGivesTheSameBytesForAValueThatItWroteBefore)
+{
+	entt::meta_ctx context;
+	Register(context);
+	const auto walker = SampleWalker(entt::entity {3}, entt::entity {8});
+	FakeCounted counted;
+	counted.counter.Add(12);
+
+	// A fresh writer finds the plan of each type as it writes the values the first time
+	BinaryWriter first(context);
+	Save(first, walker);
+	Save(first, counted);
+	const auto firstBytes = first.Bytes();
+
+	// The same writer writes them again by the plans that it kept
+	BinaryWriter again(context);
+	Save(again, walker);
+	Save(again, counted);
+	again.Clear();
+	Save(again, walker);
+	Save(again, counted);
+	EXPECT_EQ(again.Bytes(), firstBytes);
+	ASSERT_NE(again.FindPlan(entt::type_hash<FakeSpot>::value()), nullptr);
+	EXPECT_EQ(again.FindPlan(entt::type_hash<FakeSpot>::value())->fields.size(), 3u);
+	ASSERT_NE(again.FindPlan(entt::type_hash<FakeCounted>::value()), nullptr);
+}
+
+TEST(WorldArchive, AWriterNamesAValueThatItCannotKeepAlsoByThePlanOfItsType)
+{
+	entt::meta_ctx context;
+	Register(context);
+	BinaryWriter out(context);
+	out.SetPlace("First", "hidden");
+	Save(out, FakeHidden {.pointer = std::make_shared<int>(1), .kept = 4});
+	ASSERT_NE(out.FindPlan(entt::type_hash<FakeHidden>::value()), nullptr);
+	out.SetPlace("Second", "hidden");
+	Save(out, FakeHidden {.pointer = std::make_shared<int>(2), .kept = 5});
+	EXPECT_EQ(out.Unsaved().size(), 2u);
+}
+
+TEST(WorldArchive, TheBytesOfAWriterAreTheBytesWrittenUpToNow)
+{
+	entt::meta_ctx context;
+	BinaryWriter out(context);
+	out.WriteRaw(uint32_t {7});
+	EXPECT_EQ(out.Size(), 4u);
+	EXPECT_EQ(out.Bytes().size(), 4u);
+	const auto length = out.BeginLength();
+	out.Write(std::vector<uint8_t>(600, 9));
+	out.EndLength(length);
+	EXPECT_EQ(out.Size(), 608u);
+	EXPECT_EQ(out.Written(4).size(), 604u);
+	const auto& bytes = out.Bytes();
+	ASSERT_EQ(bytes.size(), 608u);
+	uint32_t written = 0;
+	std::memcpy(&written, bytes.data() + length, sizeof(written));
+	EXPECT_EQ(written, 600u);
+	EXPECT_EQ(bytes.back(), 9);
+
+	// A change that the caller made to the list stays, and the next bytes go after it
+	out.Bytes().resize(2);
+	out.WriteRaw(uint8_t {5});
+	EXPECT_EQ(out.Bytes(), (std::vector<uint8_t> {7, 0, 5}));
+
+	out.Clear();
+	EXPECT_EQ(out.Size(), 0u);
+	EXPECT_TRUE(out.Written().empty());
+	out.WriteRaw(uint16_t {0x0102});
+	EXPECT_EQ(out.Bytes(), (std::vector<uint8_t> {2, 1}));
+}
+
+TEST(WorldArchive, AListOfEnumerationsIsTheBytesOfEachValueInTurn)
+{
+	entt::meta_ctx context;
+	const std::vector<entt::entity> entities {entt::entity {1}, entt::null, entt::entity {300}};
+	const std::array<PlayerNames, 2> players {PlayerNames::PLAYER_TWO, PlayerNames::NEUTRAL};
+	BinaryWriter lists(context);
+	Save(lists, entities);
+	Save(lists, players);
+
+	BinaryWriter oneByOne(context);
+	oneByOne.WriteSize(entities.size());
+	for (const auto entity : entities)
+	{
+		oneByOne.WriteRaw(entity);
+	}
+	oneByOne.WriteSize(players.size());
+	for (const auto player : players)
+	{
+		oneByOne.WriteRaw(player);
+	}
+	EXPECT_EQ(lists.Bytes(), oneByOne.Bytes());
 }

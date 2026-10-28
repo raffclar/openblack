@@ -229,14 +229,15 @@ bool ObjectDrawListSystem::Listed(entt::entity entity) const
 	return index < _listedByIndex.size() && _listedByIndex[index] == entity;
 }
 
+bool ObjectDrawListSystem::Decides(const Registry& registry, entt::entity entity) const
+{
+	const auto* resident = registry.TryGet<const MapCellResident>(entity);
+	return _view.has_value() && resident != nullptr && !resident->cells.empty() && !DrawnOnTheirOwn(registry, entity);
+}
+
 bool ObjectDrawListSystem::Drawn(const Registry& registry, entt::entity entity) const
 {
-	if (!_view.has_value())
-	{
-		return true;
-	}
-	const auto* resident = registry.TryGet<const MapCellResident>(entity);
-	if (resident == nullptr || resident->cells.empty() || DrawnOnTheirOwn(registry, entity))
+	if (!Decides(registry, entity))
 	{
 		return true;
 	}

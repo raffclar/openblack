@@ -53,7 +53,22 @@ public:
 	/// skyType runs from 0 at night to 2 by day, and alignment from -1, evil, to 1, good. The overcast at the camera, 0
 	/// for a clear sky and 1 for a full one, darkens the land's colour and draws the haze in. A flash of lightning, 0 to
 	/// 255, takes every light and the haze towards white.
-	void Build(const LandLightPalette& palette, float skyType, float alignment, float overcast, uint8_t flash = 0) noexcept;
+	void Build(const LandLightPalette& palette, float skyType, float alignment, float overcast, uint8_t flash = 0,
+	           uint32_t rampDivisor = k_RampDivisor) noexcept;
+
+	/// What the ramps divide by when the light boost is 0
+	static constexpr uint32_t k_RampDivisor = 200;
+
+	/// What the ramps divide by for a light boost: 200 less 130 times the boost, in single precision, with the fraction
+	/// cut off. A boost above 1.53 gives 0 or less, which the game cannot divide by.
+	[[nodiscard]] static constexpr uint32_t RampDivisor(float lightBoost) noexcept
+	{
+		const float width = lightBoost * 130.0f;
+		return static_cast<uint32_t>(static_cast<int32_t>(200.0f - width));
+	}
+
+	/// Each channel of a and b, (a (255 - t) + b t) / divisor, at most 255; the alpha of a
+	[[nodiscard]] static uint32_t Ramp(uint32_t a, uint32_t b, uint32_t t, uint32_t divisor = k_RampDivisor) noexcept;
 
 	/// The distance haze of the frame: from `nearDistance` to `farDistance` from the camera things fade towards the haze
 	/// colour, which is added to them, while their own colour is scaled down to k of 256. The colour is a third of the

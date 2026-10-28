@@ -48,7 +48,6 @@
 #include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
-#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -90,7 +89,8 @@ entt::entity PlayerEntity(PlayerNames player)
 	return Entities().Valid(entity) && Entities().AllOf<Player>(entity) ? entity : entt::null;
 }
 
-/// The player plays in the game: a human moves its hands, or a computer mind plays it
+/// The player plays in the game: a computer mind marks it, or a person plays it. The hands of a player do not make it a
+/// human player, because a computer god has hands too.
 bool InGame(PlayerNames player)
 {
 	const auto entity = PlayerEntity(player);
@@ -102,7 +102,7 @@ bool InGame(PlayerNames player)
 	{
 		return true;
 	}
-	return Locator::handSystem::has_value() && Locator::handSystem::value().GetHandsOf(player).has_value();
+	return Locator::playerSystem::has_value() && Locator::playerSystem::value().IsHumanPlayer(player);
 }
 
 /// The player keeps the other player as an ally
@@ -170,7 +170,7 @@ float FreedomOf(PlayerNames player, entt::entity creature)
 	    mind != nullptr && mind->planner.current.has_value() && mind->planner.current->desire == Desire::RestoreHealth;
 	return computer_mind_rules::CreatureFreedom({
 	    .leashed = leashed,
-	    .turnsSinceTied = leashed ? Turn() - leash->worn->tiedTurn : 0,
+	    .turnsSinceTied = leashed ? Turn() - leash->lastTiedTurn : 0,
 	    .fighting = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsFighting(creature),
 	    .life = body.life,
 	    .exhaustion = body.exhaustion,

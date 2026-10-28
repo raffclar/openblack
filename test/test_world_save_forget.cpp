@@ -7,13 +7,16 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <memory>
 #include <vector>
 
+#include <DanceFile.h>
 #include <entt/entity/registry.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/ComputerHand.h"
@@ -134,4 +137,33 @@ TEST(WorldSaveForget, ALoadStartsTheMindOfAComputerGodAgain)
 	EXPECT_EQ(loaded.speed, 45.0f);
 	ASSERT_EQ(loaded.seen.size(), 1u);
 	EXPECT_EQ(loaded.seen.front().turn, 600u);
+}
+
+// A save does not keep the file of a dance. After a load each dance takes the file of the row that it dances again, so
+// that its groups continue to move.
+TEST(WorldSaveForget, ALoadGivesEachDanceTheFileOfItsRowAgain)
+{
+	entt::registry registry;
+	const auto worship = std::make_shared<const dance::DanceFile>(dance::DanceFile {.groupCount = 3});
+	const auto meeting = std::make_shared<const dance::DanceFile>(dance::DanceFile {.groupCount = 1});
+	const auto first = registry.create();
+	registry.emplace<ecs::components::Dance>(first).type = DanceInfo::Worship;
+	const auto second = registry.create();
+	registry.emplace<ecs::components::Dance>(second).type = DanceInfo::Meeting;
+	const auto unknown = registry.create();
+	registry.emplace<ecs::components::Dance>(unknown).type = DanceInfo::Creature;
+	ecs::world_save::TakeDanceFilesAgain(registry, [&](DanceInfo type) -> std::shared_ptr<const dance::DanceFile> {
+		switch (type)
+		{
+		case DanceInfo::Worship:
+			return worship;
+		case DanceInfo::Meeting:
+			return meeting;
+		default:
+			return nullptr;
+		}
+	});
+	EXPECT_EQ(registry.get<ecs::components::Dance>(first).file, worship);
+	EXPECT_EQ(registry.get<ecs::components::Dance>(second).file, meeting);
+	EXPECT_EQ(registry.get<ecs::components::Dance>(unknown).file, nullptr);
 }

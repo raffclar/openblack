@@ -43,6 +43,9 @@ public:
 	virtual void ShowLoadingFrame() = 0;
 	/// The load is complete and the loading screen goes
 	virtual void EndLoadingScreen() = 0;
+	/// A load with no loading screen is complete: the view prepares the work of the first frame, as at the end of a
+	/// loading screen, but draws no frame
+	virtual void EndLoadWithoutScreen() = 0;
 	/// Closes the start-of-game question with no answer. Gives true when the question was open.
 	virtual bool WithdrawSkipBox() = 0;
 	/// Closes the menu before the land changes
@@ -69,6 +72,7 @@ public:
 	void BeginLoadingScreen(loading::LoadingClock::Mode /*look*/) override {}
 	void ShowLoadingFrame() override {}
 	void EndLoadingScreen() override {}
+	void EndLoadWithoutScreen() override {}
 	bool WithdrawSkipBox() override { return false; }
 	void CloseMenuForNewLand() override {}
 	void MakeSymbolSheet() override {}
@@ -121,6 +125,8 @@ public:
 	[[nodiscard]] virtual bool IsPlaygroundLand(const std::filesystem::path& path) const = 0;
 	/// The map script of the land that loaded last, or the path of the testbed. Empty before a land loads.
 	[[nodiscard]] virtual const std::filesystem::path& GetLandPath() const = 0;
+	/// The land is the testbed. It has no temples, so a developer tool's network game on it asks for none.
+	[[nodiscard]] bool OnTestbed() const { return GetLandPath().string() == k_TestbedLandPath; }
 	/// The landscape file of the land, as the map script of the land gave it
 	[[nodiscard]] virtual const std::filesystem::path& GetLandscapePath() const = 0;
 	/// The challenge file of the scripts
@@ -134,6 +140,10 @@ public:
 	/// The map script of a land of a network game runs now. While it runs, its lines do not switch a computer mind on or
 	/// off: the slots with no human get their computer gods after the script.
 	[[nodiscard]] virtual bool RunsNetworkMapScript() const = 0;
+
+	/// Tools only (the AI soak): every god with a citadel is a computer god when the land loads, also the god of this
+	/// computer. The slots fill then, and no human joins.
+	virtual void SetAllComputerGods(bool allComputer) = 0;
 	/// Starts the scripts of the challenge: the script machine reads the challenge file, and the story starts if asked.
 	/// Gives false when the challenge file is not there.
 	virtual bool StartChallengeScripts(bool startStory) = 0;
@@ -142,6 +152,14 @@ public:
 
 	/// Plays the turn of the world when it is due, and the own turns of the temple while the player is in it
 	virtual void PlayTurns(simulation::TurnViewInterface& view) = 0;
+	/// The turns of PlayTurns without the work after them, on the calling thread. That thread can be another thread than
+	/// the main thread, while the main thread does no turn and does not change the world. Then the main thread calls
+	/// FinishTurns.
+	virtual void PlayTurnSteps(simulation::TurnViewInterface& view) = 0;
+	/// On the main thread after PlayTurnSteps: the main thread does the work that the turns gave it, and the run record
+	/// keeps the time of the turns played since `turnBefore`, from `start` to `end` (with no end, to now)
+	virtual void FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
+	                         std::optional<std::chrono::steady_clock::time_point> end) = 0;
 	/// The real time between the last two turns
 	[[nodiscard]] virtual std::chrono::steady_clock::duration GetTurnDeltaTime() const = 0;
 	/// Every some turns, the profile of the player keeps the alignment of the player, but not on the testbed

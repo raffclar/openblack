@@ -128,3 +128,40 @@ TEST(MouseMoves, AWindowThatGetsTheKeysUnderTheLockCountsNoMove)
 	}
 	EXPECT_EQ(moves.TakeMoves(), 0u);
 }
+
+TEST(MouseMoves, AFixedFrameGivesEachMessageTheClocksTime)
+{
+	using openblack::help::MessageTime;
+	// The window's own times follow the wall clock and are different in each run. The clock's time is the same.
+	EXPECT_EQ(MessageTime(51234u, 51240u, 300u, true), 300u);
+	EXPECT_EQ(MessageTime(98765u, 98770u, 300u, true), 300u);
+}
+
+TEST(MouseMoves, AFrameOnTheWallClockKeepsTheGapsBetweenMessages)
+{
+	using openblack::help::MessageTime;
+	// The clock is 1000 ms behind the window's count. The message keeps its place 6 ms before now.
+	EXPECT_EQ(MessageTime(5994u, 6000u, 5000u, false), 4994u);
+	// The difference wraps as the counts do
+	EXPECT_EQ(MessageTime(10u, 20u, 0xFFFFFFF0u, false), 0xFFFFFFE6u);
+}
+
+TEST(MouseMoves, TwoRunsWithFixedFramesCountTheSameMoves)
+{
+	using openblack::help::MessageTime;
+	// The same moves come at other wall clock times in two runs, in frames of 20 ms on the clock
+	auto count = [](uint32_t wallStart, uint32_t wallStep) {
+		MouseMoves moves;
+		uint32_t total = 0;
+		for (uint32_t frame = 0; frame < 50; ++frame)
+		{
+			const uint32_t clock = frame * 20u;
+			const uint32_t wall = wallStart + frame * wallStep;
+			moves.Message(MessageTime(wall, wall, clock, true), {static_cast<int>(frame), 7});
+			moves.Wait(clock, {static_cast<int>(frame), 7}, false);
+			total += moves.TakeMoves();
+		}
+		return total;
+	};
+	EXPECT_EQ(count(1000u, 3u), count(777777u, 41u));
+}

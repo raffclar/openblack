@@ -34,6 +34,7 @@
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/MapScriptGlobals.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/TownCreatureAttitude.h"
@@ -83,6 +84,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::nextHandRockTap>("nextHandRockTap")
 	    .Field<&openblack::ecs::RegistryContext::nextCreatureRockSmash>("nextCreatureRockSmash")
 	    .Field<&openblack::ecs::RegistryContext::scriptLetsTempleBeEntered>("scriptLetsTempleBeEntered")
+	    .Field<&openblack::ecs::RegistryContext::scriptCameraOrders>("scriptCameraOrders")
 	    .Field<&openblack::ecs::RegistryContext::templeEntrancesTakeCursor>("templeEntrancesTakeCursor", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::RegistryContext::gameOver>("gameOver")
 	    .Field<&openblack::ecs::RegistryContext::skirmish>("skirmish")
@@ -93,6 +95,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::nextDamageBeamSound>("nextDamageBeamSound")
 	    .Field<&openblack::ecs::RegistryContext::creaturesMade>("creaturesMade")
 	    .Field<&openblack::ecs::RegistryContext::nextTownGained>("nextTownGained")
+	    .Field<&openblack::ecs::RegistryContext::nextTownMade>("nextTownMade")
 	    .Field<&openblack::ecs::RegistryContext::peopleCountedInTurn>("peopleCountedInTurn")
 	    .Field<&openblack::ecs::RegistryContext::landAvoid>("landAvoid")
 	    .Field<&openblack::ecs::RegistryContext::creatureBoneReach>("creatureBoneReach")
@@ -178,7 +181,6 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::holder>("holder")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::works>("works")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTo>("tiedTo")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTurn>("tiedTurn")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::slackLength>("slackLength")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::maxLength>("maxLength");
 	Reflect<openblack::ecs::components::CreatureLeashRope::HeldRopes>(context, ValueOnly {})
@@ -284,6 +286,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::Player::Miracles::allEnabled>("allEnabled")
 	    .Field<&openblack::ecs::components::Player::Miracles::tribalPower>("tribalPower")
 	    .Field<&openblack::ecs::components::Player::Miracles::maxTribalPower>("maxTribalPower");
+	Reflect<openblack::ecs::components::Reward::Drawn>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::Reward::Drawn::position>("position")
+	    .Field<&openblack::ecs::components::Reward::Drawn::rotation>("rotation");
 	Reflect<openblack::ecs::components::Shark::DrawnPlace>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Shark::DrawnPlace::position>("position")
 	    .Field<&openblack::ecs::components::Shark::DrawnPlace::rotation>("rotation");

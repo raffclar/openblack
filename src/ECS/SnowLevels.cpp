@@ -18,6 +18,7 @@
 #include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Registry.h"
 #include "ECS/TownDesireFlags.h"
 
@@ -30,6 +31,7 @@ using components::Field;
 using components::SnowLevel;
 using components::TownDesireFlag;
 using components::Transform;
+using components::WorkshopFlag;
 
 std::optional<Hold> HoldOf(const Registry& registry, entt::entity entity)
 {
@@ -45,7 +47,7 @@ std::optional<Hold> HoldOf(const Registry& registry, entt::entity entity)
 	{
 		return Hold {.rate = field_crop::k_SnowCap, .cap = field_crop::k_SnowCap};
 	}
-	if (registry.AllOf<TownDesireFlag>(entity))
+	if (registry.AnyOf<TownDesireFlag, WorkshopFlag>(entity))
 	{
 		return Hold {.rate = town_desire_flags::k_SnowCap, .cap = town_desire_flags::k_SnowCap};
 	}

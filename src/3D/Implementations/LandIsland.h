@@ -53,6 +53,7 @@ public:
 	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const override;
 	void SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude) override;
 	void CommitAltitudeChanges() override;
+	size_t RestoreBuiltAltitudes() override;
 
 	// Debug
 	void DumpTextures() const override;
@@ -90,6 +91,11 @@ private:
 	std::vector<ChangedArea> _changedCells;
 	/// The map's corners that changed height since the height map last caught up
 	ChangedArea _changedCorners;
+	/// Of each block, the altitude of each of its 17 by 17 cells when the land was built
+	std::vector<std::vector<uint8_t>> _builtAltitudes;
+	/// Sets the altitude of a cell of a block, [x * 17 + z], and notes the cells that its drawing must make again.
+	/// Returns true when the altitude changed.
+	bool SetBlockCellAltitude(size_t block, int x, int z, uint8_t altitude);
 
 	// Renderer, Dynamics
 public:
@@ -102,6 +108,7 @@ public:
 	[[nodiscard]] const graphics::Texture2D& GetLuminosityMap() const override { return *_luminosityMap; }
 	[[nodiscard]] const graphics::Texture2D& GetCellColourMap() const override { return *_cellColourMap; }
 	[[nodiscard]] const graphics::Texture2D& GetBlockTextures() const override { return *_blockTextures; }
+	[[nodiscard]] int GetBlockTextureSide() const override { return block_texture::SideOf(_textureResolution); }
 	[[nodiscard]] const graphics::Texture2D* GetCoarsePages() const override { return _coarsePages.get(); }
 	[[nodiscard]] glm::vec4 GetCoarsePageSlot(size_t block) const override
 	{
@@ -109,7 +116,7 @@ public:
 	}
 	void PaintBlockTexels(size_t block, std::span<uint16_t> texels) const override;
 	void SetBlockTexels(size_t block, std::span<const uint16_t> texels) override;
-	[[nodiscard]] std::vector<size_t> TakeRepaintedBlocks() override;
+	[[nodiscard]] std::vector<RepaintedBlock> TakeRepaintedBlocks() override;
 
 	[[nodiscard]] glm::mat4 GetOrthoView() const override { return _view; }
 	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return _proj; }
@@ -123,6 +130,8 @@ private:
 	std::unique_ptr<graphics::Texture2D> _luminosityMap;
 	std::unique_ptr<graphics::Texture2D> _cellColourMap;
 	std::unique_ptr<graphics::Texture2D> _blockTextures;
+	/// The resolution the blocks' textures are painted at, from the detail level when the land loads
+	block_texture::Resolution _textureResolution {block_texture::Resolution::Full};
 	std::unique_ptr<graphics::Texture2D> _coarsePages;
 	std::vector<glm::vec4> _coarsePageSlots;
 	/// Every block's vertices, a run of them each
@@ -131,7 +140,7 @@ private:
 	std::unique_ptr<SharedIndexLists<graphics::IndexBuffer>> _blockTriangles;
 
 	/// The blocks whose textures were painted again with no footprints since the footprints last caught up
-	std::vector<size_t> _repaintedBlocks;
+	std::vector<RepaintedBlock> _repaintedBlocks;
 	glm::mat4 _proj;
 	glm::mat4 _view;
 	glm::u16vec2 _extentIndexMin;

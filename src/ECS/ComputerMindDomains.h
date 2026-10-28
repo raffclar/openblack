@@ -62,7 +62,7 @@ constexpr std::array<MindDomain, static_cast<size_t>(NodeKind::_Count)> k_Domain
     MindDomain::Core,         // TopWorldInteract
     MindDomain::Attitudes,    // NeedGiveToPlayer
     MindDomain::Attitudes,    // NeedTalktoPlayer
-    MindDomain::Core,         // NeedExpandInfluence
+    MindDomain::Conquest,     // NeedExpandInfluence
     MindDomain::Core,         // NeedLookaftercreature
     MindDomain::Core,         // NeedTeachCreature
     MindDomain::Core,         // NeedPlayWithCreature
@@ -144,7 +144,7 @@ constexpr std::array<MindDomain, static_cast<size_t>(NodeKind::_Count)> k_Domain
     MindDomain::Towns,        // ObjectGetWoodFromForest
     MindDomain::Towns,        // ObjectGetWoodFromOtherTown
     MindDomain::Worship,      // ObjectCastFoodSpellOnWorshipSite
-    MindDomain::Towns,        // ObjectShallCastWoodSpellAgain
+    MindDomain::Worship,      // ObjectShallCastWoodSpellAgain
     MindDomain::Towns,        // ObjectCastFoodSpellOn
     MindDomain::Towns,        // ObjectCastWoodSpellOn
     MindDomain::Worship,      // ObjectFindFreeVillagerBuilderInTown

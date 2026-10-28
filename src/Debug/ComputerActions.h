@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 #include <string_view>
 
 #include <entt/entity/entity.hpp>
@@ -36,5 +39,14 @@ bool MakeReady(computer_mind::Mind& mind, std::string_view name);
 /// Puts the action of the named node, with two things, in the queue of the computer god of the player. The god starts it
 /// in its next turn when its hand is free. False when the player has no computer mind or no node has the name.
 bool Force(PlayerNames player, std::string_view name, entt::entity first, entt::entity second);
+
+/// The mind counts the sends of its creature for the kind of miracle (0 to impress, 1 kind, 2 angry). False when the
+/// kind is not one of these.
+bool SetUntaughtSends(computer_mind::Mind& mind, size_t kind, uint32_t count);
+
+/// The computer god of the player counts the sends of its creature for the kind of miracle (0 to impress, 1 kind, 2
+/// angry), as if it sent the creature that many times while the creature knew no miracle of that kind. False when the
+/// player has no computer mind or the kind is not one of these.
+bool SetUntaughtSends(PlayerNames player, size_t kind, uint32_t count);
 
 } // namespace openblack::debug::computer_actions
