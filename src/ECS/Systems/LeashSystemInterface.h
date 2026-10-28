@@ -135,6 +135,11 @@ public:
 	/// The player shakes the leash off, drawing a scribble with the empty hand (see GestureSystemInterface): a leash held
 	/// in the hand comes off; one tied to something stays. Returns whether it came off.
 	virtual bool Shake(PlayerNames player) = 0;
+	/// Whether the leash of the player's creature comes off when the player goes into their temple: the player holds it
+	[[nodiscard]] virtual bool ComesOffAtTemple([[maybe_unused]] PlayerNames player) const { return false; }
+	/// The player goes into their temple: the leash of their creature comes off when the player holds it. Every computer
+	/// does this in the same game turn. Returns whether the leash came off.
+	virtual bool TakeOffAtTemple([[maybe_unused]] PlayerNames player) { return false; }
 
 	/// An order given with the leash held in the hand, as a tap of the Action button gives it: to go to a place on the land
 	/// (or what the creature makes of the place: drinking from the sea, working a field, sleeping at home), or to act on a

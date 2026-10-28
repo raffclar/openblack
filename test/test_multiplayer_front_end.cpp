@@ -28,6 +28,7 @@
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Gui/LandThumbnail.h"
 #include "Gui/MultiplayerBoxes.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
@@ -395,6 +396,23 @@ TEST(MultiplayerRules, FormatTextFillsTheCodesInOrder)
 	EXPECT_EQ(FormatText(u"%s and %s", std::span<const TextArgument>(arguments).first(1)), u"Alice and %s");
 	EXPECT_EQ(TimeLimitText(90), u"1:30");
 	EXPECT_EQ(TimeLimitText(5), u"0:05");
+	EXPECT_EQ(TimeLimitText(k_DefaultTimeLimitMinutes), u"0:30");
+}
+
+TEST(MultiplayerRules, TheConditionsPageOfAPlayerWhoIsNotTheHost)
+{
+	// With a land: the list of the game's conditions, the time limit and View Chat
+	constexpr auto withLand = ConditionsPageOf(true);
+	EXPECT_FALSE(withLand.selectMap);
+	EXPECT_TRUE(withLand.conditions);
+	EXPECT_TRUE(withLand.timeLimit);
+	EXPECT_TRUE(withLand.viewChat);
+	// With no land: only "Please select a map first."
+	constexpr auto noLand = ConditionsPageOf(false);
+	EXPECT_TRUE(noLand.selectMap);
+	EXPECT_FALSE(noLand.conditions);
+	EXPECT_FALSE(noLand.timeLimit);
+	EXPECT_FALSE(noLand.viewChat);
 }
 
 TEST(MultiplayerRules, GameLinesShowTheStatesOfAGame)
@@ -575,6 +593,12 @@ TEST(MultiplayerRules, ClanLogosKeepSixteenGreys)
 	EXPECT_EQ(logo->at(static_cast<size_t>(k_LogoSize) + 1), 5);
 	// Past the picture the logo has no opacity
 	EXPECT_EQ(logo->at(2), 0);
+	// Each part of a colour goes to the middle of its step of eight before the grey: a blue of 46 gives the grey 17
+	bmp[54 + 12] = 46;
+	bmp[54 + 14] = 0;
+	const auto blue = DecodeClanLogo(bmp);
+	ASSERT_TRUE(blue.has_value());
+	EXPECT_EQ(blue->at(static_cast<size_t>(k_LogoSize) + 1), 1);
 	EXPECT_FALSE(DecodeClanLogo(std::span(bmp).first(20)).has_value());
 }
 
@@ -738,6 +762,8 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(frontEnd->GetOwnSeat()->god, 2);
 	EXPECT_EQ(frontEnd->GetServerLand(), 0u);
 	ASSERT_TRUE(frontEnd->GetConditions().has_value());
+	// The game server sends no time limit, so the game's default of 30 minutes shows
+	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
 	// Back leaves the room and its channel, and the server gets the leave
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
@@ -1357,4 +1383,98 @@ TEST_F(FrontEndTest, NoControlOfTheGameListGoesUnderRefreshList)
 	boxes.GetFrontEnd()->SelectGame(0);
 	boxes.Update(0.0f);
 	check("a game picked");
+}
+
+TEST(MultiplayerRules, PlayerDetailsShowTheLinesOfThePlayerDatabase)
+{
+	const std::array<PlayerDetail, 2> details {{{.label = u"Points", .value = u"12"}, {.label = u"Country", .value = u"gb"}}};
+	EXPECT_EQ(PlayerDetailLines(details), (std::vector<std::u16string> {u"Points:12", u"Country:gb"}));
+	EXPECT_TRUE(PlayerDetailLines({}).empty());
+}
+
+namespace
+{
+/// A BMP file of one white pixel, 24 bits a pixel
+std::vector<uint8_t> WhitePixelBmp()
+{
+	std::vector<uint8_t> bmp(54 + 4, 0);
+	const auto put32 = [&bmp](size_t at, uint32_t value) {
+		for (size_t i = 0; i < 4; ++i)
+		{
+			bmp[at + i] = static_cast<uint8_t>(value >> (i * 8));
+		}
+	};
+	bmp[0] = 'B';
+	bmp[1] = 'M';
+	put32(10, 54);
+	put32(14, 40);
+	put32(18, 1);
+	put32(22, 1);
+	bmp[26] = 1;
+	bmp[28] = 24;
+	bmp[54] = 0xFF;
+	bmp[55] = 0xFF;
+	bmp[56] = 0xFF;
+	return bmp;
+}
+
+bool Inside(const DialogRect& inner, const DialogRect& outer)
+{
+	return inner.min.x >= outer.min.x && inner.min.y >= outer.min.y && inner.max.x <= outer.max.x && inner.max.y <= outer.max.y;
+}
+
+bool Crosses(const DialogRect& a, const DialogRect& b)
+{
+	return a.min.x < b.max.x && b.min.x < a.max.x && a.min.y < b.max.y && b.min.y < a.max.y;
+}
+} // namespace
+
+TEST_F(FrontEndTest, TheRoomsPicturesAreInTheFrameOfTheRoom)
+{
+	const auto texts = ButtonTexts();
+	const auto font = gui::test::LoadFont();
+	MultiplayerBoxes boxes {texts, font};
+	std::vector<std::string> asked;
+	boxes.SetThumbnailSource([&asked](const std::string& file) {
+		asked.push_back(file);
+		return std::make_shared<const land_thumbnail::LandThumbnail>(
+		    land_thumbnail::LandThumbnail {.texture = nullptr, .side = 74, .description = "A land"});
+	});
+	ToRoom();
+	boxes.Open(std::move(frontEnd));
+	auto& room = *boxes.GetFrontEnd();
+	const auto frame = MultiplayerBoxes::FrameOf(Box::Room);
+
+	// The Landscape tab shows the thumbnail of the land picked, between the two lists
+	room.SelectTab(RoomTab::Landscape);
+	room.ShowLand(0);
+	boxes.Update(0.0f);
+	ASSERT_FALSE(asked.empty());
+	EXPECT_EQ(asked.back(), room.GetLocalMaps()[0].file);
+	ASSERT_EQ(boxes.GetPictureRects(), std::vector<DialogRect> {land_thumbnail::k_Place});
+	EXPECT_TRUE(Inside(land_thumbnail::k_Place, frame));
+	const auto rects = boxes.GetVisibleRects();
+	// No control of the tab is at the place of the picture
+	EXPECT_EQ(std::ranges::count_if(rects, [](const DialogRect& rect) { return Crosses(rect, land_thumbnail::k_Place); }), 0);
+
+	// No other tab shows it
+	room.SelectTab(RoomTab::Chat);
+	boxes.Update(0.0f);
+	EXPECT_TRUE(boxes.GetPictureRects().empty());
+
+	// The Clans tab shows the logo of the clan picked, inside the clan's information
+	FakeLobby::Give(lobby.myClans, lobby_api::ClanList {.clans = {{.id = 4, .name = "The Clan", .points = 0.0}}});
+	room.ShowClan(0);
+	FakeLobby::Give(lobby.clan, lobby_api::ClanDetails {.id = 4, .name = "The Clan"});
+	FakeLobby::Give(lobby.logo, WhitePixelBmp());
+	room.SelectTab(RoomTab::Clans);
+	boxes.Update(0.0f);
+	const DialogRect info {.min = {410, 410}, .max = {660, 530}};
+	ASSERT_EQ(boxes.GetPictureRects(), std::vector<DialogRect> {land_thumbnail::LogoPlace(info)});
+	EXPECT_TRUE(Inside(land_thumbnail::LogoPlace(info), info));
+	EXPECT_TRUE(Inside(land_thumbnail::LogoPlace(info), frame));
+	// The conditions page shows no picture
+	room.Next();
+	boxes.Update(0.0f);
+	EXPECT_TRUE(boxes.GetPictureRects().empty());
 }

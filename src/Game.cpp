@@ -52,7 +52,6 @@
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/DayNightClock.h"
 #include "3D/FlatLand.h"
-#include "3D/GripLandscapeEffect.h"
 #include "3D/HandAnimation.h"
 #include "3D/HandCycleChoice.h"
 #include "3D/HandMorph.h"
@@ -733,6 +732,7 @@ Game::Game(Arguments&& args) noexcept
     , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _networkGame(args.networkGame)
+    , _throwLeadLatencyMs(args.throwLeadLatencyMs)
     , _networkJoin(args.networkJoin)
     , _networkLandPending(args.networkJoin.has_value())
     , _inspectInputLock(args.inspectInputLock)
@@ -2438,10 +2438,6 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::Interface:
 		UpdateInterfaceFrame(frame.deltaTime);
 		break;
-	case Step::GripEffect:
-		// The dust moves on by the game time of the frame, and stands still while the game is paused
-		GripLandscapeEffect::Update(std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
-		break;
 	case Step::Turns:
 	{
 		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is
@@ -3047,12 +3043,15 @@ void Game::ReportHand()
 		return;
 	}
 	_lastHandReport = report;
-	Locator::playerCommandSystem::value().Submit(player_commands::HandReport {
+	const player_commands::HandReport sent {
 	    .collidePoint = collidePoint,
 	    .handPoint = handPoint,
 	    .camera = cameraPoint,
 	    .focus = focus,
-	});
+	};
+	Locator::playerCommandSystem::value().Submit(sent);
+	// The send time gives the latency of the report at the turn that does it
+	Locator::handSystem::value().ReportSent(sent);
 }
 
 void Game::ReportView()
@@ -3656,6 +3655,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		{
 			Locator::handGrabSystem::value().PlaceOthersHeldForFrame(
 			    static_cast<int32_t>(Locator::time::value().GetFrameGameTime().count()));
+			// A thing that this computer threw shows on the flight of its lead until the turn of the command
+			Locator::handGrabSystem::value().DrawThrownForFrame();
 		}
 		{
 			// The globes show their miracles where they are now, a globe in the hand where the hand holds it, each turned
@@ -4203,6 +4204,11 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: fast {}, frame time {} us, draw every {}, until turn {}",
 		                   _simulation->settings.fast, _simulation->frameTime.value_or(std::chrono::microseconds {0}).count(),
 		                   _simulation->settings.drawEvery, _simulation->settings.untilTurn.value_or(0));
+	}
+	if (_throwLeadLatencyMs.has_value())
+	{
+		Locator::handSystem::value().FixReportLatency(_throwLeadLatencyMs);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The reports of the hand have a fixed latency of {} ms", *_throwLeadLatencyMs);
 	}
 	// A game that joins a server from the command line loads its land as a network game, as the server does
 	if (_networkGame || _networkJoin.has_value())

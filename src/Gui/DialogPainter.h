@@ -43,6 +43,7 @@ struct DialogRect
 	[[nodiscard]] glm::ivec2 Centre() const noexcept { return (min + max) / 2; }
 	[[nodiscard]] int Width() const noexcept { return max.x - min.x; }
 	[[nodiscard]] int Height() const noexcept { return max.y - min.y; }
+	[[nodiscard]] bool operator==(const DialogRect&) const = default;
 };
 
 /// Draws dialogs the way the game's front end does.

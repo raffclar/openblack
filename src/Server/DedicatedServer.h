@@ -72,6 +72,8 @@ struct NetworkSettings
 	uint32_t minGods {1};
 	/// How long a god's player can be away before the god is defeated
 	uint32_t comeBackSeconds {300};
+	/// Tests: the server lets through the commands of the test tools (player_commands::CreatureFightCheat)
+	bool testCommands {false};
 	/// The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room
 	/// every 5 seconds, so that the lobby lists the server and gives tickets for it.
 	std::string lobbyApi;
@@ -111,6 +113,8 @@ struct ServerSettings
 	std::optional<uint32_t> turns;
 	/// Tests: the loss of a temple at a turn, which every client of the network game must also have
 	std::optional<sim_run::TempleLoss> templeLoss;
+	/// Tests: a god with no temple stays in the game, which every client of the network game must also have
+	bool godsNeedNoTemple {false};
 	/// Tests: the time limit of the network game in minutes, which the start sends to every client. None: the default
 	/// time limit.
 	std::optional<uint32_t> timeLimit;

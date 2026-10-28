@@ -73,8 +73,9 @@ public:
 	void RaiseClearOfWhatIsUnder(PhysicsEntry& entry) override;
 	void SettleOnLand(PhysicsEntry& entry, bool noPullDown, bool alignToSlope) override;
 	FromHandResult LetGoFromHand(entt::entity object, const FromHand& release) override;
-	[[nodiscard]] std::optional<player_commands::ThrowStart>
-	StartOfThrow(entt::entity object, const std::optional<std::pair<glm::mat3, glm::vec3>>& drawn, bool alignToSlope) override;
+	[[nodiscard]] std::optional<hand_grab::throw_lead::LedThrow>
+	StartOfThrow(entt::entity object, const std::optional<std::pair<glm::mat3, glm::vec3>>& drawn, bool alignToSlope,
+	             glm::vec3 velocity, int leadTurns) override;
 	float PushObject(entt::entity object) override;
 	[[nodiscard]] const physics::Ground* GetGround() const override;
 	[[nodiscard]] std::vector<physics::Ellipsoid> CreatureSkeleton(entt::entity creature) override;

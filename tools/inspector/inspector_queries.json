@@ -1906,6 +1906,13 @@
   "writes": true
  },
  {
+  "description": "Sends the fight cheat of the player of this computer as a command: at the turn, the player's creature fights the nearest creature, or stops the duel that it is in. A game server takes the command only with its test commands on",
+  "kind": "object",
+  "parameters": [],
+  "query": "creatures.fight_cheat",
+  "writes": true
+ },
+ {
   "description": "Sends a creature walking or running to a point by its own legs (turning and stepping off as it does), or turning on the spot to face it",
   "kind": "object",
   "parameters": [

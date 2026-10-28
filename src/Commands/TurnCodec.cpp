@@ -142,6 +142,7 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const HandGive& command) {
 		               out.Entity(command.creature);
 		               out.Entity(command.object);
+		               out.Byte(command.leftHand ? 1 : 0);
 	               },
 	               [&out](const LeashOrder& command) {
 		               out.Byte(static_cast<uint8_t>(command.kind));
@@ -264,6 +265,8 @@ void WriteAction(Writer& out, const Action& action)
 		               }
 	               },
 	               [&out](const LeashLength& command) { out.Float(command.length); },
+	               [](const CreatureFightCheat& /*command*/) {},
+	               [](const TempleLeashOff& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -320,7 +323,13 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandGive:
 	{
 		const auto creature = in.Entity();
-		action = HandGive {.creature = creature, .object = in.Entity()};
+		const auto object = in.Entity();
+		const auto side = in.Byte();
+		if (side > 1)
+		{
+			return DecodeError::Value;
+		}
+		action = HandGive {.creature = creature, .object = object, .leftHand = side != 0};
 		return DecodeError::None;
 	}
 	case CommandTag::LeashOrder:
@@ -513,6 +522,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandShakeOff:
 		action = HandShakeOff {};
 		return DecodeError::None;
+	case CommandTag::CreatureFightCheat:
+		action = CreatureFightCheat {};
+		return DecodeError::None;
 	case CommandTag::GripDust:
 		action = GripDust {.point = in.Vector()};
 		return DecodeError::None;
@@ -614,6 +626,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 	}
 	case CommandTag::LeashLength:
 		action = LeashLength {.length = in.Float()};
+		return DecodeError::None;
+	case CommandTag::TempleLeashOff:
+		action = TempleLeashOff {};
 		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
@@ -734,6 +749,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const GiveCallOff& /*command*/) { return CommandTag::GiveCallOff; },
 	                      [](const CreatureTattoo& /*command*/) { return CommandTag::CreatureTattoo; },
 	                      [](const LeashLength& /*command*/) { return CommandTag::LeashLength; },
+	                      [](const CreatureFightCheat& /*command*/) { return CommandTag::CreatureFightCheat; },
+	                      [](const TempleLeashOff& /*command*/) { return CommandTag::TempleLeashOff; },
 	                  },
 	                  action);
 }
@@ -744,12 +761,14 @@ size_t SizeOf(const Action& action) noexcept
 	const size_t fields =
 	    std::visit(Overloaded {
 	                   [](const LeashKey& /*command*/) { return size_t {1}; },
+	                   [](const CreatureFightCheat& /*command*/) { return size_t {0}; },
+	                   [](const TempleLeashOff& /*command*/) { return size_t {0}; },
 	                   [](const LeashTap& /*command*/) { return k_Entity; },
 	                   [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
 	                   [](const HandTake& /*command*/) { return k_Entity; },
 	                   [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
 	                   [](const HandTap& /*command*/) { return k_Entity; },
-	                   [](const HandGive& /*command*/) { return 2 * k_Entity; },
+	                   [](const HandGive& /*command*/) { return 2 * k_Entity + 1; },
 	                   [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
 	                   [](const LeashPostTap& /*command*/) { return k_Entity; },
 	                   [](const HandReport& /*command*/) { return 4 * k_Vector; },

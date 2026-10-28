@@ -143,11 +143,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // from the fish of the farm.
     {.component = "FishFarm", .field = "shoal", .marker = ""},
     {.component = "FishFarm", .field = "shownAlpha", .marker = ""},
-    // The frames grow, spread and turn the sprites of a grip's puff of dust. Each computer puts the sprites with its own
-    // numbers. The turns make and remove the puff by its centre and its turns.
-    {.component = "GripLandscapeParticle", .field = "offset", .marker = ""},
-    {.component = "GripLandscapeParticle", .field = "age", .marker = ""},
-    {.component = "GripLandscapeParticle", .field = "frame", .marker = ""},
     // The pictures that face the camera, the glows and sparks of the scripts' highlights, and the highlights' spin
     {.component = "Sprite", .field = "", .marker = ""},
     {.component = "Transform", .field = "", .marker = "Sprite"},
@@ -204,6 +199,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The sparkles of the moves that the player queued in a fight: only the computer of the player adds them, as the
     // game draws them. The turns read the queue, not its sparkles.
     {.component = "CreatureFighting", .field = "marks", .marker = ""},
+    // The static that a creature fizzes through slides only while this computer draws it, as a knocked out fighter
+    // fades. The turns read how far it fizzed, not the static.
+    {.component = "CreatureSpells", .field = "staticScroll", .marker = ""},
     // The glow of the hand while a gesture is drawn, which only the computer that draws the gesture shows
     {.component = "HandGlow", .field = "", .marker = ""},
     // The sum of the strokes and slaps that the hand let go of a creature with, which only the creature's status panel
@@ -261,6 +259,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "OneOffSpellSeed", .field = "seedPlacement", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnModel", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnTurn", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "flightModel", .marker = ""},
     // The frames ease the drawn height of a field's crop toward the height that its food gives. Only the draw reads it.
     {.component = "Field", .field = "height", .marker = ""},
     // The roots that the frames show on a tree out of the land. Only the draw reads them.
@@ -312,6 +311,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "springPending", .marker = ""},
     {.component = "HandGrab", .field = "recordedThrow", .marker = ""},
     {.component = "HandGrab", .field = "lastThrow", .marker = ""},
+    {.component = "HandGrab", .field = "predicted", .marker = ""},
     {.component = "HandGrab", .field = "lastTarget", .marker = ""},
     {.component = "HandGrab", .field = "scoopSource", .marker = ""},
     {.component = "HandGrab", .field = "scoopTurns", .marker = ""},

@@ -96,6 +96,11 @@ namespace openblack::physics
 class MaterialTable;
 }
 
+namespace openblack::gui::land_thumbnail
+{
+struct LandThumbnail;
+}
+
 namespace openblack::audio::clip_sounds
 {
 class ClipSoundTable;
@@ -337,6 +342,13 @@ struct DanceShapeLoader final: BaseLoader<dance::DanceShapeFile>
 
 /// A hand demonstration, from the files under Data/HandDemo
 struct HandDemoLoader final: BaseLoader<hnd::HNDFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// The thumbnail of a network land from its ".thm" file, painted as the game paints it. Null when the file is not a
+/// thumbnail.
+struct LandThumbnailLoader final: BaseLoader<gui::land_thumbnail::LandThumbnail>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };

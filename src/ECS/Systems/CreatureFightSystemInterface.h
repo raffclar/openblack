@@ -152,7 +152,8 @@ public:
 		return std::nullopt;
 	}
 
-	/// The player's creature, the first they got, while it duels
+	/// The creature of the player of this computer, the first that the player got, while it duels. In a network game,
+	/// this is the creature of the god of this computer.
 	[[nodiscard]] virtual std::optional<entt::entity> PlayersFighter() const = 0;
 	/// Whether the hand directs the fight of the player's creature now. The creature duels, the camera shows a fight and
 	/// the hand holds nothing. Only then do the presses of the hand go to the fight.
@@ -182,6 +183,9 @@ public:
 	/// The turn of the let go of a press on a body that a player sent: the blow that waits last in the queue of the
 	/// player's creature gets the charge
 	virtual void DoCharge(PlayerNames /*player*/, float /*heldMs*/) {}
+	/// The turn of the fight cheat that a player sent (tools only). The leash of the player's creature comes off. A
+	/// creature in a fight stops the fight with no winner. Any other creature starts a fight with the nearest creature.
+	virtual void DoFightCheat(PlayerNames /*player*/) {}
 	/// Whether a press the fight took is held
 	[[nodiscard]] virtual bool IsPressed() const = 0;
 	/// What the hand offers over a thing, or nothing, while the hand directs the fight

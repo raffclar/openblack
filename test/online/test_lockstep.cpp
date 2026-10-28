@@ -152,7 +152,7 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 class LockstepTest: public ::testing::Test
 {
 protected:
-	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7)
+	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7, bool testCommands = false)
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
@@ -162,7 +162,8 @@ protected:
 		        .minGods = gods,
 		        .godSlots = slots,
 		        .comeBackMicroseconds = comeBack,
-		        .keptTurns = 3200});
+		        .keptTurns = 3200,
+		        .testCommands = testCommands});
 	}
 
 	/// A room with no human god (tools): the game starts at once, and the world turns when this many observers joined
@@ -352,6 +353,28 @@ TEST_F(LockstepTest, AClientCannotSendTheLeaveOfTheServer)
 	Frames({&alice}, 3);
 	EXPECT_EQ(host->RefusedBlocks(), 2u);
 	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+}
+
+TEST_F(LockstepTest, AServerLeavesOutTheFightCheatWithoutItsTestCommands)
+{
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 6);
+	alice.session.Send(CreatureFightCheat {});
+	Frames({&alice}, 3);
+	EXPECT_EQ(host->RefusedBlocks(), 1u);
+	EXPECT_EQ(host->Seats()[0].commands.count(static_cast<uint8_t>(turn_codec::CommandTag::CreatureFightCheat)), 0u);
+}
+
+TEST_F(LockstepTest, AServerWithItsTestCommandsOnTakesTheFightCheat)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 7, true);
+	Computer bob(network, now, "god:bob");
+	Frames({&bob}, 6);
+	bob.session.Send(CreatureFightCheat {});
+	Frames({&bob}, 3);
+	EXPECT_EQ(host->RefusedBlocks(), 0u);
+	EXPECT_EQ(host->Seats()[0].commands.at(static_cast<uint8_t>(turn_codec::CommandTag::CreatureFightCheat)), 1u);
 }
 
 TEST_F(LockstepTest, AClientThatLosesTheSocketComesBackAndGetsTheTurnsThatItMissed)

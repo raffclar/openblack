@@ -100,6 +100,9 @@ struct HandGive
 {
 	entt::entity creature;
 	entt::entity object;
+	/// Whether the player who gives has a left hand. The creature takes the thing with its matching hand on every
+	/// computer, so the command carries the side of the hand of the computer that sends it.
+	bool leftHand {false};
 };
 
 /// An order to the player's creature on its leash
@@ -349,6 +352,12 @@ struct HandShakeOff
 {
 };
 
+/// Tools: the creature of the player starts a fight with the nearest creature, or a fight that it is in stops. Only a
+/// game server with its test commands on lets this command through.
+struct CreatureFightCheat
+{
+};
+
 /// The hand of the player gripped the land: the turn makes a puff of dust at the point on the ground. Thus every computer
 /// makes the same dust at the same turn.
 struct GripDust
@@ -448,12 +457,18 @@ struct ViewReport
 	bool operator==(const ViewReport& other) const = default;
 };
 
+/// The player goes into their temple. When the player holds the leash of their creature, the leash comes off.
+struct TempleLeashOff
+{
+};
+
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
-                            GripDust, HelpReport, HelpQuery, ViewReport, GiveCallOff, CreatureTattoo, LeashLength>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
+                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
+                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength>;
 
 /// A command and the player that sent it
 struct Command

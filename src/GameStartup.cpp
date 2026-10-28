@@ -13,10 +13,12 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iterator>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
 #include <intrin.h>
@@ -761,6 +763,19 @@ void Game::FinishLoadingBehindScreen()
 void Game::PrepareFirstFrames()
 {
 	const auto& config = Locator::config::value();
+	// The maps of where creatures can walk and where they may go read only the land. Other threads make them while
+	// this thread does the rest. A creature's first move needs the first map and the first fight needs the second.
+	std::vector<std::future<void>> landMaps;
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		landMaps.push_back(std::async(std::launch::async, [] {
+			[[maybe_unused]] const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+		}));
+	}
+	if (Locator::creatureFightSystem::has_value())
+	{
+		landMaps.push_back(std::async(std::launch::async, [] { Locator::creatureFightSystem::value().PrepareLand(); }));
+	}
 	// The first scene draw bakes the shadows of the whole island into the land, which takes tens of milliseconds
 	if (config.drawEntities && Locator::rendererInterface::has_value())
 	{
@@ -786,16 +801,6 @@ void Game::PrepareFirstFrames()
 	{
 		Locator::objectDrawListSystem::value().PrepareLand();
 	}
-	// A creature's first move finds where creatures can walk on the whole land
-	if (Locator::creatureLocomotionSystem::has_value())
-	{
-		[[maybe_unused]] const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
-	}
-	// The first fight finds where creatures may go on the whole land
-	if (Locator::creatureFightSystem::has_value())
-	{
-		Locator::creatureFightSystem::value().PrepareLand();
-	}
 	// The first start of each effect reads its file, its models and its light maps
 	if (Locator::particleSystem::has_value())
 	{
@@ -815,6 +820,17 @@ void Game::PrepareFirstFrames()
 	{
 		Locator::gestureSystem::value().LoadTemplates();
 	}
+	for (auto& map : landMaps)
+	{
+		map.get();
+	}
+}
+
+void Game::EndLoadWithoutScreen()
+{
+	// The renderer made the land's pipelines and resources before the load, so no frame warms them up. The work of the
+	// first frame that depends on the loaded world is done now.
+	PrepareFirstFrames();
 }
 
 void Game::EndLoadingScreen()

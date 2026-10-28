@@ -224,8 +224,8 @@ bool TattooEditorDialog::KeyDown(int key, ecs::systems::TattooEditorSystemInterf
 
 void TattooEditorDialog::Ok(ecs::systems::TattooEditorSystemInterface& editor)
 {
-	// There are no network games, where OK first warns that others see the change only once the player leaves the
-	// temple
+	// In a network game with a change, the game first shows a warning box. openblack does not show this box yet, so OK
+	// always closes the editor.
 	if (editor.Ok(false) == creature_tattoo_editor::Accept::Close)
 	{
 		Close();

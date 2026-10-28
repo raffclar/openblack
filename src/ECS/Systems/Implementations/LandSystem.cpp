@@ -36,6 +36,7 @@
 #include "3D/GodsRingLand.h"
 #include "3D/LandData.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandReuse.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
@@ -522,14 +523,35 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 {
 	const InspectorLoading loading(landPath.filename().generic_string());
 	LoadTimer timer(fmt::format("saved land {}", landPath.stem().string()));
-	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
+	// A world state of the land that is open keeps the land: the landscape is the same, so only the altitudes that the
+	// world changed go back. The world loads its own changes after. The load is short and shows no loading screen.
+	const bool builtByGame = landPath == k_TestbedLandPath || gods_ring_map::IsThisMap(landPath.generic_string());
+	const bool keepsLand = land_reuse::KeepsLand({
+	    .worldState = use == SavedLandUse::WorldState,
+	    .landLoaded = Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded(),
+	    .openLand = _landPath,
+	    .openLandscape = _landscapePath,
+	    .savedLand = landPath,
+	    .savedLandscape = landscape,
+	    .builtByGame = builtByGame,
+	});
+	if (!keepsLand)
+	{
+		View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
+	}
 	PrepareNewLand(land_change::Kind::SavedGame);
 	_landPath = landPath;
+	timer.Step("reset");
 	View().ShowLoadingFrame();
 	try
 	{
+		if (keepsLand)
+		{
+			InitializeLevelOnOpenLand();
+			SetUpLandscape();
+		}
 		// The testbed's flat land comes from no file: it is built again
-		if (landPath == k_TestbedLandPath)
+		else if (landPath == k_TestbedLandPath)
 		{
 			InitializeLevel(flat_land::Build());
 			SetUpLandscape();
@@ -603,6 +625,7 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	}
 	RemakeModelsAfterLoad();
 	registry.SetDirty();
+	timer.Step("found again");
 	// Each load of a saved game starts a game. The world of a game server continues as the server has it.
 	if (use == SavedLandUse::SavedGame)
 	{
@@ -618,8 +641,24 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// save keeps no symbol.
 	View().MakeSymbolSheet();
 	View().ShowLoadingFrame();
+	// The creatures' map of the land that the saved world brings stays: the start of the land makes the map from the towns
+	// of now, but the saved world made it from the towns at the start. A save with no map gets the map of now.
+	auto exploration = std::move(registry.Context().explorationMap);
 	StartNewLand(land_change::Kind::SavedGame);
-	View().EndLoadingScreen();
+	if (exploration.has_value())
+	{
+		registry.Context().explorationMap = std::move(exploration);
+	}
+	timer.Step("start");
+	if (keepsLand)
+	{
+		View().EndLoadWithoutScreen();
+	}
+	else
+	{
+		View().EndLoadingScreen();
+	}
+	timer.Step("first frames");
 	return restored;
 }
 

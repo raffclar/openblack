@@ -118,11 +118,17 @@ def game_arguments(options, record, log, until_turn, fast, driven):
             args += ["--skip-opening", options.opening]
     if getattr(options, "network_game", False):
         args.append("--sim-network-game")
+        # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
+        args += sim_report.gods_need_no_temple_args(False, land=getattr(options, "land", ""),
+                                                    testbed=getattr(options, "testbed", False),
+                                                    scenario=getattr(options, "scenario", None))
     # The modes of the AI soak (developer builds): every god is a computer god, with the personality of an AI seed
     if getattr(options, "all_computer_gods", False):
         args.append("--sim-all-computer-gods")
     if getattr(options, "ai_seed", None) is not None:
         args += ["--sim-ai-seed", str(options.ai_seed)]
+    if getattr(options, "throw_lead_latency_ms", None) is not None:
+        args += ["--throw-lead-latency-ms", str(options.throw_lead_latency_ms)]
     args += options.extra
     return args
 
@@ -649,6 +655,7 @@ def parse(argv):
         sub.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods (the AI soak)")
         sub.add_argument("--network-game", action="store_true",
                          help="play the world as a network game does: no pause, and the turns read no part of a frame")
+        sub.add_argument("--throw-lead-latency-ms", type=int, help="a fixed latency in ms for the reports of the hand, so that the lead of each throw is the same in each run")
         sub.add_argument("extra", nargs="*", help="more arguments for the game, after --")
     return parser.parse_args(argv)
 

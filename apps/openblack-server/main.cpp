@@ -70,12 +70,14 @@ int main(int argc, char* argv[])
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
 		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
+		("gods-need-no-temple", "Tests: a god with no temple stays in the game, for a land that makes no temple at its start (a story land). Each client needs the same switch (--sim-gods-need-no-temple).")
 		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0). Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
 		("time-limit", "Tests: the time limit of the network game in minutes, in place of the default 30. The start sends it to every client.", cxxopts::value<uint32_t>())
 		("conditions", "Tools: the winning conditions of the network game, as the host picks them: [LAND:]NAME=VALUE,... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0. The values must be in the limits of the land (or of LAND) in that file. The start sends them to every client.", cxxopts::value<std::string>())
 		("all-computer-gods", "Tools: every god with a citadel is a computer god, and the room has no human god. The game starts at once: with --gods N the world turns when N observers joined (for the AI soak).")
 		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
+		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.")
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 		("row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world of a client parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("row-dump-turn", "Tools: with --row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
@@ -165,6 +167,7 @@ int main(int argc, char* argv[])
 		{
 			settings.turns = result["turns"].as<uint32_t>();
 		}
+		settings.godsNeedNoTemple = result.count("gods-need-no-temple") != 0;
 		if (result.count("temple-loss") != 0)
 		{
 			settings.templeLoss = openblack::sim_run::ParseTempleLoss(result["temple-loss"].as<std::string>());
@@ -250,6 +253,7 @@ int main(int argc, char* argv[])
 			network.minGods = result.count("min-gods") == 0 && result.count("gods") != 0 ? result["gods"].as<uint32_t>()
 			                                                                             : result["min-gods"].as<uint32_t>();
 			network.comeBackSeconds = result["come-back-seconds"].as<uint32_t>();
+			network.testCommands = result.count("test-commands") != 0;
 			if (result.count("lobby-api") != 0)
 			{
 				network.lobbyApi = result["lobby-api"].as<std::string>();

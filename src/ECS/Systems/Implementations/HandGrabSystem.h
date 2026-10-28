@@ -51,6 +51,7 @@ public:
 	void ProcessHandTurn();
 	void PlaceHeldForTurn() override;
 	void PlaceOthersHeldForFrame(int32_t frameMs) override;
+	void DrawThrownForFrame() override;
 	void DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved) override;
 	void DoLock(PlayerNames player, entt::entity object) override;
 	void DoApply(PlayerNames player, entt::entity target) override;
@@ -73,7 +74,7 @@ public:
 	void DoTake(PlayerNames player, entt::entity object) override;
 	void DoLetGo(PlayerNames player, const player_commands::HandLetGo& letGo) override;
 	void DoTap(PlayerNames player, entt::entity object) override;
-	void DoGive(PlayerNames player, entt::entity creature, entt::entity object) override;
+	void DoGive(PlayerNames player, entt::entity creature, entt::entity object, bool leftHand) override;
 	void DoGiveCallOff(PlayerNames player, entt::entity creature) override;
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
@@ -172,7 +173,7 @@ private:
 	/// Lets go of the thing that the hand holds. With no start, the hand must let go: the thing goes from where it is.
 	void LetGo(components::HandGrab& grab, glm::vec3 velocity, const std::optional<player_commands::ThrowStart>& start);
 	/// Where a thing that the hand lets go of at a velocity starts, as this computer drew it last
-	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, glm::vec3 velocity);
+	[[nodiscard]] hand_grab::throw_lead::LedThrow ThrowStartOf(entt::entity object, glm::vec3 velocity, int leadTurns);
 	/// The hand holds nothing, having let go before taking anything or let go of what it held
 	void Empty(components::HandGrab& grab);
 

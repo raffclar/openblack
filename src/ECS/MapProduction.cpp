@@ -11,6 +11,7 @@
 #include "MapProduction.h"
 
 #include <algorithm>
+#include <unordered_set>
 #include <utility>
 
 #include <glm/geometric.hpp>
@@ -160,10 +161,11 @@ MapProduction::MapProduction(OutlineSource outlines)
 	// The lists that filing writes exist before any entity goes, so that the filing done as an entity goes adds no list
 	static_cast<void>(_registry->Size<MapCellMover>());
 	static_cast<void>(_registry->Size<FixedOutline>());
-	// Anything already made is filed too
-	ForEachMapComponent([this]<typename Component>() {
-		_registry->Each<const Component>([this](entt::entity entity, const auto&... /*unused*/) {
-			if (std::ranges::find(_made, entity) == _made.end())
+	// Anything already made is filed too, each thing once, in the order the components first name it
+	std::unordered_set<entt::entity> listed(_made.begin(), _made.end());
+	ForEachMapComponent([this, &listed]<typename Component>() {
+		_registry->Each<const Component>([this, &listed](entt::entity entity, const auto&... /*unused*/) {
+			if (listed.insert(entity).second)
 			{
 				_made.push_back(entity);
 			}

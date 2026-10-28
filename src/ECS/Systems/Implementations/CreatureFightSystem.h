@@ -84,6 +84,7 @@ public:
 	void DoCharge(PlayerNames player, float heldMs) override;
 	[[nodiscard]] bool IsPressed() const override { return _pressed.has_value(); }
 	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const override;
+	void DoFightCheat(PlayerNames player) override;
 	bool GestureSpecialMove() override;
 	bool GestureSpell(MagicType type) override;
 	void DrawMarks(float realMs, const glm::vec3& eye) override;
