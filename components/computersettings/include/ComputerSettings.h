@@ -30,7 +30,8 @@
 /// - "custom_detail": an object with the values of the custom detail level (5): "model_detail" (more than 0, at most
 ///   1), "small_bump", "clouds", "cloud_shadows", "water_tiling" (0 to 1), "land_reflection", "temple_reflections",
 ///   "temple_lightmaps", "temple_glows", "temple_volume_light", "temple_people", "rain_splashes" (0 to 255), "fog",
-///   "weather", "object_lighting", "object_shadows", "low_res_textures", "coarse_land"
+///   "weather", "object_lighting", "object_shadows", "low_res_textures", "coarse_land", "light_boost" (at most 1.53; a larger
+///   value would divide the light by zero)
 namespace openblack::computer_settings
 {
 
@@ -58,6 +59,8 @@ struct CustomDetail
 	std::optional<bool> objectShadows;
 	std::optional<bool> lowResTextures;
 	std::optional<bool> coarseLand;
+	/// Brightens the light of the sky and the land; 0 for every level of the table
+	std::optional<float> lightBoost;
 
 	bool operator==(const CustomDetail&) const = default;
 };
