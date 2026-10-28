@@ -50,6 +50,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -61,6 +62,7 @@
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
 #include "Gui/MultiplayerFrontEnd.h"
+#include "Gui/IncomingMessageStripRules.h"
 #include "Gui/VillagerLabels.h"
 #include "Level.h"
 #include "Locator.h"
@@ -78,7 +80,11 @@ constexpr std::string_view k_SkipBox = "skip_box";
 constexpr std::string_view k_EndBox = "end_box";
 constexpr std::string_view k_TattooEditor = "tattoo_editor";
 constexpr std::string_view k_MusicPlayer = "music_player";
+/// The incoming message at the bottom left of the screen; its button is "message"
+constexpr std::string_view k_IncomingMessage = "incoming_message";
 constexpr std::string_view k_Multiplayer = "multiplayer";
+/// The chat of a network game at the top right of the screen
+constexpr std::string_view k_Chat = "chat";
 
 /// The names of the multiplayer front end's boxes, for gui.windows
 constexpr std::array<std::string_view, 6> k_MultiplayerBoxes = {"choose_connection", "find_games", "login",
@@ -497,6 +503,39 @@ std::vector<WindowInfo> GameGui::Windows() const
 			end.buttons.push_back(control.name);
 		}
 		windows.push_back(std::move(end));
+		// The incoming message at the bottom left of the screen, open while its button shows
+		const auto& incoming = game->GetInterface()->GetIncomingMessages();
+		WindowInfo message {.name = std::string(k_IncomingMessage), .kind = "game", .open = incoming.IsActive()};
+		if (incoming.IsActive())
+		{
+			message.buttons.emplace_back("message");
+		}
+		windows.push_back(std::move(message));
+
+		// The chat at the top right of the screen: open while its controls show. The page tells whether the line is
+		// open, and the lines are the last lines that came to this computer.
+		const auto& chatControls = game->GetInterface()->GetChatControls();
+		WindowInfo chatWindow {.name = std::string(k_Chat), .kind = "game", .open = chatControls.IsActive()};
+		chatWindow.page = chatControls.IsQuickChatOpen() ? "quick chat" : chatControls.IsOpen() ? "open" : "shut";
+		chatWindow.selected = gui::ToUtf8(chatControls.GetLine());
+		for (const auto& control : DialogControls(chatControls.GetNamedControls()))
+		{
+			chatWindow.buttons.push_back(control.name);
+		}
+		if (Locator::chatSystem::has_value())
+		{
+			constexpr size_t k_ShownChatLines = 10;
+			const auto received = Locator::chatSystem::value().GetReceived();
+			const auto first = received.size() > k_ShownChatLines ? received.size() - k_ShownChatLines : 0;
+			for (const auto& line : received.subspan(first))
+			{
+				chatWindow.lines.push_back(fmt::format("turn {} god {}{}: {}", line.turn, static_cast<int>(line.sender),
+				                                       line.taunt.has_value() ? fmt::format(" taunt {}", *line.taunt) : "",
+				                                       gui::ToUtf8(line.text)));
+			}
+		}
+		windows.push_back(std::move(chatWindow));
+
 		// The multiplayer front end over the temple's future room: its box, and the controls of the box or its message
 		const auto& boxes = game->GetInterface()->GetMultiplayerBoxes();
 		WindowInfo multiplayer {.name = std::string(k_Multiplayer), .kind = "game", .open = boxes.IsActive()};
@@ -712,6 +751,51 @@ std::string GameGui::Send(std::span<const InputEvent> events)
 std::string GameGui::Press(std::string_view window, const std::vector<ButtonPathStep>& path)
 {
 	const auto lower = Lower(window);
+	if (lower == k_IncomingMessage)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			return "the game's dialogs aren't made yet";
+		}
+		auto& interface = *game->GetInterface();
+		if (!interface.GetIncomingMessages().IsActive())
+		{
+			return "no incoming message shows now (the list is empty, or a dialog, the temple, a video or a cut scene "
+			       "hides it)";
+		}
+		const std::vector<gui::Dialog::NamedControl> named {
+		    {.name = u"message", .kind = "button", .rect = gui::incoming_message_strip::ButtonRect()}};
+		const auto found = FindDialogControl(DialogControls(named), path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the incoming message: " + *why + "; its one button is message";
+		}
+		const auto size = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(800, 600);
+		return Send(ClickAt(interface.FromIncomingMessages(std::get<glm::ivec2>(found), static_cast<glm::u16vec2>(size))));
+	}
+	if (lower == k_Chat)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			return "the game's dialogs aren't made yet";
+		}
+		auto& interface = *game->GetInterface();
+		if (!interface.GetChatControls().IsActive())
+		{
+			return "the chat doesn't show now (a game of one player with the chat shut, a dialog, a video or the "
+			       "creature in the hand hides it)";
+		}
+		const auto controls = DialogControls(interface.GetChatControls().GetNamedControls());
+		const auto found = FindDialogControl(controls, path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the chat: " + *why + "; gui.windows lists its buttons";
+		}
+		const auto size = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(800, 600);
+		return Send(ClickAt(interface.FromChatControls(std::get<glm::ivec2>(found), static_cast<glm::u16vec2>(size))));
+	}
 	if (lower == k_MusicPlayer)
 	{
 		auto* game = Game::Instance();

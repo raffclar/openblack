@@ -48,7 +48,8 @@ struct HostSettings
 	game_socket::Start start;
 	/// The checksum of the server's land file, which each player's land file must have before the start
 	uint64_t landChecksum {0};
-	/// The fewest gods with a player that start the game. The start comes when each god in the room is ready.
+	/// The fewest gods with a player that start the game. The start comes when each god in the room is ready. In a room
+	/// with no human god (tools), the world turns when this many observers joined.
 	uint32_t minGods {1};
 	/// The god slots of the room: the citadels of the land. A god who joins when all the slots have a player is refused.
 	uint8_t godSlots {k_DefaultGodSlots};
@@ -56,6 +57,9 @@ struct HostSettings
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
 	/// The turns that the server keeps to send again to a player who comes back: 5 minutes of turns, and some more
 	uint32_t keptTurns {3200};
+	/// Tests: the commands of the test tools (player_commands::CreatureFightCheat) go into the turns. Without this, the
+	/// server leaves them out.
+	bool testCommands {false};
 };
 
 /// The game role of the server in a network game (authoritative lockstep, user decision MP-Q1). It lets in the players
@@ -125,6 +129,10 @@ public:
 	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
 	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
 	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
+	/// The account ids that the lobby banned from the server. Before the start, a banned god leaves the room at once with
+	/// "kicked", and the room refuses the join of a banned god. After the start, a ban changes nothing (deviation 146).
+	void SetBans(std::set<int64_t> accounts);
+	[[nodiscard]] const std::set<int64_t>& Bans() const { return _bans; }
 
 	/// The commands of the server itself: it has no player
 	void Send(const player_commands::Action& action) override;
@@ -187,6 +195,8 @@ private:
 	void StartGame();
 	/// The start stops before the game starts: the frame tells the players why
 	void StopStart(const game_socket::Frame& why);
+	/// The human gods of the seats, with their names, for the start of a player
+	[[nodiscard]] std::vector<game_socket::God> Gods() const;
 	/// The connections of the gods with a player
 	[[nodiscard]] std::set<ConnectionId> GodConnections() const;
 	void SendTo(ConnectionId connection, const game_socket::Frame& frame);
@@ -197,6 +207,8 @@ private:
 	/// The end box of a decided game opened on a client: no turn comes after the turns closed so far
 	void StopTurns();
 	[[nodiscard]] bool AnyGodConnected() const;
+	/// Tools: the room has no human god. The game starts at once, and observers watch it.
+	[[nodiscard]] bool AllComputerGods() const { return _settings.start.allComputerGods; }
 
 	WebSocketServerInterface& _sockets;
 	CheckTicket _checkTicket;
@@ -224,6 +236,10 @@ private:
 	/// The alignments that the gods sent with their creature files, by god slot
 	std::map<uint8_t, float> _startAlignments;
 	bool _pausedBefore {false};
+	/// Tools, a room with no human god: the world turns from the time that as many observers as the room waits for joined
+	bool _observersJoined {false};
+	/// Tools, a room with no human god: at least one observer joined, so a room with no observer left is over
+	bool _observerSeen {false};
 	uint32_t _turnsDone {0};
 	/// The last turn of the game, once the turns stopped
 	std::optional<uint32_t> _stoppedAfter;
@@ -242,6 +258,8 @@ private:
 	uint32_t _refusedBlocks {0};
 	WorldState _worldState;
 	PartListener _partListener;
+	/// The account ids that the lobby banned from the server
+	std::set<int64_t> _bans;
 };
 
 } // namespace openblack::server

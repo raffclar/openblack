@@ -1227,9 +1227,9 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 		entry->body->ClearForces();
 		entry->body->TouchGround(ground);
 	}
-	// Which bodies' points are tested against which bodies' faces
-	std::vector<physics::PairMember> members;
-	members.reserve(_entries.size());
+	// Which bodies' points are tested against which bodies' faces. The list keeps its memory from step to step.
+	auto& members = _pairMembers;
+	members.clear();
 	for (const auto& entry : _entries)
 	{
 		members.push_back({.centre = entry->body->Centre(),

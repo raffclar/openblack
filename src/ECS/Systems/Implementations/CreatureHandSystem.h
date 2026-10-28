@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 
 #include "Camera/CreatureInteractCameraModel.h"
+#include "Creature/CreatureSentReactions.h"
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 
@@ -36,7 +37,7 @@ public:
 	[[nodiscard]] creature_hand::InteractTip InteractTipOver(entt::entity creature, bool handInInfluence) const override;
 	[[nodiscard]] bool IsClick() const override;
 	std::optional<HandPose> Update(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, glm::vec2 cursor,
-	                               float screenWidth, float seconds) override;
+	                               float screenWidth, const input_steps::Steps& steps) override;
 	void Release() override;
 	bool Stroke(entt::entity creature, creature_feedback::BodyPart part) override;
 	bool Slap(entt::entity creature, float heightShare, bool gentle, bool sweepsRight) override;
@@ -85,19 +86,23 @@ private:
 	/// The hand's up this frame, easing as the hand rests on the body or leaves it
 	static glm::vec3 TurnHand(components::HandOnCreature& contact, bool onBody, bool cursorMovedAcross, const glm::vec3& normal,
 	                          const glm::vec3& creaturePosition, float seconds);
+	/// The hand's up as it eases now, upright when it has no length
+	[[nodiscard]] static glm::vec3 UpOf(const components::HandOnCreature& contact);
 	/// A third hard slap in a row at one height bruises the creature where the line of sight meets its skin
 	/// The world takes a bruise: the slapping player's own creature loses some life and, slapped itself, takes the wound
 	static void ApplyBruise(PlayerNames player, const player_commands::CreatureBruise& bruise);
 	static void Bruise(entt::entity creature, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, uint8_t column);
-	/// The held creature reacts to a stroke or a slap: at once, or in a network game at the next turn on every computer.
+	/// The held creature reacts to a stroke or a slap: at once with no commands, else at a later turn on every computer.
 	/// Whether the creature takes the reaction now.
-	static bool React(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	                  float interruptsAfter);
+	bool React(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
+	           float interruptsAfter);
 
 	/// The camera on the creature while the hand holds it, and where the player's camera was going when it took over
 	CreatureInteractCameraModel* _cameraModel {nullptr};
 	std::optional<creature_interact::View> _returnTo;
 	bool _focusTip {false};
+	/// The reactions that the hand sent, which wait for a turn. Input of this computer only: the world does not read it.
+	creature_hand::SentReactions _sentReactions;
 };
 
 } // namespace openblack::ecs::systems

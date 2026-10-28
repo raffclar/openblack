@@ -217,15 +217,27 @@ TEST(BirdRules, ADeadBodysSmokeRisesHalfItsHeightOutTheWayItFaces)
 	EXPECT_NEAR(south.z, 20.2f, 1e-5f);
 }
 
-TEST(BirdRules, AnAnimalInACreaturesHandTakesItsTurnOnlyWhileItDies)
+TEST(BirdRules, AnAnimalInAHandTakesItsTurn)
 {
 	using animals::TakesOwnTurn;
-	EXPECT_TRUE(TakesOwnTurn({}, false));
-	// In a creature's hand it falls dying and lies dead, as a half-dead animal does
-	EXPECT_FALSE(TakesOwnTurn({.creature = true}, false));
-	EXPECT_TRUE(TakesOwnTurn({.creature = true}, true));
-	// A tornado, the player's hand or the physics moves it
-	EXPECT_FALSE(TakesOwnTurn({.tornado = true}, true));
-	EXPECT_FALSE(TakesOwnTurn({.playersHand = true}, true));
-	EXPECT_FALSE(TakesOwnTurn({.physics = true}, true));
+	EXPECT_TRUE(TakesOwnTurn({}));
+	// In the player's hand or in the hand of a creature, its needs grow and a creature can make it die
+	EXPECT_TRUE(TakesOwnTurn({.playersHand = true}));
+	EXPECT_TRUE(TakesOwnTurn({.creature = true}));
+	// A tornado or the physics moves it
+	EXPECT_FALSE(TakesOwnTurn({.tornado = true}));
+	EXPECT_FALSE(TakesOwnTurn({.physics = true}));
+	EXPECT_FALSE(TakesOwnTurn({.playersHand = true, .physics = true}));
+}
+
+TEST(BirdRules, AnAnimalWithNoLifeLiesDeadAtOnceOnlyWhenAKillMadeItDie)
+{
+	using animals::LandedAs;
+	using animals::LandsAs;
+	EXPECT_EQ(LandsAs(true, false), LandedAs::Landed);
+	// The mark of a kill does not stop a landing with life
+	EXPECT_EQ(LandsAs(true, true), LandedAs::Landed);
+	// A body that a hunter ate has no mark, so it falls dying again
+	EXPECT_EQ(LandsAs(false, false), LandedAs::Dying);
+	EXPECT_EQ(LandsAs(false, true), LandedAs::Dead);
 }

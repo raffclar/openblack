@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -20,6 +21,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureMarks.h"
+#include "Creature/CreatureTattoo.h"
 #include "Creature/LeashKeys.h"
 #include "Enums.h"
 
@@ -99,6 +101,9 @@ struct HandGive
 {
 	entt::entity creature;
 	entt::entity object;
+	/// Whether the player who gives has a left hand. The creature takes the thing with its matching hand on every
+	/// computer, so the command carries the side of the hand of the computer that sends it.
+	bool leftHand {false};
 };
 
 /// An order to the player's creature on its leash
@@ -348,6 +353,12 @@ struct HandShakeOff
 {
 };
 
+/// Tools: the creature of the player starts a fight with the nearest creature, or a fight that it is in stops. Only a
+/// game server with its test commands on lets this command through.
+struct CreatureFightCheat
+{
+};
+
 /// The hand of the player gripped the land: the turn makes a puff of dust at the point on the ground. Thus every computer
 /// makes the same dust at the same turn.
 struct GripDust
@@ -356,12 +367,129 @@ struct GripDust
 	glm::vec3 point {0.0f};
 };
 
+/// The report of what the player did that the help counts, since the last report: the help events of the input of the
+/// player, and what the world camera of the player shows. Only the computer of the player counts the report, at the
+/// turn. Thus the help counts the same things at the same turns at all frame rates.
+struct HelpReport
+{
+	/// One bit for each help event: bit n is event n (see help::profile)
+	uint64_t events {0};
+	/// A front-end box shows, for example the menu of the game. The help then counts nothing.
+	bool boxShows {false};
+	/// The cursor is on a point of the world. Then the point of the report of the hand (HandReport) is under the cursor.
+	bool cursorOnPoint {false};
+	/// The events of the view of the world camera, which the help counts each turn until the next report (see
+	/// help::profile::CameraViewEvents). None when a script, the temple or a creature has the camera.
+	bool cameraSeesLand {false};
+	bool cameraNearAndSteep {false};
+	bool cameraSeesSky {false};
+
+	bool operator==(const HelpReport& other) const = default;
+};
+
+/// The Help key: the advisors tell the player about a thing, else about the ground at a point. The computer of the
+/// player finds the thing and the point as its hand shows them. Only that computer says the help, at the turn.
+struct HelpQuery
+{
+	/// The thing in the hand or under the hand, or none
+	entt::entity thing {entt::null};
+	/// The point on the ground under the hand, if the hand is over the ground
+	bool hasGround {false};
+	glm::vec3 ground {0.0f};
+};
+
+/// The hand moved too far from the creature that reaches for the thing that the hand gave it. The creature gives up the
+/// take, unless it already has the thing, and the hand of the player forgets the gift.
+struct GiveCallOff
+{
+	entt::entity creature {entt::null};
+};
+
+/// The tattoo editor changed the tattoos of a creature: its slots, and the block of the player's own pictures when the
+/// editor made the block again. The turn puts them on the creature on every computer.
+struct CreatureTattoo
+{
+	entt::entity creature {entt::null};
+	creature_tattoo::Slots slots {};
+	/// When set, the block of pictures changes too (see creature_tattoo::PicturesBlock)
+	bool hasPictures {false};
+	std::vector<uint8_t> pictures;
+
+	bool operator==(const CreatureTattoo& other) const = default;
+};
+
+/// The hand let go of the rope of the leash of the player's creature, which the leash ties to a thing. The leash becomes
+/// this long, and its slack length a share of it.
+struct LeashLength
+{
+	float length {0.0f};
+};
+
+/// The report of the view of the player that the scripts and the advisors' remarks read: the view of the camera, the
+/// arrival of the camera and the grip of the hand on the land. The computer of the player sends it once a turn when
+/// something in it changes, and the turns read it, in a game alone too. Thus the scripts get the same answers at all
+/// frame rates.
+struct ViewReport
+{
+	/// The eye and the point that the camera looks at, as the frame draws them
+	glm::vec3 eye {0.0f};
+	glm::vec3 focus {0.0f};
+	/// The lens: the view across the width of a 4:3 screen, in radians
+	float lens {0.0f};
+	/// How far the near plane is ahead of the eye
+	float nearClip {0.0f};
+	/// The size of the window that the frame draws into, in pixels, and the shape of the camera's picture (width over
+	/// height). The screen tests of the scripts and the advisors' remarks use the window of the player who reports, so
+	/// that every computer and the game server get the same answer.
+	uint16_t screenWidth {0};
+	uint16_t screenHeight {0};
+	float aspect {0.0f};
+	/// How far the camera is from the fence of the camera zones, as the world camera finds it
+	float inclusionDistance {0.0f};
+	/// How many camera orders of the scripts the camera has got (ecs::RegistryContext::scriptCameraOrders)
+	uint32_t cameraOrders {0};
+	/// The camera has arrived where it goes
+	bool cameraArrived {false};
+	/// The hand grips the land with the select button
+	bool gripsLand {false};
+	/// The other button is held too
+	bool otherButton {false};
+
+	bool operator==(const ViewReport& other) const = default;
+};
+
+/// The player goes into their temple. When the player holds the leash of their creature, the leash comes off.
+struct TempleLeashOff
+{
+/// A line of the chat that the player typed. The line goes to the players of the list, by god slot. Each computer does
+/// the command at the same turn: the line shows only to the players of the list, but the creatures of the sender and of
+/// the players of the list say it in their bubbles on every computer. An empty list sends it to all players. The line
+/// is not a part of the synced world.
+struct ChatSpeech
+{
+	std::vector<PlayerNames> recipients;
+	std::u16string text;
+
+	[[nodiscard]] bool operator==(const ChatSpeech&) const = default;
+};
+
+/// A line of the quick chat that the player picked: a taunt, by its number in the list of taunts. The advisors of every
+/// computer say the taunt at the turn, and the line goes to the players of the list as a typed line does.
+struct ChatTaunt
+{
+	std::vector<PlayerNames> recipients;
+	uint32_t taunt {0};
+
+	[[nodiscard]] bool operator==(const ChatTaunt&) const = default;
+};
+
 /// What a command does
 using Action =
     std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
                  HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
                  FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust>;
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
+                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt>;
 
 /// A command and the player that sent it
 struct Command

@@ -20,10 +20,8 @@ namespace openblack::graphics::tree_shadows
 namespace
 {
 
-/// The texels per unit, as the game works them out: the texels along a block times a 160th
-constexpr float k_TexelsPerBlock = static_cast<float>(k_BlockTexels);
+/// A 160th: the texels per unit are the texels along a block times this, as the game works them out
 constexpr float k_PerBlockSize = 1.0f / k_BlockSize;
-constexpr int k_LastTexel = k_BlockTexels - 1;
 
 /// What one row of texels a triangle covers: its first and last texel along z, with the texture's coordinates there
 struct Row
@@ -34,12 +32,19 @@ struct Row
 	glm::vec2 firstUv {0.0f};
 	glm::vec2 lastUv {0.0f};
 };
-using Rows = std::array<Row, k_BlockTexels>;
+/// The rows of a block's texels, and the texels along a side of the block
+struct Rows
+{
+	int side {k_BlockTexels};
+	std::array<Row, k_BlockTexels> rows {};
+
+	[[nodiscard]] Row& operator[](size_t x) { return rows.at(x); }
+};
 
 /// Notes a point of an edge in its row: the row's ends are pushed out to it, keeping the texture's coordinates there
 void Mark(Rows& rows, int x, int z, glm::vec2 uv)
 {
-	if (x < 0 || x > k_LastTexel)
+	if (x < 0 || x > rows.side - 1)
 	{
 		return;
 	}
@@ -226,15 +231,19 @@ AlphaMask MaskOfCompressed(std::span<const uint8_t> blocks, uint32_t width, uint
 	return mask;
 }
 
-uint8_t Shade(uint8_t coverage)
+uint8_t Shade(uint8_t coverage, bool lowResolution)
 {
-	// An eighth of 255 for each bit, halved
+	// An eighth of 255 for each bit, halved. The low resolution halves it once more.
 	const auto bits = static_cast<unsigned>(std::popcount(coverage));
-	const auto darkness = ((bits * 255u) >> 3u) >> 1u;
-	return static_cast<uint8_t>(255u - darkness);
+	auto eighths = (bits * 255u) >> 3u;
+	if (lowResolution)
+	{
+		eighths >>= 1u;
+	}
+	return static_cast<uint8_t>(255u - (eighths >> 1u));
 }
 
-Corner Flatten(glm::vec3 offset, glm::vec2 foot, glm::vec2 block, glm::vec2 uv)
+Corner Flatten(glm::vec3 offset, glm::vec2 foot, glm::vec2 block, glm::vec2 uv, int side)
 {
 	// The block's corner is taken as the origin, so the far sun is placed from it too
 	const auto footInBlock = foot - block;
@@ -244,18 +253,18 @@ Corner Flatten(glm::vec3 offset, glm::vec2 foot, glm::vec2 block, glm::vec2 uv)
 	const float along = k_Sun.y / (k_Sun.y - height);
 	const auto flat = (point - sun) * along + sun;
 	return {
-	    .texel = flat * k_TexelsPerBlock * k_PerBlockSize,
+	    .texel = flat * static_cast<float>(side) * k_PerBlockSize,
 	    .uv = uv * static_cast<float>(k_MaskSide - 1) + 0.5f,
 	};
 }
 
-void Fill(Coverage& coverage, const std::array<Corner, 3>& corners, const AlphaMask& mask)
+void Fill(Coverage& coverage, const std::array<Corner, 3>& corners, const AlphaMask& mask, int side)
 {
-	Rows rows {};
+	Rows rows {.side = side};
 	Edge(rows, corners[0], corners[1]);
 	Edge(rows, corners[1], corners[2]);
 	Edge(rows, corners[2], corners[0]);
-	for (int x = 0; x < k_BlockTexels; ++x)
+	for (int x = 0; x < side; ++x)
 	{
 		const auto& row = rows[static_cast<size_t>(x)];
 		if (!row.used)
@@ -270,20 +279,20 @@ void Fill(Coverage& coverage, const std::array<Corner, 3>& corners, const AlphaM
 			step = {(row.lastUv.x - row.firstUv.x) * perTexel, (row.lastUv.y - row.firstUv.y) * perTexel};
 		}
 		auto uv = row.firstUv;
-		const int last = std::min(row.last, k_LastTexel);
+		const int last = std::min(row.last, side - 1);
 		for (int z = row.first; z <= last; ++z)
 		{
 			if (z >= 0)
 			{
 				const auto place = Place(uv.y) * k_MaskSide + Place(uv.x);
-				coverage[static_cast<size_t>(x * k_BlockTexels + z)] |= mask[static_cast<size_t>(place)];
+				coverage[static_cast<size_t>(x * side + z)] |= mask[static_cast<size_t>(place)];
 			}
 			uv += step;
 		}
 	}
 }
 
-bool Reaches(const std::array<Corner, 3>& corners)
+bool Reaches(const std::array<Corner, 3>& corners, int side)
 {
 	const auto whole = [](float value) { return static_cast<int>(value); };
 	int lowX = whole(corners[0].texel.x);
@@ -297,7 +306,7 @@ bool Reaches(const std::array<Corner, 3>& corners)
 		lowZ = std::min(lowZ, whole(corner.texel.y));
 		highZ = std::max(highZ, whole(corner.texel.y));
 	}
-	return highX >= 0 && lowX <= k_LastTexel && highZ >= 0 && lowZ <= k_LastTexel;
+	return highX >= 0 && lowX <= side - 1 && highZ >= 0 && lowZ <= side - 1;
 }
 
 bool TakesShadowFrom(glm::ivec2 block, glm::ivec2 cell)

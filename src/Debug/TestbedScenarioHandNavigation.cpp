@@ -139,6 +139,18 @@ void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "hand.grip_dust",
+	    .name = "Grip the land: the puff of dust",
+	    .facet = Facet::Hand,
+	    .description = "The hand grips the land in the middle of the screen and holds it for three seconds, then lets go.",
+	    .expected = "At the next turn a puff of dust comes up where the hand grips. Its sprites grow, spread out and fade "
+	                "in about a second, as the particle file of the grip gives them. Each computer of a network game "
+	                "shows the same puff.",
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {PointerTo({0.5f, 0.6f}, 1.0f), Press(k_Left, 0.5f), Release(k_Left, 3.0f)},
+	});
+
+	all.push_back({
 	    .id = "hand.edge_hover",
 	    .name = "Hover at the edges of the screen",
 	    .facet = Facet::Hand,

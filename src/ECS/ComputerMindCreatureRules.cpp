@@ -12,6 +12,10 @@
 #include <cmath>
 
 #include <algorithm>
+#include <iterator>
+#include <ranges>
+
+#include "Common/X87.h"
 
 using namespace openblack;
 
@@ -62,4 +66,111 @@ float computer_mind_rules::JourneySpeed(bool longJourney, float walk, float run)
 		return 0.0f;
 	}
 	return speed < 1.0f ? speed : 1.0f;
+}
+
+glm::vec3 computer_mind_rules::ThrowFoodHandPlace(glm::vec3 hand, glm::vec3 creature)
+{
+	const float dx = creature.x - hand.x;
+	const float dy = creature.y - hand.y;
+	const float dz = creature.z - hand.z;
+	const float zz = dz * dz;
+	const float xx = dx * dx;
+	const float yy = dy * dy;
+	const float distance = std::sqrt((yy + xx) + zz);
+	// The game takes a side that is not a number as 0
+	const auto zero = [](float side) { return !(side < 0.0f) && !(side > 0.0f); };
+	// The direction from the hand to the creature has the length 1, unless the hand is at the place of the creature
+	glm::vec3 direction {dx, dy, dz};
+	if (!zero(dx) || !zero(dy) || !zero(dz))
+	{
+		const float inverse = 1.0f / std::sqrt(zz + (yy + xx));
+		direction = {dx * inverse, dy * inverse, dz * inverse};
+	}
+	if (!(distance >= k_ThrowFoodDistance))
+	{
+		return {hand.x - direction.x * k_ThrowFoodDistance, hand.y - direction.y * k_ThrowFoodDistance,
+		        hand.z - direction.z * k_ThrowFoodDistance};
+	}
+	const float along = distance - k_ThrowFoodDistance;
+	return {direction.x * along + hand.x, direction.y * along + hand.y, direction.z * along + hand.z};
+}
+
+glm::vec3 computer_mind_rules::ThrowFoodAim(glm::vec3 creature, float size, float firstDraw, float secondDraw)
+{
+	constexpr float k_Half = k_ThrowFoodScatter * 0.5f;
+	return {(firstDraw - k_Half) + creature.x, size * k_ThrowFoodHeightPerSize, (secondDraw - k_Half) + creature.z};
+}
+
+uint32_t computer_mind_rules::FeedbackTurns(float draw)
+{
+	const float turns = (draw + k_FeedbackLeastSeconds) * 10.0f;
+	return static_cast<uint32_t>(static_cast<int32_t>(turns));
+}
+
+float computer_mind_rules::CastLetGoWish(float freedom, float seen, float needed)
+{
+	const float part = seen / needed;
+	const float learnt = part > 1.0f ? 1.0f : part;
+	return freedom * (1.0f - learnt);
+}
+
+bool computer_mind_rules::LetsGoAtCast(float freedom, float wish, float distance, float size)
+{
+	// A wish that is not a number makes the compare fail, and the god continues to let go
+	if (freedom >= wish)
+	{
+		return false;
+	}
+	const float near = size * k_ThrowFoodHeightPerSize * k_LetGoHeights + k_LetGoDistance;
+	return near > distance;
+}
+
+bool computer_mind_rules::UntiesEvilLeash(float influence, bool restoringHealth)
+{
+	return !(influence > 0.0f) || restoringHealth;
+}
+
+float computer_mind_rules::MiracleLessonWish(uint32_t untaughtSends)
+{
+	// The game multiplies the whole count by the wish at the precision of a float
+	const float wish = x87::Mul(static_cast<double>(untaughtSends), k_UntaughtSendWish);
+	if (wish < 0.0f)
+	{
+		return 0.0f;
+	}
+	return wish > 1.0f ? 1.0f : wish;
+}
+
+std::optional<size_t> computer_mind_rules::FirstSkillToTeach(std::span<const LessonFacts> skills)
+{
+	const auto found = std::ranges::find_if(skills, [](const LessonFacts& skill) { return skill.teachable && !skill.known; });
+	if (found == skills.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::distance(skills.begin(), found));
+}
+
+std::optional<size_t> computer_mind_rules::FirstMiracleToTeach(std::span<const LessonFacts> miracles, LessonKind kind)
+{
+	const auto ofKind = [kind](CreatureDesires perceived) {
+		switch (kind)
+		{
+		case LessonKind::Aggressive:
+			return perceived == CreatureDesires::Anger;
+		case LessonKind::Compassionate:
+			return perceived == CreatureDesires::Compassion;
+		case LessonKind::Impressive:
+			return true;
+		}
+		return false;
+	};
+	const auto found = std::ranges::find_if(miracles, [&ofKind](const LessonFacts& miracle) {
+		return miracle.teachable && !miracle.known && ofKind(miracle.perceived) && miracle.seedExists;
+	});
+	if (found == miracles.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::distance(miracles.begin(), found));
 }

@@ -685,6 +685,11 @@ private:
 			joint.rgba[3] =
 			    scale > 1.0f ? k_JointAlphaThick : static_cast<uint8_t>(effect.Rand(k_JointAlphaRange) + k_JointAlphaMin);
 			joint.drawWeight = glued ? 1.0f - t : 0.0f;
+			joint.handOffset.reset();
+			if (glued)
+			{
+				FollowLiveHand(joint, origin, 1.0f - t);
+			}
 		}
 	}
 

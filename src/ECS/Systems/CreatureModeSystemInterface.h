@@ -49,7 +49,7 @@ public:
 	/// As C does: locks onto the player's creature, or lets go of it when already on it
 	virtual void PressCreatureKey() = 0;
 	/// Locks onto a creature, any player's; false when the camera can't be taken now
-	virtual bool Enter(entt::entity creature) = 0;
+	virtual bool Enter(entt::entity creature, creature_follow::StartDistance start) = 0;
 	/// Gives the camera back, as soon as it has it again
 	virtual void Leave() = 0;
 	[[nodiscard]] virtual bool IsActive() const = 0;

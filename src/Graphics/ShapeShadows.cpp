@@ -23,9 +23,9 @@ namespace
 {
 
 constexpr auto k_Sun = tree_shadows::k_Sun;
-/// Samples per unit along z and x: the block's columns and rows times a 160th, as the game works them out
-constexpr float k_ColumnsPerUnit = static_cast<float>(tree_shadows::k_BlockTexels) * 0.025f;
-constexpr float k_RowsPerUnit = static_cast<float>(tree_shadows::k_BlockTexels) * 0.0125f;
+/// Samples per unit along z and x for each texel along a side: a 40th and an 80th, as the game keeps them in floats
+constexpr float k_ColumnsPerTexelUnit = 0.025f;
+constexpr float k_RowsPerTexelUnit = 0.0125f;
 /// The edges' columns are followed in 16.16 fixed point
 constexpr float k_FixedOne = 65536.0f;
 
@@ -47,6 +47,8 @@ struct Edges
 {
 	std::array<int, k_Rows> starts;
 	std::array<int, k_Rows> ends;
+	/// The sample rows of the block: two for each texel along x
+	int rows {k_Rows};
 	/// The rows any edge went through: from the first to before the last
 	int first {k_Rows};
 	int last {0};
@@ -67,12 +69,12 @@ void Edge(Edges& edges, int fromRow, float fromColumn, int toRow, float toColumn
 		std::swap(fromColumn, toColumn);
 		side = &edges.starts;
 	}
-	if (fromRow >= k_Rows || toRow <= 0)
+	if (fromRow >= edges.rows || toRow <= 0)
 	{
 		return;
 	}
 	const float slope = (toColumn - fromColumn) / static_cast<float>(toRow - fromRow);
-	toRow = std::min(toRow, k_Rows);
+	toRow = std::min(toRow, edges.rows);
 	if (fromRow < 0)
 	{
 		fromColumn -= static_cast<float>(fromRow) * slope;
@@ -90,9 +92,9 @@ void Edge(Edges& edges, int fromRow, float fromColumn, int toRow, float toColumn
 }
 
 /// Covers the samples of a row from one column up to, not including, another
-void Cover(tree_shadows::Coverage& coverage, int row, int from, int to)
+void Cover(tree_shadows::Coverage& coverage, int row, int from, int to, int side)
 {
-	const auto texelRow = static_cast<size_t>(row >> 1) * tree_shadows::k_BlockTexels;
+	const auto texelRow = static_cast<size_t>(row >> 1) * static_cast<size_t>(side);
 	const int rowBits = 4 * (row & 1);
 	for (int column = from; column < to; ++column)
 	{
@@ -111,13 +113,16 @@ glm::vec2 Cast(glm::vec3 offset, glm::vec2 origin)
 	return {(x - k_Sun.x) * along + k_Sun.x, (z - k_Sun.z) * along + k_Sun.z};
 }
 
-Sample SampleOf(glm::vec2 cast, glm::vec2 block)
+Sample SampleOf(glm::vec2 cast, glm::vec2 block, int side)
 {
-	return {.column = (cast.y - block.y) * k_ColumnsPerUnit, .row = (cast.x - block.x) * k_RowsPerUnit};
+	const auto texels = static_cast<float>(side);
+	return {.column = (cast.y - block.y) * (texels * k_ColumnsPerTexelUnit),
+	        .row = (cast.x - block.x) * (texels * k_RowsPerTexelUnit)};
 }
 
-void Fill(tree_shadows::Coverage& coverage, const std::array<Sample, 3>& corners, bool bothSides)
+void Fill(tree_shadows::Coverage& coverage, const std::array<Sample, 3>& corners, bool bothSides, int side)
 {
+	const int columns = 4 * side;
 	std::array<int, 3> rows {};
 	std::ranges::transform(corners, rows.begin(), [](const Sample& corner) { return Truncate(corner.row); });
 	const auto turn = [&rows, &corners](size_t a, size_t b, size_t c) {
@@ -125,6 +130,8 @@ void Fill(tree_shadows::Coverage& coverage, const std::array<Sample, 3>& corners
 	};
 
 	Edges edges;
+	edges.rows = 2 * side;
+	edges.first = edges.rows;
 	const auto follow = [&edges, &rows, &corners](size_t from, size_t to) {
 		Edge(edges, rows[from], corners[from].column, rows[to], corners[to].column);
 	};
@@ -158,10 +165,10 @@ void Fill(tree_shadows::Coverage& coverage, const std::array<Sample, 3>& corners
 	for (int row = edges.first; row < edges.last; ++row)
 	{
 		const int from = std::max(edges.starts[static_cast<size_t>(row)], 0);
-		const int to = std::min(edges.ends[static_cast<size_t>(row)], k_Columns);
-		if (from < to && from < k_Columns && to > 0)
+		const int to = std::min(edges.ends[static_cast<size_t>(row)], columns);
+		if (from < to && from < columns && to > 0)
 		{
-			Cover(coverage, row, from, to);
+			Cover(coverage, row, from, to, side);
 		}
 	}
 }

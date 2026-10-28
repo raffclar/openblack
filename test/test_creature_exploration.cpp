@@ -9,6 +9,8 @@
 
 #include <cstdint>
 
+#include <algorithm>
+#include <map>
 #include <optional>
 #include <set>
 #include <utility>
@@ -277,4 +279,22 @@ TEST(CreatureExploration, DancingByTheSeaNeedsTheCoastAndTheSea)
 	EXPECT_FALSE(plan_actions::Agenda(*dance, std::nullopt, {}, situation, First).has_value());
 	situation.exploreSea = glm::vec2 {0.0f, 0.0f};
 	EXPECT_EQ(plan_actions::Agenda(*dance, std::nullopt, {}, situation, First)->size(), 3);
+}
+
+TEST(CreatureExploration, TheMapReadsEachCellOfTheLandOneTime)
+{
+	std::map<std::pair<int32_t, int32_t>, int> reads;
+	const auto map = RegionMap::Make(
+	    [&reads](glm::ivec2 cell) {
+		    ++reads[{cell.x, cell.y}];
+		    return FakeCell(cell);
+	    },
+	    FakeTowns {}.At());
+	constexpr auto k_Cells = static_cast<size_t>(k_RegionsPerSide * k_CellsPerRegion);
+	EXPECT_EQ(reads.size(), k_Cells * k_Cells);
+	EXPECT_TRUE(std::ranges::all_of(reads, [](const auto& read) { return read.second == 1; }));
+	// The kept cells give the same kinds as the land: the high region is a hill and the east edge of the land is coast
+	EXPECT_TRUE(map.At({5, 5}).Is(Kind::Hill));
+	EXPECT_TRUE(map.At({19, 0}).Is(Kind::Coast));
+	EXPECT_TRUE(map.At({25, 0}).Is(Kind::Sea));
 }

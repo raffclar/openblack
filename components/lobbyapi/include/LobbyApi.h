@@ -216,6 +216,21 @@ struct ServerList
 	std::vector<ServerEntry> servers;
 };
 
+/// A ban of an account from one game server
+struct ServerBan
+{
+	/// "account"
+	AccountRef account;
+	/// "reason"
+	std::string reason;
+};
+
+/// GET /api/v1/servers/{id}/bans: {"bans": [...]}, the bans of the server that did not end, over mutual TLS
+struct ServerBanList
+{
+	std::vector<ServerBan> bans;
+};
+
 /// The roles of a join ticket
 constexpr std::string_view k_GodRole = "god";
 constexpr std::string_view k_ObserverRole = "observer";
@@ -358,10 +373,10 @@ struct Date
 };
 
 /// POST /api/v1/me/creatures: the files of the player's creature as multipart/form-data, as the creature upload tool of
-/// the game sent them. Not in the contract of the lobby yet.
+/// the game sent them
 struct CreatureUpload
 {
-	/// The field "creature": creature.lhp, the package of the values and the pictures of the creature's web page
+	/// The field "lhp": creature.lhp, the package of the values and the pictures of the creature's web page
 	std::vector<uint8_t> package;
 	/// The field "mind": the creature's mind file, with its file name
 	std::vector<uint8_t> mind;
@@ -372,7 +387,7 @@ struct CreatureUpload
 };
 
 /// The names of the fields of the creature upload
-constexpr std::string_view k_UploadPackageField = "creature";
+constexpr std::string_view k_UploadPackageField = "lhp";
 constexpr std::string_view k_UploadMindField = "mind";
 constexpr std::string_view k_UploadPhysiqueField = "physique";
 constexpr std::string_view k_UploadPackageFileName = "creature.lhp";

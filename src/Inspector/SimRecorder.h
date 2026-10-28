@@ -96,13 +96,15 @@ private:
 	uint64_t _frame {0};
 	/// What the records keep of the hashes of the parts of the world
 	sim_run::HashDetail _hashParts {sim_run::HashDetail::None};
-	/// The synced part of the world as the last turn to record left it, before the steps of the frame
+	/// The synced part of the world as each turn to record left it, before the steps of the frame
 	struct Synced
 	{
 		uint32_t turn {0};
 		Json value;
 	};
-	std::optional<Synced> _synced;
+	/// The turns to record that ended since the last record. A frame can end more than one turn: for example, when the
+	/// turns of the next frame play beside the draw
+	std::vector<Synced> _synced;
 	/// At the end of a turn to record: keeps the synced part of the world
 	void TurnEnded(uint32_t turn);
 };

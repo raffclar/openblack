@@ -127,6 +127,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -809,10 +810,14 @@ std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt:
 	if (const auto healAction = creature_mind_tables::FindAction(tables, k_HealAction);
 	    data != nullptr && body != nullptr && healAction.has_value())
 	{
-		// TODO(fish): a town desire shown on the leash holds off the healing; the leash can't show one yet
+		// A leash tied to a town's desire flag stops the healing choice
+		const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+		const bool leashedToTownDesire = leashes != nullptr && leashes->worn.has_value() && leashes->worn->tiedTo.has_value() &&
+		                                 registry.Valid(*leashes->worn->tiedTo) &&
+		                                 registry.AllOf<TownDesireFlag>(*leashes->worn->tiedTo);
 		const auto sightings = MiracleSightings(mind, tables, body->species, MagicType::Heal);
 		if (sightings.has_value() &&
-		    town_compassion::HealFirst(data->injured, false, sightings->first, sightings->second, random))
+		    town_compassion::HealFirst(data->injured, leashedToTownDesire, sightings->first, sightings->second, random))
 		{
 			heal = healAction;
 		}
@@ -3147,7 +3152,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			// acts on the first part of the whole thing that suits the desire and is of use.
 			parts = ShownThingsWithoutWhole(creature, mind, desire, *leashTarget);
 		}
-		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
 		// The actions of the desire, in the order of its list
 		candidates.clear();
 		executors.clear();

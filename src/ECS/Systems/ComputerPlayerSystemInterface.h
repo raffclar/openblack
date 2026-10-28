@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -74,6 +75,10 @@ public:
 	/// In the turn of the start of a network game: the humans of the network session join. The game makes the player of
 	/// each human when the land has none. Then, when the land waits for its humans, the slots with no player fill.
 	virtual void HumansJoined(std::span<const PlayerNames> humans) = 0;
+	/// Tools only: the seed of the personalities of the computer gods. The mind of each god gets the weights of that seed
+	/// as it starts. None: each god keeps its built-in personality. The seed is not part of the saved world: every
+	/// computer of a network game sets it before its land loads.
+	virtual void SetAiSeed(std::optional<uint32_t> seed) = 0;
 };
 
 } // namespace openblack::ecs::systems

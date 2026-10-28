@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include "Common/GUtilsDistance.h"
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerHandSteps.h"
 #include "ECS/ComputerMindCreatureRules.h"
@@ -110,12 +111,104 @@ Result JourneyProcess(HandAction& /*action*/, const World& world, const Step& st
 	return Result::Next;
 }
 
+Result SetLeashProcess(HandAction& /*action*/, const World& world, const Step& step)
+{
+	const auto creature = ArgumentAt(step, 0).object;
+	if (world.creature.SpeedsOf(creature).has_value() && world.creature.HasPlayer(creature))
+	{
+		world.creature.SetLeashType(creature, static_cast<LeashType>(ArgumentAt(step, 1).number));
+	}
+	return Result::Next;
+}
+
+/// The creature can take the leash of its player
+bool Leashable(const World& world, entt::entity creature)
+{
+	return world.creature.SpeedsOf(creature).has_value() && world.creature.HasPlayer(creature);
+}
+
+Result AttachStart(HandAction& /*action*/, const World& world, const Step& step)
+{
+	const auto creature = ArgumentAt(step, 0).object;
+	if (!Leashable(world, creature))
+	{
+		return Result::Abort;
+	}
+	// A leash that is tied to a thing comes off before the new tie
+	world.creature.TakeOffTiedLeash(creature);
+	return Result::Next;
+}
+
+Result AttachProcess(HandAction& action, const World& world, const Step& step)
+{
+	const auto creature = ArgumentAt(step, 0).object;
+	if (!Leashable(world, creature) || !world.creature.TieLeash(creature, ArgumentAt(step, 1).object))
+	{
+		return Result::Abort;
+	}
+	action.counter = computer_mind_rules::k_TieFollowTurns;
+	return Result::Next;
+}
+
+Result AttachEnd(HandAction& action, const World& world, const Step& step)
+{
+	// The hand follows the thing for a time, and then until it is near the thing
+	const auto object = ArgumentAt(step, 1).object;
+	KeepHandOver(action, world, object);
+	if (action.counter > 0)
+	{
+		--action.counter;
+		return Result::Continue;
+	}
+	const auto coords = world.moves.CoordsOf(object);
+	if (!coords.has_value())
+	{
+		return Result::Continue;
+	}
+	const map_coords::MapCoords hand {.x = map_coords::ToFixed(action.hand.x), .z = map_coords::ToFixed(action.hand.z)};
+	return gutils::GetDistanceInMetres(hand, *coords) < computer_mind_rules::k_TieNearDistance ? Result::Next
+	                                                                                           : Result::Continue;
+}
+
+/// The creature feels the stroke or the slap, and the hand stays on it for a random time
+Result Touch(HandAction& action, const World& world, const Step& step, float feedback)
+{
+	const auto creature = ArgumentAt(step, 0).object;
+	if (world.creature.SpeedsOf(creature).has_value())
+	{
+		world.creature.Feedback(creature, feedback);
+	}
+	action.counter = computer_mind_rules::FeedbackTurns(world.creature.DrawFeedbackSeconds());
+	return Result::Next;
+}
+
+Result SlapProcess(HandAction& action, const World& world, const Step& step)
+{
+	return Touch(action, world, step, computer_mind_rules::k_SlapFeedback);
+}
+
+Result StrokeProcess(HandAction& action, const World& world, const Step& step)
+{
+	return Touch(action, world, step, computer_mind_rules::k_StrokeFeedback);
+}
+
+Result TouchEnd(HandAction& action, const World& world, const Step& step)
+{
+	KeepHandOver(action, world, ArgumentAt(step, 0).object);
+	--action.counter;
+	return action.counter != 0 ? Result::Continue : Result::Next;
+}
+
 } // namespace
 
 void openblack::computer_hand::steps::AddCreatureSteps(StepTable& table)
 {
-	// SetLeash, AttachLeashToObject, SlapCreature and StrokeCreature are not made yet
 	constexpr auto k_Creature = StepOwner::Creature;
+	AddStep(table, k_Creature, StepKind::SetLeash, {.made = true, .process = SetLeashProcess});
+	AddStep(table, k_Creature, StepKind::AttachLeashToObject,
+	        {.made = true, .start = AttachStart, .process = AttachProcess, .end = AttachEnd});
+	AddStep(table, k_Creature, StepKind::SlapCreature, {.made = true, .process = SlapProcess, .end = TouchEnd});
+	AddStep(table, k_Creature, StepKind::StrokeCreature, {.made = true, .process = StrokeProcess, .end = TouchEnd});
 	AddStep(table, k_Creature, StepKind::MoveHandToCreatureHead,
 	        {.made = true, .start = ToHeadStart, .process = ToHeadProcess});
 	AddStep(table, k_Creature, StepKind::GiveObjectInHandToCreature, {.made = true, .process = GiveProcess});

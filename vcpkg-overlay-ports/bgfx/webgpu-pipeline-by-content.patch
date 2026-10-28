@@ -1,0 +1,135 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index 2aec3e2..676690e 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -7421,16 +7421,44 @@ WGPU_IMPORT
+ 		WGPUBindGroupLayout bindGroupLayout = NULL;
+ 		WGPURenderPipeline  currentPipeline = NULL;
+ 
++		// The pipeline of a draw uses the layouts of its vertex streams and the bindings of the stages of its program.
++		// It does not use the vertex buffers or the bind index of the draw. When the next draw has the same values,
++		// it uses the last pipeline and bind group, and the hash does not run again.
++		const auto layoutsOf = [&](const RenderDraw& _draw, uint16_t* _layouts)
++		{
++			for (uint32_t ii = 0; ii < BGFX_CONFIG_MAX_VERTEX_STREAMS; ++ii)
++			{
++				const Stream& stream = _draw.m_stream[ii];
++				_layouts[ii] = UINT32_MAX == _draw.m_streamMask || 0 == (_draw.m_streamMask & (1u << ii) )
++					? UINT16_MAX
++					: isValid(stream.m_layoutHandle) ? stream.m_layoutHandle.idx : m_vertexBuffers[stream.m_handle.idx].m_layoutHandle.idx
++					;
++			}
++		};
++		const auto sameBindings = [&](const ProgramWGPU& _program, const Binding* _kept, const RenderBind& _renderBind)
++		{
++			for (uint32_t stage = 0; stage < BGFX_CONFIG_MAX_TEXTURE_SAMPLERS; ++stage)
++			{
++				if (isValid(_program.m_shaderBinding[stage].uniformHandle)
++				&&  0 != bx::memCmp(&_kept[stage], &_renderBind.m_bind[stage], sizeof(Binding) ) )
++				{
++					return false;
++				}
++			}
++
++			return true;
++		};
++
+ 		struct PipelineState
+ 		{
+-			Stream                stream[BGFX_CONFIG_MAX_VERTEX_STREAMS];
++			Binding               bind[BGFX_CONFIG_MAX_TEXTURE_SAMPLERS];
++			uint16_t              layouts[BGFX_CONFIG_MAX_VERTEX_STREAMS];
+ 			const RenderPipeline* pipeline;
+ 			uint64_t              state;
+ 			uint64_t              stencil;
+ 			uint32_t              msaaCount;
+ 			uint32_t              rgba;
+ 			uint32_t              streamMask;
+-			uint32_t              bindIdx;
+ 			uint32_t              sampleMask;
+ 			uint16_t              program;
+ 			uint16_t              fbh;
+@@ -7445,9 +7473,10 @@ WGPU_IMPORT
+ 
+ 		struct BindState
+ 		{
+-			const BindGroup* bindGroup;
+-			WGPUBuffer       buffer;
+-			uint32_t         bindIdx;
++			Binding             bind[BGFX_CONFIG_MAX_TEXTURE_SAMPLERS];
++			const BindGroup*    bindGroup;
++			WGPUBindGroupLayout layout;
++			WGPUBuffer          buffer;
+ 			uint32_t         vsSize;
+ 			uint32_t         fsSize;
+ 			uint16_t         program;
+@@ -7893,7 +7922,6 @@ WGPU_IMPORT
+ 				}
+ 
+ 				const RenderDraw& draw = renderItem.draw;
+-				const uint32_t bindIdx = draw.m_bindIdx;
+ 
+ 				const bool hasOcclusionQuery = 0 != (draw.m_stateFlags & BGFX_STATE_INTERNAL_OCCLUSION_QUERY);
+ 				{
+@@ -7926,6 +7954,10 @@ WGPU_IMPORT
+ 				const uint8_t numInstanceData = uint8_t(draw.m_instanceDataStride/16);
+ 				const bool    drawIsIndex16   = draw.isIndex16();
+ 
++				const ProgramWGPU& drawProgram = m_program[key.m_program.idx];
++				uint16_t drawLayouts[BGFX_CONFIG_MAX_VERTEX_STREAMS];
++				layoutsOf(draw, drawLayouts);
++
+ 				const RenderPipeline* renderPipelinePtr;
+ 				if (pipelineState.valid
+ 				&&  pipelineState.program         == key.m_program.idx
+@@ -7937,10 +7969,10 @@ WGPU_IMPORT
+ 				&&  pipelineState.streamMask      == draw.m_streamMask
+ 				&&  pipelineState.numInstanceData == numInstanceData
+ 				&&  pipelineState.isIndex16       == drawIsIndex16
+-				&&  pipelineState.bindIdx         == bindIdx
+ 				&&  pipelineState.depthBias       == draw.m_depthBias
+ 				&&  pipelineState.sampleMask      == sampleMask
+-				&&  0 == bx::memCmp(pipelineState.stream, draw.m_stream, sizeof(pipelineState.stream) ) )
++				&&  0 == bx::memCmp(pipelineState.layouts, drawLayouts, sizeof(drawLayouts) )
++				&&  sameBindings(drawProgram, pipelineState.bind, renderBind) )
+ 				{
+ 					renderPipelinePtr = pipelineState.pipeline;
+ 				}
+@@ -7982,10 +8014,10 @@ WGPU_IMPORT
+ 					pipelineState.streamMask      = draw.m_streamMask;
+ 					pipelineState.numInstanceData = numInstanceData;
+ 					pipelineState.isIndex16       = drawIsIndex16;
+-					pipelineState.bindIdx         = bindIdx;
+ 					pipelineState.depthBias       = draw.m_depthBias;
+ 					pipelineState.sampleMask      = sampleMask;
+-					bx::memCopy(pipelineState.stream, draw.m_stream, sizeof(pipelineState.stream) );
++					bx::memCopy(pipelineState.layouts, drawLayouts, sizeof(drawLayouts) );
++					bx::memCopy(pipelineState.bind, renderBind.m_bind, sizeof(pipelineState.bind) );
+ 					pipelineState.pipeline        = renderPipelinePtr;
+ 				}
+ 
+@@ -8040,10 +8072,11 @@ WGPU_IMPORT
+ 				const BindGroup* bindGroupCached;
+ 				if (bindState.valid
+ 				&&  bindState.program == key.m_program.idx
+-				&&  bindState.bindIdx == bindIdx
++				&&  bindState.layout  == bindGroupLayout
+ 				&&  bindState.buffer  == sbo.buffer
+ 				&&  bindState.vsSize  == vsSize
+-				&&  bindState.fsSize  == fsSize)
++				&&  bindState.fsSize  == fsSize
++				&&  sameBindings(program, bindState.bind, renderBind) )
+ 				{
+ 					bindGroupCached = bindState.bindGroup;
+ 				}
+@@ -8077,8 +8110,9 @@ WGPU_IMPORT
+ 
+ 					bindState.valid     = true;
+ 					bindState.program   = key.m_program.idx;
+-					bindState.bindIdx   = bindIdx;
++					bindState.layout    = bindGroupLayout;
+ 					bindState.buffer    = sbo.buffer;
++					bx::memCopy(bindState.bind, renderBind.m_bind, sizeof(bindState.bind) );
+ 					bindState.vsSize    = vsSize;
+ 					bindState.fsSize    = fsSize;
+ 					bindState.bindGroup = bindGroupCached;

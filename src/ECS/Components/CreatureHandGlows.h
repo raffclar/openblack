@@ -39,6 +39,9 @@ struct CreatureHandGlows
 	};
 	/// Each glow where its creature's pose put it last, none for a place without a glow or before the first pose
 	std::array<std::optional<Placed>, creature_hand_glow::k_PlaceCount> placed;
+	/// How far each glow has turned and slid in the frames. Only the frames and the draw read it. The frames start it
+	/// again while a place has no glow.
+	creature_hand_glow::Motions motion {};
 };
 
 } // namespace openblack::ecs::components

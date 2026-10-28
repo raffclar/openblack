@@ -24,6 +24,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureAnimationLog.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "ECS/Systems/FixedOutlineSystemInterface.h"
 #include "ECS/Systems/LandShadeSystemInterface.h"
@@ -102,6 +103,19 @@ struct PhysicsSources
 /// What a creature is doing: its plan (desire, action, object, priority), its activity and its agenda's steps
 [[nodiscard]] Json PlanJson(const ecs::components::CreatureMindState& mind, const creature_mind_tables::Tables* tables);
 
+/// A clip's line in the creature spec file: its name without the type letter, the type letter and its set
+struct ClipLine
+{
+	std::string name;
+	char type {'N'};
+	std::string set;
+};
+/// A clip of the developer log of the clips, with its name when the line is known
+[[nodiscard]] Json AnimationClipJson(const creature_animation_log::Clip& clip, const std::optional<ClipLine>& line);
+/// An entry of the developer log of the clips: the clip, the turns that it played, its speed and what asked for it
+[[nodiscard]] Json AnimationEntryJson(const creature_animation_log::Entry& entry, const std::optional<ClipLine>& line);
+[[nodiscard]] Json AnimationCauseJson(const creature_animation_log::Cause& cause);
+
 struct CreatureSources
 {
 	WorldSources world;
@@ -113,6 +127,12 @@ struct CreatureSources
 	/// Whether a cell is clear for a creature to go to, and the nearest clear area so wide about a point
 	std::function<bool(entt::entity creature, int32_t x, int32_t z, bool livingBlocks)> cellClear;
 	std::function<std::optional<glm::vec2>(entt::entity creature, glm::vec2 point, float width, bool livingBlocks)> clearArea;
+	/// The developer log of the clips that a creature's body plays, or none before the inspector starts the log
+	std::function<const creature_animation_log::Log*(entt::entity creature)> animationLog;
+	/// The line of a clip in the creature spec file of a creature's species, or none when its body is not loaded
+	std::function<std::optional<ClipLine>(entt::entity creature, size_t clip)> clipLine;
+	/// Removes the logs of the clips of all the creatures; none when the game has no log
+	std::function<void()> clearAnimationLogs;
 };
 
 ///   creature.list                       the creatures, what each does and its strongest desire
@@ -121,6 +141,10 @@ struct CreatureSources
 ///   creature.plan    {id?}              a creature's plan and agenda
 ///   creature.reactions {id?}            whether a creature takes notice of reactions
 ///   creature.set_reactions {id?, notice} a debug tool: the creature starts or stops to take notice of reactions
+///   creature.animation {id?}            the clips that a creature's body plays now, and what asked for them
+///   creature.animation_history {id?, last?}  the clips that a creature's body played, the newest last
+///   creature.animation_problems {id?}   the clips that something asked for that did not play
+///   creature.animation_clear            removes the logs of the clips of all the creatures
 ///   creature.clear_area {id?, position, width, living?}  the cells about a point that are not clear for the creature,
 ///                                       and the nearest clear area so wide
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeCreatureProvider(CreatureSources sources);
@@ -197,6 +221,11 @@ struct AudioState
 	std::string musicPlaying;
 	std::string landMusic;
 	std::string scriptMusic;
+	/// The world's clock of the script's music: the last line cue, the word of that line, and the time since its
+	/// channel started in milliseconds (none when no channel plays)
+	int32_t scriptMusicLine {0};
+	int32_t scriptMusicWord {0};
+	std::optional<int64_t> scriptMusicMs;
 	bool alignmentMusic {false};
 	/// Music scripts have attached to objects, the most recently attached first: the music's name and the object
 	std::vector<std::pair<std::string, uint32_t>> attachedMusic;

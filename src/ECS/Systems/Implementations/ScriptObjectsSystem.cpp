@@ -24,7 +24,6 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
-#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/NeverFades.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
@@ -34,6 +33,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Dances.h"
+#include "ECS/Map.h"
 #include "ECS/Reflection/PlainImage.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
@@ -123,7 +123,7 @@ public:
 	[[nodiscard]] bool IsInMap(entt::entity object) const override
 	{
 		const auto& registry = Registry();
-		return registry.AllOf<MapCellResident>(object) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(object);
+		return ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(object);
 	}
 
 	void SetVillagerDecideWhatToDo(entt::entity villager) override

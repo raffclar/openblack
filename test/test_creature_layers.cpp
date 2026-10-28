@@ -20,6 +20,7 @@
 
 #include "3D/SkeletalAnimation.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureWalkPlanner.h"
 
 using namespace openblack;
 using namespace openblack::creature_layers;
@@ -84,6 +85,27 @@ TEST(CreatureLayers, RealTimePlaysAtTheUsualSpeed)
 	EXPECT_EQ(BodyRate(2.0f, true), 1.0f);
 	EXPECT_EQ(BodyRate(0.0f, true), 1.0f);
 	EXPECT_EQ(BodyRate(1.0f, false), PlaybackRate(1.0f));
+}
+
+// In a game turn, the body's animations move on by whole milliseconds: the turn's milliseconds at the rate of the size,
+// cut towards zero
+TEST(CreatureLayers, TheStepOfATurnIsWholeMilliseconds)
+{
+	EXPECT_EQ(TurnStepMs(100, 1.0f, false), 117);
+	EXPECT_EQ(TurnStepMs(100, 1.3f, false), 104);
+	EXPECT_EQ(TurnStepMs(100, 0.05f, false), 157);
+	EXPECT_EQ(TurnStepMs(100, 4.0f, false), -10);
+	// A frozen creature lives fewer milliseconds in the turn
+	EXPECT_EQ(TurnStepMs(50, 1.0f, false), 58);
+	EXPECT_EQ(TurnStepMs(0, 1.0f, false), 0);
+	// Real time does not change the milliseconds of the turn
+	EXPECT_EQ(TurnStepMs(100, 1.3f, true), 100);
+	EXPECT_EQ(TurnStepMs(37, 2.0f, true), 37);
+	// The walk's clips and the body's clips move on by the same step
+	for (const float size : {0.05f, 0.5f, 0.8f, 1.0f, 1.3f, 1.7f, 2.4f, 3.1f, 4.0f})
+	{
+		EXPECT_EQ(TurnStepMs(100, size, false), creature_walk_planner::ClipStepMs(100, size)) << size;
+	}
 }
 
 TEST(CreatureLayers, AnActionPlaysOnceThenTheBodyStands)

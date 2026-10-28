@@ -17,6 +17,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -51,7 +52,6 @@
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/DayNightClock.h"
 #include "3D/FlatLand.h"
-#include "3D/GripLandscapeEffect.h"
 #include "3D/HandAnimation.h"
 #include "3D/HandCycleChoice.h"
 #include "3D/HandMorph.h"
@@ -61,6 +61,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
+#include "3D/LowResolutionTextures.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
 #include "3D/PlayersSymbols.h"
@@ -85,9 +86,9 @@
 #include "Camera/FightCameraModel.h"
 #include "Camera/NearClipping.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Commands/PlayerCommands.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
-#include "Common/BuildVersionFile.h"
 #include "Common/DeveloperToolsGate.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
@@ -96,7 +97,9 @@
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
+#include "Common/SideThread.h"
 #include "Common/StringUtils.h"
 #include "Common/UserData.h"
 #include "Common/X87Vector.h"
@@ -149,6 +152,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/CreatureDanceMusic.h"
 #include "ECS/CreatureExplorationLand.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
@@ -170,6 +174,8 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -222,6 +228,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -254,6 +261,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
@@ -305,6 +313,7 @@
 #include "Gui/LoadingScreen.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/OnlineMapTexts.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Gui/StatisticsBoxRules.h"
@@ -623,6 +632,16 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	};
 }
 
+/// An ease of the hand takes the fixed steps of the input of this frame (see input_steps)
+template <typename Ease>
+void StepEase(Ease& ease)
+{
+	for (uint32_t i = 0; i < Locator::time::value().GetInputSteps().count; ++i)
+	{
+		ease.Update(input_steps::k_StepSeconds);
+	}
+}
+
 /// The player of this computer is in the temple. In a network game the world's turns go on there, and their audio
 /// plays the temple's sounds.
 bool PlayerInTemple()
@@ -683,9 +702,23 @@ Game* Game::sInstance = nullptr;
 /// The state that the frames of the game loop keep from one frame to the next
 struct Game::FrameLoop
 {
-	std::chrono::high_resolution_clock::time_point lastTime;
+	/// The game's clock when the loop started. The clock follows a fixed frame time in a tool's run, so the draw's time
+	/// does not change with the speed of the machine.
+	uint32_t startTicks {0};
 	std::optional<debug::FrameStatsLog> frameStats;
 	std::chrono::steady_clock::time_point frameStart;
+	/// The thread of the turns that play beside the draw (deviation row 153), made the first time it is used
+	std::unique_ptr<SideThread> turnThread;
+	/// The turns that play beside the draw: the turn count before them and their start
+	uint32_t turnBefore {0};
+	std::chrono::steady_clock::time_point turnsStart;
+	std::chrono::steady_clock::time_point turnsEnd;
+	/// The clock of the next frame moved on already, and its turns played beside the draw of this frame
+	bool turnsPlayedBeside {false};
+	/// The clock of the machine for the statistics of this frame, read before the clock of the next frame moved on
+	std::optional<uint32_t> statisticsTicks;
+	/// Open while the turns play beside the draw: the main thread then does not use the services that the turns hold
+	std::optional<MainThreadQueue::TurnElsewhere> turnsElsewhere;
 };
 
 Game::Game(Arguments&& args) noexcept
@@ -716,11 +749,14 @@ Game::Game(Arguments&& args) noexcept
     , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _networkGame(args.networkGame)
+    , _throwLeadLatencyMs(args.throwLeadLatencyMs)
     , _networkJoin(args.networkJoin)
     , _networkLandPending(args.networkJoin.has_value())
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
+    , _turnApiCheck(args.turnApiCheck)
+    , _turnBesideDraw(args.turnBesideDraw)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	// The log of each part of the game
@@ -735,10 +771,12 @@ Game::Game(Arguments&& args) noexcept
 	config.numFramesToSimulate = args.numFramesToSimulate;
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
+	config.frameStatsOut = args.frameStatsOut;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
 	config.lobbyOrigin = args.lobbyOrigin;
 	config.lobbyTestAuthorities = args.lobbyTestAuthorities;
 	config.useInternetWeather = args.useInternetWeather;
+	config.showPing = args.showPing;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	// The settings of this computer give what the command line did not
@@ -786,6 +824,14 @@ Game::~Game() noexcept
 	{
 		Locator::pauseTextSystem::value().SetInterface(nullptr);
 	}
+	if (Locator::incomingMessageSystem::has_value())
+	{
+		Locator::incomingMessageSystem::value().SetTexts(nullptr);
+	}
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().SetTexts(nullptr);
+	}
 	if (Locator::saveGameSystem::has_value())
 	{
 		Locator::saveGameSystem::value().SetShowBox({});
@@ -809,6 +855,7 @@ Game::~Game() noexcept
 	{
 		Locator::landSystem::value().SetView(nullptr);
 	}
+	ReportTurnApiCheck();
 	ShutDownServices();
 	// A later caller of Instance must not get this game once it is gone
 	if (sInstance == this)
@@ -817,6 +864,11 @@ Game::~Game() noexcept
 	}
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
+	// A later game, or a test, must not find this one through the static pointer
+	if (sInstance == this)
+	{
+		sInstance = nullptr;
+	}
 }
 
 bool Game::ProcessEvents(const SDL_Event& event) noexcept
@@ -899,7 +951,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		// scripts; not while the game is paused
 		if (handTakesPresses && !_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
 		{
-			handGrab->ClickReleased(Locator::time::value().GetTurn());
+			handGrab->ClickReleased();
 		}
 	}
 	// The action button (the right) casts the miracle in the hand, which comes before the creatures: pressed, it arms,
@@ -959,8 +1011,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		}
 		// A lesson can let an empty hand act only on a highlight that a script made. This limit also stops a press on a
 		// fireball, which is not a highlight.
-		const auto picked =
-		    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+		std::optional<entt::entity> picked;
+		if (Locator::pickingSystem::has_value())
+		{
+			picked = Locator::pickingSystem::value().GetPick().object;
+		}
 		const bool highlightUnderHand = picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
 		                                Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(*picked);
 		const bool mayPress = handHoldsThing || script::interface_levels::MayPress(interfaceLimits, highlightUnderHand);
@@ -1000,7 +1055,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				_actionPressTaken = true;
 				if (handGrab != nullptr)
 				{
-					handGrab->ClickThing(*under, Locator::time::value().GetTurn());
+					handGrab->ClickThing(*under);
 				}
 				if (!creatureHand.Grab())
 				{
@@ -1307,20 +1362,45 @@ void Game::WarmUpFirstFrame()
 	const auto start = std::chrono::steady_clock::now();
 	// Some renderers divide the warm-up between some frames, each with a part of the draws
 	bool shown = false;
-	bool partsLeft = true;
-	for (uint32_t part = 0; partsLeft; ++part)
+	const auto warmUp = [&renderer, &shown, this](const graphics::RendererInterface::DrawSceneDesc& desc) {
+		bool partsLeft = true;
+		for (uint32_t part = 0; partsLeft; ++part)
+		{
+			partsLeft = false;
+			const bool partShown = RenderLoadingFrame(true, [&renderer, &desc, &partsLeft, part]() {
+				partsLeft = renderer.WarmUpScene(desc, part);
+				// The interface draws over the scene too, and the cinema bars are its first draw
+				gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
+				// The villagers' labels and the tip bubble test the depth of the scene, sorted among its see-through
+				// things outside the temple
+				gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
+				gui::Canvas::WarmUp(graphics::RenderPass::Translucent, gui::Canvas::DepthTest::NearerIsGreater, true);
+				// The interface that the game draws over the scene, which the loading screen does not blend in each way
+				gui::Canvas::WarmUp(graphics::RenderPass::Interface);
+				// The debug menu comes up with the game's menu, over all of the game
+				if (Locator::debugGui::has_value())
+				{
+					Locator::debugGui::value().WarmUp();
+				}
+			});
+			shown = shown || partShown;
+		}
+	};
+	warmUp(SceneDrawDesc(config, 0, IsHandDrawn()));
+	// The temple's rooms show only while the player is in the temple. A visit draws them with the temple's own pipelines
+	// and targets, thus the warm-up draws a visit too. The temple draws no island and no sea.
+	if (Locator::temple::has_value())
 	{
-		partsLeft = false;
-		shown = RenderLoadingFrame(true, [&renderer, &config, &partsLeft, part, this]() {
-			partsLeft = renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()), part);
-			// The interface draws over the scene too, and the cinema bars are its first draw
-			gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
-			// The villagers' labels and the tip bubble test the depth of the scene, sorted among its see-through things
-			// outside the temple
-			gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
-			gui::Canvas::WarmUp(graphics::RenderPass::Translucent, gui::Canvas::DepthTest::NearerIsGreater, true);
-			// The interface that the game draws over the scene, which the loading screen does not blend in each way
-			gui::Canvas::WarmUp(graphics::RenderPass::Interface);
+		Locator::temple::value().WarmUpVisit([&config, &warmUp, this]() {
+			if (config.drawEntities)
+			{
+				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
+				                                                config.drawStreams);
+			}
+			auto desc = SceneDrawDesc(config, 0, IsHandDrawn());
+			desc.drawIsland = false;
+			desc.drawWater = false;
+			warmUp(desc);
 		});
 	}
 	// The first frame makes the draw lists again from what the game's first update changed
@@ -1378,6 +1458,7 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	};
 	ecs::systems::GestureSystemInterface::Frame frame {
 	    .seconds = deltaSeconds,
+	    .steps = Locator::time::value().GetInputSteps(),
 	    .cursor = static_cast<glm::vec2>(_mousePosition),
 	    // Not over a debug window, nor while a cut scene has the screen
 	    .overWorld = !Locator::debugGui::value().StealsFocus() && !Locator::debugGui::value().IsMouseOverWindow() &&
@@ -1784,7 +1865,11 @@ void Game::ProcessHandToolTipTurn()
 	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(LocalInputPlayer())
 	                         : std::nullopt;
 	    tip.has_value() && Locator::entitiesRegistry::value().Valid(tip->totem) &&
-	    OnScreen(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem).position).has_value())
+	    OnScreen(ecs::drawn_place::DrawnTransformOf(
+	                 Locator::entitiesRegistry::value(), tip->totem,
+	                 Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem))
+	                 .position)
+	        .has_value())
 	{
 		toolTips.Force(ecs::village_totem::k_ShareToolTip, tip->percent);
 	}
@@ -1828,7 +1913,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		if (const auto event = tips::OverNothingHelpEvent(camera, overFish);
 		    event.has_value() && Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().Trigger(*event);
+			Locator::helpProfileSystem::value().Report(*event);
 		}
 		submitAll({tips::OverNothing(camera, overFish)});
 	};
@@ -1837,7 +1922,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		const auto tip = Locator::leashSystem::value().ToolTip(LocalInputPlayer(), pointed);
 		if (tip == creature_leash_orders::k_FocusCreatureTip && Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().Trigger(help::profile::k_FocusCreatureTip);
+			Locator::helpProfileSystem::value().Report(help::profile::k_FocusCreatureTip);
 		}
 		return tip;
 	};
@@ -2090,10 +2175,10 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 		ecs::other_player_sparkles::AddAtCameras();
 		break;
 	case Step::HelpProfile:
-		// The help's count of what the player did moves on a turn
+		// The help's count of what the player did moves on a turn. It reads the view of the camera from the last report.
 		if (Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().ProcessTurn(FrontEndBoxShows(), HelpWorldCameraView());
+			Locator::helpProfileSystem::value().ProcessTurn();
 		}
 		break;
 	case Step::Ambience:
@@ -2192,6 +2277,17 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	    },
 	};
 	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
+	// The music heard follows the world's clock of the scripts' music
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+		music.script = {
+		    .type = script.GetType(),
+		    .started = script.IsStarted(),
+		    .playCount = script.GetPlayCount(),
+		    .place = script.GetPlace(),
+		};
+	}
 	music.film = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
 	if (Locator::infoConstants::has_value())
 	{
@@ -2267,8 +2363,10 @@ bool Game::Update() noexcept
 	// The frame's steps go in the game's order, because many systems depend on it (see game_frame::k_Frame)
 	FrameState frame;
 	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) {
-		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world
-		    if (!_frameGuard || step == game_frame::Step::Turns ||
+		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world. The guard
+		    // also does not look at the debug windows. The timeline of the testbed runner acts in them by the game time of
+		    // the frame. It is a tool for the debug builds and is not part of the game.
+		    if (!_frameGuard || step == game_frame::Step::Turns || step == game_frame::Step::DebugGui ||
 		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
 		    {
 			    if (_frameGuard)
@@ -2340,7 +2438,7 @@ game_frame::GraphicsWindow Game::FrameGraphicsWindow() const
 bool Game::DoesFrameGraphics() const
 {
 	const auto window = FrameGraphicsWindow();
-	return game_frame::DoesGraphics(window.minimised, window.pictureWanted);
+	return game_frame::DoesGraphics(window.minimised, window.pictureWanted, window.fixedFrameTime);
 }
 
 bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
@@ -2371,16 +2469,17 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::Interface:
 		UpdateInterfaceFrame(frame.deltaTime);
 		break;
-	case Step::GripEffect:
-		// The dust moves on by the game time of the frame, and stands still while the game is paused
-		GripLandscapeEffect::Update(std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
-		break;
 	case Step::Turns:
 	{
 		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is
 		if (_scenarioStager && _scenarioRequest.has_value())
 		{
 			_scenarioStager();
+		}
+		// The turns of this frame played beside the draw of the last frame (deviation row 153)
+		if (_frameLoop != nullptr && std::exchange(_frameLoop->turnsPlayedBeside, false))
+		{
+			return true;
 		}
 		return PlayTurns();
 	}
@@ -2389,14 +2488,23 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		if (_simulation.has_value() && _simulation->playCommandsPath.has_value())
 		{
 			Locator::playerCommandSystem::value().Reset();
+			if (Locator::helpProfileSystem::has_value())
+			{
+				std::ignore = Locator::helpProfileSystem::value().MakeReport(false, std::nullopt, false);
+			}
 			break;
 		}
 		ReportHand();
+		ReportHelp();
 		Locator::playerCommandSystem::value().SendOpenBlock();
 		break;
 	case Step::FrameTime:
 		// The frame's game time: none while paused, quicker or slower with the game speed
 		Locator::time::value().UpdateFrame();
+		// The steps of a sixtieth of a second that the hand, the strokes, the throws and the camera take in this frame
+		Locator::time::value().StepInput(InputStepTime(frame.deltaTime));
+		// The camera reads the mouse of the frame divided across these steps
+		Locator::gameActionSystem::value().SplitInput(Locator::time::value().GetInputSteps());
 		break;
 	case Step::FilmClock:
 		// The clock of a full-screen video counts the frames that are due by the real clock
@@ -2425,9 +2533,14 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::CameraMouse:
 		// The camera reads the movement of the mouse and of the hand of this frame as it moves, after the turns
-		if (!Locator::cameraPathSystem::value().HoldsCamera())
+		// The first step of the input reads its part of the mouse. A frame with no step keeps the mouse for the next step.
+		if (const auto& steps = Locator::time::value().GetInputSteps();
+		    steps.count > 0 && !Locator::cameraPathSystem::value().HoldsCamera())
 		{
-			Locator::camera::value().HandleActions(frame.deltaTime);
+			auto& actions = Locator::gameActionSystem::value();
+			actions.UseInputStep(0);
+			Locator::camera::value().HandleActions(std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(0)));
+			actions.UseInputStep(std::nullopt);
 		}
 		break;
 	case Step::CameraPaths:
@@ -2651,7 +2764,11 @@ void Game::StartFrame(FrameState& frame)
 	frame.deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(current - previous);
 
 	Locator::debugGui::value().SetScale(config.guiScale);
-	Locator::time::value().Update();
+	// The clock of this frame moved on at the end of the last frame, when this frame's turns played beside its draw
+	if (_frameLoop == nullptr || !_frameLoop->turnsPlayedBeside)
+	{
+		Locator::time::value().Update();
+	}
 	// The debug inspector answers what was asked since the last frame, and holds or releases the game for stepping,
 	// before the frame's input and turn
 	if (Locator::inspector::has_value())
@@ -2816,7 +2933,7 @@ void Game::UpdateCamera()
 		{
 			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
 		}
-		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
+		camera.Update(Locator::time::value().GetInputSteps());
 	}
 	// The lens glides on the game's time, and holds while the player is in the temple, whose own lens it has
 	if (!(Locator::temple::has_value() && Locator::temple::value().Active()))
@@ -2865,7 +2982,7 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		const auto moves = Locator::gameActionSystem::value().TakeMouseMoves();
 		for (uint32_t i = 0; i < moves && Locator::helpProfileSystem::has_value(); ++i)
 		{
-			Locator::helpProfileSystem::value().Trigger(help::profile::k_MouseMoved);
+			Locator::helpProfileSystem::value().Report(help::profile::k_MouseMoved);
 		}
 	}
 	if (_interface)
@@ -2877,6 +2994,15 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		_interface->SetFightPanel(creature_fight_hud::PanelAllowed(inTemple, scriptHasCamera)
 		                              ? Locator::creatureFightSystem::value().GetPanel()
 		                              : std::nullopt);
+		// The player's own ping, with --show-ping in a network game (deviation 143)
+		std::optional<uint64_t> roundTrip = _demoRoundTrip;
+		if (!roundTrip.has_value() && Locator::config::value().showPing && Locator::networkGame::has_value() &&
+		    Locator::networkGame::value().InGame())
+		{
+			const auto* session = Locator::networkGame::value().Session();
+			roundTrip = session != nullptr ? session->RoundTrip() : std::nullopt;
+		}
+		_interface->SetPingLine(gui::ping_display::Text(roundTrip));
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
@@ -2934,10 +3060,12 @@ void Game::ReportHand()
 		_reportedHand = hand;
 		_lastHandReport = {};
 		_lastHandPick = entt::null;
+		_lastViewReport.reset();
 	}
-	// In a network game the thing under the cursor goes too, when it changes, so that every computer counts the same
-	// time that the hand stays over the creature
-	if (Locator::time::value().IsNetworkGame() && Locator::pickingSystem::has_value())
+	ReportView();
+	// The thing under the cursor goes too, when it changes, so that the turn counts the same time that the hand stays
+	// over the creature at each frame rate and on every computer
+	if (Locator::pickingSystem::has_value())
 	{
 		const auto picked = Locator::pickingSystem::value().GetPick().object;
 		const auto object = picked.has_value() && registry.Valid(*picked) ? *picked : entt::entity {entt::null};
@@ -2963,12 +3091,95 @@ void Game::ReportHand()
 		return;
 	}
 	_lastHandReport = report;
-	Locator::playerCommandSystem::value().Submit(player_commands::HandReport {
+	const player_commands::HandReport sent {
 	    .collidePoint = collidePoint,
 	    .handPoint = handPoint,
 	    .camera = cameraPoint,
 	    .focus = focus,
-	});
+	};
+	Locator::playerCommandSystem::value().Submit(sent);
+	// The send time gives the latency of the report at the turn that does it
+	Locator::handSystem::value().ReportSent(sent);
+}
+
+void Game::ReportView()
+{
+	// What the scripts and the advisors' remarks read of the view: the camera as the frame draws it, the window it draws
+	// into, its arrival, the distance from the fence of the camera zones, and the grip of the hand on the land
+	auto& camera = Locator::camera::value();
+	const auto pose = camera.DrawnPose(Camera::Interpolation::Current);
+	const auto window = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(0);
+	const auto pixels = [](int size) {
+		return static_cast<uint16_t>(std::clamp(size, 0, static_cast<int>(std::numeric_limits<uint16_t>::max())));
+	};
+	player_commands::ViewReport report {
+	    .eye = pose.eye,
+	    .focus = pose.focus,
+	    .lens = camera.GetLens(),
+	    .nearClip = camera.GetNearClip(),
+	    .screenWidth = pixels(window.x),
+	    .screenHeight = pixels(window.y),
+	    .aspect = camera.GetAspect(),
+	    .inclusionDistance =
+	        Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f,
+	    .cameraOrders = Locator::entitiesRegistry::value().Context().scriptCameraOrders,
+	    .cameraArrived = false,
+	    .gripsLand = camera.GetModel().GetHandCues().dragging,
+	    .otherButton = Locator::gameActionSystem::has_value() &&
+	                   Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK),
+	};
+	if (const auto* script = Locator::scriptControlSystem::value().GetScriptCamera(camera); script != nullptr)
+	{
+		report.cameraArrived = script->Arrived();
+	}
+	else
+	{
+		report.cameraArrived =
+		    script_camera::PlayerCameraArrived(camera.GetOrigin(), camera.GetOrigin(Camera::Interpolation::Target),
+		                                       camera.GetFocus(), camera.GetFocus(Camera::Interpolation::Target));
+	}
+	if (_lastViewReport != nullptr && *_lastViewReport == report)
+	{
+		return;
+	}
+	_lastViewReport = std::make_unique<player_commands::ViewReport>(report);
+	Locator::playerCommandSystem::value().Submit(report);
+}
+
+void Game::ReportHelp()
+{
+	// The report goes once a turn, after the turns of a frame that played one, and only when something in it changed
+	const auto turn = Locator::time::value().GetTurn();
+	if (_helpReportTurn == turn || !Locator::helpProfileSystem::has_value())
+	{
+		return;
+	}
+	_helpReportTurn = turn;
+	const bool cursorOnPoint =
+	    Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().point.has_value();
+	if (const auto report =
+	        Locator::helpProfileSystem::value().MakeReport(FrontEndBoxShows(), HelpWorldCameraView(), cursorOnPoint);
+	    report.has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(*report);
+	}
+}
+
+void Game::ReportTurnApiCheck() const
+{
+	if (!Locator::mainThreadQueue::has_value() || _turnApiCheck == TurnApiCheck::Off)
+	{
+		return;
+	}
+	const auto calls = Locator::mainThreadQueue::value().GetDirectCalls();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The check of the turn's calls found {} places that use a service directly",
+	                   calls.size());
+	for (const auto& call : calls)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Turn check: step {} {} {} {} calls ({})",
+		                   call.turnStep.has_value() ? std::to_string(*call.turnStep) : std::string("?"), Name(call.api),
+		                   call.what, call.count, call.where);
+	}
 }
 
 bool Game::PlayTurns()
@@ -2976,6 +3187,73 @@ bool Game::PlayTurns()
 	// The game is the view of the turns
 	Locator::landSystem::value().PlayTurns(*this);
 	return true;
+}
+
+bool Game::StartTurnsBesideDraw()
+{
+	if (!_turnBesideDraw || _frameLoop == nullptr || !Locator::mainThreadQueue::has_value())
+	{
+		return false;
+	}
+	// The turns start early only when the end of this frame changes nothing that they read: no scenario waits to be laid
+	// out, the player does not go into the temple after this frame, no picture waits for its screen and the game does not
+	// close. Else they play in the next frame, as usual.
+	const bool templeEntry = Locator::temple::has_value() && Locator::temple::value().GoesInAfterFrame();
+	const bool pictureWaits =
+	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
+	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
+	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
+	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || _closeAsked)
+	{
+		return false;
+	}
+	auto& loop = *_frameLoop;
+	if (!loop.turnThread)
+	{
+		loop.turnThread = std::make_unique<SideThread>();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns play on their own thread, beside the end of the draw of the frame "
+		                                        "before (deviation row 153)");
+	}
+	// The turns read the camera of the game, not the camera that the inspector shows
+	ShowInspectorCamera(false);
+	// The clock of the next frame moves on now, so that the turns that are due in the next frame play now. The statistics
+	// of this frame keep the clock of this frame.
+	loop.statisticsTicks = machine_clock::Ticks();
+	auto& time = Locator::time::value();
+	time.Update();
+	loop.turnsPlayedBeside = true;
+	loop.turnBefore = time.GetTurn();
+	loop.turnsStart = std::chrono::steady_clock::now();
+	auto& queue = Locator::mainThreadQueue::value();
+	loop.turnsElsewhere.emplace(queue);
+	loop.turnThread->Start(
+	    [this, &loop] {
+		    Locator::landSystem::value().PlayTurnSteps(*this);
+		    loop.turnsEnd = std::chrono::steady_clock::now();
+	    },
+	    [&queue] { queue.Wake(); });
+	return true;
+}
+
+void Game::FinishTurnsBesideDraw()
+{
+	auto& loop = *_frameLoop;
+	auto& queue = Locator::mainThreadQueue::value();
+	// Meanwhile the main thread does the calls that the turns wait for, such as the load of the next land
+	queue.ServeUntil([&loop] { return loop.turnThread->Done(); });
+	loop.turnsElsewhere.reset();
+	try
+	{
+		loop.turnThread->Wait();
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The turns beside the draw stopped: {}", e.what());
+		std::abort();
+	}
+	Locator::landSystem::value().FinishTurns(loop.turnBefore, loop.turnsStart, loop.turnsEnd);
+	// The scopes of the turns go into this frame's entry of the profiler
+	Locator::profiler::value().MergeThreads();
 }
 
 void Game::UpdateCreaturePoses()
@@ -3052,9 +3330,13 @@ void Game::UpdateSingAlong(bool inTemple)
 	}
 	const auto& clock = Locator::time::value();
 	std::optional<int32_t> word;
-	if (_gameMusic && help::sing_along::IsSungVerse(static_cast<int32_t>(_gameMusic->GetScriptType())))
+	if (Locator::scriptMusicSystem::has_value())
 	{
-		word = _gameMusic->GetMusicLyrics().word;
+		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+		if (help::sing_along::IsSungVerse(static_cast<int32_t>(script.GetType())))
+		{
+			word = script.GetLyrics().word;
+		}
 	}
 	_interface->SetSingAlong(word, help::sing_along::StepMilliseconds(inTemple,
 	                                                                  static_cast<int32_t>(clock.GetFrameRealTime().count()),
@@ -3112,9 +3394,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 					// In the temple, the hand goes where the cursor meets the room, turning to its surface
 					if (const auto hit = Locator::temple::value().GetCursorHit())
 					{
-						const auto seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count();
 						_handTempleNormal.SetDestination(hit->normal, k_HandTempleTurnTime);
-						_handTempleNormal.Update(seconds);
+						StepEase(_handTempleNormal);
 						const auto normal = _handTempleNormal.GetValue();
 						_cursorWorldPosition = hit->point;
 						intersectionTransform.position = hit->point;
@@ -3307,8 +3588,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				else
 				{
 					OrientHand(handTransform, glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection),
-					           _handSurfaceUp.value_or(glm::vec3(0.0f, 1.0f, 0.0f)),
-					           std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+					           _handSurfaceUp.value_or(glm::vec3(0.0f, 1.0f, 0.0f)));
 				}
 				PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				TraceHand("navigation", handTransform.position);
@@ -3340,8 +3620,9 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 						}
 						if (hands.GetCreature().has_value())
 						{
-							_handOnCreature = hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
-							                               static_cast<float>(screenSize.x), HandStepSeconds());
+							_handOnCreature =
+							    hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
+							                 static_cast<float>(screenSize.x), Locator::time::value().GetInputSteps());
 						}
 						if (_handOnCreature.has_value())
 						{
@@ -3399,6 +3680,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 						        HandAnimation::SizeAtDistance(x87::Distance<x87::SumOrder::Zyx>(camera.GetOrigin(), land)),
 						    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
 						    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
+						    .inputSteps = Locator::time::value().GetInputSteps(),
 						    .nowMs = machine_clock::Ticks(),
 						    .turn = Locator::time::value().GetTurn(),
 						});
@@ -3509,6 +3791,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		{
 			Locator::handGrabSystem::value().PlaceOthersHeldForFrame(
 			    static_cast<int32_t>(Locator::time::value().GetFrameGameTime().count()));
+			// A thing that this computer threw shows on the flight of its lead until the turn of the command
+			Locator::handGrabSystem::value().DrawThrownForFrame();
 		}
 		// The phantom buildings of the scaffolds: at the drawn hand of the player, and on the building sites
 		if (Locator::workshopSystem::has_value())
@@ -3523,7 +3807,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			// The globes show their miracles where they are now, a globe in the hand where the hand holds it, each turned
 			// to face the camera as it is drawn
 			auto miracleGlobes = profiler.BeginScoped(Profiler::Stage::MiracleGlobesUpdate);
-			Locator::miracleFxSystem::value().UpdateGlobes(std::chrono::duration<float>(gameTime).count());
+			Locator::miracleFxSystem::value().UpdateGlobes(Locator::time::value().GetFrameRealTime(),
+			                                               Locator::time::value().GetFrameGameTime(), simulation::LandDrawn());
 		}
 
 		// The animation of the hand in this frame, and what is below the hand, for the blend of the drawn hand
@@ -3748,7 +4033,7 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				{
 					Locator::scriptHighlightSystem::value().UpdateFrame(
 					    std::chrono::duration<float, std::milli>(gameTime).count(), clock.GetTurnFraction(),
-					    Locator::camera::value().GetOrigin());
+					    Locator::camera::value().GetOrigin(), clock.GetFrameRealTime(), simulation::LandDrawn());
 				}
 				Locator::animatedStaticSystem::value().Update(clock.GetFrameGameTime());
 			};
@@ -3785,6 +4070,25 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 					{
 						Locator::abodeSoundSystem::value().Update(
 						    std::chrono::duration<float, std::milli>(clock.GetFrameGameTime()));
+					}
+					// The pools of the teleport stones, the swirls of the dispensers and the effects of the vortices over the
+					// land show only while the list draws their things, and move on only in a frame that draws the land
+					const bool landDrawn = simulation::LandDrawn();
+					auto& drawList = Locator::objectDrawListSystem::value();
+					if (Locator::teleportSystem::has_value())
+					{
+						Locator::teleportSystem::value().UpdateFrame(drawList, clock.GetFrameRealTime(),
+						                                             clock.GetFrameGameTime(), landDrawn);
+					}
+					if (Locator::magicSystem::has_value())
+					{
+						Locator::magicSystem::value().UpdateDispenserFrame(drawList, clock.GetFrameRealTime(),
+						                                                   clock.GetFrameGameTime(), landDrawn);
+					}
+					if (Locator::vortexSystem::has_value())
+					{
+						Locator::vortexSystem::value().UpdateDrawnFrame(drawList, clock.GetFrameRealTime(),
+						                                                clock.GetFrameGameTime(), landDrawn);
 					}
 				}
 				updateDrawnScenery();
@@ -3836,9 +4140,13 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	     .frameMilliseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(deltaTime).count()),
 	     .grippingLand = _handGripping && !_handRotating});
 	// The camera that the path gives back reads the keys from the next frame
-	if (!pathHeld)
+	// The keys go to the last step of the input in this frame. A frame with no step does not read them.
+	if (const auto& steps = Locator::time::value().GetInputSteps(); !pathHeld && steps.count > 0)
 	{
-		camera.HandleKeys(deltaTime);
+		auto& gameActions = Locator::gameActionSystem::value();
+		gameActions.UseInputStep(steps.count - 1);
+		camera.HandleKeys(std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(steps.count - 1)));
+		gameActions.UseInputStep(std::nullopt);
 	}
 	// A grip of the land ends the camera of a dance. A zoom with the land held does not end it.
 	hand::script_state::Facts grip {.gripsLand = _handSelectGrip, .otherButton = _handOtherButton};
@@ -3873,6 +4181,7 @@ bool Game::Initialize() noexcept
 	using filesystem::Path;
 	// The services that the game shares with the dedicated server come first, then the services that show the world
 	InitializeSimulationCore();
+	Locator::mainThreadQueue::value().SetCheck(_turnApiCheck);
 	if (!InitializeEngine(config.graphicsBackend, config.vsync))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
@@ -3917,6 +4226,12 @@ bool Game::Initialize() noexcept
 			}
 			// The multiplayer front end's boxes take the keyboard and the mouse while they are up, Escape too
 			if (_interface && _interface->GetMultiplayerBoxes().IsActive() && Locator::windowing::has_value() &&
+			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			{
+				return;
+			}
+			// The line of the chat takes the keyboard while it has the focus, Escape and Return too
+			if (_interface && _interface->ChatWantsKeys() && Locator::windowing::has_value() &&
 			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
 			{
 				return;
@@ -4024,6 +4339,11 @@ bool Game::Initialize() noexcept
 	if (_simulation.has_value())
 	{
 		Locator::simulation::value().SetSettings(_simulation->settings);
+		if (const auto refusal = simulation::ApplySoakTools(_simulation->soak); refusal.has_value())
+		{
+			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The simulation run cannot start: {}", *refusal);
+			return false;
+		}
 		if (_simulation->frameTime.has_value())
 		{
 			Locator::time::value().SetFixedFrameTime(*_simulation->frameTime);
@@ -4031,6 +4351,11 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: fast {}, frame time {} us, draw every {}, until turn {}",
 		                   _simulation->settings.fast, _simulation->frameTime.value_or(std::chrono::microseconds {0}).count(),
 		                   _simulation->settings.drawEvery, _simulation->settings.untilTurn.value_or(0));
+	}
+	if (_throwLeadLatencyMs.has_value())
+	{
+		Locator::handSystem::value().FixReportLatency(_throwLeadLatencyMs);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The reports of the hand have a fixed latency of {} ms", *_throwLeadLatencyMs);
 	}
 	// A game that joins a server from the command line loads its land as a network game, as the server does
 	if (_networkGame || _networkJoin.has_value())
@@ -4129,6 +4454,14 @@ const gui::TextDatabase* Game::MakeInterface()
 		{
 			Locator::pauseTextSystem::value().SetInterface(_interface.get());
 		}
+		if (Locator::incomingMessageSystem::has_value())
+		{
+			Locator::incomingMessageSystem::value().SetTexts(&_interface->GetTexts());
+		}
+		if (Locator::chatSystem::has_value())
+		{
+			Locator::chatSystem::value().SetTexts(&_interface->GetTexts());
+		}
 	}
 	return _interface ? &_interface->GetTexts() : nullptr;
 }
@@ -4147,6 +4480,11 @@ void Game::StartSimulationLogs()
 	{
 		return;
 	}
+	if (_simulation->frameGuard != sim_run::HashDetail::None)
+	{
+		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
+		                                                         _simulation->frameGuardSystems);
+	}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	if (_simulation->traceDrawsPath.has_value())
 	{
@@ -4157,11 +4495,6 @@ void Game::StartSimulationLogs()
 		}
 	}
 #endif
-	if (_simulation->frameGuard != sim_run::HashDetail::None)
-	{
-		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
-		                                                         _simulation->frameGuardSystems);
-	}
 	if (_simulation->checksumsPath.has_value())
 	{
 		_checksumLog = std::make_unique<checksum_log::Writer>(*_simulation->checksumsPath);
@@ -4488,11 +4821,12 @@ Game::RunStart Game::StartRun() noexcept
 	simulation::BeginPlay(continued, loadAllFirst, *this);
 	_frameCount = 0;
 	_frameLoop = std::make_unique<FrameLoop>();
-	_frameLoop->lastTime = std::chrono::high_resolution_clock::now();
+	_frameLoop->startTicks = Locator::time::value().GetTicks();
 	if (config.frameStatsInterval > 0)
 	{
 		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
-		                               Locator::rendererInterface::value().GetPipelinesMade());
+		                               Locator::rendererInterface::value().GetPipelinesMade(),
+		                               std::filesystem::path(config.frameStatsOut));
 		if (config.frameStatsViews)
 		{
 			Locator::rendererInterface::value().SetProfile(true);
@@ -4573,13 +4907,16 @@ void Game::BeforeFirstFrame(bool continued)
 
 bool Game::RunFrame() noexcept
 {
+	// The work of the frame starts here. In a web browser, the wait for the display frame is before this point.
+	const auto workStart = std::chrono::steady_clock::now();
+	const auto turnBefore = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 	if (!Update())
 	{
 		return false;
 	}
 	auto& config = Locator::config::value();
 	auto& profiler = Locator::profiler::value();
-	const auto lastTime = _frameLoop->lastTime;
+	const auto startTicks = _frameLoop->startTicks;
 	auto& frameStats = _frameLoop->frameStats;
 	auto& frameStart = _frameLoop->frameStart;
 	{
@@ -4591,8 +4928,8 @@ bool Game::RunFrame() noexcept
 			_prefetchTimer.reset();
 		}
 
-		auto duration = std::chrono::high_resolution_clock::now() - lastTime;
-		auto milliseconds = std::chrono::duration_cast<std::chrono::duration<uint32_t, std::milli>>(duration);
+		// The time since the loop started, in milliseconds, by the game's clock
+		const uint32_t drawMs = Locator::time::value().GetTicks() - startTicks;
 		// The frame is drawn from where the inspector shows the camera (an override, a picture's), while everything the
 		// game did this frame went by its own camera, which it gets back once the frame is drawn
 		ShowInspectorCamera(true);
@@ -4600,9 +4937,11 @@ bool Game::RunFrame() noexcept
 		// is laid out before the scene, so that the creatures it shows over itself are drawn in the same frame as it.
 		PlaceScreenLabels();
 		PlaceLearningTexts();
-		// In the fast simulation mode the game draws only some frames, or none
+		// In the fast simulation mode the game draws only some frames, or none. It also draws the frame of a picture
+		// that a tool asks for.
+		const bool pictureWanted = _requestScreenshot.has_value() && _requestScreenshot->first == _frameCount;
 		const bool drawsFrame =
-		    sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount) && DoesFrameGraphics();
+		    sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount, pictureWanted) && DoesFrameGraphics();
 		if (drawsFrame && _interface && Locator::windowing::has_value())
 		{
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
@@ -4613,8 +4952,7 @@ bool Game::RunFrame() noexcept
 		if (drawsFrame)
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
-			// TODO(#481): get actual time
-			const auto drawDesc = SceneDrawDesc(config, milliseconds.count(), IsHandDrawn());
+			const auto drawDesc = SceneDrawDesc(config, drawMs, IsHandDrawn());
 			// The sun, the moon and the dome's blend of this frame, for drawing it
 			Locator::skySystem::value().UpdateFrame(config.drawSky);
 			// Nothing of the world shows under a video that covers the screen, nor behind the falling spell's film
@@ -4654,9 +4992,15 @@ bool Game::RunFrame() noexcept
 			}
 		}
 
+		// The turns of the next frame may play beside the end of the draw (deviation row 153)
+		const bool turnsBeside = StartTurnsBesideDraw();
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::RendererFrame);
 			Locator::rendererInterface::value().Frame();
+		}
+		if (turnsBeside)
+		{
+			FinishTurnsBesideDraw();
 		}
 		// The challenges' pictures whose screens are back
 		auto& renderer = Locator::rendererInterface::value();
@@ -4686,7 +5030,11 @@ bool Game::RunFrame() noexcept
 			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
 		}
-		ShowInspectorCamera(false);
+		// The turns beside the draw had the camera of the game back before they started
+		if (!turnsBeside)
+		{
+			ShowInspectorCamera(false);
+		}
 
 		// Clear the stale screenshot request
 		if (_requestScreenshot.has_value())
@@ -4700,7 +5048,8 @@ bool Game::RunFrame() noexcept
 		_frameCount++;
 		// The frame rate of the statistics uses the machine clock of the game. When each frame has a fixed time, each run
 		// gets the same rate.
-		_statisticsFrameRate.Frame(machine_clock::Ticks(), _frameCount);
+		_statisticsFrameRate.Frame(std::exchange(_frameLoop->statisticsTicks, std::nullopt).value_or(machine_clock::Ticks()),
+		                           _frameCount);
 		// The game is playable from its first frame drawn
 		if (_startupTimer.has_value())
 		{
@@ -4708,6 +5057,7 @@ bool Game::RunFrame() noexcept
 			_startupTimer.reset();
 		}
 
+		const auto workEnd = std::chrono::steady_clock::now();
 		// A simulation run at the normal speed waits until the frame took its fixed game time in real time too
 		auto& simulation = Locator::simulation::value();
 		if (const auto wait = sim_run::PaceWait(
@@ -4730,8 +5080,11 @@ bool Game::RunFrame() noexcept
 		}
 		if (frameStats.has_value())
 		{
-			frameStats->Frame(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(), profiler,
-			                  Locator::rendererInterface::value().GetPipelinesMade());
+			frameStats->Frame({.milliseconds = std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(),
+			                   .workMilliseconds = std::chrono::duration<float, std::milli>(workEnd - workStart).count(),
+			                   .playedTurn = Locator::time::has_value() && turnBefore != Locator::time::value().GetTurn(),
+			                   .turn = Locator::time::value().GetTurn()},
+			                  profiler, Locator::rendererInterface::value().GetPipelinesMade());
 		}
 		frameStart = frameEnd;
 		// A close of the window ends the game here, at the end of the frame, but not during a script's cut scene
@@ -4824,6 +5177,10 @@ void Game::StartLandAudio()
 	{
 		// The -NOLOADMUSIC switch: the game loads none of its music banks, so none of its music plays
 		_gameMusic = std::make_unique<audio::GameMusic>(!_launchSwitches.noLoadMusic);
+		if (Locator::scriptMusicSystem::has_value())
+		{
+			Locator::scriptMusicSystem::value().SetBanksLoaded(!_launchSwitches.noLoadMusic);
+		}
 		if (!_launchSwitches.noLoadMusic)
 		{
 			audio::GameMusic::RegisterBanks();
@@ -5189,6 +5546,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	auto maps = gui::ReadOnlineMapTexts();
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);
+	settings.showPing = Locator::config::value().showPing;
 	return std::make_unique<gui::MultiplayerFrontEnd>(std::move(services), std::move(settings));
 }
 
@@ -5504,17 +5862,39 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 		}
 		StartInputTools();
 	}
-	// The client starts the land as the game server started it: the same new-game start, the same seed and the same
-	// pinned date, as a network game
+	// The client starts the land as the game server started it: the same new-game start and the same seed, as a network
+	// game. Each computer reads the date from its own clock, as in the original game. Only a run of a tool keeps its
+	// pinned date. No synced value reads the date.
 	_newGameStart = start.opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(start.opening);
 	auto& lands = Locator::landSystem::value();
 	lands.SetNewGameStart(_newGameStart);
 	auto& clock = Locator::time::value();
-	clock.RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
+	const auto pinnedDate = clock.GetPinnedDate();
+	clock.RestartClock(pinnedDate);
 	clock.SetNetworkGame(true);
 	// The land starts from the state that the game server started it from
 	simulation::PrepareNetworkLand(start.seed);
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, date pinned", start.seed);
+	// The modes of the AI soak come from the server, as the seed does. A build for players refuses them.
+	if (const auto refusal = simulation::ApplySoakTools({.allComputerGods = start.allComputerGods, .aiSeed = start.aiSeed});
+	    refusal.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}", *refusal);
+		return false;
+	}
+	// The testbed scenario of the tools comes from the server too. The scenarios' window lays it out before the first turn,
+	// as the server does. A build for players has no such window and refuses it.
+	if (start.scenario.has_value())
+	{
+		if (const auto refusal = developer_tools::ScenarioRefusalOf(developer_tools::k_Built); refusal.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}", *refusal);
+			return false;
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game plays the testbed scenario {}", *start.scenario);
+		_scenarioRequest = ScenarioRequest {.id = *start.scenario, .hideWindow = true, .benchmark = false};
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, {}", start.seed,
+	                   pinnedDate.has_value() ? "date pinned" : "date from the clock of the computer");
 	_startTestbed = start.testbed;
 	_startGodsRingMap = start.godsRingMap;
 	// The server chose the land: the testbed of a server is not a developer tool of this computer
@@ -5534,7 +5914,7 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 		// The server names a land in the Scripts folder of the game, and never a path out of it
 		return false;
 	}
-	// The story's scripts run the first land, but not the testbed, the map for 32 gods or a playground
+	// The story's scripts run the first land, but not the testbed, the map for 32 gods, a playground or a network game
 	const bool startStory = !start.testbed && !start.godsRingMap &&
 	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish, true);
 	if (!lands.StartChallengeScripts(startStory))
@@ -5743,7 +6123,13 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 	auto players = players_symbols::MakeSheet(std::move(file), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
 	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
 	auto& textureManager = Locator::resources::value().GetTextures();
-	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {
+	// The lowest detail levels keep the sheet at half its size: each symbol takes every second texel of its full one
+	const bool halve = Locator::config::value().detail.lowResTextures;
+	const auto replace = [&textureManager, halve](const std::string& name, std::vector<uint8_t> bytes) {
+		if (auto halved = halve ? low_resolution_textures::Halve(bytes) : std::nullopt)
+		{
+			bytes = std::move(*halved);
+		}
 		textureManager.Erase(name);
 		try
 		{
@@ -6144,7 +6530,7 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 			    glm::clamp(glm::max(roomDistance - k_HandTempleGap, 1.0f), k_HandTempleMinDistance, k_HandTempleMaxDistance);
 			const auto easeTime = _handHoverZoomer.GetDestination() <= target ? 0.4f : 0.2f;
 			_handHoverZoomer.SetDestination(target, easeTime);
-			_handHoverZoomer.Update(deltaSeconds);
+			StepEase(_handHoverZoomer);
 			// The hand's distance from the camera
 			_handDistance = _handHoverZoomer.GetValue();
 		}
@@ -6213,7 +6599,7 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 			}
 		}
 		_handHoldZoomer.SetDestination(glm::distance(eye, _handPosition), k_HandHoldTime);
-		_handHoldZoomer.Update(deltaSeconds);
+		StepEase(_handHoldZoomer);
 		const auto landDistance = _cursorWorldPosition.has_value() ? glm::distance(eye, *_cursorWorldPosition) : handReach;
 		_handDistance = glm::clamp(glm::min(_handHoldZoomer.GetValue(), landDistance), k_HandMinDistance, handReach);
 		_handHoverZoomer.Reset(_handDistance);
@@ -6280,7 +6666,11 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		const bool pulling = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsPulling();
 		const bool watchesFight = dynamic_cast<const FightCameraModel*>(&camera.GetModel()) != nullptr;
 		const bool offers = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().OffersToCreature();
-		hand_feel::EaseHover(_handHoverZoomer, hover.target, deltaSeconds, pulling, watchesFight || offers);
+		// The hover eases at the fixed steps of the input
+		for (uint32_t i = 0; i < Locator::time::value().GetInputSteps().count; ++i)
+		{
+			hand_feel::EaseHover(_handHoverZoomer, hover.target, input_steps::k_StepSeconds, pulling, watchesFight || offers);
+		}
 		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), hover.limit), k_HandMinDistance, handReach);
 	}
 	// The hand is on the line of sight through the cursor at its distance, or on the fight's sparkle
@@ -6364,7 +6754,7 @@ void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 	using namespace hand_navigation_pose;
 	auto cues = Locator::camera::value().GetModel().GetHandCues();
 	// A hand demonstration shows the camera hints its recording had
-	if (Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0))
+	if (Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying())
 	{
 		cues.tricons = Locator::handDemoSystem::value().GetHints();
 	}
@@ -6400,7 +6790,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	// Shown from the world camera, or from a tutorial demonstration's recording in any camera, out of the temple
 	const auto& camera = Locator::camera::value();
 	const auto cues = camera.GetModel().GetHandCues();
-	const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
+	const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying();
 	if (!handDrawn || (!demonstration && !cues.icons.has_value()) || !Locator::windowing::has_value() ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
@@ -6480,8 +6870,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	_interface->SetHandTricons(tricons);
 }
 
-void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
-                      float deltaSeconds)
+void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp)
 {
 	using namespace hand_orientation;
 	const auto& camera = Locator::camera::value();
@@ -6575,7 +6964,7 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 			}
 			_handUp.SetDestination(hand_feel::UnitUp(up), k_UpEaseSeconds);
 		}
-		_handUp.Update(deltaSeconds);
+		StepEase(_handUp);
 	}
 	_handUpWasHeld = cameraUp;
 
@@ -6590,14 +6979,29 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	handTransform.rotation = glm::length(up) > 0.0f ? StandOnSlope(onLevelLand, _handHeading, up) : onLevelLand;
 }
 
+bool Game::ScriptHoldsCamera() const
+{
+	return Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
+	       Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
+}
+
 std::chrono::milliseconds Game::CameraStepTime() const
 {
 	const auto& time = Locator::time::value();
-	const bool scripted = Locator::cinematicDirectorSystem::has_value() &&
-	                      Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
-	                      Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
 	const bool insideTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	return ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted, insideTemple);
+	return ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), ScriptHoldsCamera(), insideTemple);
+}
+
+std::chrono::microseconds Game::InputStepTime(std::chrono::microseconds frameTime) const
+{
+	// The steps of the input go by the time of this frame: its real time, or its game time while a script holds the
+	// widescreen, as the camera's step does
+	const bool insideTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (ScriptHoldsCamera() && !insideTemple)
+	{
+		return std::chrono::duration_cast<std::chrono::microseconds>(Locator::time::value().GetFrameGameTime());
+	}
+	return frameTime;
 }
 
 float Game::HandStepSeconds() const
@@ -6681,8 +7085,8 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	frame.overWorld = !inTemple && !Locator::debugGui::value().IsMouseOverWindow();
 	auto& magic = Locator::magicSystem::value();
-	// The hand's movement, and the spin it gives a miracle, are measured by what the hand steps by
-	magic.UpdateHand(frame, HandStepSeconds());
+	// The hand's movement, and the spin it gives a miracle, are measured at the steps of the input
+	magic.UpdateHand(frame, Locator::time::value().GetInputSteps());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
 	// The seeds above the stone hands and worship icons spin as the globes' do, by the game time of the frame: they stand

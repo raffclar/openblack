@@ -16,7 +16,9 @@
 #include <spdlog/spdlog.h>
 #include <stb_image_write.h>
 
+#include "Common/MainThreadQueue.h"
 #include "GraphicsHandleBgfx.h"
+#include "MainThreadWork.h"
 #include "UploadPacer.h"
 
 namespace openblack::graphics
@@ -30,6 +32,7 @@ Texture2D::Texture2D(std::string name)
 
 Texture2D::~Texture2D()
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::~Texture2D");
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
 		bgfx::destroy(toBgfx(_handle));
@@ -70,18 +73,8 @@ void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t laye
 	default:
 		assert(false);
 	}
-	const auto* texels = reinterpret_cast<const bgfx::Memory*>(memory);
-	if (texels != nullptr)
-	{
-		UploadPacer::Pace(texels->size);
-	}
-	_handle = fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags, texels));
-	// Out of textures, it isn't made: only one that is can be named
-	if (bgfx::isValid(toBgfx(_handle)))
-	{
-		bgfx::setName(toBgfx(_handle), _name.c_str());
-	}
-
+	// The size of the texture is known at once. The graphics library makes the texture on the main thread: a turn on
+	// another thread gives that work to the main thread, which makes the texture before the next draw.
 	bgfx::TextureInfo textureInfo;
 	bgfx::calcTextureSize(textureInfo, width, height, 1, false, false, layers, toBgfx(format));
 	_resolution = glm::u16vec2(textureInfo.width, textureInfo.height);
@@ -89,29 +82,56 @@ void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t laye
 	_format = fromBgfx(textureInfo.format);
 	_stride = textureInfo.width * textureInfo.bitsPerPixel / 8;
 	_storageSize = textureInfo.storageSize;
+
+	const auto* texels = reinterpret_cast<const bgfx::Memory*>(memory);
+	PostToMainThread(MainThreadApi::Graphics, [this, width, height, layers, format, flags, texels] {
+		if (texels != nullptr)
+		{
+			UploadPacer::Pace(texels->size);
+		}
+		_handle = fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags, texels));
+		// Out of textures, it isn't made: only one that is can be named
+		if (bgfx::isValid(toBgfx(_handle)))
+		{
+			bgfx::setName(toBgfx(_handle), _name.c_str());
+		}
+	});
 }
 
 void Texture2D::Update(const void* data, uint32_t size) const
 {
-	UploadPacer::Pace(size);
-	bgfx::updateTexture2D(toBgfx(_handle), 0, 0, 0, 0, _resolution.x, _resolution.y, bgfx::copy(data, size));
+	UpdateLayerFromMemory(0, bgfx::copy(data, size), size);
 }
 
 void Texture2D::UpdateLayerRegion(uint16_t layer, glm::u16vec2 origin, glm::u16vec2 size, const void* data,
                                   uint32_t bytes) const
 {
-	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, origin.x, origin.y, size.x, size.y, bgfx::copy(data, bytes));
+	const auto* memory = bgfx::copy(data, bytes);
+	PostToMainThread(MainThreadApi::Graphics, [this, layer, origin, size, memory] {
+		bgfx::updateTexture2D(toBgfx(_handle), layer, 0, origin.x, origin.y, size.x, size.y, memory);
+	});
 }
 
 void Texture2D::UpdateLayer(uint16_t layer, const void* data, uint32_t size) const
 {
-	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y, bgfx::copy(data, size));
+	UpdateLayerFromMemory(layer, bgfx::copy(data, size), std::nullopt);
 }
 
 void Texture2D::UpdateLayerFromMemory(uint16_t layer, const void* memory) const
 {
-	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y,
-	                      static_cast<const bgfx::Memory*>(memory));
+	UpdateLayerFromMemory(layer, memory, std::nullopt);
+}
+
+void Texture2D::UpdateLayerFromMemory(uint16_t layer, const void* memory, std::optional<uint32_t> paced) const
+{
+	const auto* texels = static_cast<const bgfx::Memory*>(memory);
+	PostToMainThread(MainThreadApi::Graphics, [this, layer, texels, paced] {
+		if (paced.has_value())
+		{
+			UploadPacer::Pace(*paced);
+		}
+		bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y, texels);
+	});
 }
 
 void Texture2D::DumpTexture() const

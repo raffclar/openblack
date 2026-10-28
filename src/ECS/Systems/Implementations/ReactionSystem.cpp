@@ -54,6 +54,7 @@
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
@@ -241,18 +242,29 @@ reaction_timing::Reacting WhoOf(const ecs::Registry& registry, entt::entity livi
 	return registry.AllOf<Creature>(living) ? reaction_timing::Reacting::Creature : reaction_timing::Reacting::Other;
 }
 
+/// Where a thing is now, as the turn knows it. A hand is where the last report of its player put it: its drawn place
+/// follows the pointer of one computer only. Empty when the thing has no place.
+std::optional<glm::vec3> TurnPlaceOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (const auto* reported = registry.TryGet<const ReportedHand>(thing))
+	{
+		return reported->handPoint;
+	}
+	if (const auto* transform = registry.TryGet<const Transform>(thing))
+	{
+		return transform->position;
+	}
+	return std::nullopt;
+}
+
 /// Where the thing a reaction is about is now: the thing itself while it is there, else where the reaction is
 glm::vec3 ThingAt(const ecs::Registry& registry, const ReactionSystem::Active& reaction)
 {
-	const auto thing = reaction.source.initiator;
-	if (thing != entt::null && registry.Valid(thing))
-	{
-		if (const auto* transform = registry.TryGet<const Transform>(thing))
-		{
-			return transform->position;
-		}
-	}
-	return reaction.source.position;
+	return TurnPlaceOf(registry, reaction.source.initiator).value_or(reaction.source.position);
 }
 
 /// Whether what a living reacts to has gone: deleted, or a villager dying
@@ -1102,11 +1114,8 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		}
 		const auto at = registry.Get<const Transform>(entity).position;
 		// Under a shield that what made the reaction isn't inside, where it is now, it is kept off
-		const auto* initiatorAt =
-		    registry.Valid(reaction.source.initiator) ? registry.TryGet<const Transform>(reaction.source.initiator) : nullptr;
 		if (Locator::magicShieldSystem::has_value() &&
-		    Locator::magicShieldSystem::value().KeepsReactionOff(at, initiatorAt != nullptr ? initiatorAt->position
-		                                                                                    : reaction.source.position))
+		    Locator::magicShieldSystem::value().KeepsReactionOff(at, ThingAt(registry, reaction)))
 		{
 			continue;
 		}
@@ -1858,7 +1867,7 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		const float belief = ignored ? 0.0f : creature.value_or(value(boredom, villager->town)) * share;
 		magic::town_belief::Add(impression->belief, source.player, belief);
 		impression->lastImpression = belief;
-		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX, _voice, _turn);
+		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX);
 		// Whatever a villager is impressed by moves the player's alignment a little, by how much its town wants what it
 		// shows for those kinds that look to a desire
 		std::optional<float> desire;
@@ -1982,7 +1991,7 @@ void ReactionSystem::GiveTownBelief(entt::entity town, PlayerNames player, float
 	magic::town_belief::Add(villager_reactions::ImpressionOf(town).belief, player, amount);
 	if (from != entt::null && registry.Valid(from) && registry.AllOf<Transform>(from))
 	{
-		villager_reactions::ShowObjectBelief(from, town, player, amount, alignment, _voice, _turn);
+		villager_reactions::ShowObjectBelief(from, town, player, amount, alignment);
 	}
 }
 
@@ -1994,7 +2003,6 @@ void ReactionSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _turn);
 	reflection::Save(out, _joins);
 	reflection::Save(out, _landBalances);
-	reflection::Save(out, _voice);
 }
 
 bool ReactionSystem::LoadState(reflection::BinaryReader& in)
@@ -2005,7 +2013,6 @@ bool ReactionSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _turn);
 	reflection::Load(in, _joins);
 	reflection::Load(in, _landBalances);
-	reflection::Load(in, _voice);
 	return !in.Failed();
 }
 
@@ -2019,7 +2026,6 @@ void ReactionSystem::Reset()
 	_cursor = 0;
 	_turn = 0;
 	_joins = 0;
-	_voice = {};
 	_landBalances = {1.0f, 1.0f, 1.0f};
 }
 

@@ -78,6 +78,7 @@ void openblack::ecs::reflection::RegisterFields_Components_a(entt::meta_ctx& con
 	    .Field<&components::Animal::heading>("heading")
 	    .Field<&components::Animal::drawn>("drawn")
 	    .Field<&components::Animal::life>("life")
+	    .Field<&components::Animal::dying>("dying")
 	    .Field<&components::Animal::birthTurn>("birthTurn")
 	    .Field<&components::Animal::turnsUntilStateChange>("turnsUntilStateChange")
 	    .Field<&components::Animal::landingPose>("landingPose");

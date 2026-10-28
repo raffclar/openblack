@@ -75,6 +75,9 @@ public:
 	/// How many buffers and textures went this frame
 	[[nodiscard]] size_t GetUploadCount() const;
 
+	/// How many threads are held now, waiting for the next frame
+	[[nodiscard]] size_t GetWaiting() const;
+
 private:
 	void Take(size_t bytes);
 
@@ -84,6 +87,7 @@ private:
 	size_t _uploaded {0};
 	size_t _uploadCount {0};
 	size_t _hurries {0};
+	size_t _waiting {0};
 	bool _released {false};
 };
 

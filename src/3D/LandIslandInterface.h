@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -61,6 +62,9 @@ public:
 	/// The land's drawing catches up with the altitudes set since the last time: the shapes of the blocks that changed,
 	/// the height map, and the blocks' textures, whose ground follows the height
 	virtual void CommitAltitudeChanges() {}
+	/// Puts each cell corner back to the altitude that it had when the land was built. Only the blocks that change are
+	/// made again, as for CommitAltitudeChanges. Returns the count of the block cells that changed.
+	virtual size_t RestoreBuiltAltitudes() { return 0; }
 
 	// Debug
 	virtual void DumpTextures() const = 0;
@@ -87,14 +91,30 @@ public:
 	/// Where a block's coarse texture is on the pages: x the layer, yz where its square starts (0 to 1 across the
 	/// page), w 1; all 0 when there are no pages
 	[[nodiscard]] virtual glm::vec4 GetCoarsePageSlot(size_t /*block*/) const { return glm::vec4(0.0f); }
+	/// The texels along a side of each block's texture: 256, or 128 at the low resolution of the lowest detail levels
+	[[nodiscard]] virtual int GetBlockTextureSide() const { return 256; }
 	/// Paints a block's own texture again into ARGB texels at 4 bits a channel, with no footprints (see block_texture).
-	/// The texels are k_Side by k_Side, a row for each texel along x.
+	/// The texels are GetBlockTextureSide on each side, a row for each texel along x.
 	virtual void PaintBlockTexels(size_t /*block*/, std::span<uint16_t> /*texels*/) const {}
 	/// Puts ARGB texels at 4 bits a channel in place of a block's texture, for example with its footprints painted in
 	virtual void SetBlockTexels(size_t /*block*/, std::span<const uint16_t> /*texels*/) {}
-	/// The blocks whose textures the land painted again with no footprints since the last call: each block after a land
-	/// loads, and the blocks that change height
-	[[nodiscard]] virtual std::vector<size_t> TakeRepaintedBlocks() { return {}; }
+	/// A block whose texture the land painted again with no footprints
+	struct RepaintedBlock
+	{
+		/// The texels of a rectangle of the block's cells, as the land painted them (see block_texture::PaintCellTexels)
+		struct Cells
+		{
+			glm::ivec2 first {0};
+			glm::ivec2 count {0};
+			std::vector<uint16_t> texels;
+		};
+		size_t block {0};
+		/// The cells that the land painted again, or none when it painted the whole block
+		std::optional<Cells> cells;
+	};
+	/// The blocks whose textures the land painted again with no footprints since the last call, in the order it painted
+	/// them: each block after a land loads, and the cells of the blocks that change height
+	[[nodiscard]] virtual std::vector<RepaintedBlock> TakeRepaintedBlocks() { return {}; }
 
 	[[nodiscard]] virtual U16Extent2 GetIndexExtent() const = 0;
 	[[nodiscard]] virtual glm::mat4 GetOrthoView() const = 0;

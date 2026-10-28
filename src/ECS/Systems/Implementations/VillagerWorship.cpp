@@ -47,6 +47,7 @@
 #include "ECS/WorshipperRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "ObjectMeasures.h"
 #include "VillagerBuild.h"
 #include "VillagerDance.h"
 #include "VillagerDisciples.h"
@@ -793,7 +794,8 @@ uint32_t villager_worship::GotoWorshipSiteForWorship(LivingAction& action)
 		}
 		WorshipperOf(villager).onTheWay = true;
 		const auto gate = Sites().PlaceAt(site, SitePlace::Gate).value_or(PositionOf(site));
-		if (gutils::GetDistanceInMetres(map_coords::FromMetres(PositionOf(villager)), map_coords::FromMetres(gate)) > 0.0f)
+		// A villager that touches the site starts its arrival at once; others walk to the gate on the footpaths
+		if (systems::object_measures::DistanceFromObject(registry, site, villager) > 0.0f)
 		{
 			MoveOnPathsTo(action, site, gate, VillagerStates::ArrivesAtWorshipSiteForWorship);
 		}

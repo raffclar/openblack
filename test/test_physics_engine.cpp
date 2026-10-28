@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <numbers>
 #include <sstream>
+#include <tuple>
 #include <vector>
 
 #include <PhysicsConstantsFile.h>
@@ -745,4 +746,42 @@ TEST(PhysicsShapes, EachBoneBoxHoldsItsVerticesAndItsOrigin)
 	// A bone with no vertices keeps a box at its origin
 	EXPECT_EQ(boxes[1].min, glm::vec3(0.0f));
 	EXPECT_EQ(boxes[1].max, glm::vec3(0.0f));
+}
+
+// A prediction steps the body alone, twenty steps a turn, as the turns do. It keeps the place at the start of each turn
+// and the last place.
+TEST(PhysicsBody, APredictionStepsTheBodyAloneTurnByTurn)
+{
+	const FakeLand land(0.0f);
+	auto predicted = MakeCube(0.5f, {0.0f, 20.0f, 0.0f});
+	predicted.velocity = {3.0f, 4.0f, -2.0f};
+	auto stepped = predicted;
+	const auto places = PredictFlight(predicted, land, 3);
+	ASSERT_EQ(places.size(), 4U);
+	for (size_t turn = 0; turn < 3; ++turn)
+	{
+		EXPECT_EQ(places[turn].centre, stepped.Centre());
+		EXPECT_EQ(places[turn].axes, stepped.Axes());
+		for (int step = 0; step < k_StepsPerTurn; ++step)
+		{
+			std::ignore = Step(stepped, land);
+		}
+	}
+	EXPECT_EQ(places.back().centre, stepped.Centre());
+	EXPECT_EQ(predicted.Centre(), stepped.Centre());
+	EXPECT_EQ(predicted.velocity, stepped.velocity);
+	EXPECT_EQ(predicted.angularMomentum, stepped.angularMomentum);
+}
+
+// No lead leaves the body as it is, and a prediction steps no more than fifteen turns
+TEST(PhysicsBody, APredictionHasAtMostFifteenTurns)
+{
+	const FakeLand land(0.0f);
+	auto body = MakeCube(0.5f, {0.0f, 20.0f, 0.0f});
+	const auto still = PredictFlight(body, land, 0);
+	ASSERT_EQ(still.size(), 1U);
+	EXPECT_EQ(still.front().centre, glm::vec3(0.0f, 20.0f, 0.0f));
+	EXPECT_EQ(body.velocity, glm::vec3(0.0f));
+	EXPECT_EQ(PredictFlight(body, land, 40).size(), static_cast<size_t>(k_MostPredictedTurns) + 1);
+	EXPECT_EQ(PredictFlight(body, land, -3).size(), 1U);
 }
