@@ -66,13 +66,6 @@ constexpr float k_RewardFaceMs = 2000.0f;
 /// The part nearest a point the hand touches, given where each part's bone is, in part order
 [[nodiscard]] BodyPart NearestPart(const glm::vec3& touch, std::span<const glm::vec3, k_BodyPartCount> parts);
 
-/// The hand runs its strokes and slaps at most this many times a second, as the game did once a frame at the screen's
-/// refresh; each step takes all the time since the last
-constexpr float k_StepsPerSecond = 60.0f;
-/// The milliseconds the next step runs on after a frame of some milliseconds, the time left over kept in `sinceStep`;
-/// nothing until a step's worth has gone by
-[[nodiscard]] std::optional<float> Pace(float& sinceStep, float frameMs);
-
 /// The clocks a stroke waits on, in milliseconds
 struct StrokeClocks
 {

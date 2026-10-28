@@ -16,6 +16,8 @@
 
 #include <entt/fwd.hpp>
 
+#include "Common/InputSteps.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -74,6 +76,11 @@ public:
 	/// less those at the start of the last draw, at least 1: what the hand and the camera step by. Before the draw of the
 	/// frame starts, it is the time of the last draw.
 	[[nodiscard]] virtual std::chrono::milliseconds GetFrameRealTime() const = 0;
+	/// The input clock counts the fixed steps that the player's input takes in this frame, by the time that the hand and
+	/// the camera step by (see CameraStep)
+	virtual void StepInput(std::chrono::microseconds stepTime) = 0;
+	/// The fixed steps that the player's input takes in this frame: the hand, the strokes, the throws and the camera
+	[[nodiscard]] virtual const input_steps::Steps& GetInputSteps() const = 0;
 
 	/// Pausing stops the game clock; unpausing starts it again from where it stopped
 	virtual void SetPaused(bool paused) = 0;

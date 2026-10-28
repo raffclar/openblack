@@ -23,6 +23,7 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Commands/PlayerCommands.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/Components/Creature.h"
@@ -189,12 +190,12 @@ const creature_tattoo::Slots& ShownTattoos(const ecs::Registry& registry, Player
 			{
 				if (const auto* tattoos = registry.TryGet<const CreatureTattoos>(*primary))
 				{
-					return tattoos->slots;
+					return tattoos->shown.has_value() ? *tattoos->shown : tattoos->slots;
 				}
 			}
 		}
 	}
-	return body.slots;
+	return body.shown.has_value() ? *body.shown : body.slots;
 }
 
 /// Paints the skin when what it shows has changed
@@ -337,7 +338,9 @@ void CreatureSkinSystem::RemakeTattooMasks(entt::entity creature, creature_tatto
 		masks = &registry.Assign<TattooMasks>(*player);
 	}
 	const auto& art = *arts.Handle(creature_skin::k_ArtId);
-	creature_tattoo::RemakeMasks(masks->masks, tattoos->slots, tattoos->pictures,
+	// The masks follow what the skin shows: a change from the tattoo editor that waits for its turn comes first
+	creature_tattoo::RemakeMasks(masks->masks, tattoos->shown.value_or(tattoos->slots),
+	                             tattoos->picturesShown ? tattoos->shownPictures : tattoos->pictures,
 	                             sheet == creature_tattoo::Sheet::Shipped ? art.shippedDesigns : art.designs);
 }
 
@@ -347,6 +350,36 @@ void CreatureSkinSystem::PaintTattoos(entt::entity creature)
 	{
 		++tattoos->revision;
 	}
+}
+
+void CreatureSkinSystem::DoTattoo(PlayerNames player, const player_commands::CreatureTattoo& tattoo)
+{
+	auto* tattoos = Locator::entitiesRegistry::value().TryGet<CreatureTattoos>(tattoo.creature);
+	if (tattoos == nullptr)
+	{
+		return;
+	}
+	tattoos->slots = tattoo.slots;
+	if (tattoo.hasPictures)
+	{
+		tattoos->pictures = tattoo.pictures;
+	}
+	// The skin stops showing a change that now is on the creature
+	if (tattoos->shown == tattoos->slots)
+	{
+		tattoos->shown.reset();
+	}
+	if (tattoos->picturesShown && tattoos->shownPictures == tattoos->pictures)
+	{
+		tattoos->picturesShown = false;
+		tattoos->shownPictures.clear();
+	}
+	// The masks of the player are made again and the skin is painted, as the editor does on the computer of the player.
+	// Only the computer of the player has the player's own pictures.
+	const auto local =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	RemakeTattooMasks(tattoo.creature, player == local ? creature_tattoo::Sheet::OwnPictures : creature_tattoo::Sheet::Shipped);
+	PaintTattoos(tattoo.creature);
 }
 
 void CreatureSkinSystem::PutOnTattoos(entt::entity creature, const creature_tattoo::Slots& slots,

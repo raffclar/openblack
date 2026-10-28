@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
 #include <vector>
 
 #include <PackFile.h>
@@ -25,12 +26,12 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
-#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
@@ -41,7 +42,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
-#include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -102,17 +103,48 @@ bool ComputerNight()
 	return guidance::ClockSaysNight(local.tm_hour, local.tm_min);
 }
 
+/// The random numbers of the help, which no frame draws
+uint32_t HelpRand(int32_t n)
+{
+	return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpRand(n) : 0;
+}
+
+float HelpFloatRand(float x)
+{
+	return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpFloatRand(x) : 0.0f;
+}
+
 /// The advisors warn of a loss only near the point under the cursor
 constexpr float k_WarnReach = 300.0f;
+
+/// The point under the cursor of this computer's player, as the last reports of the hand and of the help that a turn did
+/// give it. None when the cursor is not on a point of the world.
+std::optional<glm::vec3> ReportedPointUnderCursor()
+{
+	if (!Locator::helpProfileSystem::has_value() || !Locator::handSystem::has_value() ||
+	    !Locator::helpProfileSystem::value().GetLastReport().cursorOnPoint)
+	{
+		return std::nullopt;
+	}
+	const auto hands = Locator::handSystem::value().GetHandsOf(OwnPlayer());
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = (*hands)[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? std::optional(reported->collidePoint) : std::nullopt;
+}
 
 /// Whether a thing stands nearer to the point under the cursor than the reach of a warning
 bool NearPointUnderCursor(entt::entity thing)
 {
-	if (!Locator::pickingSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	if (!Locator::entitiesRegistry::has_value())
 	{
 		return false;
 	}
-	const auto point = Locator::pickingSystem::value().GetPick().point;
+	const auto point = ReportedPointUnderCursor();
 	const auto* at = Locator::entitiesRegistry::value().TryGet<const Transform>(thing);
 	return point.has_value() && at != nullptr && gutils::GetDistanceInMetres(at->position, *point) < k_WarnReach;
 }
@@ -211,16 +243,15 @@ void GuidanceSystem::Reset()
 void GuidanceSystem::ProcessTurn()
 {
 	// A new land's guidance counts each kind as last heard a random while before now, and nothing said once yet
-	if (_stampsDue && Locator::gameRandom::has_value())
+	if (_stampsDue && Locator::helpMessageSystem::has_value())
 	{
 		if (auto* heard = Heard(); heard != nullptr)
 		{
-			auto& random = Locator::gameRandom::value();
 			const auto turn = Turn();
 			for (size_t kind = 0; kind < guidance::k_KindCount; ++kind)
 			{
 				const auto least = guidance::Rule(static_cast<guidance::Kind>(kind)).leastGap;
-				heard->lastTurn.at(kind) = guidance::FirstStamp(turn, random.LocalRand(static_cast<int32_t>(least)));
+				heard->lastTurn.at(kind) = guidance::FirstStamp(turn, HelpRand(static_cast<int32_t>(least)));
 			}
 			heard->oneOffSaid = {};
 			heard->alignmentDrift = 0.0f;
@@ -236,7 +267,7 @@ void GuidanceSystem::ProcessTurn()
 bool GuidanceSystem::PlayNow(guidance::Kind kind)
 {
 	auto* heard = Heard();
-	if (heard == nullptr || !Locator::gameRandom::has_value())
+	if (heard == nullptr || !Locator::helpMessageSystem::has_value())
 	{
 		return false;
 	}
@@ -248,9 +279,8 @@ bool GuidanceSystem::PlayNow(guidance::Kind kind)
 	{
 		return false;
 	}
-	auto& random = Locator::gameRandom::value();
-	const auto spread = guidance::GapSpread(rule.leastGap, random.LocalFloatRand(1.0f));
-	const auto wait = rule.leastGap + random.LocalRand(static_cast<int32_t>(spread));
+	const auto spread = guidance::GapSpread(rule.leastGap, HelpFloatRand(1.0f));
+	const auto wait = rule.leastGap + HelpRand(static_cast<int32_t>(spread));
 	const auto since = Turn() - heard->lastTurn.at(static_cast<size_t>(kind));
 	return guidance::MayPlay(rule, level, firstLand, wait, since);
 }
@@ -298,13 +328,13 @@ void GuidanceSystem::Say(uint32_t text, guidance::Kind kind)
 void GuidanceSystem::SayRemark(guidance::Kind kind)
 {
 	const auto row = guidance::RemarkRow(kind);
-	if (!row.has_value() || !Locator::infoConstants::has_value() || !Locator::gameRandom::has_value())
+	if (!row.has_value() || !Locator::infoConstants::has_value() || !Locator::helpMessageSystem::has_value())
 	{
 		return;
 	}
 	const auto& texts = Locator::infoConstants::value().helpSpritesGuidance.at(*row).texts;
 	const auto choices = guidance::RemarkChoices(texts);
-	const auto pick = Locator::gameRandom::value().LocalRand(static_cast<int32_t>(choices));
+	const auto pick = HelpRand(static_cast<int32_t>(choices));
 	Say(texts.at(pick), kind);
 }
 
@@ -334,7 +364,7 @@ void GuidanceSystem::TownAttacked(entt::entity town, PlayerNames attacker, bool 
 
 void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice)
 {
-	if (!Locator::entitiesRegistry::has_value() || !Locator::gameRandom::has_value() ||
+	if (!Locator::entitiesRegistry::has_value() || !Locator::helpMessageSystem::has_value() ||
 	    !PlayNow(guidance::Kind::TownAttackedSound))
 	{
 		return;
@@ -351,16 +381,14 @@ void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttack
 	{
 		return;
 	}
-	auto& random = Locator::gameRandom::value();
 	constexpr int32_t k_AttackerCries = 10;
-	const uint32_t attackerCry =
-	    voice.attacker == guidance::Attacker::Other
-	        ? 0
-	        : guidance::AttackerCry(voice.attacker, static_cast<uint32_t>(random.LocalRand(k_AttackerCries)));
+	const uint32_t attackerCry = voice.attacker == guidance::Attacker::Other
+	                                 ? 0
+	                                 : guidance::AttackerCry(voice.attacker, static_cast<uint32_t>(HelpRand(k_AttackerCries)));
 	const auto cries = guidance::AttackCries(voice.fire, attackerCry);
 	const auto* aggression = registry.TryGet<const TownAggression>(town);
 	const float reach = guidance::AttackCryReach(aggression != nullptr ? aggression->record.protection : 0.0f);
-	const auto sample = guidance::PickCry(cries, static_cast<uint32_t>(random.LocalRand(static_cast<int32_t>(cries.size()))));
+	const auto sample = guidance::PickCry(cries, static_cast<uint32_t>(HelpRand(static_cast<int32_t>(cries.size()))));
 	// The guidance counts the cry as heard even when the bank has no sound for it
 	if (auto* heard = Heard(); heard != nullptr)
 	{
@@ -381,7 +409,7 @@ void GuidanceSystem::BuildingBroken(entt::entity building, std::optional<PlayerN
 		return;
 	}
 	// Only a building the player can see
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(OwnPlayer());
 	if (!view.has_value() || !Locator::entitiesRegistry::value().Valid(building) ||
 	    !ecs::thing_on_screen::OnScreen(*view, building))
 	{
@@ -410,7 +438,7 @@ void GuidanceSystem::AlignmentTurn(float change)
 void GuidanceSystem::SayOneOff(guidance::OneOff oneOff)
 {
 	auto* heard = Heard();
-	if (heard == nullptr || !Locator::gameRandom::has_value())
+	if (heard == nullptr || !Locator::helpMessageSystem::has_value())
 	{
 		return;
 	}
@@ -419,7 +447,7 @@ void GuidanceSystem::SayOneOff(guidance::OneOff oneOff)
 		return;
 	}
 	const auto& rule = guidance::Rule(oneOff);
-	if (guidance::OneOffSaid(Locator::gameRandom::value().LocalFloatRand(1.0f), rule.chance))
+	if (guidance::OneOffSaid(HelpFloatRand(1.0f), rule.chance))
 	{
 		Say(rule.text, guidance::Kind::OneOff);
 		// Looked up again: saying it may have added the component to the player
@@ -436,7 +464,7 @@ void GuidanceSystem::KilledVillager(entt::entity villager)
 	{
 		return;
 	}
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(OwnPlayer());
 	if (view.has_value() && Locator::entitiesRegistry::value().Valid(villager) &&
 	    ecs::thing_on_screen::OnScreen(*view, villager))
 	{
@@ -501,7 +529,8 @@ void GuidanceSystem::LookAtMoon()
 void GuidanceSystem::TownDesireVoices()
 {
 	if (Turn() % guidance::k_DesireVoiceTurns != 0 || !Locator::entitiesRegistry::has_value() ||
-	    !Locator::gameRandom::has_value() || !Locator::camera::has_value() || !PlayNow(guidance::Kind::TownDesireSound))
+	    !Locator::helpMessageSystem::has_value() || !Locator::handSystem::has_value() ||
+	    !PlayNow(guidance::Kind::TownDesireSound))
 	{
 		return;
 	}
@@ -511,9 +540,14 @@ void GuidanceSystem::TownDesireVoices()
 		return;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	auto& random = Locator::gameRandom::value();
 	const auto turn = Turn();
-	const glm::vec3 camera = Locator::camera::value().GetOrigin();
+	// The camera of the player as the last report of the hand that a turn did gives it
+	const auto reportedCamera = Locator::handSystem::value().GetReportedCamera(OwnPlayer());
+	if (!reportedCamera.has_value())
+	{
+		return;
+	}
+	const glm::vec3 camera = reportedCamera->origin;
 	const auto since = turn - heard->lastTurn.at(static_cast<size_t>(guidance::Kind::TownDesireSound));
 	const auto score = [&](entt::entity thing, float distance, float desire, uint32_t voice) {
 		return guidance::DesireVoiceScore({.turnsSinceHeard = since,
@@ -550,7 +584,7 @@ void GuidanceSystem::TownDesireVoices()
 		for (const auto& sorted : desires->sortedRaw)
 		{
 			const float raw = ecs::town_desire::GetRawDesire(*desires, sorted.index);
-			const float draw = random.LocalFloatRand(guidance::DesireVoiceDrawLimit(sorted.value));
+			const float draw = HelpFloatRand(guidance::DesireVoiceDrawLimit(sorted.value));
 			const auto voice = guidance::DesireVoice(sorted.index, sorted.value, draw);
 			if (voice == 0)
 			{
@@ -596,9 +630,9 @@ void GuidanceSystem::TownDesireVoices()
 			// voice scores by the strain of the temple's sites.
 			const float food = Locator::worshipSiteSystem::value().DesireForFood(site);
 			const float strain = worship.strainSound < 1.0f ? worship.strainSound : 1.0f;
-			const float foodDraw = random.LocalFloatRand(guidance::DesireVoiceDrawLimit(food));
+			const float foodDraw = HelpFloatRand(guidance::DesireVoiceDrawLimit(food));
 			const auto foodVoice = guidance::DesireVoice(guidance::k_WorshipFoodRow, food, foodDraw);
-			const float worshippersDraw = random.LocalFloatRand(guidance::DesireVoiceDrawLimit(food));
+			const float worshippersDraw = HelpFloatRand(guidance::DesireVoiceDrawLimit(food));
 			const auto worshippersVoice = guidance::DesireVoice(guidance::k_WorshippersRow, food, worshippersDraw);
 			const guidance::DesireVoicePick foodPick {
 			    .voice = foodVoice, .score = foodVoice != 0 ? score(site, nearestSite, food, foodVoice) : 0.0f};
@@ -618,7 +652,7 @@ void GuidanceSystem::TownDesireVoices()
 	{
 		return;
 	}
-	const float draw = random.LocalFloatRand(guidance::DesireVoiceReachDrawLimit(best.score));
+	const float draw = HelpFloatRand(guidance::DesireVoiceReachDrawLimit(best.score));
 	const auto* at = thing != entt::null ? registry.TryGet<const Transform>(thing) : nullptr;
 	if (at == nullptr)
 	{

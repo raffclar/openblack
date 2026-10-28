@@ -774,6 +774,13 @@ float GameHandGrabWorld::CreatureSizeOf(entt::entity creature) const
 
 void GameHandGrabWorld::CallOffGiving(entt::entity creature)
 {
+	// A creature that took the thing from the hand already keeps it and goes on
+	if (Locator::creatureMindSystem::has_value() && Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureMindSystem::value().IsTakingFromHand(creature) &&
+	    Locator::creatureObjectActionSystem::value().GetHeld(creature).has_value())
+	{
+		return;
+	}
 	// It gives up taking as a failure, and its hand closes on nothing if it was already reaching
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetTakingFromHand(creature).has_value())
@@ -972,7 +979,15 @@ void GameHandGrabWorld::DrawPulledPose(entt::entity object, const Pose& pose)
 	{
 		return;
 	}
-	HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+	const auto& stands = registry.Get<const Transform>(object);
+	HandPulled pulled {
+	    .position = pose.origin,
+	    .rotation = glm::mat3(1.0f),
+	    .scale = glm::vec3(1.0f),
+	    .standsAt = stands.position,
+	    .standsRotation = stands.rotation,
+	    .standsScale = stands.scale,
+	};
 	for (glm::length_t column = 0; column < 3; ++column)
 	{
 		const float length = glm::length(pose.axes[column]);

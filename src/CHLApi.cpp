@@ -195,6 +195,7 @@
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -365,10 +366,24 @@ uint32_t WideScreenOwner()
 	return Locator::cinematicDirectorSystem::value().GetWideScreenOwner();
 }
 
+/// A script gives the camera an order: the turns count it, so that a view report from before the order does not tell
+/// that the camera has arrived
+void CountCameraOrder()
+{
+	++Locator::entitiesRegistry::value().Context().scriptCameraOrders;
+}
+
+/// The script's camera, for a command that gives it an order
+ScriptCameraModel* OrderedScriptCamera()
+{
+	CountCameraOrder();
+	return Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+}
+
 /// The script's camera the camera commands move: with a warning when the script has none
 ScriptCameraModel* ScriptCamera()
 {
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("We are in the wrong camera mode! - exception happened?");
@@ -491,14 +506,15 @@ help::spirits::AdvisorSpiritController* ScriptAdvisors()
 }
 
 /// The advisor a script's spirit means, 1 the good one or 2 the evil one, by the local player's alignment for those
-/// that go by it
+/// that go by it. A random spirit comes from the random numbers of the help, which no frame draws.
 int32_t ScriptHelpSpirit(int32_t scriptSpirit)
 {
 	const auto alignment = Locator::alignmentSystem::has_value()
 	                           ? Locator::alignmentSystem::value().GetPlayerAlignment(ScriptPlayerName(0))
 	                           : 0.0f;
-	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment),
-	                                          []() { return Locator::gameRandom::value().LocalRand(100); });
+	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment), []() {
+		return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpRand(100) : 0u;
+	});
 }
 
 /// The last of the advisors' animations a script can play
@@ -946,6 +962,7 @@ void CHLApi::TaskStopped(uint32_t task)
 	const auto released = Locator::scriptControlSystem::value().TaskStopped(Locator::camera::value(), task);
 	if (released.camera)
 	{
+		CountCameraOrder();
 		ApplySwitchChanges(script::switches::CameraReleased());
 	}
 	if (released.gameSpeed)
@@ -1168,6 +1185,7 @@ void RemakeDrawList()
 /// has this position and focus, nothing changes. The land's draw list is made again on the next frame.
 void PlaceCamera(const glm::vec3& origin, const glm::vec3& focus)
 {
+	CountCameraOrder();
 	Locator::camera::value().Place(origin, focus);
 	RemakeDrawList();
 }
@@ -1178,7 +1196,7 @@ void SetCameraPosition() // 001 SET_CAMERA_POSITION
 {
 	const auto position = PopVec();
 	// Without the script's camera the position is quietly dropped
-	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
+	if (auto* camera = OrderedScriptCamera(); camera != nullptr)
 	{
 		camera->SetOrigin(position);
 		RemakeDrawList();
@@ -1215,38 +1233,25 @@ void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 	}
 }
 
-/// In a network game the scripts read the camera and the hand of the player from the last report of a turn, so that
-/// every computer gets the same answer; before the first report they read the middle of the world's axes. Alone, the
-/// scripts read the camera and the hand of this computer.
-bool ScriptsReadReports()
+/// The scripts read the camera, the hand and the view of the player from the last reports that a turn did, in a game
+/// alone too, so that every computer and every frame rate gets the same answer. Before the first report they read the
+/// middle of the world's axes.
+std::optional<HandSystemInterface::ReportedView> ScriptView()
 {
-	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportedView(PlayerNames::PLAYER_ONE)
+	                                        : std::nullopt;
 }
 
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
 {
-	if (ScriptsReadReports())
-	{
-		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-		PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
-		return;
-	}
-	auto& camera = Locator::camera::value();
-	const auto position = camera.GetOrigin();
-	PushVec(position);
+	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
 }
 
 void GetCameraFocus() // 006 GET_CAMERA_FOCUS
 {
-	if (ScriptsReadReports())
-	{
-		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-		PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
-		return;
-	}
-	auto& camera = Locator::camera::value();
-	const auto focus = camera.GetFocus();
-	PushVec(focus);
+	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
 }
 
 void SpiritEject() // 007 SPIRIT_EJECT
@@ -1307,14 +1312,14 @@ void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW
 	{
 		ObjectNoLongerValid();
 	}
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(PlayerNames::PLAYER_ONE);
 	Pushb(valid && !PlayerInsideTemple() && view.has_value() && ecs::thing_on_screen::OnScreen(*view, object));
 }
 
 void PosFieldOfView() // 012 POS_FIELD_OF_VIEW
 {
 	const auto position = PopVec();
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(PlayerNames::PLAYER_ONE);
 	Pushb(!PlayerInsideTemple() && view.has_value() && screen_pick::PointOnScreen(*view, position));
 }
 
@@ -2685,6 +2690,7 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 	{
 		Locator::creatureModeSystem::value().Leave();
 	}
+	CountCameraOrder();
 	const bool taken = Locator::scriptControlSystem::value().StartCameraControl(
 	    Locator::camera::value(), {.task = task, .templeScript = templeScript, .insideTemple = insideTemple},
 	    [](float x, float z) { return Locator::terrainSystem::value().GetHeightAt(glm::vec2(x, z)); });
@@ -2697,6 +2703,7 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 
 void EndCameraControl() // 031 END_CAMERA_CONTROL
 {
+	CountCameraOrder();
 	if (Locator::scriptControlSystem::value().EndCameraControl(Locator::camera::value(), CurrentTask()))
 	{
 		ApplySwitchChanges(script::switches::CameraReleased());
@@ -2902,18 +2909,10 @@ void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
 	{
 		ScriptMessage("Script camera in citadel");
 	}
-	auto& camera = Locator::camera::value();
-	if (const auto* script = Locator::scriptControlSystem::value().GetScriptCamera(camera); script != nullptr)
-	{
-		Pushb(script->Arrived());
-		return;
-	}
-	// The player's camera has arrived once where it is and what it looks at are where it is going
-	const auto distanceSquared = [](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a - b, a - b); };
-	Pushb(distanceSquared(camera.GetOrigin(Camera::Interpolation::Target), camera.GetOrigin()) <
-	          script_camera::k_ArrivedDistanceSquared &&
-	      distanceSquared(camera.GetFocus(Camera::Interpolation::Target), camera.GetFocus()) <
-	          script_camera::k_ArrivedDistanceSquared);
+	// The view report of the player tells whether the camera has arrived
+	const auto view = ScriptView();
+	Pushb(view.has_value() && script_camera::ArrivedByReport(view->cameraArrived, view->cameraOrders,
+	                                                         Locator::entitiesRegistry::value().Context().scriptCameraOrders));
 }
 
 /// A villager's town: it leaves its old town's homeless, then joins the new town
@@ -3362,17 +3361,8 @@ void GetHandPosition() // 042 GET_HAND_POSITION
 	{
 		ScriptMessage("Hand in citadel");
 	}
-	if (ScriptsReadReports())
-	{
-		const auto reported = Locator::handSystem::value().GetPlayerHandPositions()[0];
-		PushVec(reported.value_or(glm::vec3(0.0f)));
-		return;
-	}
-	// A game on one computer reads the hand of this computer where the frames draw it
-	const auto handEntity = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	auto& handTransform = Locator::entitiesRegistry::value().Get<Transform>(handEntity);
-
-	PushVec(handTransform.position);
+	const auto reported = Locator::handSystem::value().GetPlayerHandPositions()[0];
+	PushVec(reported.value_or(glm::vec3(0.0f)));
 }
 
 /// The loaded sound group of a bank's file, whatever the case of the file's name on disk
@@ -4631,7 +4621,7 @@ std::optional<std::pair<entt::entity, entt::entity>> PopDualThings()
 void StartDualCamera() // 093 START_DUAL_CAMERA
 {
 	const auto things = PopDualThings();
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (things.has_value() && camera != nullptr)
 	{
 		// The camera keeps both things in view, from the side of the line between them, until the script lets it go
@@ -4642,7 +4632,7 @@ void StartDualCamera() // 093 START_DUAL_CAMERA
 void UpdateDualCamera() // 094 UPDATE_DUAL_CAMERA
 {
 	const auto things = PopDualThings();
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (things.has_value() && camera != nullptr)
 	{
 		camera->UpdateDualView(DualSubjectOf(things->first), DualSubjectOf(things->second));
@@ -4652,7 +4642,7 @@ void UpdateDualCamera() // 094 UPDATE_DUAL_CAMERA
 void ReleaseDualCamera() // 095 RELEASE_DUAL_CAMERA
 {
 	// The script's own camera takes over again, from wherever the two-thing camera left it
-	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
+	if (auto* camera = OrderedScriptCamera(); camera != nullptr)
 	{
 		camera->ReleaseDualView();
 	}
@@ -4824,7 +4814,7 @@ std::optional<script_camera::View> FaceViewOf(entt::entity object, float distanc
 /// under a two-thing camera
 ScriptCameraModel* ScriptCameraToFace()
 {
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed!");
@@ -5013,7 +5003,7 @@ void GetRealYear() // 118 GET_REAL_YEAR
 void RunCameraPath() // 119 RUN_CAMERA_PATH
 {
 	const auto track = Pop().intVal;
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed! - Exception happened?");
@@ -5503,7 +5493,8 @@ void MoveMusic() // 149 MOVE_MUSIC
 void GetInclusionDistance() // 150 GET_INCLUSION_DISTANCE
 {
 	// The world camera's distance to the fence from its last fence test
-	Pushf(Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f);
+	const auto view = ScriptView();
+	Pushf(view.has_value() ? view->inclusionDistance : 0.0f);
 }
 
 void GetLandHeight() // 151 GET_LAND_HEIGHT
@@ -5906,7 +5897,7 @@ void CameraProperties() // 180 CAMERA_PROPERTIES
 	const auto angle = Popf() * k_DegreesToRadians;
 	const auto glideScale = Popf();
 	const auto distance = Popf();
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed! - Exception happened?");
@@ -7524,7 +7515,7 @@ void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
 /// The thing a following command is given, and the script's camera, each complained of when missing
 std::pair<entt::entity, ScriptCameraModel*> FollowCommand(entt::entity thing)
 {
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed! - Exception happened?");
@@ -7620,9 +7611,13 @@ void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT
 
 void StoreCameraDetails() // 283 STORE_CAMERA_DETAILS
 {
-	// The script keeps where the camera is and where it looks, whatever has the camera
-	const auto& camera = Locator::camera::value();
-	Locator::scriptControlSystem::value().StoreCameraDetails({.origin = camera.GetOrigin(), .focus = camera.GetFocus()});
+	// The script keeps where the camera is and where it looks as the frame draws it, whatever has the camera. It reads
+	// the camera from the last view report, as the other camera reads of the scripts do.
+	const auto view = ScriptView();
+	Locator::scriptControlSystem::value().StoreCameraDetails({
+	    .origin = view.has_value() ? view->eye : glm::vec3(0.0f),
+	    .focus = view.has_value() ? view->focus : glm::vec3(0.0f),
+	});
 }
 
 void RestoreCameraDetails() // 284 RESTORE_CAMERA_DETAILS
@@ -9280,13 +9275,11 @@ void GetHandState() // 413 GET_HAND_STATE
 	facts.interfaceActive =
 	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	facts.inTemple = PlayerInsideTemple();
-	if (Locator::camera::has_value())
+	// The grip of the land and the other button come from the view report of the player
+	if (const auto view = ScriptView(); view.has_value())
 	{
-		facts.gripsLand = Locator::camera::value().GetModel().GetHandCues().dragging;
-	}
-	if (Locator::gameActionSystem::has_value())
-	{
-		facts.otherButton = Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
+		facts.gripsLand = view->gripsLand;
+		facts.otherButton = view->otherButton;
 	}
 	if (Locator::cameraHelpSystem::has_value())
 	{

@@ -121,7 +121,7 @@ float SecondsInState(const Vortex& vortex, ReadIn readIn)
 	const auto& time = Locator::time::value();
 	const auto turn = time.GetTurn();
 	const auto turns = turn >= vortex.stateStartTurn ? turn - vortex.stateStartTurn : 0;
-	const auto fraction = vortex::TurnFractionFor(time.GetTurnFraction(), readIn == ReadIn::Turn, time.IsNetworkGame());
+	const auto fraction = vortex::TurnFractionFor(time.GetTurnFraction(), readIn == ReadIn::Turn);
 	return vortex::ElapsedSeconds(turns, fraction, static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
 }
 
