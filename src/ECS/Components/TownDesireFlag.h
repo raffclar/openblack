@@ -14,6 +14,7 @@
 #include <array>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
 #include "ECS/Components/TownDesire.h"
@@ -39,6 +40,11 @@ struct TownDesireFlag
 	float speed {0.0f};
 	/// Whether it showed this frame
 	bool shown {false};
+	/// Where the frames draw it, turned to the camera and at the size of its level. Its Transform is its place in the
+	/// map, which only the turn changes.
+	glm::vec3 drawnPosition {0.0f};
+	glm::mat3 drawnRotation {1.0f};
+	float drawnScale {1.0f};
 };
 
 /// A town's flags, by desire: none for a desire that flies no flag

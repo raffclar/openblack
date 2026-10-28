@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/GUtilsAngle.h"
 #include "Common/PortableMath.h"
 
 namespace openblack::ecs::town_desire_flags
@@ -26,6 +27,11 @@ std::optional<uint32_t> PointOf(int32_t place)
 		return std::nullopt;
 	}
 	return k_FirstFlagPoint + static_cast<uint32_t>(place);
+}
+
+map_coords::MapCoords PlaceWithoutStore(const map_coords::MapCoords& town, uint32_t place)
+{
+	return town + gutils::GetPosFromAngle(static_cast<float>(place) * k_AngleWithoutStore, k_DistanceWithoutStore);
 }
 
 bool Shows(bool storeWorking, float level, float showsAfter)

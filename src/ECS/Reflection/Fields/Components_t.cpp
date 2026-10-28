@@ -206,7 +206,10 @@ void openblack::ecs::reflection::RegisterFields_Components_t(entt::meta_ctx& con
 	    .Field<&components::TownDesireFlag::overGround>("overGround")
 	    .Field<&components::TownDesireFlag::level>("level")
 	    .Field<&components::TownDesireFlag::speed>("speed")
-	    .Field<&components::TownDesireFlag::shown>("shown");
+	    .Field<&components::TownDesireFlag::shown>("shown")
+	    .Field<&components::TownDesireFlag::drawnPosition>("drawnPosition")
+	    .Field<&components::TownDesireFlag::drawnRotation>("drawnRotation")
+	    .Field<&components::TownDesireFlag::drawnScale>("drawnScale");
 	Reflect<components::TownDesireFlags>(context).Field<&components::TownDesireFlags::flags>("flags");
 	Reflect<components::Transform>(context)
 	    .Field<&components::Transform::position>("position")

@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <entt/meta/context.hpp>
+#include <entt/signal/sigh.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
@@ -52,10 +53,18 @@ constexpr size_t k_Heal = 10;
 constexpr size_t k_Fire = 1;
 
 /// A land of its own: flat ground at height 0, its things kept by spot, a clock set by the test, random numbers that
-/// always toss heads (1) and give half of what is asked
+/// always toss heads (1) and give half of what is asked. As in the game's map, a new firefly goes to the front of the
+/// fireflies, and a firefly that moves to another cell goes to the front again. A search of a cell meets the other
+/// things first.
 class FakeWorld final: public FireflyWorldInterface
 {
 public:
+	FakeWorld()
+	{
+		_made = registry.OnConstruct<Firefly>().connect<&FakeWorld::OnFireflyMade>(*this);
+		_gone = registry.OnDestroy<Firefly>().connect<&FakeWorld::OnFireflyGone>(*this);
+	}
+
 	enum class Kind : uint8_t
 	{
 		Tree,
@@ -75,6 +84,10 @@ public:
 	float hour {k_Evening};
 	glm::vec3 camera {0.0f};
 	std::optional<ecs::components::Sprite> look;
+	/// The fireflies in the map's cells, the front first, each with the cell that it is in
+	std::vector<std::pair<entt::entity, glm::ivec2>> filed;
+	/// How many times a firefly that moved asked for the cell of its new place
+	size_t moves {0};
 
 	entt::entity Add(Kind kind, glm::vec2 metres, float height = 0.0f)
 	{
@@ -123,7 +136,25 @@ public:
 				found.push_back(entity);
 			}
 		}
+		for (const auto& [entity, at] : filed)
+		{
+			if (at == cell)
+			{
+				found.push_back(entity);
+			}
+		}
 		return found;
+	}
+	void Moved(entt::entity thing) override
+	{
+		++moves;
+		const auto found = std::ranges::find(filed, thing, &std::pair<entt::entity, glm::ivec2>::first);
+		const auto now = map_coords::Cell(registry.Get<const Firefly>(thing).at);
+		if (found != filed.end() && found->second != now)
+		{
+			filed.erase(found);
+			filed.insert(filed.begin(), {thing, now});
+		}
 	}
 	[[nodiscard]] std::optional<map_coords::MapCoords> SpotOf(entt::entity thing) const override
 	{
@@ -162,6 +193,19 @@ public:
 	[[nodiscard]] glm::vec3 CameraPosition() const override { return camera; }
 	[[nodiscard]] bool InView(glm::vec3 /*point*/) const override { return true; }
 	[[nodiscard]] std::optional<ecs::components::Sprite> Look() const override { return look; }
+
+private:
+	void OnFireflyMade(entt::registry& made, entt::entity entity)
+	{
+		filed.insert(filed.begin(), {entity, map_coords::Cell(made.get<Firefly>(entity).at)});
+	}
+	void OnFireflyGone(entt::registry& /*registry*/, entt::entity entity)
+	{
+		std::erase_if(filed, [entity](const auto& entry) { return entry.first == entity; });
+	}
+
+	entt::scoped_connection _made;
+	entt::scoped_connection _gone;
 };
 
 /// Where the village stands, well inside the map
@@ -311,20 +355,58 @@ TEST(FireflyRules, TheRewardIsDrawnByWeight)
 	EXPECT_FLOAT_EQ(table.Total(), 2.0f);
 }
 
-TEST_F(Fireflies, NightfallTopsUpToFiftyAndSharersAreRemovedOneATurn)
+TEST_F(Fireflies, NightfallTopsUpToFiftyAndOneATurnComesOut)
 {
 	_world->Add(FakeWorld::Kind::Tree, k_Here);
 	_world->Add(FakeWorld::Kind::Building, k_Here + glm::vec2(20.0f, 0.0f), 3.0f);
-	// The first evening turn makes 50 in the only tree, and the first in line is gone, sharing its spot
+	const auto out = [this] {
+		return std::ranges::count_if(_system->GetFireflies(), [this](entt::entity entity) {
+			return !_world->registry.Get<const Firefly>(entity).hidden;
+		});
+	};
+	// The first evening turn makes 50 in the only tree. They all share its spot, and the first in line comes out.
 	Turns(1);
-	EXPECT_EQ(_system->GetFireflies().size(), 49u);
-	// One a turn goes until one is left, which then comes out
-	Turns(48);
-	ASSERT_EQ(_system->GetFireflies().size(), 1u);
-	EXPECT_TRUE(Only().hidden);
+	EXPECT_EQ(_system->GetFireflies().size(), 50u);
+	EXPECT_EQ(out(), 1);
+	// One a turn comes out, until all are out
+	Turns(49);
+	EXPECT_EQ(_system->GetFireflies().size(), 50u);
+	EXPECT_EQ(out(), 50);
+	// Each firefly is in the map's cells
+	EXPECT_EQ(_world->filed.size(), 50u);
+}
+
+TEST_F(Fireflies, AFireflyThatFliesToAnotherCellGoesToTheFrontOfTheCellsFireflies)
+{
+	_world->Add(FakeWorld::Kind::Rock, k_Here);
+	_world->Add(FakeWorld::Kind::Building, k_Here + glm::vec2(30.0f, 0.0f), 3.0f);
+	const auto first = _system->Create(map_coords::FromMetres(k_Here));
+	const auto second = _system->Create(map_coords::FromMetres(k_Here));
+	ASSERT_EQ(_world->filed.front().first, second);
+	// The newer one comes out first. The older one comes out a turn later, and so it is the last to come into each cell.
 	Turns(1);
-	EXPECT_FALSE(Only().hidden);
-	EXPECT_EQ(Only().state, State::FlyingOut);
+	EXPECT_GT(_world->moves, 0u);
+	Turns(200);
+	const auto& older = _world->registry.Get<const Firefly>(first);
+	ASSERT_EQ(older.state, State::Hovering);
+	ASSERT_EQ(_world->filed.size(), 2u);
+	EXPECT_EQ(_world->filed.front().first, first);
+	EXPECT_EQ(_world->filed.front().second, map_coords::Cell(older.at));
+}
+
+TEST_F(Fireflies, ACatchTakesTheFireflyThatTheCellMeetsFirst)
+{
+	_world->Add(FakeWorld::Kind::Tree, k_Here);
+	_world->hour = 13.0f;
+	const auto older = _system->Create(map_coords::FromMetres(k_Here));
+	const auto newer = _system->Create(map_coords::FromMetres(k_Here));
+	// The newer firefly is first in the line to come out, but the cell meets the older one first
+	ASSERT_EQ(_system->GetFireflies().front(), newer);
+	ASSERT_EQ(_world->filed.size(), 2u);
+	std::swap(_world->filed.front(), _world->filed.back());
+	EXPECT_TRUE(_system->Catch(map_coords::FromMetres(k_Here)));
+	EXPECT_FALSE(_world->registry.Valid(older));
+	EXPECT_TRUE(_world->registry.Valid(newer));
 }
 
 TEST_F(Fireflies, OutTheyHoverTwoMetresAboveTheBuilding)
