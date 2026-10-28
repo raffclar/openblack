@@ -184,6 +184,13 @@ constexpr float k_KickSpeedPerSize = 45.0f;
 /// Whether a throw is over: its animation has played out, and, thrown into a store, what it threw has stopped flying
 [[nodiscard]] bool ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying);
 
+/// The time of a reach for a pick-up or a stomp in the turn that the thing gets out of reach: one step less than the
+/// time before the turn, and not less than zero
+[[nodiscard]] float WithdrawStart(float timeBeforeMs, float stepMs);
+/// The time of a reach that lost its thing, one turn later: one step less. Nothing when the step is longer than the
+/// time that is left: then the reach is at its start, and the action fails.
+[[nodiscard]] std::optional<float> WithdrawStep(float timeMs, float stepMs);
+
 /// Whether a creature about to swallow what it holds brings it back up instead, uneaten: a thing made indestructible,
 /// or one the scripts hold while they own the widescreen bars, can't be eaten. The creature then lets it fall and is
 /// sick, and isn't hungry for a while.
