@@ -25,7 +25,9 @@
 
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureLayers.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureTurnToFace.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureBody.h"
@@ -778,8 +780,13 @@ TEST_F(CreatureFightSystemTest, AFightFacesOffAndTauntsBeforeItLooksForAnArena)
 	EXPECT_TRUE(registry.Get<CreatureFighting>(first).arenaEntity == entt::null);
 	EXPECT_TRUE(fights.IsSettingUpFight(second));
 
-	// The first creature turns, then tells the other creature to taunt with it
-	fights.ProcessTurn();
+	// The first creature asks, tells the other creature not to think and to turn, and turns itself on the fourth turn.
+	// With no legs, nothing turns. On the next turn it tells the other creature to taunt with it.
+	for (int turn = 0; turn < 4; ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	EXPECT_EQ(registry.Get<CreatureFighting>(first).stage, CreatureFighting::Stage::FaceOff);
 	fights.ProcessTurn();
 	EXPECT_EQ(registry.Get<CreatureFighting>(first).stage, CreatureFighting::Stage::Taunt);
 	EXPECT_EQ(registry.Get<CreatureFighting>(second).stage, CreatureFighting::Stage::Taunt);
@@ -896,6 +903,103 @@ TEST_F(CreatureFightSystemTest, EachCreatureLetsGoOfWhatItHoldsBeforeItsTaunt)
 	Locator::gameRandom::reset();
 	Locator::creatureMindSystem::reset();
 	Locator::creatureObjectActionSystem::reset();
+}
+
+namespace
+{
+/// Legs that turn a creature to a heading at once, unless its body plays an action. They count the soft stops, the stops
+/// at once and the asks to turn of each creature.
+class TurningLegs final: public ecs::systems::CreatureLocomotionSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Update(float) override {}
+	void ShowTurnEnd(entt::entity) override {}
+	MoveResult MoveTo(entt::entity, glm::vec2, Pace, float, float) override { return MoveResult::Busy; }
+	MoveResult LeadTo(entt::entity, glm::vec2, float, float) override { return MoveResult::Busy; }
+	MoveResult MoveToObject(entt::entity, entt::entity, Pace, float) override { return MoveResult::Busy; }
+	MoveResult Follow(entt::entity, entt::entity, float, Pace) override { return MoveResult::Busy; }
+	MoveResult FleeFrom(entt::entity, glm::vec2, Pace) override { return MoveResult::Busy; }
+	bool TurnToFace(entt::entity, glm::vec2) override { return false; }
+	bool TurnToHeading(entt::entity creature, GameHeading heading) override
+	{
+		++asked[creature];
+		auto& registry = Locator::entitiesRegistry::value();
+		if (creature_layers::IsPlaying(registry.Get<const CreatureAnimation>(creature).body))
+		{
+			return false;
+		}
+		auto& legs = registry.Get<CreatureLocomotion>(creature);
+		legs.heading = heading;
+		legs.started = true;
+		return true;
+	}
+	bool TurnToFaceAtOnce(entt::entity, glm::vec2) override { return false; }
+	bool TurnToHeadingAtOnce(entt::entity, GameHeading) override { return false; }
+	void Stop(entt::entity creature) override { ++stopped[creature]; }
+	void StopAtOnce(entt::entity creature) override { ++stoppedAtOnce[creature]; }
+	void ResetPace(entt::entity) override {}
+	void Place(entt::entity, glm::vec3) override {}
+	void PlaceWithoutWalking(entt::entity, glm::vec3) override {}
+	[[nodiscard]] bool IsMoving(entt::entity) const override { return false; }
+	[[nodiscard]] float KeptFraction(entt::entity) const override { return 0.0f; }
+	[[nodiscard]] const creature_route::WalkableLand& GetWalkableLand() override
+	{
+		throw std::logic_error("the fights do not ask for the walkable land");
+	}
+	[[nodiscard]] std::vector<creature_route::Circle> ThingCirclesIn(entt::entity, glm::ivec2) override { return {}; }
+
+	std::map<entt::entity, size_t> asked;
+	std::map<entt::entity, size_t> stopped;
+	std::map<entt::entity, size_t> stoppedAtOnce;
+};
+} // namespace
+
+// As a fight starts, an action that the body of a creature plays continues. The request does not wait for the body,
+// but the turn to face does. The other creature turns from the third turn and the first creature from the fourth.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheFaceOffTurnWaitsForTheBodyThatPlaysAnAction)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	auto& legs = static_cast<TurningLegs&>(Locator::creatureLocomotionSystem::emplace<TurningLegs>());
+	using Body = creature_layers::BodyAction;
+	registry.Get<CreatureAnimation>(first).body = Body {.kind = Body::Kind::Once, .animations = {5, 0, 0}};
+	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	// Both stop as a plan stops, and the action of the body plays on
+	EXPECT_EQ(legs.stopped[first], 1u);
+	EXPECT_EQ(legs.stopped[second], 1u);
+	EXPECT_TRUE(legs.stoppedAtOnce.empty());
+	EXPECT_TRUE(creature_layers::IsPlaying(registry.Get<const CreatureAnimation>(first).body));
+
+	// The first two turns are the request and the order not to think
+	fights.ProcessTurn();
+	fights.ProcessTurn();
+	EXPECT_TRUE(legs.asked.empty());
+	// The other creature turns from the third turn, the first creature from the fourth. Its body refuses the turn while
+	// it plays the action.
+	fights.ProcessTurn();
+	fights.ProcessTurn();
+	fights.ProcessTurn();
+	EXPECT_GE(legs.asked[second], 1u);
+	EXPECT_EQ(legs.asked[first], 2u);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).faceTurn.phase, creature_turn_to_face::Turn::Phase::Start);
+
+	// The action ends. The turn starts, it faces the other creature, holds for a turn, and is done. On the next turn it
+	// tells the other creature to taunt.
+	registry.Get<CreatureAnimation>(first).body = {};
+	int turns = 0;
+	while (registry.Get<const CreatureFighting>(first).stage == CreatureFighting::Stage::FaceOff && turns < 20)
+	{
+		fights.ProcessTurn();
+		++turns;
+	}
+	EXPECT_EQ(turns, 5);
+	EXPECT_EQ(legs.asked[first], 3u);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Taunt);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).faceTurn.phase, creature_turn_to_face::Turn::Phase::Done);
+	Locator::creatureLocomotionSystem::reset();
 }
 
 namespace
