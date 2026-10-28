@@ -48,11 +48,11 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
-#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
 
 using namespace openblack::ecs::systems;
@@ -60,11 +60,12 @@ using namespace openblack::player_commands;
 
 namespace
 {
-/// The help of this computer is for the player of this computer only
+/// The help and the saves of this computer are for the god of this computer only. In a network game, this is the god
+/// of the slot of this computer. The game server has no such god.
 bool PlayerOfThisComputer(openblack::PlayerNames player)
 {
-	return !openblack::Locator::playerSystem::has_value() ||
-	       openblack::Locator::playerSystem::value().GetLocalPlayer() == player;
+	return openblack::input::IsLocalPlayer(
+	    openblack::Locator::handSystem::has_value() ? &openblack::Locator::handSystem::value() : nullptr, player);
 }
 
 /// The words of the leash report for a command that can change the leash of the player's creature, or none for

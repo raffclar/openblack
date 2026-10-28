@@ -61,7 +61,6 @@
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
-#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -75,6 +74,7 @@
 #include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
 #include "Resources/ResourcesInterface.h"
@@ -1055,7 +1055,8 @@ bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNa
 	// scaffold.
 	const auto sound = entt::hashed_string("InGame.sad/174").value();
 	const bool local =
-	    player.has_value() && Locator::playerSystem::has_value() && *player == Locator::playerSystem::value().GetLocalPlayer();
+	    player.has_value() &&
+	    input::IsLocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr, *player);
 	if (local)
 	{
 		audio::PlayGameSoundEffect(sound, std::nullopt);

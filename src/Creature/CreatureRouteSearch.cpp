@@ -111,6 +111,7 @@ void Obstacles::Reset(glm::vec2 walker, float margin, Gatherer gatherer)
 	_leftOutAround = {};
 	_margin = margin;
 	_gatherer = std::move(gatherer);
+	_blockGatherer = {};
 	_obstacles.clear();
 	_blocks.assign(static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide), {});
 	_gathered.assign(static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide), false);
@@ -229,6 +230,11 @@ bool Obstacles::BlockHas(uint32_t thing, glm::ivec2 cell) const
 void Obstacles::Gather(int32_t x, int32_t z)
 {
 	_gathered[BlockIndex(x, z)] = true;
+	if (_blockGatherer)
+	{
+		_blockGatherer({x, z}, *this);
+		return;
+	}
 	if (!_gatherer)
 	{
 		return;
@@ -1007,7 +1013,11 @@ void Search::Splice(Obstacles& obstacles, Route& route, size_t candidate, const 
 	route.legs = std::move(joined);
 }
 
-void creature_route::AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles, bool roundWater)
+namespace
+{
+/// Gives each circle of the land round a cell to a function, in the order that the obstacles add them
+template <typename Add>
+void ForEachLandCircle(const WalkableLand& land, glm::ivec2 cell, bool roundWater, const Add& add)
 {
 	const auto inLand = [](int32_t i) { return i >= 0 && i < k_CellsPerSide; };
 	// Most cells have no blocked cell and no water next to them, and so they add nothing
@@ -1021,11 +1031,53 @@ void creature_route::AddLandCircles(const WalkableLand& land, glm::ivec2 cell, O
 		{
 			if (inLand(x) && inLand(z) && (land.At(x, z) == Ground::Blocked || (roundWater && land.At(x, z) == Ground::Water)))
 			{
-				obstacles.Add(std::nullopt,
-				              {(static_cast<float>(x) * k_CellSize) + (0.5f * k_CellSize),
+				add(glm::vec2 {(static_cast<float>(x) * k_CellSize) + (0.5f * k_CellSize),
 				               (static_cast<float>(z) * k_CellSize) + (0.5f * k_CellSize)},
-				              k_DestinationClearance);
+				    k_DestinationClearance);
 			}
+		}
+	}
+}
+} // namespace
+
+void creature_route::AddLandCircles(const WalkableLand& land, glm::ivec2 cell, Obstacles& obstacles, bool roundWater)
+{
+	ForEachLandCircle(land, cell, roundWater,
+	                  [&obstacles](glm::vec2 centre, float radius) { obstacles.Add(std::nullopt, centre, radius); });
+}
+
+void creature_route::AddLandCircles(const WalkableLand& land, glm::ivec2 cell, BlockGathering& gathering, bool roundWater)
+{
+	ForEachLandCircle(land, cell, roundWater, [&gathering](glm::vec2 centre, float radius) { gathering.Land(centre, radius); });
+}
+
+void BlockGathering::Land(glm::vec2 centre, float radius)
+{
+	_steps.push_back({.thing = std::nullopt, .cell = {0, 0}, .first = static_cast<uint32_t>(_circles.size()), .count = 1});
+	_circles.push_back({.centre = centre, .radius = radius});
+}
+
+void BlockGathering::Thing(glm::ivec2 cell, uint32_t thing, std::span<const Circle> circles)
+{
+	_steps.push_back({.thing = thing,
+	                  .cell = cell,
+	                  .first = static_cast<uint32_t>(_circles.size()),
+	                  .count = static_cast<uint32_t>(circles.size())});
+	_circles.insert(_circles.end(), circles.begin(), circles.end());
+}
+
+void BlockGathering::AddTo(Obstacles& obstacles) const
+{
+	for (const auto& step : _steps)
+	{
+		// The block that has the circles of the thing already does not get them again
+		if (step.thing.has_value() && obstacles.BlockHas(*step.thing, step.cell))
+		{
+			continue;
+		}
+		for (const auto& circle : std::span<const Circle>(_circles).subspan(step.first, step.count))
+		{
+			obstacles.Add(step.thing, circle.centre, circle.radius);
 		}
 	}
 }

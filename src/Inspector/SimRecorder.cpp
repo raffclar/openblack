@@ -783,6 +783,8 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 	    {"turn_ms", timings.TurnAverageMs()},
 	    {"turn_ms_max", timings.turnLongestMs},
 	    {"turns", timings.turns},
+	    {"record_ms", timings.RecordAverageMs()},
+	    {"record_ms_max", timings.recordLongestMs},
 	    {"frame_ms", timings.FrameAverageMs()},
 	    {"frame_ms_max", timings.frameLongestMs},
 	    {"frames", timings.frames},

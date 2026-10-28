@@ -956,6 +956,47 @@ def leash_state(pid):
     return {key: leash.get(key) for key in ("id", "leashed", "type", "tied_to")}
 
 
+def press_key(pid, key, tap):
+    """Presses a key of a desktop client through the inspector. A tap holds the key down for one frame; else the key
+    stays down for half a second, as a player presses it. Gives the answer of the inspector to the key down."""
+    if tap:
+        pressed = inspector_call(pid, "input.key", {"params": {"key": key, "how": "tap"}})
+    else:
+        pressed = inspector_call(pid, "input.key", {"params": {"key": key, "how": "press"}})
+        time.sleep(0.5)
+        inspector_call(pid, "input.key", {"params": {"key": key, "how": "release"}})
+    time.sleep(1.0)
+    return pressed
+
+
+def box_keys_check(pid, log, tap=False):
+    """Presses the leash key L and the temple key F4 of a desktop client while the information box of the land shows.
+    Tells whether the box still shows after the keys, whether the player went into the temple, the leash after the
+    keys, and the turns that the client compared when the check ended."""
+    for key in ("L", "F4"):
+        press_key(pid, key, tap)
+    time.sleep(1.0)
+    windows = items_of(inspector_call(pid, "gui.windows", {}))
+    interior = inspector_call(pid, "temple.interior", {})
+    counts = session_counts(log)
+    return {"open_after_keys": any(window.get("name") == "land_info_box" and window.get("open") for window in windows),
+            "in_temple": interior.get("active") if isinstance(interior, dict) else None,
+            "leash": leash_state(pid), "checked_after_turns": counts[0] if counts else None}
+
+
+def box_kept_keys(box, server_commands):
+    """Whether the information box of the land kept the keys L and F4 from the controls: the box still showed after the
+    keys, the player stayed out of the temple, the creature wore no leash, and the server got no leash command of the
+    slot up to the turn of the check. None when the box did not show, so there was nothing to check."""
+    if box is None:
+        return None
+    leash = box.get("leash")
+    checked = box.get("checked_after_turns")
+    return (box.get("open_after_keys") is True and box.get("in_temple") is False and isinstance(leash, dict)
+            and not leash.get("leashed") and checked is not None
+            and not any(command[0] <= checked for command in server_commands))
+
+
 def desktop_leash_step(leash, done, pid, log):
     """Presses the next keys of a leash check on a desktop client once its log tells the turns of the key. Gives True
     when the check pressed every key."""
@@ -972,16 +1013,13 @@ def desktop_leash_step(leash, done, pid, log):
             box = any(window.get("name") == "land_info_box" and window.get("open") for window in windows)
             print(f"leash: the information box of the land shows on the client with pid {pid}: {box}")
             if box:
-                inspector_call(pid, "input.key", {"params": {"key": "Escape", "how": "press"}})
-                time.sleep(0.5)
-                inspector_call(pid, "input.key", {"params": {"key": "Escape", "how": "release"}})
-                time.sleep(2.0)
-        # A tap of the inspector (down for one frame) does not show to the actions of the controls: the key stays down
-        # for half a second, as a player presses it
-        pressed = inspector_call(pid, "input.key", {"params": {"key": key, "how": "press"}})
-        time.sleep(0.5)
-        inspector_call(pid, "input.key", {"params": {"key": key, "how": "release"}})
-        time.sleep(1.0)
+                # While the box shows, the leash key and the temple key must do nothing
+                leash["box"] = box_keys_check(pid, log, leash.get("tap", False))
+                print(f"leash: L and F4 with the information box open on the client with pid {pid}: "
+                      f"{json.dumps(leash['box'])[:400]}")
+                press_key(pid, "Escape", leash.get("tap", False))
+                time.sleep(1.0)
+        pressed = press_key(pid, key, leash.get("tap", False))
         done.append({"turns": turns, "key": key, "pressed": pressed, "leash": leash_state(pid)})
         print(f"leash: client with pid {pid} pressed {key} after {turns} turns: {json.dumps(done[-1])[:400]}")
     return True
@@ -1000,8 +1038,9 @@ def leash_result(leash, server_log, logs):
            and command[3].endswith("wears no leash")]
     result = {"client": "web" if leash["client"] == "web" else leash["client"] + 1, "slot": slot,
               "server": [list(command) for command in server], "on": bool(on), "off": bool(off),
-              "held_turns": off[0][0] - on[0][0] if on and off else None, "clients": {}}
-    same = bool(on) and bool(off)
+              "held_turns": off[0][0] - on[0][0] if on and off else None, "clients": {},
+              "box": leash.get("box"), "box_kept_keys": box_kept_keys(leash.get("box"), server)}
+    same = bool(on) and bool(off) and result["box_kept_keys"] is not False
     for name, path, first, last in logs:
         mine = [command for command in sim_report.leash_commands_in_file(path, last) if command[1] == slot]
         theirs = [command for command in server if last is None or command[0] <= last]
@@ -1076,7 +1115,18 @@ def shifted_input(path, folder, extra=0, camera=None):
 
 
 def max_turn_ms(record):
-    """The longest turn of a client in milliseconds, from the turn times in its run record (none without a time)"""
+    """The longest turn of a client in milliseconds, from the turn times in its run record (none without a time). The
+    turn time does not include the time of the step that records the run (max_record_ms gives it)."""
+    return longest_of(record, ("turn_ms_max", "turn_ms"))
+
+
+def max_record_ms(record):
+    """The longest time of the step that records the run of a client, in milliseconds (none without a time)"""
+    return longest_of(record, ("record_ms_max", "record_ms"))
+
+
+def longest_of(record, keys):
+    """The largest value of the keys in the lines of a run record, none when no line has one"""
     longest = None
     if not os.path.exists(record):
         return longest
@@ -1088,7 +1138,7 @@ def max_turn_ms(record):
                 continue
             if not isinstance(value, dict):
                 continue
-            for key in ("turn_ms_max", "turn_ms"):
+            for key in keys:
                 if isinstance(value.get(key), (int, float)):
                     longest = value[key] if longest is None else max(longest, value[key])
     return longest
@@ -1417,6 +1467,9 @@ def main():
                              "goes on its god's creature, holds it HOLD more turns, then goes into the temple (F4, then "
                              "Escape; OFF 'temple', the default) or presses L again (OFF 'key'). TURN and HOLD are "
                              "multiples of 100. The server and every client must tell the same leash commands")
+    parser.add_argument("--key-tap", action="store_true",
+                        help="the leash checks of the desktop clients tap each key (down for one frame) in place of a "
+                             "press of half a second")
     parser.add_argument("--give", type=int, metavar="CLIENT",
                         help="once the client (from 1) compared --hold-after turns, its hand takes a villager near its "
                              "god's creature and gives it to the creature through the inspector; the server and every "
@@ -1647,6 +1700,8 @@ def main():
     give_done = None
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
     leash_done = {number: [] for number, leash in enumerate(leashes) if leash["client"] != "web"}
+    for leash in leashes:
+        leash["tap"] = options.key_tap
     try:
         server = start(server_command, server_dir)
         processes.append(server)
@@ -1900,6 +1955,7 @@ def main():
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
             "observer": is_observer, "max_turn_ms": max_turn_ms(os.path.join(client_dir, "record.jsonl")),
+            "max_record_ms": max_record_ms(os.path.join(client_dir, "record.jsonl")),
             "last_compared": compared[-1] if compared else None,
             "stopped_after": client_stopped_after,
             "end_box": lines_with(os.path.join(client_dir, "client.log"),

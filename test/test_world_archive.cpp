@@ -39,6 +39,7 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameHeading.h"
+#include "Common/WorkerPool.h"
 #include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreatureRouteFollow.h"
 #include "ECS/Components/AudioEmitter.h"
@@ -1252,6 +1253,39 @@ TEST(WorldArchive, TheHashMemoDoesNotChangeTheHash)
 	expectSame();
 }
 
+TEST(WorldArchive, TheThreadsThatShareTheRowsOfAComponentGiveTheSameHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	// Enough rows for the threads to share the rows of the component in parts
+	std::vector<entt::entity> made(300);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakeWalker>(entity, SampleWalker(entity, made[0]));
+	}
+	WorkerPool pool(3);
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto plain = HashWorld(registry, context);
+		const auto shared = HashWorld(registry, context, {}, false, {}, &pool);
+		const auto remembered = HashWorld(registry, context, {}, false, {}, &pool, nullptr, &memo);
+		EXPECT_EQ(plain.entities, shared.entities);
+		EXPECT_EQ(plain.components, shared.components);
+		EXPECT_EQ(plain.components, remembered.components);
+	};
+	expectSame();
+	expectSame();
+	// A change in a row of the second part, and a longer row in the first part
+	registry.get<FakeWalker>(made[100]).name = "Tom";
+	expectSame();
+	registry.get<FakeWalker>(made[3]).name = "A much longer name than before";
+	expectSame();
+	registry.destroy(made[200]);
+	expectSame();
+}
+
 // A footpath that the game still looks for keeps its search in a world state. A loaded search goes on to the same route
 // as the search that was saved.
 TEST(WorldArchive, AFootpathSearchContinuesAfterALoad)
@@ -1442,4 +1476,75 @@ TEST(WorldArchive, AListOfEnumerationsIsTheBytesOfEachValueInTurn)
 		oneByOne.WriteRaw(player);
 	}
 	EXPECT_EQ(lists.Bytes(), oneByOne.Bytes());
+}
+
+TEST(WorldArchive, AListOfFlagsAndAListOfListsAreTheBytesOfEachValueInTurn)
+{
+	entt::meta_ctx context;
+	const std::vector<bool> flags {true, false, false, true, true};
+	const std::vector<std::vector<uint32_t>> lists {{}, {7, 8}, {}, {0xFFFFFFFFu}};
+	BinaryWriter blocks(context);
+	Save(blocks, flags);
+	Save(blocks, lists);
+	Save(blocks, std::vector<std::vector<uint32_t>> {});
+
+	BinaryWriter oneByOne(context);
+	oneByOne.WriteSize(flags.size());
+	for (const bool flag : flags)
+	{
+		oneByOne.WriteRaw(static_cast<uint8_t>(flag ? 1 : 0));
+	}
+	oneByOne.WriteSize(lists.size());
+	for (const auto& list : lists)
+	{
+		oneByOne.WriteSize(list.size());
+		for (const auto value : list)
+		{
+			oneByOne.WriteRaw(value);
+		}
+	}
+	oneByOne.WriteSize(0);
+	EXPECT_EQ(blocks.Bytes(), oneByOne.Bytes());
+
+	// The bytes load back to the same lists
+	BinaryReader in(context, blocks.Bytes(), EntityRemap {});
+	std::vector<bool> readFlags;
+	std::vector<std::vector<uint32_t>> readLists;
+	Load(in, readFlags);
+	Load(in, readLists);
+	EXPECT_FALSE(in.Failed());
+	EXPECT_EQ(readFlags, flags);
+	EXPECT_EQ(readLists, lists);
+}
+
+TEST(WorldArchive, TheMixOfBytesIsTheHashOfEachByteInTurn)
+{
+	constexpr uint64_t k_Offset = 14695981039346656037ull;
+	constexpr uint64_t k_Prime = 1099511628211ull;
+	// Runs of zero bytes of each length at each place, with bytes that are not zero between them
+	std::vector<uint8_t> bytes;
+	for (uint8_t run = 0; run < 40; ++run)
+	{
+		bytes.insert(bytes.end(), run, uint8_t {0});
+		bytes.push_back(static_cast<uint8_t>(run + 1));
+	}
+	// Long runs, which take the powers of the prime for many words
+	for (const size_t run : {100U, 1000U, 4096U * 4U, 77777U})
+	{
+		bytes.insert(bytes.end(), run, uint8_t {0});
+		bytes.push_back(uint8_t {9});
+	}
+	bytes.insert(bytes.end(), 300, uint8_t {0});
+	for (size_t from = 0; from < 9; ++from)
+	{
+		const auto part = std::span<const uint8_t>(bytes).subspan(from);
+		uint64_t expected = k_Offset;
+		for (const auto byte : part)
+		{
+			expected = (expected ^ byte) * k_Prime;
+		}
+		uint64_t mixed = k_Offset;
+		MixBytes(mixed, part);
+		EXPECT_EQ(mixed, expected) << "from " << from;
+	}
 }

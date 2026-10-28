@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <utility>
 
 #include "ECS/Systems/SimulationSystemInterface.h"
@@ -31,7 +32,10 @@ public:
 	{
 		if (_turnEnd)
 		{
+			// The run record gives the time of its own step apart from the time of the turn
+			const auto start = std::chrono::steady_clock::now();
 			_turnEnd(turn);
+			_timings.AddRecord(std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start).count());
 		}
 	}
 	void FrameEnded(float ms) override { _timings.AddFrame(ms); }

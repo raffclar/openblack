@@ -9,10 +9,16 @@
 
 #pragma once
 
-#include <unordered_map>
+#include <cstdint>
 
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include <L3DFile.h>
 #include <entt/core/fwd.hpp>
 #include <entt/entity/fwd.hpp>
+#include <glm/vec2.hpp>
 
 #include "3D/TempleExteriorMorph.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
@@ -38,9 +44,25 @@ public:
 	void FindAfterLoad() override;
 
 private:
+	/// The blends made in one call, which the temples with the same look or the same texture use again. Each blend
+	/// comes only from the look and the meshes and images of the cache, which do not change in the call.
+	struct MadeBlends
+	{
+		/// The blended shape of each look
+		std::vector<std::pair<glm::vec2, l3d::L3DFile>> shapes;
+		struct Skin
+		{
+			TempleExteriorMorph::TextureBlend texture;
+			uint32_t set;
+			std::vector<uint16_t> texels;
+		};
+		std::vector<Skin> skins;
+	};
+
 	/// Blends the temple's own mesh from the four about its size and alignment, and its texture between
 	/// the two looks about its alignment, of its player's set
-	void Morph(entt::entity entity, components::Mesh& mesh, const components::TempleExterior& exterior, PlayerNames owner);
+	void Morph(entt::entity entity, components::Mesh& mesh, const components::TempleExterior& exterior, PlayerNames owner,
+	           MadeBlends& made);
 
 	/// Of each temple's own mesh in the cache, by its id, the blend that this computer last made for it
 	std::unordered_map<entt::id_type, TempleExteriorMorph::Blend> _blends;

@@ -14,6 +14,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -150,6 +151,10 @@ public:
 
 	/// A count or a length, as 32 bits
 	void WriteSize(size_t size) { WriteRaw(static_cast<uint32_t>(size)); }
+
+	/// The place for a count of bytes at the end of the bytes written. The caller writes all of them before the next
+	/// call to the writer.
+	[[nodiscard]] std::span<uint8_t> Extend(size_t count) { return {Grow(count), count}; }
 
 	/// Puts a length of 32 bits that a later call to EndLength fills. Returns where the length is.
 	[[nodiscard]] size_t BeginLength()
@@ -381,6 +386,12 @@ void LoadBytes(Type& value, BinaryReader& in)
 namespace detail
 {
 
+/// A vector of vectors of values with plain bits
+template <typename>
+inline constexpr bool k_IsListOfPlainLists = false;
+template <typename Type, typename Allocator, typename OuterAllocator>
+inline constexpr bool k_IsListOfPlainLists<std::vector<std::vector<Type, Allocator>, OuterAllocator>> = PlainBits<Type>();
+
 /// A fixed list or a vector of the values of an enumeration
 template <typename>
 inline constexpr bool k_IsEnumList = false;
@@ -509,6 +520,45 @@ void Save(BinaryWriter& out, const Type& value)
 		// reads each value again, so that an entity goes through the map of the entities.
 		out.WriteSize(value.size());
 		out.Write({reinterpret_cast<const uint8_t*>(value.data()), value.size() * sizeof(typename Type::value_type)});
+	}
+	else if constexpr (std::is_same_v<Type, std::vector<bool>>)
+	{
+		// The same bytes as a value of 1 or 0 for each element, in one block. Most flags are false, and the search for the
+		// next true flag is quicker than a look at each flag.
+		out.WriteSize(value.size());
+		auto place = out.Extend(value.size());
+		std::ranges::fill(place, uint8_t {0});
+		for (auto flag = std::find(value.begin(), value.end(), true); flag != value.end();
+		     flag = std::find(std::next(flag), value.end(), true))
+		{
+			place[static_cast<size_t>(flag - value.begin())] = 1;
+		}
+	}
+	else if constexpr (detail::k_IsListOfPlainLists<Type>)
+	{
+		// A list of plain lists: the same bytes as each list after the other, in one block
+		using Element = typename Type::value_type::value_type;
+		size_t count = sizeof(uint32_t);
+		for (const auto& list : value)
+		{
+			count += sizeof(uint32_t) + (list.size() * sizeof(Element));
+		}
+		auto place = out.Extend(count);
+		const auto put = [&place](const void* from, size_t bytes) {
+			if (bytes != 0)
+			{
+				std::memcpy(place.data(), from, bytes);
+			}
+			place = place.subspan(bytes);
+		};
+		const auto size = static_cast<uint32_t>(value.size());
+		put(&size, sizeof(size));
+		for (const auto& list : value)
+		{
+			const auto listSize = static_cast<uint32_t>(list.size());
+			put(&listSize, sizeof(listSize));
+			put(list.data(), list.size() * sizeof(Element));
+		}
 	}
 	else if constexpr (detail::k_IsStdArray<Type>)
 	{
