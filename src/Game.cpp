@@ -102,6 +102,7 @@
 #include "Common/X87Vector.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureHandRules.h"
+#include "Creature/CreatureNames.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "Creature/LeashOrders.h"
@@ -5776,9 +5777,10 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 
 void Game::NameCreatureAfterProfile()
 {
-	// The player's creature takes the name its profile gives it
+	// In a game alone, the player's creature takes the name its profile gives it
 	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	if (!profile.has_value() || !Locator::playerSystem::has_value())
+	if (!profile.has_value() || !Locator::playerSystem::has_value() ||
+	    !creature_names::ProfileRenamesCreature(Locator::time::value().IsNetworkGame()))
 	{
 		return;
 	}

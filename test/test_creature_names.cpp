@@ -66,3 +66,10 @@ TEST(CreatureNames, AllButAComputerPlayersCreatureTakeTheNameItsMindFileKeeps)
 	static_assert(creature_names::TakesNameFromFile(Owner::Nobody));
 	static_assert(!creature_names::TakesNameFromFile(Owner::Computer));
 }
+
+TEST(CreatureNames, OnlyAGameAloneGivesThePlayersCreatureTheNameOfTheProfile)
+{
+	static_assert(creature_names::ProfileRenamesCreature(false));
+	// In a network game the profile of one computer must not change the world of all computers
+	static_assert(!creature_names::ProfileRenamesCreature(true));
+}
