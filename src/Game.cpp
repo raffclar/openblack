@@ -3812,6 +3812,11 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 						Locator::vortexSystem::value().UpdateDrawnFrame(drawList, clock.GetFrameRealTime(),
 						                                                clock.GetFrameGameTime(), landDrawn);
 					}
+					// The globes that the list draws run their glint on
+					if (Locator::miracleFxSystem::has_value())
+					{
+						Locator::miracleFxSystem::value().UpdateDrawnGlobes(drawList, clock.GetFrameGameTime());
+					}
 				}
 				updateDrawnScenery();
 				// The static of each fizzing creature slides only when the frame draws its body on the screen

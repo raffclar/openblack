@@ -195,6 +195,29 @@ void AddBuildingBreak(std::vector<Scenario>& all)
 	    .objects = objects,
 	    .throws = throws,
 	});
+
+	// The same huts in deep snow, struck once the snow has settled on them
+	auto snowThrows = throws;
+	for (auto& thrown : snowThrows)
+	{
+		thrown.delaySeconds += 6.0f;
+		thrown.repeatSeconds.reset();
+	}
+	all.push_back({
+	    .id = "light.snow_on_broken_huts",
+	    .name = "Snow on huts broken by thrown boulders",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island. Three huts stand in a row. After the snow settles on them, "
+	                   "two boulders hit each hut from the south, one time.",
+	    .expected = "The snow shows on the huts in about four seconds. When a boulder breaks a hut, the broken hut keeps "
+	                "its snow. Each piece that flies off shows the snow that the hut had, and keeps it where it lands.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}},
+	                .distance = k_WithinEarshot},
+	    .objects = objects,
+	    .throws = snowThrows,
+	});
 }
 
 void AddRockSplit(std::vector<Scenario>& all)

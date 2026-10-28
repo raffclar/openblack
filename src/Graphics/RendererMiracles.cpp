@@ -44,6 +44,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -285,7 +286,13 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 	// A globe nobody owns shows its rings in the colour of the player at this computer
 	const auto ringColour = ColourOf(OwnColour());
 
-	desc.entities.Each<const OneOffSpellSeed, const Transform>([&](const OneOffSpellSeed& globe, const Transform& transform) {
+	// Of the globes on the land's blocks only those that the land's draw list draws show
+	const auto* drawList = Locator::objectDrawListSystem::has_value() ? &Locator::objectDrawListSystem::value() : nullptr;
+	const auto drawGlobe = [&](entt::entity entity, const OneOffSpellSeed& globe, const Transform& transform) {
+		if (drawList != nullptr && !drawList->Drawn(desc.entities, entity))
+		{
+			return;
+		}
 		const float scale = transform.scale.x * visuals::k_GlobeSeedScale;
 
 		// The miracle's seed spinning inside, below the middle, for the seeds that show one. Nobody owns a globe, and
@@ -353,7 +360,8 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 				DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
 			}
 		}
-	});
+	};
+	desc.entities.Each<const OneOffSpellSeed, const Transform>(drawGlobe);
 }
 
 void Renderer::DrawRewardSeeds(const DrawSceneDesc& desc) const

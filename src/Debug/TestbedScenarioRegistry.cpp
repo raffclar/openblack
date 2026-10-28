@@ -2888,6 +2888,33 @@ void AddLight(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-4.0f, 4.0f}, .joinTown = true},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-8.0f, 6.0f}, .joinTown = true}},
 	});
+
+	all.push_back({
+	    .id = "light.snow_on_carried_things",
+	    .name = "Snow on villagers, not on what they carry",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island. Two villagers carry wood and one villager carries food. "
+	                   "They walk to and fro in front of the camera.",
+	    .expected = "The snow shows on the villagers in about four seconds. The wood and the food that they carry show "
+	                "no snow.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, -10.0f}, .look = {0.0f, 1.5f, 8.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {-4.0f, 6.0f},
+	                 .walkTo = glm::vec2 {4.0f, 6.0f},
+	                 .walkRepeatSeconds = 6.0f,
+	                 .woodHeld = 50},
+	                {.type = VillagerInfo::CelticForesterMale,
+	                 .offset = {4.0f, 10.0f},
+	                 .walkTo = glm::vec2 {-4.0f, 10.0f},
+	                 .walkRepeatSeconds = 6.0f,
+	                 .woodHeld = 50},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {-3.0f, 3.0f},
+	                 .walkTo = glm::vec2 {3.0f, 3.0f},
+	                 .walkRepeatSeconds = 6.0f,
+	                 .foodHeld = 50}},
+	});
 }
 
 void AddMovement(std::vector<Scenario>& all)

@@ -306,6 +306,24 @@ TEST(ObjectDrawList, AFullFrameKeepsWhatWasOnTheScreen)
 	EXPECT_TRUE(StaysDrawn(true, false, true));
 }
 
+// A building that its site draws, or a broken building, stays drawn while its sphere is on the screen, also when it fades
+// out. A building of which its site draws no part stays drawn in all cases, as a villager does.
+TEST(ObjectDrawList, BuildingsThatTheirSiteDrawsHaveNoFadeTest)
+{
+	EXPECT_EQ(KeptTestOf({}), KeptTest::SphereAndFade);
+	EXPECT_EQ(KeptTestOf({.alwaysDrawn = true}), KeptTest::Always);
+	EXPECT_EQ(KeptTestOf({.broken = true}), KeptTest::Sphere);
+	EXPECT_EQ(KeptTestOf({.broken = true, .drawnWhole = true, .partlyShown = true}), KeptTest::Sphere);
+	EXPECT_EQ(KeptTestOf({.drawnWhole = false, .partlyShown = true}), KeptTest::Sphere);
+	EXPECT_EQ(KeptTestOf({.drawnWhole = false}), KeptTest::Always);
+
+	EXPECT_TRUE(StaysDrawn(KeptTest::Sphere, true, true));
+	EXPECT_FALSE(StaysDrawn(KeptTest::Sphere, false, false));
+	EXPECT_FALSE(StaysDrawn(KeptTest::SphereAndFade, true, true));
+	EXPECT_TRUE(StaysDrawn(KeptTest::SphereAndFade, true, false));
+	EXPECT_TRUE(StaysDrawn(KeptTest::Always, false, true));
+}
+
 // While the camera stands still, only the things that the last full frame kept are drawn. A move of more than one unit
 // draws all of the list again and notes it again.
 TEST(ObjectDrawList, AStillCameraDrawsOnlyWhatTheLastFullFrameKept)

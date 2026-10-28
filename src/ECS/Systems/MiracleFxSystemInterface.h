@@ -31,6 +31,7 @@ class Texture2D;
 
 namespace openblack::ecs::systems
 {
+class ObjectDrawListSystemInterface;
 
 /// How the miracles look outside their own effects, frame by frame: the one-shot globes (their glint, the miracle
 /// spinning inside each with its effect, the rings round the extreme ones), the hand holding a miracle (its bands,
@@ -49,6 +50,10 @@ public:
 	/// frame that draws the land.
 	virtual void UpdateGlobes(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
 	                          bool landDrawn) = 0;
+	/// The globes that the land's draw list draws in this frame, after the list: the glint of each runs on by the game
+	/// time of the frame. On a frame that draws all of the list, each listed globe stays drawn while its sphere shows on
+	/// the screen.
+	virtual void UpdateDrawnGlobes(ObjectDrawListSystemInterface& /*drawList*/, std::chrono::milliseconds /*frameGameTime*/) {}
 	/// At the start of each turn: each miracle's pile stands on the land where it is, as the land is now
 	virtual void PlacePilesOnLand() {}
 	/// Loads the models of the globes and their bands, if they are not loaded. The first update of the globes also
