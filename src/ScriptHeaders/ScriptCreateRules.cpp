@@ -76,7 +76,19 @@ std::optional<uint32_t> TribeVillagerRow(int32_t tribe, uint32_t draw, std::size
 	return static_cast<uint32_t>(row);
 }
 
-bool KeepsScriptHeight(ObjectType type, uint32_t subtype)
+namespace
+{
+/// The rows that make a thing that can not move in the physics: the holder of a singing stone, the lanterns and the
+/// bonfire
+bool IsFixedInPhysics(uint32_t subtype)
+{
+	const auto row = static_cast<MobileStaticInfo>(subtype);
+	return row == MobileStaticInfo::SingingStoneBase || row == MobileStaticInfo::StreetLantern ||
+	       row == MobileStaticInfo::CountryLantern || row == MobileStaticInfo::Bonfire;
+}
+} // namespace
+
+bool KeepsScriptHeight(ObjectType type, uint32_t subtype, bool rockKind)
 {
 	if (type == ObjectType::Marker)
 	{
@@ -86,9 +98,16 @@ bool KeepsScriptHeight(ObjectType type, uint32_t subtype)
 	{
 		return false;
 	}
-	const auto row = static_cast<MobileStaticInfo>(subtype);
-	return row == MobileStaticInfo::SingingStoneBase || row == MobileStaticInfo::StreetLantern ||
-	       row == MobileStaticInfo::CountryLantern || row == MobileStaticInfo::Bonfire;
+	return IsFixedInPhysics(subtype) || rockKind;
+}
+
+std::optional<ScriptRockStart> RockStartOf(ObjectType type, uint32_t subtype, bool rockKind)
+{
+	if ((type != ObjectType::MobileStatic && type != ObjectType::Rock) || !rockKind || IsFixedInPhysics(subtype))
+	{
+		return std::nullopt;
+	}
+	return ScriptRockStart {.settlesOnLand = type == ObjectType::Rock};
 }
 
 bool IgnoresReactions(ObjectType type)

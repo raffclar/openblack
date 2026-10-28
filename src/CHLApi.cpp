@@ -629,6 +629,38 @@ glm::vec3 OnGround(const glm::vec3& position)
 	return {position.x, Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z)), position.z};
 }
 
+/// Whether the info table puts a row of the mobile statics in the rock kind
+bool IsRockKindRow(uint32_t subtype)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& rows = Locator::infoConstants::value().mobileStatic;
+	return script::create_rules::IsRow(subtype, rows.size()) && rows.at(subtype).mobileType == MobileStaticInfo::Rock;
+}
+
+/// A rock that a script made starts in the physics at rest. The physics puts it on the land when the start asks for
+/// it, and then lifts it clear of the things under it. A rock above the land falls in the next turns.
+void StartScriptRock(entt::entity rock, const script::create_rules::ScriptRockStart& start)
+{
+	if (rock == entt::null || !Locator::dynamicsSystem::has_value())
+	{
+		return;
+	}
+	auto& dynamics = Locator::dynamicsSystem::value();
+	const auto started = dynamics.InitialisePhysics(rock, {.add = true});
+	if (started.entry == nullptr)
+	{
+		return;
+	}
+	if (start.settlesOnLand)
+	{
+		dynamics.SettleOnLand(*started.entry, false, true);
+	}
+	dynamics.RaiseClearOfWhatIsUnder(*started.entry);
+}
+
 /// A one-shot miracle globe a script puts straight into the local player's hand, charged in full and ready, if the hand
 /// is free to take it: the seed, or none
 entt::entity CreateScriptSeedInHand(uint32_t subtype)
@@ -674,18 +706,24 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	switch (type)
 	{
 	// Asking for a mobile static or for a rock makes the same thing: whether it is a rock is up to its kind. The thing
-	// goes onto the land under the place asked for. Only a holder of a singing stone, a lantern and a bonfire keep the
-	// height that the script gave, because they can not move in the physics.
+	// goes onto the land under the place asked for. A holder of a singing stone, a lantern and a bonfire keep the
+	// height that the script gave, because they can not move in the physics. A mobile static of the rock kind also
+	// keeps the height, and the physics lets it fall.
 	case ObjectType::MobileStatic:
 	case ObjectType::Rock:
 	{
+		const bool rockKind = IsRockKindRow(subtype);
 		const auto made = MobileStaticArchetype::Create(
-		    script::create_rules::KeepsScriptHeight(type, subtype) ? position : OnGround(position),
+		    script::create_rules::KeepsScriptHeight(type, subtype, rockKind) ? position : OnGround(position),
 		    static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians, yAngleRadians, zAngleRadians, scale);
 		// The holder of a singing stone shows only as a print of its model on the land
 		if (static_cast<MobileStaticInfo>(subtype) == MobileStaticInfo::SingingStoneBase)
 		{
 			MarkGroundPrint(made);
+		}
+		if (const auto start = script::create_rules::RockStartOf(type, subtype, rockKind))
+		{
+			StartScriptRock(made, *start);
 		}
 		return made;
 	}

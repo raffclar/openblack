@@ -10935,6 +10935,30 @@ void AddSwayAndFrightScenarios(std::vector<Scenario>& all)
 	        {{.object = 0, .height = 14.0f, .velocity = {14.0f, 4.0f, 0.0f}, .delaySeconds = 2.0f, .repeatSeconds = 5.0f}},
 	});
 
+	// Rocks that a script makes go into the physics
+	const auto create = [](float delay, int32_t type, glm::vec2 point, float height) {
+		return Command {
+		    .kind = Kind::CallNative,
+		    .delaySeconds = delay,
+		    .script = "CREATE",
+		    .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = static_cast<float>(type)},
+		                        {.kind = ScriptArgument::Kind::Integer, .number = static_cast<float>(MobileStaticInfo::Rock)},
+		                        {.kind = ScriptArgument::Kind::Position, .point = point, .height = height}}};
+	};
+	all.push_back({
+	    .id = "objects.script_rock_falls",
+	    .name = "A rock that a script makes falls onto the land",
+	    .facet = Facet::Objects,
+	    .description = "After one second, CREATE makes a rock as a mobile static 10 metres above the land, 10 metres "
+	                   "west of the middle. Two seconds later, CREATE makes a rock by the rock type at the same height, "
+	                   "10 metres east of the middle.",
+	    .expected = "The first rock falls from the height that the script gave and comes to rest on the land. The "
+	                "second rock shows on the land at once, turned to the slope, and stays there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 0.0f}, {15.0f, 0.0f}}},
+	    .commands = {create(1.0f, 8, {-10.0f, 0.0f}, 10.0f), create(2.0f, 33, {10.0f, 0.0f}, 10.0f)},
+	});
+
 	all.push_back({
 	    .id = "senses.creature_runs_from_a_wolf",
 	    .name = "A wolf frightens the creature",
