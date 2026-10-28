@@ -238,8 +238,8 @@ private:
 	{
 		Stage stage;
 		uint8_t level;
-		std::chrono::system_clock::time_point start;
-		std::chrono::system_clock::time_point end;
+		std::chrono::steady_clock::time_point start;
+		std::chrono::steady_clock::time_point end;
 	};
 
 	/// The scopes of one thread other than the main thread. Only that thread opens and closes them; the main thread takes
