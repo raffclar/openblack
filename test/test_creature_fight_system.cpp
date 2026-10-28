@@ -40,6 +40,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -781,6 +782,63 @@ TEST_F(CreatureFightSystemTest, AFightFacesOffAndTauntsBeforeItLooksForAnArena)
 	}
 	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(first));
 	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(second));
+}
+
+namespace
+{
+/// The hands of the creatures. They record each creature that puts down or drops what it holds.
+class RecordedHands final: public ecs::systems::CreatureObjectActionSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void ActionTurn(entt::entity) override {}
+	void AfterPoseTurn(entt::entity) override {}
+	void UpdateHeld() override {}
+	void ShowHeldAtTurnEnd() override {}
+	bool PickUp(entt::entity, entt::entity) override { return false; }
+	bool PutDown(entt::entity) override { return false; }
+	bool Discard(entt::entity) override { return false; }
+	bool DiscardWith(entt::entity, size_t) override { return false; }
+	bool EatHeld(entt::entity) override { return false; }
+	bool EatHeldOnly(entt::entity) override { return false; }
+	bool Keep(entt::entity, size_t) override { return false; }
+	bool Throw(entt::entity, const glm::vec3&) override { return false; }
+	bool ThrowTaking(entt::entity, const glm::vec3&, float) override { return false; }
+	bool ThrowAimed(entt::entity, const glm::vec3&, float) override { return false; }
+	bool Destroy(entt::entity, entt::entity) override { return false; }
+	bool Kick(entt::entity, entt::entity) override { return false; }
+	bool PointAt(entt::entity, const glm::vec3&) override { return false; }
+	bool Catch(entt::entity, entt::entity) override { return false; }
+	void Cancel(entt::entity) override {}
+	void Drop(entt::entity creature) override { dropped.push_back(creature); }
+	void PutDownAtOnce(entt::entity creature) override { putDown.push_back(creature); }
+	[[nodiscard]] State GetState(entt::entity) const override { return State::Idle; }
+	[[nodiscard]] bool IsCatching(entt::entity) const override { return false; }
+	[[nodiscard]] std::optional<float> GetProgress(entt::entity) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity) const override { return std::nullopt; }
+	[[nodiscard]] bool CanPickUp(entt::entity, entt::entity) const override { return false; }
+	[[nodiscard]] bool CanEat(entt::entity, entt::entity) const override { return false; }
+	[[nodiscard]] bool CanEatHeld(entt::entity) const override { return false; }
+	[[nodiscard]] bool CanDestroy(entt::entity) const override { return false; }
+
+	std::vector<entt::entity> putDown;
+	std::vector<entt::entity> dropped;
+};
+} // namespace
+
+// A fight needs free hands: each creature puts down what it holds, as at the end of a put-down clip
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, BothCreaturesPutDownWhatTheyHoldAsTheFightStarts)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	auto& hands = static_cast<RecordedHands&>(Locator::creatureObjectActionSystem::emplace<RecordedHands>());
+	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	EXPECT_EQ(hands.putDown, (std::vector {first, second}));
+	EXPECT_TRUE(hands.dropped.empty());
+	Locator::creatureObjectActionSystem::reset();
 }
 
 namespace

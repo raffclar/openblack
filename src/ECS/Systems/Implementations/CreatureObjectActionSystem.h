@@ -63,6 +63,7 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> TakePoint(entt::entity creature, glm::vec3 facing) const override;
 	void Cancel(entt::entity creature) override;
 	void Drop(entt::entity creature) override;
+	void PutDownAtOnce(entt::entity creature) override;
 
 	[[nodiscard]] State GetState(entt::entity creature) const override;
 	[[nodiscard]] creature_object_actions::Failure GetFailure(entt::entity creature) const override;
@@ -100,14 +101,18 @@ private:
 	void SwallowStoppedEat(entt::entity creature);
 	/// Starts an action on the creature in place of any it was doing, or records why it can't
 	bool Start(entt::entity creature, components::CreatureObjectAction action);
-	/// Where a released thing starts: where it hangs in the hand, or with its origin at the finger ends as a throw does
+	/// How the creature releases a thing:
+	/// - Dropped: it starts where it hangs in the hand, and keeps the turn of the hand.
+	/// - LetGo: as Dropped, and it keeps the angles of the turn in the hand.
+	/// - Thrown: it starts with its origin at the finger ends, and turns by the angles of the turn in the hand.
 	enum class ReleaseFrom : uint8_t
 	{
-		Hanging,
-		FingerEnds,
+		Dropped,
+		LetGo,
+		Thrown,
 	};
 	/// Lets go of the held object, which flies off with a velocity
-	void Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from = ReleaseFrom::Hanging);
+	void Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from = ReleaseFrom::Dropped);
 	/// A held thing goes into the physics as the creature lets it go
 	void LetGo(entt::entity creature, entt::entity object, const glm::vec3& velocity);
 };

@@ -113,6 +113,7 @@
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -2235,6 +2236,11 @@ void CreatureObjectActionSystem::Drop(entt::entity creature)
 	Release(creature, glm::vec3(0.0f));
 }
 
+void CreatureObjectActionSystem::PutDownAtOnce(entt::entity creature)
+{
+	Release(creature, glm::vec3(0.0f), ReleaseFrom::LetGo);
+}
+
 void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2254,7 +2260,7 @@ void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3&
 	if (pose.has_value())
 	{
 		pose = creature_throw::ReleaseStart(*pose, FingerEndsOf(held->bone, *animation, TurnPoseOf(*animation, *transform)),
-		                                    from == ReleaseFrom::FingerEnds);
+		                                    from == ReleaseFrom::Thrown);
 	}
 	registry.Remove<CreatureHeldObject>(creature);
 	if (!registry.Valid(object))
@@ -2266,6 +2272,19 @@ void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3&
 	{
 		at->position = pose->position;
 		at->rotation = pose->rotation;
+		// A thing that the creature lets go of or throws takes its angles from its turn in the hand. A held creature keeps
+		// the turn of the hand. A thrown villager or animal stands upright with the heading of the hand. It keeps its own
+		// heading and no angles, and its landing gives it a new heading.
+		if (from != ReleaseFrom::Dropped && !registry.AllOf<Creature>(object))
+		{
+			const auto taken = ecs::placed_turn::TurnFromHeld(
+			    pose->rotation, at->scale.x, ecs::placed_turn::CanLean(registry, object), from == ReleaseFrom::Thrown);
+			at->rotation = taken.turn;
+			if (!registry.AnyOf<Villager, Animal>(object))
+			{
+				ecs::placed_turn::KeepAngles(registry, object, taken.angles);
+			}
+		}
 	}
 	LetGo(creature, object, velocity);
 }
@@ -3362,7 +3381,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			break;
 		}
 		case Kind::PutDown:
-			Release(creature, glm::vec3(0.0f));
+			Release(creature, glm::vec3(0.0f), ReleaseFrom::LetGo);
 			break;
 		case Kind::Discard:
 		{
@@ -3371,7 +3390,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			// keeps the thing in the hand.
 			if (letGo == creature_throw::LetGo::PutDownStill)
 			{
-				Release(creature, glm::vec3(0.0f));
+				Release(creature, glm::vec3(0.0f), ReleaseFrom::LetGo);
 				break;
 			}
 			if (letGo == creature_throw::LetGo::Keep)
@@ -3384,14 +3403,14 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			                          ? creature_throw::TossVelocity(*hand * transform.scale, action.mirrored,
 			                                                         transform.rotation, creature_throw::k_DiscardSpeedShare)
 			                          : glm::vec3(0.0f);
-			Release(creature, velocity);
+			Release(creature, velocity, ReleaseFrom::LetGo);
 			break;
 		}
 		case Kind::Throw:
 			action.thrown = GetHeld(creature);
 			Release(creature,
 			        creature_throw::ReleaseVelocity(action.point, handPosition, std::max(action.flightSeconds, k_Tiny)),
-			        ReleaseFrom::FingerEnds);
+			        ReleaseFrom::Thrown);
 			break;
 		case Kind::Eat:
 		{
