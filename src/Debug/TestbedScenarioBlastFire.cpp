@@ -201,17 +201,17 @@ void AddFire(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
-	    .id = "miracles.broken_hut_burns",
-	    .name = "A burning hut broken by thrown boulders",
+	    .id = "miracles.broken_shack_burns",
+	    .name = "A burning shack broken by thrown boulders",
 	    .facet = Facet::Miracles,
-	    .description = "A hut catches fire. One second later, two boulders thrown from the south break holes in it.",
-	    .expected = "The new flames of the fire start on the broken hut only where its walls stand. No flame starts in a "
-	                "hole that a boulder made.",
+	    .description = "A shack catches fire. One second later, two small boulders thrown from the south break holes in it.",
+	    .expected = "After the boulders break the shack, the new flames start on the broken model only. As in the game, "
+	                "they start on one part of the model that stands, not in a hole and not on the whole model.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Ground - glm::vec2(15.0f), k_Ground + glm::vec2(15.0f)}},
-	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Ground + glm::vec2(0.0f, 10.0f), .alight = true},
-	                {.type = MobileStaticInfo::Boulder2Chalk, .offset = k_Ground + glm::vec2(-1.0f, -20.0f)},
-	                {.type = MobileStaticInfo::Boulder2Chalk, .offset = k_Ground + glm::vec2(1.0f, -20.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticShackX, .offset = k_Ground + glm::vec2(0.0f, 10.0f), .alight = true},
+	                {.type = MobileStaticInfo::Boulder1Chalk, .offset = k_Ground + glm::vec2(-1.0f, -20.0f)},
+	                {.type = MobileStaticInfo::Boulder1Chalk, .offset = k_Ground + glm::vec2(1.0f, -20.0f)}},
 	    .throws = {{.object = 1,
 	                .from = k_Ground + glm::vec2(-1.0f, -20.0f),
 	                .height = 4.0f,

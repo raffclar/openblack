@@ -212,10 +212,10 @@ void AddUnbuiltOnBank(std::vector<Scenario>& all)
 	                "the land under it, so the top goes down the slope with the land. No wall shows a gap or a spike "
 	                "at its top.",
 	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
-	    .framing = {.shot = Shot::Placed, .eye = {k_Lake.x + 45.0f, 18.0f, k_Bank - 30.0f}, .look = {k_Lake.x, 2.0f, k_Bank}},
-	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {k_Lake.x - 20.0f, k_Bank}, .built = 0.5f},
+	    .framing = {.shot = Shot::Placed, .eye = {k_Lake.x + 20.0f, 30.0f, k_Bank - 60.0f}, .look = {k_Lake.x, 2.0f, k_Bank}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {k_Lake.x - 40.0f, k_Bank}, .built = 0.5f},
 	                {.type = AbodeInfo::CelticStoragePit, .offset = {k_Lake.x, k_Bank}, .built = 0.5f},
-	                {.type = AbodeInfo::CelticGraveyard, .offset = {k_Lake.x + 20.0f, k_Bank}, .built = 0.5f}},
+	                {.type = AbodeInfo::CelticGraveyard, .offset = {k_Lake.x + 40.0f, k_Bank}, .built = 0.5f}},
 	});
 }
 
