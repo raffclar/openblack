@@ -34,6 +34,11 @@ bool Finished(const Settings& settings, uint32_t turn)
 	return settings.untilTurn.has_value() && turn >= *settings.untilTurn;
 }
 
+bool SkipsHeldFrame(bool steppedByTool, bool paused, bool workWaits)
+{
+	return steppedByTool && paused && !workWaits;
+}
+
 std::chrono::microseconds PaceWait(const Settings& settings, std::optional<std::chrono::microseconds> frameTime,
                                    std::chrono::microseconds frameTook)
 {

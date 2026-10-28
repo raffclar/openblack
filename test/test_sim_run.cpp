@@ -59,6 +59,16 @@ TEST(SimRun, TheRunEndsAtItsLastTurn)
 	EXPECT_TRUE(Finished(settings, 51));
 }
 
+TEST(SimRun, AHeldRunThatAToolStepsSkipsItsFrames)
+{
+	EXPECT_TRUE(SkipsHeldFrame(true, true, false));
+	// The game runs, or the tool does not step the run: each frame plays
+	EXPECT_FALSE(SkipsHeldFrame(true, false, false));
+	EXPECT_FALSE(SkipsHeldFrame(false, true, false));
+	// The tool waits for the work of a frame, for example a scenario to lay out
+	EXPECT_FALSE(SkipsHeldFrame(true, true, true));
+}
+
 TEST(SimRun, ThePacedRunWaitsForTheRestOfTheFrame)
 {
 	const Settings paced {.paceToWallClock = true};
