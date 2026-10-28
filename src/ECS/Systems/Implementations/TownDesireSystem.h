@@ -36,7 +36,6 @@ public:
 	void UpdateFlags(float seconds) override;
 	void MakeFlags(entt::entity town) override;
 	void ProcessFlags() override;
-	void MakeFlags(entt::entity town) override;
 	[[nodiscard]] std::optional<FlagToolTip> GetFlagToolTip(entt::entity flag) const override;
 };
 
