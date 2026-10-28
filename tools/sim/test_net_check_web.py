@@ -237,6 +237,11 @@ class LeashCheckOfTheWebGod(unittest.TestCase):
             self.assertFalse(net_check.land_shows_info_box(folder, "Online Maps/mpm_3p_1.map"))
             self.assertFalse(net_check.land_shows_info_box(folder, "Playgrounds/Missing.txt"))
 
+    def test_a_game_decided_after_the_last_turn_of_the_run_needs_no_stop_on_the_clients(self):
+        self.assertTrue(net_check.decided_after_the_run(1202, 1200))
+        self.assertFalse(net_check.decided_after_the_run(900, 1200))
+        self.assertFalse(net_check.decided_after_the_run(None, 1200))
+
     def test_the_escape_key_closes_the_box_before_the_first_leash_key(self):
         leash = {"client": "web", "slot": 1, "turn": 300, "hold": 100, "off": "key"}
         self.assertEqual([key for _, key, _ in net_check.web_leash_presses(leash, True)], ["Escape", "L", "L"])

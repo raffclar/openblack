@@ -1143,6 +1143,12 @@ def leash_key_presses(leash):
     return [(leash["turn"], "L", 0.0), (off_turn, "L", 0.0)]
 
 
+def decided_after_the_run(decided_at_turn, turns):
+    """Whether the game was decided only after the last turn that the clients play. Then the clients stop at their own
+    last turn, before the stop of the turns of the game."""
+    return decided_at_turn is not None and decided_at_turn > turns
+
+
 def land_shows_info_box(game_path, land):
     """Whether the land script opens the information box of the land at the start (its game message). In a network
     game the box stays open until the player closes it, and it keeps the keys from the controls meanwhile."""
@@ -1812,6 +1818,10 @@ def main():
     if decided_reason is not None:
         print(decided_reason)
         all_same = False
+    # A god whose client stopped at its last turn leaves the game, and the god that stays can win a game of two gods: a
+    # game decided after the last turn of the run tells nothing of the stop of the turns on the clients
+    decided_after_run = decided_after_the_run(summary["decided_at_turn"], options.turns)
+    summary["decided_after_run"] = decided_after_run
     for index, client_dir in enumerate(client_dirs):
         client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))
         compared = [turn for turn in sorted(client_turns) if turn in server_turns]
@@ -1845,7 +1855,7 @@ def main():
             expected = leave_turn
             if not lines_with(os.path.join(client_dir, "client.log"), ["The player leaves the network game"]):
                 different = different + [-2]
-        elif stopped_after is not None:
+        elif stopped_after is not None and not decided_after_run:
             # The client did every turn up to the last turn of the game, and none after it
             expected = stopped_after
             if client_stopped_after != stopped_after or max(client_turns, default=0) > stopped_after:
