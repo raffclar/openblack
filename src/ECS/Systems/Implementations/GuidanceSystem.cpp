@@ -29,6 +29,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/BuildingSites.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/Player.h"
@@ -448,6 +449,22 @@ void GuidanceSystem::KilledVillager(entt::entity villager)
 	    ecs::thing_on_screen::OnScreen(*view, villager))
 	{
 		SayRemark(guidance::Kind::KillingPeople);
+	}
+}
+
+void GuidanceSystem::CreatureWonFight(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr || body->owner != OwnPlayer() || !RemarkNow(guidance::Kind::GeneralGood))
+	{
+		return;
+	}
+	// Only when the place where the creature stands is on screen
+	const auto view = ecs::thing_on_screen::ScreenView();
+	if (view.has_value() && ecs::thing_on_screen::PlaceOnScreen(*view, creature))
+	{
+		SayRemark(guidance::Kind::GeneralGood);
 	}
 }
 

@@ -2902,6 +2902,11 @@ void CreatureMindSystem::TurnBeforeDecision(entt::entity creature, const Creatur
 	if (creature_turn_order::RestartsAfterHold(mind.heldSinceRestart, planHasSteps()))
 	{
 		mind.heldSinceRestart = false;
+		// The plan stops first: a fight stops with no response, and the fight of the opponent stops too
+		if (Locator::creatureFightSystem::has_value())
+		{
+			Locator::creatureFightSystem::value().HandLetGo(creature);
+		}
 		StartPlanAgain(creature, mind);
 	}
 	if (planHasSteps() && creature_turn_order::OwnPlanRuns(true, mind.planner.current->desire))

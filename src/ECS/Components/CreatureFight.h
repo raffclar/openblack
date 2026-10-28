@@ -55,6 +55,8 @@ struct CreatureFighting
 		Celebrate,
 		/// After a fight that ended otherwise: finishing, then happy or sad
 		Respond,
+		/// Its fight stopped with nothing after it: it finishes its move and leaves the fight with no response
+		Stop,
 	};
 	Stage stage {Stage::FaceOff};
 	entt::entity opponent {entt::null};
@@ -84,6 +86,20 @@ struct CreatureFighting
 	bool rude {false};
 	/// Whether its life has paid for the fight and its mind learnt from it
 	bool ended {false};
+	/// Whether the hand took hold of it in the fight. Its fight steps wait while the hand holds it. When the hand lets go
+	/// of it, its fight stops.
+	bool held {false};
+	/// Why its opponent left the duel before it, if the opponent did. It then stays in its duel against the opponent until
+	/// the fight of the opponent ends. Then it stops with no response.
+	enum class PartnerLeft : uint8_t
+	{
+		None,
+		/// The opponent won because this creature had no life left
+		Won,
+		/// The hand took hold of the opponent
+		Held,
+	};
+	PartnerLeft partnerLeft {PartnerLeft::None};
 };
 /// Whether a fighter is in one of the steps before the duel
 [[nodiscard]] constexpr bool IsLeadIn(CreatureFighting::Stage stage)

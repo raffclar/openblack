@@ -559,13 +559,11 @@ creature_fight::FaintWait creature_fight::LyingTurn(FaintWait wait, const FaintB
 
 float creature_fight::DamageFactor(const Blow& blow)
 {
-	// Strength runs from weak to strong as -1 to 1 here
-	const auto attackerStrength = (2.0f * blow.attackerStrength) - 1.0f;
-	const auto defenderStrength = (2.0f * blow.defenderStrength) - 1.0f;
-	const auto sizes = blow.attackerSize / std::max(blow.defenderSize, 0.01f);
-	const auto strengths = (attackerStrength + 1.5f) / (defenderStrength + 1.5f);
-	const auto factor = std::clamp(sizes * strengths * blow.speed, k_MinDamageFactor, k_MaxDamageFactor);
-	return blow.special ? factor * 2.0f : factor;
+	// The game multiplies in this order: the strengths, then the sizes, then the speed
+	const auto strengths = (blow.attackerStrength + k_StrengthShift) / (blow.defenderStrength + k_StrengthShift);
+	const auto factor =
+	    std::clamp((strengths * (blow.attackerSize / blow.defenderSize)) * blow.speed, k_MinDamageFactor, k_MaxDamageFactor);
+	return blow.special ? factor + factor : factor;
 }
 
 Hit creature_fight::ResolveBlow(const Blow& blow, RecoilDirection direction)
@@ -1042,6 +1040,26 @@ bool creature_fight::PlayerMove(Fighter& fighter, const Move& move, bool replace
 	return fighter.queue.Push(move, replace);
 }
 
+bool creature_fight::CountComputerWait(Fighter& fighter, int32_t turnMs)
+{
+	if (fighter.control != Control::Player)
+	{
+		return false;
+	}
+	const auto state = fighter.state;
+	if (state != State::Stance && state != State::Action && state != State::Block && state != State::BlockRecoil)
+	{
+		return false;
+	}
+	fighter.computerWaitMs -= static_cast<float>(turnMs);
+	if ((state == State::Stance || state == State::Block) && fighter.computerWaitMs < 0.0f)
+	{
+		fighter.control = Control::Computer;
+		return true;
+	}
+	return false;
+}
+
 bool creature_fight::PlayerMove(Fighter& fighter, marks::MarkList& marks, const Move& move, bool replace)
 {
 	// A move made in place of the queue keeps only its own sparkle
@@ -1073,6 +1091,7 @@ std::optional<Order> creature_fight::TakeOrder(Fighter& fighter, bool inRange)
 	// Anything at all ends a block, and is made from the stance after it; another block is used up ending it
 	if (fighter.state == State::Block)
 	{
+		fighter.computerWaitMs = k_ComputerWaitsMs;
 		if (front->move.kind == Move::Kind::Block)
 		{
 			fighter.queue.Pop();
@@ -1083,6 +1102,7 @@ std::optional<Order> creature_fight::TakeOrder(Fighter& fighter, bool inRange)
 	{
 		return std::nullopt;
 	}
+	fighter.computerWaitMs = k_ComputerWaitsMs;
 	const auto& move = front->move;
 	std::optional<Order> order;
 	switch (move.kind)
@@ -1128,9 +1148,10 @@ Opponent creature_fight::OpponentOf(State state, size_t animation)
 		return Opponent::EndingCast;
 	case State::BlockRecoil:
 		return Opponent::BlockRecoil;
+	// The computer strikes at once at an opponent that starts a cast or casts
 	case State::CastStart:
 	case State::Cast:
-		return Opponent::Casting;
+		return Opponent::OtherAction;
 	case State::Action:
 		if (IsAttack(animation))
 		{
@@ -1160,7 +1181,8 @@ Choice creature_fight::ChooseMove(uint32_t tier, Opponent opponent, const Random
 		return Choice {.kind = Choice::Kind::Step, .step = k_Steps.at(random(3))};
 	};
 	const auto block = Choice {.kind = Choice::Kind::Block};
-	const bool counters = tier >= 2 && random(k_CounterLots) != 0;
+	// Only the most aggressive tier draws this lot, and only against the moves that it can strike back at
+	const auto counters = [tier, &random] { return tier >= 2 && random(k_CounterLots) != 0; };
 	switch (opponent)
 	{
 	case Opponent::Stance:
@@ -1170,15 +1192,14 @@ Choice creature_fight::ChooseMove(uint32_t tier, Opponent opponent, const Random
 	case Opponent::OtherAction:
 		return blow();
 	case Opponent::Attacking:
-	case Opponent::Casting:
-		if (counters)
+		if (counters())
 		{
 			return blow();
 		}
 		return random(4) == 0 ? block : step();
 	case Opponent::SteppingForward:
 	{
-		if (counters)
+		if (counters())
 		{
 			return blow();
 		}
@@ -1190,7 +1211,7 @@ Choice creature_fight::ChooseMove(uint32_t tier, Opponent opponent, const Random
 		return pick == 3 ? blow() : step();
 	}
 	case Opponent::Blocking:
-		if (counters)
+		if (counters())
 		{
 			return blow();
 		}
@@ -1329,6 +1350,30 @@ bool creature_fight::WinnerPoos(float alignment)
 bool creature_fight::FightWonIsSeen(bool byBlow, bool winnerHasPlayer)
 {
 	return byBlow && winnerHasPlayer;
+}
+
+bool creature_fight::WinsByOpponentsLife(float opponentLife, bool scriptControlled)
+{
+	return !(0.0f < opponentLife) && !scriptControlled;
+}
+
+bool creature_fight::LifePaysAtStop(State state)
+{
+	switch (state)
+	{
+	case State::Start:
+	case State::Stance:
+	case State::Action:
+	case State::BlockStart:
+	case State::Block:
+	case State::BlockEnd:
+	case State::CastStart:
+	case State::Cast:
+	case State::CastEnd:
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool creature_fight::WinPlanForced(bool byBlow)

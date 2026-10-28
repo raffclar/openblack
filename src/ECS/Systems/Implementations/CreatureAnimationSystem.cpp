@@ -1171,6 +1171,8 @@ std::string_view StageName(CreatureFighting::Stage stage)
 		return "celebrate";
 	case Stage::Respond:
 		return "respond";
+	case Stage::Stop:
+		return "stop";
 	}
 	return "fight";
 }
