@@ -5334,8 +5334,8 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	// The hand gives the food, then moves far away while the creature reaches for it
-	constexpr float k_CallOffSweepDelay = 1.0f;
-	constexpr float k_CallOffSweepSeconds = 0.3f;
+	constexpr float k_CallOffSweepDelay = 0.3f;
+	constexpr float k_CallOffSweepSeconds = 0.2f;
 	auto callingOff = giving;
 	callingOff.push_back({.kind = Kind::PointerSweep,
 	                      .delaySeconds = k_CallOffSweepDelay,

@@ -1636,6 +1636,12 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 	}
 	if (creature_giving::CallsOff(hand, *takePoint, _world->CreatureSizeOf(grab.givenTo)))
 	{
+		// Only the log reads this line. It is not a deed of the turn, as only this computer moves its hand.
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_INFO(logger, "The hand calls off its gift of thing {} to creature {}", entt::to_integral(grab.object),
+			                   entt::to_integral(grab.givenTo));
+		}
 		_world->CallOffGiving(grab.givenTo);
 		ForgetOffer(grab);
 		return frame.target;
