@@ -48,7 +48,6 @@ public:
 	bool QueueChunk(Stream stream, const MusicBank& bank, uint32_t chunk, uint32_t skipFrames) override;
 	[[nodiscard]] uint32_t ReleasePlayedChunks(Stream stream) override;
 	[[nodiscard]] uint32_t GetPlayPosition(Stream stream) const override;
-	[[nodiscard]] uint64_t GetFramesPlayed(Stream stream) const override;
 	void Play(Stream stream) override;
 	[[nodiscard]] bool IsPlaying(Stream stream) const override;
 	void SetVolume(Stream stream, float volume) override;
@@ -89,9 +88,6 @@ private:
 		/// The speed that the source plays at, 1 for the music's own speed
 		float rate {1.0f};
 		std::deque<BufferId> buffers;
-		/// Frames in each queued buffer, and in all the buffers already played and taken off
-		std::deque<uint64_t> bufferFrames;
-		uint64_t releasedFrames {0};
 		float volume {0.0f};
 		std::optional<MusicPlacement> placement;
 		/// The chunk queued last and its length in frames, which the next chunk is decoded after

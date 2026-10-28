@@ -70,6 +70,13 @@ public:
 	void Stop();
 	/// Once a frame
 	void Update(float seconds);
+	/// Once a frame of a network game: only the camera follows the scenario. The commands come before the turns.
+	void UpdateView() { UpdateCamera(); }
+	/// Before each turn of a network game: the scenario steps on by the time of one turn and gives the commands that are
+	/// due. The first turn after the layout gives no commands (see TurnStepOf).
+	void BeforeTurn();
+	/// The turn count at which the last scenario was laid out, or none before the first scenario
+	[[nodiscard]] std::optional<uint32_t> GetLayoutTurn() const { return _layoutTurn; }
 
 	[[nodiscard]] bool IsRunning() const { return _running; }
 	/// The scenario running, or last run
@@ -107,6 +114,8 @@ public:
 
 private:
 	void SetUpEnvironment(const Environment& environment);
+	/// The machine's clock gives the scenario's date, or the date it gave before a scenario set one
+	void SetUpDate(const std::optional<RealDate>& date);
 	void PlaceHighlights(const Scenario& scenario, glm::vec2 middle);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
 	/// Lays the scenario's footpaths and links them to the objects they lead from
@@ -223,11 +232,21 @@ private:
 	const Scenario* _scenario {nullptr};
 	bool _running {false};
 	float _seconds {0.0f};
+	/// The turn count at which the scenario was laid out
+	std::optional<uint32_t> _layoutTurn;
+	/// When the made-up ping of the ping line started, in the scenario's seconds; none while it does not show
+	std::optional<float> _demoPingSince;
+	/// Gives the made-up ping to the game while it shows
+	void UpdateDemoPing() const;
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// The date that the machine's clock was pinned to (none for the wall clock's) before a scenario set the date
+	std::optional<std::optional<int64_t>> _pinnedDateBefore;
 	/// Whether the game was a skirmish before a scenario made it one
 	std::optional<bool> _skirmishBefore;
+	/// Whether the world played as a network game before a scenario made it one
+	std::optional<bool> _networkGameBefore;
 	/// The players that the scenario put in the game, which go when it stops
 	std::vector<entt::entity> _addedPlayers;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
@@ -239,6 +258,8 @@ private:
 	Timeline _timeline;
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
+	/// The creatures that the scenario's filled slots got, in the order of their ids
+	std::vector<entt::entity> _slotCreatures;
 	/// The game turn at which the scenario started, and which of its computer actions the tool forced
 	uint32_t _startTurn {0};
 	std::vector<bool> _computerActionsDone;

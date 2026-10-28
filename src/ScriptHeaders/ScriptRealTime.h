@@ -11,10 +11,15 @@
 
 #include <ctime>
 
+#include <string_view>
+
 /// What the scripts read of the date and the time of the player's computer, from its local time, as the game gives
 /// them. The game gives these values in a game for more than one player too.
 namespace openblack::script::real_time
 {
+
+/// The script error that each of these functions gives in a game for more than one player, before it gives its value
+inline constexpr std::string_view k_NotMultiplayerFriendly = "This is not multiplayer friendly yet!";
 
 /// An hour as a part of a second, as the game keeps it in a float
 inline constexpr float k_HoursPerSecond = 0.00027777778450399637f;

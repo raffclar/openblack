@@ -33,6 +33,28 @@ ASSERT_WORD = re.compile(r"assert", re.IGNORECASE)
 UNREGISTERED_WORDS = "unregistered component storage: "
 
 
+def land_makes_no_temples(land, testbed=False, gods_ring_map=False, scenario=None):
+    """Whether a tool's network run plays a land that makes no temple for its gods at the start.
+
+    A story land makes the player's temple only later, from a plan, and the testbed makes none. In a network game a god
+    with no temple is out at once, so the game would end at its first turn. The network maps and the skirmish lands
+    make each god's temple at the start. A testbed scenario keeps the rule: it can test the end of the game.
+    """
+    if gods_ring_map or scenario:
+        return False
+    if testbed:
+        return True
+    name = land.replace("\\", "/").lower()
+    return not (name.startswith("online maps/") or name.startswith("playgrounds/") or name.endswith(".map"))
+
+
+def gods_need_no_temple_args(server, **land):
+    """The switch that keeps gods with no temple in a tool's network run, for the server or a game"""
+    if not land_makes_no_temples(**land):
+        return []
+    return ["--gods-need-no-temple"] if server else ["--sim-gods-need-no-temple"]
+
+
 def unregistered_in_text(lines):
     """The names of the unregistered components that lines of a log, a record or a checksum file tell of. A log tells
     them as the words and the names with commas between them; a record or a checksum line has an "unregistered" list."""
@@ -373,7 +395,9 @@ def compare(records_a, records_b):
         state_a = (record.get("creature") or {}).get("state_hash")
         state_b = (other.get("creature") or {}).get("state_hash")
         draws_same = record.get("seeds") == other.get("seeds") and record.get("draws") == other.get("draws")
-        if record.get("hash") != other.get("hash") or state_a != state_b or not draws_same:
+        # The checksum of the synced world also holds what the systems keep, such as the scripts' music
+        checksum_same = (record.get("synced") or {}).get("checksum") == (other.get("synced") or {}).get("checksum")
+        if record.get("hash") != other.get("hash") or state_a != state_b or not draws_same or not checksum_same:
             parts_a, parts_b = record.get("hash_parts", {}), other.get("hash_parts", {})
             parts = sorted(key for key in set(parts_a) | set(parts_b) if parts_a.get(key) != parts_b.get(key))
             return {
@@ -405,7 +429,7 @@ def compare_synced(records_a, records_b):
         if not synced_a or not synced_b:
             continue
         compared += 1
-        if (synced_a.get("hash"), synced_a.get("seed"), synced_a.get("draws")) !=                 (synced_b.get("hash"), synced_b.get("seed"), synced_b.get("draws")):
+        if (synced_a.get("hash"), synced_a.get("seed"), synced_a.get("draws"), synced_a.get("checksum")) !=                 (synced_b.get("hash"), synced_b.get("seed"), synced_b.get("draws"), synced_b.get("checksum")):
             parts_a, parts_b = synced_a.get("parts") or {}, synced_b.get("parts") or {}
             parts = sorted(key for key in set(parts_a) | set(parts_b) if parts_a.get(key) != parts_b.get(key))
             return {

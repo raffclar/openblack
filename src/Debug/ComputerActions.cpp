@@ -58,3 +58,30 @@ bool debug::computer_actions::Force(PlayerNames player, std::string_view name, e
 	}
 	return ready;
 }
+
+bool debug::computer_actions::SetUntaughtSends(computer_mind::Mind& mind, size_t kind, uint32_t count)
+{
+	if (kind >= mind.untaughtSends.size())
+	{
+		return false;
+	}
+	mind.untaughtSends.at(kind) = count;
+	return true;
+}
+
+bool debug::computer_actions::SetUntaughtSends(PlayerNames player, size_t kind, uint32_t count)
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return false;
+	}
+	bool set = false;
+	Locator::entitiesRegistry::value().Each<const ecs::components::Player, ecs::components::ComputerPlayer>(
+	    [player, kind, count, &set](const ecs::components::Player& owner, ecs::components::ComputerPlayer& computer) {
+		    if (owner.name == player)
+		    {
+			    set = SetUntaughtSends(computer.mind, kind, count);
+		    }
+	    });
+	return set;
+}

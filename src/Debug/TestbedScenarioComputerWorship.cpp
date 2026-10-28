@@ -115,6 +115,27 @@ CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
 )";
 
+/// The lines of a land that give player two a computer mind, a temple and a Celtic town with no miracle, so that the
+/// worship site of the town is not built at the start. The storage pit of the town has wood, and two abodes have people.
+constexpr std::string_view k_UnbuiltSiteTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "0.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "-4.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "10.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 3000, 3000)
+CREATE_ABODE(900, "40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+)";
+
 } // namespace
 
 void testbed_scenarios::AddComputerGodWorshipScenarios(std::vector<Scenario>& all)
@@ -226,6 +247,37 @@ void testbed_scenarios::AddComputerGodWorshipScenarios(std::vector<Scenario>& al
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, 115.0f}, .built = 0.2f}},
 	    .landScript = k_WoodMiracleTownScript,
 	    .worshipShare = 0.5f,
+	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_unbuilt_worship_site",
+	    .name = "A computer god that holds wood over a worship site that it built at once",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
+	                   "and a Celtic town to the north with no miracle, so the worship site of the town is not built at "
+	                   "the start. The storage pit of the town has wood.",
+	    .expected = "At the first turn the god wants wood for the worship site. In the same turn the god builds the site "
+	                "at once, because the site is not damaged. The hand takes all the wood of the storage pit, moves "
+	                "over the site and holds the wood there. The built site does not take wood, so the hand keeps it and "
+	                "no step follows (see docs/vanilla-bugs.md). The players.list query shows the needs and the steps.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 110.0f)}},
+	    .landScript = k_UnbuiltSiteTownScript,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_builders_stay_at_site",
+	    .name = "A computer god whose carried villagers become builders and stay at the site",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
+	                   "and a Celtic town to the north with no miracle, so the worship site of the town is not built at "
+	                   "the start. The storage pit of the town has wood. A hut of the town stands a fifth built north of "
+	                   "the town, with a site for its builders.",
+	    .expected = "The god takes the wood of the storage pit to the hut. Then the god takes free adults of the town to "
+	                "the hut, one at a time. In the hand of the god, each adult becomes a builder, because the hand of "
+	                "the god is the hand of its own player. Each builder stays at the hut and builds it. The god does not "
+	                "take the same adult again. The players.list query shows the needs and the steps.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 130.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, 115.0f}, .built = 0.2f}},
+	    .landScript = k_UnbuiltSiteTownScript,
 	    .objectsAfterLandScript = true,
 	});
 }

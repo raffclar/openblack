@@ -35,11 +35,11 @@
 
 #include "3D/SkyDome.h"
 #include "Enums.h"
-#include "Graphics/DescriptorSetTally.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
 #include "Graphics/LandDetail.h"
+#include "Graphics/PaintedSkinStamp.h"
 #include "Graphics/PartialBuildCap.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
@@ -179,6 +179,10 @@ private:
 	/// The particle effects in the order the camera of the pass draws them, among the other things that blend: runs of
 	/// sprites that share a sheet as one instanced draw, ribbons, models and mists
 	void DrawParticles(const DrawSceneDesc& desc) const;
+	/// Draws what a frame of particles holds, in the order of its commands, seen from a point
+	void SubmitParticleFrame(const DrawSceneDesc& desc, const particles::draw::Frame& frame,
+	                         std::span<const particles::draw::Command> commands, std::span<const uint32_t> spriteOrder,
+	                         std::span<const particles::draw::Command> beforeLand, const glm::vec3& origin) const;
 	/// For a warm-up, a sprite of no size for each way that sprites blend, into the pass's blended view
 	void WarmUpParticles(const DrawSceneDesc& desc) const;
 	/// The opening's light falling from the sky, and its flash where it lands
@@ -213,10 +217,12 @@ private:
 		/// A phial's pulse and its texture's frame
 		float phialPhase;
 		float phialFrame;
-		/// How faint a phial is drawn, of 255
+		/// How faint a phial is drawn, of 255. A seed drawn at once is drawn at this alpha too.
 		uint8_t phialAlpha;
 		/// The alignment of the player it is shown for, which makes the flying flock's seed a bat or a dove
 		float ownerAlignment;
+		/// The seed is drawn at once in white, with no light from the land, as the seeds over the gestures' hints are
+		bool drawnAtOnce {false};
 	};
 	/// With `seenBy`, the function does not send a draw of the model that is out of that view
 	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown,
@@ -486,6 +492,9 @@ private:
 	/// The collars of the leashes the gestures' hints offer, each over its hint's square, seen through a camera of its
 	/// own
 	void DrawGestureHintCollars(const DrawSceneDesc& desc) const;
+	/// The seeds and the globe that the gestures' hints picture, each over its hint's square, seen through the collars'
+	/// camera: a seed spins with the effect of its holder over it and its rings round it
+	void DrawGestureHintSeeds(const DrawSceneDesc& desc) const;
 	/// The leashes hanging on the temples, and the one carried in the hand, each drawn just after its glow
 	void DrawTempleLeashes(const DrawSceneDesc& desc) const;
 	/// A texture for a painted skin: a spare one, else a new one. None if bgfx has no more textures.
@@ -500,9 +509,6 @@ private:
 	void UploadAnimalBones(const DrawSceneDesc& drawDesc) const;
 	/// What the hand's base mesh is pulled towards for its player's alignment, none while it shows the base
 	[[nodiscard]] std::optional<L3DMeshSubmitDesc::MorphTargets> HandMorphTargets() const;
-	/// Warns when a frame's draws near the descriptor sets Vulkan has for a frame, and skips the sea's reflection for
-	/// a while when they come too near
-	void WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept;
 
 	std::unique_ptr<ShaderManager> _shaderManager;
 	std::unique_ptr<BgfxCallback> _bgfxCallback;
@@ -511,12 +517,6 @@ private:
 	std::unique_ptr<OffscreenScreenshots> _offscreenShots;
 	bool _bgfxDebug = false;
 	bool _bgfxProfile = false;
-	/// Frames left drawing without the sea's reflection, the last frames having come too near Vulkan's descriptor sets
-	uint32_t _reflectionSkips {0};
-	/// Frames left drawing each view in the order its draws come, for the same reason
-	std::array<uint32_t, static_cast<size_t>(RenderPass::_count)> _inOrderViews {};
-	/// Frames left before the next warning about the descriptor sets
-	uint32_t _descriptorSetWarningPause {0};
 	/// While the scene is drawn only to make the renderer's pipelines and targets: nothing that later frames use changes
 	mutable bool _warmingUp {false};
 	/// The next frame holds a warm-up's draws, after which its views are set back
@@ -625,6 +625,8 @@ private:
 	mutable std::unique_ptr<FrameBuffer> _landColourFrameBuffer;
 	/// The sky's dome for each alignment, one above the other, kept from frame to frame
 	mutable std::unique_ptr<FrameBuffer> _skyDomeFrameBuffer;
+	/// The rows of each alignment's dome in the frame buffer above
+	mutable uint16_t _skyDomeRows {sky_dome::k_Rows};
 	/// The glow lightning stamps on the land, made the first time it is drawn
 	mutable std::optional<TextureHandle> _lightningGlowTexture;
 	/// How strongly the sun glares, 0 to 255, easing towards how much of the sun shows
@@ -655,8 +657,8 @@ private:
 	/// A creature's skins as painted (see components::CreatureSkin), one texture each
 	struct CreatureSkins
 	{
-		/// The painting the textures hold
-		uint32_t revision {0};
+		/// The painting the textures hold, none before the first upload
+		std::optional<painted_skin::Stamp> stamp;
 		std::vector<std::unique_ptr<Texture2D>> textures;
 		/// The painted skins the body is drawn with in place of its base mesh's, by skin id
 		std::vector<std::pair<uint32_t, const Texture2D*>> drawn;
@@ -688,7 +690,7 @@ private:
 	/// The hand's skins as blended for its player's alignment, one texture each, and the blending they hold
 	mutable std::vector<std::unique_ptr<Texture2D>> _handSkinTextures;
 	mutable std::vector<std::pair<uint32_t, const Texture2D*>> _handSkins;
-	mutable std::optional<uint32_t> _handSkinRevision;
+	mutable std::optional<painted_skin::Stamp> _handSkinStamp;
 	/// The creatures drawn this frame: all of them, or the nearest the camera when there are more than the backend can
 	/// upload the bones of
 	struct DrawnCreature
@@ -759,6 +761,12 @@ private:
 	mutable std::vector<particles::draw::LightStamp> _landStamps;
 	mutable std::vector<particles::draw::Command> _particleCommands;
 	mutable std::vector<uint32_t> _particleSpriteOrder;
+	/// What the effect over a seed of the gestures' hints draws, and its order
+	mutable particles::draw::Frame _hintParticleFrame;
+	/// The camera the gestures' hints picture their seeds through, made the first time a hint pictures one
+	mutable std::unique_ptr<Camera> _hintCamera;
+	mutable std::vector<particles::draw::Command> _hintParticleCommands;
+	mutable std::vector<uint32_t> _hintParticleSpriteOrder;
 	mutable std::vector<particles::draw::Command> _particleBeforeLandCommands;
 	mutable std::vector<uint32_t> _particleBeforeLandSprites;
 	/// What the falling spell's film draws of the particles this frame, and their order

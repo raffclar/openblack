@@ -26,8 +26,10 @@ class GameHandTotem final: public computer_hand::TotemWorld
 public:
 	GameHandTotem(PlayerNames player, components::ComputerPlayer& state);
 
+	void RaiseTotem(entt::entity totem, float share) override;
+
 private:
-	[[maybe_unused]] PlayerNames _player;
+	PlayerNames _player;
 	[[maybe_unused]] components::ComputerPlayer& _state;
 };
 

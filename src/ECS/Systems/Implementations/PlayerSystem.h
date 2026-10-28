@@ -43,7 +43,6 @@ public:
 	void TakeUpKept(entt::entity playerEntity) override;
 	void SetAlly(PlayerNames player, PlayerNames other, float strength) override;
 	[[nodiscard]] float AllyStrength(PlayerNames player, PlayerNames other) const override;
-
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override;
 	[[nodiscard]] bool IsHumanPlayer(PlayerNames name) const override;
 

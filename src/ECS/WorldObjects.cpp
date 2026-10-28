@@ -48,6 +48,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
@@ -61,6 +62,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
@@ -273,6 +275,11 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	if (registry.AllOf<Ball>(object))
 	{
 		return &info.ball;
+	}
+	// A scaffold has the one row of the scaffolds
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return &info.scaffold;
 	}
 	return nullptr;
 }
@@ -877,6 +884,12 @@ void world_objects::Remove(entt::entity object)
 		{
 			world_objects::Remove(pile);
 		}
+	}
+	// A workshop that goes removes its wood pile
+	if (const auto* workshop = registry.TryGet<const Workshop>(object);
+	    workshop != nullptr && registry.Valid(workshop->woodPile))
+	{
+		world_objects::Remove(workshop->woodPile);
 	}
 	// A graveyard going hands its town's dead over to another of the town's graveyards
 	graveyards::Lost(object);

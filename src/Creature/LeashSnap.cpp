@@ -115,11 +115,20 @@ std::optional<float> leash_snap::TouchDepth(std::span<const ScreenPoint> points,
 	return std::nullopt;
 }
 
-creature_leash::Lengths leash_snap::LengthsOnLettingGo(const glm::vec3& hand, const glm::vec3& tied, float tiedRadius)
+float leash_snap::LengthOnLettingGo(const glm::vec3& hand, const glm::vec3& tied, float tiedRadius)
 {
 	// The game adds the squares from z to x
-	const auto length = std::max(x87::LengthZyx(hand - tied), k_RadiusReach * tiedRadius);
+	return std::max(x87::LengthZyx(hand - tied), k_RadiusReach * tiedRadius);
+}
+
+creature_leash::Lengths leash_snap::LengthsOf(float length)
+{
 	return {.slack = length * k_SlackShare, .max = length};
+}
+
+creature_leash::Lengths leash_snap::LengthsOnLettingGo(const glm::vec3& hand, const glm::vec3& tied, float tiedRadius)
+{
+	return LengthsOf(LengthOnLettingGo(hand, tied, tiedRadius));
 }
 
 creature_leash::Lengths leash_snap::CollarRopeLengths(const creature_leash::Lengths& leash)

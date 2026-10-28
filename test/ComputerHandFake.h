@@ -187,6 +187,7 @@ public:
 		letGoTypes.push_back(type);
 		letGoHands.push_back(hand);
 	}
+	void RaiseTotem(entt::entity totem, float share) override { raised.push_back({totem, share}); }
 
 	/// An order that the god gave to a creature, and a desire that it made dominant
 	struct Order
@@ -216,6 +217,7 @@ public:
 	float feedbackDraw {0.0f};
 	std::vector<MagicType> letGoTypes;
 	std::vector<map_coords::MapCoords> letGoHands;
+	std::vector<std::pair<entt::entity, float>> raised;
 
 	std::map<entt::entity, glm::vec2> places;
 	std::vector<glm::vec3> castAt;

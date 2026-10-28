@@ -48,6 +48,7 @@ void Registry::Release(entt::entity entity)
 
 void Registry::Destroy(entt::entity entity)
 {
+	_destroying.publish(entity);
 	SetLayoutDirty();
 	_registry.destroy(entity);
 }
@@ -75,6 +76,7 @@ void Registry::Reset()
 	_registry.ctx().erase<RegistryContext>();
 	_registry.ctx().emplace<RegistryContext>();
 	_entitiesMade = 0;
+	++_resets;
 	++_entitiesGone;
 }
 

@@ -14,12 +14,15 @@
 
 using namespace openblack;
 
-TEST(PlayerKind, InAGameAloneThePersonPlaysTheFirstPlayerAndTheComputerTheOthers)
+TEST(PlayerKind, InAGameAloneTheComputerPlaysOnlyThePlayersOfItsMinds)
 {
 	EXPECT_FALSE(player_kind::IsComputer({.player = PlayerNames::PLAYER_ONE}));
-	EXPECT_TRUE(player_kind::IsComputer({.player = PlayerNames::PLAYER_TWO}));
-	EXPECT_TRUE(player_kind::IsComputer({.player = PlayerNames::PLAYER_SEVEN}));
+	// Nobody plays a player with no mind: its creature is not of a computer player
+	EXPECT_FALSE(player_kind::IsComputer({.player = PlayerNames::PLAYER_TWO}));
+	EXPECT_FALSE(player_kind::IsComputer({.player = PlayerNames::PLAYER_SEVEN}));
+	EXPECT_TRUE(player_kind::IsComputer({.player = PlayerNames::PLAYER_TWO, .computerMind = true}));
 	EXPECT_FALSE(player_kind::IsComputer({.player = PlayerNames::NEUTRAL}));
+	EXPECT_FALSE(player_kind::IsComputer({.player = PlayerNames::NEUTRAL, .computerMind = true}));
 }
 
 TEST(PlayerKind, InANetworkGameTheComputerPlaysOnlyThePlayersOfItsMinds)

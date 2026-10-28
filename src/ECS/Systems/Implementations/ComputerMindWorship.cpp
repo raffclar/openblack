@@ -25,6 +25,7 @@
 #include "ComputerMindCommon.h"
 #include "ComputerMindMiracles.h"
 #include "ComputerMindRuleTable.h"
+#include "ComputerMindScaffolds.h"
 #include "ComputerMindTowns.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
@@ -1177,4 +1178,5 @@ void computer_world::RegisterWorshipRules(RuleTable& table)
 	        {.intensity = HealSpellForSite, .perform = HealWorshipper});
 	AddRule(table, k_Worship, NodeKind::ObjectShallCastWoodSpellAgain,
 	        {.intensity = WoodSpellForSite, .perform = CastWoodAtSite});
+	RegisterScaffoldRules(table);
 }

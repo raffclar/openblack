@@ -32,6 +32,7 @@
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 
+#include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
@@ -49,9 +50,11 @@
 #include "Common/EventManager.h"
 #include "Common/GameHeading.h"
 #include "Common/GameRandom.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureRig.h"
 #include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
@@ -105,6 +108,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
@@ -124,10 +128,12 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -172,6 +178,7 @@
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
@@ -203,6 +210,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -228,6 +236,7 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
@@ -236,6 +245,7 @@
 #include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
+#include "Gui/GameInterface.h"
 #include "Gui/ScriptTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Hand/HandTrace.h"
@@ -283,6 +293,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"computerSettingsSystem", "engine.computer_settings"},
     LocatorCoverage {"infoConstants", "engine.services"},
     LocatorCoverage {"profiler", "engine.frame"},
+    LocatorCoverage {"mainThreadQueue", "engine.services"},
     LocatorCoverage {"events", "engine.services"},
     LocatorCoverage {"windowing", "engine.frame"},
     LocatorCoverage {"debugGui", "engine.services"},
@@ -348,6 +359,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"leashSystem", "creatures.status"},
     LocatorCoverage {"creatureFightSystem", "creatures.status"},
     LocatorCoverage {"fightTranscript", "fights.transcripts"},
+    LocatorCoverage {"creatureAnimationLog", "creature.animation"},
     LocatorCoverage {"creatureModeSystem", "creatures.systems"},
     LocatorCoverage {"creatureCaveSystem", "creatures.systems"},
     LocatorCoverage {"cinematicDirectorSystem", "view.cinematic"},
@@ -393,12 +405,15 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
+    LocatorCoverage {"workshopSystem", "living.workshops"},
     LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
     LocatorCoverage {"objectDrawListSystem", "view.draw_list"},
     LocatorCoverage {"appleBarrelSystem", "living.apple_barrel"},
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"pauseTextSystem", "view.pause_text"},
+    LocatorCoverage {"incomingMessageSystem", "view.incoming_messages"},
+    LocatorCoverage {"chatSystem", "view.chat"},
     LocatorCoverage {"fireSystem", "magic.fires"},
     LocatorCoverage {"explosionSystem", "magic.state"},
     LocatorCoverage {"floatingNumberSystem", "magic.state"},
@@ -421,6 +436,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},
+    LocatorCoverage {"scriptMusicSystem", "audio.state"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
@@ -785,6 +801,11 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		                  {"events", Locator::events::has_value()},
 		                  {"rng", Locator::rng::has_value()},
 		              };
+		              if (Locator::mainThreadQueue::has_value())
+		              {
+			              // The work that the turn gave to the main thread and that still waits
+			              result["main_thread_work_waits"] = Locator::mainThreadQueue::value().GetPendingCount();
+		              }
 		              if (Locator::gameRandom::has_value())
 		              {
 			              const auto seeds = Locator::gameRandom::value().GetSeeds();
@@ -877,7 +898,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                  return Json {{"count", clouds.GetStormClouds().size()}, {"clouds", std::move(list)}};
 	                  }));
 	provider->Add(Query("real_weather", "The real-world weather: the weather that the lobby gave, whether it changes the land, "
-	                                    "its storm and the background weather"),
+	                                    "its storm, the place of its message and the background weather"),
 	              Serve<Locator::realWeatherSystem>(
 	                  "the real weather", [](const ecs::systems::RealWeatherSystemInterface& real, const QueryContext& /*c*/) {
 		                  Json result {{"applied", real.IsApplied()}, {"storm", real.GetStorm() != entt::null}};
@@ -889,6 +910,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 			                                            {"city", weather->city},
 			                                            {"area", weather->area},
 			                                            {"country", weather->country}};
+			                  result["place"] = real.GetPlace().value_or("");
 		                  }
 		                  else
 		                  {
@@ -1167,12 +1189,11 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              return QueryResult::Value(std::move(result));
 	              }));
 	provider->Add(
-	    Query(
-	        "animal",
-	        "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock "
-	        "and town, its kind's radius, where it moves to, whether "
-	        "a creature fears it, and a grazer's needs",
-	        {IdParameter("The animal's entity id")}),
+	    Query("animal",
+	          "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, "
+	          "whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether "
+	          "a creature fears it, and a grazer's needs",
+	          {IdParameter("The animal's entity id")}),
 	    Serve<Locator::animalSystem>(
 	        "the animals", [](const ecs::systems::AnimalSystemInterface& animals, const QueryContext& context) {
 		        const auto entity = EntityParam(context.params);
@@ -1188,6 +1209,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                       {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
 		                       {"turns_in_state", animal.turnsInState},
 		                       {"turns_until_state_change", animal.turnsUntilStateChange},
+		                       {"dying", animal.dying},
 		                       {"birth_turn", animal.birthTurn},
 		                       {"clip", static_cast<int>(animal.animation)},
 		                       {"speed", animal.move.speed},
@@ -1552,6 +1574,38 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			                  item["fish_left"] = farms.FishLeft(entity);
 			                  item["fishermen"] = farm.fishermen.size();
 			                  item["shoal"] = farm.shoal.has_value() ? Point(farm.shoal->centre) : Json(nullptr);
+			                  items.push_back(std::move(item));
+		                  });
+		                  return items;
+	                  }));
+	provider->Add(Query("workshops",
+	                    "The workshops: their room for scaffolds, the turns left on a scaffold, and the scaffolds they count",
+	                    {}, ResultKind::List),
+	              Serve<Locator::workshopSystem>(
+	                  "the workshops", [](const ecs::systems::WorkshopSystemInterface& workshops, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  const auto* registry = Registry();
+		                  if (registry == nullptr)
+		                  {
+			                  return items;
+		                  }
+		                  registry->Each<const Workshop>([&](entt::entity entity, const Workshop& workshop) {
+			                  auto item = Listed(*registry, entity);
+			                  item["room"] = workshops.RoomOf(entity);
+			                  item["making_turns"] = workshop.makingTurns;
+			                  item["counted"] = workshop.counted;
+			                  Json places = Json::array();
+			                  for (const auto place : workshop.places)
+			                  {
+				                  places.push_back(static_cast<int>(place));
+			                  }
+			                  item["places"] = std::move(places);
+			                  Json scaffolds = Json::array();
+			                  for (const auto scaffold : workshop.scaffolds)
+			                  {
+				                  scaffolds.push_back(ToId(scaffold));
+			                  }
+			                  item["scaffolds"] = std::move(scaffolds);
 			                  items.push_back(std::move(item));
 		                  });
 		                  return items;
@@ -2624,6 +2678,114 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
+	provider->Add(
+	    Query("incoming_messages",
+	          "The incoming messages at the bottom left of the screen: the list in order (kind, text, weather picture, the "
+	          "real time it started to show), the real time now, and whether the button shows with its look"),
+	    [](const QueryContext& /*c*/) {
+		    Json result = {{"count", 0}, {"messages", Json::array()}, {"shown", false}};
+		    if (!Locator::incomingMessageSystem::has_value())
+		    {
+			    return QueryResult::Value(std::move(result));
+		    }
+		    const auto& system = Locator::incomingMessageSystem::value();
+		    constexpr std::array<std::string_view, 3> k_Kinds {"chat", "mail", "weather"};
+		    result["now"] = system.GetMilliseconds();
+		    result["count"] = system.GetQueue().Count();
+		    result["shown_text"] = gui::ToUtf8(system.GetQueue().ShownText());
+		    // The list is read from the top message down, by dismissing copies
+		    auto copy = system.GetQueue();
+		    while (const auto* top = copy.Top())
+		    {
+			    result["messages"].push_back({{"kind", k_Kinds.at(static_cast<size_t>(top->kind))},
+			                                  {"text", gui::ToUtf8(top->text)},
+			                                  {"picture", top->picture},
+			                                  {"since", top->since}});
+			    copy.Dismiss(top->since);
+		    }
+		    if (auto* game = Game::Instance(); game != nullptr && game->GetInterface() != nullptr)
+		    {
+			    const auto& strip = game->GetInterface()->GetIncomingMessages();
+			    result["shown"] = strip.IsActive();
+			    if (const auto& look = strip.GetLook(); look.has_value())
+			    {
+				    constexpr std::array<std::string_view, 5> k_Looks {"speech", "speech_arrow", "envelope", "envelope_arrow",
+				                                                       "weather"};
+				    result["look"] = k_Looks.at(static_cast<size_t>(look->look));
+				    result["look_picture"] = look->picture;
+			    }
+			    result["line"] = gui::ToUtf8(strip.GetText());
+		    }
+		    return QueryResult::Value(std::move(result));
+	    });
+	provider->Add(Query("chat",
+	                    "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the "
+	                    "players that get them, text or taunt, shown in the incoming messages), the speech bubbles over "
+	                    "the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, "
+	                    "the typed line, the list of players and who gets a line)"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = {{"names", Json::object()}, {"received", Json::array()}, {"bubbles", Json::array()}};
+		              if (!Locator::chatSystem::has_value())
+		              {
+			              return QueryResult::Value(std::move(result));
+		              }
+		              auto& chat = Locator::chatSystem::value();
+		              for (const auto& [slot, name] : chat.GetNames())
+		              {
+			              result["names"][std::to_string(static_cast<int>(slot))] = gui::ToUtf8(name);
+		              }
+		              for (const auto& line : chat.GetReceived())
+		              {
+			              Json recipients = Json::array();
+			              for (const auto player : line.recipients)
+			              {
+				              recipients.push_back(static_cast<int>(player));
+			              }
+			              result["received"].push_back({{"turn", line.turn},
+			                                            {"sender", static_cast<int>(line.sender)},
+			                                            {"recipients", std::move(recipients)},
+			                                            {"text", gui::ToUtf8(line.text)},
+			                                            {"taunt", line.taunt.has_value() ? Json(*line.taunt) : Json(nullptr)},
+			                                            {"shown", line.shown}});
+		              }
+		              for (const auto& [creature, bubble] : chat.GetBubbles())
+		              {
+			              Json lines = Json::array();
+			              for (const auto& line : bubble.lines)
+			              {
+				              lines.push_back({{"text", gui::ToUtf8(line.text)}, {"sender", static_cast<int>(line.sender)}});
+			              }
+			              result["bubbles"].push_back({{"creature", entt::to_integral(creature)},
+			                                           {"lines", std::move(lines)},
+			                                           {"display_time", bubble.displayTime},
+			                                           {"scroll", bubble.scroll}});
+		              }
+		              if (auto* game = Game::Instance(); game != nullptr && game->GetInterface() != nullptr)
+		              {
+			              const auto& controls = game->GetInterface()->GetChatControls();
+			              Json players = Json::array();
+			              for (const auto& person : controls.GetPeople().players)
+			              {
+				              players.push_back({{"slot", static_cast<int>(person.slot)},
+				                                 {"name", gui::ToUtf8(person.name)},
+				                                 {"selected", person.selected}});
+			              }
+			              Json recipients = Json::array();
+			              for (const auto player : controls.Recipients())
+			              {
+				              recipients.push_back(static_cast<int>(player));
+			              }
+			              result["controls"] = {{"shown", controls.IsActive()},
+			                                    {"open", controls.IsOpen()},
+			                                    {"quick_chat", controls.IsQuickChatOpen()},
+			                                    {"line", gui::ToUtf8(controls.GetLine())},
+			                                    {"expanded", controls.GetPeople().expanded},
+			                                    {"messages_on", controls.GetPeople().messagesOn},
+			                                    {"players", std::move(players)},
+			                                    {"recipients", std::move(recipients)}};
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
 	                             "creature and its effects, whether films are on, and the 16-bit surface of the films"),
 	              [](const QueryContext& /*c*/) {
@@ -3402,6 +3564,20 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    {"opponent_of_id", Id(fights.OpponentOf(*creature))},
 		});
 	});
+	auto cheat = Query("fight_cheat",
+	                   "Sends the fight cheat of the player of this computer as a command: at the turn, the player's "
+	                   "creature fights the nearest creature, or stops the duel that it is in. A game server takes the "
+	                   "command only with its test commands on",
+	                   {});
+	cheat.writes = true;
+	provider->Add(std::move(cheat), [](const QueryContext& /*context*/) {
+		if (Registry() == nullptr || !Locator::playerCommandSystem::has_value())
+		{
+			return QueryResult::Error("there are no fights without a land");
+		}
+		Locator::playerCommandSystem::value().Submit(player_commands::CreatureFightCheat {});
+		return QueryResult::Value({{"sent", true}});
+	});
 	auto move = Query("move",
 	                  "Sends a creature walking or running to a point by its own legs (turning and stepping off as it "
 	                  "does), or turning on the spot to face it",
@@ -3783,6 +3959,31 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		const bool loaded = Locator::saveGameSystem::value().Load(static_cast<uint32_t>(*slot));
 		return QueryResult::Value({{"loaded", loaded}, {"slot", static_cast<uint32_t>(*slot)}});
 	});
+	auto loadAndSave =
+	    Query("load_and_save",
+	          "Loads a slot and then saves the game into a second slot in the same call, with no frame and no turn between. A "
+	          "save of a loaded world must have the same bytes as the save that the game loaded (tools/sim/save_diff.py "
+	          "compares the two files)",
+	          {slotParameter,
+	           {.name = "into", .type = "integer", .description = "The slot of the second save, 0 to 20", .required = true},
+	           {.name = "name", .type = "string", .description = "The name of the second save", .required = false}});
+	loadAndSave.writes = true;
+	provider->Add(std::move(loadAndSave), [](const QueryContext& context) {
+		const auto slot = NumberMember(context.params, "slot");
+		const auto into = NumberMember(context.params, "into");
+		if (!Locator::saveGameSystem::has_value() || !slot.has_value() || *slot < 0.0 || !into.has_value() || *into < 0.0)
+		{
+			return QueryResult::Error("saves.load_and_save needs a game, a slot and an into slot from 0 to 20");
+		}
+		auto& saves = Locator::saveGameSystem::value();
+		const bool loaded = saves.Load(static_cast<uint32_t>(*slot));
+		const auto name = gui::ToUtf16(StringMember(context.params, "name").value_or(""));
+		const bool saved = loaded && saves.Save(static_cast<uint32_t>(*into), name);
+		return QueryResult::Value({{"loaded", loaded},
+		                           {"saved", saved},
+		                           {"slot", static_cast<uint32_t>(*slot)},
+		                           {"into", static_cast<uint32_t>(*into)}});
+	});
 	provider->Add(Query("vanilla_check",
 	                    "After a load of a slot of the game itself: each creature of the game's file, and whether the record "
 	                    "that a save writes for it now has the same bytes as the file's record",
@@ -4040,7 +4241,8 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	        }));
 	provider->Add(Query("hand_demo",
 	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "
-	                    "it is at, whether it holds at a mark, and the camera and hints it has"),
+	                    "the turns are at, whether it holds at a mark, the record the frames are at, and the camera and "
+	                    "hints it has"),
 	              Serve<Locator::handDemoSystem>(
 	                  "the hand demonstrations",
 	                  [](const ecs::systems::HandDemoSystemInterface& demos, const QueryContext& /*c*/) -> Json {
@@ -4057,6 +4259,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		                               {"pause_on_trigger", status->pauseOnTrigger},
 		                               {"trigger_reached", status->triggerReached},
 		                               {"holding", status->holding},
+		                               {"replaying", status->replaying},
+		                               {"replay_record", status->replayRecord},
+		                               {"replay_holding", status->replayHolding},
 		                               {"hints", demos.GetHints()}};
 		                  if (const auto camera = demos.GetCamera(); camera.has_value())
 		                  {
@@ -4177,6 +4382,35 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		               ? Locator::creatureMindSystem::value().FindClearAreaFor(creature, point, width, livingBlocks)
 		               : std::nullopt;
 	    },
+	    .animationLog = [](entt::entity creature) -> const creature_animation_log::Log* {
+		    return Locator::creatureAnimationLog::has_value() ? Locator::creatureAnimationLog::value().Find(creature) : nullptr;
+	    },
+	    .clipLine = [](entt::entity creature, size_t clip) -> std::optional<ClipLine> {
+		    const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+		    if (body == nullptr || !Locator::resources::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& rigs = Locator::resources::value().GetCreatureRigs();
+		    const auto rigId = creature::GetRigId(body->species);
+		    if (!rigs.Contains(rigId))
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& lines = rigs.Handle(rigId)->specLines;
+		    if (clip >= lines.size())
+		    {
+			    return std::nullopt;
+		    }
+		    return ClipLine {.name = lines[clip].name, .type = lines[clip].type, .set = lines[clip].set};
+	    },
+	    .clearAnimationLogs =
+	        [] {
+		        if (Locator::creatureAnimationLog::has_value())
+		        {
+			        Locator::creatureAnimationLog::value().Clear();
+		        }
+	        },
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),
@@ -4251,11 +4485,21 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    const auto& music = *game->GetGameMusic();
 			    state.musicPlaying = audio::GetMusicTypeName(music.GetPlaying());
 			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
-			    state.scriptMusic = audio::GetMusicTypeName(music.GetScriptType());
 			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
 			    for (const auto& attached : music.GetAttachedMusic())
 			    {
 				    state.attachedMusic.emplace_back(audio::GetMusicTypeName(attached.type), attached.thing);
+			    }
+		    }
+		    if (Locator::scriptMusicSystem::has_value())
+		    {
+			    const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+			    state.scriptMusic = audio::GetMusicTypeName(script.GetType());
+			    state.scriptMusicLine = script.GetLyrics().line;
+			    state.scriptMusicWord = script.GetLyrics().word;
+			    if (const auto time = script.GetChannelTime(); time.has_value())
+			    {
+				    state.scriptMusicMs = std::chrono::duration_cast<std::chrono::milliseconds>(*time).count();
 			    }
 		    }
 		    if (const auto* player = audio.GetMusic(); player != nullptr)

@@ -56,6 +56,29 @@ struct ImpressionInputs
 /// How much a miracle impresses one watcher
 [[nodiscard]] float ImpressiveValue(const ImpressionInputs& inputs);
 
+/// What goes into how much a thing in the world impresses one watcher, as a scaffold does
+struct ObjectImpressionInputs
+{
+	/// The land's balance of how impressive things in the world are
+	float landBalance {1.0f};
+	/// The thing's own impressiveness, from its table
+	float impressiveValue {0.0f};
+	/// The reaction's multiplier
+	float reactionMultiplier {1.0f};
+	float distance {0.0f};
+	float maxDistance {1.0f};
+	/// The watcher's town's weariness of this kind of reaction, 1 when it did not see it before
+	float boredom {1.0f};
+	/// The multiplier of an artefact that the thing is, 1 for any other thing
+	float artefact {1.0f};
+};
+
+/// The power of a thing in the world, which multiplies how much it impresses
+inline constexpr float k_ObjectPower = 1.0f;
+
+/// How much a thing in the world impresses one watcher. Its order of the steps is not the order of a miracle.
+[[nodiscard]] float ObjectImpressiveValue(const ObjectImpressionInputs& inputs);
+
 /// What goes into how much a creature impresses a villager that takes up its reaction
 struct CreatureImpressionInputs
 {

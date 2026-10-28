@@ -35,22 +35,44 @@ float BlendNumber(float older, float newer, float weight)
 	return (olderWeight * older) + newerPart;
 }
 
+namespace
+{
+/// One drawn bone between the older and the newer bone, with the weight of the older bone given
+inline glm::mat4 BlendBone(const glm::mat4& older, const glm::mat4& newer, float weight, float olderWeight)
+{
+	glm::mat4 out;
+	for (glm::length_t column = 0; column < 4; ++column)
+	{
+		for (glm::length_t row = 0; row < 3; ++row)
+		{
+			const float newerPart = weight * newer[column][row];
+			out[column][row] = (olderWeight * older[column][row]) + newerPart;
+		}
+		out[column][3] = column == 3 ? 1.0f : 0.0f;
+	}
+	return out;
+}
+} // namespace
+
 void Blend(std::span<const glm::mat4> older, std::span<const glm::mat4> newer, float weight, std::span<glm::mat4> drawn)
 {
 	assert(older.size() == drawn.size() && newer.size() == drawn.size());
 	const float olderWeight = 1.0f - weight;
 	for (size_t bone = 0; bone < drawn.size(); ++bone)
 	{
-		auto& out = drawn[bone];
-		for (glm::length_t column = 0; column < 4; ++column)
-		{
-			for (glm::length_t row = 0; row < 3; ++row)
-			{
-				const float newerPart = weight * newer[bone][column][row];
-				out[column][row] = (olderWeight * older[bone][column][row]) + newerPart;
-			}
-			out[column][3] = column == 3 ? 1.0f : 0.0f;
-		}
+		drawn[bone] = BlendBone(older[bone], newer[bone], weight, olderWeight);
+	}
+}
+
+void BlendToMesh(std::span<const glm::mat4> older, std::span<const glm::mat4> newer, float weight, const glm::mat4& placement,
+                 std::span<glm::mat4> bones)
+{
+	assert(older.size() == bones.size() && newer.size() == bones.size());
+	const auto inverse = glm::inverse(placement);
+	const float olderWeight = 1.0f - weight;
+	for (size_t bone = 0; bone < bones.size(); ++bone)
+	{
+		bones[bone] = inverse * BlendBone(older[bone], newer[bone], weight, olderWeight);
 	}
 }
 

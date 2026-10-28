@@ -122,6 +122,12 @@ public:
 	/// is nothing that breaks buildings
 	[[nodiscard]] virtual std::optional<entt::entity> PieceAtRest(systems::DynamicsSystemInterface& dynamics,
 	                                                              PhysicsEntry* entry, entt::entity piece, bool insert) = 0;
+	/// A hand lets go of a scaffold, by force or not
+	virtual void ScaffoldLetGo(entt::entity /*scaffold*/, bool /*forced*/) {}
+	/// The hand did not put a scaffold down on the land
+	virtual void ScaffoldNotPutDown(entt::entity /*scaffold*/) {}
+	/// A scaffold comes to rest, after a hand let it go when `fromHand`; it goes back into the map when `insert`
+	virtual void ScaffoldAtRest(entt::entity /*scaffold*/, bool /*fromHand*/, bool /*insert*/) {}
 
 	/// The resources a thing would give a store, nothing without stores
 	[[nodiscard]] virtual systems::ResourceStoreSystemInterface::ObjectResource ResourceOf(entt::entity object) const = 0;

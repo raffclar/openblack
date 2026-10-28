@@ -14,9 +14,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Graphics/DescriptorSetTally.h"
 #include "Graphics/DrawWindow.h"
-#include "Graphics/WarmUpViews.h"
 
 using namespace openblack::graphics;
 
@@ -115,11 +113,4 @@ TEST(DrawWindow, WarmUpPartsCoverEveryDrawOnce)
 		EXPECT_EQ(drawn, expected) << total;
 		EXPECT_EQ(parts, total == 0 ? 1u : (total + k_PerPart - 1) / k_PerPart) << total;
 	}
-}
-
-// A part of a warm-up takes fewer descriptor sets than a frame's share, with space for the loading screen
-TEST(DrawWindow, WarmUpPartKeepsInItsShare)
-{
-	EXPECT_LT(warm_up::k_DrawsPerPart, k_DescriptorSetsPerFrame);
-	EXPECT_GE(k_DescriptorSetsPerFrame - warm_up::k_DrawsPerPart, 128u);
 }

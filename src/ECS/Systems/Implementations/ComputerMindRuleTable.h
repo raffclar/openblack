@@ -68,6 +68,8 @@ void RegisterWorshipRules(RuleTable& table);
 void RegisterMiraclesRules(RuleTable& table);
 void RegisterCreatureCareRules(RuleTable& table);
 void RegisterCreaturePlayRules(RuleTable& table);
+/// The lessons of the creature, a part of the play with the creature, in the file ComputerMindCreatureTeach.cpp
+void RegisterCreatureTeachRules(RuleTable& table);
 void RegisterConquestRules(RuleTable& table);
 void RegisterWarRules(RuleTable& table);
 void RegisterDefenceRules(RuleTable& table);

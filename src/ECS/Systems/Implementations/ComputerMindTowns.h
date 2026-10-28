@@ -22,7 +22,8 @@
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
 #endif
 
-/// The town rules and the actions for the food and the wood of towns that the other parts of the mind of a computer god use
+/// The town rules and the actions for the food and the wood of towns that the other parts of the mind of a computer
+/// god use
 namespace openblack::ecs::systems::computer_world
 {
 

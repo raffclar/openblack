@@ -78,8 +78,14 @@ public:
 	[[nodiscard]] bool KeepAlignmentAt(uint32_t /*turn*/) override { return false; }
 	void TakeUpKept(entt::entity /*playerEntity*/) override {}
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override { return computers.contains(name); }
+	[[nodiscard]] bool IsHumanPlayer(PlayerNames name) const override
+	{
+		return !computers.contains(name) && !nobody.contains(name);
+	}
 
 	std::set<PlayerNames> computers;
+	/// The players that nobody plays
+	std::set<PlayerNames> nobody;
 };
 
 class HandHeldSeeds: public ::testing::Test
@@ -198,6 +204,10 @@ TEST_F(HandHeldSeeds, TheIconsServeNoHandOfAComputerGod)
 	// A player that the computer does not play gets the miracle again
 	players.computers.clear();
 	EXPECT_TRUE(icons.IsHandReady(PlayerNames::PLAYER_THREE));
+
+	// The hand of a player that nobody plays gets no miracle
+	players.nobody.insert(PlayerNames::PLAYER_THREE);
+	EXPECT_FALSE(icons.IsHandReady(PlayerNames::PLAYER_THREE));
 }
 
 // A cast or a let go of a player whose hand holds nothing changes nothing, also when another hand holds a seed

@@ -68,7 +68,7 @@ public:
 		deleted.push_back(seed);
 		Locator::entitiesRegistry::value().Destroy(seed);
 	}
-	void UpdateHand(const HandFrame&, float) override {}
+	void UpdateHand(const HandFrame&, const input_steps::Steps&) override {}
 	bool TapFireBall(entt::entity) override { return false; }
 	bool TapGlobe(entt::entity, PlayerNames) override { return false; }
 	bool PressFireBall(uint32_t, uint32_t) override { return false; }

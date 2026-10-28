@@ -26,6 +26,7 @@ class Camera;
 class EventManager;
 class LandIslandInterface;
 struct LandData;
+class MainThreadQueue;
 class OceanInterface;
 class Profiler;
 class GameRandomInterface;
@@ -123,6 +124,7 @@ class HeartbeatSystemInterface;
 class GameEndSystemInterface;
 class FieldSystemInterface;
 class FishFarmSystemInterface;
+class WorkshopSystemInterface;
 class AnimalSystemInterface;
 class SnowSystemInterface;
 class SnowfallSystemInterface;
@@ -143,6 +145,7 @@ class CreaturePenSystemInterface;
 class LeashSystemInterface;
 class CreatureFightSystemInterface;
 class FightTranscriptSystemInterface;
+class CreatureAnimationLogSystemInterface;
 class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
 class TattooEditorSystemInterface;
@@ -183,6 +186,7 @@ class TutorialSkipSystemInterface;
 class PlayerProfileSystemInterface;
 class ProfileFolderSystemInterface;
 class MusicMoodSystemInterface;
+class ScriptMusicSystemInterface;
 class TempleExteriorSystemInterface;
 class TempleDestructionSystemInterface;
 class ComputerPlayerSystemInterface;
@@ -222,6 +226,8 @@ class FireflySystemInterface;
 class GestureSystemInterface;
 class MiracleFxSystemInterface;
 class PauseTextSystemInterface;
+class IncomingMessageSystemInterface;
+class ChatSystemInterface;
 class LandSystemInterface;
 class FireSystemInterface;
 class ExplosionSystemInterface;
@@ -251,6 +257,9 @@ bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
+/// Starts a level on the land that is open: the land keeps its blocks, and its cells go back to the altitudes of its
+/// build. Only the blocks that change are made again.
+void InitializeLevelOnOpenLand();
 /// The settings of this computer, read from the file when there is one (see computer_settings)
 void InitializeComputerSettings(std::optional<std::filesystem::path> file);
 void ShutDownServices();
@@ -263,6 +272,8 @@ struct Locator
 	using config = entt::locator<EngineConfig>;
 	using infoConstants = entt::locator<const InfoConstants>;
 	using profiler = entt::locator<Profiler>;
+	/// The work that a game turn gives to the main thread: the graphics, the renderer and the audio
+	using mainThreadQueue = entt::locator<MainThreadQueue>;
 	using events = entt::locator<EventManager>;
 	using windowing = entt::locator<windowing::WindowingInterface>;
 	using debugGui = entt::locator<debug::gui::DebugGuiInterface>;
@@ -303,6 +314,7 @@ struct Locator
 	using playerProfileSystem = entt::locator<ecs::systems::PlayerProfileSystemInterface>;
 	using profileFolderSystem = entt::locator<ecs::systems::ProfileFolderSystemInterface>;
 	using musicMoodSystem = entt::locator<ecs::systems::MusicMoodSystemInterface>;
+	using scriptMusicSystem = entt::locator<ecs::systems::ScriptMusicSystemInterface>;
 	using templeExteriorSystem = entt::locator<ecs::systems::TempleExteriorSystemInterface>;
 	using templeDestructionSystem = entt::locator<ecs::systems::TempleDestructionSystemInterface>;
 	using computerPlayerSystem = entt::locator<ecs::systems::ComputerPlayerSystemInterface>;
@@ -323,6 +335,7 @@ struct Locator
 	using gameEndSystem = entt::locator<ecs::systems::GameEndSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
 	using fishFarmSystem = entt::locator<ecs::systems::FishFarmSystemInterface>;
+	using workshopSystem = entt::locator<ecs::systems::WorkshopSystemInterface>;
 	using animalSystem = entt::locator<ecs::systems::AnimalSystemInterface>;
 	using snowSystem = entt::locator<ecs::systems::SnowSystemInterface>;
 	using snowfallSystem = entt::locator<ecs::systems::SnowfallSystemInterface>;
@@ -344,6 +357,8 @@ struct Locator
 	using creatureFightSystem = entt::locator<ecs::systems::CreatureFightSystemInterface>;
 	/// Only in builds with the inspector, and only once the inspector started
 	using fightTranscript = entt::locator<ecs::systems::FightTranscriptSystemInterface>;
+	/// Only in builds with the inspector, and only once the inspector started
+	using creatureAnimationLog = entt::locator<ecs::systems::CreatureAnimationLogSystemInterface>;
 	using creatureModeSystem = entt::locator<ecs::systems::CreatureModeSystemInterface>;
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;
 	using tattooEditorSystem = entt::locator<ecs::systems::TattooEditorSystemInterface>;
@@ -407,6 +422,8 @@ struct Locator
 	using gestureSystem = entt::locator<ecs::systems::GestureSystemInterface>;
 	using miracleFxSystem = entt::locator<ecs::systems::MiracleFxSystemInterface>;
 	using pauseTextSystem = entt::locator<ecs::systems::PauseTextSystemInterface>;
+	using incomingMessageSystem = entt::locator<ecs::systems::IncomingMessageSystemInterface>;
+	using chatSystem = entt::locator<ecs::systems::ChatSystemInterface>;
 	using landSystem = entt::locator<ecs::systems::LandSystemInterface>;
 	using fireSystem = entt::locator<ecs::systems::FireSystemInterface>;
 	using explosionSystem = entt::locator<ecs::systems::ExplosionSystemInterface>;

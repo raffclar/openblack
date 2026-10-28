@@ -138,6 +138,18 @@ enum class Land : uint8_t
 	GodsRingMap,
 };
 
+/// A date and time on the player's computer, by its own time zone
+struct RealDate
+{
+	int year {2001};
+	/// 1 for January to 12 for December
+	int month {1};
+	/// 1 to 31
+	int day {1};
+	int hour {12};
+	int minute {0};
+};
+
 struct Environment
 {
 	Land land {Land::Testbed};
@@ -154,6 +166,9 @@ struct Environment
 	bool fainting {true};
 	/// Smiley faces for footprints as on the first of April, or by the date when not given
 	std::optional<bool> aprilFools;
+	/// The date and time that the machine's clock gives while the scenario runs, as if the computer's clock were set to
+	/// it; the clock continues from it. When not given, the clock is as it was before the scenario.
+	std::optional<RealDate> realDate;
 	/// The grid of every miracle's dispenser the testbed lays out in front of the camera stays, or is cleared away
 	bool dispenserGrid {true};
 	/// The footpaths are drawn as lines, as the debug menu's Footpaths box draws them
@@ -185,6 +200,9 @@ struct Environment
 	/// The game is a skirmish while the scenario runs: a god with no temple is out, and the last god in wins. The runner
 	/// puts the testbed back when the scenario stops.
 	bool skirmish {false};
+	/// The world plays as a network game while the scenario runs, so that a player with hands of its own is a person at
+	/// another computer. The runner puts the testbed back when the scenario stops.
+	bool networkGame {false};
 };
 
 /// Where the camera looks as the scenario starts
@@ -268,6 +286,9 @@ struct CreatureSetup
 	bool hold {false};
 	/// The mind leaves the body alone, to be posed by the commands
 	bool pauseMind {false};
+	/// A paused mind starts to think this many seconds after the scenario starts, so that the creature stays where it is
+	/// until then
+	std::optional<float> thinksAfterSeconds;
 	std::vector<creature_tattoo::Slot> tattoos;
 	/// Wounds and burns, and drops of blood, on its skin
 	std::vector<creature_marks::Mark> wounds;
@@ -281,11 +302,11 @@ struct CreatureSetup
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot
 /// or pile of food or wood, a building or field of the scenario's town, which is made with the first of them, or an
-/// animal, or a fish farm (which joins the nearest town)
+/// animal, a fish farm (which joins the nearest town), or a scaffold of no workshop and no town
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo>
+	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo, ScaffoldInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -550,6 +571,15 @@ struct ScriptArgument
 /// The value of a command that plays custom music that stops the music
 constexpr size_t k_StopCustomMusic = std::numeric_limits<size_t>::max();
 
+/// The values of an AddIncomingMessage command that give a chat line and an e-mail
+constexpr size_t k_IncomingChat = 100;
+constexpr size_t k_IncomingMail = 101;
+/// The values of a Chat command: a god says a line, or the chat of this computer opens with a line in it
+constexpr size_t k_ChatSays = 0;
+constexpr size_t k_ChatTypes = 1;
+/// The names that a Chat command gives the first gods
+constexpr std::array<std::u16string_view, 4> k_ChatNames {u"Alice", u"Bob", u"Carol", u"Dave"};
+
 struct Command
 {
 	enum class Kind : uint8_t
@@ -609,6 +639,8 @@ struct Command
 		/// hand, taking it off; keeping it within a radius of where it stands
 		PutOnLeash,
 		TieLeash,
+		/// The leash tied to the flag of a town's desire (by value), the first such flag found
+		TieLeashToDesireFlag,
 		UntieLeash,
 		TakeOffLeash,
 		ConfineToHome,
@@ -966,6 +998,9 @@ struct Command
 		/// Each worship site of the player that is not built yet is built at once, with its altar, as when its builders
 		/// put on the last of it. Needs no creature.
 		BuildWorshipSites,
+		/// The player presses a key (value, the key's scancode) on the keyboard and lets it go. The key goes through the
+		/// queue of the window's events, as the real keyboard's keys do. Needs no creature.
+		PressPlainKey,
 		/// Another god's hand, as a network game reports it: the player (player) gets hands of its own, and its hand
 		/// takes the scenario's object (object), or holds a miracle seed (heldSeed) in place of the object. Then the
 		/// player reports its hand at the point (point), so high above the land (radius), and its camera 30 m above the
@@ -982,9 +1017,30 @@ struct Command
 		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.
 		/// The creature comes at the creature home of the god's temple. Needs no creature.
 		BringCreature,
+		/// The reports of the player's hand get a fixed latency (value, in milliseconds), as a network game with that
+		/// latency gives them. A throw then moves its start along the flight by the latency. Needs no creature.
+		SetReportLatency,
+		/// The tattoo editor works as in a network game (value 1) or as in a game alone (value 0). Needs no creature.
+		TattooEditorAsNetworkGame,
+		/// The ping line in the top left corner shows a made-up round trip, as --show-ping does in a network game
+		/// (value 1), or goes (value 0). The round trip is 40 ms and grows by 8 ms each second to 64 ms, then starts
+		/// again. Needs no creature.
+		ShowDemoPing,
+		/// A message comes into the list of incoming messages at the bottom left of the screen. A value below
+		/// k_IncomingChat is the message of the real weather with that weather picture, and the action is its place, as
+		/// the real weather gives them. k_IncomingChat gives a chat line and k_IncomingMail an e-mail, with the action as
+		/// their text. Needs no creature.
+		AddIncomingMessage,
+		/// The chat of a network game, with the names that the testbed gives the gods (k_ChatNames). With value
+		/// k_ChatSays, the god (player) says the action to all of the players. With value k_ChatTypes, the chat of this
+		/// computer opens and the action is in its line. Needs no creature.
+		Chat,
 		/// The god of the player (player) gets the weight (amount) for each node of its mind of the name (action), as a
 		/// script's SET_COMPUTER_PLAYER_PERSONALITY gives it. Needs no creature.
 		ComputerPersonality,
+		/// The god of the player (player) counts sends (amount) of its creature for a kind of miracle (value: 0 to
+		/// impress, 1 kind, 2 angry). The god then wants to teach the creature that kind. Needs no creature.
+		ComputerUntaughtSends,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1171,6 +1227,8 @@ struct ComputerActionThing
 		Object,
 		/// The scenario's creature at the index
 		Creature,
+		/// The newest workshop of the town that the land script made with the number
+		Workshop,
 		/// The first creature of the player that owner gives
 		PlayerCreature,
 	};
@@ -1235,6 +1293,9 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town believes this much in the player from the start, so that it stays the
 	/// player's rather than going back to the neutral player at its first turn
 	std::optional<float> townBeliefInPlayer;
+	/// A testbed set-up step: the scenario's town also believes this much in the second player from the start. Put the
+	/// second player in the environment's players.
+	std::optional<float> townBeliefInRival;
 	/// A testbed set-up step: the debug tool gives the scenario's town these miracles, as a land file line gives them. A
 	/// town without a worship site then gets its site, on the first land too.
 	std::vector<MagicType> townMiracles;
@@ -1263,6 +1324,9 @@ struct Scenario
 	std::vector<ComputerActionSetup> computerActions;
 	/// The debug window opened as the scenario starts, by its name; none when empty
 	std::string_view debugWindow;
+	/// After the land script, the start of a network game fills each slot with no player, as for a game where player
+	/// one is the only human
+	bool fillEmptySlots {false};
 	/// The first player's statistics as the scenario starts, for the Game Statistics box and the temple's scrolls
 	std::function<void(ecs::components::PlayerStatistics&)> playerStatistics;
 	/// What the first player's creature has counted of its life
@@ -1380,6 +1444,10 @@ void AddGodsRingMapScenarios(std::vector<Scenario>& all);
 /// A point given from the middle of the map, on the land
 [[nodiscard]] glm::vec2 MapPoint(glm::vec2 middle, glm::vec2 offset);
 
+/// The number of the help text that has this name, as the scripts give a challenge's title. Empty when no help text has
+/// this name.
+[[nodiscard]] std::optional<uint32_t> HelpTextNumber(std::span<const std::string> names, std::string_view name);
+
 /// About how tall a creature of a size stands
 [[nodiscard]] float CreatureHeight(float size);
 
@@ -1430,5 +1498,29 @@ struct Timeline
 [[nodiscard]] std::vector<size_t> Advance(Timeline& timeline, std::span<const Command> commands,
                                           std::optional<size_t> repeatFrom, float seconds,
                                           const std::function<bool(const Command& command)>& isFree);
+
+/// What a testbed scenario does before one turn of a network game. In a network game the scenario steps by the turns, not
+/// by the frames, so that the server and every client give its commands before the same turn.
+enum class TurnStep : uint8_t
+{
+	/// No scenario was laid out
+	None,
+	/// The scenario was laid out before this turn, and gives no commands before it
+	Wait,
+	/// The scenario steps on by the time of one turn and gives the commands that are due
+	Update,
+};
+
+/// The step of a scenario before a turn. startedAt: the turn count at which the scenario was laid out. turn: the turn
+/// count before the turn. A game lays out a scenario in the frame of its first turn and gives the first commands in the
+/// frame after it. Thus the first turn after the layout gives no commands.
+[[nodiscard]] constexpr TurnStep TurnStepOf(std::optional<uint32_t> startedAt, uint32_t turn) noexcept
+{
+	if (!startedAt.has_value())
+	{
+		return TurnStep::None;
+	}
+	return *startedAt == turn ? TurnStep::Wait : TurnStep::Update;
+}
 
 } // namespace openblack::testbed_scenarios

@@ -74,6 +74,19 @@ TEST(GameSocket, EachFrameGoesToJsonAndBack)
 	EXPECT_EQ(state.state, PlayerState::State::Left);
 }
 
+TEST(GameSocket, TheStartNamesTheGods)
+{
+	Start start {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
+	start.gods = {{.slot = 0, .name = "Ann"}, {.slot = 3, .name = "Bob"}};
+	EXPECT_EQ(RoundTrip(start).gods, start.gods);
+	EXPECT_EQ(ToJson(start), R"({"gods":[{"name":"Ann","slot":0},{"name":"Bob","slot":3}],"land":"","seed":1,)"
+	                         R"("testbed":true,"turn":0,"type":"game.start"})");
+	// A list that is not a list, or a god with no name or a slot past 255, does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":3})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":1}]})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"gods":[{"slot":256,"name":"a"}]})").has_value());
+}
+
 TEST(GameSocket, TheReplyToAJoinGivesTheServersWorld)
 {
 	const auto joined = RoundTrip(Joined {.role = Role::God,
@@ -122,6 +135,20 @@ TEST(GameSocket, TheToolModesOfTheSoakGoInTheStartAndAreLeftOutWhenNotSet)
 	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"ai_seed":"x"})").has_value());
 	EXPECT_FALSE(
 	    Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"all_computer_gods":3})").has_value());
+}
+
+TEST(GameSocket, TheScenarioOfTheToolsGoesInTheStartAndIsLeftOutWhenNotSet)
+{
+	Start tools {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
+	tools.scenario = "mind.computer_god_rivals";
+	const auto read = RoundTrip(tools);
+	ASSERT_TRUE(read.scenario.has_value());
+	EXPECT_EQ(*read.scenario, "mind.computer_god_rivals");
+	EXPECT_FALSE(
+	    RoundTrip(Start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"}).scenario.has_value());
+	// A scenario that is not a word, or is empty, does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"scenario":3})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"scenario":""})").has_value());
 }
 
 TEST(GameSocket, TheJoinOfTheFrontEndReads)

@@ -149,3 +149,40 @@ TEST(LandLightTable, TheOvercastLimitRoundsToAFloat)
 	const auto palette = FakePalette(255, 255, 255);
 	EXPECT_EQ(LandLightTable::GetLandColour(palette, 2.0f, 1.0f, std::bit_cast<float>(0x3CAAAAC0u)), 0xFDFDFDu);
 }
+
+TEST(LandLightTable, TheRampDivisorFollowsTheLightBoost)
+{
+	EXPECT_EQ(LandLightTable::RampDivisor(0.0f), 200u);
+	EXPECT_EQ(LandLightTable::RampDivisor(0.5f), 135u);
+	EXPECT_EQ(LandLightTable::RampDivisor(1.0f), 70u);
+	// The fraction is cut off, not rounded
+	EXPECT_EQ(LandLightTable::RampDivisor(1.53f), 1u);
+	EXPECT_EQ(LandLightTable::RampDivisor(0.001f), 199u);
+	// A negative boost darkens
+	EXPECT_EQ(LandLightTable::RampDivisor(-1.0f), 330u);
+}
+
+TEST(LandLightTable, ARampIsBrighterForASmallerDivisorAndStopsAt255)
+{
+	// (100 * 255 - 0) / 200 = 127; (100 * 255) / 100 = 255; more than 255 is cut
+	EXPECT_EQ(LandLightTable::Ramp(0x000064u, 0x000064u, 0, 200) & 0xFFu, 127u);
+	EXPECT_EQ(LandLightTable::Ramp(0x000064u, 0x000064u, 0, 100) & 0xFFu, 255u);
+	EXPECT_EQ(LandLightTable::Ramp(0x000064u, 0x000064u, 0, 50) & 0xFFu, 255u);
+	// The alpha of the first colour is kept
+	EXPECT_EQ(LandLightTable::Ramp(0x80000064u, 0xFF000000u, 0, 100) >> 24, 0x80u);
+}
+
+TEST(LandLightTable, ABoostOfZeroBuildsTheSameTableAsTheDefaultDivisor)
+{
+	const auto palette = FakePalette(200, 220, 240);
+	LandLightTable defaulted;
+	LandLightTable boostless;
+	LandLightTable boosted;
+	defaulted.Build(palette, 2.0f, 1.0f, 0.0f);
+	boostless.Build(palette, 2.0f, 1.0f, 0.0f, 0, LandLightTable::RampDivisor(0.0f));
+	boosted.Build(palette, 2.0f, 1.0f, 0.0f, 0, LandLightTable::RampDivisor(0.5f));
+	EXPECT_EQ(defaulted.GetTexels(), boostless.GetTexels());
+	EXPECT_NE(defaulted.GetTexels(), boosted.GetTexels());
+	// The land's colour and the haze do not use the ramps
+	EXPECT_EQ(defaulted.GetLandColour(), boosted.GetLandColour());
+}

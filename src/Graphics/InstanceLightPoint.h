@@ -19,6 +19,10 @@
 namespace openblack::graphics::instance_light
 {
 
+/// The y of an instance's look below 0 (in place of a colour of its own): the instance takes no colour of the land. The
+/// parts on the deck of the explorers' boat take only the land's light of the boat.
+inline constexpr float k_NoLandColour = -1.0f;
+
 void SetLightOffset(glm::mat4& model, glm::vec2 offset) noexcept;
 [[nodiscard]] glm::vec2 LightOffset(const glm::mat4& model) noexcept;
 

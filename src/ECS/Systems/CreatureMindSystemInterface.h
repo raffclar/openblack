@@ -306,6 +306,17 @@ public:
 	                            bool /*knows*/)
 	{
 	}
+	/// A computer god teaches the creature an ordinary skill or a miracle (by its row in the game's tables). The creature
+	/// knows it at once, and its sightings of a miracle do not change. A thing that it did not know before shows the
+	/// player the creature's lesson. A creature with no learning yet learns nothing.
+	virtual void LearnAction(entt::entity /*creature*/, CreatureActionLearningType /*type*/, uint32_t /*action*/) {}
+	/// Whether the creature knows an ordinary skill or a miracle (by its row in the game's tables). A creature with no
+	/// learning yet knows nothing.
+	[[nodiscard]] virtual bool KnowsAction(entt::entity /*creature*/, CreatureActionLearningType /*type*/,
+	                                       uint32_t /*action*/) const
+	{
+		return false;
+	}
 	virtual bool TellCast(entt::entity /*creature*/, MagicType /*type*/, entt::entity /*target*/) { return false; }
 
 	/// A plan the creature is made to carry out, as an order given with the leash makes it: an action of the game's table

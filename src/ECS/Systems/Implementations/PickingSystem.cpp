@@ -44,6 +44,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Spell.h"
@@ -387,7 +388,7 @@ void PickingSystem::PickUnderCursor(const Frame& frame)
 		const auto& drawnObject = drawnObjects[turn.drawnIndex];
 		const auto entity = drawnObject.entity;
 		const auto& model = drawnObject.model;
-		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough>(entity) || heldSeed == entity)
+		if (!registry.Valid(entity) || registry.AnyOf<Hand, InHand, SeeThrough, ScaffoldGhost>(entity) || heldSeed == entity)
 		{
 			continue;
 		}
