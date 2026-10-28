@@ -75,6 +75,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureScriptPlay.h"
+#include "Debug/ComputerActions.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/TestbedHandSweep.h"
 #include "Debug/TestbedMultiplayer.h"
@@ -151,6 +152,7 @@
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
@@ -239,6 +241,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
@@ -1115,6 +1118,9 @@ void Runner::Start(const Scenario& scenario)
 	{
 		SetUpWorship(*scenario.worshipShare);
 	}
+	_startTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	_computerActionsDone.assign(scenario.computerActions.size(), false);
+	UpdateComputerActions();
 	if (!scenario.debugWindow.empty() && Locator::debugGui::has_value())
 	{
 		Locator::debugGui::value().OpenWindow(scenario.debugWindow);
@@ -1741,6 +1747,12 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    {
 				    return ecs::archetypes::FlowersArchetype::Create(position, type, yaw, object.scale);
 			    }
+			    else if constexpr (std::is_same_v<T, ScaffoldInfo>)
+			    {
+				    return Locator::workshopSystem::has_value() ? Locator::workshopSystem::value().CreateScaffold(
+				                                                      position, entt::null, entt::null, yaw, object.scale)
+				                                                : entt::null;
+			    }
 			    else
 			    {
 				    return ecs::archetypes::FeatureArchetype::Create(position, type, yaw, object.scale);
@@ -1832,6 +1844,95 @@ void Runner::SetUpWorship(float share)
 	{
 		Locator::villageTotemSystem::value().SetTownShare(town, share);
 	}
+}
+
+void Runner::UpdateComputerActions()
+{
+	if (_scenario == nullptr)
+	{
+		return;
+	}
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	for (size_t i = 0; i < _scenario->computerActions.size() && i < _computerActionsDone.size(); ++i)
+	{
+		const auto& action = _scenario->computerActions[i];
+		if (_computerActionsDone[i] || turn - _startTurn < action.afterTurns)
+		{
+			continue;
+		}
+		_computerActionsDone[i] = true;
+		const auto first = ComputerActionThingOf(action.first, action.player);
+		const auto second = ComputerActionThingOf(action.second, action.player);
+		if (!debug::computer_actions::Force(action.player, action.node, first, second))
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} has no node {}",
+			                   static_cast<int>(action.player), action.node);
+		}
+	}
+}
+
+entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	switch (thing.kind)
+	{
+	case ComputerActionThing::Kind::None:
+		break;
+	case ComputerActionThing::Kind::Town:
+	{
+		const auto& towns = registry.Context().towns;
+		const auto found = towns.find(thing.townId);
+		return found != towns.end() ? found->second : entt::null;
+	}
+	case ComputerActionThing::Kind::Icon:
+	{
+		if (!Locator::infoConstants::has_value())
+		{
+			break;
+		}
+		const auto& info = Locator::infoConstants::value();
+		entt::entity found = entt::null;
+		registry.Each<const ecs::components::WorshipIcon>(
+		    [&registry, &info, &found, &thing, player](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+			    const auto* site =
+			        registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+			    if (found != entt::null || site == nullptr || site->player != player || icon.seed == SpellSeedType::None)
+			    {
+				    return;
+			    }
+			    const auto plain =
+			        magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, icon.seed), magic::k_BasePowerUpLevel);
+			    if (plain == thing.type)
+			    {
+				    found = entity;
+			    }
+		    });
+		return found;
+	}
+	case ComputerActionThing::Kind::Object:
+		return thing.object < _objects.size() ? _objects[thing.object] : entt::null;
+	case ComputerActionThing::Kind::Creature:
+		return thing.object < _creatures.size() ? _creatures[thing.object] : entt::null;
+	case ComputerActionThing::Kind::Workshop:
+	{
+		const auto& towns = registry.Context().towns;
+		const auto found = towns.find(thing.townId);
+		const auto* town = found != towns.end() ? registry.TryGet<const ecs::components::Town>(found->second) : nullptr;
+		if (town == nullptr)
+		{
+			break;
+		}
+		const auto workshop = std::ranges::find_if(town->abodes, [&registry](entt::entity abode) {
+			return registry.Valid(abode) && registry.AllOf<ecs::components::Workshop>(abode);
+		});
+		return workshop != town->abodes.end() ? *workshop : entt::null;
+	}
+	case ComputerActionThing::Kind::PlayerCreature:
+		return Locator::playerSystem::has_value()
+		           ? Locator::playerSystem::value().GetPrimaryCreature(thing.owner).value_or(entt::null)
+		           : entt::null;
+	}
+	return entt::null;
 }
 
 void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
@@ -2368,6 +2469,17 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		                              .focus = ground});
 		return held;
 	}
+	case Kind::ComputerPersonality:
+		if (!Locator::computerPlayerSystem::has_value())
+		{
+			return "no computer players";
+		}
+		Locator::computerPlayerSystem::value().SetPersonality(command.player, command.action, command.amount);
+		return fmt::format("{} weighs {}", command.action, command.amount);
+	case Kind::ComputerUntaughtSends:
+		return debug::computer_actions::SetUntaughtSends(command.player, command.value, static_cast<uint32_t>(command.amount))
+		           ? fmt::format("{} sends for kind {}", command.amount, command.value)
+		           : "no computer mind";
 	case Kind::BringCreature:
 	{
 		if (!Locator::filesystem::has_value())
@@ -3132,7 +3244,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
 	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
 	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod ||
-	    command.kind == Kind::BringCreature)
+	    command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::ComputerUntaughtSends)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3947,6 +4060,8 @@ void Runner::Give(const Command& command)
 	case Kind::BringCreature:
 	case Kind::AddIncomingMessage:
 	case Kind::Chat:
+	case Kind::ComputerPersonality:
+	case Kind::ComputerUntaughtSends:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
@@ -4405,6 +4520,7 @@ void Runner::Update(float seconds)
 	UpdateVillagerWalks();
 	UpdateTurnsAsked();
 	UpdateThrows();
+	UpdateComputerActions();
 	WatchGesture();
 	FinishTakingFireBall();
 	ApplyStates();

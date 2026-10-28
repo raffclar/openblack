@@ -64,9 +64,11 @@ public:
 	void CountHelpEvent(uint32_t event) override;
 	void ForgetGesturePath() override;
 	void HeatHeld(entt::entity object) override;
+	void HeldTurn(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override;
+	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override;
 	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity held) const override;
 	void SayCantPickUp(entt::entity creature) override;
 	bool GiveTo(entt::entity creature, entt::entity held, bool leftHand) override;
@@ -132,6 +134,8 @@ public:
 	bool TakeIntoStore(entt::entity store, entt::entity object) override;
 	[[nodiscard]] bool TakesWhole(entt::entity target, entt::entity held) const override;
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
+	[[nodiscard]] bool JoinsScaffold(entt::entity target, entt::entity held) const override;
+	void JoinScaffold(entt::entity target, entt::entity held) override;
 	void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) override;
 	void UseUp(entt::entity object) override;
 	altar_offering::Answer OfferAtAltar(entt::entity altar, entt::entity held) override;

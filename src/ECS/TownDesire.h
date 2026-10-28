@@ -152,6 +152,11 @@ struct DesireFunctions
 /// midnight
 [[nodiscard]] float EveningRamp(float visualHour, float dayFull, float width, float offset);
 
+/// The food that the town wants: its people's food for dinner by the game's multiplier
+[[nodiscard]] float FoodWanted(const DesireContext& c);
+/// The food that the town has: what its villagers carry, and the storage pit's food or else the temporary pot's
+[[nodiscard]] uint32_t FoodHeld(const DesireInputs& in);
+
 /// A desire with the boosts, as the villagers see it and as the town feels it
 [[nodiscard]] float GetDesire(const components::TownDesire& desire, size_t d);
 [[nodiscard]] float GetRawDesire(const components::TownDesire& desire, size_t d);

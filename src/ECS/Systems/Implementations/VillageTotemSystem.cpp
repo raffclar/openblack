@@ -508,6 +508,38 @@ void VillageTotemSystem::LetGo()
 	_world->SendCommand(player_commands::HandUnlock {.object = totem});
 }
 
+void VillageTotemSystem::RaiseByGod(PlayerNames player, entt::entity totem, float share)
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(totem) || !registry.AllOf<VillageTotem>(totem))
+	{
+		return;
+	}
+	DoGrip(player, totem);
+	// The creature of the town's player feels the raise also when the share is none
+	if (const auto town = TownOf(totem); town != entt::null)
+	{
+		_world->EmpathiseWithPlayer(registry.Get<const Town>(town).owner, StandingAt(totem));
+		SetTownShare(town, share);
+	}
+	else
+	{
+		SetTotemShare(totem, share);
+	}
+	KeepShareShown(totem);
+}
+
+void VillageTotemSystem::KeepShareShown(entt::entity totem)
+{
+	auto& totemComponent = _world->Entities().Get<VillageTotem>(totem);
+	// The hand of this computer can hold the totem meanwhile: then the totem stays at the share of the hand
+	if (!totemComponent.gripped)
+	{
+		totemComponent.held = totemComponent.ease.target;
+	}
+	Place(totem);
+}
+
 void VillageTotemSystem::DoShare([[maybe_unused]] PlayerNames player, entt::entity totem, float share)
 {
 	auto& registry = _world->Entities();

@@ -146,12 +146,18 @@ std::optional<PlayerNames> villager_physics::DropperOf(entt::entity object)
 
 std::optional<PlayerNames> villager_physics::DropperOf(const Registry& registry, entt::entity object)
 {
-	// Find the hand that let it go last. Each god has its own hands.
+	// Find the hand that let it go last. Each god has its own hands. When the hands of more players let it go last, the
+	// first player in the order of the players is the dropper.
 	std::optional<PlayerNames> dropper;
 	registry.Each<const HandGrab>([&registry, &dropper, object](entt::entity hand, const HandGrab& grab) {
-		if (grab.lastDropped == object)
+		if (grab.lastDropped != object)
 		{
-			dropper = ecs::HandPlayer(registry, hand);
+			return;
+		}
+		const auto player = ecs::HandPlayer(registry, hand);
+		if (!dropper.has_value() || player < *dropper)
+		{
+			dropper = player;
 		}
 	});
 	return dropper;

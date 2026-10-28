@@ -133,6 +133,10 @@ private:
 	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
 	/// The scenario's town's worship site is put up built and its totem raised to the share
 	static void SetUpWorship(float share);
+	/// The testbed tool forces each action of the computer gods that the scenario gives, at its turn
+	void UpdateComputerActions();
+	/// The thing that a forced action of a computer god gets, or none when the scenario has no such thing
+	[[nodiscard]] entt::entity ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const;
 	/// The first player's statistics and their creature's tallies, as the scenario gives them
 	static void SetUpStatistics(const Scenario& scenario);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
@@ -269,6 +273,9 @@ private:
 	std::vector<entt::entity> _creatures;
 	/// The creatures that the scenario's filled slots got, in the order of their ids
 	std::vector<entt::entity> _slotCreatures;
+	/// The game turn at which the scenario started, and which of its computer actions the tool forced
+	uint32_t _startTurn {0};
+	std::vector<bool> _computerActionsDone;
 	std::vector<entt::entity> _objects;
 	/// The globes that the scenario puts down on their own, in the order of its list
 	std::vector<entt::entity> _globes;

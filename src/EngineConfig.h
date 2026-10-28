@@ -166,6 +166,8 @@ struct EngineConfig
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// Tools: log the times of the computer gods each time this many turns go by, never when 0
+	uint32_t aiTimesEvery {0};
 	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
 	std::string frameStatsOut;
 	/// Draw the first frame of a land once behind the loading screen, so that the renderer makes its pipelines and

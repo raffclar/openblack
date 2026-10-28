@@ -66,6 +66,7 @@
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
@@ -208,6 +209,11 @@ void SiteClosed(entt::entity building, const BuildingSite& site)
 	if (Locator::livingActionSystem::has_value())
 	{
 		villager_build::LetGoOfSite(building, site.workers);
+	}
+	// The scaffolds on the site go
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().SiteClosed(building);
 	}
 	for (const auto pile : site.piles)
 	{
@@ -654,6 +660,15 @@ building_site::Places PlacesRound(entt::entity building)
 	// TODO(temple-builders): football pitches put their places on a circle (building_site::CirclePlaces)
 	return building_site::OutlinePlaces(triangles, matrix, box.Center(), reach);
 }
+
+/// A new site takes the next number of the sites that its town opened
+void NumberSite(BuildingSite& site, entt::entity town)
+{
+	if (auto* opener = town != entt::null && Entities().Valid(town) ? Entities().TryGet<Town>(town) : nullptr)
+	{
+		site.number = ++opener->sitesOpened;
+	}
+}
 } // namespace
 
 void construction::OpenSite(entt::entity building, float desire)
@@ -666,6 +681,7 @@ void construction::OpenSite(entt::entity building, float desire)
 	// The building's own town opens a new site at it
 	const auto town = TownOfSite(building);
 	auto& site = building_site_list::Open(SitesToOpenAt(building), town);
+	NumberSite(site, town);
 	site.desire = desire;
 	site.repair = IsBuilt(building);
 	site.places = PlacesRound(building);
@@ -694,6 +710,7 @@ bool construction::OpenSiteForTown(entt::entity building, entt::entity town)
 	// The town opens a new site at it, wanting it built no more than its other building; its pile of wood is made when
 	// the first wood comes
 	auto& site = building_site_list::Open(SitesToOpenAt(building), town);
+	NumberSite(site, town);
 	site.repair = IsBuilt(building);
 	site.places = PlacesRound(building);
 	// A site added to a town changes what it wants

@@ -9,9 +9,13 @@
 
 #pragma once
 
+#include <cstddef>
+
+#include <filesystem>
 #include <functional>
 #include <optional>
 #include <span>
+#include <string>
 
 #include "Camera/Camera.h"
 #include "CameraControl.h"
@@ -98,6 +102,17 @@ public:
 	std::string NewGame(std::string_view start) override;
 	[[nodiscard]] std::string Current() const override;
 	[[nodiscard]] bool IsSkirmish() const override;
+
+private:
+	/// The name of the land last found, with the land's path and the count of levels it was found for. The inspector
+	/// asks for the name every frame, and the search tests the files of all the levels.
+	struct FoundName
+	{
+		std::filesystem::path land;
+		size_t levels;
+		std::string name;
+	};
+	mutable std::optional<FoundName> _found;
 };
 
 /// Pictures of the screen through the game's own screenshot

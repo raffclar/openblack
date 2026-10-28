@@ -134,6 +134,9 @@ public:
 	/// A villager takes up a reaction straight away, whatever else is more urgent to it and however lately it reacted to
 	/// that kind: a villager watching a creature goes to watch the fight the creature went into
 	virtual void TakeUp(uint32_t /*id*/, entt::entity /*living*/) {}
+	/// A villager or a creature is impressed by a reaction at once, but does not take it up. The people of the towns near
+	/// a new building site are impressed in this way by its scaffold.
+	virtual void Impress(uint32_t /*id*/, entt::entity /*living*/) {}
 	/// Whether an initiator has a reaction going
 	[[nodiscard]] virtual bool HasReaction(entt::entity initiator) const = 0;
 	/// Whether a living thing may take up a kind of reaction now. A creature also catches a flying thing only when it may
