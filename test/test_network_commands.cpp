@@ -76,7 +76,7 @@ public:
 	}
 	bool ProcessForSpell(EffectId /*id*/, const particles::ProcessInfo& /*info*/, float /*seconds*/) override { return false; }
 	EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
-	                         float magnitude) override
+	                         float magnitude, bool /*synced*/) override
 	{
 		spotVisuals.push_back({.type = type, .position = position, .turns = turns, .owner = owner, .magnitude = magnitude});
 		return static_cast<EffectId>(spotVisuals.size());
@@ -245,7 +245,7 @@ public:
 	{
 		return std::nullopt;
 	}
-	bool TapPost(entt::entity /*post*/) override { return false; }
+	bool TapPost(PlayerNames /*player*/, entt::entity /*post*/) override { return false; }
 	bool PickType(PlayerNames /*player*/, LeashType /*type*/) override { return false; }
 	bool TakeOffAtTemple(PlayerNames player) override
 	{
