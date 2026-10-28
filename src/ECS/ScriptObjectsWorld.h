@@ -75,6 +75,8 @@ public:
 	virtual void VillagerDie(entt::entity villager) = 0;
 	/// A creature gives up what it is doing as a failure
 	virtual void AbandonCreatureAction(entt::entity creature) = 0;
+	/// An animal in the physics goes back to wandering after a reaction: its state before a reaction is set to wandering
+	virtual void SetAnimalWanderBeforeReaction(entt::entity animal) = 0;
 	/// An animal goes back to its own life: a flock of its own if it has none, then a leg of its own, or its death
 	virtual void ReleaseAnimal(entt::entity animal) = 0;
 	/// The object goes from the world at once

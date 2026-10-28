@@ -184,6 +184,8 @@ public:
 	}
 	/// An animal that does not react now remembers its state before it takes up a reaction
 	virtual void RememberStateBeforeReaction([[maybe_unused]] entt::entity animal) {}
+	/// The animal goes back to wandering when a reaction ends: its state before a reaction is set to wandering
+	virtual void SetWanderBeforeReaction([[maybe_unused]] entt::entity animal) {}
 	/// An animal's reaction ends, and the animal forgets what it fled. When `resetState` is true, the animal goes into
 	/// the state after the reaction. When it is false, the reaction is gone and the animal stays in its state.
 	virtual void StopReaction([[maybe_unused]] entt::entity animal, [[maybe_unused]] bool resetState) {}

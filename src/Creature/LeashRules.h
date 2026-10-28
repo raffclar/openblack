@@ -234,4 +234,21 @@ struct MindHooks
 	return creatureOwner != localPlayer;
 }
 
+/// The two leash-attach sounds play in turn, and the first sound plays first. A tie and the leash put back in the hand
+/// each have one of these. Each one keeps its turn for all the creatures until the game stops.
+class AttachSoundTurns
+{
+public:
+	/// Gives 0 for the first sound or 1 for the second sound, and gives the turn to the other sound
+	[[nodiscard]] constexpr int Next()
+	{
+		const int sound = _second ? 1 : 0;
+		_second = !_second;
+		return sound;
+	}
+
+private:
+	bool _second {false};
+};
+
 } // namespace openblack::creature_leash

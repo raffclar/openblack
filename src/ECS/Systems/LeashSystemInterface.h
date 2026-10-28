@@ -105,6 +105,9 @@ public:
 	/// Ties the worn leash to something, or puts the picked leash on tied to it
 	virtual bool TieTo(entt::entity creature, entt::entity object) = 0;
 	virtual void UntieToHand(entt::entity creature) = 0;
+	/// Plays the next leash-attach sound when the leash goes back on in the hand. Only the local player hears it, and only
+	/// for their own creature.
+	virtual void PlayHandAttachSound(entt::entity creature) = 0;
 	/// Whether the leash makes the creature do anything, as scripts set
 	virtual void SetWorks(entt::entity creature, bool works) = 0;
 	/// Whether ropes are drawn
