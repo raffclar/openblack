@@ -135,7 +135,7 @@ std::vector<uint32_t> creature_throw::TossPointBones(std::span<const uint32_t> p
 		return {};
 	}
 	const auto count = static_cast<uint32_t>(parents.size());
-	const auto hasChild = [&parents, count](uint32_t bone) {
+	const auto hasChild = [&parents](uint32_t bone) {
 		return std::ranges::any_of(parents, [bone](uint32_t parent) { return parent == bone; });
 	};
 	// The bones that start the branches: the hand, and those after it under its parent

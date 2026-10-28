@@ -46,6 +46,9 @@ struct NetworkJoin
 	std::optional<uint32_t> partAt;
 	/// Tests: the world parts again after each load of the server's world
 	bool partAgain {false};
+	/// Tests: the creature file that the player sends before the start, in place of the creature of the player's
+	/// profile
+	std::optional<std::string> testCreatureFile;
 };
 
 /// The network game of this computer: the session with the game server, which gives the turns of the world. A join
@@ -71,6 +74,9 @@ public:
 	virtual void SetReady(bool ready) = 0;
 	/// The player leaves the network game
 	virtual void Leave() = 0;
+	/// The end box of a decided game opened: the game server stops the turns of the game. When the last turn came, the
+	/// clock of this computer stops, as a pause stops it.
+	virtual void StopGame() {}
 	/// The land, the seed and the start of the server's world, one time: for a join from the front end when the server
 	/// starts the game, and for a join from the command line when the server lets the player in. None before that.
 	[[nodiscard]] virtual std::optional<game_socket::Start> TakeStart() = 0;
@@ -79,6 +85,9 @@ public:
 	virtual void BeginPlay() = 0;
 	/// After the session ended: the world of this computer turns alone from now on, with no server
 	virtual void PlayAlone() = 0;
+	/// After the player left: the session goes, and the next land that loads is a game of this computer alone, not a
+	/// network game
+	virtual void EndNetworkGame() {}
 	/// Once a frame: moves the session on
 	virtual void Update() = 0;
 	/// True from the join until the session ends

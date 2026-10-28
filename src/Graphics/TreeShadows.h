@@ -44,7 +44,7 @@ inline constexpr glm::vec3 k_Sun {-500000.0f, 500000.0f, -500000.0f};
 /// A land block's side, in units and in texels of its texture
 inline constexpr float k_BlockSize = 160.0f;
 inline constexpr int k_BlockTexels = 256;
-/// A block's texels, a row along x at a time, each down z
+/// A block's texels, a row along x at a time, each down z. At the low resolution only the first 128 by 128 are used.
 using Coverage = std::array<uint8_t, k_BlockTexels * k_BlockTexels>;
 /// The places over a texture its alpha is read from, along each side
 inline constexpr int k_MaskSide = 64;
@@ -75,8 +75,9 @@ enum class Compression : uint8_t
 [[nodiscard]] AlphaMask MaskOfCompressed(std::span<const uint8_t> blocks, uint32_t width, uint32_t height,
                                          Compression compression);
 
-/// What a block's land colour is scaled by, over 256, under a texel the shadows cover with these bits
-[[nodiscard]] uint8_t Shade(uint8_t coverage);
+/// What a block's land colour is scaled by, over 256, under a texel the shadows cover with these bits. At the low
+/// resolution of the lowest detail levels each shadow is half as dark.
+[[nodiscard]] uint8_t Shade(uint8_t coverage, bool lowResolution = false);
 
 /// A corner of a flattened triangle: where it lies in the block's texels (x, then z) and the texture's coordinates
 /// spread over the mask's places
@@ -87,15 +88,17 @@ struct Corner
 };
 
 /// Where a point of a tree falls in a block's texels. offset is the point less the tree's foot, turned and scaled as the
-/// tree stands; foot is the tree's foot along x and z in the world and block the block's corner there.
-[[nodiscard]] Corner Flatten(glm::vec3 offset, glm::vec2 foot, glm::vec2 block, glm::vec2 uv);
+/// tree stands; foot is the tree's foot along x and z in the world and block the block's corner there. side is the
+/// texels along a side of the block: k_BlockTexels, or 128 at the low resolution of the lowest detail levels.
+[[nodiscard]] Corner Flatten(glm::vec3 offset, glm::vec2 foot, glm::vec2 block, glm::vec2 uv, int side = k_BlockTexels);
 
-/// Scans a flattened triangle into a block's texels, joining in the mask's alpha where it covers them
-void Fill(Coverage& coverage, const std::array<Corner, 3>& corners, const AlphaMask& mask);
+/// Scans a flattened triangle into a block's texels, joining in the mask's alpha where it covers them. The coverage
+/// holds side texels a row.
+void Fill(Coverage& coverage, const std::array<Corner, 3>& corners, const AlphaMask& mask, int side = k_BlockTexels);
 
 /// Whether a triangle can reach any of a block's texels: the fill touches only those between its corners taken down to
 /// whole texels
-[[nodiscard]] bool Reaches(const std::array<Corner, 3>& corners);
+[[nodiscard]] bool Reaches(const std::array<Corner, 3>& corners, int side = k_BlockTexels);
 
 /// Whether a block (its index along x and z) takes the shadow of a tree standing in a cell
 [[nodiscard]] bool TakesShadowFrom(glm::ivec2 block, glm::ivec2 cell);

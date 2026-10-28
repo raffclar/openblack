@@ -248,6 +248,9 @@ protected:
 	std::vector<BodyBlockLookup> _bodyBlockLookup;
 	/// Metadata and DDS formatted texture data
 	std::map<std::string, G3DTexture> _textures;
+	/// The low resolution textures that the lowest detail levels draw in place of the textures above, by the same names.
+	/// Each takes the metadata of its texture.
+	std::map<std::string, G3DTexture> _lowTextures;
 	/// Bytes of l3d meshes
 	std::vector<std::vector<uint8_t>> _meshes;
 	/// Bytes of anm meshes
@@ -352,6 +355,8 @@ public:
 	[[nodiscard]] const std::vector<BodyBlockLookup>& GetBodyBlockLookup() const noexcept { return _bodyBlockLookup; }
 	[[nodiscard]] const std::map<std::string, G3DTexture>& GetTextures() const noexcept { return _textures; }
 	[[nodiscard]] const G3DTexture& GetTexture(const std::string& name) const noexcept { return _textures.at(name); }
+	/// The low resolution textures, by the names of the textures they stand in for
+	[[nodiscard]] const std::map<std::string, G3DTexture>& GetLowTextures() const noexcept { return _lowTextures; }
 	[[nodiscard]] const std::vector<std::vector<uint8_t>>& GetMeshes() const noexcept { return _meshes; }
 	[[nodiscard]] const std::vector<uint8_t>& GetMesh(uint32_t index) const noexcept { return _meshes[index]; }
 	[[nodiscard]] const std::vector<std::vector<uint8_t>>& GetAnimations() const noexcept { return _animations; }

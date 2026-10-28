@@ -70,7 +70,7 @@ entt::entity PlayerHand()
 	{
 		return entt::null;
 	}
-	return openblack::Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	return openblack::Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 } // namespace
 
@@ -79,6 +79,8 @@ RenderingSystemTemple::~RenderingSystemTemple() = default;
 void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	// The rooms' meshes are things of the temple's rooms
+	const auto& rooms = Locator::temple::value().GetRooms();
 
 	// Count number of instances
 	uint32_t instanceCount = 0;
@@ -118,7 +120,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	std::unordered_map<entt::id_type, TempleRoom> roomMeshIds;
 	const auto currentRoom = temple.GetCurrentRoom();
 	const bool templeReflected = graphics::detail_level::TempleReflected(Locator::config::value().detail);
-	registry.Each<const Mesh, const Transform, const TempleInteriorPart>(
+	rooms.Each<const Mesh, const Transform, const TempleInteriorPart>(
 	    [this, &prep, &mirroredMeshIds, &reflectiveMeshIds, &doorMeshIds, &otherRoomMeshIds, &waterMeshIds, &sideRoomMeshIds,
 	     &roomMeshIds, mainRoomDoorsOnly, currentRoom,
 	     templeReflected](const Mesh& mesh, const Transform& /* unused */, const TempleInteriorPart& templePart) {
@@ -195,7 +197,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	std::map<entt::id_type, uint32_t> creatureCounts;
 	if (_loadedRooms.contains(TempleRoom::CreatureCave))
 	{
-		registry.Each<const CreatureCopy, const CaveCreature, const Transform>(
+		rooms.Each<const CreatureCopy, const CaveCreature, const Transform>(
 		    [&registry, &creatureCounts, &instanceCount](const CreatureCopy& copy, const CaveCreature& /*unused*/,
 		                                                 const Transform& /*unused*/) {
 			    if (const auto mesh = CopiedMesh(registry, copy); mesh.has_value())
@@ -329,12 +331,14 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	// The rooms' meshes are things of the temple's rooms
+	const auto& rooms = Locator::temple::value().GetRooms();
 
 	// Store offsets of uniforms for descs
 	std::map<entt::id_type, uint32_t> uniformOffsets;
 
 	// Set transforms for instanced draw at offsets
-	registry.Each<const Mesh, const Transform, const TempleInteriorPart>(
+	rooms.Each<const Mesh, const Transform, const TempleInteriorPart>(
 	    [this, &uniformOffsets, drawBoundingBox](const Mesh& mesh, const Transform& transform,
 	                                             const TempleInteriorPart& templePart) {
 		    auto l3dMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
@@ -402,7 +406,7 @@ void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 	_renderContext.creatureCopyDraws.clear();
 	if (_loadedRooms.contains(TempleRoom::CreatureCave))
 	{
-		registry.Each<const CreatureCopy, const CaveCreature, const Transform>(
+		rooms.Each<const CreatureCopy, const CaveCreature, const Transform>(
 		    [this, &registry, &uniformOffsets](const entt::entity entity, const CreatureCopy& copy, const CaveCreature& cave,
 		                                       const Transform& transform) {
 			    const auto mesh = CopiedMesh(registry, copy);

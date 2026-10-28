@@ -88,8 +88,10 @@ public:
 	/// Where a block's coarse texture is on the pages: x the layer, yz where its square starts (0 to 1 across the
 	/// page), w 1; all 0 when there are no pages
 	[[nodiscard]] virtual glm::vec4 GetCoarsePageSlot(size_t /*block*/) const { return glm::vec4(0.0f); }
+	/// The texels along a side of each block's texture: 256, or 128 at the low resolution of the lowest detail levels
+	[[nodiscard]] virtual int GetBlockTextureSide() const { return 256; }
 	/// Paints a block's own texture again into ARGB texels at 4 bits a channel, with no footprints (see block_texture).
-	/// The texels are k_Side by k_Side, a row for each texel along x.
+	/// The texels are GetBlockTextureSide on each side, a row for each texel along x.
 	virtual void PaintBlockTexels(size_t /*block*/, std::span<uint16_t> /*texels*/) const {}
 	/// Puts ARGB texels at 4 bits a channel in place of a block's texture, for example with its footprints painted in
 	virtual void SetBlockTexels(size_t /*block*/, std::span<const uint16_t> /*texels*/) {}

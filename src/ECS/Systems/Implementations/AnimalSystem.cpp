@@ -69,6 +69,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerRoutine.h"
 #include "ECS/WorldObjects.h"
@@ -330,10 +331,10 @@ void AnimalSystem::ReleaseFromScript(entt::entity entity)
 		StartWander(entity, *animal);
 		return;
 	}
-	// With no life it dies. One that was already dying is dead at once.
-	const bool wasDying = animal->state == AnimalState::Dying;
+	// With no life it dies. One that a kill made dying before is dead at once.
+	const bool wasDying = animal->dying;
 	SetDying(entity);
-	if (wasDying)
+	if (animals::LandsAs(false, wasDying) == animals::LandedAs::Dead)
 	{
 		SetTopState(*animal, AnimalState::Dead);
 	}
@@ -551,6 +552,7 @@ void AnimalSystem::SetupMoveRoundTo(entt::entity entity, Animal& animal, glm::ve
 	walk.position = animal.move.position;
 	walk.placedAt = Metres(animal.move.position);
 	walk.gameAngle = animal.move.angle;
+	walk.yAngle = animal.heading;
 	walk.speed = 0.0f;
 	registry.AssignOrReplace<TurningWalker>(entity,
 	                                        TurningWalker {.turnAngle = TurnAngleOf(animal), .speed = animal.move.speed});
@@ -660,14 +662,12 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 	{
 		return;
 	}
-	// Carried off by a tornado, it is the tornado's until it lets go; held in the player's hand or flying, the hand's or
-	// the physics'. In a creature's hand it still dies and lies dead.
+	// Carried off by a tornado, it is the tornado's until it lets go; flying, the physics'. In a hand it takes its turn
 	auto& animal = registry.Get<Animal>(entity);
 	if (!animals::TakesOwnTurn({.tornado = registry.AllOf<CarriedByTornado>(entity),
 	                            .playersHand = registry.AllOf<InHand>(entity),
 	                            .creature = registry.AllOf<HeldByCreature>(entity),
-	                            .physics = registry.AllOf<InPhysics>(entity)},
-	                           animal.state == AnimalState::Dying || animal.state == AnimalState::Dead))
+	                            .physics = registry.AllOf<InPhysics>(entity)}))
 	{
 		return;
 	}
@@ -677,6 +677,12 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 	// Every kind is brought down, eaten and lands in the same way
 	if (CommonStateTurn(entity, animal))
 	{
+		return;
+	}
+	// In a hand it does nothing, but its needs grow and a young animal grows. A creature can make it die in its hand
+	if (animal.state == AnimalState::InHand)
+	{
+		InHandTurn(entity, animal);
 		return;
 	}
 	if (animal.state == AnimalState::Dying || animal.state == AnimalState::Dead)
@@ -720,6 +726,21 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 	{
 		// Any other kind goes into its next state when its clip ends
 		SetTopState(animal, animal.afterClip);
+	}
+}
+
+void AnimalSystem::InHandTurn(entt::entity entity, Animal& animal)
+{
+	// The state of the hand sees to the needs, as the states in the land do. The state itself does nothing
+	if (auto* grazer = EntityRegistry().TryGet<Grazer>(entity))
+	{
+		GrazerNeedsTurn(entity, animal, *grazer);
+		return;
+	}
+	const auto& info = InfoOf(animal.type);
+	if (info.hunger != 0 && animal.hunger < static_cast<int32_t>(info.hunger))
+	{
+		++animal.hunger;
 	}
 }
 
@@ -1378,17 +1399,8 @@ void AnimalSystem::IntoHand(entt::entity animal)
 	{
 		return;
 	}
-	// A dying or dead animal keeps its state, so that it lies dead when it comes down
-	if (data->state == AnimalState::Dying || data->state == AnimalState::Dead)
-	{
-		if (const auto clip = physics::living::ClipsOf(data->type).inHand)
-		{
-			data->animation = *clip;
-			data->clipPlace = 0;
-		}
-		return;
-	}
-	// It stops what it did, also the count of a hunter that eats it. It plays its kind's clip for the hand
+	// It stops what it did, also when it dies or lies dead. It plays its kind's clip for the hand. Its mark of a kill
+	// stays, so that it lies dead when it comes down
 	SetTopState(*data, AnimalState::InHand);
 	data->clipPlace = 0;
 }
@@ -1732,10 +1744,11 @@ void AnimalSystem::SetDying(entt::entity entity)
 	// It has no life left and falls dying; its body lies its time once dead. A bird falls out of the sky through the
 	// physics while it dies. Killed again, its body only lies its full time afresh
 	animal->turnsUntilStateChange = animals::k_TurnsToDieOver;
-	if (animal->state == AnimalState::Dying || animal->state == AnimalState::Dead)
+	if (animal->dying)
 	{
 		return;
 	}
+	animal->dying = true;
 	animal->life = 0.0f;
 	// It lies dead on its left side, unless a landing after this shows how it lies
 	animal->landingPose = physics::living::LandingPose::None;
@@ -1883,7 +1896,13 @@ void AnimalSystem::SetScale(entt::entity animal, float scale)
 {
 	if (auto* transform = EntityRegistry().TryGet<Transform>(animal))
 	{
+		const bool resized = transform->scale.x != scale;
 		transform->scale = glm::vec3(scale);
+		// An animal in the map's cells that changes its size comes out of them and goes in again
+		if (resized)
+		{
+			ecs::thing_map_place::Reinsert(animal);
+		}
 	}
 }
 
@@ -2403,7 +2422,6 @@ void AnimalSystem::ShowTurnEnd()
 void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFraction)
 {
 	auto& registry = EntityRegistry();
-	const float t = std::clamp(turnFraction, 0.0f, 1.0f);
 	const auto elapsed = static_cast<uint32_t>(frameGameTime.count());
 	// A screen refresh of the game's, when a clip held at its end plays its sounds again; none while the game is paused
 	const bool refresh = Locator::time::has_value() && !Locator::time::value().IsPaused() &&
@@ -2411,24 +2429,25 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 	const float elapsedSeconds = static_cast<float>(elapsed) * 0.001f;
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
-	registry.Each<Animal, Transform, const Mesh>([&](entt::entity entity, Animal& animal, Transform& transform,
-	                                                 const Mesh& mesh) {
+	// The frame writes only the drawn place, the tilt, the clip and the pose. The turns go by the Transform.
+	registry.Each<Animal, const Transform, const Mesh>([&](entt::entity entity, Animal& animal, const Transform& transform,
+	                                                       const Mesh& mesh) {
 		// A tornado carrying it places it, as does a hand or a creature holding it or the physics moving it; it still plays
 		// its clip
+		animal.drawn.reset();
 		if (!registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
 		{
 			// Drawn between its last two turns, tilted as far as its bank has glided
-			transform.position = animal.previousPosition + ((animal.position - animal.previousPosition) * t);
-			const float heading =
-			    animal.previousHeading + (std::remainder(animal.heading - animal.previousHeading, k_TwoPi) * t);
+			const auto between = animals::DrawnAt(animal.previousPosition, animal.position, animal.previousHeading,
+			                                      animal.heading, turnFraction);
 			const float bank = animal.bank.Step(elapsedSeconds);
-			transform.rotation = animals::Orientation(heading, bank);
+			auto rotation = animals::Orientation(between.heading, bank);
 			// An animal on the land leans to its slope: each of its x and z axes lifts or drops to the land at its end
 			if (!(animal.height > animals::k_HighestToFollowSlope) && Locator::terrainSystem::has_value())
 			{
-				const auto turned = animals::Orientation(heading, 0.0f);
+				const auto turned = animals::Orientation(between.heading, 0.0f);
 				const float scale = transform.scale.x;
-				const auto& at = transform.position;
+				const auto& at = between.position;
 				const auto& land = Locator::terrainSystem::value();
 				const auto landAt = [&](const glm::vec3& axis) {
 					return land.GetAltitude(animals::SlopeSampleUnit(at.x + (axis.x * scale)),
@@ -2436,9 +2455,11 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 				};
 				const float alongX = animals::SlopeLift(landAt(turned[0]), at.y);
 				const float alongZ = animals::SlopeLift(landAt(turned[2]), at.y);
-				transform.rotation = turned * animals::SlopeLean(alongX, alongZ) * glm::mat3(portable_math::EulerAngleZ(bank));
+				rotation = turned * animals::SlopeLean(alongX, alongZ) * glm::mat3(portable_math::EulerAngleZ(bank));
 			}
+			animal.drawn = Animal::DrawnPlace {.position = between.position, .rotation = rotation};
 		}
+		const auto drawnAt = animal.drawn.has_value() ? animal.drawn->position : transform.position;
 		auto* pose = registry.TryGet<AnimalPose>(entity);
 		// The clips are kept by the hash of their number in the animation pack
 		const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(animal.animation));
@@ -2465,7 +2486,7 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 		animal.groundCarry = carried.carry;
 		// The sounds on the clip's frames it passes play from the animal
 		ecs::clip_sound_player::Play(entity, animal.animation, *clip, animal.clipPlace,
-		                             static_cast<uint32_t>(std::max(played, 0)), transform.position, refresh);
+		                             static_cast<uint32_t>(std::max(played, 0)), drawnAt, refresh);
 		animal.clipPlace = animals::AdvanceClip(timing, animal.clipPlace, played);
 
 		// A wolf fades out of sight as it goes; the doves and bats stay whole until they go

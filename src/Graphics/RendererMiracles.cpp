@@ -42,6 +42,7 @@
 #include "ECS/Registry.h"
 #include "ECS/RewardOpening.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -50,6 +51,7 @@
 #include "Graphics/ShaderManager.h"
 #include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
+#include "Graphics/ViewFrustum.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -65,6 +67,12 @@ namespace visuals = openblack::magic::visuals;
 
 namespace
 {
+/// The colour of the player at this computer
+uint32_t OwnColour()
+{
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	return ecs::components::Player::k_Colours.at(static_cast<size_t>(own));
+}
 constexpr float k_ByteMax = 255.0f;
 /// The freeze phial's creature takes its spell in this way
 constexpr int k_FreezeReceiveType = 0;
@@ -84,7 +92,7 @@ constexpr uint64_t k_BlendedState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST
 constexpr uint64_t k_AddedState = k_BlendedState | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
 } // namespace
 
-void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown) const
+void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown, const view_frustum::Frustum* seenBy) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
 	const auto& meshes = Locator::resources::value().GetMeshes();
@@ -117,17 +125,29 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 			}
 		}
 		const float pulse = visuals::PhialPulse(shown.phialPhase);
-		const auto draws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
-		                         : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = 255, .landLit = true}};
+		// A seed that is not a phial takes the light of the land, unless it is drawn at once. A seed drawn at once has the
+		// alpha that it is drawn at. A phial is lit and faded in the same way when it is drawn at once.
+		const uint8_t seedAlpha = shown.drawnAtOnce ? shown.phialAlpha : std::numeric_limits<uint8_t>::max();
+		const auto draws =
+		    phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
+		          : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = seedAlpha, .landLit = !shown.drawnAtOnce}};
 		const auto shape = phial ? visuals::PhialScale(receiveType, shown.phialPhase) : glm::vec3(1.0f);
 		const bool environmentMapped = environment != nullptr && (phial || shown.seed == SpellSeedType::Food);
 		const bool added = shown.seed == k_AddedSeed;
 		const auto mesh = meshes.Handle(seedMesh);
 		const auto at = shown.middle + glm::vec3(0.0f, seed.meshHeight * shown.scale, 0.0f);
+		// A model of several bones can move its parts out of its box, so the view test uses only a model of no bones. A
+		// draw out of the view puts no pixel on the screen.
+		const auto box = mesh->GetBoundingBox();
+		const bool testsView = seenBy != nullptr && !mesh->IsBoned();
 		for (const auto& draw : draws)
 		{
 			const auto model = glm::translate(glm::mat4(1.0f), at) * glm::eulerAngleY(shown.spin) *
 			                   glm::scale(glm::mat4(1.0f), seed.scale * shown.scale * draw.size * shape);
+			if (testsView && !view_frustum::SeesBox(*seenBy, model, box.minima, box.maxima))
+			{
+				continue;
+			}
 			// A model of several bones (the flocks' birds and wolves) has each placed by its rest matrix
 			std::vector<glm::mat4> bones;
 			if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
@@ -209,9 +229,9 @@ void Renderer::DrawCaveSeeds(const DrawSceneDesc& desc) const
 	}
 	// The seeds are the player's at this computer: theirs is the alignment that makes the flock's seed a bat. Each is
 	// drawn at its full size and colour, the land's light not on it.
-	const float alignment = Locator::alignmentSystem::has_value()
-	                            ? Locator::alignmentSystem::value().GetPlayerAlignment(PlayerNames::PLAYER_ONE)
-	                            : 0.0f;
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	const float alignment =
+	    Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(own) : 0.0f;
 	for (const auto& seed : Locator::temple::value().GetCaveSeeds())
 	{
 		DrawSeedModel(desc, {.seed = seed.seed,
@@ -263,7 +283,7 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 	const bool haveBubble = meshes.Contains(OneOffSpellSeed::k_MeshId.value());
 	const bool haveRing = meshes.Contains(OneOffSpellSeed::k_RingMeshId.value());
 	// A globe nobody owns shows its rings in the colour of the player at this computer
-	const auto ringColour = ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)));
+	const auto ringColour = ColourOf(OwnColour());
 
 	desc.entities.Each<const OneOffSpellSeed, const Transform>([&](const OneOffSpellSeed& globe, const Transform& transform) {
 		const float scale = transform.scale.x * visuals::k_GlobeSeedScale;
@@ -379,6 +399,12 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	const auto eye = desc.camera->GetOrigin();
 	const auto* objectProgram = _shaderManager->GetShader("Object");
 	const auto translucent = TranslucentPassOf(desc.viewId);
+	// The view of this pass, as the pass sets it. The function does not draw the seeds and the rings out of it.
+	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto ringBox =
+	    haveRing ? std::optional(meshes.Handle(ecs::components::OneOffSpellSeed::k_RingMeshId.value())->GetBoundingBox())
+	             : std::nullopt;
 	// A warm-up draws the model of each kind of seed at no size, for a good and an evil player, as the first seeds of
 	// each kind draw them
 	if (_warmingUp)
@@ -403,14 +429,16 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL
 		                            ? Locator::alignmentSystem::value().GetPlayerAlignment(player)
 		                            : 0.0f;
-		DrawSeedModel(desc, {.seed = shown.seed,
-		                     .middle = shown.middle,
-		                     .scale = 1.0f,
-		                     .spin = shown.spin,
-		                     .phialPhase = shown.phialPhase,
-		                     .phialFrame = shown.phialFrame,
-		                     .phialAlpha = std::numeric_limits<uint8_t>::max(),
-		                     .ownerAlignment = alignment});
+		DrawSeedModel(desc,
+		              {.seed = shown.seed,
+		               .middle = shown.middle,
+		               .scale = 1.0f,
+		               .spin = shown.spin,
+		               .phialPhase = shown.phialPhase,
+		               .phialFrame = shown.phialFrame,
+		               .phialAlpha = std::numeric_limits<uint8_t>::max(),
+		               .ownerAlignment = alignment},
+		              &seenBy);
 		// A power-up level shown has its rings, each drawn twice over, added without writing depth, in the player's colour
 		const int rings = magic::visuals::RingCount(shown.powerUp);
 		if (!haveRing || rings <= 0)
@@ -423,6 +451,10 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		for (int i = 0; i < rings; ++i)
 		{
 			const auto model = magic::visuals::RingModel(i, shown.ringSpin, shown.middle, 1.0f, eye);
+			if (!ring->IsBoned() && !view_frustum::SeesBox(seenBy, model, ringBox->minima, ringBox->maxima))
+			{
+				continue;
+			}
 			L3DMeshSubmitDesc submitDesc = {};
 			submitDesc.viewId = translucent;
 			submitDesc.program = objectProgram;
@@ -441,6 +473,17 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 
 namespace
 {
+/// The hand that the frame draws: the left hand of the god of this computer. Only this hand shows its miracles.
+entt::entity DrawnHand()
+{
+	using ecs::systems::HandSystemInterface;
+	if (!Locator::handSystem::has_value())
+	{
+		return entt::null;
+	}
+	return Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+}
+
 /// The hand that holds the miracles, its look and where it is drawn: its matrix and each of its bones' in the world
 struct HandPose
 {
@@ -460,9 +503,10 @@ std::optional<HandPose> PoseOfHand(const ecs::Registry& registry)
 		return std::nullopt;
 	}
 	std::optional<HandPose> found;
-	registry.Each<const Hand, const HandMiracleFx, const Transform>([&](const Hand& hand, const HandMiracleFx& fx,
-	                                                                    const Transform& transform) {
-		if (found.has_value())
+	const auto drawnHand = DrawnHand();
+	registry.Each<const Hand, const HandMiracleFx, const Transform>([&](entt::entity entity, const Hand& hand,
+	                                                                    const HandMiracleFx& fx, const Transform& transform) {
+		if (found.has_value() || entity != drawnHand)
 		{
 			return;
 		}
@@ -531,14 +575,15 @@ std::optional<Renderer::HandGlowLook> Renderer::HandGlowOf(const DrawSceneDesc& 
 		return std::nullopt;
 	}
 	std::optional<HandGlowLook> look;
-	desc.entities.Each<const Hand, const HandMiracleFx>([&](const Hand&, const HandMiracleFx& fx) {
-		if (look.has_value() || !fx.glowing)
+	const auto drawnHand = DrawnHand();
+	desc.entities.Each<const Hand, const HandMiracleFx>([&](entt::entity entity, const Hand&, const HandMiracleFx& fx) {
+		if (look.has_value() || !fx.glowing || entity != drawnHand)
 		{
 			return;
 		}
 		// The flow's sheet, an eighth of it at a time, running backwards over the hand in its player's colour at four
 		// fifths
-		const auto rgb = ecs::components::Player::k_Colours.at(static_cast<size_t>(PlayerNames::PLAYER_ONE));
+		const auto rgb = OwnColour();
 		look = HandGlowLook {
 		    .flow = flow,
 		    .uvOffset = visuals::GlowUvOffset(fx.glowFrame),
@@ -616,7 +661,7 @@ void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc) const
 	glm::mat4 cameraFrame {glm::vec4(camera.GetRight(), 0.0f), glm::vec4(camera.GetUp(), 0.0f),
 	                       glm::vec4(camera.GetForward(), 0.0f), glm::vec4(camera.GetOrigin(), 1.0f)};
 	const auto atCamera = cameraFrame * visuals::BandAtCamera(camera.GetNearClip());
-	const auto colour = ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)));
+	const auto colour = ColourOf(OwnColour());
 	const auto ring = meshes.Handle(OneOffSpellSeed::k_RingMeshId.value());
 	const auto* program = _shaderManager->GetShader("Object");
 	const auto translucent = TranslucentPassOf(desc.viewId);

@@ -29,7 +29,8 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
   };
 
   let rawMovement = false;
-  // The place of the click that took the lock, in the pixels of the game window
+  // The place of the click that took the lock, in the CSS pixels of the game canvas. The game changes it to the pixels
+  // of its back buffer.
   let lockClick = null;
   // The game window must listen to the pointer lock before the lock starts, else the window does not know of the lock
   let lockAllowed = false;
@@ -129,6 +130,19 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
     }
     window.dispatchEvent(new Event('resize'));
   });
+
+  // The game draws at the full resolution of the screen: the CSS size of the canvas times the device pixel ratio. The
+  // ratio changes when the browser zooms or the window goes to a screen of another scale. Then the page sends a resize
+  // event: SDL takes the new ratio from it, and the game draws at the new size.
+  const followPixelRatio = () => {
+    matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', () => {
+      say(`device pixel ratio ${window.devicePixelRatio}`);
+      window.dispatchEvent(new Event('resize'));
+      followPixelRatio();
+    }, { once: true });
+  };
+  say(`device pixel ratio ${window.devicePixelRatio}`);
+  followPixelRatio();
 
   // While the game has the pointer, the keys of the game do not do the browser's actions, such as Tab to the next
   // button or Alt to the menu. A key that writes a character keeps its action, because the game reads the text of

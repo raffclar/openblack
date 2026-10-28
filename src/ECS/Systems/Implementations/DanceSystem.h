@@ -27,6 +27,7 @@ public:
 	entt::entity Create(DanceInfo type, const glm::vec3& place, entt::entity owner, uint32_t duration, bool madeByScript,
 	                    entt::entity town) override;
 	void Destroy(entt::entity dance) override;
+	[[nodiscard]] std::shared_ptr<const dance::DanceFile> FileOf(DanceInfo type) override;
 	void ProcessTurn() override;
 	void ProcessCameraKeys(bool gripsLand) override;
 	void CheckCamera() override;

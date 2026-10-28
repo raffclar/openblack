@@ -30,6 +30,7 @@
 #include "Common/PortableRotations.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/BoatFilm.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -200,38 +201,93 @@ void BoatLaunchSystem::Play(const Places& places)
 	_places = places;
 	_clocks = {};
 	_playing = true;
-	MakeParts();
+	// The turn makes the things of both stages now. The frames show those of the stage that plays, and hide them all at
+	// the end. The turns remove them when the next film starts or the land closes.
+	_launchParts = MakeParts(rules::Stage::Launch);
+	_sailingParts = MakeParts(rules::Stage::Sailing);
+	Show(_sailingParts, false);
 	_boat = BoatMatrix();
 	PlaceParts();
 }
 
 void BoatLaunchSystem::Stop()
 {
-	FreeParts();
+	FreeParts(_launchParts);
+	FreeParts(_sailingParts);
 	_playing = false;
 	_boat.reset();
 	_clocks = {};
 }
 
-void BoatLaunchSystem::MakeParts()
+void BoatLaunchSystem::EndInFrame()
+{
+	Show(_launchParts, false);
+	Show(_sailingParts, false);
+	_playing = false;
+	_boat.reset();
+	_clocks = {};
+}
+
+std::vector<entt::entity>& BoatLaunchSystem::StageParts()
+{
+	return _clocks.stage == rules::Stage::Launch ? _launchParts : _sailingParts;
+}
+
+const std::vector<entt::entity>& BoatLaunchSystem::StageParts() const
+{
+	return _clocks.stage == rules::Stage::Launch ? _launchParts : _sailingParts;
+}
+
+void BoatLaunchSystem::Show(const std::vector<entt::entity>& parts, bool shown)
+{
+	if (parts.empty() || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	auto& registry = Entities();
+	for (const auto entity : parts)
+	{
+		if (!registry.Valid(entity) || registry.AllOf<HiddenByState>(entity) != shown)
+		{
+			continue;
+		}
+		if (shown)
+		{
+			registry.Remove<HiddenByState>(entity);
+		}
+		else
+		{
+			registry.Assign<HiddenByState>(entity);
+		}
+	}
+	registry.SetDirty();
+}
+
+bool BoatLaunchSystem::Shown(const std::vector<entt::entity>& parts) const
+{
+	return !parts.empty() && Entities().Valid(parts.front()) && !Entities().AllOf<HiddenByState>(parts.front());
+}
+
+std::vector<entt::entity> BoatLaunchSystem::MakeParts(rules::Stage stage)
 {
 	auto& registry = Entities();
-	const auto make = [&registry, this](MeshId mesh, BoatFilmPart::Role role, size_t index, bool animated) {
+	std::vector<entt::entity> parts;
+	const auto make = [&registry, &parts, stage](MeshId mesh, BoatFilmPart::Role role, size_t index, bool animated) {
 		const auto entity = registry.Create();
 		registry.Assign<Transform>(entity, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 		registry.Assign<Mesh>(entity, resources::HashIdentifier(mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
 		registry.Assign<DrawnMatrix>(entity);
 		// The boat casts its shadow only on the beach
-		const bool castsShadow = role == BoatFilmPart::Role::Boat && _clocks.stage == rules::Stage::Launch;
+		const bool castsShadow = role == BoatFilmPart::Role::Boat && stage == rules::Stage::Launch;
 		registry.Assign<BoatFilmPart>(entity, role, static_cast<uint8_t>(index), 0, castsShadow);
 		if (animated)
 		{
 			registry.Assign<AnimatedStaticPose>(entity);
 		}
-		_parts.push_back(entity);
+		parts.push_back(entity);
 	};
 	make(MeshId::ObjectArk, BoatFilmPart::Role::Boat, 0, false);
-	if (_clocks.stage == rules::Stage::Launch)
+	if (stage == rules::Stage::Launch)
 	{
 		for (size_t i = 0; i < rules::k_LaunchSailors; ++i)
 		{
@@ -247,14 +303,15 @@ void BoatLaunchSystem::MakeParts()
 		}
 	}
 	registry.SetDirty();
+	return parts;
 }
 
-void BoatLaunchSystem::FreeParts()
+void BoatLaunchSystem::FreeParts(std::vector<entt::entity>& parts)
 {
-	if (!_parts.empty() && Locator::entitiesRegistry::has_value())
+	if (!parts.empty() && Locator::entitiesRegistry::has_value())
 	{
 		auto& registry = Entities();
-		for (const auto entity : _parts)
+		for (const auto entity : parts)
 		{
 			if (registry.Valid(entity) && registry.AllOf<BoatFilmPart>(entity))
 			{
@@ -263,7 +320,7 @@ void BoatLaunchSystem::FreeParts()
 		}
 		registry.SetDirty();
 	}
-	_parts.clear();
+	parts.clear();
 }
 
 std::optional<glm::mat4> BoatLaunchSystem::BoatMatrix() const
@@ -321,15 +378,16 @@ void BoatLaunchSystem::LaunchEffects()
 
 void BoatLaunchSystem::PlaceParts()
 {
-	if (_parts.empty() || !_boat.has_value())
+	const auto& parts = StageParts();
+	if (parts.empty() || !_boat.has_value())
 	{
 		return;
 	}
 	auto& registry = Entities();
-	Place(_parts.front(), *_boat);
-	for (size_t i = 1; i < _parts.size(); ++i)
+	Place(parts.front(), *_boat);
+	for (size_t i = 1; i < parts.size(); ++i)
 	{
-		const auto entity = _parts.at(i);
+		const auto entity = parts.at(i);
 		if (_clocks.stage == rules::Stage::Launch)
 		{
 			const auto sailor = rules::LaunchSailor(i - 1, _clocks, _places.dock);
@@ -364,19 +422,20 @@ void BoatLaunchSystem::Update(uint32_t milliseconds)
 	switch (rules::Advance(_clocks, static_cast<int32_t>(milliseconds), lengths))
 	{
 	case rules::Step::Ended:
-		Stop();
+		// The film goes from view at once
+		EndInFrame();
 		return;
 	case rules::Step::SailingBegan:
 		// The boat at sea and its deck are drawn from the next frame
-		FreeParts();
+		Show(_launchParts, false);
 		_boat.reset();
 		return;
 	case rules::Step::Continues:
 		break;
 	}
-	if (_parts.empty())
+	if (!Shown(StageParts()))
 	{
-		MakeParts();
+		Show(StageParts(), true);
 	}
 	_boat = BoatMatrix();
 	if (_clocks.stage == rules::Stage::Launch)
@@ -388,7 +447,7 @@ void BoatLaunchSystem::Update(uint32_t milliseconds)
 
 void BoatLaunchSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 {
-	if (!_playing || _clocks.stage != rules::Stage::Sailing || !_boat.has_value() || _parts.empty())
+	if (!_playing || _clocks.stage != rules::Stage::Sailing || !_boat.has_value() || !Shown(_sailingParts))
 	{
 		return;
 	}
@@ -432,5 +491,5 @@ BoatLaunchSystemInterface::State BoatLaunchSystem::GetState() const
 	        .clocks = _clocks,
 	        .places = _places,
 	        .boat = _boat,
-	        .parts = static_cast<uint32_t>(_parts.size())};
+	        .parts = _playing && Shown(StageParts()) ? static_cast<uint32_t>(StageParts().size()) : 0u};
 }

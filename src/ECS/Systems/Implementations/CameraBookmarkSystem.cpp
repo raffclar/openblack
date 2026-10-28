@@ -391,7 +391,8 @@ void CameraBookmarkSystem::FlyToNextTown(std::optional<entt::entity> thingUnderH
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto towns = player_towns::InOrder(registry, Locator::playerSystem::value().GetLocalPlayer());
+	const auto towns = player_towns::InOrder(
+	    registry, (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
 	std::vector<camera_bookmarks::TownStop> stops;
 	std::vector<std::optional<glm::vec3>> places;
 	stops.reserve(towns.size());

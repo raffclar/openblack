@@ -65,6 +65,7 @@ public:
 	void Reset() override;
 	void StartGame() override;
 	void FinishWrites() const override;
+	void SetBroughtCreature(entt::entity creature) override;
 
 private:
 	struct Arriving
@@ -94,6 +95,10 @@ private:
 	std::shared_ptr<const creaturemind::MindFileData> _kept;
 	std::vector<Arriving> _arriving;
 	bool _landKeepsCreatures {true};
+	/// The creature that the god of this computer brought into the network game, and the turns that it lived when this
+	/// computer last looked at it. This is not world state: only this computer writes the player's files.
+	std::optional<entt::entity> _brought;
+	std::optional<uint32_t> _broughtTurnsSeen;
 	/// The writer starts with the first file to write. It is the last member, so that it stops first.
 	mutable std::unique_ptr<save_files::BackgroundWriter> _writer;
 };

@@ -36,6 +36,7 @@ struct Transform;
 struct Translucent;
 struct Tree;
 struct Unlit;
+struct VillageTotemGhostHidden;
 } // namespace openblack::ecs::components
 
 namespace openblack::ecs
@@ -55,7 +56,8 @@ constexpr bool k_ChangesDrawLayout = [] {
 	       std::is_same_v<C, Translucent> || std::is_same_v<C, AnimalPose> || std::is_same_v<C, AnimatedStaticPose> ||
 	       std::is_same_v<C, DetailMeshes> || std::is_same_v<C, ShownRoots> || std::is_same_v<C, Temple> ||
 	       std::is_same_v<C, BuildProgress> || std::is_same_v<C, BlendedByMaterial> || std::is_same_v<C, BoatFilmPart> ||
-	       std::is_same_v<C, ScriptHighlight> || std::is_same_v<C, ChangedMaterials>;
+	       std::is_same_v<C, ScriptHighlight> || std::is_same_v<C, ChangedMaterials> ||
+	       std::is_same_v<C, VillageTotemGhostHidden>;
 }();
 
 } // namespace openblack::ecs

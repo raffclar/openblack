@@ -127,6 +127,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -809,10 +810,14 @@ std::vector<uint32_t> TownCompassionActions(const ecs::Registry& registry, entt:
 	if (const auto healAction = creature_mind_tables::FindAction(tables, k_HealAction);
 	    data != nullptr && body != nullptr && healAction.has_value())
 	{
-		// TODO(fish): a town desire shown on the leash holds off the healing; the leash can't show one yet
+		// A leash tied to a town's desire flag stops the healing choice
+		const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+		const bool leashedToTownDesire = leashes != nullptr && leashes->worn.has_value() && leashes->worn->tiedTo.has_value() &&
+		                                 registry.Valid(*leashes->worn->tiedTo) &&
+		                                 registry.AllOf<TownDesireFlag>(*leashes->worn->tiedTo);
 		const auto sightings = MiracleSightings(mind, tables, body->species, MagicType::Heal);
 		if (sightings.has_value() &&
-		    town_compassion::HealFirst(data->injured, false, sightings->first, sightings->second, random))
+		    town_compassion::HealFirst(data->injured, leashedToTownDesire, sightings->first, sightings->second, random))
 		{
 			heal = healAction;
 		}
@@ -1006,7 +1011,7 @@ void SetKindAttributes(const ecs::Registry& registry, entt::entity entity, const
 {
 	using creature_tree::Attribute;
 	namespace types = creature_tree::belief_types;
-	const auto onFire = [&registry, entity]() -> uint32_t {
+	const auto onFire = [entity]() -> uint32_t {
 		return creature_tree::OnFireValue(Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity));
 	};
 	switch (belief.type)
@@ -1224,7 +1229,8 @@ bool CreatureMindSystem::IsLocalPrimaryCreature(entt::entity creature)
 		return false;
 	}
 	const auto& players = Locator::playerSystem::value();
-	return players.GetPrimaryCreature(players.GetLocalPlayer()) == creature;
+	return players.GetPrimaryCreature((Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+	                                                                    : PlayerNames::PLAYER_ONE)) == creature;
 }
 
 void CreatureMindSystem::SetUpLearning(entt::entity creature, CreatureMindState& mind)
@@ -2276,9 +2282,7 @@ creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::
 		break;
 	}
 	// Only the player of the creature looks at it. In a game with one player, that is the first player.
-	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
-	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
-	    (networkGame || self.owner == PlayerNames::PLAYER_ONE) && camera.has_value())
+	if (const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature))
 	{
 		const auto* at = registry.TryGet<const Transform>(creature);
 		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
@@ -3148,7 +3152,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			// acts on the first part of the whole thing that suits the desire and is of use.
 			parts = ShownThingsWithoutWhole(creature, mind, desire, *leashTarget);
 		}
-		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
 		// The actions of the desire, in the order of its list
 		candidates.clear();
 		executors.clear();
@@ -3753,12 +3756,10 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	if (const auto* at = registry.TryGet<const Transform>(creature))
 	{
 		situation.position = {at->position.x, at->position.z};
-		// Only the local player's hands are about to throw to
-		const bool local = body != nullptr && Locator::playerSystem::has_value() &&
-		                   body->owner == Locator::playerSystem::value().GetLocalPlayer();
-		if (local && Locator::handSystem::has_value())
+		// The nearest hand of the creature's own player, which it may throw to
+		if (body != nullptr && Locator::handSystem::has_value())
 		{
-			for (const auto& hand : Locator::handSystem::value().GetPlayerHandPositions())
+			for (const auto& hand : Locator::handSystem::value().GetHandPositionsOf(body->owner))
 			{
 				if (hand.has_value() &&
 				    (!situation.playerHand.has_value() ||
@@ -3794,11 +3795,9 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* at = registry.TryGet<const Transform>(creature);
-	const auto* body = registry.TryGet<const Creature>(creature);
-	// Only the local player's camera looks at creatures here
-	const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
-	if (at != nullptr && body != nullptr && camera.has_value() && Locator::playerSystem::has_value() &&
-	    body->owner == Locator::playerSystem::value().GetLocalPlayer())
+	// Only the camera of the creature's own player looks at it here
+	const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature);
+	if (at != nullptr && camera.has_value())
 	{
 		situation.lookedAt = creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
 	}
@@ -4881,7 +4880,9 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 	if (Locator::playerProfileSystem::has_value())
 	{
 		const auto& profiles = Locator::playerProfileSystem::value();
-		if (Locator::playerSystem::has_value() && body->owner == Locator::playerSystem::value().GetLocalPlayer())
+		if (Locator::playerSystem::has_value() &&
+		    body->owner ==
+		        (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE))
 		{
 			ownerFile = profiles.CreatureFile();
 		}
@@ -5609,10 +5610,9 @@ void CreatureMindSystem::NoteStepSeen(entt::entity creature, CreatureMindState& 
 bool CreatureMindSystem::LookedAtByItsPlayer(entt::entity creature)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto* transform = registry.TryGet<const Transform>(creature);
-	const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
-	if (body == nullptr || transform == nullptr || body->owner != PlayerNames::PLAYER_ONE || !camera.has_value())
+	const auto camera = openblack::ecs::ReportedCameraOfItsPlayer(creature);
+	if (transform == nullptr || !camera.has_value())
 	{
 		return false;
 	}

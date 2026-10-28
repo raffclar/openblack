@@ -26,6 +26,8 @@
 #include "3D/MapCoords.h"
 #include "Animals/GrazerRules.h"
 #include "Camera/Camera.h"
+#include "Camera/StartCamera.h"
+#include "Camera/ZoomToPlaces.h"
 #include "Common/StringUtils.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -56,6 +58,7 @@
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/FootpathRules.h"
 #include "ECS/Registry.h"
@@ -846,12 +849,10 @@ void FeatureScriptCommands::CreateArea([[maybe_unused]] glm::vec3 position, floa
 
 void FeatureScriptCommands::StartCameraPos(glm::vec3 focus)
 {
-	static constexpr auto k_DefaultCameraOriginOffset = 120.0f;
-	static constexpr auto k_DefaultCameraOriginOffsetAngles = glm::radians(glm::vec2(12.8571f, 157.51f));
-
 	auto& camera = Locator::camera::value();
-	const auto offset = k_DefaultCameraOriginOffset * glm::euclidean(k_DefaultCameraOriginOffsetAngles);
-	camera.SetFocus(focus).SetOrigin(focus + offset);
+	camera.SetFocus(focus).SetOrigin(start_camera::OriginOver(focus));
+	// The land keeps the place, because a game that starts at the origin of the map starts at the player's temple
+	Locator::landSystem::value().SetStartCameraPlace({zoom_to::MapCoordOf(focus.x), zoom_to::MapCoordOf(focus.z)});
 }
 
 void FeatureScriptCommands::FlyByFile([[maybe_unused]] const std::string& path)
@@ -1058,8 +1059,10 @@ void FeatureScriptCommands::SetInteractDesire(float)
 
 void FeatureScriptCommands::ToggleComputerPlayer(const std::string& affiliation, int32_t toggle)
 {
-	// Any value but 0 switches the computer mind of the player on, and 0 switches it off
-	if (Locator::computerPlayerSystem::has_value())
+	// Any value but 0 switches the computer mind of the player on, and 0 switches it off. The map script of a network
+	// game does not do this, so that a human's god gets no computer mind.
+	const bool networkMapScript = Locator::landSystem::has_value() && Locator::landSystem::value().RunsNetworkMapScript();
+	if (Locator::computerPlayerSystem::has_value() && computer_player::LandScriptSwitchesMind(networkMapScript))
 	{
 		Locator::computerPlayerSystem::value().SwitchOn(GetPlayerName(affiliation), toggle != 0);
 	}
