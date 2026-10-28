@@ -106,6 +106,60 @@ TEST(SyncedState, AGlowWithNoMarkIsPartOfTheSyncedState)
 	EXPECT_NE(synced_state::HashOf(registry, context, k_Presentation).hash, before);
 }
 
+TEST(SyncedState, ARowThatOnlyOneComputerAddsPartsTheWorldAtTheNextRemoval)
+{
+	entt::meta_ctx context;
+	Register(context);
+	// The game server and a computer that draws have the same glows. Each glow is a row of the synced state.
+	entt::registry server;
+	entt::registry drawer;
+	for (auto* registry : {&server, &drawer})
+	{
+		for (int i = 0; i < 3; ++i)
+		{
+			registry->emplace<FakeGlow>(registry->create(), FakeGlow {.shine = static_cast<float>(i)});
+		}
+		// A marked copy that only the frames show
+		registry->emplace<FakeGlowMark>(registry->create());
+	}
+	ASSERT_EQ(synced_state::HashOf(server, context, k_Presentation).hash,
+	          synced_state::HashOf(drawer, context, k_Presentation).hash);
+	// The frames of the drawer give the copy a glow. The hash leaves the row out, but the order of the rows changes.
+	const auto copy = entt::entity {3};
+	drawer.emplace<FakeGlow>(copy, FakeGlow {.shine = 9.0f});
+	EXPECT_EQ(synced_state::HashOf(server, context, k_Presentation).hash,
+	          synced_state::HashOf(drawer, context, k_Presentation).hash);
+	EXPECT_NE(synced_state::RowOrdersOf(server, context, k_Presentation),
+	          synced_state::RowOrdersOf(drawer, context, k_Presentation));
+	// A turn removes the first glow on both. The last row moves to its place: another row on each computer.
+	server.remove<FakeGlow>(entt::entity {0});
+	drawer.remove<FakeGlow>(entt::entity {0});
+	EXPECT_NE(synced_state::HashOf(server, context, k_Presentation).hash,
+	          synced_state::HashOf(drawer, context, k_Presentation).hash);
+}
+
+TEST(SyncedState, TheOrderOfTheRowsLeavesOutTheMarksAndThePresentationComponents)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 1.0f, .drawnPlace = 1.0f});
+	registry.emplace<FakeHidden>(body);
+	registry.emplace<FakeGlowMark>(body);
+	const auto orders = synced_state::RowOrdersOf(registry, context, k_Presentation);
+	// The body has a synced field. The mark has no values, so the hash takes its rows in the order of their entities.
+	ASSERT_EQ(orders.size(), 2u);
+	EXPECT_EQ(orders.at(0).first, "FakeBody");
+	EXPECT_EQ(orders.at(1).first, "FakeGlowMark");
+	constexpr auto k_WholeBody = std::to_array<synced_state::PresentationPart>({
+	    {.component = "FakeBody", .field = "", .marker = ""},
+	});
+	const auto whole = synced_state::RowOrdersOf(registry, context, k_WholeBody);
+	ASSERT_EQ(whole.size(), 1u);
+	EXPECT_EQ(whole.at(0).first, "FakeGlowMark");
+}
+
 TEST(SyncedState, TheChecksumFollowsTheStateTheSeedAndTheDraws)
 {
 	const auto checksum = synced_state::Checksum(1, 2, 3);

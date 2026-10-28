@@ -87,6 +87,12 @@ private:
                           const ecs::reflection::RowVisitor& visit = {}, WorkerPool* pool = nullptr,
                           ecs::reflection::WorldRows* rows = nullptr, ecs::reflection::HashMemo* memo = nullptr);
 
+/// Tools: the hash of the order of the rows of each component that the hash of the synced state keeps values of. The order
+/// includes the rows of the presentation parts. A frame must not change it. The game turns go through the rows in this
+/// order, and when a turn removes a row, the last row moves to the place of that row.
+[[nodiscard]] std::vector<std::pair<std::string, uint64_t>>
+RowOrdersOf(const entt::registry& registry, const entt::meta_ctx& context, std::span<const PresentationPart> presentation);
+
 /// The hash of the synced state mixed with values of the world that the systems keep outside the entities
 [[nodiscard]] uint64_t MixValues(uint64_t stateHash, std::span<const int64_t> values);
 

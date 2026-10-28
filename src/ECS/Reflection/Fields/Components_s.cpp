@@ -76,7 +76,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Scaffold::ghost>("ghost");
 	Reflect<components::ScaffoldGhost>(context)
 	    .Field<&components::ScaffoldGhost::scaffold>("scaffold")
-	    .Field<&components::ScaffoldGhost::alpha>("alpha");
+	    .Field<&components::ScaffoldGhost::alpha>("alpha")
+	    .Field<&components::ScaffoldGhost::model>("model");
 	Reflect<components::ScaffoldDrawnScale>(context).Field<&components::ScaffoldDrawnScale::scale>("scale");
 	Reflect<components::ScriptAnimation>(context)
 	    .Field<&components::ScriptAnimation::clip>("clip")
