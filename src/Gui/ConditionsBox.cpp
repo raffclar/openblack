@@ -58,7 +58,7 @@ ConditionsBox::ConditionsBox(const TextDatabase& texts, const GameFont& font, st
 	tabs.resize(k_TabCount);
 	for (auto& tab : tabs)
 	{
-		tab.textSize = DialogPainter::k_SmallTextSize;
+		tab.textSize = DialogPainter::SmallTextSize();
 	}
 	_dialog = std::make_unique<Dialog>(std::move(tabs), k_MultiplayerTab, k_Box);
 	auto& dialog = *_dialog;
@@ -71,13 +71,13 @@ ConditionsBox::ConditionsBox(const TextDatabase& texts, const GameFont& font, st
 		    {colour, colour, colour, colour});
 	};
 	dialog.Add<StaticText>(k_HeadingRect, std::u16string(texts.Get("HELP_TEXT_MULTIPLAYER_STATS_CAPTION")),
-	                       StaticText::Layout::Centre, DialogPainter::k_MidTextSize);
+	                       StaticText::Layout::Centre, DialogPainter::MidTextSize());
 	dialog
 	    .Add<BigButton>(font, glm::ivec2 {20, 530}, 40, std::u16string(texts.Get("HELP_TEXT_DIALOG_TATOOBACK")),
 	                    BigButton::LabelSide::Right, BigButton::Look::LeftArrow)
 	    .onClick = back;
 	_graph = &statistics_box::AddLineGraph(dialog, k_GraphRect, std::u16string(), false);
-	_list = &dialog.Add<List>(font, k_ListRect, DialogPainter::k_MidTextSize, false, true, true);
+	_list = &dialog.Add<List>(font, k_ListRect, DialogPainter::MidTextSize(), false, true, true);
 	_list->ShowScrollBarWhenNeeded();
 	_list->drawUnder = [this](const DialogPainter& painter, const List::ItemPlace& place) { DrawValues(painter, place); };
 	for (size_t i = 0; i < k_Gods; ++i)

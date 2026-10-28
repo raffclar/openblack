@@ -137,3 +137,9 @@ TEST(ChallengeRoom, AHeldReplayButtonMovesIntoTheWall)
 	EXPECT_EQ(rules::HeldOffset(Part::Picture, frameZ), glm::vec3(0.0f));
 	EXPECT_EQ(rules::HeldOffset(Part::SilverFrame, frameZ), glm::vec3(0.0f));
 }
+
+TEST(ChallengeRoom, TheCloseLookIsThreePixelsBiggerForTheLanguagesThatNeedBiggerText)
+{
+	EXPECT_EQ(openblack::temple::challenge_room::TextSize(false), 30.0f);
+	EXPECT_EQ(openblack::temple::challenge_room::TextSize(true), 33.0f);
+}

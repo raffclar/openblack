@@ -85,10 +85,30 @@ public:
 	static constexpr glm::vec4 k_FocusColour {1.0f, 1.0f, 1.0f, 1.0f};
 	static constexpr glm::vec4 k_HoverColour {192.0f / 255.0f, 128.0f / 255.0f, 32.0f / 255.0f, 1.0f};
 	static constexpr glm::vec4 k_ShadowColour {0.0f, 0.0f, 0.0f, 1.0f};
-	/// The big, middle and small text sizes for screens that don't need bigger text
+	/// The big, middle and small text sizes for the languages that do not need bigger text
 	static constexpr int k_BigTextSize = 35;
 	static constexpr int k_MidTextSize = 22;
 	static constexpr int k_SmallTextSize = 20;
+	/// The middle and small text sizes for the languages that need bigger text. The big size does not change.
+	static constexpr int k_BiggerMidTextSize = 23;
+	static constexpr int k_BiggerSmallTextSize = 21;
+
+	/// The middle text size, one more when the language needs bigger text
+	[[nodiscard]] static constexpr int MidTextSizeFor(bool biggerText)
+	{
+		return biggerText ? k_BiggerMidTextSize : k_MidTextSize;
+	}
+	/// The small text size, one more when the language needs bigger text
+	[[nodiscard]] static constexpr int SmallTextSizeFor(bool biggerText)
+	{
+		return biggerText ? k_BiggerSmallTextSize : k_SmallTextSize;
+	}
+	/// Whether the language of the install needs bigger text. It is false before the game reads the language.
+	[[nodiscard]] static bool NeedsBiggerText();
+	/// The middle text size for the language of the install
+	[[nodiscard]] static int MidTextSize() { return MidTextSizeFor(NeedsBiggerText()); }
+	/// The small text size for the language of the install
+	[[nodiscard]] static int SmallTextSize() { return SmallTextSizeFor(NeedsBiggerText()); }
 
 	/// The colour of the edge lines of a bevelled box. Each part is the edge colour of the style times the same part of
 	/// the colour of the box, divided by 256 with no fraction. Thus white edges on a white box are 254, not 255.
@@ -149,7 +169,7 @@ public:
 	/// A tab button with its label: a tab on top of a dialog, open onto it when selected, or
 	/// just the line along the bottom of a tab without a label
 	void DrawTab(const DialogRect& rect, std::u16string_view label, bool selected, bool first, bool last, bool hovered,
-	             int textSize = k_MidTextSize) const;
+	             int textSize = MidTextSize()) const;
 	/// A big arrow button: an arrow size pixels square with its shadow, orange when hovered and nearer its shadow
 	/// when pressed
 	void DrawArrow(glm::ivec2 position, int size, Arrow arrow, bool hovered, bool pressed) const;

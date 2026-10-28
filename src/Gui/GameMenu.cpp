@@ -32,7 +32,11 @@ using Look = BigButton::Look;
 using LabelSide = BigButton::LabelSide;
 using Layout = StaticText::Layout;
 constexpr auto k_Big = DialogPainter::k_BigTextSize;
-constexpr auto k_Mid = DialogPainter::k_MidTextSize;
+/// The middle text size for the language of the install
+[[nodiscard]] int Mid()
+{
+	return DialogPainter::MidTextSize();
+}
 
 // Dialogs and message boxes: fading in when shown and out when hidden
 constexpr float k_FadeInSeconds = 0.5f;
@@ -363,7 +367,7 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	// computer keep the choice. The selector steps through as many levels as those settings say.
 	auto& detail = page.Add<Button>(
 	    DialogRect {.min = {k_SelectorLeft, 350}, .max = {k_SelectorLeft + k_SelectorWidth, 350 + k_SelectorHeight}},
-	    _detailLabels.at(static_cast<size_t>(_settings.detail)), k_Mid);
+	    _detailLabels.at(static_cast<size_t>(_settings.detail)), Mid());
 	const auto stepDetail = [this, &detail](int step) {
 		const auto count = _settings.detailLevels;
 		_settings.detail = (_settings.detail + step + count) % count;
@@ -421,7 +425,7 @@ void GameMenu::BuildPlayers(const TextDatabase& texts)
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_SELECT_A_PLAYER")), Layout::Wrapped);
 
 	// The profiles, the one played picked; picking another plays as it from now on
-	auto& players = page.Add<List>(_font, DialogRect {.min = {200, 120}, .max = {600, 280}}, k_Mid, true, false, true);
+	auto& players = page.Add<List>(_font, DialogRect {.min = {200, 120}, .max = {600, 280}}, Mid(), true, false, true);
 	players.SetItems({{.text = _playerName, .mouseCell = std::nullopt, .mouseMirrored = false}});
 	players.SetSelection(0);
 	players.onClick = [this, &players] {
@@ -448,9 +452,9 @@ void GameMenu::BuildPlayers(const TextDatabase& texts)
 	};
 
 	page.Add<StaticText>(DialogRect {.min = {0, 370}, .max = {190, 410}},
-	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_CREATURENAME")), Layout::Right, k_Mid);
+	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_CREATURENAME")), Layout::Right, Mid());
 	// The name box takes 29 characters
-	auto& name = page.Add<EditBox>(_font, DialogRect {.min = {200, 370}, .max = {600, 410}}, _settings.creatureName, 29, k_Mid);
+	auto& name = page.Add<EditBox>(_font, DialogRect {.min = {200, 370}, .max = {600, 410}}, _settings.creatureName, 29, Mid());
 	_creatureNameBox = &name;
 	name.onChange = [this](const std::u16string& text) {
 		_settings.creatureName = text;
@@ -705,7 +709,7 @@ void GameMenu::BuildAdvanced(const TextDatabase& texts)
 	const auto addSelector = [this, &page](int top, int& value, auto& labels) {
 		auto& button = page.Add<Button>(
 		    DialogRect {.min = {k_SelectorLeft, top}, .max = {k_SelectorLeft + k_SelectorWidth, top + k_SelectorHeight}},
-		    labels.at(static_cast<size_t>(value)), k_Mid);
+		    labels.at(static_cast<size_t>(value)), Mid());
 		const auto step = [this, &button, &value, &labels](int by) {
 			const auto count = static_cast<int>(labels.size());
 			value = (value + by + count) % count;
@@ -770,11 +774,11 @@ void GameMenu::BuildControls(const TextDatabase& texts)
 
 	// Halfway between the big and the mid text size
 	_controls =
-	    &page.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 440}}, (k_Big + k_Mid) / 2, true, true, false);
+	    &page.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 440}}, (k_Big + Mid()) / 2, true, true, false);
 	RefreshControls();
 
 	// Load Defaults asks first, then puts every binding back
-	page.Add<Button>(DialogRect {.min = {260, 530}, .max = {540, 570}}, _loadDefaults, k_Mid).onClick = [this] {
+	page.Add<Button>(DialogRect {.min = {260, 530}, .max = {540, 570}}, _loadDefaults, Mid()).onClick = [this] {
 		Confirm(_loadDefaults, [this] {
 			_bindings = input::DefaultKeyBindings();
 			RefreshControls();
@@ -952,7 +956,7 @@ void GameMenu::Tell(std::u16string text, Action ok)
 	// A message with an OK button 150 by 32 under it, in the same box as a question
 	auto answers = std::make_unique<Dialog>();
 	auto& words = answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
-	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, k_Mid);
+	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, Mid());
 	okButton.onClick = [this, ok] { Settle(ok); };
 	_question = Question {.text = std::move(text),
 	                      .answers = std::move(answers),
@@ -969,7 +973,7 @@ void GameMenu::TellThen(std::u16string text, std::function<void()> then)
 	// A message with an OK button, as Tell shows it, which does what it is given
 	auto answers = std::make_unique<Dialog>();
 	auto& words = answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
-	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, k_Mid);
+	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, Mid());
 	okButton.onClick = [this, then = std::move(then)] {
 		then();
 		Settle(Action::None);

@@ -19,12 +19,14 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/SoundDecoder.h"
 #include "Audio/WaveCueLabels.h"
+#include "Common/GameLanguage.h"
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "EngineConfig.h"
 #include "Gui/TextDatabase.h"
 #include "Help/Spirits.h"
 #include "InfoConstants.h"
@@ -253,8 +255,9 @@ void HelpTextSystem::Start(const gui::TextDatabase& texts, int screenHeight)
 		settings.turnsPerWord = help.readDefaultWordGTTime;
 		settings.extraTurns = help.readDefaultAdjustGTTime;
 	}
-	// Some languages' texts are drawn bigger; the game's English ones are not
-	_dialogue = std::make_unique<help::DialogueText>(screenHeight, false, settings, DialogueQueries(), DialogueHooks());
+	// Some languages use bigger lines of text
+	const bool biggerText = Locator::config::has_value() && game_language::NeedsBiggerText(Locator::config::value().language);
+	_dialogue = std::make_unique<help::DialogueText>(screenHeight, biggerText, settings, DialogueQueries(), DialogueHooks());
 	SetTextChoices(_textChoices);
 }
 

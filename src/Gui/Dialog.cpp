@@ -30,7 +30,7 @@ class TabControl final: public Control
 {
 public:
 	TabControl(DialogRect rect, std::u16string label, bool selected, bool first, bool last, std::function<void()> select,
-	           int textSize = DialogPainter::k_MidTextSize)
+	           int textSize = DialogPainter::MidTextSize())
 	    : Control(rect)
 	    , _label(std::move(label))
 	    , _textSize(textSize)

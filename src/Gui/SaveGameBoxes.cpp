@@ -102,7 +102,7 @@ void SaveGameBoxes::Tell(std::u16string message)
 {
 	auto& told = Show(std::move(message));
 	told.message = true;
-	told.answers.Add<Button>(k_MessageOk, Text(_texts, k_OkText), DialogPainter::k_MidTextSize).onClick = [this] {
+	told.answers.Add<Button>(k_MessageOk, Text(_texts, k_OkText), DialogPainter::MidTextSize()).onClick = [this] {
 		Answered(Answer::Ok);
 	};
 }
@@ -307,7 +307,7 @@ void SaveGameBoxes::Draw(const DialogPainter& painter) const
 		{
 			--size;
 		} while (painter.GetTextHeight(k_QuestionWidth, _question->text, size) >= k_QuestionTallest &&
-		         size > DialogPainter::k_SmallTextSize);
+		         size > DialogPainter::SmallTextSize());
 		_question->textControl->size = size;
 		const auto alpha = std::clamp(_questionFade.GetValue(), 0.0f, 1.0f);
 		painter.SetAlpha(alpha);
