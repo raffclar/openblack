@@ -209,6 +209,28 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f}},
 	});
 
+	// The hand takes the cow that a wolf eats: the wolf lets go of its meal at once and runs on
+	all.push_back({
+	    .id = "animals.wolf_meal_in_hand",
+	    .name = "The hand takes the meal of a wolf",
+	    .facet = Facet::Miracles,
+	    .description = "The ground flock cast at a point south of a cow, so that the wolves run at the cow. When a wolf "
+	                   "eats the cow, the hand takes the cow. Five seconds later the hand lets it go.",
+	    .expected = "A wolf pounces and the cow falls in its dying clip. The wolf goes to the cow and eats. On the turn "
+	                "that the hand takes the cow, the wolf stops its meal and runs on to where the miracle sent it. Let "
+	                "go, the cow gets up and wanders off.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {8.0f, 9.0f, 34.0f}, .look = {0.0f, 2.0f, 50.0f}},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 50.0f}, .living = true}},
+	    .miracles = {{.type = MagicType::FlockGround,
+	                  .point = k_Spot,
+	                  .handOffset = k_HandBehind,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 10.0f, .object = 0},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 5.0f}},
+	});
+
 	// A cow that a kill made dying, in the hand for a time and then let go: in the hand it does not die or go
 	all.push_back({
 	    .id = "animals.dying_cow_in_hand",
