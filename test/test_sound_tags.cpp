@@ -496,7 +496,7 @@ TEST_F(SoundTags, AMovedSoundKeepsItsOffset)
 }
 
 // A saved game loads: the sounds of points and the sounds attached to objects do not come back, and an object's own
-// sound starts again on the next turn
+// sound starts again on the next turn. The tag keeps its count of the turns.
 TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -512,9 +512,12 @@ TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	ASSERT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter != entt::null);
 	const auto before = Audio().emitters.size();
+	const auto turns = registry.Get<ecs::components::SoundTag>(lantern).turns;
 
 	_tags.ForgetSavedSounds();
 	EXPECT_FALSE(registry.Valid(attached));
+	// The count of the turns is a part of the synced world, so the load keeps it
+	EXPECT_EQ(registry.Get<ecs::components::SoundTag>(lantern).turns, turns);
 	EXPECT_TRUE(_tags.PointSounds().empty());
 	EXPECT_TRUE(registry.Valid(box));
 	EXPECT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter == entt::null);

@@ -42,6 +42,22 @@ constexpr float k_ShareOfNoInfluence = 0.01f;
 /// A loaded game keeps the look that the mesh was blended for, but the blended mesh itself is made again.
 [[nodiscard]] bool NeedsBlend(std::optional<glm::vec2> blendedFor, glm::vec2 look, bool meshLoaded);
 
+/// What a blend of a temple's mesh comes from: the temple's look (its size, then its alignment) and the set of
+/// textures of its player
+struct Blend
+{
+	glm::vec2 look {0.0f};
+	uint32_t textureSet {0};
+
+	bool operator==(const Blend&) const = default;
+};
+
+/// Whether the temple's mesh is to be blended again after a load. Each temple that the save keeps a look for gets a new
+/// blend. The cache can keep a mesh that this computer blended for another world, such as the world before a network
+/// game loads the server's world. A mesh in the cache that is the blend of the same look and textures stays.
+/// @param inCache The blend of the mesh that the cache keeps for the temple, nothing when the cache keeps none
+[[nodiscard]] bool BlendsAfterLoad(std::optional<glm::vec2> blendedFor, std::optional<Blend> inCache, Blend wanted);
+
 /// One of the meshes a temple's is blended from, and how much of it
 struct Corner
 {

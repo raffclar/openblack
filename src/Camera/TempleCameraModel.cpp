@@ -417,6 +417,11 @@ glm::vec3 TempleCameraModel::MapAround(float yaw, float pitch)
 	        x87::Mul(x87::Sin(yaw), x87::Cos(pitch))};
 }
 
+float TempleCameraModel::DragLeanStep(float mouseDown, float dt, float across)
+{
+	return ((mouseDown * dt) * 0.06f) * (1.0f - std::abs(across));
+}
+
 float TempleCameraModel::EdgeLeanStep(float dt, float ramp, float speed)
 {
 	// The FPU's cosine stays wide for the subtraction
@@ -874,7 +879,7 @@ void TempleCameraModel::UpdateOrbit(float dt, const Input& input)
 		if (_wasPressed)
 		{
 			_yawTarget = _yaw.GetValue() + turn;
-			_leanTarget += (((input.mouse.y - _lastMouse.y) * dt) * 0.06f) * (1.0f - std::abs(input.mouseScreen.x));
+			_leanTarget += DragLeanStep(input.mouse.y - _lastMouse.y, dt, input.mouseScreen.x);
 		}
 		_lastMouse = input.mouse;
 	}

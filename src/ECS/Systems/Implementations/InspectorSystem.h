@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
 
 #include <atomic>
@@ -25,6 +26,7 @@
 #include <entt/meta/context.hpp>
 
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "Inspector/CameraControl.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -75,6 +77,8 @@ public:
 private:
 	/// The helper answering while the game loads: until told to stop
 	void AnswerWhileLoading();
+	/// Tells the helper to stop and waits for it
+	void StopLoadingHelper();
 	/// A scenario asked for while the game loads is kept and loaded once the load is done, rather than refused: a tool
 	/// asking for one straight after launching the game would otherwise get the empty testbed it was starting with
 	[[nodiscard]] std::optional<inspector::QueryResult> QueueWhileLoading(const inspector::Request& request);
@@ -109,6 +113,9 @@ private:
 	std::optional<std::string> _queuedScenario;
 	std::mutex _loadingMutex;
 	std::atomic<bool> _stopLoadingHelper {false};
+	/// Wakes the helper when it must stop, so that the end of a load does not wait for its next answer
+	std::mutex _stopMutex;
+	std::condition_variable _stopSignal;
 	std::thread _loadingHelper;
 	/// The recorded input that the next land makes from its first frame on
 	std::optional<inspector::Json> _replayOnLoad;
@@ -118,6 +125,9 @@ private:
 	void WriteRecordedInput();
 	/// Where the camera of the next land stands before its first frame, as camera.set takes it
 	std::optional<inspector::Json> _cameraOnLoad;
+	/// The frames on which the drawn view changes to a different camera, and the last frame that it checked
+	inspector::ShownCameraCuts _shownCameraCuts;
+	std::optional<uint64_t> _cutsCheckedAt;
 	/// The fight autopilot, which gives its input through the inspector's input
 	std::unique_ptr<inspector::FightAutopilot> _autopilot;
 };

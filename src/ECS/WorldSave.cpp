@@ -46,6 +46,7 @@
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
@@ -67,6 +68,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -273,6 +275,7 @@ void ForgetSavedSounds(Registry& registry)
 		    }
 		    // The loaded creature has no glows before it gets its powers
 		    glows.glows = {};
+		    glows.motion = {};
 		    creatures.emplace_back(entity, powers);
 	    });
 	for (const auto& [entity, powers] : creatures)
@@ -414,7 +417,7 @@ void LogWorldReport(const reflection::WorldSaveReport& report)
 
 } // namespace
 
-std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt::meta_ctx& reflection)
+std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt::meta_ctx& reflection, bool valueEnds)
 {
 	std::vector<reflection::NamedSection> sections;
 	for (const auto& [name, find] : k_SavedSystems)
@@ -422,9 +425,13 @@ std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt
 		if (const auto* system = find(); system != nullptr)
 		{
 			reflection::BinaryWriter out(reflection);
+			if (valueEnds)
+			{
+				out.KeepValueEnds();
+			}
 			out.SetPlace(name, "");
 			system->SaveState(out);
-			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes())});
+			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes()), .valueEnds = out.ValueEnds()});
 		}
 	}
 	return sections;
@@ -520,7 +527,8 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		{
 			// The maps that the game works out from the land are made again when they are next needed
 			loaded.landAvoid.reset();
-			loaded.explorationMap.reset();
+			// The creatures' map of the land comes from the land and its towns at the start of the land, and the towns
+			// changed after. The load keeps the saved map, so that the creatures find the same places as before the save.
 			registry.Context() = std::move(loaded);
 		}
 		else
@@ -550,6 +558,10 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		}
 	}
 	registry.Underlying().remove<components::WalkPath>(lost.begin(), lost.end());
+	// A dance takes its file again, which the save does not keep
+	TakeDanceFilesAgain(registry.Underlying(), [](DanceInfo type) {
+		return Locator::danceSystem::has_value() ? Locator::danceSystem::value().FileOf(type) : nullptr;
+	});
 	// An arena makes its ring of light again, shown while a fight is on in it
 	for (auto&& [entity, arena] : registry.Underlying().view<components::CreatureArena>().each())
 	{
@@ -654,6 +666,15 @@ void world_save::ForgetUnsavedState(entt::registry& registry)
 	registry.view<components::FootpathFinder>().each([](components::FootpathFinder& finder) { finder.plan.reset(); });
 	// A save from inside the temple has the rooms of the temple, so the load removes them
 	ForgetTempleRooms(registry);
+}
+
+void world_save::TakeDanceFilesAgain(entt::registry& registry,
+                                     const std::function<std::shared_ptr<const dance::DanceFile>(DanceInfo)>& fileOf)
+{
+	for (auto&& [entity, dance] : registry.view<components::Dance>().each())
+	{
+		dance.file = fileOf(dance.type);
+	}
 }
 
 bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn)

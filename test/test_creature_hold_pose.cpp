@@ -87,6 +87,18 @@ TEST(CreatureHoldPose, KeptWhileKnockingDownKickingAndPointing)
 	}
 }
 
+TEST(CreatureHoldPose, AnActionPosesTheBodyOnlyWhileItPlaysItsAnimations)
+{
+	using creature_object_actions::PosesBody;
+	using creature_object_actions::Status;
+	EXPECT_TRUE(PosesBody(true, Status::Running));
+	EXPECT_TRUE(PosesBody(true, Status::Contact));
+	EXPECT_FALSE(PosesBody(true, Status::Done));
+	EXPECT_FALSE(PosesBody(true, Status::Failed));
+	// While it walks or turns to the thing, the walk poses the body
+	EXPECT_FALSE(PosesBody(false, Status::Running));
+}
+
 TEST(CreatureHoldPose, LayerSetsOnlyTheBonesItTurns)
 {
 	const auto skeleton = ThreeBones();

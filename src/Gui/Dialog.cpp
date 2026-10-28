@@ -112,6 +112,19 @@ void Dialog::SetTabLabel(size_t index, std::u16string label)
 	}
 }
 
+std::vector<DialogRect> Dialog::GetVisibleRects() const
+{
+	std::vector<DialogRect> rects;
+	for (const auto& control : _controls)
+	{
+		if (control->visible)
+		{
+			rects.push_back(control->rect);
+		}
+	}
+	return rects;
+}
+
 std::vector<Dialog::NamedControl> Dialog::GetNamedControls() const
 {
 	std::vector<NamedControl> named;
@@ -193,7 +206,7 @@ bool Dialog::MouseUp(glm::ivec2 point)
 	}
 	if (auto* picture = dynamic_cast<SymbolPicture*>(pressed); picture != nullptr && released != pressed)
 	{
-		picture->Release();
+		picture->CloseRing();
 	}
 	if (pressed == nullptr || released != pressed)
 	{
@@ -338,7 +351,7 @@ void Dialog::Reset()
 	        std::ranges::find_if(_controls, [](const auto& c) { return dynamic_cast<SymbolPicture*>(c.get()) != nullptr; });
 	    it != _controls.end())
 	{
-		static_cast<SymbolPicture&>(**it).Release();
+		static_cast<SymbolPicture&>(**it).CloseRing();
 	}
 }
 

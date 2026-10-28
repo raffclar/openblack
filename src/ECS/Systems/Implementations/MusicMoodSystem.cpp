@@ -22,6 +22,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -116,7 +117,8 @@ std::optional<entt::entity> MusicMoodSystem::LocalCreature()
 		return std::nullopt;
 	}
 	const auto& players = Locator::playerSystem::value();
-	const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer());
+	const auto creature = players.GetPrimaryCreature(
+	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
 	if (!creature.has_value() || !Locator::entitiesRegistry::value().Valid(*creature))
 	{
 		return std::nullopt;

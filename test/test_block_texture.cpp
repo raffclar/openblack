@@ -321,3 +321,101 @@ TEST(BlockTexture, PaintCellTexelsMatchesThePaintOfOneTexelAtATime)
 		EXPECT_EQ(texels, PaintTexelByTexel(cells, sources, first, count)) << "first " << first.x << " " << first.y;
 	}
 }
+
+TEST(BlockTexture, TheLowResolutionTakesEverySecondTexelOfTheFullTexture)
+{
+	const std::array countries = {SingleMaterialCountry(0), SingleMaterialCountry(1)};
+	std::vector<uint16_t> materials(k_MapTexels * 2);
+	std::iota(materials.begin(), materials.end(), uint16_t {0});
+	std::vector<uint8_t> noise(k_MapTexels);
+	std::iota(noise.begin(), noise.end(), uint8_t {0});
+	const std::vector<uint8_t> bump(k_MapTexels, 0x90);
+	auto cells = FlatCells(10);
+	// A slope, a cell of open sea and cells where two countries meet, so that the corners blend
+	for (size_t i = 0; i < cells.size(); ++i)
+	{
+		cells[i].altitude = static_cast<uint8_t>(2 + (i % 23));
+		cells[i].properties.country = static_cast<uint8_t>((i / 5) % 2);
+	}
+	cells[(5 * block_texture::k_CellsPerSide) + 6].flags = 0x02;
+	block_texture::Sources sources {countries, materials, noise, bump};
+	std::vector<uint8_t> full(block_texture::k_BlockBytes, 0);
+	block_texture::BuildBlock(cells, sources, full);
+
+	sources.resolution = block_texture::Resolution::Low;
+	ASSERT_EQ(block_texture::SideOf(sources.resolution), 128);
+	ASSERT_EQ(block_texture::TexelsPerCellOf(sources.resolution), 8);
+	std::vector<uint8_t> low(block_texture::BlockBytesOf(sources.resolution), 0xAA);
+	block_texture::BuildBlock(cells, sources, low);
+	for (int x = 0; x < block_texture::k_LowSide; ++x)
+	{
+		for (int z = 0; z < block_texture::k_LowSide; ++z)
+		{
+			const auto fromLow = static_cast<size_t>((x * block_texture::k_LowSide) + z) * 4;
+			ASSERT_EQ((std::array {low[fromLow], low[fromLow + 1], low[fromLow + 2], low[fromLow + 3]}),
+			          TexelAt(full, x * 2, z * 2))
+			    << "texel x " << x << " z " << z;
+		}
+	}
+
+	// A rectangle of cells at the low resolution is the same part of the low texture
+	const glm::ivec2 first {4, 5};
+	const glm::ivec2 count {3, 4};
+	std::vector<uint8_t> part(static_cast<size_t>(count.x * count.y) * 8 * 8 * 4, 0xAA);
+	block_texture::PaintCells(cells, sources, first, count, part);
+	for (int x = 0; x < count.x * 8; ++x)
+	{
+		for (int z = 0; z < count.y * 8; ++z)
+		{
+			const auto fromPart = static_cast<size_t>((x * count.y * 8) + z) * 4;
+			const auto fromLow = static_cast<size_t>(((first.x * 8 + x) * block_texture::k_LowSide) + (first.y * 8 + z)) * 4;
+			ASSERT_TRUE(std::equal(part.begin() + static_cast<std::ptrdiff_t>(fromPart),
+			                       part.begin() + static_cast<std::ptrdiff_t>(fromPart + 4),
+			                       low.begin() + static_cast<std::ptrdiff_t>(fromLow)))
+			    << "texel x " << x << " z " << z;
+		}
+	}
+}
+
+TEST(BlockTexture, PutCellTexelsMakesAKeptBlockAsANewPaintOfIt)
+{
+	const std::array countries = {SingleMaterialCountry(0), SingleMaterialCountry(1)};
+	std::vector<uint16_t> materials(k_MapTexels * 2);
+	std::iota(materials.begin(), materials.end(), uint16_t {0});
+	std::vector<uint8_t> noise(k_MapTexels);
+	std::iota(noise.begin(), noise.end(), uint8_t {0});
+	const std::vector<uint8_t> bump(k_MapTexels, 0x80);
+	const block_texture::Sources sources {countries, materials, noise, bump};
+	auto cells = FlatCells(0);
+	for (size_t i = 0; i < cells.size(); ++i)
+	{
+		cells[i].altitude = static_cast<uint8_t>(2 + (i % 19));
+		cells[i].properties.country = static_cast<uint8_t>((i / 7) % 2);
+	}
+	std::vector<uint16_t> kept(static_cast<size_t>(block_texture::k_Side) * block_texture::k_Side);
+	block_texture::BuildBlockTexels(cells, sources, kept);
+
+	// Two corners change height: x 7 and 8, z 10. The land paints again the cells that touch them, x 6 to 8 and z 9 to
+	// 10.
+	for (const int x : {7, 8})
+	{
+		cells[static_cast<size_t>((x * block_texture::k_CellsPerSide) + 10)].altitude = 40;
+	}
+	const glm::ivec2 first {6, 9};
+	const glm::ivec2 count {3, 2};
+	std::vector<uint16_t> part(static_cast<size_t>(count.x * count.y) * 16 * 16);
+	block_texture::PaintCellTexels(cells, sources, first, count, part);
+	block_texture::PutCellTexels(part, first, count, kept);
+
+	std::vector<uint16_t> fresh(kept.size());
+	block_texture::BuildBlockTexels(cells, sources, fresh);
+	EXPECT_EQ(kept, fresh);
+}
+
+TEST(BlockTexture, PutCellTexelsLeavesABlockAsItIsForARectangleOutsideIt)
+{
+	std::vector<uint16_t> block(static_cast<size_t>(block_texture::k_Side) * block_texture::k_Side, 7);
+	const std::vector<uint16_t> part(static_cast<size_t>(2 * 2) * 16 * 16, 9);
+	block_texture::PutCellTexels(part, {15, 0}, {2, 2}, block);
+	EXPECT_TRUE(std::ranges::all_of(block, [](uint16_t texel) { return texel == 7; }));
+}

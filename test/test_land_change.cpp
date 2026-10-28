@@ -89,6 +89,17 @@ TEST(ProfileAlignment, ANewGameStartsThePlayerAtTheKeptAlignmentNoFurtherThanGoo
 	EXPECT_FLOAT_EQ(Starting(-3.0), -1.0f);
 }
 
+// Only a game for one player uses the alignment of the profile of this computer. A network game neither starts a god
+// from it nor changes it, so that the game server and each player start the same world.
+TEST(ProfileAlignment, ANetworkGameDoesNotUseTheProfileOfThisComputer)
+{
+	using namespace openblack::profile_alignment;
+	EXPECT_TRUE(StartsFromOwnProfile(false));
+	EXPECT_FALSE(StartsFromOwnProfile(true));
+	EXPECT_TRUE(KeptInOwnProfile(false));
+	EXPECT_FALSE(KeptInOwnProfile(true));
+}
+
 TEST(ProfileAlignment, TheAlignmentIsKeptEverySixHundredTurnsAndAtOnceOnANewLand)
 {
 	using namespace openblack::profile_alignment;
