@@ -118,6 +118,8 @@ void LockstepHost::Refuse(ConnectionId connection, std::string_view reason)
 	SendTo(connection, game_socket::Refused {.reason = std::string(reason)});
 	_sockets.Close(connection, server_close::k_Refused);
 	_peers.erase(connection);
+	// A refused observer cannot come back with its session
+	std::erase_if(_watchers, [connection](const Watcher& watcher) { return watcher.connection == connection; });
 }
 
 void LockstepHost::Text(ConnectionId connection, std::string_view text)
@@ -164,6 +166,11 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 			{
 				StopStart(game_socket::StartStop {});
 			}
+		}
+		// An observer that leaves cannot come back with its session
+		if (std::erase_if(_watchers, [connection](const Watcher& watcher) { return watcher.connection == connection; }) > 0)
+		{
+			Log(spdlog::level::info, "An observer leaves the game");
 		}
 		_sockets.Close(connection, server_close::k_Normal);
 		_peers.erase(connection);
@@ -257,6 +264,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	}
 	else
 	{
+		joined.session = NewWatcher(connection);
 		Log(spdlog::level::info, fmt::format("{} joins as an observer", claims.name));
 	}
 	peer.joined = true;
@@ -273,9 +281,18 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	// The server sends again only the turns that it kept, unless it sends its world
 	const bool world = resume.world && _worldState;
 	const bool kept = world || resume.turn == _turnsDone || _history.contains(resume.turn);
-	if (peer.joined || found == _seats.end() || resume.turn > _turnsDone || !kept)
+	if (peer.joined || resume.turn > _turnsDone || !kept)
 	{
 		Refuse(connection, "resume");
+		return;
+	}
+	if (found == _seats.end())
+	{
+		// A session of no god can be the session of an observer
+		if (!ResumeObserver(connection, peer, resume, world))
+		{
+			Refuse(connection, "resume");
+		}
 		return;
 	}
 	const auto seat = static_cast<uint8_t>(found - _seats.begin());
@@ -306,7 +323,53 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 		return;
 	}
 	SendTo(connection, game_socket::Resumed {.turn = _turnsDone});
-	for (auto turn = _history.lower_bound(resume.turn); turn != _history.end(); ++turn)
+	SendKeptTurns(connection, resume.turn);
+	Log(spdlog::level::info,
+	    fmt::format("The player of slot {} is back from turn {}; the server is at turn {}", seat, resume.turn, _turnsDone));
+	if (wasAway)
+	{
+		Broadcast(game_socket::PlayerState {.slot = seat, .state = game_socket::PlayerState::State::Back});
+	}
+}
+
+bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const game_socket::Resume& resume, bool world)
+{
+	const auto found = std::ranges::find_if(
+	    _watchers, [&resume](const Watcher& watcher) { return !watcher.session.empty() && watcher.session == resume.session; });
+	if (found == _watchers.end())
+	{
+		return false;
+	}
+	if (found->connection.has_value() && *found->connection != connection)
+	{
+		// A new socket of the same observer replaces the old one
+		_sockets.Close(*found->connection, server_close::k_GoingAway);
+		_peers.erase(*found->connection);
+	}
+	found->connection = connection;
+	found->awaySince = 0;
+	++found->resumes;
+	peer.joined = true;
+	peer.role = game_socket::Role::Observer;
+	peer.seat.reset();
+	// An observer comes back as a god does: the world of the server when its world parted, else the turns that it missed.
+	// An observer has no god, so the other players get no message.
+	if (world && SendWorld(connection))
+	{
+		Log(spdlog::level::info,
+		    fmt::format("An observer is back from turn {} with the world of turn {}", resume.turn, _turnsDone));
+		return true;
+	}
+	SendTo(connection, game_socket::Resumed {.turn = _turnsDone});
+	SendKeptTurns(connection, resume.turn);
+	Log(spdlog::level::info,
+	    fmt::format("An observer is back from turn {}; the server is at turn {}", resume.turn, _turnsDone));
+	return true;
+}
+
+void LockstepHost::SendKeptTurns(ConnectionId connection, uint32_t from)
+{
+	for (auto turn = _history.lower_bound(from); turn != _history.end(); ++turn)
 	{
 		_sockets.SendBinary(connection, turn->second);
 		if (const auto checksum = _checksums.find(turn->first + 1); checksum != _checksums.end())
@@ -315,16 +378,21 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 			                                                                             .checksum = checksum->second}));
 		}
 	}
-	Log(spdlog::level::info,
-	    fmt::format("The player of slot {} is back from turn {}; the server is at turn {}", seat, resume.turn, _turnsDone));
 	if (_stoppedAfter.has_value())
 	{
 		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
 	}
-	if (wasAway)
+}
+
+std::string LockstepHost::NewWatcher(ConnectionId connection)
+{
+	if (!_makeSecret)
 	{
-		Broadcast(game_socket::PlayerState {.slot = seat, .state = game_socket::PlayerState::State::Back});
+		return {};
 	}
+	auto session = _makeSecret();
+	_watchers.push_back(Watcher {.session = session, .connection = connection, .awaySince = 0, .resumes = 0});
+	return session;
 }
 
 bool LockstepHost::SendWorld(ConnectionId connection)
@@ -341,6 +409,11 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 	}
 	Log(spdlog::level::info,
 	    fmt::format("The server sends its world of turn {} ({} bytes) to connection {}", _turnsDone, state.size(), connection));
+	// A client that was away when the turns stopped did not get the stop. No turn comes after this world.
+	if (_stoppedAfter.has_value())
+	{
+		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
+	}
 	return true;
 }
 
@@ -396,6 +469,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	{
 		// Any other player who joins after the start is an observer (MP-Q12)
 		peer.role = game_socket::Role::Observer;
+		joined.session = NewWatcher(connection);
 		Log(spdlog::level::info, fmt::format("{} joins the game at turn {} as an observer", claims.name, _turnsDone));
 	}
 	peer.joined = true;
@@ -470,6 +544,22 @@ void LockstepHost::Closed(ConnectionId connection)
 	}
 	const auto seat = found->second.seat;
 	_peers.erase(found);
+	if (const auto watcher = std::ranges::find(_watchers, std::optional(connection), &Watcher::connection);
+	    watcher != _watchers.end())
+	{
+		// Before the start, the session of the observer ends. After the start, the observer can come back for a time.
+		if (!_started)
+		{
+			_watchers.erase(watcher);
+		}
+		else
+		{
+			watcher->connection.reset();
+			watcher->awaySince = _clock();
+			Log(spdlog::level::info, "An observer lost the connection; it can come back");
+		}
+		return;
+	}
 	if (!seat.has_value() || _seats[*seat].connection != connection)
 	{
 		return;
@@ -516,6 +606,13 @@ void LockstepHost::CloseSeat(uint8_t seat)
 void LockstepHost::Update()
 {
 	const auto now = _clock();
+	// An observer that does not come back in the time to come back loses its session
+	if (std::erase_if(_watchers, [this, now](const Watcher& watcher) {
+		    return !watcher.connection.has_value() && now - watcher.awaySince > _settings.comeBackMicroseconds;
+	    }) > 0)
+	{
+		Log(spdlog::level::info, "An observer did not come back: its session ends");
+	}
 	if (AllComputerGods())
 	{
 		// A room with no human god starts at once. The observers join the running game and get its world.
@@ -766,8 +863,9 @@ bool LockstepHost::GameOver() const
 {
 	if (AllComputerGods())
 	{
-		// A room with no human god is over when the observers that joined all left
-		return _started && _observerSeen && Observers() == 0;
+		// A room with no human god is over when the observers that joined all left. An observer that lost its socket can
+		// come back for a time, so the room stays open until it is back or its session ends.
+		return _started && _observerSeen && Observers() == 0 && _watchers.empty();
 	}
 	// After the turns stop, the defeat of a god that left comes at no turn
 	return _started && (_leaving.empty() || _stoppedAfter.has_value()) && std::ranges::none_of(_seats, [](const Seat& seat) {

@@ -73,6 +73,11 @@ bool WouldBlock()
 }
 bool MakeNonBlocking(Socket socket)
 {
+#if defined(SO_NOSIGPIPE)
+	// A write to a client that closed its socket is an error that the server handles. It must not stop the server.
+	int on = 1;
+	setsockopt(socket, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#endif
 	const auto flags = fcntl(socket, F_GETFL, 0);
 	return flags >= 0 && fcntl(socket, F_SETFL, flags | O_NONBLOCK) == 0;
 }
