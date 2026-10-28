@@ -256,10 +256,11 @@ bool ServerWorld::Initialize()
 		Locator::handSystem::value().ClearOwnPlayer();
 	}
 
-	// Every random number from the seed, the date pinned
-	Locator::rng::value().SetRunSeed(_settings.seed);
-	Locator::time::value().RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Seeded run: seed {}, date pinned", _settings.seed);
+	// Every random number from the seed of the world. Only the seed of a tool pins the date.
+	const auto start = RoomStartFor(_settings);
+	Locator::rng::value().SetRunSeed(start.seed);
+	Locator::time::value().RestartClock(start.pinnedDate);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", RoomStartLine(start));
 	// The server's world is the world of a network game
 	Locator::time::value().SetNetworkGame(true);
 	// Each frame takes a fixed game time from the first, so that the server plays the same turns at any speed
@@ -320,7 +321,7 @@ bool ServerWorld::StartLand()
 		_scenarioRunner = std::make_unique<testbed_scenarios::Runner>();
 	}
 	// The land starts from the state that every client of the network game starts it from
-	simulation::PrepareNetworkLand(_settings.seed);
+	simulation::PrepareNetworkLand(RoomStartFor(_settings).seed);
 	if (const auto refusal = simulation::ApplySoakTools(_settings.soak); refusal.has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot start: {}", *refusal);
@@ -576,7 +577,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	const game_socket::Start start {
 	    .land = scriptLand ? network_land::WireName(landPath) : std::string(),
 	    .testbed = settings.testbed,
-	    .seed = settings.seed,
+	    .seed = RoomStartFor(settings).seed,
 	    .turn = Locator::time::value().GetTurn(),
 	    .opening = scriptLand ? settings.openingName : std::string(),
 	    .godsRingMap = settings.godsRingMap,
@@ -683,6 +684,22 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 		simulation.hashParts = settings.recordFields ? sim_run::HashDetail::Fields : sim_run::HashDetail::Components;
 	}
 	return simulation;
+}
+
+RoomStart RoomStartFor(const ServerSettings& settings)
+{
+	if (settings.seed.has_value())
+	{
+		return {.seed = *settings.seed, .pinnedDate = ecs::systems::TimeSystemInterface::k_DeterministicDate};
+	}
+	return {.seed = k_RoomSeed, .pinnedDate = std::nullopt};
+}
+
+std::string RoomStartLine(const RoomStart& start)
+{
+	return start.pinnedDate.has_value()
+	           ? fmt::format("The seed of the world: {} (from a tool), date pinned", start.seed)
+	           : fmt::format("The seed of the world: {}, date from the clock of the computer", start.seed);
 }
 
 std::string ChecksumLine(uint32_t turn, uint64_t checksum)

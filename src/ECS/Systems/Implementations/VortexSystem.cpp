@@ -531,10 +531,16 @@ std::optional<VortexSystemInterface::Taken> VortexSystem::EnterVortex(const std:
 		return std::nullopt;
 	}
 	// It starts where it stood, still, or where its body was as it flew, at the velocity it flew with
-	const Taken taken {.position = flight.has_value() ? flight->position : transform->position,
-	                   .rotation = flight.has_value() ? flight->rotation : transform->rotation,
-	                   .velocity = flight.has_value() ? flight->velocity : glm::vec3(0.0f),
-	                   .indestructible = registry.AllOf<components::Indestructible>(thing)};
+	Taken taken {.position = transform->position,
+	             .rotation = transform->rotation,
+	             .velocity = glm::vec3(0.0f),
+	             .indestructible = registry.AllOf<components::Indestructible>(thing)};
+	if (flight.has_value())
+	{
+		taken.position = flight->position;
+		taken.rotation = flight->rotation;
+		taken.velocity = flight->velocity;
+	}
 	registry.Assign<CarriedByTornado>(thing, carried);
 	const auto* vortex = registry.Valid(vortexEntity) ? registry.TryGet<const Vortex>(vortexEntity) : nullptr;
 	if (taken.indestructible || vortex == nullptr)

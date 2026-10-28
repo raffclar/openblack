@@ -2559,7 +2559,7 @@ static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec
 		// Not finding a thing is no mistake: scripts that wait for one to come (the singing stones put in their places)
 		// ask again and again. Only the closest tracing says which script asks and for what
 		const auto& tasks = Locator::vm::value().GetTasks();
-		const auto task = tasks.find(CurrentTask());
+		[[maybe_unused]] const auto task = tasks.find(CurrentTask());
 		SPDLOG_LOGGER_TRACE(spdlog::get("scripting"), "Thing not found: type {} subtype {} at ({}, {}) radius {} for {}", type,
 		                    subtype, position.x, position.z, radius.value_or(0.0f),
 		                    task != tasks.end() ? task->second.name : std::string("no script"));

@@ -453,7 +453,7 @@ public:
 	[[nodiscard]] float GetRingOpening() const noexcept { return std::clamp(_ring.GetValue(), 0.0f, 1.0f); }
 	using Control::Release;
 	/// The mouse button was let go, wherever it was: the ring goes
-	void Release();
+	void CloseRing();
 	std::function<void(int)> onChange;
 
 	/// Where a symbol sits around the picture once the ring is up

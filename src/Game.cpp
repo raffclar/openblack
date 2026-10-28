@@ -967,8 +967,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		}
 		// A lesson can let an empty hand act only on a highlight that a script made. This limit also stops a press on a
 		// fireball, which is not a highlight.
-		const auto picked =
-		    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+		std::optional<entt::entity> picked;
+		if (Locator::pickingSystem::has_value())
+		{
+			picked = Locator::pickingSystem::value().GetPick().object;
+		}
 		const bool highlightUnderHand = picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
 		                                Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(*picked);
 		const bool mayPress = handHoldsThing || script::interface_levels::MayPress(interfaceLimits, highlightUnderHand);
@@ -5513,13 +5516,15 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 		}
 		StartInputTools();
 	}
-	// The client starts the land as the game server started it: the same new-game start, the same seed and the same
-	// pinned date, as a network game
+	// The client starts the land as the game server started it: the same new-game start and the same seed, as a network
+	// game. Each computer reads the date from its own clock, as in the original game. Only a run of a tool keeps its
+	// pinned date. No synced value reads the date.
 	_newGameStart = start.opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(start.opening);
 	auto& lands = Locator::landSystem::value();
 	lands.SetNewGameStart(_newGameStart);
 	auto& clock = Locator::time::value();
-	clock.RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
+	const auto pinnedDate = clock.GetPinnedDate();
+	clock.RestartClock(pinnedDate);
 	clock.SetNetworkGame(true);
 	// The land starts from the state that the game server started it from
 	simulation::PrepareNetworkLand(start.seed);
@@ -5530,7 +5535,8 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}", *refusal);
 		return false;
 	}
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, date pinned", start.seed);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, {}", start.seed,
+	                   pinnedDate.has_value() ? "date pinned" : "date from the clock of the computer");
 	_startTestbed = start.testbed;
 	_startGodsRingMap = start.godsRingMap;
 	// The server chose the land: the testbed of a server is not a developer tool of this computer

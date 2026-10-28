@@ -38,6 +38,20 @@ constexpr double k_DefaultFrameMilliseconds = 100.0;
 /// network map
 inline constexpr std::string_view k_ServerDefaultLand = "Online Maps/mpm_2p_1.map";
 
+/// The seed of the world of a room when no tool gives one. Every room starts from this seed.
+constexpr uint32_t k_RoomSeed = 1;
+
+/// How the world of the server starts its random numbers and its date
+struct RoomStart
+{
+	/// The seed of every random number of the world, which the clients get in the start of the game
+	uint32_t seed {k_RoomSeed};
+	/// The date of the world for a run of a tool. None: each computer reads the date from its own clock.
+	std::optional<int64_t> pinnedDate;
+
+	bool operator==(const RoomStart&) const = default;
+};
+
 /// The game role of the server: the game socket that the clients join with a ticket of the lobby
 struct NetworkSettings
 {
@@ -90,8 +104,9 @@ struct ServerSettings
 	std::optional<new_game_choice::NewGameStart> opening;
 	/// The text of --skip-opening, which the game server sends to the clients in the start of the game
 	std::string openingName;
-	/// The seed of every random number of the world. The date of the world is pinned with it.
-	uint32_t seed {1};
+	/// Tools: the seed of every random number of the world. A seed from a tool also pins the date of the world. With
+	/// none, the world starts from the seed of a room and reads the date from the clock of the computer.
+	std::optional<uint32_t> seed;
 	/// The server stops when the world gets to this turn. None for a server that runs until a signal stops it.
 	std::optional<uint32_t> turns;
 	/// Tests: the loss of a temple at a turn, which every client of the network game must also have
@@ -134,6 +149,13 @@ struct ServerSettings
 /// The clock of the server: each frame takes a fixed game time and, unless the run is fast, waits until the wall clock
 /// gives that time. No pointer moves the hand.
 [[nodiscard]] sim_run::Request SimulationFor(const ServerSettings& settings);
+
+/// The seed and the date of the world: those of a tool when it gives a seed, else the seed of a room and the clock of the
+/// computer
+[[nodiscard]] RoomStart RoomStartFor(const ServerSettings& settings);
+
+/// The line of the log that tells the seed and the date of the world
+[[nodiscard]] std::string RoomStartLine(const RoomStart& start);
 
 /// The line of the log for the checksum of one turn, which the tools read
 [[nodiscard]] std::string ChecksumLine(uint32_t turn, uint64_t checksum);
