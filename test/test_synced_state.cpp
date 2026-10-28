@@ -134,6 +134,16 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+// Only the frames of this computer change the hum and the mana path of the hand past the border. The turns change the
+// strength that the hand keeps.
+TEST(SyncedState, TheHumAndTheManaPathOfTheHandPastTheBorderAreNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "shown"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "hum"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "state"));
+}
+
 TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
 {
 	// The frames draw a chest between its turns, lift the lid of an opened chest and fade its dust

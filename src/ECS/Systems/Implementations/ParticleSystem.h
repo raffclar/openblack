@@ -249,6 +249,7 @@ public:
 	bool Renumber(EffectId from, EffectId to) override;
 	void KeepOutOfSaves(EffectId id) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
+	void SetLiveHand(EffectId id, glm::vec3 hand) override;
 	void SetInTemple(EffectId id) override;
 	void SetDrawnAlone(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
@@ -324,6 +325,9 @@ private:
 		glm::vec3 drawOffset {0.0f};
 		/// A save keeps it, unless its owner starts it again after a load
 		bool saved {true};
+		/// The point where this computer draws its hand this frame, when it casts the miracle from the hand. The frame sets it
+		/// again before each draw, so a save does not keep it.
+		std::optional<glm::vec3> liveHand;
 	};
 
 	/// What the draw of the effects reads from the world

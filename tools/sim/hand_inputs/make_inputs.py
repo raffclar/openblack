@@ -10,9 +10,10 @@ object can also have an "expect", the least count of each deed of the hand that 
 
 writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json,
 twogods_totem.json, strokes.json, twogods_scoop_throw.json, gods_ring_slot1_scoop_throw.json, casts.json,
-twogods_slot1_tree_press.json, busy_hand.json and the store inputs of the online maps (<map>_slot<n>_store.json) beside
-this script. strokes.json plays on the testbed scenario hand.recorded_strokes
-(server_check.py --scenario hand.recorded_strokes), and casts.json on miracles.recorded_casts. The twogods inputs play on the
+twogods_slot1_tree_press.json, busy_hand.json, cast_edge.json and the store inputs of the online maps
+(<map>_slot<n>_store.json) beside this script. strokes.json plays on the testbed scenario hand.recorded_strokes
+(server_check.py --scenario hand.recorded_strokes), casts.json on miracles.recorded_casts and cast_edge.json on
+miracles.cast_at_influence_edge. The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 
 fight.json is not made here: it is the recording of the fight autopilot on the testbed scenario combat.recorded_presses,
@@ -437,6 +438,25 @@ def store_hand(piles, cycles, takes=None):
     return script.events
 
 
+def cast_edge():
+    """The testbed scenario miracles.cast_at_influence_edge: the hand waits inside the player's influence with the water
+    miracle, goes just past the border, waits two turns and casts there, then moves far out at once, before the next
+    turn. The turn after the press checks the cast from the hand that the last turn reported, in every game."""
+    script = Script()
+    script.wait(10)
+    script.move((640, 980), 20)
+    # The water miracle comes into the hand at 1 s and is ready to cast before the hand goes out
+    script.frame = 250
+    script.move((640, 700), 15)
+    script.wait(10)
+    script.press()
+    script.move((640, 100), 3)
+    script.wait(60)
+    script.release()
+    script.wait(100)
+    return script.events
+
+
 def write(name, events, camera=None, expect=None):
     """Writes an input: a list of events, or an object with the camera and the deeds that the hand must do (the least
     count of each, which server_check.py and net_check.py check) when it has either"""
@@ -477,6 +497,7 @@ def main():
             view = more[1] if len(more) > 1 else None
             expect = {"scoops": 1, "throws": 1} | ({"takes": 1} if take_pixels else {})
             write(f"{land}_slot{slot}_store", store_hand(piles, 30, take_pixels), store_camera(store, view), expect)
+    write("cast_edge", cast_edge())
 
 
 if __name__ == "__main__":

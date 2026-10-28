@@ -138,6 +138,9 @@ public:
 	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows
 	/// the hand between turns
 	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
+	/// The point where this computer draws its hand this frame, for a miracle that this computer casts from the hand.
+	/// The draw moves the atoms of the effect that follow the live hand by it.
+	virtual void SetLiveHand(EffectId id, glm::vec3 hand) = 0;
 	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
 	virtual void SetInTemple(EffectId id) = 0;
 	/// An effect that the world and the temple do not draw. Only CollectEffectDrawFrame draws it, as for the seeds
