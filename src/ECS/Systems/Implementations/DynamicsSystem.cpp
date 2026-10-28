@@ -52,6 +52,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -61,6 +62,7 @@
 #include "ECS/PlacedTurn.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/RewardRules.h"
 #include "ECS/SnowDust.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -690,7 +692,24 @@ bool DynamicsSystem::IsFlying(entt::entity object) const
 float DynamicsSystem::WeightOf(entt::entity object) const
 {
 	const auto* transform = IsAvailable(object) ? Entities().TryGet<const Transform>(object) : nullptr;
-	return transform != nullptr ? physics_classes::Weight(InfoWeight(object), transform->scale.x) : 0.0f;
+	if (transform == nullptr)
+	{
+		return 0.0f;
+	}
+	// A reward chest has the same weight at all sizes
+	if (Entities().AllOf<Reward>(object))
+	{
+		return reward::k_Weight;
+	}
+	// A piece that broke off a building has the weight of the rock row of the statics
+	if (Entities().AllOf<BuildingPiece>(object))
+	{
+		const auto* tables = _world->Info();
+		const auto row = static_cast<size_t>(MobileStaticInfo::Rock);
+		const float weight = tables != nullptr && row < tables->mobileStatic.size() ? tables->mobileStatic[row].weight : 0.0f;
+		return physics_classes::Weight(weight, transform->scale.x);
+	}
+	return physics_classes::Weight(InfoWeight(object), transform->scale.x);
 }
 
 void DynamicsSystem::RemoveAt(size_t index)

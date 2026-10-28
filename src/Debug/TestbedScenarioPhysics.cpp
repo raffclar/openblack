@@ -332,6 +332,43 @@ void AddCreatureCatch(std::vector<Scenario>& all)
 	});
 }
 
+void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
+{
+	// Boulders from the south break a hut, and the pieces fly north towards a tiger that faces the hut
+	constexpr glm::vec2 k_Hut = k_Field + glm::vec2 {0.0f, 10.0f};
+	std::vector<ObjectSetup> objects {{.type = AbodeInfo::CelticHut, .offset = k_Hut}};
+	std::vector<ThrowSetup> throws;
+	for (size_t i = 0; i < 2; ++i)
+	{
+		const float x = i == 0 ? -2.0f : 2.0f;
+		objects.push_back({.type = MobileStaticInfo::Boulder2Chalk, .offset = k_Field + glm::vec2 {x, -20.0f}});
+		throws.push_back({
+		    .object = objects.size() - 1,
+		    .from = k_Field + glm::vec2 {x, -20.0f},
+		    .height = 4.0f,
+		    .velocity = {0.0f, 4.0f, 20.0f},
+		    .delaySeconds = 2.0f + static_cast<float>(i) * 0.5f,
+		    .repeatSeconds = 6.0f,
+		});
+	}
+	all.push_back({
+	    .id = "physics.creature_catches_building_piece",
+	    .name = "A creature catching a piece of a hut",
+	    .facet = Facet::Physics,
+	    .description = "Boulders thrown from the south break a hut again and again. A tiger stands north of the hut and "
+	                   "faces it.",
+	    .expected = "Pieces of the hut fly towards the tiger. The tiger turns to a piece that comes near and can catch it "
+	                "in its hand, as it catches a thrown villager.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = glm::vec3(k_Field.x + 45.0f, 18.0f, k_Field.y + 20.0f),
+	                .look = glm::vec3(k_Field.x, 6.0f, k_Field.y + 20.0f)},
+	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field + glm::vec2 {0.0f, 30.0f}, .facingDegrees = 0.0f}},
+	    .objects = objects,
+	    .throws = throws,
+	});
+}
+
 void AddCreatureCatchWhileWalking(std::vector<Scenario>& all)
 {
 	all.push_back({
@@ -556,6 +593,7 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddCreatureHit(all);
 	AddCreatureCatch(all);
 	AddCreatureCatchWhileWalking(all);
+	AddCreatureCatchesBuildingPiece(all);
 	AddCreatureIgnoringReactions(all);
 	AddCreatureWithForcedPlan(all);
 	AddSinking(all);
