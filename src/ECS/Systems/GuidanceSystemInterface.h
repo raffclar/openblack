@@ -75,6 +75,9 @@ public:
 	virtual void SayOneOff(guidance::OneOff oneOff) = 0;
 	/// The player here killed a villager: the advisors speak of it when the villager is on screen
 	virtual void KilledVillager(entt::entity villager) = 0;
+	/// A creature won its duel because its opponent has no life left. For a creature of the player here, the advisors
+	/// say a good line when the place of the creature is on screen.
+	virtual void CreatureWonFight(entt::entity creature) = 0;
 	/// A villager of the player here died of chanting: the advisors warn of the worshippers that die
 	virtual void WorshipperDied() = 0;
 	/// Another player took a villager of the player here: the advisors warn of the loss when the villager died near the
