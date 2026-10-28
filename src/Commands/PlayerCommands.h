@@ -461,6 +461,8 @@ struct ViewReport
 /// The player goes into their temple. When the player holds the leash of their creature, the leash comes off.
 struct TempleLeashOff
 {
+};
+
 /// A line of the chat that the player typed. The line goes to the players of the list, by god slot. Each computer does
 /// the command at the same turn: the line shows only to the players of the list, but the creatures of the sender and of
 /// the players of the list say it in their bubbles on every computer. An empty list sends it to all players. The line
