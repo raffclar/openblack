@@ -114,6 +114,9 @@ struct ServerSettings
 	/// Tests: the time limit of the network game in minutes, which the start sends to every client. None: the default
 	/// time limit.
 	std::optional<uint32_t> timeLimit;
+	/// Tools: the winning conditions of the network game, which the start sends to every client. None: the game has no
+	/// winning conditions.
+	std::optional<sim_run::ConditionsRequest> conditions;
 	/// The game time of each frame in milliseconds
 	double frameMilliseconds {k_DefaultFrameMilliseconds};
 	/// Tools: play the frames one after the other with no wait for the wall clock

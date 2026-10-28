@@ -40,6 +40,19 @@ inline constexpr uint32_t k_TurnsPerMinute = 600;
 	return minutes * k_TurnsPerMinute;
 }
 
+/// A winning condition of a network game that the host picks, and the value that a player must get to
+struct ConditionPick
+{
+	Condition condition {Condition::VillagersKilled};
+	int32_t value {0};
+
+	[[nodiscard]] bool operator==(const ConditionPick&) const = default;
+};
+
+/// At the start of a network game, the player gets each condition that the host picked, with its value as the target.
+/// The player starts each condition from 0.
+void GiveConditions(ecs::components::GameStanding& standing, std::span<const ConditionPick> picks);
+
 /// A condition of the player goes up by an amount, when the player has the condition
 void AddToCondition(ecs::components::GameStanding& standing, Condition condition, int32_t amount);
 /// A condition of the player takes a value, when the player has the condition

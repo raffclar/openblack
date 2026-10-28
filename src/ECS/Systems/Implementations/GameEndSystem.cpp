@@ -180,7 +180,7 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 	    .skirmish = context.skirmish && !networkGame,
 	    .turn = turn,
 	    .timeLimitTurn = networkGame ? std::optional(game_end::TimeLimitTurn(GetTimeLimit())) : std::nullopt,
-	    .conditionCount = 0,
+	    .conditionCount = context.gameEnd.conditionCount,
 	    .templesNeeded = !(networkGame && Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed()),
 	};
 	if ((!facts.networkGame && !facts.skirmish) || context.gameEnd.decided)
@@ -227,6 +227,42 @@ uint32_t GameEndSystem::GetTimeLimit() const
 		}
 	}
 	return game_end::k_DefaultTimeLimitMinutes;
+}
+
+void GameEndSystem::GiveConditions()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& context = registry.Context();
+	if (!Locator::time::value().IsNetworkGame() || context.gameEnd.conditionCount != 0 || context.gameEnd.decided)
+	{
+		return;
+	}
+	// The conditions of the game server, else those of the test switch of a tool's run
+	std::vector<game_end::ConditionPick> picks;
+	if (_conditions.has_value())
+	{
+		picks = *_conditions;
+	}
+	else if (Locator::simulation::has_value())
+	{
+		picks = Locator::simulation::value().GetSettings().conditions;
+	}
+	if (picks.empty())
+	{
+		return;
+	}
+	GameEndWorld world;
+	const auto turn = Locator::time::value().GetTurn();
+	for (const auto god : world.ActiveGods())
+	{
+		game_end::GiveConditions(world.Standing(god), picks);
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_INFO(logger, "Turn {}: the god of player {} gets {} winning conditions", turn, static_cast<int>(god),
+			                   picks.size());
+		}
+	}
+	context.gameEnd.conditionCount = static_cast<uint32_t>(picks.size());
 }
 
 bool GameEndSystem::IsDecided() const
@@ -291,6 +327,37 @@ GameStanding* StandingWithConditions(Registry& registry, PlayerNames player)
 	return found;
 }
 
+/// Which winning conditions of a god are completed
+std::array<bool, GameStanding::k_ConditionCount> CompletedConditions(const GameStanding& standing)
+{
+	std::array<bool, GameStanding::k_ConditionCount> completed {};
+	std::ranges::transform(standing.conditions, completed.begin(),
+	                       [](const auto& condition) { return condition.has_value() && condition->completed; });
+	return completed;
+}
+
+/// The log tells each winning condition that the god completed since an earlier look, so that the tools can compare
+/// the turns of the server and of each client
+void LogNewlyCompleted(PlayerNames player, const std::array<bool, GameStanding::k_ConditionCount>& before,
+                       const GameStanding& standing)
+{
+	const auto logger = spdlog::get("game");
+	if (!logger)
+	{
+		return;
+	}
+	const auto after = CompletedConditions(standing);
+	for (size_t index = 0; index < after.size(); ++index)
+	{
+		if (after.at(index) && !before.at(index))
+		{
+			SPDLOG_LOGGER_INFO(logger, "Turn {}: the god of player {} completed winning condition {} at {}",
+			                   Locator::time::value().GetTurn(), static_cast<int>(player), index,
+			                   standing.conditions.at(index)->current);
+		}
+	}
+}
+
 /// The amounts of the piles of the storage pits of the player's towns: the food pile, or the wood piles
 std::vector<uint32_t> StorePiles(Registry& registry, const std::vector<entt::entity>& towns, bool wood)
 {
@@ -333,7 +400,9 @@ void GameEndSystem::AddToCondition(std::optional<PlayerNames> player, game_end::
 	}
 	if (auto* standing = StandingWithConditions(Locator::entitiesRegistry::value(), *player))
 	{
+		const auto before = CompletedConditions(*standing);
 		game_end::AddToCondition(*standing, condition, amount);
+		LogNewlyCompleted(*player, before, *standing);
 	}
 }
 
@@ -386,6 +455,7 @@ void GameEndSystem::MeasureConditions(PlayerNames player)
 	{
 		return;
 	}
+	const auto before = CompletedConditions(*standing);
 	const auto towns = Locator::townSystem::value().TownsInGainedOrder(player);
 	game_end::SetCondition(*standing, Condition::WoodInStores, game_end::AmountInStores(StorePiles(registry, towns, true)));
 	game_end::SetCondition(*standing, Condition::FoodInStores, game_end::AmountInStores(StorePiles(registry, towns, false)));
@@ -416,6 +486,7 @@ void GameEndSystem::MeasureConditions(PlayerNames player)
 		beliefs.push_back(impression != nullptr ? impression->belief.belief.at(static_cast<size_t>(player)) : 0.0f);
 	}
 	game_end::SetCondition(*standing, Condition::BeliefInWorld, game_end::BeliefInWorld(beliefs));
+	LogNewlyCompleted(player, before, *standing);
 }
 
 } // namespace openblack::ecs::systems

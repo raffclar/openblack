@@ -61,6 +61,8 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
+#include "Gui/MultiplayerFrontEndRules.h"
+#include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
 #include "Online/NetworkLand.h"
@@ -362,6 +364,22 @@ bool ServerWorld::StartLand()
 			return false;
 		}
 	}
+	// The winning conditions of the tools keep to the limits that the host has on the land, or on the land that the
+	// switch names
+	if (_settings.conditions.has_value())
+	{
+		const auto& request = *_settings.conditions;
+		const auto limitsLand =
+		    request.limitsLand.empty() ? std::filesystem::path(_settings.land).stem().string() : request.limitsLand;
+		const auto limits = gui::multiplayer::FindConditions(gui::ReadOnlineMapTexts().conditionTemplate, limitsLand);
+		if (const auto refusal = gui::multiplayer::ConditionsRefusal(limits, request.picks); refusal.has_value())
+		{
+			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot start: {} ({})", *refusal, limitsLand);
+			return false;
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game has {} winning conditions in the limits of {}",
+		                   request.picks.size(), limitsLand);
+	}
 	Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
 	// The story's scripts run the first land, but not the testbed or a playground. The server's world is the world of a
 	// network game, which starts no story.
@@ -603,7 +621,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	{
 		landChecksum = online::start_rules::LandChecksum(fileSystem.ReadAll(landPath));
 	}
-	const game_socket::Start start {
+	game_socket::Start start {
 	    .land = scriptLand ? network_land::WireName(landPath) : std::string(),
 	    .testbed = settings.testbed,
 	    .seed = RoomStartFor(settings).seed,
@@ -614,7 +632,16 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .aiSeed = settings.soak.aiSeed,
 	    .scenario = settings.scenario,
 	    .timeLimit = settings.timeLimit.value_or(game_end::k_DefaultTimeLimitMinutes),
+	    .conditions = {},
 	};
+	if (settings.conditions.has_value())
+	{
+		for (const auto& pick : settings.conditions->picks)
+		{
+			start.conditions.push_back(
+			    {.condition = static_cast<uint8_t>(pick.condition), .value = static_cast<uint32_t>(pick.value)});
+		}
+	}
 	// A land of a network game has a god slot for each citadel, as the room of the land has a team for each citadel. The
 	// other lands of the tools and the testbed keep the default slots.
 	uint8_t godSlots = k_DefaultGodSlots;
@@ -712,6 +739,10 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 	simulation.settings.stillHand = true;
 	simulation.settings.templeLoss = settings.templeLoss;
 	simulation.settings.timeLimit = settings.timeLimit;
+	if (settings.conditions.has_value())
+	{
+		simulation.settings.conditions = settings.conditions->picks;
+	}
 	simulation.frameTime = sim_run::FrameTimeFromMs(settings.frameMilliseconds);
 	simulation.traceDrawsPath = settings.traceDrawsPath;
 	if (settings.recordPath.has_value())

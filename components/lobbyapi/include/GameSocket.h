@@ -67,6 +67,16 @@ struct Leave
 {
 };
 
+/// A winning condition that the host of a network game picked: the number of the condition (0 to 14, in the order of
+/// the game) and the value that a god must get to
+struct ConditionValue
+{
+	uint8_t condition {0};
+	uint32_t value {0};
+
+	[[nodiscard]] bool operator==(const ConditionValue&) const = default;
+};
+
 /// Server to client: "game.start". The world starts to turn from this turn.
 struct Start
 {
@@ -93,6 +103,9 @@ struct Start
 	/// The time limit of the game in minutes ("time_limit", optional). Every computer decides the game at the same turn
 	/// when the time is up. None: the default time limit of the game.
 	std::optional<uint32_t> timeLimit;
+	/// The winning conditions of the game ("conditions", optional). Each god gets each condition at the start. Empty: the
+	/// game has no winning conditions.
+	std::vector<ConditionValue> conditions;
 	/// The names of the players of the gods, by god slot ("names", optional). A slot with no player has an empty name.
 	std::vector<std::string> names;
 };

@@ -48,6 +48,15 @@ struct TownParts
 constexpr float k_BeliefScale = 1000.0f;
 } // namespace
 
+void GiveConditions(GameStanding& standing, std::span<const ConditionPick> picks)
+{
+	for (const auto& pick : picks)
+	{
+		standing.conditions.at(static_cast<size_t>(pick.condition)) =
+		    ecs::components::WinCondition {.current = 0, .target = pick.value, .completed = false};
+	}
+}
+
 void AddToCondition(GameStanding& standing, Condition condition, int32_t amount)
 {
 	if (auto& each = standing.conditions.at(static_cast<size_t>(condition)); each.has_value())

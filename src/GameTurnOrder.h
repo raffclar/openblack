@@ -114,6 +114,8 @@ enum class Step : uint8_t
 	PlayerAlignment,
 	/// The end of a skirmish or a network game
 	GameEnd,
+	/// The gods of a network game get the winning conditions of the game
+	GameConditions,
 	VillageTotems,
 	/// The flags over the towns' stores, and the apple barrel at the player's store. The game draws them and keeps no
 	/// object for them: openblack makes their entities in the turn, so that no frame makes an entity of the world.
@@ -256,6 +258,9 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The speed of the hand, which blows the chimneys' smoke, comes from the same part of the player's input
     {.step = Step::ChimneySmoke, .stage = Stage::Input},
     {.step = Step::Clock, .stage = Stage::StartTurn},
+    // The humans of a network game join with the commands of its first turn. Then the gods are known, and each god gets
+    // the winning conditions of the game before a thing in the world can count for them.
+    {.step = Step::GameConditions, .stage = Stage::StartTurn},
     // The living's reactions count their times by the same turn count as the game
     {.step = Step::ReactionClock, .stage = Stage::StartTurn},
     // The places of the turn's start, which the frames draw from. Each thing goes into its new map cells as it moves,

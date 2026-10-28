@@ -2370,8 +2370,9 @@ bool Game::Update() noexcept
 		const auto last = session != nullptr ? session->StoppedAfter() : std::nullopt;
 		if (last.has_value() && Locator::time::value().GetTurn() > *last)
 		{
+			// The log names the last turn by the number of the world, as the line of the decision does
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the network game stopped after turn {}: the game stops",
-			                   *last);
+			                   *last + 1);
 			return false;
 		}
 	}
@@ -5686,6 +5687,14 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	if (Locator::gameEndSystem::has_value())
 	{
 		Locator::gameEndSystem::value().SetTimeLimit(start.timeLimit.value_or(game_end::k_DefaultTimeLimitMinutes));
+		// The winning conditions come from the server too. The gods get them at the first turn.
+		std::vector<game_end::ConditionPick> picks;
+		for (const auto& each : start.conditions)
+		{
+			picks.push_back(
+			    {.condition = static_cast<game_end::Condition>(each.condition), .value = static_cast<int32_t>(each.value)});
+		}
+		Locator::gameEndSystem::value().SetConditions(std::move(picks));
 	}
 	// The land starts from the state that the game server started it from
 	simulation::PrepareNetworkLand(start.seed);

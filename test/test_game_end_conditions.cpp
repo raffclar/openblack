@@ -179,3 +179,23 @@ TEST(GameEndConditions, TheBeliefOfEachTownIsAWholeNumberOfThousandths)
 	constexpr std::array k_Third {std::bit_cast<float>(0x3EAAAAABu)};
 	EXPECT_EQ(BeliefInWorld(k_Third), 333);
 }
+
+TEST(GameEndConditions, TheGodGetsEachPickedConditionFromZero)
+{
+	GameStanding standing;
+	constexpr std::array k_Picks {ConditionPick {.condition = Condition::HousesBuilt, .value = 3},
+	                              ConditionPick {.condition = Condition::TreesGrown, .value = 5}};
+	GiveConditions(standing, k_Picks);
+	ASSERT_TRUE(HasCondition(standing, Condition::HousesBuilt));
+	EXPECT_EQ(standing.conditions.at(static_cast<size_t>(Condition::HousesBuilt))->target, 3);
+	EXPECT_EQ(standing.conditions.at(static_cast<size_t>(Condition::HousesBuilt))->current, 0);
+	EXPECT_FALSE(standing.conditions.at(static_cast<size_t>(Condition::HousesBuilt))->completed);
+	EXPECT_EQ(standing.conditions.at(static_cast<size_t>(Condition::TreesGrown))->target, 5);
+	// A condition that the host did not pick stays empty, so it counts nothing
+	EXPECT_FALSE(HasCondition(standing, Condition::VillagersKilled));
+	AddToCondition(standing, Condition::VillagersKilled, 1);
+	EXPECT_FALSE(HasCondition(standing, Condition::VillagersKilled));
+	// A picked condition counts up to its value
+	AddToCondition(standing, Condition::HousesBuilt, 3);
+	EXPECT_TRUE(standing.conditions.at(static_cast<size_t>(Condition::HousesBuilt))->completed);
+}
