@@ -12,9 +12,11 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <functional>
 #include <span>
 #include <vector>
 
+#include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -46,4 +48,9 @@ inline constexpr size_t k_MostSegments = 500;
 /// draw below the cut is off screen; that changes nothing that can be seen.)
 [[nodiscard]] bool DrawsAnythingBelow(std::span<const glm::vec3> positions, std::span<const uint16_t> indices, float height);
 
+/// The corners of a model that follows the land, in the model's own space, each moved up by how much higher the land is
+/// under it than under the origin of the model, in the units of the model. The outer walls of the model rise this way when
+/// it is drawn, and the inner walls keep the rise of their outer corners. The land gives its height at a point.
+[[nodiscard]] std::vector<glm::vec3> RisenWithLand(std::span<const glm::vec3> positions, const glm::mat4& placement,
+                                                   const std::function<float(glm::vec2)>& landHeight);
 } // namespace openblack::graphics::partial_build_cap
