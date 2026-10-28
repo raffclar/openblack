@@ -397,18 +397,8 @@ std::vector<TempleSubMeshTexture> TempleScrolls::GetTextures(TempleRoom room) co
 	return textures;
 }
 
-void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices, const Facts& facts) const
+std::optional<TempleScrolls::Layout> TempleScrolls::FocusedLayout(const Scroll& scroll)
 {
-	if (!_focusedText || !_focused.has_value())
-	{
-		return;
-	}
-	const auto& scroll = _scrolls[*_focused];
-	const auto text = Write(scroll.content, _texts, _font, facts, _historyStart);
-	if (!text.has_value())
-	{
-		return;
-	}
 	// The scroll's submesh gives the text's frame: its axes made unit long, its y and z axes turned round, at the
 	// middle of the scroll's box. The texture's 237 texels across fit the box's depth along z and its 255 down its
 	// height along y.
@@ -427,8 +417,78 @@ void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices,
 	const float down = std::abs(scroll.max.y - scroll.min.y) * lengths[1] / ((256.0f / 255.0f) * 256.0f);
 	if (down <= 0.0f)
 	{
+		return std::nullopt;
+	}
+	return Layout {.frame = frame, .across = across, .down = down};
+}
+
+void TempleScrolls::AppendFocusedPictures(std::vector<temple::scroll_pictures::WorldPicture>& pictures,
+                                          const Facts& facts) const
+{
+	if (!_focusedText || !_focused.has_value())
+	{
 		return;
 	}
+	const auto& scroll = _scrolls[*_focused];
+	const auto layout = FocusedLayout(scroll);
+	if (!layout.has_value())
+	{
+		return;
+	}
+	const auto text = Write(scroll.content, _texts, _font, facts, _historyStart);
+	if (!text.has_value())
+	{
+		return;
+	}
+	const auto& frame = layout->frame;
+	const float across = layout->across;
+	const float down = layout->down;
+	constexpr float k_Middle = static_cast<float>(TempleScrollTexture::k_Size) * 0.5f;
+	constexpr auto k_Line = static_cast<float>(TempleScrollTexture::k_LineHeight);
+	// A point of the texture, in texels from its top left, in the world
+	const auto at = [&frame, across, down](float x, float y) {
+		return frame.origin + (frame.axes[2] * ((x - k_Middle) * across)) + (frame.axes[1] * ((y - k_Middle) * down));
+	};
+	TempleScrollTexture::LayOut(
+	    *text, static_cast<uint32_t>(scroll.position), _font, [](std::u16string_view, float, float) {},
+	    [&](const TempleScrollTexture::PictureLine& line) {
+		    if (line.y < -k_Line || line.y > static_cast<float>(TempleScrollTexture::k_Size))
+		    {
+			    return;
+		    }
+		    using Kind = temple::scroll_pictures::WorldPicture::Kind;
+		    const auto top = at(line.lastX, line.y);
+		    pictures.push_back({
+		        .kind = line.marker == TempleScrollText::k_Gesture ? Kind::Gesture : Kind::Control,
+		        .number = line.number,
+		        .lineTop = top,
+		        .lineBelow = top + (frame.axes[1] * (k_Line * down)),
+		        .textureTopLeft = at(0.0f, 0.0f),
+		        .textureBottomRight = at(2.0f * k_Middle, 2.0f * k_Middle),
+		    });
+	    });
+}
+
+void TempleScrolls::AppendFocusedText(std::vector<OrientedTextVertex>& vertices, const Facts& facts) const
+{
+	if (!_focusedText || !_focused.has_value())
+	{
+		return;
+	}
+	const auto& scroll = _scrolls[*_focused];
+	const auto text = Write(scroll.content, _texts, _font, facts, _historyStart);
+	if (!text.has_value())
+	{
+		return;
+	}
+	const auto layout = FocusedLayout(scroll);
+	if (!layout.has_value())
+	{
+		return;
+	}
+	const auto& frame = layout->frame;
+	const float across = layout->across;
+	const float down = layout->down;
 	const float size = static_cast<float>(TempleScrollTexture::k_LineHeight) * down;
 	const float stretch = TempleScrollTexture::k_Stretch * across / down;
 	constexpr float k_Size = TempleScrollTexture::k_Size;

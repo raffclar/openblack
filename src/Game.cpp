@@ -819,6 +819,11 @@ Game::~Game() noexcept
 	}
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
+	// A later game, or a test, must not find this one through the static pointer
+	if (sInstance == this)
+	{
+		sInstance = nullptr;
+	}
 }
 
 bool Game::ProcessEvents(const SDL_Event& event) noexcept

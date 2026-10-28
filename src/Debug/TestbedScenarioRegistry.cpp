@@ -3429,6 +3429,20 @@ void AddFootprints(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "footprints.april_fools_date",
+	    .name = "1 April by the computer's date",
+	    .facet = Facet::Footprints,
+	    .description = "The computer's clock is set to noon on 1 April 2026; nothing else is changed. A tiger walks round "
+	                   "in a circle.",
+	    .expected = "Its footprints are smiley faces, each the size of a tiger's own print.",
+	    .environment = {.realDate = RealDate {.year = 2026, .month = 4, .day = 1, .hour = 12, .minute = 0}},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {50.0f, 0.0f}, 180.0f)},
+	    .commands = circling,
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "footprints.walk_and_run_close",
 	    .name = "Footprints close up, walking and running",
 	    .facet = Facet::Footprints,
@@ -4063,6 +4077,28 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
 	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 6}},
+	});
+
+	all.push_back({
+	    .id = "temple.scroll_pictures",
+	    .name = "The pictures of a gesture and of controls on the library's did you know scroll",
+	    .facet = Facet::Story,
+	    .description = "The player reads three did you know tips on signs: one with the picture of a gesture, two with the "
+	                   "picture of a control. Then the player goes through the temple's main room into the library. After "
+	                   "four seconds the camera looks at the did you know scroll, as a press on it does.",
+	    .expected = "Far from the scroll, the lines of the pictures are blank. Close to the scroll, its text is in front of "
+	                "it, and under each tip is its picture, two lines high: the gesture in white over a black shadow, "
+	                "and the mouse button or the key of each control. The pictures move with the scroll when it turns. "
+	                "A gesture is cut at the top and the bottom of the scroll. A control shows only while all of it is "
+	                "on the scroll.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::ReadTip, .delaySeconds = 0.5f, .value = 4131, .amount = 4.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4138, .amount = 4.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4153, .amount = 4.0f},
+	                 // The other rooms open after the temple draws the main room. Thus the player enters through it.
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 5}},
 	});
 
 	all.push_back({
@@ -7049,6 +7085,22 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "saves.arena_ring_back",
+	    .name = "Save and load: the ring of the arena shows again",
+	    .facet = Facet::Combat,
+	    .description = "Two tigers are told to fight, and both fight by themselves. 5 seconds later the game saves into "
+	                   "slot 0. 3 seconds after the save the game loads slot 0.",
+	    .expected = "Before the save the ring of light stands round the arena. After the load the ring stands round the "
+	                "arena again while the fight continues, as before the save.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 {.kind = Kind::SaveGame, .delaySeconds = 5.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
 	{
 		// A lion against a tiger, so that two species show their heads
 		auto lion = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
@@ -7143,6 +7195,30 @@ void AddCombat(std::vector<Scenario>& all)
 	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
 	                 {.kind = Kind::DrawGesture, .delaySeconds = 8.0f, .value = static_cast<size_t>(GestureType::Star)}},
 	});
+
+	{
+		// The player's tiger knows the five miracles that a creature casts in a fight
+		const auto knows = [](MagicType magic) {
+			return Command {
+			    .kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.1f, .value = static_cast<size_t>(magic)};
+		};
+		all.push_back({
+		    .id = "interface.hint_fight_seeds",
+		    .name = "The seeds over the hints of the fight miracles",
+		    .facet = Facet::Interface,
+		    .description = "The player's red tiger knows the fireball, the lightning bolt, the heal, and the weak and the "
+		                   "strong creature spells. It fights a blue tiger, and the two fight by themselves.",
+		    .expected = "When the duel starts, the hints along the bottom right of the screen show the star of the "
+		                "special move and the gesture of each of the five miracles. Over each gesture of a miracle, the "
+		                "seed of the miracle turns slowly, with the effect of its holder over it. The seeds are small, in "
+		                "white light, and they do not go away while the duel continues.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {knows(MagicType::Fireball), knows(MagicType::LightningBolt), knows(MagicType::Heal),
+		                 knows(MagicType::CreatureSpellWeak), knows(MagicType::CreatureSpellStrong),
+		                 Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
 
 	{
 		// Two creatures that are not the player's fight by themselves, and the player's own lion stands near the arena
@@ -10935,8 +11011,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       IsPointerCommand(kind);
+	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox ||
+	       kind == Kind::BringCreature || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10964,7 +11040,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 182> k_Names {
+	constexpr std::array<std::string_view, 184> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -11003,6 +11079,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand lets go",
 	    "put on leash",
 	    "tie leash to",
+	    "tie leash to desire flag",
 	    "untie leash",
 	    "take off leash",
 	    "keep at home",
@@ -11143,6 +11220,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "make a dance",
 	    "open a multiplayer box",
 	    "build the worship sites",
+	    "press a key on the keyboard",
 	    "show another god's hand",
 	    "press Join Online Game of the page",
 	    "end box",

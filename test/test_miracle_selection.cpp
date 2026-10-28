@@ -124,7 +124,7 @@ TEST(SelectionRequests, TheSpiralsAndTheROnlyWithAReadyHand)
 	context.handReady = true;
 	const std::vector<Request> expected {
 	    {.gesture = GestureType::Spiral, .purpose = Purpose::OpenSelection},
-	    {.gesture = GestureType::InverseSpiral, .purpose = Purpose::OpenSelection},
+	    {.gesture = GestureType::InverseSpiral, .purpose = Purpose::OpenSelection, .forCreature = true},
 	    {.gesture = GestureType::RShape, .purpose = Purpose::RepeatMiracle, .seed = SpellSeedType::Heal},
 	};
 	EXPECT_EQ(Requests(context), expected);
@@ -150,7 +150,7 @@ TEST(SelectionRequests, TheOpenSelectionWaitsForItsScribbleAndGesturesFirst)
 	    {.gesture = GestureType::Scribble, .purpose = Purpose::CloseSelection},
 	    {.gesture = GestureType::SShape, .purpose = Purpose::SelectMiracle, .seed = SpellSeedType::Food},
 	    // The other spiral opens the selection again for its own miracles; the R and the leash wait
-	    {.gesture = GestureType::InverseSpiral, .purpose = Purpose::OpenSelection},
+	    {.gesture = GestureType::InverseSpiral, .purpose = Purpose::OpenSelection, .forCreature = true},
 	};
 	EXPECT_EQ(Requests(context), expected);
 
