@@ -1,4 +1,5 @@
-[
+{"camera": {"focus": [2928.87, 88.44, 2620.91], "yaw": 0, "pitch": 20, "distance": 25}, "expect": {"takes": 1},
+"events": [
 {"frame": 10, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 493]}},
 {"frame": 11, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 475]}},
 {"frame": 12, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 456]}},
@@ -31,4 +32,4 @@
 {"frame": 96, "event": {"kind": "pointer", "timing": "mouse", "position": [604, 572]}},
 {"frame": 97, "event": {"kind": "pointer", "timing": "mouse", "position": [602, 586]}},
 {"frame": 98, "event": {"kind": "pointer", "timing": "mouse", "position": [600, 600]}}
-]
+]}

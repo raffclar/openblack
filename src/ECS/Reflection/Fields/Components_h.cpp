@@ -17,6 +17,7 @@
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGlow.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
@@ -50,7 +51,15 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	Reflect<components::InHand>(context)
 	    .Field<&components::InHand::hand>("hand")
 	    .Field<&components::InHand::rotation>("rotation")
-	    .Field<&components::InHand::scale>("scale");
+	    .Field<&components::InHand::scale>("scale")
+	    .Field<&components::InHand::drawn>("drawn");
+	Reflect<components::HandPulled>(context)
+	    .Field<&components::HandPulled::position>("position")
+	    .Field<&components::HandPulled::rotation>("rotation")
+	    .Field<&components::HandPulled::scale>("scale")
+	    .Field<&components::HandPulled::standsAt>("standsAt")
+	    .Field<&components::HandPulled::standsRotation>("standsRotation")
+	    .Field<&components::HandPulled::standsScale>("standsScale");
 	Reflect<components::HeldLight>(context)
 	    .Field<&components::HeldLight::takenAt>("takenAt")
 	    .Field<&components::HeldLight::drawn>("drawn")
@@ -70,7 +79,6 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandGrab::pulling>("pulling")
 	    .Field<&components::HandGrab::grips>("grips")
 	    .Field<&components::HandGrab::tug>("tug")
-	    .Field<&components::HandGrab::pullPosition>("pullPosition")
 	    .Field<&components::HandGrab::pullRotation>("pullRotation")
 	    .Field<&components::HandGrab::pullScale>("pullScale")
 	    .Field<&components::HandGrab::stretch>("stretch")
@@ -102,10 +110,12 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandGrab::offeredTo>("offeredTo")
 	    .Field<&components::HandGrab::offer>("offer")
 	    .Field<&components::HandGrab::givenTo>("givenTo")
+	    .Field<&components::HandGrab::callingOff>("callingOff")
 	    .Field<&components::HandGrab::offerTurn>("offerTurn")
 	    .Field<&components::HandGrab::lastHand>("lastHand")
 	    .Field<&components::HandGrab::lastPickedUp>("lastPickedUp")
 	    .Field<&components::HandGrab::lastDropped>("lastDropped");
+	Reflect<components::HandHeldSeed>(context).Field<&components::HandHeldSeed::seed>("seed");
 	Reflect<components::HandLockedCreature>(context).Field<&components::HandLockedCreature::creature>("creature");
 	Reflect<components::HandMiracleFx>(context)
 	    .Field<&components::HandMiracleFx::bands>("bands")
@@ -122,7 +132,6 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandOnCreature::sum>("sum")
 	    .Field<&components::HandOnCreature::clocks>("clocks")
 	    .Field<&components::HandOnCreature::lastPart>("lastPart")
-	    .Field<&components::HandOnCreature::sinceStepMs>("sinceStepMs")
 	    .Field<&components::HandOnCreature::lastCursor>("lastCursor")
 	    .Field<&components::HandOnCreature::lastPoint>("lastPoint")
 	    .Field<&components::HandOnCreature::wasOnBody>("wasOnBody")
@@ -137,7 +146,8 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandOnCreature::frameCursor>("frameCursor")
 	    .Field<&components::HandOnCreature::distance>("distance")
 	    .Field<&components::HandOnCreature::distanceStarted>("distanceStarted")
-	    .Field<&components::HandOnCreature::shownAt>("shownAt");
+	    .Field<&components::HandOnCreature::shownAt>("shownAt")
+	    .Field<&components::HandOnCreature::shownDistance>("shownDistance");
 	Reflect<components::HandLastFeedback>(context).Field<&components::HandLastFeedback::sum>("sum");
 	Reflect<components::HandStillness>(context)
 	    .Field<&components::HandStillness::stillTurns>("stillTurns")

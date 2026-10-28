@@ -43,6 +43,8 @@ struct AutosaveState
 	/// A script holds the widescreen for a cut scene
 	bool scriptCutScene {false};
 	bool paused {false};
+	/// The game is a network game, which never saves
+	bool networkGame {false};
 	uint32_t land {0};
 	uint32_t turn {0};
 	uint32_t lastAutosaveTurn {0};
@@ -52,8 +54,8 @@ struct AutosaveState
 /// number with no sign.
 [[nodiscard]] constexpr bool AutosaveDue(const AutosaveState& state)
 {
-	return state.autosaveOn && !state.gameOver && !state.scriptCutScene && state.land != k_PlaygroundLand &&
-	       state.turn - state.lastAutosaveTurn > k_AutosaveInterval && !state.paused;
+	return state.autosaveOn && !state.gameOver && !state.scriptCutScene && !state.networkGame &&
+	       state.land != k_PlaygroundLand && state.turn - state.lastAutosaveTurn > k_AutosaveInterval && !state.paused;
 }
 
 /// The slot of an autosave: the autosaves of each land go in turn into the three autosave slots, by the count of the
@@ -63,11 +65,13 @@ struct AutosaveState
 	return k_FirstAutosaveSlot + (landAutosaves % 3);
 }
 
-/// Whether the key of the quick save or the quick load does its work: not in a script's cut scene, not after the game
-/// is over, and only when the turn is more than three turns from the turn of the last one, forward or back
-[[nodiscard]] constexpr bool QuickTurnAllowed(uint32_t turn, uint32_t lastTurn, bool gameOver, bool scriptCutScene)
+/// Whether the key of the quick save or the quick load does its work: not in a network game, not in a script's cut
+/// scene, not after the game is over, and only when the turn is more than three turns from the turn of the last one,
+/// forward or back
+[[nodiscard]] constexpr bool QuickTurnAllowed(uint32_t turn, uint32_t lastTurn, bool gameOver, bool scriptCutScene,
+                                              bool networkGame)
 {
-	if (gameOver || scriptCutScene)
+	if (gameOver || scriptCutScene || networkGame)
 	{
 		return false;
 	}

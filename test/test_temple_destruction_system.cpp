@@ -59,6 +59,7 @@ public:
 	[[nodiscard]] uint32_t MillisecondsPerTurn() const override { return 100; }
 	[[nodiscard]] uint32_t Turn() const override { return static_cast<uint32_t>(turn); }
 	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override { return PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] bool NetworkGame() const override { return networkGame; }
 	entt::entity StartLoop(entt::id_type sound, glm::vec3 /*position*/, entt::entity /*owner*/) override
 	{
 		loopsStarted.push_back(turn);
@@ -118,6 +119,7 @@ public:
 
 	Registry registry;
 	int turn {0};
+	bool networkGame {false};
 	float share {0.0f};
 	entt::id_type loopSound {0};
 	entt::id_type onceSound {0};
@@ -151,8 +153,8 @@ public:
 class SeededRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t n) override { return n == 0 ? 0 : game_random::LHRand(n, _seeds.synced); }
-	float GameFloatRand(float x) override { return game_random::FloatRand(x, _seeds.synced); }
+	uint32_t SyncedRand(uint32_t n, DrawSite /*site*/) override { return n == 0 ? 0 : game_random::LHRand(n, _seeds.synced); }
+	float SyncedFloatRand(float x, DrawSite /*site*/) override { return game_random::FloatRand(x, _seeds.synced); }
 	uint32_t LocalRand(int32_t n) override { return n == 0 ? 0 : game_random::LHRand(static_cast<uint32_t>(n), _seeds.local); }
 	float LocalFloatRand(float x) override { return game_random::FloatRand(x, _seeds.local); }
 	int32_t CrtRand() override { return 0; }
@@ -484,6 +486,17 @@ TEST_F(TempleDestructionSystemTest, TheLocalPlayersLossEndsTheGameOnceOnTheTurnI
 	EXPECT_TRUE(_world->registry.Context().gameOver);
 	Turn();
 	EXPECT_EQ(_world->scripts.size(), 1u);
+}
+
+TEST_F(TempleDestructionSystemTest, LosingATempleInANetworkGameDoesntEndTheGame)
+{
+	_world->networkGame = true;
+	const auto temple = MakeTemple(PlayerNames::PLAYER_ONE);
+	_system->Start(temple);
+	Turn();
+	Turn();
+	EXPECT_TRUE(_world->scripts.empty());
+	EXPECT_FALSE(_world->registry.Context().gameOver);
 }
 
 TEST_F(TempleDestructionSystemTest, LosingATempleInASkirmishDoesntEndTheGame)

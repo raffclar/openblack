@@ -31,8 +31,12 @@ struct CreatureTattoos
 	/// creature has none
 	std::vector<uint8_t> pictures;
 	/// The tattoos that the skin shows in place of the slots: the tattoos being edited, while the tattoo editor shows
-	/// this creature
+	/// this creature, or the change from the tattoo editor that waits for its turn
 	std::optional<creature_tattoo::Slots> shown;
+	/// When set, the skin shows shownPictures in place of the block of pictures, while a change from the tattoo editor
+	/// waits for its turn
+	bool picturesShown {false};
+	std::vector<uint8_t> shownPictures;
 	/// Goes up each time that the game paints the tattoos again. A change of the slots alone does not paint them.
 	uint32_t revision {0};
 };

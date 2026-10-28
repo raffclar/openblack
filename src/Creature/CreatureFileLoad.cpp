@@ -34,4 +34,27 @@ Refusal WhyNot(const Request& request)
 	return Refusal::None;
 }
 
+Refusal WhyNotBrought(const BroughtRequest& request)
+{
+	// Only a god with a citadel asks the other computers to make its creature
+	if (!request.citadel)
+	{
+		return Refusal::NoCitadel;
+	}
+	if (!request.file || !request.readable)
+	{
+		return Refusal::NoFile;
+	}
+	if (!request.species.has_value())
+	{
+		return Refusal::UnknownSpecies;
+	}
+	// The game does not examine the place. openblack makes no creature off the map.
+	if (!request.onMap)
+	{
+		return Refusal::OffMap;
+	}
+	return Refusal::None;
+}
+
 } // namespace openblack::creature_file_load
