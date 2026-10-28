@@ -39,6 +39,21 @@ struct StillMessageInputs
 	return inputs.windowHasKeys && !inputs.playerInputBlocked && !inputs.cursorFrozen && !inputs.playerMouseBlocked;
 }
 
+/// The time of a message of the mouse on the clock that the help reads (see TimeSystemInterface::GetTicks).
+/// - A frame with a fixed time gives each message that comes in the frame the clock's time. Thus two runs that get the
+///   same input count the same moves, whatever the wall clock says.
+/// - Otherwise the message keeps its own time from the window, moved to the clock by the difference of the two clocks.
+[[nodiscard]] constexpr uint32_t MessageTime(uint32_t windowMilliseconds, uint32_t windowNow, uint32_t clockNow,
+                                             bool fixedFrameTime) noexcept
+{
+	if (fixedFrameTime)
+	{
+		return clockNow;
+	}
+	// The unsigned sums wrap as both clocks do
+	return windowMilliseconds + (clockNow - windowNow);
+}
+
 /// The help counts the movements of the mouse as the interface reads them. The window sends a message each time the
 /// mouse moves. While the mouse is still, it also sends a message after each period without one, with the pointer
 /// where it is. The messages add up the time from each message to the next. When this time is more than a limit, the

@@ -356,6 +356,30 @@ float TownDesireSystem::FoodShortage(entt::entity town) const
 	});
 }
 
+TownDesireSystemInterface::FoodNeed TownDesireSystem::FoodWantedAndHeld(entt::entity town) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* townDesire = registry.TryGet<const TownDesire>(town);
+	const auto* data = registry.TryGet<const Town>(town);
+	const auto* tribe = registry.TryGet<const Tribe>(town);
+	if (townDesire == nullptr || data == nullptr || tribe == nullptr)
+	{
+		return {};
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto& farmer = info.villager.at(10);
+	const auto inputs = GatherInputs(town, *data, *tribe);
+	const town_desire::DesireContext context {
+	    .desire = *townDesire,
+	    .in = inputs,
+	    .town = info.town,
+	    .info = info.townDesire,
+	    .farmerMaxFood = farmer.maxFoodCarried,
+	    .farmerMaxWood = farmer.maxWoodCarried,
+	};
+	return {.wanted = town_desire::FoodWanted(context), .held = town_desire::FoodHeld(inputs)};
+}
+
 TownDesireInfo TownDesireSystem::GetMostWanted(entt::entity town) const
 {
 	const auto* townDesire = Locator::entitiesRegistry::value().TryGet<const TownDesire>(town);

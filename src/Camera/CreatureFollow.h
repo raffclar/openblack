@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
 #include <numbers>
 
@@ -67,9 +69,19 @@ struct HeadingPitch
 };
 [[nodiscard]] HeadingPitch HeadingPitchOf(glm::vec3 point, glm::vec3 centre);
 
+/// How far away the camera starts from the creature
+enum class StartDistance : uint8_t
+{
+	/// The creature's viewing distance, or as far as the camera already is when it is close
+	KeepWhenClose,
+	/// Always the creature's viewing distance
+	Viewing,
+};
 /// The view the camera starts with on a creature: as it is turned and tilted now, and the creature's viewing distance
-/// away, or as far as it already is when it is close, but no nearer than twice the creature's height
-[[nodiscard]] View Start(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height);
+/// away. With KeepWhenClose, it is as far as it already is when it is close, but no nearer than twice the creature's
+/// height.
+[[nodiscard]] View Start(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height,
+                         StartDistance start = StartDistance::KeepWhenClose);
 /// The view kept within the follow's bounds: the distance between the least and the most, and no lower than the least
 /// pitch
 [[nodiscard]] View Clamped(View view);

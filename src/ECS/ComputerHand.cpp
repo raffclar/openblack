@@ -9,6 +9,7 @@
 
 #include "ComputerHand.h"
 
+#include <cmath>
 #include <cstdint>
 
 #include <array>
@@ -207,6 +208,20 @@ bool openblack::computer_hand::Process(HandAction& action, const World& world)
 		return true;
 	}
 	return true;
+}
+
+glm::vec3 openblack::computer_hand::ThrowVelocity(glm::vec3 hand, glm::vec3 place)
+{
+	// The thing flies for a time that the distance gives, and gravity pulls it down for that time
+	const float dx = place.x - hand.x;
+	const float dy = place.y - hand.y;
+	const float dz = place.z - hand.z;
+	const float distance = std::sqrt(dz * dz + dy * dy + dx * dx);
+	const float seconds = std::sqrt(distance * k_ThrowTimeScale);
+	const float fall = seconds * seconds * 0.5f;
+	const float drop = fall * k_ThrowGravity;
+	const float inverse = 1.0f / seconds;
+	return {(dx - 0.0f) * inverse, (dy - drop) * inverse, (dz - 0.0f) * inverse};
 }
 
 float openblack::computer_hand::GestureSharePerTurn(float length, float circleLength)

@@ -11,12 +11,14 @@
 
 #include <cstdint>
 
+#include <atomic>
 #include <limits>
 #include <map>
 #include <memory>
 #include <optional>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -210,7 +212,8 @@ struct RenderContext
 	std::vector<EntityDraw> entityDraws;
 	/// Copies of creatures drawn where they stand in a pose of their own (see components::CreatureCopy), as the Creature
 	/// Cave shows the player's creature: each looks as `creature` does, takes its pose and eyes from `copy`, is placed by
-	/// its instance and lit from a light of its own
+	/// its instance and lit from a light of its own. The creature is a thing of the land, and the copy is a thing of the
+	/// temple's rooms.
 	struct CreatureCopyDraw
 	{
 		entt::entity creature;
@@ -224,6 +227,9 @@ struct RenderContext
 	{
 		entt::entity entity;
 		glm::mat4 model;
+		/// The model that the cursor finds, when it is not the model of `entity`: a gate stone of the drawn registry
+		/// stands for its plinth
+		std::optional<entt::id_type> mesh;
 	};
 	std::vector<DrawnObject> drawnObjects;
 	/// The animals drawn this frame, with the model that each one is drawn as and its matrix: each casts blobs from its
@@ -273,6 +279,8 @@ struct RenderContext
 	std::vector<glm::mat4> streamSegments;
 	/// The hand is scaled by a negative factor to mirror it, which turns its faces round
 	bool handMirrored {false};
+	/// The hand that the draw lists draw. When another hand becomes the drawn hand, the lists change.
+	entt::entity drawnHand {entt::null};
 
 	/// Not an actual vertex buffer, but a dynamic general purpose buffer which
 	/// stores uniform data as a GPU-side copy of \ref _instanceUniforms and
@@ -357,10 +365,10 @@ struct RenderContext
 	std::vector<glm::mat4> treeInstanceUniforms;
 	std::vector<glm::vec4> treeSwayParams;
 
-	/// The instances are to be uploaded again
-	bool dirty {true};
-	/// The draw lists are to be made again, then the instances uploaded
-	bool layoutDirty {true};
+	/// The instances are to be uploaded again. A turn on another thread can set it, while the draw does not read it.
+	std::atomic<bool> dirty {true};
+	/// The draw lists are to be made again, then the instances uploaded. A turn on another thread can set it too.
+	std::atomic<bool> layoutDirty {true};
 	bool hasBoundingBoxes {false};
 	uint32_t treeInstanceCount {0};
 };

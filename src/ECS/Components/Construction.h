@@ -51,6 +51,8 @@ struct BuildingSite
 {
 	/// The town whose builders work at it
 	entt::entity town {entt::null};
+	/// Its place among the sites that its town opened: a newer site has a higher number
+	uint32_t number {0};
 	float desire {0.0f};
 	/// Opened for a building already built, to mend it
 	bool repair {false};

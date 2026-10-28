@@ -42,6 +42,8 @@ struct Town
 	std::vector<entt::entity> abodes;
 	/// When its player gained it, against the player's other towns: earlier gained, smaller
 	uint32_t gained {0};
+	/// When the game made it, against the other towns: earlier made, smaller. A new player does not change it.
+	uint32_t made {0};
 	/// How many of its people are hurt, their life under seven tenths
 	uint32_t injured {0};
 	/// What its people's deaths came to, by the player put down for each (by player number) and what killed them
@@ -79,6 +81,8 @@ struct Town
 	bool desiresChangedLastTurn {false};
 	/// The buildings it plans to build later (houses, civic buildings, its player's temple), in the order it planned them
 	std::vector<entt::entity> planned;
+	/// The building sites that it opened so far, which numbers each new one
+	uint32_t sitesOpened {0};
 	/// The game turn one of its villagers last asked it to start a planned building: it is asked at most once a turn
 	std::optional<uint32_t> askedToBuildTurn;
 	/// The turns left before the town becomes empty, counted down from the time its last person left; 0 when no

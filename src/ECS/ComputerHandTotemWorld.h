@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <entt/entity/entity.hpp>
+
 namespace openblack::computer_hand
 {
 
@@ -18,6 +20,9 @@ class TotemWorld
 {
 public:
 	virtual ~TotemWorld() = default;
+	/// The hand of the god takes the totem, and the town of the totem takes the share of its people at worship. The creature
+	/// of the town's player takes it that the player wants to impress, by half.
+	virtual void RaiseTotem(entt::entity totem, float share) = 0;
 };
 
 } // namespace openblack::computer_hand

@@ -119,6 +119,12 @@ const openblack::online::NetworkSession* MultiplayerFrontEnd::Session() const
 	return _services.network != nullptr ? _services.network->Session() : nullptr;
 }
 
+std::optional<uint64_t> MultiplayerFrontEnd::GetRoundTrip() const
+{
+	const auto* session = Session();
+	return _joined && session != nullptr ? session->RoundTrip() : std::nullopt;
+}
+
 bool MultiplayerFrontEnd::IsStarted() const
 {
 	const auto* session = Session();

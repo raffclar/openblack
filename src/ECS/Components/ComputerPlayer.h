@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 #include <vector>
 
@@ -38,6 +40,18 @@ struct ComputerPlayer
 	computer_hand::HandAction hand;
 	/// The miracles that the god cast and that are still in the world, the newest first
 	std::vector<entt::entity> casts;
+	/// The speed of the hand of the god in metres a second. A land script can change it.
+	float speed {90.0f};
+	/// The forests and the seeds of miracles that the god saw near its hand, the newest first
+	std::vector<computer_mind::SeenThing> seen;
+};
+
+/// The names of the kinds of node of the computer minds, which all the gods of the land share. Only one entity has
+/// them. A personality load makes the entity when it first changes a name. With no such entity, the gods use the first
+/// names.
+struct ComputerNodeNames
+{
+	computer_mind::NodeNames names;
 };
 
 } // namespace openblack::ecs::components

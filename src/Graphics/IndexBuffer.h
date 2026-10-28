@@ -57,6 +57,9 @@ public:
 	void Bind(uint32_t count, uint32_t startIndex = 0) const;
 
 private:
+	/// Makes the buffer of the graphics library from bgfx memory, on the main thread
+	void Make(const void* memory);
+
 	std::string _name;
 	uint32_t _count;
 	Type _type;

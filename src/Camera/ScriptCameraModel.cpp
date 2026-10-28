@@ -55,6 +55,11 @@ glm::vec3 DestinationOf(const Zoomers& zoomers)
 	return {zoomers[0].Destination(), zoomers[1].Destination(), zoomers[2].Destination()};
 }
 
+glm::vec3 SpeedOf(const Zoomers& zoomers)
+{
+	return {zoomers[0].Speed(), zoomers[1].Speed(), zoomers[2].Speed()};
+}
+
 /// The square of the distance, with the squares added in the given order
 template <x87::SumOrder Order>
 float DistanceSquared(const glm::vec3& a, const glm::vec3& b)
@@ -582,4 +587,24 @@ glm::vec3 ScriptCameraModel::GetTargetOrigin() const
 glm::vec3 ScriptCameraModel::GetTargetFocus() const
 {
 	return DestinationOf(_focus);
+}
+
+glm::vec3 ScriptCameraModel::GetOrigin() const
+{
+	return ValueOf(_origin);
+}
+
+glm::vec3 ScriptCameraModel::GetFocus() const
+{
+	return ValueOf(_focus);
+}
+
+glm::vec3 ScriptCameraModel::GetOriginSpeed() const
+{
+	return SpeedOf(_origin);
+}
+
+glm::vec3 ScriptCameraModel::GetFocusSpeed() const
+{
+	return SpeedOf(_focus);
 }

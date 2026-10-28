@@ -54,8 +54,13 @@ public:
 	void StartAction() override;
 	[[nodiscard]] bool ActionLocked() const override;
 	void UnlockAction() override;
-	bool ForceQueued() override;
+	[[nodiscard]] std::optional<glm::vec3> MarkerPlace(entt::entity thing) const override;
 	[[nodiscard]] bool HeldByHelp() const override;
+	[[nodiscard]] const computer_mind::NodeNames& Names() const override;
+	/// Tools: the world adds the time of each step of the hand, for the developer log of the times of the gods
+	void TimeHand(bool on) { _timeHand = on; }
+	/// The time of the steps of the hand in this turn, in milliseconds
+	[[nodiscard]] double HandMs() const { return _handMs; }
 
 private:
 	PlayerNames _player;
@@ -67,10 +72,23 @@ private:
 	GameHandTotem _totem;
 	computer_hand::World _hand;
 	RuleContext _context;
+	bool _timeHand {false};
+	double _handMs {0.0};
 };
 
-/// Before the mind's turn: the god forgets its miracles that are gone, and stops an action whose things are gone
+/// Before the mind's turn: the god forgets its miracles, its seen things and its queued actions whose things are gone,
+/// and stops an action whose things are gone
 void Validate(components::ComputerPlayer& state);
+/// The thing is in the world, and it is not a villager on its way to dying
+[[nodiscard]] bool Available(entt::entity thing);
+/// The cinema bars hold the mind of the god while it has no script action and no queued action
+[[nodiscard]] bool HeldByHelp(const components::ComputerPlayer& state);
+/// The god adds the forests and the seeds of miracles near its hand to its list of seen things
+void SeeNearHand(components::ComputerPlayer& state, uint32_t turn);
+/// The names of the kinds of node that all the gods of the land share
+[[nodiscard]] const computer_mind::NodeNames& SharedNodeNames();
+/// The shared names of the kinds of node, to change them. The first change makes the entity that keeps them.
+[[nodiscard]] computer_mind::NodeNames& SharedNodeNamesToChange();
 /// Where the hand of the god starts on the land: at its temple
 [[nodiscard]] std::optional<glm::vec3> StartingHand(PlayerNames player);
 

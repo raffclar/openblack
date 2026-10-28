@@ -13,6 +13,7 @@
 #include <bit>
 #include <limits>
 #include <random>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -44,7 +45,7 @@ std::vector<Action> EachCommand()
 	        .velocity = {1.5f, -2.25f, 1e-30f},
 	        .start = {.angularMomentum = {0.0f, -0.0f, 2.0f}, .origin = {100.5f, 7.0f, -9.0f}, .angles = {0.1f, -3.1f, 1.5f}}},
 	    HandTap {.object = entt::null},
-	    HandGive {.creature = Entity(10), .object = Entity(11)},
+	    HandGive {.creature = Entity(10), .object = Entity(11), .leftHand = true},
 	    LeashOrder {.kind = LeashOrder::Kind::AtPlace, .object = entt::null, .place = {1000.5f, 12.0f, -3.0f}},
 	    LeashPostTap {.post = Entity(12)},
 	    HandReport {.collidePoint = {1.0f, 2.0f, 3.0f},
@@ -87,6 +88,35 @@ std::vector<Action> EachCommand()
 	    LeashPick {.type = LeashType::Good},
 	    HandShakeOff {},
 	    GripDust {.point = {2000.5f, 104.25f, -2363.0f}},
+	    HelpReport {.events = 0x0102030405060708,
+	                .boxShows = false,
+	                .cursorOnPoint = true,
+	                .cameraSeesLand = true,
+	                .cameraNearAndSteep = true,
+	                .cameraSeesSky = false},
+	    HelpQuery {.thing = Entity(26), .hasGround = true, .ground = {1.0f, 2.0f, 3.0f}},
+	    CreatureFightCheat {},
+	    ViewReport {.eye = {1.0f, 2.0f, 3.0f},
+	                .focus = {4.0f, 5.0f, 6.0f},
+	                .lens = 1.2f,
+	                .nearClip = 0.5f,
+	                .screenWidth = 1280,
+	                .screenHeight = 1024,
+	                .aspect = 1.25f,
+	                .inclusionDistance = 30.0f,
+	                .cameraOrders = 7,
+	                .cameraArrived = true,
+	                .gripsLand = false,
+	                .otherButton = true},
+	    TempleLeashOff {},
+	    GiveCallOff {.creature = Entity(27)},
+	    CreatureTattoo {.creature = Entity(28),
+	                    .slots = {creature_tattoo::Slot {.design = 3, .site = 1, .colour = {10, 20, 30}}},
+	                    .hasPictures = true,
+	                    .pictures = {1, 2, 3}},
+	    LeashLength {.length = 12.5f},
+	    ChatSpeech {.recipients = {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_FOUR}, .text = u"Hello"},
+	    ChatTaunt {.recipients = {PlayerNames::PLAYER_ONE}, .taunt = 30},
 	};
 }
 
@@ -110,7 +140,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 32)
+	switch (bits(random) % 42)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -127,7 +157,7 @@ Action RandomAction(std::mt19937& random)
 	case 5:
 		return HandTap {.object = entity()};
 	case 6:
-		return HandGive {.creature = entity(), .object = entity()};
+		return HandGive {.creature = entity(), .object = entity(), .leftHand = bits(random) % 2 == 1};
 	case 7:
 		return LeashOrder {.kind = static_cast<LeashOrder::Kind>(bits(random) % 4), .object = entity(), .place = vector()};
 	case 8:
@@ -212,6 +242,73 @@ Action RandomAction(std::mt19937& random)
 		return HandShakeOff {};
 	case 30:
 		return GripDust {.point = vector()};
+	case 31:
+		return HelpReport {.events = (uint64_t {bits(random)} << 32) | bits(random),
+		                   .boxShows = bits(random) % 2 == 0,
+		                   .cursorOnPoint = bits(random) % 2 == 0,
+		                   .cameraSeesLand = bits(random) % 2 == 0,
+		                   .cameraNearAndSteep = bits(random) % 2 == 0,
+		                   .cameraSeesSky = bits(random) % 2 == 0};
+	case 32:
+		return HelpQuery {.thing = entity(), .hasGround = bits(random) % 2 == 0, .ground = vector()};
+	case 33:
+		return ViewReport {.eye = vector(),
+		                   .focus = vector(),
+		                   .lens = number(),
+		                   .nearClip = number(),
+		                   .screenWidth = static_cast<uint16_t>(bits(random)),
+		                   .screenHeight = static_cast<uint16_t>(bits(random)),
+		                   .aspect = number(),
+		                   .inclusionDistance = number(),
+		                   .cameraOrders = bits(random),
+		                   .cameraArrived = bits(random) % 2 == 0,
+		                   .gripsLand = bits(random) % 2 == 0,
+		                   .otherButton = bits(random) % 2 == 0};
+	case 34:
+		return GiveCallOff {.creature = entity()};
+	case 35:
+	{
+		CreatureTattoo tattoo {.creature = entity()};
+		for (auto& slot : tattoo.slots)
+		{
+			slot = {.design = static_cast<uint8_t>(bits(random) % 16),
+			        .site = static_cast<uint8_t>(bits(random) % 16),
+			        .colour = glm::u8vec3(bits(random) % 256, bits(random) % 256, bits(random) % 256)};
+		}
+		tattoo.hasPictures = bits(random) % 2 == 0;
+		if (tattoo.hasPictures)
+		{
+			tattoo.pictures.resize(bits(random) % 64);
+			for (auto& byte : tattoo.pictures)
+			{
+				byte = static_cast<uint8_t>(bits(random));
+			}
+		}
+		return tattoo;
+	}
+	case 36:
+		return LeashLength {.length = number()};
+	case 37:
+		return CreatureFightCheat {};
+	case 38:
+		return TempleLeashOff {};
+	case 39:
+	{
+		ChatSpeech speech;
+		speech.recipients.resize(bits(random) % 33);
+		for (auto& recipient : speech.recipients)
+		{
+			recipient = static_cast<PlayerNames>(bits(random) % 32);
+		}
+		speech.text.resize(bits(random) % 300);
+		for (auto& character : speech.text)
+		{
+			character = static_cast<char16_t>(bits(random));
+		}
+		return speech;
+	}
+	case 40:
+		return ChatTaunt {.recipients = {static_cast<PlayerNames>(bits(random) % 32)}, .taunt = bits(random)};
 	default:
 		return PlayerLeft {};
 	}
@@ -273,8 +370,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5, 9, 12,
-	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 2, 1, 13};
+	const std::vector<size_t> sizes {2,  5, 9, 5, 53, 5, 10, 18, 5, 49, 17, 5,  5,  5, 9,  12, 1, 18, 11, 5,  21,
+	                                 15, 3, 5, 1, 2,  1, 61, 5,  2, 1,  13, 10, 18, 1, 50, 1,  5, 51, 5,  16, 7};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -285,6 +382,15 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		if (std::holds_alternative<PlayerLeft>(commands[i]))
 		{
 			tag = 17;
+		}
+		// The lines of the chat have the tags 41 and 42
+		if (std::holds_alternative<ChatSpeech>(commands[i]))
+		{
+			tag = 41;
+		}
+		if (std::holds_alternative<ChatTaunt>(commands[i]))
+		{
+			tag = 42;
 		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
@@ -481,6 +587,23 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	auto gesture = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {SeedGesture {}}});
 	gesture[10] = 3;
 	EXPECT_EQ(Decode(gesture).error, DecodeError::Value);
+	// A tattoo of a design that is not one of the sixteen, a pictures flag that is not 0 or 1, pictures with no flag, or
+	// a block of pictures larger than eight pictures
+	auto tattoo = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {CreatureTattoo {.creature = Entity(1)}}});
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::None);
+	tattoo[14] = 16;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[14] = 0;
+	tattoo[54] = 2;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[54] = 0;
+	tattoo[55] = 1;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[54] = 1;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Truncated);
+	tattoo[55] = 0x29;
+	tattoo[56] = 0x40;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
 
 	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}});
 	turn[8] = 32;
@@ -679,4 +802,129 @@ TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
 	auto wrong = bytes;
 	wrong.back() = static_cast<uint8_t>(SpellSeedType::BeamExplosion) + 1;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AGiveCarriesTheSideOfTheHandOfTheGiver)
+{
+	for (const bool leftHand : {false, true})
+	{
+		const auto bytes =
+		    Encode(CommandBlock {.sequence = 0,
+		                         .turn = 0,
+		                         .actions = {HandGive {.creature = Entity(3), .object = Entity(4), .leftHand = leftHand}}});
+		const auto decoded = Decode(bytes);
+		ASSERT_EQ(decoded.error, DecodeError::None);
+		ASSERT_TRUE(decoded.frame.has_value());
+		const auto& give = std::get<HandGive>(std::get<CommandBlock>(*decoded.frame).actions.at(0));
+		EXPECT_EQ(give.creature, Entity(3));
+		EXPECT_EQ(give.object, Entity(4));
+		EXPECT_EQ(give.leftHand, leftHand);
+		// The side is the last byte of the command
+		EXPECT_EQ(bytes.back(), leftHand ? 1 : 0);
+	}
+}
+
+TEST(TurnCodec, AHelpReportKeepsItsEventsAndRefusesUnknownFlags)
+{
+	const HelpReport report {.events = uint64_t {1} << 48, .boxShows = true, .cameraSeesSky = true};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	EXPECT_EQ(std::get<HelpReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
+
+	// The byte of the flags comes last, after the tag and the eight bytes of the events. A flag after the fifth is
+	// refused.
+	auto wrong = bytes;
+	wrong.back() = 32;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlags)
+{
+	const ViewReport report {.eye = {10.0f, 20.0f, 30.0f},
+	                         .focus = {-1.0f, 0.0f, 1.0f},
+	                         .lens = 1.2217305f,
+	                         .nearClip = 2.0f,
+	                         .screenWidth = 0x0A0B,
+	                         .screenHeight = 0x0C0D,
+	                         .aspect = 1.7777778f,
+	                         .inclusionDistance = 12.5f,
+	                         .cameraOrders = 0x01020304,
+	                         .cameraArrived = false,
+	                         .gripsLand = true,
+	                         .otherButton = true};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	EXPECT_EQ(std::get<ViewReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
+
+	// The byte of the flags comes last. A flag after the third is refused.
+	auto wrong = bytes;
+	wrong.back() = 8;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+TEST(TurnCodec, ALineOfTheChatHasItsPlayersThenItsCharacters)
+{
+	const CommandBlock block {
+	    .sequence = 1,
+	    .turn = 2,
+	    .actions = {ChatSpeech {.recipients = {PlayerNames::PLAYER_THREE}, .text = u"Hi\u00E9"}},
+	};
+	const std::vector<uint8_t> expected {
+	    k_Version, 1,         // version, kind Commands
+	    1,         0,         // sequence
+	    2,         0, 0,   0, // turn
+	    1,                    // count
+	    41,                   // tag ChatSpeech
+	    1,         2,         // one player, slot 2
+	    3,         0,         // three characters
+	    'H',       0, 'i', 0, 0xE9, 0,
+	};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
+	ASSERT_EQ(actions.size(), 1);
+	EXPECT_EQ(std::get<ChatSpeech>(actions[0]), std::get<ChatSpeech>(block.actions[0]));
+}
+
+TEST(TurnCodec, ATauntHasItsNumberAfterItsPlayers)
+{
+	const CommandBlock block {
+	    .sequence = 0,
+	    .turn = 0,
+	    .actions = {ChatTaunt {.recipients = {}, .taunt = 0x01020304}},
+	};
+	const std::vector<uint8_t> expected {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 0, 4, 3, 2, 1};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	EXPECT_EQ(std::get<ChatTaunt>(std::get<CommandBlock>(*decoded.frame).actions[0]).taunt, 0x01020304u);
+}
+
+TEST(TurnCodec, ALineOfTheChatKeepsToItsLimits)
+{
+	// The longest line goes, one character more does not
+	ChatSpeech longest {.recipients = {}, .text = std::u16string(k_MostChatCharacters, u'a')};
+	EXPECT_FALSE(Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {longest}}).empty());
+	longest.text.push_back(u'a');
+	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {longest}}).empty());
+	// A player past the slots of the game does not go
+	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0,
+	                                 .turn = 0,
+	                                 .actions = {ChatTaunt {.recipients = {static_cast<PlayerNames>(32)}, .taunt = 0}}})
+	                .empty());
+
+	// The reader refuses the same: a slot out of range, too many players, and a line that is too long
+	const std::vector<uint8_t> badSlot {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 1, 32, 0, 0, 0, 0};
+	EXPECT_EQ(Decode(badSlot).error, DecodeError::Value);
+	std::vector<uint8_t> tooMany {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 33};
+	tooMany.insert(tooMany.end(), 33 + 4, 0);
+	EXPECT_EQ(Decode(tooMany).error, DecodeError::Value);
+	const std::vector<uint8_t> tooLong {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 41, 0, 0x00, 0x04};
+	EXPECT_EQ(Decode(tooLong).error, DecodeError::Value);
+	// A line that says more characters than it has stops early
+	const std::vector<uint8_t> shortLine {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 41, 0, 2, 0, 'a', 0};
+	EXPECT_EQ(Decode(shortLine).error, DecodeError::Truncated);
 }

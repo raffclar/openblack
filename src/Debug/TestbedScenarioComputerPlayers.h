@@ -128,6 +128,8 @@ void AddComputerGodCoreScenarios(std::vector<Scenario>& all);
 void AddComputerGodTownsScenarios(std::vector<Scenario>& all);
 /// The scenarios of the worshippers, the building sites and the people of the towns
 void AddComputerGodWorshipScenarios(std::vector<Scenario>& all);
+/// The scenarios of the workshops and the scaffolds of the god
+void AddComputerGodScaffoldScenarios(std::vector<Scenario>& all);
 /// The scenarios of the choice, the charge and the cast of the miracles
 void AddComputerGodMiraclesScenarios(std::vector<Scenario>& all);
 /// The scenarios of the care of the god's creature

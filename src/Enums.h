@@ -3002,6 +3002,8 @@ enum class HoldType
 enum class ScaffoldInfo
 {
 	Normal = 0,
+
+	_COUNT
 };
 
 enum class HelpSpritesGuidance
