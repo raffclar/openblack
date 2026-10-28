@@ -215,6 +215,13 @@ void TestbedScenarios::RunRequested() noexcept
 		game->RequestQuit();
 		return;
 	}
+	// A tool's run keeps each command that the scenario gives, for a dedicated server that gives it with the game
+	_runner.ObserveGives([](uint32_t turn, size_t command) {
+		if (auto* each = Game::Instance(); each != nullptr)
+		{
+			each->RecordScenarioGive(turn, command);
+		}
+	});
 	const auto all = All();
 	_picked = static_cast<size_t>(scenario - all.data());
 	_facet = scenario->facet;

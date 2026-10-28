@@ -53,6 +53,7 @@
 #include "ECS/DiscipleSymbol.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/DrawnRegistry.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/HandPlayer.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
@@ -60,6 +61,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -580,15 +582,19 @@ bool SetAboutWork(LivingAction& action, VillagerDisciple type)
 		// It stops being a disciple as it sets about moving into the building nearest it, or failing that the
 		// building's town, then goes to its new home
 		const auto villager = EntityOf(action);
+		const auto before = world_objects::PlayerOf(villager);
 		villager_disciple::SetType(villager, None);
 		auto& towns = Locator::townSystem::value();
 		if (!towns.MoveInByBuilding(towns.NearestBuilding(glm::xz(PositionOf(villager))), villager))
 		{
 			return false;
 		}
-		// TODO(disciples): moved to another player's town, the new player counts a villager converted (a multiplayer
-		// win condition)
 		SetTopState(action, VillagerStates::GoHomeAndChange);
+		// In a network game, a villager that moved to the town of another player counts as converted by the new player
+		if (const auto after = world_objects::PlayerOf(villager); after != before && Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().AddToCondition(after, game_end::Condition::VillagersConverted, 1);
+		}
 		return true;
 	}
 	case FromVortex:

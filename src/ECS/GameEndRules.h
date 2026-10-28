@@ -130,6 +130,9 @@ struct State
 	bool decided {false};
 	/// The last place that a god took
 	int32_t lastPlace {0};
+	/// The number of the winning conditions that each god got at the start of a network game. 0: the gods did not get
+	/// conditions yet, or the game has none.
+	uint32_t conditionCount {0};
 };
 
 /// What happened in the turn, which the players see

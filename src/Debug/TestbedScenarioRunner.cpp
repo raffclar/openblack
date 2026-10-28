@@ -2732,7 +2732,7 @@ void Runner::FinishTakingFireBall()
 	}
 	else
 	{
-		result = magic.TapFireBall(_fireBallTaken) ? "caught it" : "it slipped through the hand";
+		result = magic.TapFireBall(_fireBallTaken) ? "the tap went to the turn" : "the hand could not tap it";
 	}
 	magic.DriveHand(std::nullopt);
 	Log(fmt::format("{:.1f}s: hand on the fireball: {}", _seconds, result));
@@ -4198,7 +4198,7 @@ void Runner::Update(float seconds)
 	FinishTakingFireBall();
 	ApplyStates();
 	UpdatePointer(seconds);
-	const auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds, [this](const Command& command) {
+	auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds, [this](const Command& command) {
 		const bool toHand =
 		    command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed;
 		if (toHand)
@@ -4207,8 +4207,17 @@ void Runner::Update(float seconds)
 		}
 		return IsFree(command.creature);
 	});
+	const auto turn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
+	if (_followedGives.has_value() && turn.has_value())
+	{
+		due = GivesAt(*_followedGives, *turn, _scenario->commands.size());
+	}
 	for (const auto index : due)
 	{
+		if (_giveObserver && turn.has_value())
+		{
+			_giveObserver(*turn, index);
+		}
 		Give(_scenario->commands[index]);
 	}
 }

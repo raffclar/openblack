@@ -155,6 +155,7 @@
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/FloatingNumber.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
 #include "ECS/OtherPlayerSparkles.h"
@@ -838,6 +839,14 @@ Game::~Game() noexcept
 	if (sInstance == this)
 	{
 		sInstance = nullptr;
+	}
+}
+
+void Game::RecordScenarioGive(uint32_t turn, size_t command)
+{
+	if (_scenarioGives != nullptr)
+	{
+		_scenarioGives->Write(turn, command);
 	}
 }
 
@@ -2361,8 +2370,9 @@ bool Game::Update() noexcept
 		const auto last = session != nullptr ? session->StoppedAfter() : std::nullopt;
 		if (last.has_value() && Locator::time::value().GetTurn() > *last)
 		{
+			// The log names the last turn by the number of the world, as the line of the decision does
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the network game stopped after turn {}: the game stops",
-			                   *last);
+			                   *last + 1);
 			return false;
 		}
 	}
@@ -2909,7 +2919,8 @@ void Game::UpdateCamera()
 	{
 		camera.SetOrigin(chase->origin).SetFocus(chase->focus);
 	}
-	FitNearClip();
+	// The near plane follows the height of the eye that the game drew last, with its lift above the land and its shake
+	FitNearClip(camera.GetOrigin(Camera::Interpolation::Drawn));
 }
 
 void Game::UpdateTemple(std::chrono::microseconds deltaTime)
@@ -4424,6 +4435,7 @@ void Game::StartFightTools()
 	if (_simulation.has_value() && _simulation->commandsPath.has_value())
 	{
 		_commandLog = std::make_unique<command_log::Writer>(*_simulation->commandsPath);
+		_scenarioGives = std::make_unique<command_log::GivesWriter>(command_log::GivesPathOf(*_simulation->commandsPath));
 		if (_commandLog->IsOpen())
 		{
 			Locator::playerCommandSystem::value().SetTurnListener(
@@ -5671,6 +5683,19 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	const auto pinnedDate = clock.GetPinnedDate();
 	clock.RestartClock(pinnedDate);
 	clock.SetNetworkGame(true);
+	// The time limit of the game comes from the server, so every computer decides the game at the same turn
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().SetTimeLimit(start.timeLimit.value_or(game_end::k_DefaultTimeLimitMinutes));
+		// The winning conditions come from the server too. The gods get them at the first turn.
+		std::vector<game_end::ConditionPick> picks;
+		for (const auto& each : start.conditions)
+		{
+			picks.push_back(
+			    {.condition = static_cast<game_end::Condition>(each.condition), .value = static_cast<int32_t>(each.value)});
+		}
+		Locator::gameEndSystem::value().SetConditions(std::move(picks));
+	}
 	// The land starts from the state that the game server started it from
 	simulation::PrepareNetworkLand(start.seed);
 	// The modes of the AI soak come from the server, as the seed does. A build for players refuses them.
@@ -6204,7 +6229,7 @@ void Game::FollowWindowSize()
 	}
 }
 
-void Game::FitNearClip()
+void Game::FitNearClip(const glm::vec3& eye)
 {
 	// Outside a camera with a lens of its own, the near plane follows the camera's height over the land, but for close
 	// shots: a script's, and a miracle's camera path
@@ -6213,14 +6238,37 @@ void Game::FitNearClip()
 	{
 		return;
 	}
-	const auto origin = camera.GetOrigin();
-	const float height = origin.y - Locator::terrainSystem::value().GetHeightAt(glm::vec2(origin.x, origin.z));
+	const float height = eye.y - Locator::terrainSystem::value().GetHeightAt(glm::vec2(eye.x, eye.z));
 	const float nearClip = near_clipping::NearPlane(height, Locator::cinematicDirectorSystem::value().IsCloseClipping() ||
 	                                                            Locator::cameraPathSystem::value().HoldsCamera());
 	if (nearClip != camera.GetNearClip())
 	{
 		camera.SetNearClip(nearClip);
 	}
+}
+
+void Game::FitInspectorNearClip(bool shown, const glm::vec3& eyeBefore, const glm::vec3& focusBefore)
+{
+	auto& camera = Locator::camera::value();
+	if (!shown)
+	{
+		// The game's camera gets back the near plane that it had before the inspector showed a different view
+		if (const auto nearClip = std::exchange(_nearClipUnderInspector, std::nullopt); nearClip.has_value())
+		{
+			camera.SetNearClip(*nearClip);
+		}
+		return;
+	}
+	if (camera.GetOrigin() == eyeBefore && camera.GetFocus() == focusBefore)
+	{
+		return;
+	}
+	// A different view gets the near plane for the height of its own eye
+	if (!_nearClipUnderInspector.has_value())
+	{
+		_nearClipUnderInspector = camera.GetNearClip();
+	}
+	FitNearClip(camera.GetOrigin());
 }
 
 void Game::ShowInspectorCamera(bool shown)
@@ -6230,6 +6278,9 @@ void Game::ShowInspectorCamera(bool shown)
 		return;
 	}
 	auto& inspector = Locator::inspector::value();
+	const auto& camera = Locator::camera::value();
+	const auto eyeBefore = camera.GetOrigin();
+	const auto focusBefore = camera.GetFocus();
 	if (shown)
 	{
 		inspector.PlaceCamera();
@@ -6238,7 +6289,7 @@ void Game::ShowInspectorCamera(bool shown)
 	{
 		inspector.GiveCameraBack();
 	}
-	FitNearClip();
+	FitInspectorNearClip(shown, eyeBefore, focusBefore);
 }
 
 void Game::ShowInspectorOverride(bool shown)
@@ -6248,6 +6299,9 @@ void Game::ShowInspectorOverride(bool shown)
 		return;
 	}
 	auto& inspector = Locator::inspector::value();
+	const auto& camera = Locator::camera::value();
+	const auto eyeBefore = camera.GetOrigin();
+	const auto focusBefore = camera.GetFocus();
 	if (shown)
 	{
 		inspector.ShowOverrideToPointer();
@@ -6256,7 +6310,7 @@ void Game::ShowInspectorOverride(bool shown)
 	{
 		inspector.GiveCameraBack();
 	}
-	FitNearClip();
+	FitInspectorNearClip(shown, eyeBefore, focusBefore);
 }
 
 void Game::RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui) noexcept

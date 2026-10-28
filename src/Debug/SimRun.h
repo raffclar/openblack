@@ -23,6 +23,7 @@
 #include "Common/DeveloperTools.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/RowDump.h"
+#include "ECS/GameEndConditions.h"
 #endif
 
 /// The fast simulation mode for long tool runs, such as a creature's whole life. Each frame takes a fixed game time, so a
@@ -51,6 +52,15 @@ struct TempleLoss
 	uint32_t turn {0};
 };
 
+/// Tools: the winning conditions that a test switch gives a network game, as the host picks them. The values are checked
+/// against the limits of a land in "Online Maps\ConditionTemplate.txt".
+struct ConditionsRequest
+{
+	/// The land whose limits the values must keep to, such as "mpm_2p_1". Empty: the land of the game.
+	std::string limitsLand;
+	std::vector<game_end::ConditionPick> picks;
+};
+
 /// How the game runs its frames
 struct Settings
 {
@@ -68,6 +78,12 @@ struct Settings
 	bool stillHand {false};
 	/// Tests: the loss of a temple at a turn
 	std::optional<TempleLoss> templeLoss;
+	/// Tests: the time limit of a network game in minutes, in place of the default time limit. The game server sends its
+	/// time limit to the clients at the start.
+	std::optional<uint32_t> timeLimit;
+	/// Tools: the winning conditions of a network game, in place of the host's pick. The game server sends its
+	/// conditions to the clients at the start.
+	std::vector<game_end::ConditionPick> conditions;
 	/// Tests: at this turn the player of a network game leaves it as a player does: Escape, Exit Online Game, Leave Game
 	std::optional<uint32_t> leaveAt;
 };
@@ -143,6 +159,11 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 
 /// The loss of a temple from the text "player:turn", such as "1:300". None for another text or a player past the seventh.
 [[nodiscard]] std::optional<TempleLoss> ParseTempleLoss(std::string_view text);
+
+/// The winning conditions from the text "[LAND:]NAME=VALUE,...", such as "mpm_2p_1:WC_HOUSES_BUILT=3,WC_GROW_TREES=5".
+/// A name is the name of the condition in the template file, or its number from 0. None for another text, or for a
+/// condition that the text names two times.
+[[nodiscard]] std::optional<ConditionsRequest> ParseConditions(std::string_view text);
 
 /// How long the frame waits at its end so that it takes its fixed game time in real time; no wait in fast mode, without
 /// a fixed frame time, or once the frame took that long or longer

@@ -106,3 +106,26 @@ TEST(SimRun, AFrameTimeCanHaveAPartOfAMillisecond)
 	EXPECT_FALSE(FrameTimeFromMs(0.5).has_value());
 	EXPECT_FALSE(FrameTimeFromMs(1000.5).has_value());
 }
+
+TEST(SimRun, TheConditionsSwitchReadsNamesNumbersAndALand)
+{
+	const auto named = ParseConditions("WC_HOUSES_BUILT=3,WC_GROW_TREES=5");
+	ASSERT_TRUE(named.has_value());
+	EXPECT_TRUE(named->limitsLand.empty());
+	ASSERT_EQ(named->picks.size(), 2u);
+	EXPECT_EQ(named->picks[0],
+	          (openblack::game_end::ConditionPick {.condition = openblack::game_end::Condition::HousesBuilt, .value = 3}));
+	EXPECT_EQ(named->picks[1].condition, openblack::game_end::Condition::TreesGrown);
+	const auto numbered = ParseConditions("mpm_2p_1:0=1,14=7");
+	ASSERT_TRUE(numbered.has_value());
+	EXPECT_EQ(numbered->limitsLand, "mpm_2p_1");
+	EXPECT_EQ(numbered->picks[0].condition, openblack::game_end::Condition::VillagersKilled);
+	EXPECT_EQ(numbered->picks[1].value, 7);
+	// A text with no value, an unknown name, a number past the last condition or a condition two times does not read
+	EXPECT_FALSE(ParseConditions("").has_value());
+	EXPECT_FALSE(ParseConditions("WC_HOUSES_BUILT").has_value());
+	EXPECT_FALSE(ParseConditions("WC_NOTHING=1").has_value());
+	EXPECT_FALSE(ParseConditions("15=1").has_value());
+	EXPECT_FALSE(ParseConditions("3=x").has_value());
+	EXPECT_FALSE(ParseConditions("3=1,WC_HOUSES_BUILT=2").has_value());
+}

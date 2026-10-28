@@ -237,7 +237,7 @@ public:
 	EffectId StartByFrame(ParticleType type, glm::vec3 origin, float magnitude) override;
 	void SetShown(EffectId id, bool shown) override;
 	EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
-	                         float magnitude) override;
+	                         float magnitude, bool synced) override;
 
 	void SetOrigin(EffectId id, glm::vec3 origin) override;
 	void SetPlayer(EffectId id, int player) override;
