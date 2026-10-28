@@ -280,6 +280,7 @@ public:
 	void CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const override;
 	[[nodiscard]] DrawStats GetDrawStats() const override { return _drawStats; }
 	[[nodiscard]] std::vector<EffectInfo> GetEffects() const override;
+	[[nodiscard]] BeliefSpritesSeen GetBeliefSpritesSeen() const override;
 	[[nodiscard]] std::vector<std::string> GetFileNames() const override;
 	void SetPaused(bool paused) override { _paused = paused; }
 	[[nodiscard]] bool IsPaused() const override { return _paused; }
@@ -365,6 +366,11 @@ private:
 	water_rings::Pace _chainScrollPace;
 	/// A symbol of belief waits for its effect
 	bool _beliefWanted {false};
+	/// The symbols of belief that rose last, the newest at the front, and the count of all of them. Only the inspector
+	/// reads these.
+	static constexpr size_t k_BeliefSpritesSeen = 32;
+	std::deque<particles::BeliefSprite> _beliefSpritesSeen;
+	uint64_t _beliefSpriteCount {0};
 	/// The effect the hand's mana path sparks run in, once started
 	EffectId _handManaPath {k_NoEffect};
 	/// The players' symbols drawn by themselves this frame

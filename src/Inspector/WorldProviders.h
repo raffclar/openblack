@@ -71,6 +71,9 @@ using ParticleEffectInfo = ecs::systems::ParticleSystemInterface::EffectInfo;
 /// The pool of liquid particles: how many there are of each kind, and how many drops lie on the land
 [[nodiscard]] Json LiquidSummary(std::span<const liquid_particles::Particle> particles);
 
+/// The symbols of belief that rose last: where, how much and in which colour, the newest first, with the count of all
+[[nodiscard]] Json BeliefSummary(const ecs::systems::ParticleSystemInterface::BeliefSpritesSeen& seen);
+
 struct ParticleSources
 {
 	std::function<std::span<const water_rings::Ring>()> rings;
@@ -78,12 +81,15 @@ struct ParticleSources
 	std::function<std::span<const liquid_particles::Particle>()> liquids;
 	/// The sparkles at the camera of another player
 	std::function<std::span<const liquid_particles::Particle>(PlayerNames)> playerLiquids;
+	/// The symbols of belief that rose last
+	std::function<ecs::systems::ParticleSystemInterface::BeliefSpritesSeen()> belief;
 };
 
 ///   particles.splash   near, radius          the splashes within the radius, nearest first, with their state
 ///   particles.effects  {file?} [near, radius] the running particle effects
 ///   particles.emitters {owner}               the effects that follow an object
 ///   particles.liquid                         the pool of liquid particles: counts by kind, drops on the land
+///   particles.belief                         the symbols of belief that rose last, the newest first
 class ParticlesProvider final: public ProviderInterface
 {
 public:

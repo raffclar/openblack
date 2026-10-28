@@ -4331,6 +4331,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    }
 		    return Locator::liquidParticleSystem::value().PlayerParticles(player);
 	    },
+	    .belief = []() -> ecs::systems::ParticleSystemInterface::BeliefSpritesSeen {
+		    if (!Locator::particleSystem::has_value())
+		    {
+			    return {};
+		    }
+		    return Locator::particleSystem::value().GetBeliefSpritesSeen();
+	    },
 	}));
 
 	inspector.Add(MakePhysicsProvider({.bodies = &Bodies}));

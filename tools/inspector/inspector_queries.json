@@ -432,6 +432,12 @@
   "query": "particles.liquid"
  },
  {
+  "description": "The symbols of belief that rose last from things that gained belief, the newest first: place, amount (the belief by ten thousand) and the player's colour. Also the count of all symbols since the land started",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.belief"
+ },
+ {
   "description": "How many bodies the physics has: flying, resting and in water",
   "kind": "object",
   "parameters": [],
