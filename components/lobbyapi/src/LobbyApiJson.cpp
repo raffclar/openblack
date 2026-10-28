@@ -182,6 +182,13 @@ bool ReadAccountRef(const Json& object, AccountRef& out)
 	return ReadInteger(object, "id", out.id) && ReadString(object, "name", out.name);
 }
 
+bool ReadServerBan(const Json& object, ServerBan& out)
+{
+	const auto* account = Member(object, "account");
+	return account != nullptr && account->is_object() && ReadAccountRef(*account, out.account) &&
+	       ReadString(object, "reason", out.reason, false);
+}
+
 bool ReadClanSummary(const Json& object, ClanSummary& out)
 {
 	return ReadInteger(object, "id", out.id) && ReadString(object, "name", out.name) &&
@@ -444,6 +451,12 @@ std::optional<ServerList> ParseServerList(std::string_view text)
 {
 	return ParseWith<ServerList>(
 	    text, [](const Json& object, ServerList& out) { return ReadArray(object, "servers", out.servers, ReadServerEntry); });
+}
+
+std::optional<ServerBanList> ParseServerBanList(std::string_view text)
+{
+	return ParseWith<ServerBanList>(
+	    text, [](const Json& object, ServerBanList& out) { return ReadArray(object, "bans", out.bans, ReadServerBan); });
 }
 
 std::optional<JoinTicket> ParseJoinTicket(std::string_view text)

@@ -12,7 +12,9 @@
 #include <algorithm>
 #include <bit>
 #include <limits>
+#include <string>
 #include <type_traits>
+#include <utility>
 
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFight.h"
@@ -120,6 +122,37 @@ private:
 	bool _bad {false};
 };
 
+/// The players that get a line of the chat: their count, then the god slot of each
+void WriteRecipients(Writer& out, const std::vector<PlayerNames>& recipients)
+{
+	out.Byte(static_cast<uint8_t>(recipients.size()));
+	for (const auto recipient : recipients)
+	{
+		out.Byte(static_cast<uint8_t>(recipient));
+	}
+}
+
+/// Reads the players that get a line of the chat. A count or a slot past the slots of the game is out of range.
+DecodeError ReadRecipients(Reader& in, std::vector<PlayerNames>& recipients)
+{
+	const auto count = in.Byte();
+	if (count > player_slots::k_MaxPlayers)
+	{
+		return DecodeError::Value;
+	}
+	recipients.resize(count);
+	for (auto& recipient : recipients)
+	{
+		const auto slot = in.Byte();
+		if (slot >= player_slots::k_MaxPlayers)
+		{
+			return DecodeError::Value;
+		}
+		recipient = static_cast<PlayerNames>(slot);
+	}
+	return in.Bad() ? DecodeError::Truncated : DecodeError::None;
+}
+
 void WriteAction(Writer& out, const Action& action)
 {
 	out.Byte(static_cast<uint8_t>(TagOf(action)));
@@ -142,6 +175,7 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const HandGive& command) {
 		               out.Entity(command.creature);
 		               out.Entity(command.object);
+		               out.Byte(command.leftHand ? 1 : 0);
 	               },
 	               [&out](const LeashOrder& command) {
 		               out.Byte(static_cast<uint8_t>(command.kind));
@@ -232,6 +266,19 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Byte(static_cast<uint8_t>(command.hasGround ? 1 : 0));
 		               out.Vector(command.ground);
 	               },
+	               [&out](const ViewReport& command) {
+		               out.Vector(command.eye);
+		               out.Vector(command.focus);
+		               out.Float(command.lens);
+		               out.Float(command.nearClip);
+		               out.Number(command.screenWidth);
+		               out.Number(command.screenHeight);
+		               out.Float(command.aspect);
+		               out.Float(command.inclusionDistance);
+		               out.Number(command.cameraOrders);
+		               out.Byte(static_cast<uint8_t>((command.cameraArrived ? 1u : 0u) | (command.gripsLand ? 2u : 0u) |
+		                                             (command.otherButton ? 4u : 0u)));
+	               },
 	               [&out](const GiveCallOff& command) { out.Entity(command.creature); },
 	               [&out](const CreatureTattoo& command) {
 		               out.Entity(command.creature);
@@ -251,6 +298,20 @@ void WriteAction(Writer& out, const Action& action)
 		               }
 	               },
 	               [&out](const LeashLength& command) { out.Float(command.length); },
+	               [](const CreatureFightCheat& /*command*/) {},
+	               [](const TempleLeashOff& /*command*/) {},
+	               [&out](const ChatSpeech& command) {
+		               WriteRecipients(out, command.recipients);
+		               out.Number(static_cast<uint16_t>(command.text.size()));
+		               for (const auto character : command.text)
+		               {
+			               out.Number(static_cast<uint16_t>(character));
+		               }
+	               },
+	               [&out](const ChatTaunt& command) {
+		               WriteRecipients(out, command.recipients);
+		               out.Number(command.taunt);
+	               },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -307,7 +368,8 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandGive:
 	{
 		const auto creature = in.Entity();
-		action = HandGive {.creature = creature, .object = in.Entity()};
+		const auto object = in.Entity();
+		action = HandGive {.creature = creature, .object = object, .leftHand = in.Byte() != 0};
 		return DecodeError::None;
 	}
 	case CommandTag::LeashOrder:
@@ -500,6 +562,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandShakeOff:
 		action = HandShakeOff {};
 		return DecodeError::None;
+	case CommandTag::CreatureFightCheat:
+		action = CreatureFightCheat {};
+		return DecodeError::None;
 	case CommandTag::GripDust:
 		action = GripDust {.point = in.Vector()};
 		return DecodeError::None;
@@ -532,6 +597,29 @@ DecodeError ReadAction(Reader& in, Action& action)
 		query.hasGround = hasGround == 1;
 		query.ground = in.Vector();
 		action = query;
+		return DecodeError::None;
+	}
+	case CommandTag::ViewReport:
+	{
+		ViewReport report {};
+		report.eye = in.Vector();
+		report.focus = in.Vector();
+		report.lens = in.Float();
+		report.nearClip = in.Float();
+		report.screenWidth = in.Number<uint16_t>();
+		report.screenHeight = in.Number<uint16_t>();
+		report.aspect = in.Float();
+		report.inclusionDistance = in.Float();
+		report.cameraOrders = in.Number<uint32_t>();
+		const auto flags = in.Byte();
+		if (flags > 7)
+		{
+			return DecodeError::Value;
+		}
+		report.cameraArrived = (flags & 1u) != 0;
+		report.gripsLand = (flags & 2u) != 0;
+		report.otherButton = (flags & 4u) != 0;
+		action = report;
 		return DecodeError::None;
 	}
 	case CommandTag::GiveCallOff:
@@ -578,7 +666,44 @@ DecodeError ReadAction(Reader& in, Action& action)
 	}
 	case CommandTag::LeashLength:
 		action = LeashLength {.length = in.Float()};
+	case CommandTag::TempleLeashOff:
+		action = TempleLeashOff {};
 		return DecodeError::None;
+	case CommandTag::ChatSpeech:
+	{
+		ChatSpeech speech;
+		if (const auto error = ReadRecipients(in, speech.recipients); error != DecodeError::None)
+		{
+			return error;
+		}
+		const auto length = in.Number<uint16_t>();
+		if (length > k_MostChatCharacters)
+		{
+			return DecodeError::Value;
+		}
+		if (in.Left() < size_t {length} * 2)
+		{
+			return DecodeError::Truncated;
+		}
+		speech.text.resize(length);
+		for (auto& character : speech.text)
+		{
+			character = static_cast<char16_t>(in.Number<uint16_t>());
+		}
+		action = std::move(speech);
+		return DecodeError::None;
+	}
+	case CommandTag::ChatTaunt:
+	{
+		ChatTaunt taunt;
+		if (const auto error = ReadRecipients(in, taunt.recipients); error != DecodeError::None)
+		{
+			return error;
+		}
+		taunt.taunt = in.Number<uint32_t>();
+		action = std::move(taunt);
+		return DecodeError::None;
+	}
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -613,9 +738,28 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 	return DecodeError::None;
 }
 
+/// The players of a line of the chat are slots of the game, and the line is not too long
+[[nodiscard]] bool ValidChat(const Action& action)
+{
+	const auto validRecipients = [](const std::vector<PlayerNames>& recipients) {
+		return recipients.size() <= player_slots::k_MaxPlayers && std::ranges::all_of(recipients, [](PlayerNames recipient) {
+			       return static_cast<size_t>(recipient) < player_slots::k_MaxPlayers;
+		       });
+	};
+	if (const auto* speech = std::get_if<ChatSpeech>(&action); speech != nullptr)
+	{
+		return validRecipients(speech->recipients) && speech->text.size() <= k_MostChatCharacters;
+	}
+	if (const auto* taunt = std::get_if<ChatTaunt>(&action); taunt != nullptr)
+	{
+		return validRecipients(taunt->recipients);
+	}
+	return true;
+}
+
 [[nodiscard]] bool ValidActions(const std::vector<Action>& actions)
 {
-	return actions.size() <= k_MostBlockCommands;
+	return actions.size() <= k_MostBlockCommands && std::ranges::all_of(actions, ValidChat);
 }
 
 [[nodiscard]] bool ValidFrame(const Frame& frame)
@@ -694,9 +838,14 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const GripDust& /*command*/) { return CommandTag::GripDust; },
 	                      [](const HelpReport& /*command*/) { return CommandTag::HelpReport; },
 	                      [](const HelpQuery& /*command*/) { return CommandTag::HelpQuery; },
+	                      [](const ViewReport& /*command*/) { return CommandTag::ViewReport; },
 	                      [](const GiveCallOff& /*command*/) { return CommandTag::GiveCallOff; },
 	                      [](const CreatureTattoo& /*command*/) { return CommandTag::CreatureTattoo; },
 	                      [](const LeashLength& /*command*/) { return CommandTag::LeashLength; },
+	                      [](const CreatureFightCheat& /*command*/) { return CommandTag::CreatureFightCheat; },
+	                      [](const TempleLeashOff& /*command*/) { return CommandTag::TempleLeashOff; },
+	                      [](const ChatSpeech& /*command*/) { return CommandTag::ChatSpeech; },
+	                      [](const ChatTaunt& /*command*/) { return CommandTag::ChatTaunt; },
 	                  },
 	                  action);
 }
@@ -707,12 +856,14 @@ size_t SizeOf(const Action& action) noexcept
 	const size_t fields =
 	    std::visit(Overloaded {
 	                   [](const LeashKey& /*command*/) { return size_t {1}; },
+	                   [](const CreatureFightCheat& /*command*/) { return size_t {0}; },
+	                   [](const TempleLeashOff& /*command*/) { return size_t {0}; },
 	                   [](const LeashTap& /*command*/) { return k_Entity; },
 	                   [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
 	                   [](const HandTake& /*command*/) { return k_Entity; },
 	                   [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
 	                   [](const HandTap& /*command*/) { return k_Entity; },
-	                   [](const HandGive& /*command*/) { return 2 * k_Entity; },
+	                   [](const HandGive& /*command*/) { return 2 * k_Entity + 1; },
 	                   [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
 	                   [](const LeashPostTap& /*command*/) { return k_Entity; },
 	                   [](const HandReport& /*command*/) { return 4 * k_Vector; },
@@ -740,11 +891,14 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const GripDust& /*command*/) { return k_Vector; },
 	                   [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
 	                   [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
+	                   [](const ViewReport& /*command*/) { return 2 * k_Vector + 6 * 4 + 1; },
 	                   [](const GiveCallOff& /*command*/) { return k_Entity; },
 	                   [](const CreatureTattoo& command) {
 		                   return k_Entity + 5 * creature_tattoo::k_SlotCount + 1 + 2 + command.pictures.size();
 	                   },
 	                   [](const LeashLength& /*command*/) { return size_t {4}; },
+	                   [](const ChatSpeech& command) { return 1 + command.recipients.size() + 2 + (2 * command.text.size()); },
+	                   [](const ChatTaunt& command) { return 1 + command.recipients.size() + 4; },
 	               },
 	               action);
 	return 1 + fields;

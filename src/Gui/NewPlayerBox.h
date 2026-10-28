@@ -20,6 +20,7 @@
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
 #include "Dialog.h"
+#include "SetupMessage.h"
 
 namespace openblack::gui
 {
@@ -61,10 +62,6 @@ public:
 	static constexpr glm::ivec2 k_OkPosition {150, 400};
 	static constexpr glm::ivec2 k_CancelPosition {610, 400};
 	static constexpr int k_ButtonSize = 40;
-	/// The message in front of the box: an opaque white box, the message and an OK button
-	static constexpr DialogRect k_MessageBox {.min = {150, 200}, .max = {650, 400}};
-	static constexpr DialogRect k_Message {.min = {200, 220}, .max = {600, 350}};
-	static constexpr DialogRect k_MessageOk {.min = {325, 338}, .max = {475, 370}};
 
 	NewPlayerBox(const TextDatabase& texts, const GameFont& font);
 	NewPlayerBox(const NewPlayerBox&) = delete;
@@ -79,7 +76,7 @@ public:
 	/// Up, or fading out
 	[[nodiscard]] bool IsVisible() const noexcept { return _active || _fade.GetValue() > 0.0f; }
 	/// A message is up in front of the box
-	[[nodiscard]] bool IsShowingMessage() const noexcept { return _message.has_value(); }
+	[[nodiscard]] bool IsShowingMessage() const noexcept { return _message.IsShown(); }
 
 	/// Each of these is true when a control was let go over, or a key acted: the game clicks
 	void MouseMove(glm::ivec2 point);
@@ -116,13 +113,11 @@ private:
 	SymbolPicture* _symbol {nullptr};
 	BigButton* _cancel {nullptr};
 	/// The message in front, while it is up
-	std::optional<Dialog> _message;
-	StaticText* _messageText {nullptr};
+	SetupMessage _message;
 	std::optional<Answer> _answer;
 	bool _cancelled {false};
 	bool _active {false};
 	Zoomer _fade;
-	Zoomer _messageFade;
 };
 
 } // namespace openblack::gui

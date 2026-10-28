@@ -541,6 +541,21 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	    .hand = HandHold {.offset = {0.0f, 30.0f}, .height = 8.0f},
 	});
 
+	all.push_back({
+	    .id = "miracles.hand_fire_seed_frames",
+	    .name = "The fireball held in the hand, its effect stepped in the drawn frames",
+	    .facet = Facet::Miracles,
+	    .description = "The player's hand is given the fireball and held still over the land, close up. The fire in the "
+	                   "hand steps no more often than 60 times a second, each step by all the game time since the last.",
+	    .expected = "The fire in the hand burns as it does at 60 frames a second, also at hundreds of frames a second. It "
+	                "does not burn faster or flicker more at a high frame rate. While the game is paused it still moves a "
+	                "little at each step. Its random numbers are only this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, 16.0f}, .look = {0.0f, 8.0f, 30.0f}},
+	    .commands = {{.kind = Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Fire)}},
+	    .hand = HandHold {.offset = {0.0f, 30.0f}, .height = 8.0f},
+	});
+
 	// Far from its home, the creature leaves a teleport stone where it explores
 	all.push_back({
 	    .id = "miracles.creature_teleport_from_afar",

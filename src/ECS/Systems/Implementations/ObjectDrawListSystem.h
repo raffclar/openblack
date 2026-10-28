@@ -45,6 +45,7 @@ public:
 	[[nodiscard]] const std::optional<object_draw_list::View>& GetView() const override { return _view; }
 	[[nodiscard]] bool Listed(entt::entity entity) const override;
 	[[nodiscard]] bool Drawn(const Registry& registry, entt::entity entity) const override;
+	[[nodiscard]] bool Decides(const Registry& registry, entt::entity entity) const override;
 	void NoteFullFrame(entt::entity entity, bool staysDrawn) override;
 	[[nodiscard]] std::span<const entt::entity> GetList() const override { return _list; }
 	[[nodiscard]] Summary GetSummary() const override;

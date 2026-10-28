@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #include <MindFile.h>
 #include <PhysiqueFile.h>
@@ -31,6 +32,7 @@
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreaturePhysiology.h"
+#include "Creature/CreatureTattoo.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFileSave.h"
@@ -45,6 +47,7 @@
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
+#include "ECS/Systems/Implementations/TimeSystem.h"
 #include "TestTempFolder.h"
 
 using namespace openblack;
@@ -162,6 +165,7 @@ public:
 	void TakeOff(entt::entity /*creature*/) override {}
 	bool Toggle(entt::entity /*creature*/) override { return false; }
 	bool ChangeType(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	bool PickType(PlayerNames /*player*/, LeashType /*type*/) override { return false; }
 	bool TieTo(entt::entity /*creature*/, entt::entity /*object*/) override { return false; }
 	void UntieToHand(entt::entity /*creature*/) override {}
 	void SetWorks(entt::entity /*creature*/, bool /*works*/) override {}
@@ -634,6 +638,31 @@ TEST_F(CreatureCarryOverSaves, ThePlayersCreatureIsWrittenToItsFilesAsItLives)
 	EXPECT_EQ(Saved(), 2);
 }
 
+TEST_F(CreatureCarryOverSaves, TheKeptFileHasTheTattoosThatThisComputerShows)
+{
+	const TestFolder folder("carry_over_shown_tattoos");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 1199);
+	auto& tattoos = Locator::entitiesRegistry::value().Assign<ecs::components::CreatureTattoos>(creature);
+	tattoos.pictures = {9};
+	// In a network game a change from the tattoo editor stays on this computer only
+	creature_tattoo::Slots shown {};
+	shown.at(0) = {.design = 3, .site = 2, .colour = {10, 20, 30}};
+	tattoos.shown = shown;
+	tattoos.picturesShown = true;
+	tattoos.shownPictures = {1, 2};
+
+	carryOver.ProcessTurn();
+	Live(creature, 1200);
+	carryOver.ProcessTurn();
+	carryOver.FinishWrites();
+	ASSERT_NE(carryOver.Kept(), nullptr);
+	ASSERT_TRUE(carryOver.Kept()->tattooHeader.has_value());
+	EXPECT_EQ(carryOver.Kept()->tattooHeader->at(0), creature_tattoo::ToWord(shown.at(0)));
+	EXPECT_EQ(carryOver.Kept()->tattooHeader->at(1), creature_tattoo::ToWord(creature_tattoo::Slot {}));
+	EXPECT_EQ(carryOver.Kept()->tattoo, std::optional(std::vector<uint8_t> {1, 2}));
+}
+
 TEST_F(CreatureCarryOverSaves, ALandThatKeepsNoCreaturesWritesNoneAsTheyLiveNorAtTheEnd)
 {
 	const TestFolder folder("carry_over_testbed");
@@ -676,4 +705,51 @@ TEST_F(CreatureCarryOverSaves, AReadOfTheProfilesFilesWaitsUntilTheWriterPutThem
 	const auto physique = carryOver.ProfilePhysique();
 	ASSERT_TRUE(physique.has_value());
 	EXPECT_TRUE(std::filesystem::exists(*physique));
+}
+
+TEST(CreatureCarryOverRules, ANetworkGameWritesOnlyTheCreatureThatThisComputerBrought)
+{
+	EXPECT_TRUE(WritesToPlayersFiles({.networkGame = false, .localPlayers = true, .broughtHere = false}));
+	EXPECT_FALSE(WritesToPlayersFiles({.networkGame = false, .localPlayers = false, .broughtHere = false}));
+	EXPECT_TRUE(WritesToPlayersFiles({.networkGame = true, .localPlayers = false, .broughtHere = true}));
+	// In a network game every computer has the same local player, so that player's creature is not its own
+	EXPECT_FALSE(WritesToPlayersFiles({.networkGame = true, .localPlayers = true, .broughtHere = false}));
+}
+
+TEST_F(CreatureCarryOverSaves, ANetworkGameWritesOnlyTheCreatureOfThisComputersGod)
+{
+	const TestFolder folder("carry_over_network");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	auto& clock = Locator::time::emplace<ecs::systems::TimeSystem>([] { return uint32_t {1000}; });
+	clock.SetNetworkGame(true);
+	auto& leash = static_cast<FakeLeash&>(Locator::leashSystem::emplace<FakeLeash>());
+	const auto firstGods = MakeCreature(PlayerNames::PLAYER_ONE, 599);
+	const auto own = MakeCreature(PlayerNames::PLAYER_TWO, 599);
+	leash.playersCreature = firstGods;
+	carryOver.SetBroughtCreature(own);
+
+	// The first look takes the count, then the creature of this computer's god is written at 600 turns
+	carryOver.ProcessTurn();
+	Live(firstGods, 600);
+	Live(own, 600);
+	carryOver.ProcessTurn();
+	EXPECT_EQ(Saved(), 1);
+	// The count stays out of the world, which is the same on each computer
+	const auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_FALSE(registry.AllOf<ecs::components::CreatureFileSave>(firstGods));
+	EXPECT_FALSE(registry.AllOf<ecs::components::CreatureFileSave>(own));
+
+	// At the end only the creature of this computer's god is written
+	carryOver.EndGame();
+	EXPECT_EQ(Saved(), 2);
+	carryOver.KeepCreature(firstGods);
+	EXPECT_EQ(Saved(), 2);
+
+	// The land clear forgets the creature, so nothing is written after it
+	carryOver.Reset();
+	carryOver.EndGame();
+	EXPECT_EQ(Saved(), 2);
+	carryOver.FinishWrites();
+	Locator::leashSystem::reset();
+	Locator::time::reset();
 }

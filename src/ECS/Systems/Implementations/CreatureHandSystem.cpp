@@ -185,24 +185,6 @@ std::optional<creature_interact::View> InteractViewOf(const ecs::Registry& regis
 	return creature_interact::ViewOf(transform.position, height, HeadingOf(registry, creature, transform));
 }
 
-/// Where a line of sight meets the upright plane through the creature that faces back along it
-std::optional<glm::vec3> OnPlaneThrough(const glm::vec3& centre, const glm::vec3& origin, const glm::vec3& direction)
-{
-	auto normal = glm::vec3(direction.x, 0.0f, direction.z);
-	if (glm::length(normal) < 1e-4f)
-	{
-		normal = glm::vec3(0.0f, 0.0f, 1.0f);
-	}
-	normal = glm::normalize(normal);
-	const auto facing = glm::dot(direction, normal);
-	if (std::abs(facing) < 1e-6f)
-	{
-		return std::nullopt;
-	}
-	const auto along = glm::dot(centre - origin, normal) / facing;
-	return along > 0.0f ? std::optional(origin + (direction * along)) : std::nullopt;
-}
-
 /// Where a line first touches the creature's mesh as it is posed this frame
 std::optional<screen_pick::MeshHit> SkinAlong(entt::entity creature, const Transform& transform, const glm::vec3& origin,
                                               const glm::vec3& direction)
@@ -746,16 +728,29 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 
 void CreatureHandSystem::LookAtReportedHand()
 {
+	if (IsHeldByCommand())
+	{
+		return;
+	}
+	// Each player who holds a creature makes it look at the hand of that player
+	for (auto player = static_cast<size_t>(PlayerNames::PLAYER_ONE); player <= static_cast<size_t>(PlayerNames::PLAYER_SEVEN);
+	     ++player)
+	{
+		LookAtReportedHandOf(static_cast<PlayerNames>(player));
+	}
+}
+
+void CreatureHandSystem::LookAtReportedHandOf(PlayerNames player)
+{
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto creatureEntity = GetLockedCreature(PlayerNames::PLAYER_ONE);
-	if (!creatureEntity.has_value() || IsHeldByCommand() ||
-	    !registry.AllOf<Creature, CreatureAnimation, Transform>(*creatureEntity))
+	const auto creatureEntity = GetLockedCreature(player);
+	if (!creatureEntity.has_value() || !registry.AllOf<Creature, CreatureAnimation, Transform>(*creatureEntity))
 	{
 		return;
 	}
 	const auto& handSystem = Locator::handSystem::value();
-	const auto hand = handSystem.GetPlayerHandPositions().at(static_cast<size_t>(HandSystemInterface::Side::Left));
-	const auto camera = handSystem.GetReportedCamera(PlayerNames::PLAYER_ONE);
+	const auto hand = handSystem.GetHandPositionsOf(player).at(static_cast<size_t>(HandSystemInterface::Side::Left));
+	const auto camera = handSystem.GetReportedCamera(player);
 	if (!hand.has_value() || !camera.has_value())
 	{
 		return;

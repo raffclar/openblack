@@ -22,8 +22,10 @@
 #include <utility>
 #include <vector>
 
+#include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Reflection/BinaryArchive.h"
 #include "Help/DialogueText.h"
 
 using namespace openblack::help;
@@ -574,4 +576,54 @@ TEST(DialogueText, ShowingAgainWithNoTextsLeavesTheBoxHidden)
 	dialogue.ShowAgain();
 	EXPECT_TRUE(dialogue.GetDisplay().IsHidden());
 	EXPECT_EQ(dialogue.GetEndTurn(), 0u);
+}
+
+namespace
+{
+std::vector<uint8_t> SavedBytes(const DialogueText& dialogue)
+{
+	const entt::meta_ctx context;
+	openblack::ecs::reflection::BinaryWriter out(context);
+	openblack::ecs::reflection::Save(out, dialogue);
+	return std::move(out.Bytes());
+}
+} // namespace
+
+TEST(DialogueText, TheTextsShownAgainAfterALoadShowAgainTheSameWay)
+{
+	// A save keeps the texts as a load shows them again, so that a save at once after a load has the same bytes
+	Fixture f;
+	f.texts[10] = {.text = u"one two three"};
+	f.texts[11] = {.narrator = 2, .text = u"four five"};
+	auto dialogue = f.Make();
+	ASSERT_TRUE(dialogue.RunText(false, 10, 0));
+	f.turn = 110;
+	f.nowMs = 11000;
+	ASSERT_TRUE(dialogue.RunText(false, 11, 1));
+	f.turn = 130;
+	f.nowMs = 13000;
+
+	auto saved = dialogue;
+	saved.EmptyBox();
+	saved.ShowAgain();
+	auto loaded = saved;
+	loaded.EmptyBox();
+	loaded.ShowAgain();
+	EXPECT_EQ(SavedBytes(loaded), SavedBytes(saved));
+	// The newest text reads from the load
+	EXPECT_EQ(loaded.GetCurrentText(), 11u);
+	EXPECT_EQ(loaded.GetEndTurn(), 130u + 18u);
+}
+
+TEST(DialogueText, AnEmptyBoxShownAgainAfterALoadStaysTheSame)
+{
+	Fixture f;
+	auto dialogue = f.Make();
+	auto saved = dialogue;
+	saved.EmptyBox();
+	saved.ShowAgain();
+	auto loaded = saved;
+	loaded.EmptyBox();
+	loaded.ShowAgain();
+	EXPECT_EQ(SavedBytes(loaded), SavedBytes(saved));
 }

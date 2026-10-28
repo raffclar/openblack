@@ -30,7 +30,7 @@
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
-#include "Common/BuildVersionFile.h"
+#include "Common/BuildVersion.h"
 #include "Common/LoadTimer.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
@@ -46,6 +46,7 @@
 #include "GameSession.h"
 #include "GameTurnOrder.h"
 #include "Graphics/UploadPacer.h"
+#include "Gui/EndGameBoxRules.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
@@ -115,6 +116,10 @@ namespace frame_write_guard
 {
 class Guard;
 }
+namespace player_commands
+{
+struct ViewReport;
+}
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
@@ -168,6 +173,8 @@ struct Arguments
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
+	std::string frameStatsOut;
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
 	/// The https:// origin of the lobby, none for no online services
@@ -175,6 +182,8 @@ struct Arguments
 	std::optional<std::string> lobbyTestAuthorities;
 	/// The real-world weather changes the weather of a single-player game (on by default)
 	bool useInternetWeather {true};
+	/// A network game shows the player's own ping (off by default)
+	bool showPing {false};
 	bool dynamicTreeShadows {false};
 	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
 	/// through the inspector does not wait on a busy graphics card
@@ -224,6 +233,9 @@ struct Arguments
 	/// Tools: play the world as a network game does, with no network: the clock never stops for the player, and the
 	/// turns read no part of a frame
 	bool networkGame {false};
+	/// Tools: a fixed latency in milliseconds for the reports of the hand, so that the lead of each throw is the same in
+	/// each run. None measures the latency on the clock.
+	std::optional<uint32_t> throwLeadLatencyMs;
 	/// Join a game server once the land loaded: the world then turns only with the turns of the server
 	std::optional<ecs::systems::NetworkJoin> networkJoin;
 	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
@@ -285,12 +297,21 @@ public:
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// The audio of a turn of the temple
 	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
+	/// The tools that act before each turn: the testbed scenario of a network game
+	void BeforeTurn() override
+	{
+		if (_scenarioTurn)
+		{
+			_scenarioTurn();
+		}
+	}
 	/// The parts of the land's loads that the view of the player does
 	void ShowLoadingFrame() override;
 	bool WithdrawSkipBox() override;
 	void MakeSymbolSheet() override;
 	void StartLandAudio() override;
 	void TestbedLoaded() override;
+	void StartCameraAtTemple() override;
 	bool AskStartQuestion(bool hasCreature) override;
 	[[nodiscard]] std::optional<std::filesystem::path> ChallengeFile() override;
 	/// The parts of the effects of a frame that the view of the player does
@@ -342,12 +363,34 @@ public:
 	void UpdateFrameEffects();
 	/// The web client and the lobby client do their work of the frame
 	void UpdateOnline();
+	/// The end of a skirmish or a network game: the boxes that the turns of the frame open, and the player's choice in the
+	/// end box
+	void FollowGameEnd();
+	/// The player asks to leave the network game: the end box asks the question to leave
+	void AskToLeaveNetworkGame();
+	/// Exit Online Game of the menu: the question to leave, or a leave at once when the god of the player is out
+	void ExitOnlineGame();
+	/// The player leaves the network game. The game server makes the god of the player a leaver. A join from the command
+	/// line and a run of the tools stop the game; a join from the front end goes back to the multiplayer front end.
+	void LeaveNetworkGame();
+	/// Tests: the player leaves the network game through the menu and the question to leave, as a player does
+	void LeaveAsAPlayerDoes();
+	/// The god of this computer for the end of the game: player seven for a looker-on of a network game
+	[[nodiscard]] PlayerNames LocalGodForGameEnd() const;
+	/// After the player left a network game: the start land loads as a plain start does, and the multiplayer front end
+	/// opens in place of the menu
+	void StartAfterNetworkGame();
+	/// Opens the multiplayer front end in place of the menu. When it cannot open, the start-of-game question that waited
+	/// for it shows.
+	bool OpenFrontEndInPlaceOfMenu();
 	/// The numbers and the marks that rise over things
 	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
 	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
 	void ReportHand();
+	/// With the report of the hand: reports the view that the scripts and the advisors' remarks read, when it changed
+	void ReportView();
 	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
 	/// world camera, when they changed
 	void ReportHelp();
@@ -438,6 +481,9 @@ public:
 	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
 	/// starts, so that only a load or a turn changes the world. None: the window is gone.
 	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
+	/// The scenarios' window sets the work that a scenario does before each turn of a network game. None: the window is
+	/// gone.
+	void SetScenarioTurn(std::function<void()> turn) { _scenarioTurn = std::move(turn); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
@@ -464,6 +510,9 @@ public:
 	[[nodiscard]] const std::optional<std::filesystem::path>& GetScreenshotRoot() const noexcept { return _screenshotRoot; }
 	/// The game's own interface (its menu), once it is made
 	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
+	/// For the testbed: the ping line shows this round trip in microseconds, as --show-ping does in a network game.
+	/// None gives the line back to the network game.
+	void SetDemoRoundTrip(std::optional<uint64_t> microseconds) noexcept { _demoRoundTrip = microseconds; }
 	/// The multiplayer front end with the game's own services: the lobby client, the game socket and the search of
 	/// the local network
 	[[nodiscard]] std::unique_ptr<gui::MultiplayerFrontEnd> MakeMultiplayerFrontEnd();
@@ -510,6 +559,7 @@ private:
 	bool RenderLoadingFrame(bool drawNow = false, const std::function<void()>& drawUnder = nullptr);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen() override;
+	void EndLoadWithoutScreen() override;
 	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources. Then it does
 	/// the work of the first frame that the game can do before, and draws one more loading frame.
 	void FinishLoadingBehindScreen();
@@ -579,6 +629,7 @@ private:
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
 	std::function<void()> _scenarioStager;
+	std::function<void()> _scenarioTurn;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
 	std::optional<FightAutopilotRequest> _fightAutopilot;
@@ -599,14 +650,20 @@ private:
 	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
 	bool _networkGame {false};
+	std::optional<uint32_t> _throwLeadLatencyMs;
 	std::optional<ecs::systems::NetworkJoin> _networkJoin;
 	/// The game joined a game server from the command line, and stops when that network game ends
 	bool _joinedFromCommandLine {false};
 	/// A join from the command line waits for the server's land: the land of the start of the game only stands in for it
 	bool _networkLandPending {false};
+	std::optional<uint64_t> _demoRoundTrip;
 	/// The out-of-sync box was asked; the player answered No to it
 	bool _outOfSyncAsked {false};
 	bool _leaveNetworkGame {false};
+	/// What the end boxes of this computer keep between turns
+	end_game_box::State _endGameBoxState;
+	/// Tests: the player left the network game at the turn that the command line gives
+	bool _testLeaveDone {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
@@ -701,6 +758,8 @@ private:
 	/// The thing under the cursor that the last player_commands::HandPick sent
 	entt::entity _lastHandPick {entt::null};
 	std::optional<uint32_t> _handReportTurn;
+	/// The last report of the view that this computer sent (player_commands::ViewReport), none before the first
+	std::unique_ptr<player_commands::ViewReport> _lastViewReport;
 	/// The turn of the last report of the help that this computer sent
 	std::optional<uint32_t> _helpReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it

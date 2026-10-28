@@ -7,12 +7,12 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#include "BuildVersionFile.h"
-
 #include <cctype>
 
 #include <algorithm>
 #include <utility>
+
+#include "BuildVersion.h"
 
 namespace openblack::build_version
 {

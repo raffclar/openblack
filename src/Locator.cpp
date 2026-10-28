@@ -17,6 +17,7 @@
 #include <exception>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -39,6 +40,7 @@
 #include "Common/RandomNumberManagerProduction.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/MapProduction.h"
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/Registry.h"
@@ -58,6 +60,7 @@
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
 #include "ECS/Systems/Implementations/ComputerSettingsSystem.h"
+#include "ECS/Systems/Implementations/CreatureAnimationLogSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
 #include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
@@ -114,13 +117,19 @@
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
+#include "ECS/IncomingMessageRules.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
+#include "ECS/Systems/Implementations/ChatSystem.h"
 #include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
+#include "ECS/Systems/Implementations/GameEndSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
+#include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -171,15 +180,24 @@
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/TextDatabase.h"
+#include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/NetworkSession.h"
 #include "Online/PushChannelInterface.h"
 #include "Online/TokenStoreInterface.h"
 #include "Online/WebSocketInterface.h"
 #include "Online/WebSocketPushChannel.h"
+#include "PlayerSlots.h"
 #include "Profiler.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/BrowserWebSocketClient.h"
@@ -205,6 +223,7 @@ using openblack::TempleInterior;
 using openblack::UnloadedIsland;
 using openblack::chlapi::CHLApi;
 using openblack::debug::gui::DebugGuiInterface;
+using openblack::ecs::DrawnRegistry;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
@@ -220,6 +239,7 @@ using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
 using openblack::ecs::systems::CameraZoneSystem;
+using openblack::ecs::systems::ChatSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
@@ -254,6 +274,7 @@ using openblack::ecs::systems::FixedOutlineSystem;
 using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
+using openblack::ecs::systems::GameEndSystem;
 using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::GuidanceSystem;
@@ -266,6 +287,7 @@ using openblack::ecs::systems::HelpProfileSystem;
 using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
+using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
 using openblack::ecs::systems::LandShadeSystem;
@@ -493,27 +515,135 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	    online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
 	    []() { return std::chrono::system_clock::now(); });
 	const bool internetWeather = Locator::config::has_value() && Locator::config::value().useInternetWeather;
+	const auto readScript = [](std::string_view file) -> std::optional<std::vector<uint8_t>> {
+		auto& files = Locator::filesystem::value();
+		const auto path = files.GetPath<filesystem::Path::Scripts>() / file;
+		try
+		{
+			if (!files.Exists(path))
+			{
+				return std::nullopt;
+			}
+			return files.ReadAll(path);
+		}
+		catch (const std::exception& error)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read {}: {}", file, error.what());
+			return std::nullopt;
+		}
+	};
 	Locator::realWeatherSystem::emplace<RealWeatherSystem>(
-	    internetWeather, Locator::lobbyClient::value(),
-	    []() -> std::optional<std::vector<uint8_t>> {
-		    auto& files = Locator::filesystem::value();
-		    const auto path = files.GetPath<filesystem::Path::Scripts>() / "weatherinfo.lhw";
-		    try
+	    internetWeather, Locator::lobbyClient::value(), [readScript]() { return readScript("weatherinfo.lhw"); },
+	    []() { return LocalDate(Locator::time::has_value() ? Locator::time::value().GetUnixTime() : std::time(nullptr)); },
+	    []() { return std::chrono::steady_clock::now(); }, [readScript]() { return readScript("country.lhw"); },
+	    // The days of weather go to the folder of the current profile. A developer's run keeps no files for its player.
+	    [developer = profiles.developer](std::span<const uint8_t> bytes) {
+		    if (developer || !Locator::playerProfileSystem::has_value() || !Locator::profileFolderSystem::has_value())
 		    {
-			    if (!files.Exists(path))
-			    {
-				    return std::nullopt;
-			    }
-			    return files.ReadAll(path);
+			    return;
 		    }
-		    catch (const std::exception& error)
+		    const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		    if (profile.has_value() &&
+		        !Locator::profileFolderSystem::value().WritePlayerFile(gui::ToUtf16(profile->name), "weather.dat", bytes))
 		    {
-			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read the weather presets: {}", error.what());
-			    return std::nullopt;
+			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not write the days of the real weather");
 		    }
 	    },
-	    []() { return LocalDate(Locator::time::has_value() ? Locator::time::value().GetUnixTime() : std::time(nullptr)); },
-	    []() { return std::chrono::steady_clock::now(); });
+	    // The message of the real weather goes into the list of incoming messages
+	    [](std::string_view place, uint8_t picture) {
+		    if (Locator::incomingMessageSystem::has_value())
+		    {
+			    Locator::incomingMessageSystem::value().AddWeather(gui::ToUtf16(place), picture);
+		    }
+	    });
+}
+
+/// The chat of a network game, and what it asks of the rest of the game
+void EmplaceChat(bool developer)
+{
+	ChatSystem::Services services;
+	services.submit = [](player_commands::Action action) {
+		if (Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(std::move(action));
+		}
+	};
+	services.localPlayer = []() -> std::optional<PlayerNames> {
+		if (!Locator::handSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& hands = Locator::handSystem::value();
+		const auto own = hands.GetOwnPlayer();
+		return hands.IsOwnPlayer(own) ? std::optional(own) : std::nullopt;
+	};
+	services.creatureOf = [](PlayerNames player) -> std::optional<entt::entity> {
+		return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetPrimaryCreature(player) : std::nullopt;
+	};
+	services.players = []() {
+		std::vector<PlayerNames> players;
+		for (size_t slot = 0; slot < player_slots::k_MaxPlayers; ++slot)
+		{
+			players.push_back(static_cast<PlayerNames>(slot));
+		}
+		return players;
+	};
+	services.incoming = [](std::u16string_view line) {
+		if (Locator::incomingMessageSystem::has_value())
+		{
+			Locator::incomingMessageSystem::value().Add(incoming_messages::Kind::Chat, line, 0);
+		}
+	};
+	// A taunt is said as the remark of the first kind, as the original game does
+	services.advisorsSay = [](uint32_t text) {
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().SayText(text, guidance::Kind::TownDesireSound);
+		}
+	};
+	services.yackingRemark = []() {
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().SayOneOff(guidance::OneOff::QuitTheYacking);
+		}
+	};
+	// The lines go to the chat log in the folder of the current profile. A developer's run keeps no files for its player.
+	services.log = [developer](std::string_view line) {
+		if (developer || !Locator::playerProfileSystem::has_value() || !Locator::profileFolderSystem::has_value())
+		{
+			return;
+		}
+		const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		if (profile.has_value())
+		{
+			const auto* bytes = reinterpret_cast<const uint8_t*>(line.data());
+			Locator::profileFolderSystem::value().AppendPlayerFile(gui::ToUtf16(profile->name), "chat.log",
+			                                                       {bytes, line.size()});
+		}
+	};
+	services.names = []() {
+		std::map<PlayerNames, std::u16string> names;
+		if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
+		{
+			return names;
+		}
+		const auto& session = *Locator::networkGame::value().Session();
+		const auto& start = session.GetStart();
+		const auto& joined = session.GetJoined();
+		const auto* gods = start.has_value()                                 ? &start->gods
+		                   : joined.has_value() && joined->start.has_value() ? &joined->start->gods
+		                                                                     : nullptr;
+		if (gods != nullptr)
+		{
+			for (const auto& god : *gods)
+			{
+				names[static_cast<PlayerNames>(god.slot)] = gui::ToUtf16(god.name);
+			}
+		}
+		return names;
+	};
+	services.turn = []() { return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u; };
+	Locator::chatSystem::emplace<ChatSystem>(std::move(services));
 }
 
 } // namespace
@@ -528,6 +658,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::resources::emplace<Resources>();
 	Locator::playerSystem::emplace<PlayerSystem>();
 	Locator::entitiesRegistry::emplace<Registry>();
+	Locator::drawnRegistry::emplace<DrawnRegistry>();
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
@@ -555,6 +686,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
 	Locator::artefactSystem::emplace<ArtefactSystem>();
 	Locator::heartbeatSystem::emplace<HeartbeatSystem>();
+	Locator::gameEndSystem::emplace<GameEndSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
@@ -637,6 +769,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::magicSystem::emplace<MagicSystem>();
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
 	Locator::pauseTextSystem::emplace<PauseTextSystem>();
+	Locator::incomingMessageSystem::emplace<IncomingMessageSystem>([]() { return machine_clock::Ticks(); });
+	EmplaceChat(profiles.developer);
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
 	Locator::floatingNumberSystem::emplace<ecs::systems::FloatingNumberSystem>();
@@ -676,8 +810,10 @@ namespace openblack
 {
 namespace
 {
-template <typename LandSource>
-void InitializeLevelWith(const LandSource& land)
+/// Starts the services of a new level. makeLand gives the level its land, at the place in the order where the land
+/// changes.
+template <typename MakeLand>
+void InitializeLevelWith(MakeLand&& makeLand)
 {
 	// Both seeds go to 0 with every map, as the game clears them
 	Locator::gameRandom::value().SetSeeds({0, 0});
@@ -713,7 +849,7 @@ void InitializeLevelWith(const LandSource& land)
 	Locator::cameraBookmarkSystem::emplace<CameraBookmarkSystem>();
 	// A land starts with no camera zones
 	Locator::cameraZoneSystem::emplace<CameraZoneSystem>();
-	Locator::terrainSystem::emplace<LandIsland>(land);
+	makeLand();
 	// The things on the land's blocks that are drawn, near to far
 	Locator::objectDrawListSystem::emplace<ObjectDrawListSystem>();
 	Locator::cameraPathSystem::emplace<CameraPathSystem>();
@@ -723,12 +859,21 @@ void InitializeLevelWith(const LandSource& land)
 
 void openblack::InitializeLevel(const std::filesystem::path& path)
 {
-	InitializeLevelWith(path);
+	InitializeLevelWith([&path] { Locator::terrainSystem::emplace<LandIsland>(path); });
 }
 
 void openblack::InitializeLevel(const LandData& land)
 {
-	InitializeLevelWith(land);
+	InitializeLevelWith([&land] { Locator::terrainSystem::emplace<LandIsland>(land); });
+}
+
+void openblack::InitializeLevelOnOpenLand()
+{
+	InitializeLevelWith([] {
+		const auto restored = Locator::terrainSystem::value().RestoreBuiltAltitudes();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The level keeps its land: {} cells went back to their built altitude",
+		                   restored);
+	});
 }
 
 void openblack::InitializeComputerSettings(std::optional<std::filesystem::path> file)
@@ -766,6 +911,8 @@ void openblack::ShutDownServices()
 		resources.GetSounds().Clear();
 		// The advisors' models hold meshes of their own
 		resources.GetAdvisorModels().Clear();
+		// The thumbnails of the network lands hold textures of their own
+		resources.GetLandThumbnails().Clear();
 	}
 	Locator::advisorSystem::reset();
 
@@ -785,6 +932,7 @@ void openblack::ShutDownServices()
 	Locator::webSocketClient::reset();
 	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();
+	Locator::creatureAnimationLog::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
@@ -864,9 +1012,12 @@ void openblack::ShutDownServices()
 	Locator::spellIconSystem::reset();
 	Locator::artefactSystem::reset();
 	Locator::heartbeatSystem::reset();
+	Locator::gameEndSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::pauseTextSystem::reset();
+	Locator::incomingMessageSystem::reset();
+	Locator::chatSystem::reset();
 	Locator::fireSystem::reset();
 	Locator::explosionSystem::reset();
 	Locator::floatingNumberSystem::reset();
@@ -898,10 +1049,23 @@ void openblack::ShutDownServices()
 
 	Locator::oceanSystem::reset();
 	Locator::skySystem ::reset();
+	Locator::cameraHelpSystem::reset();
+	Locator::cameraPathSystem::reset();
+	Locator::cloudSystem::reset();
+	Locator::mistSystem::reset();
+	Locator::villageLightSystem::reset();
+	Locator::tutorialSkipSystem::reset();
+	Locator::templeExteriorSystem::reset();
+	Locator::temple::reset();
+	Locator::vegetation::reset();
+	Locator::alignmentSystem::reset();
+	Locator::playerProfileSystem::reset();
+	Locator::playerSystem::reset();
 	Locator::debugGui::reset();
 	// The map listens to the registry's signals, so it goes first: a map left behind would later let go of signals of a
 	// registry that is gone
 	Locator::entitiesMap::reset();
+	Locator::drawnRegistry::reset();
 	Locator::entitiesRegistry::reset();
 	Locator::rendererInterface::reset();
 	Locator::windowing::reset();
@@ -912,6 +1076,8 @@ void openblack::ShutDownServices()
 	Locator::profiler::reset();
 
 	Locator::vm::reset();
+	Locator::gameRandom::reset();
+	Locator::rng::reset();
 }
 
 bool openblack::StartInspector([[maybe_unused]] uint16_t port)
@@ -926,6 +1092,8 @@ bool openblack::StartInspector([[maybe_unused]] uint16_t port)
 	}
 	// The fights keep a transcript for the inspector's tools
 	Locator::fightTranscript::emplace<ecs::systems::FightTranscriptSystem>();
+	// The creatures' bodies keep a log of their clips for the inspector's tools
+	Locator::creatureAnimationLog::emplace<ecs::systems::CreatureAnimationLogSystem>();
 	Locator::inspector::emplace<ecs::systems::InspectorSystem>(std::move(server));
 	return true;
 #else

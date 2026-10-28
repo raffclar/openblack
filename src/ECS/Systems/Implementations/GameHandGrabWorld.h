@@ -27,6 +27,7 @@ public:
 	[[nodiscard]] PlayerNames HandPlayer() const override;
 	void SetActingPlayer(std::optional<PlayerNames> player) override { _acting = player; }
 	[[nodiscard]] bool IsOtherPlayersHand(entt::entity hand) const override;
+	[[nodiscard]] std::optional<PlayerNames> PlayerOfHand(entt::entity hand) const override;
 	[[nodiscard]] glm::vec3 AsMapPlace(glm::vec3 point) const override;
 	[[nodiscard]] std::optional<glm::vec3> ReportedCollidePoint() const override;
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return _acting; }
@@ -98,7 +99,12 @@ public:
 	void ForgetPulledPose(entt::entity object) override;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const override;
 
-	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) override;
+	[[nodiscard]] hand_grab::throw_lead::LedThrow ThrowStartOf(entt::entity object, bool alignToSlope, glm::vec3 velocity,
+	                                                           int leadTurns) override;
+	[[nodiscard]] uint32_t ReportLatencyMs() const override;
+	[[nodiscard]] uint32_t FrameTurn() const override;
+	[[nodiscard]] float FrameTurnFraction() const override;
+	void DrawThrownPose(entt::entity object, const physics::Pose& pose) override;
 	void StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start) override;
 	std::optional<uint32_t> PourPot(entt::entity pot, PlayerNames player) override;
 	[[nodiscard]] std::optional<PotFacts> PotFactsOf(entt::entity pot) const override;

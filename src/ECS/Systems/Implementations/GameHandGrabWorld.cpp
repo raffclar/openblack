@@ -189,6 +189,9 @@ entt::entity GameHandGrabWorld::Hand() const
 		const auto acting = hands.GetHandsOf(*_acting);
 		return acting.has_value() ? (*acting)[k_Left] : entt::null;
 	}
+	// With no acting player the turn acts with the first player's hand. The turn does the first player's hand first, and
+	// then each other god's hand as its acting player. The input, the frames and the questions of this computer set
+	// its own player as the acting player.
 	return hands.GetPlayerHands()[k_Left];
 }
 
@@ -586,7 +589,8 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 	{
 		return;
 	}
-	auto* data = Entities().TryGet<Player>(Locator::playerSystem::value().GetPlayer(player));
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	auto* data = entity.has_value() && Entities().Valid(*entity) ? Entities().TryGet<Player>(*entity) : nullptr;
 	if (data == nullptr)
 	{
 		return;
@@ -893,6 +897,13 @@ bool GameHandGrabWorld::IsOtherPlayersHand(entt::entity hand) const
 	return player != Locator::handSystem::value().GetOwnPlayer();
 }
 
+std::optional<PlayerNames> GameHandGrabWorld::PlayerOfHand(entt::entity hand) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* god = registry.Valid(hand) ? registry.TryGet<const GodHand>(hand) : nullptr;
+	return god != nullptr ? std::optional(god->player) : std::nullopt;
+}
+
 std::optional<glm::vec3> GameHandGrabWorld::ReportedCollidePoint() const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -1005,24 +1016,29 @@ glm::mat3 GameHandGrabWorld::UnstretchedAxes(entt::entity object, const glm::mat
 	return hand_grab::AxesAtSize(axes, scale);
 }
 
-player_commands::ThrowStart GameHandGrabWorld::ThrowStartOf(entt::entity object, bool alignToSlope)
+hand_grab::throw_lead::LedThrow GameHandGrabWorld::ThrowStartOf(entt::entity object, bool alignToSlope, glm::vec3 velocity,
+                                                                int leadTurns)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	// A globe starts as it was last drawn, turned to this player's camera. Any other thing starts at its Transform.
+	// The thing starts as this computer last drew it at the drawn hand. A globe is turned to this player's camera.
 	std::optional<std::pair<glm::mat3, glm::vec3>> drawn;
 	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(object);
 	    globe != nullptr && globe->drawnTurn.has_value() && globe->drawnModel.has_value())
 	{
 		drawn = std::pair {*globe->drawnTurn, glm::vec3((*globe->drawnModel)[3])};
 	}
+	else if (const auto* inHand = registry.TryGet<const InHand>(object); inHand != nullptr && inHand->drawn.has_value())
+	{
+		drawn = std::pair {inHand->drawn->rotation, inHand->drawn->position};
+	}
 	if (Locator::dynamicsSystem::has_value())
 	{
-		if (const auto start = Locator::dynamicsSystem::value().StartOfThrow(object, drawn, alignToSlope))
+		if (auto led = Locator::dynamicsSystem::value().StartOfThrow(object, drawn, alignToSlope, velocity, leadTurns))
 		{
-			return *start;
+			return std::move(*led);
 		}
 	}
-	// A thing with no body starts where it is
+	// A thing with no body starts where it is, at the velocity of the hand
 	const auto* transform = registry.TryGet<const Transform>(object);
 	if (!drawn.has_value() && transform != nullptr)
 	{
@@ -1030,9 +1046,41 @@ player_commands::ThrowStart GameHandGrabWorld::ThrowStartOf(entt::entity object,
 	}
 	if (!drawn.has_value())
 	{
-		return {};
+		return {.velocity = velocity};
 	}
-	return {.origin = drawn->second, .angles = x87::GameTurnMatrixAngles(drawn->first)};
+	return {.start = {.origin = drawn->second, .angles = x87::GameTurnMatrixAngles(drawn->first)}, .velocity = velocity};
+}
+
+uint32_t GameHandGrabWorld::ReportLatencyMs() const
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportLatencyMs() : 0;
+}
+
+uint32_t GameHandGrabWorld::FrameTurn() const
+{
+	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+}
+
+float GameHandGrabWorld::FrameTurnFraction() const
+{
+	return Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
+}
+
+void GameHandGrabWorld::DrawThrownPose(entt::entity object, const physics::Pose& pose)
+{
+	// Only the draw reads this place. The turns keep the thing in the hand until the command.
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* inHand = registry.TryGet<InHand>(object))
+	{
+		inHand->drawn = InHand::Drawn {.position = pose.origin, .rotation = pose.axes};
+	}
+	// A globe draws its own model
+	if (auto* globe = registry.TryGet<OneOffSpellSeed>(object))
+	{
+		glm::mat4 model(pose.axes);
+		model[3] = glm::vec4(pose.origin, 1.0f);
+		globe->flightModel = model;
+	}
 }
 
 void GameHandGrabWorld::StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start)
@@ -1415,8 +1463,9 @@ bool GameHandGrabWorld::PlayerHasNoWindResistance(PlayerNames player) const
 	{
 		return false;
 	}
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
-	const auto* data = Locator::entitiesRegistry::value().TryGet<const Player>(entity);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* data = entity.has_value() && registry.Valid(*entity) ? registry.TryGet<const Player>(*entity) : nullptr;
 	return data != nullptr && data->windResistance != 0;
 }
 

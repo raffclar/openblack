@@ -68,6 +68,15 @@ struct Leave
 };
 
 /// Server to client: "game.start". The world starts to turn from this turn.
+/// A human god of the game, for the names in the chat
+struct God
+{
+	uint8_t slot {0};
+	/// The name of the account
+	std::string name;
+	bool operator==(const God&) const = default;
+};
+
 struct Start
 {
 	/// The script of the land, as a path under the Scripts folder of the game (for example "Land1.txt" or
@@ -82,6 +91,18 @@ struct Start
 	std::string opening;
 	/// The network map for 32 gods in place of a land ("gods_ring_map", optional)
 	bool godsRingMap {false};
+	/// Tools: every god with a citadel is a computer god, and the room has no human god ("all_computer_gods", optional).
+	/// Only a developer build plays such a game.
+	bool allComputerGods {false};
+	/// Tools: the seed of the personalities of the computer gods ("ai_seed", optional). None: the built-in personalities.
+	std::optional<uint32_t> aiSeed;
+	/// Tools: the id of the testbed scenario that every computer plays from the first turn ("scenario", optional). Only a
+	/// developer build plays such a game.
+	std::optional<std::string> scenario;
+	/// The names of the players of the gods, by god slot ("names", optional). A slot with no player has an empty name.
+	std::vector<std::string> names;
+	/// The human gods of the game, by slot, as the game starts or as an observer joins ("gods", optional)
+	std::vector<God> gods;
 };
 
 /// Server to client: "room.joined". The server accepted the ticket.
@@ -182,10 +203,24 @@ struct StartCreature
 	/// The god's slot. None from a client.
 	std::optional<uint8_t> slot;
 	std::vector<uint8_t> file;
+	/// The alignment that the god starts the game at: the alignment of its player's profile, from -1 (evil) to 1 (good)
+	float alignment {0.0f};
+};
+
+/// Client to server: "game.stop_request". The end box of a decided game opened on the client. The server stops the turns
+/// of the game, if they did not stop before.
+struct StopRequest
+{
+};
+
+/// Server to client: "game.stop". The server stopped the turns of the game. No turn comes after this turn.
+struct GameStop
+{
+	uint32_t turn {0};
 };
 
 using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
-                           StartCancel, StartStop, StartTransfer, StartCreature>;
+                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

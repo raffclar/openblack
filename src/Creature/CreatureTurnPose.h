@@ -39,4 +39,10 @@ void Blend(std::span<const glm::mat4> older, std::span<const glm::mat4> newer, f
 /// The bones in the space of the mesh of bones in the world, for a body drawn at a placement. The placement must have an
 /// inverse.
 void ToMesh(std::span<const glm::mat4> world, const glm::mat4& placement, std::span<glm::mat4> bones);
+
+/// The bones in the space of the mesh of the drawn body, for a body drawn at a placement: the same numbers as a blend
+/// followed by the change into the space of the mesh, with no table of drawn bones between them. The three spans must
+/// have the same length, and the placement must have an inverse.
+void BlendToMesh(std::span<const glm::mat4> older, std::span<const glm::mat4> newer, float weight, const glm::mat4& placement,
+                 std::span<glm::mat4> bones);
 } // namespace openblack::creature_turn_pose

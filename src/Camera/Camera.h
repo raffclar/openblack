@@ -86,6 +86,16 @@ public:
 
 	Camera& SetOriginInterpolator(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& m0, const glm::vec3& m1);
 	Camera& SetFocusInterpolator(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& m0, const glm::vec3& m1);
+	/// One point of the camera (the eye or the focus) that glides: where it starts, where it goes, and its speed at the
+	/// start
+	struct Glide
+	{
+		glm::vec3 from;
+		glm::vec3 to;
+		glm::vec3 speed;
+	};
+	/// The eye and the focus glide over a number of seconds. Each starts at its point and speed and arrives still.
+	Camera& GlideTo(const Glide& origin, const Glide& focus, float seconds);
 
 	/// The eye's and the focus's movements each run on their own clock: they are set off together, but holding the eye
 	/// inside the world's ball sets the eye off again alone. These give the eye's clock, which the camera models time by.
@@ -142,6 +152,9 @@ public:
 	                                         Interpolation interpolation = Camera::Interpolation::Current) const;
 	bool ProjectWorldToScreen(glm::vec3 worldPosition, glm::vec4 viewport, glm::vec3& outScreenPosition,
 	                          Interpolation interpolation = Camera::Interpolation::Current) const;
+
+	/// The eye and the focus of the view, with the shake. The view now also has the limits of the drawn eye.
+	[[nodiscard]] camera_drawn::Pose DrawnPose(Interpolation interpolation) const;
 
 	/// One step of the camera, as long as the frame
 	void Update(std::chrono::microseconds dt);
@@ -262,8 +275,6 @@ protected:
 	std::optional<View> _drawnView;
 	/// The kept view, or the view now when there is no kept view
 	[[nodiscard]] View GetDrawnView() const;
-	/// The eye and the focus of the view, with the shake. The view now also has the limits of the drawn eye.
-	[[nodiscard]] camera_drawn::Pose DrawnPose(Interpolation interpolation) const;
 	[[nodiscard]] glm::mat4 GetProjectionMatrix(Projection projection, Interpolation interpolation) const;
 	float _keyboardMoveSpeed = k_KeyboardMoveSpeedDefault;
 };

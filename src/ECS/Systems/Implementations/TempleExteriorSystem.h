@@ -9,8 +9,12 @@
 
 #pragma once
 
+#include <unordered_map>
+
+#include <entt/core/fwd.hpp>
 #include <entt/entity/fwd.hpp>
 
+#include "3D/TempleExteriorMorph.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
 #include "Enums.h"
 
@@ -36,8 +40,10 @@ public:
 private:
 	/// Blends the temple's own mesh from the four about its size and alignment, and its texture between
 	/// the two looks about its alignment, of its player's set
-	static void Morph(entt::entity entity, components::Mesh& mesh, const components::TempleExterior& exterior,
-	                  PlayerNames owner);
+	void Morph(entt::entity entity, components::Mesh& mesh, const components::TempleExterior& exterior, PlayerNames owner);
+
+	/// Of each temple's own mesh in the cache, by its id, the blend that this computer last made for it
+	std::unordered_map<entt::id_type, TempleExteriorMorph::Blend> _blends;
 };
 
 } // namespace openblack::ecs::systems

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
@@ -31,6 +33,27 @@ struct ReportedHand
 	/// The thing under the cursor as the last pick that a turn did tells it (player_commands::HandPick). None until the
 	/// first pick.
 	entt::entity pickedObject {entt::null};
+	/// The view of the player as the last view report that a turn did tells it (player_commands::ViewReport). False
+	/// until the first view report.
+	bool viewReported {false};
+	/// The eye and the point that the camera looks at, as the frame draws them
+	glm::vec3 viewEye {0.0f};
+	glm::vec3 viewFocus {0.0f};
+	/// The lens across a 4:3 screen, in radians, and the distance of the near plane
+	float viewLens {0.0f};
+	float viewNearClip {0.0f};
+	/// The size of the window of the player in pixels, and the shape of the camera's picture
+	uint16_t viewScreenWidth {0};
+	uint16_t viewScreenHeight {0};
+	float viewAspect {0.0f};
+	/// How far the camera is from the fence of the camera zones
+	float inclusionDistance {0.0f};
+	/// How many camera orders of the scripts the camera has got, and whether it has arrived where it goes
+	uint32_t cameraOrders {0};
+	bool cameraArrived {false};
+	/// The hand grips the land with the select button, and the other button is held too
+	bool gripsLand {false};
+	bool otherButton {false};
 };
 
 } // namespace openblack::ecs::components

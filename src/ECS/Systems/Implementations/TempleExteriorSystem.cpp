@@ -11,6 +11,7 @@
 
 #include "TempleExteriorSystem.h"
 
+#include <string>
 #include <vector>
 
 #include <L3DFile.h>
@@ -49,6 +50,23 @@ namespace
 {
 /// The mesh the temples' are made from, which the outsides are blended into
 constexpr std::string_view k_FirstTemple = "temple/b_first_temple_l3d";
+
+/// The name of the temple's own mesh in the cache
+std::string OwnMeshName(entt::entity entity)
+{
+	return fmt::format("temple/exterior/{}", static_cast<uint32_t>(entity));
+}
+
+entt::id_type OwnMeshId(entt::entity entity)
+{
+	return entt::hashed_string(OwnMeshName(entity).c_str()).value();
+}
+
+/// What the temple's blend comes from: its look now and the textures of its player
+TempleExteriorMorph::Blend BlendOf(const TempleExterior& exterior, PlayerNames owner)
+{
+	return {.look = {exterior.size, exterior.alignment}, .textureSet = static_cast<uint32_t>(owner) & 3};
+}
 } // namespace
 
 void TempleExteriorSystem::UpdateTurn()
@@ -56,7 +74,7 @@ void TempleExteriorSystem::UpdateTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& alignment = Locator::alignmentSystem::value();
 	registry.Each<const Temple, TempleExterior, Mesh>(
-	    [&registry, &alignment](const entt::entity entity, const Temple& temple, TempleExterior& exterior, Mesh& mesh) {
+	    [this, &registry, &alignment](const entt::entity entity, const Temple& temple, TempleExterior& exterior, Mesh& mesh) {
 		    // Its model shows as much of it built as its heart is. Once it shows all of it, the temple is taken out of the
 		    // map's cells and put back in them.
 		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
@@ -115,13 +133,18 @@ void TempleExteriorSystem::UpdateTurn()
 void TempleExteriorSystem::FindAfterLoad()
 {
 	// The save keeps the look that each temple's mesh was blended for, but not the blended mesh. The mesh is made again
-	// before the first frame is drawn, with no step toward the targets.
+	// before the first frame is drawn, with no step toward the targets. A mesh in the cache does not prevent this,
+	// because this computer can have blended it for the world before the load.
+	// The mesh that this computer blended for the same look and textures stays, as a world state of the same world
+	// brings it again.
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	registry.Each<const Temple, const TempleExterior, Mesh>(
-	    [&meshes](const entt::entity entity, const Temple& temple, const TempleExterior& exterior, Mesh& mesh) {
-		    if (exterior.morphed.has_value() &&
-		        TempleExteriorMorph::NeedsBlend(exterior.morphed, *exterior.morphed, meshes.Contains(mesh.id)))
+	    [this, &meshes](const entt::entity entity, const Temple& temple, const TempleExterior& exterior, Mesh& mesh) {
+		    const auto kept = _blends.find(mesh.id);
+		    const bool inCache = kept != _blends.end() && mesh.id == OwnMeshId(entity) && meshes.Contains(mesh.id);
+		    if (TempleExteriorMorph::BlendsAfterLoad(exterior.morphed, inCache ? std::optional(kept->second) : std::nullopt,
+		                                             BlendOf(exterior, temple.owner)))
 		    {
 			    Morph(entity, mesh, exterior, temple.owner);
 		    }
@@ -174,7 +197,7 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 
 	// The temple's own mesh, made once from the first temple's and changed after
 	auto& meshes = resources.GetMeshes();
-	const auto name = fmt::format("temple/exterior/{}", static_cast<uint32_t>(entity));
+	const auto name = OwnMeshName(entity);
 	const auto id = entt::hashed_string(name.c_str()).value();
 	if (!meshes.Contains(id))
 	{
@@ -183,6 +206,8 @@ void TempleExteriorSystem::Morph(entt::entity entity, Mesh& mesh, const TempleEx
 	}
 	auto& temple = *meshes.Handle(id);
 	temple.UpdateVertices(blended);
+	// The same look and textures always give the same blend
+	_blends.insert_or_assign(id, BlendOf(exterior, owner));
 	// Its shape is kept too, for what is done at points on its surface
 	if (files.Contains(id))
 	{

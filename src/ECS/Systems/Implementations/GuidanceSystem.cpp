@@ -11,8 +11,6 @@
 
 #include "GuidanceSystem.h"
 
-#include <ctime>
-
 #include <algorithm>
 #include <iterator>
 #include <optional>
@@ -28,7 +26,9 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/MachineClock.h"
 #include "ECS/BuildingSites.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/Player.h"
@@ -72,9 +72,10 @@ uint32_t Turn()
 	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 }
 
-PlayerNames LocalPlayer()
+/// The player of this computer, who hears the guidance
+PlayerNames OwnPlayer()
 {
-	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
 /// The help level the player chose, none while the scripts keep the help system off
@@ -99,13 +100,7 @@ bool FirstLandOfStory()
 /// Whether the computer's clock says it is night now
 bool ComputerNight()
 {
-	const std::time_t now = std::time(nullptr);
-	std::tm local {};
-#if defined(_WIN32)
-	localtime_s(&local, &now);
-#else
-	localtime_r(&now, &local);
-#endif
+	const auto local = machine_clock::LocalTime();
 	return guidance::ClockSaysNight(local.tm_hour, local.tm_min);
 }
 
@@ -132,7 +127,7 @@ std::optional<glm::vec3> ReportedPointUnderCursor()
 	{
 		return std::nullopt;
 	}
-	const auto hands = Locator::handSystem::value().GetHandsOf(LocalPlayer());
+	const auto hands = Locator::handSystem::value().GetHandsOf(OwnPlayer());
 	if (!hands.has_value())
 	{
 		return std::nullopt;
@@ -153,6 +148,20 @@ bool NearPointUnderCursor(entt::entity thing)
 	const auto point = ReportedPointUnderCursor();
 	const auto* at = Locator::entitiesRegistry::value().TryGet<const Transform>(thing);
 	return point.has_value() && at != nullptr && gutils::GetDistanceInMetres(at->position, *point) < k_WarnReach;
+}
+
+/// The point under the cursor of the player at this computer, as the last report of a turn tells it (zero until the
+/// first report)
+glm::vec3 ReportedPointUnderCursor()
+{
+	if (!Locator::handSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return glm::vec3(0.0f);
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? reported->collidePoint : glm::vec3(0.0f);
 }
 
 /// Play a voice of the guidance sound bank at a thing on the land. The player hears it at full volume to a third of its
@@ -221,7 +230,7 @@ GuidanceHeard* GuidanceSystem::Heard()
 		return nullptr;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto here = LocalPlayer();
+	const auto here = OwnPlayer();
 	std::optional<entt::entity> player;
 	registry.Each<const Player>([&](entt::entity entity, const Player& candidate) {
 		if (candidate.name == here)
@@ -346,7 +355,7 @@ void GuidanceSystem::SayRemark(guidance::Kind kind)
 
 void GuidanceSystem::TownAttacked(entt::entity town, PlayerNames attacker, bool byCreature)
 {
-	const auto here = LocalPlayer();
+	const auto here = OwnPlayer();
 	// TODO(guidance-alerts): harm done by the player's creature is the creature's own remark, kept quiet on the first
 	// land
 	if (byCreature || attacker != here || !Locator::entitiesRegistry::has_value())
@@ -410,12 +419,12 @@ void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttack
 
 void GuidanceSystem::BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining)
 {
-	if (!(remaining < k_WreckedShare) || player != LocalPlayer() || !RemarkNow(guidance::Kind::DestroyBuilding))
+	if (!(remaining < k_WreckedShare) || player != OwnPlayer() || !RemarkNow(guidance::Kind::DestroyBuilding))
 	{
 		return;
 	}
 	// Only a building the player can see
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(OwnPlayer());
 	if (!view.has_value() || !Locator::entitiesRegistry::value().Valid(building) ||
 	    !ecs::thing_on_screen::OnScreen(*view, building))
 	{
@@ -432,7 +441,7 @@ void GuidanceSystem::AlignmentTurn(float change)
 		return;
 	}
 	heard->alignmentDrift = guidance::Drift(heard->alignmentDrift, change);
-	const float alignment = Locator::alignmentSystem::value().GetPlayerAlignment(LocalPlayer());
+	const float alignment = Locator::alignmentSystem::value().GetPlayerAlignment(OwnPlayer());
 	const auto remark = guidance::AlignmentRemark(heard->alignmentDrift, alignment,
 	                                              Locator::infoConstants::value().player.maxAlignmentChangePerGameTurn);
 	if (remark.has_value() && RemarkNow(*remark))
@@ -470,7 +479,7 @@ void GuidanceSystem::KilledVillager(entt::entity villager)
 	{
 		return;
 	}
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(OwnPlayer());
 	if (view.has_value() && Locator::entitiesRegistry::value().Valid(villager) &&
 	    ecs::thing_on_screen::OnScreen(*view, villager))
 	{
@@ -478,9 +487,63 @@ void GuidanceSystem::KilledVillager(entt::entity villager)
 	}
 }
 
+void GuidanceSystem::CreatureWonFight(entt::entity creature)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr || body->owner != OwnPlayer() || !RemarkNow(guidance::Kind::GeneralGood))
+	{
+		return;
+	}
+	// Only when the place where the creature stands is on screen
+	const auto view = ecs::thing_on_screen::ScreenView(OwnPlayer());
+	if (view.has_value() && ecs::thing_on_screen::PlaceOnScreen(*view, creature))
+	{
+		SayRemark(guidance::Kind::GeneralGood);
+	}
+}
+
 void GuidanceSystem::WorshipperDied()
 {
 	RemarkIfNow(guidance::Kind::WorshippersDying);
+}
+
+void GuidanceSystem::BeliefVoice(glm::vec3 at, float share, GuidanceAlignment alignment)
+{
+	if (!Locator::gameRandom::has_value() || !PlayNow(guidance::Kind::BeliefSound))
+	{
+		return;
+	}
+	auto* heard = Heard();
+	if (heard == nullptr)
+	{
+		return;
+	}
+	auto& random = Locator::gameRandom::value();
+	const float left = share - random.LocalFloatRand(guidance::BeliefVoiceDrawLimit(share));
+	if (alignment != GuidanceAlignment::Good && alignment != GuidanceAlignment::Evil)
+	{
+		alignment = random.LocalRand(2) != 0 ? GuidanceAlignment::Evil : GuidanceAlignment::Good;
+	}
+	const auto sample = guidance::BeliefVoice(alignment, left);
+	if (!sample.has_value())
+	{
+		return;
+	}
+	const auto turn = Turn();
+	const float distance = gutils::GetDistanceInMetres(ReportedPointUnderCursor(), at);
+	const auto sinceDesireVoice = turn - heard->lastTurn.at(static_cast<size_t>(guidance::Kind::TownDesireSound));
+	// The game compares the voice with a last voice that it clears on each land and never sets, so the two are never
+	// the same
+	constexpr bool k_SameAsLast = false;
+	if (!(guidance::BeliefVoiceWanted(sinceDesireVoice, distance, k_SameAsLast) > guidance::k_BeliefVoiceLeast))
+	{
+		return;
+	}
+	heard->lastTurn.at(static_cast<size_t>(guidance::Kind::BeliefSound)) = turn;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Voice of awe: guidance sample {}, share {:.3f}, {:.0f} m from the cursor",
+	                    *sample, left, distance);
+	PlayVoice(*sample, at, guidance::k_BeliefVoiceReach);
 }
 
 void GuidanceSystem::LosingVillager(entt::entity villager)
@@ -524,7 +587,7 @@ void GuidanceSystem::LookAtMoon()
 	{
 		return;
 	}
-	const auto look = guidance::LookAtMoon(graphics::moon::Phase(static_cast<int64_t>(std::time(nullptr))), ComputerNight());
+	const auto look = guidance::LookAtMoon(graphics::moon::Phase(machine_clock::UnixTime()), ComputerNight());
 	if (look.remark)
 	{
 		SayOneOff(guidance::OneOff::FullMoon);
@@ -548,7 +611,7 @@ void GuidanceSystem::TownDesireVoices()
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto turn = Turn();
 	// The camera of the player as the last report of the hand that a turn did gives it
-	const auto reportedCamera = Locator::handSystem::value().GetReportedCamera(LocalPlayer());
+	const auto reportedCamera = Locator::handSystem::value().GetReportedCamera(OwnPlayer());
 	if (!reportedCamera.has_value())
 	{
 		return;
@@ -605,7 +668,7 @@ void GuidanceSystem::TownDesireVoices()
 
 	// Find the worship site of the player at this machine that is nearest to the camera, with people that dance at it
 	const auto temple =
-	    Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().TempleOf(LocalPlayer()) : entt::null;
+	    Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().TempleOf(OwnPlayer()) : entt::null;
 	if (temple != entt::null)
 	{
 		const auto& worship = registry.Get<const CitadelWorship>(temple);

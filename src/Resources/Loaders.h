@@ -97,6 +97,11 @@ namespace openblack::physics
 class MaterialTable;
 }
 
+namespace openblack::gui::land_thumbnail
+{
+struct LandThumbnail;
+}
+
 namespace openblack::audio::clip_sounds
 {
 class ClipSoundTable;
@@ -221,7 +226,7 @@ struct Texture2DLoader final: BaseLoader<graphics::Texture2D>
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& rawTexturePath,
 	                                     graphics::texel_depth::Depth depth = graphics::texel_depth::Depth::Full) const;
 	[[nodiscard]] result_type operator()(FromDiskWithAlphaTag, const std::filesystem::path& rawTexturePath,
-	                                     const std::filesystem::path& alphaPath, uint16_t side) const;
+	                                     const std::filesystem::path& alphaPath, uint16_t side, bool halve = false) const;
 	/// The bytes of a square raw file that the game made, as a raw file on the disk with the same name is loaded
 	[[nodiscard]] result_type operator()(FromBufferTag, const std::string& name, std::vector<uint8_t> data,
 	                                     graphics::texel_depth::Depth depth) const;
@@ -349,6 +354,13 @@ struct DanceShapeLoader final: BaseLoader<dance::DanceShapeFile>
 
 /// A hand demonstration, from the files under Data/HandDemo
 struct HandDemoLoader final: BaseLoader<hnd::HNDFile>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+};
+
+/// The thumbnail of a network land from its ".thm" file, painted as the game paints it. Null when the file is not a
+/// thumbnail.
+struct LandThumbnailLoader final: BaseLoader<gui::land_thumbnail::LandThumbnail>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 };
