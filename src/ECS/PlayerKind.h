@@ -58,12 +58,11 @@ enum class Kind
 	return person ? Kind::Human : Kind::None;
 }
 
-/// Whether the computer plays a player. In a game alone, the computer plays each player that the person does not play.
-/// In a network game, the computer plays only the players of its minds.
+/// Whether the computer plays a player: only a player that a computer mind plays, in every game. A player that nobody
+/// plays is not a computer player, also in a game alone.
 [[nodiscard]] constexpr bool IsComputer(const Facts& facts)
 {
-	const auto kind = KindOf(facts);
-	return kind == Kind::Computer || (kind == Kind::None && !facts.networkGame && facts.player != PlayerNames::NEUTRAL);
+	return KindOf(facts) == Kind::Computer;
 }
 
 /// Whether a person plays a player

@@ -561,11 +561,12 @@ bool SpellIconSystem::HandReady(PlayerNames player) const
 	{
 		return false;
 	}
-	// A computer god has hands too, but its hand never takes a miracle: the god casts from the store of the icon
-	const bool computer = Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(player);
-	const bool human = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player).has_value()
+	// A computer god has hands too, but its hand never takes a miracle: the god casts from the store of the icon. The hand
+	// of a player that nobody plays does not take one either.
+	const bool person = !Locator::playerSystem::has_value() || Locator::playerSystem::value().IsHumanPlayer(player);
+	const bool hands = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player).has_value()
 	                                                    : player == PlayerNames::PLAYER_ONE;
-	if (!human || computer)
+	if (!person || !hands)
 	{
 		return false;
 	}

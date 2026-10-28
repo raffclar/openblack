@@ -1256,9 +1256,9 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 	spell.magicType = type;
 	spell.spellClass = magic::ClassOf(type);
 	spell.caster = caster;
-	// A person casts it: the hand of a player that the computer does not play
+	// A person casts it: the hand of a player that a person plays
 	spell.humanCasting = caster.kind == SpellCaster::Kind::Player && player != PlayerNames::NEUTRAL &&
-	                     (Locator::playerSystem::has_value() ? !Locator::playerSystem::value().IsComputerPlayer(player)
+	                     (Locator::playerSystem::has_value() ? Locator::playerSystem::value().IsHumanPlayer(player)
 	                                                         : player == PlayerNames::PLAYER_ONE);
 	magic::SetChants(spell.chants, cast.chants);
 	spell.duration = cast.duration;

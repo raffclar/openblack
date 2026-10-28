@@ -1171,12 +1171,11 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              return QueryResult::Value(std::move(result));
 	              }));
 	provider->Add(
-	    Query(
-	        "animal",
-	        "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock "
-	        "and town, its kind's radius, where it moves to, whether "
-	        "a creature fears it, and a grazer's needs",
-	        {IdParameter("The animal's entity id")}),
+	    Query("animal",
+	          "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, "
+	          "whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether "
+	          "a creature fears it, and a grazer's needs",
+	          {IdParameter("The animal's entity id")}),
 	    Serve<Locator::animalSystem>(
 	        "the animals", [](const ecs::systems::AnimalSystemInterface& animals, const QueryContext& context) {
 		        const auto entity = EntityParam(context.params);
@@ -1192,6 +1191,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                       {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
 		                       {"turns_in_state", animal.turnsInState},
 		                       {"turns_until_state_change", animal.turnsUntilStateChange},
+		                       {"dying", animal.dying},
 		                       {"birth_turn", animal.birthTurn},
 		                       {"clip", static_cast<int>(animal.animation)},
 		                       {"speed", animal.move.speed},
