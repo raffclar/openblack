@@ -169,8 +169,8 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	                   "past dusk.",
 	    .expected = "At the first turn the land is topped up: 50 coin tosses, each tails hiding a firefly in a random tree "
 	                "and heads looking for a rock, of which there are none, so about 25 are made. Then one a turn comes out of "
-	                "the tree it hides in, unless another shares its tree, "
-	                "in which case it is gone: so one firefly a tree comes out. Each flies, easing in and out, to roughly "
+	                "the tree it hides in, also when others hide in the same tree: every firefly comes out. Each flies, "
+	                "easing in and out, to roughly "
 	                "the nearest hut and hovers 2 m above its roof, drifting on a slow loop 8 m across and a quick one "
 	                "1 m across, its drift growing over the first fifth of its flight. Each is a small white glow 0.6 m "
 	                "across, at three quarters brightness within 100 m and fading out by 300 m.",
@@ -248,6 +248,22 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = k_Action},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = k_Action}},
 	    .fireflyRewards = {{"HEAL", 1.0f}},
+	});
+	all.push_back({
+	    .id = "nature.firefly_burns",
+	    .name = "A firefly burns in its burning tree",
+	    .facet = Facet::Nature,
+	    .description = "Noon, with the clock held: a firefly hides in an oak, as a land's script places one, and the oak "
+	                   "is set alight as it is made.",
+	    .expected = "The oak burns. Its fire heats the firefly that hides in it as hot as the oak. After about two "
+	                "minutes the firefly catches at its low combustion temperature of 140 and burns. The firefly shows no "
+	                "flames of its own. In about a minute its fire takes its one unit of life, and the firefly is gone. The "
+	                "log shows the firefly catch and burn down, and the inspector "
+	                "finds no firefly after that.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, 12.0f}, .look = {k_Tree.x, 3.0f, k_Tree.y}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = k_Tree, .firefly = true, .alight = true},
+	                {.type = AbodeInfo::NorseHut, .offset = k_Tree + glm::vec2(30.0f, 6.0f), .yawDegrees = 200.0f}},
 	});
 	all.push_back({
 	    .id = "nature.apple_barrel_worm",

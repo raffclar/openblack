@@ -10,6 +10,7 @@
 #include "ThingModel.h"
 
 #include "3D/AllMeshes.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/VillageTotem.h"
@@ -37,6 +38,11 @@ std::optional<entt::id_type> thing_model::ModelOf(const Registry& registry, entt
 	if (const auto* altar = registry.TryGet<const WorshipAltar>(thing); altar != nullptr && altar->model != 0)
 	{
 		return altar->model;
+	}
+	// A firefly shows only a sprite, but in the map it has the plain model of a thing that has no model of its own
+	if (registry.AllOf<Firefly>(thing))
+	{
+		return resources::HashIdentifier(MeshId::Dummy);
 	}
 	return std::nullopt;
 }

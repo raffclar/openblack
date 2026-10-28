@@ -35,11 +35,13 @@
 #include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/TownDesire.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TownHomes.h"
@@ -403,29 +405,12 @@ void TownDesireSystem::SetBoost(entt::entity town, TownDesireInfo desire, float 
 namespace
 {
 
-/// A town's flags are made with it, unseen until it has a store standing built
-void MakeFlags(entt::entity town)
+/// The height of the ground at a point, 0 while no land is loaded
+float GroundAt(glm::vec2 point)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto& info = Locator::infoConstants::value().townDesire;
-	TownDesireFlags made;
-	made.flags.fill(entt::null);
-	for (size_t i = 0; i < info.size(); ++i)
-	{
-		const auto point = town_desire_flags::PointOf(info.at(i).worshipSiteSlot);
-		if (!point.has_value())
-		{
-			continue;
-		}
-		const auto flag = registry.Create();
-		registry.Assign<TownDesireFlag>(
-		    flag, TownDesireFlag {.town = town, .desire = static_cast<TownDesireInfo>(i), .point = *point});
-		registry.Assign<Mesh>(flag, resources::HashIdentifier(info.at(i).worshipSiteMesh), static_cast<int8_t>(0),
-		                      static_cast<int8_t>(0));
-		registry.Assign<Transform>(flag, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-		made.flags.at(i) = flag;
-	}
-	registry.Assign<TownDesireFlags>(town, made);
+	return Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded()
+	           ? Locator::terrainSystem::value().GetHeightAt(point)
+	           : 0.0f;
 }
 
 /// Each new store of its town takes the flag to its own place for it, from the store's model, over the ground
@@ -445,12 +430,71 @@ void PlaceOnStore(TownDesireFlag& flag, entt::entity store)
 		}
 	}
 	flag.place = transform.position + (transform.rotation * (local * transform.scale));
-	const float ground =
-	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({flag.place.x, flag.place.z}) : 0.0f;
-	flag.overGround = flag.place.y - ground;
+	flag.overGround = flag.place.y - GroundAt({flag.place.x, flag.place.z});
+}
+
+/// The flag stands at its place in the map, upright and at its full size. Only the frames turn it to the camera and
+/// change its height and size.
+void StandAtPlace(ecs::Registry& registry, entt::entity entity, const TownDesireFlag& flag)
+{
+	auto& transform = registry.Get<Transform>(entity);
+	transform.position = flag.place;
+	transform.rotation = glm::mat3(1.0f);
+	transform.scale = glm::vec3(1.0f);
 }
 
 } // namespace
+
+void TownDesireSystem::MakeFlags(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::infoConstants::has_value() || !registry.Valid(town) || registry.AllOf<TownDesireFlags>(town))
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value().townDesire;
+	// A flag stands on the store of its town. Before the town has a store, the flag stands a short distance from the
+	// town.
+	const auto store = construction::StoragePitOf(town);
+	const auto townPlace = ecs::thing_map_place::Of(registry, town);
+	TownDesireFlags made;
+	made.flags.fill(entt::null);
+	for (size_t i = 0; i < info.size(); ++i)
+	{
+		const auto slot = info.at(i).worshipSiteSlot;
+		const auto point = town_desire_flags::PointOf(slot);
+		if (!point.has_value())
+		{
+			continue;
+		}
+		const auto flag = registry.Create();
+		auto& component = registry.Assign<TownDesireFlag>(
+		    flag, TownDesireFlag {.town = town, .desire = static_cast<TownDesireInfo>(i), .point = *point});
+		registry.Assign<Mesh>(flag, resources::HashIdentifier(info.at(i).worshipSiteMesh), static_cast<int8_t>(0),
+		                      static_cast<int8_t>(0));
+		registry.Assign<Transform>(flag, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		std::optional<map_coords::MapCoords> placeWithoutStore;
+		if (store.has_value() && Locator::resources::has_value())
+		{
+			PlaceOnStore(component, *store);
+		}
+		else
+		{
+			placeWithoutStore = town_desire_flags::PlaceWithoutStore(townPlace, static_cast<uint32_t>(slot));
+			const glm::vec2 metres {map_coords::ToMetres(placeWithoutStore->x), map_coords::ToMetres(placeWithoutStore->z)};
+			component.place = {metres.x, GroundAt(metres), metres.y};
+			component.overGround = 0.0f;
+		}
+		StandAtPlace(registry, flag, component);
+		if (placeWithoutStore.has_value())
+		{
+			ecs::thing_map_place::Keep(registry, flag, *placeWithoutStore);
+		}
+		component.madeAt = ecs::thing_map_place::Of(registry, flag);
+		made.flags.at(i) = flag;
+	}
+	registry.Assign<TownDesireFlags>(town, made);
+}
 
 void TownDesireSystem::ProcessFlags()
 {
@@ -467,12 +511,31 @@ void TownDesireSystem::ProcessFlags()
 		MakeFlags(town);
 	}
 	std::vector<entt::entity> orphans;
-	registry.Each<const TownDesireFlag>([&](entt::entity entity, const TownDesireFlag& flag) {
+	std::vector<entt::entity> moved;
+	registry.Each<TownDesireFlag>([&](entt::entity entity, TownDesireFlag& flag) {
 		if (!registry.Valid(flag.town) || !registry.AllOf<Town>(flag.town))
 		{
 			orphans.push_back(entity);
+			return;
+		}
+		// A new store of the town takes the flag to its place on the store. The flag stays where it is after its store
+		// is gone.
+		const auto store = construction::StoragePitOf(flag.town);
+		if (store.has_value() && *store != flag.store && Locator::resources::has_value())
+		{
+			PlaceOnStore(flag, *store);
+			moved.push_back(entity);
 		}
 	});
+	for (const auto entity : moved)
+	{
+		// The flag goes into the map cell of its new place, at the back of the things in the cell that do not move
+		StandAtPlace(registry, entity, registry.Get<const TownDesireFlag>(entity));
+		if (Locator::entitiesMap::has_value())
+		{
+			Locator::entitiesMap::value().Refile(entity);
+		}
+	}
 	for (const auto orphan : orphans)
 	{
 		registry.Destroy(orphan);
@@ -489,24 +552,20 @@ void TownDesireSystem::UpdateFlags(float seconds)
 	const auto viewProjection = camera != nullptr ? camera->GetViewProjectionMatrix() : glm::mat4(1.0f);
 	const auto eye = camera != nullptr ? camera->GetOrigin() : glm::vec3(0.0f);
 
-	registry.Each<TownDesireFlag, Transform>([&](TownDesireFlag& flag, Transform& transform) {
+	registry.Each<TownDesireFlag>([&](TownDesireFlag& flag) {
 		// The turn removes the flags of a town that has gone
 		if (!registry.Valid(flag.town) || !registry.AllOf<Town>(flag.town))
 		{
 			return;
 		}
-		const auto store = construction::StoragePitOf(flag.town);
-		if (store.has_value() && *store != flag.store)
-		{
-			PlaceOnStore(flag, *store);
-		}
 		// A store works while built and not hurt down to the share at which it stops working
+		const auto store = construction::StoragePitOf(flag.town);
 		const bool working = store.has_value() && villager_home::IsFunctional(*store);
 		const float desire = GetRawDesire(flag.town, flag.desire);
 		const float showsAfter = info.at(static_cast<size_t>(flag.desire)).showsAfterPercent;
 		const bool shows = town_desire_flags::Shows(working, flag.level, showsAfter);
 		if (shows && flag.shown && camera != nullptr &&
-		    !town_desire_flags::InView(viewProjection * glm::vec4(transform.position, 1.0f)))
+		    !town_desire_flags::InView(viewProjection * glm::vec4(flag.drawnPosition, 1.0f)))
 		{
 			return;
 		}
@@ -522,9 +581,9 @@ void TownDesireSystem::UpdateFlags(float seconds)
 		const float ground =
 		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({position.x, position.z}) : 0.0f;
 		position.y = ground + flag.overGround + town_desire_flags::Rise(flag.level);
-		transform.position = position;
-		transform.rotation = glm::mat3(portable_math::EulerAngleY(-town_desire_flags::FacingAngle(position, eye)));
-		transform.scale = glm::vec3(town_desire_flags::DrawnScale(flag.level, showsAfter));
+		flag.drawnPosition = position;
+		flag.drawnRotation = glm::mat3(portable_math::EulerAngleY(-town_desire_flags::FacingAngle(position, eye)));
+		flag.drawnScale = town_desire_flags::DrawnScale(flag.level, showsAfter);
 	});
 }
 

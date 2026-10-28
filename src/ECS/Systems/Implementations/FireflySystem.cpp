@@ -144,8 +144,8 @@ entt::entity FireflySystem::Create(const map_coords::MapCoords& spot)
 	const auto drift = fireflies::DrawDrift([this](float x) { return _world->GameFloatRand(x); });
 	const auto entity = registry.Create();
 	registry.Assign<Firefly>(entity, fireflies::Make(spot, drift));
-	registry.Assign<Transform>(entity, _world->ToWorld(spot), glm::mat3(1.0f),
-	                           glm::vec3(fireflies::k_SpriteHalfSize, fireflies::k_SpriteHalfSize, 1.0f));
+	// In the map it has the size of a plain thing. The frames draw its sprite at the size of the sprite.
+	registry.Assign<Transform>(entity, _world->ToWorld(spot), glm::mat3(1.0f), glm::vec3(1.0f));
 	_order.insert(_order.begin(), entity);
 	return entity;
 }
@@ -229,17 +229,14 @@ void FireflySystem::SendOutOnce()
 	}
 	const auto first = _order.front();
 	const auto at = registry.Get<const Firefly>(first).at;
-	// It comes out only from a tree or rock still standing exactly where it hides, and only if no other firefly shares
-	// the spot; otherwise it is gone
+	// It comes out only from a tree or rock that still stands exactly where it hides. If there is no tree or rock, it
+	// is gone. Other fireflies can hide at the same spot.
 	const auto things = _world->ThingsInCell(map_coords::Cell(at));
 	const bool hasHome = std::ranges::any_of(things, [this, &at](entt::entity thing) {
 		const auto spot = _world->SpotOf(thing);
 		return _world->IsHidingPlace(thing) && spot.has_value() && *spot == at;
 	});
-	const bool shared = std::ranges::any_of(_order, [&registry, first, &at](entt::entity other) {
-		return other != first && registry.Get<const Firefly>(other).at == at;
-	});
-	if (!hasHome || shared)
+	if (!hasHome)
 	{
 		registry.Destroy(first);
 		return;
@@ -288,8 +285,10 @@ void FireflySystem::Fly(entt::entity entity)
 		const auto to = _world->ToWorld(out ? firefly.hover : firefly.home);
 		firefly.at = _world->FromWorld((to - from) * *step.along + from);
 	}
-	// It stands where it is on the map. The frames keep the place where they draw it in Firefly::drawn.
+	// It stands where it is on the map, and goes into the map cell of that place. The frames keep the place where they
+	// draw it in Firefly::drawn.
 	registry.Get<Transform>(entity).position = _world->ToWorld(firefly.at);
+	_world->Moved(entity);
 }
 
 std::optional<fireflies::Found> FireflySystem::Search(const map_coords::MapCoords& from, bool building)
@@ -382,9 +381,13 @@ void FireflySystem::Update(float milliseconds, float turnFraction)
 bool FireflySystem::Catch(const map_coords::MapCoords& spot)
 {
 	auto& registry = _world->Entities();
-	const auto found = std::ranges::find_if(
-	    _order, [&registry, &spot](entt::entity entity) { return registry.Get<const Firefly>(entity).at == spot; });
-	if (found == _order.end())
+	// The hand catches the first firefly at the exact spot, in the order that a search of the spot's map cell meets them
+	const auto things = _world->ThingsInCell(map_coords::Cell(spot));
+	const auto found = std::ranges::find_if(things, [&registry, &spot](entt::entity thing) {
+		const auto* firefly = registry.Valid(thing) ? registry.TryGet<const Firefly>(thing) : nullptr;
+		return firefly != nullptr && firefly->at == spot;
+	});
+	if (found == things.end())
 	{
 		return false;
 	}

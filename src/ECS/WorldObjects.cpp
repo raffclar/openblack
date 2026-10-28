@@ -35,6 +35,7 @@
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
@@ -58,6 +59,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -327,7 +329,17 @@ const GObjectInfo* world_objects::EffectInfoOf(entt::entity object)
 	{
 		return nullptr;
 	}
+	// A town's desire flag takes no effect, also no heat from a fire
+	if (registry.AllOf<TownDesireFlag>(object))
+	{
+		return nullptr;
+	}
 	const auto& info = Locator::infoConstants::value();
+	// A firefly takes heat and catches fire by its row of the fixed things' table
+	if (registry.AllOf<Firefly>(object))
+	{
+		return &info.singleMapFixed.at(Firefly::k_InfoRow);
+	}
 	if (const auto* flowers = registry.TryGet<const Flowers>(object))
 	{
 		return Row(info.flowers, flowers->type);
