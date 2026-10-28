@@ -493,9 +493,10 @@ def map_lines(rows):
         status = {"same": "same", "part": "PART"}.get(row["status"], "ERROR")
         part = row.get("first_part_turn")
         planned = row.get("part_observer_at")
+        # A game in step names no parts: the parts of the row then come from the part on purpose
+        parts = ", ".join(row.get("parts") or []) if status == "PART" else ""
         line = (f"{row['land']:<12} {status:<5} turns {row.get('turns_played', '-')}"
-                f" first part {'-' if part is None else part}"
-                f" parts {', '.join(row.get('parts') or []) or '-'}")
+                f" first part {'-' if part is None else part} parts {parts or '-'}")
         if planned is not None:
             line += f" observer part {planned}"
         lines.append(line)

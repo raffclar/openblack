@@ -510,6 +510,7 @@ class ObserverPart(unittest.TestCase):
             runner, calls = Playing.runner_of(None, [SAME])
             row = ai_soak.play(game, day, options(), runner=runner)
         self.assertEqual(row["part_observer_at"], 150)
+        row["parts"] = ["Animal"]
         self.assertEqual(calls[0][calls[0].index("--part-second-at") + 1], "150")
         part = dict(row, land="ring32", status="part", first_part_turn=212, parts=["ComputerPlayers"])
         error = dict(row, land="mpm_4p_1", status="error")
