@@ -94,6 +94,7 @@ public:
 	                                  float interruptsAfter) const override;
 	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
 	                 float interruptsAfter) override;
+	void PullReactionFace(entt::entity creature, const creature_face::Request& face) override;
 	bool Sleep(entt::entity creature) override;
 	bool Eat(entt::entity creature, std::optional<entt::entity> food) override;
 	bool Drink(entt::entity creature) override;

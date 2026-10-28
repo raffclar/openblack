@@ -6213,6 +6213,32 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = collarHand,
 	});
 
+	// The real hand on the body: a fast sweep slaps, then slow strokes come while the tiger still reels
+	std::vector<Command> refusedStroke {
+	    {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	    {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {-0.1f, 0.0f}, .amount = 0.3f},
+	    {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {0.2f, 0.0f}, .amount = 0.01f}};
+	for (int stroke = 0; stroke < 4; ++stroke)
+	{
+		const float down = stroke % 2 == 0 ? 0.08f : -0.08f;
+		refusedStroke.push_back({.kind = Kind::PointerSweep, .delaySeconds = 0.4f, .point = {0.0f, down}, .amount = 0.4f});
+	}
+	refusedStroke.push_back({.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3});
+	all.push_back({
+	    .id = "hand.refused_stroke_face",
+	    .name = "A stroke while the creature reels pulls only the face",
+	    .facet = Facet::Hand,
+	    .description = "The hand holds the player's tiger, which faces the camera, by its middle. It sweeps fast across "
+	                   "the middle of the screen one time, then strokes the tiger slowly up and down while it reels.",
+	    .expected = "The fast sweep plays a reeling animation. A stroke that comes before the reel is far enough through "
+	                "pulls only its face: the tiger reels to the end and plays no pleased animation for that stroke. The "
+	                "log shows \"pulls only the face of reaction\" at the turn of that stroke.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = refusedStroke,
+	});
+
 	all.push_back({
 	    .id = "hand.slap_after_stroke",
 	    .name = "A slap soon after a stroke",

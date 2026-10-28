@@ -15,6 +15,8 @@
 #include "Creature/CreatureSentReactions.h"
 
 using namespace openblack;
+using creature_hand::ReactionSend;
+using creature_hand::ReactionToSend;
 using creature_hand::SentReactions;
 using creature_hand::TakesReaction;
 
@@ -86,4 +88,15 @@ TEST(CreatureSentReactions, AReactionWithNoLimitInterruptsAWaitingReaction)
 	EXPECT_TRUE(TakesReaction(true, 0.0f, true));
 	// The body still has to take it
 	EXPECT_FALSE(TakesReaction(true, 0.0f, false));
+}
+
+TEST(CreatureSentReactions, ARefusedStrokeSendsOnlyItsFaceAndARefusedSlapSendsNothing)
+{
+	// The creature takes the reaction: the turn plays it whole, with or without a face
+	EXPECT_EQ(ReactionToSend(true, true), ReactionSend::Whole);
+	EXPECT_EQ(ReactionToSend(true, false), ReactionSend::Whole);
+	// The creature refuses a stroke: the turn pulls only its face
+	EXPECT_EQ(ReactionToSend(false, true), ReactionSend::FaceOnly);
+	// The creature refuses a slap, which has no face: the hand sends nothing
+	EXPECT_EQ(ReactionToSend(false, false), ReactionSend::None);
 }

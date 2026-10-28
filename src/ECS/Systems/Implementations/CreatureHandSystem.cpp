@@ -508,8 +508,8 @@ bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mir
 		// that plays does.
 		const bool takes = creature_hand::TakesReaction(_sentReactions.Waiting(creature), interruptsAfter,
 		                                                minds.CanForceAction(creature, animation, mirrored, interruptsAfter));
-		// A refused reaction with no face does nothing in the world, so the hand does not send it
-		if (!takes && !face.has_value())
+		const auto send = creature_hand::ReactionToSend(takes, face.has_value());
+		if (send == creature_hand::ReactionSend::None)
 		{
 			return false;
 		}
@@ -523,6 +523,7 @@ bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mir
 		    .faceMs = face.has_value() ? face->milliseconds : 0.0f,
 		    .cue = face.has_value() ? static_cast<uint8_t>(face->cue) : uint8_t {0},
 		    .interruptsAfter = interruptsAfter,
+		    .faceOnly = send == creature_hand::ReactionSend::FaceOnly,
 		});
 		return takes;
 	}
@@ -549,6 +550,20 @@ void CreatureHandSystem::DoReaction(PlayerNames player, const player_commands::C
 	                                           .cue = static_cast<creature_face::Cue>(reaction.cue),
 	                                       })
 	                                     : std::nullopt;
+	// The creature refused the action in the frame of the stroke: it pulls only the face, as when it reacts at once
+	if (reaction.faceOnly)
+	{
+		if (face.has_value())
+		{
+			if (const auto logger = spdlog::get("game"))
+			{
+				SPDLOG_LOGGER_INFO(logger, "Creature {} pulls only the face of reaction {} from player {}",
+				                   entt::to_integral(reaction.creature), reaction.animation, static_cast<int>(player));
+			}
+			Locator::creatureMindSystem::value().PullReactionFace(reaction.creature, *face);
+		}
+		return;
+	}
 	if (const auto logger = spdlog::get("game"))
 	{
 		SPDLOG_LOGGER_INFO(logger, "Creature {} gets reaction {} (mirrored {}) from player {}",
