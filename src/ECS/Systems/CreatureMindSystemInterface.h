@@ -208,9 +208,13 @@ public:
 
 	/// A fight the creature was in ended, won or lost: fighting satisfies the desire it is for, and its body pays for it
 	virtual void FoughtFight(entt::entity creature, bool won) = 0;
-	/// A fight started between the two creatures. The fight has the minds of both until it ends. When the first creature
-	/// did not plan the fight itself, it is made to fight. The second creature stops what it does and obeys the first.
+	/// A fight started: the first creature asked the second creature, and the second creature agreed. The fight has the
+	/// mind of the first creature until it ends. When the first creature did not plan the fight itself, it is made to
+	/// fight.
 	virtual void FightStarted(entt::entity /*creature*/, entt::entity /*opponent*/, bool /*planned*/) {}
+	/// The first creature of a fight told the second creature to obey it. The second creature stops what it does, and
+	/// the fight has its mind until the fight ends.
+	virtual void FightOrdered(entt::entity /*creature*/, entt::entity /*asker*/) {}
 	/// What the creature does stops as a failure. The desire becomes fully dominant, and the creature plans to satisfy it
 	/// through the thing. Returns whether the creature has a plan for that desire.
 	virtual bool ForceDesireOn(entt::entity /*creature*/, creature_desires::Desire /*desire*/, entt::entity /*thing*/)
