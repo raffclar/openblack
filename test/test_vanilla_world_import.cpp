@@ -15,6 +15,7 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <iterator>
 #include <optional>
 #include <string_view>
@@ -24,8 +25,10 @@
 #include <VanillaWorld.h>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/VanillaWorldImport.h"
+#include "ECS/WallHugRules.h"
 
 using namespace openblack;
 using namespace openblack::gamesave;
@@ -165,11 +168,71 @@ TEST(VanillaWorldImport, KeepsTheStatesOnlyWhenTheFileHasAllTheyNeed)
 	// A villager that stands still in a state with no more values keeps its states
 	EXPECT_EQ(world_import::StartStates({k_Sleeping, 0, k_Chillout}, 0x04),
 	          (std::array<uint8_t, 3> {k_Sleeping, 0, k_Chillout}));
-	// A villager that walks decides again
-	EXPECT_EQ(world_import::StartStates({k_Chillout, 0, 0}, 0x0C), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
-	// A state with more values in the file, at the top or at the end, makes the villager decide again
+	// A villager that walks straight or steps through keeps its walk and its states
+	constexpr auto k_ToField = static_cast<uint8_t>(VillagerStates::FarmerArrivesAtFarm);
+	EXPECT_EQ(world_import::StartStates({1, k_ToField, 0}, 0x0B), (std::array<uint8_t, 3> {1, k_ToField, 0}));
+	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x0C), (std::array<uint8_t, 3> {1, k_Chillout, 0}));
+	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x0E), (std::array<uint8_t, 3> {1, k_Chillout, 0}));
+	// A villager that heads for a circle or goes round one decides again
+	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x0C, true), world_import::DecideAgain());
+	EXPECT_EQ(world_import::StartStates({1, k_Chillout, 0}, 0x0F), world_import::DecideAgain());
+	EXPECT_EQ(world_import::DecideAgain(), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
+	// A state with values that openblack does not keep, at the top or at the end, makes the villager decide again
 	EXPECT_EQ(world_import::StartStates({k_OnPath, 0, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
 	EXPECT_EQ(world_import::StartStates({1, k_OnPath, 0}, 0x01), (std::array<uint8_t, 3> {k_Decide, k_Invalid, k_Invalid}));
+	EXPECT_TRUE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::Fishing)));
+	EXPECT_TRUE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::FarmerPlantsCrop)));
+	EXPECT_FALSE(world_import::CanKeepStateValues(static_cast<uint8_t>(VillagerStates::InScript)));
+}
+
+TEST(VanillaWorldImport, TheValuesOfAStateGiveTheWorkOfAFarmerOrAFisherman)
+{
+	using world_import::ImportedStateValue;
+	// A farmer keeps the spot in its field, then its field
+	std::vector<uint8_t> spot(sizeof(MapCoords));
+	const MapCoords coords {.x = 11950536, .z = 18509796, .altitude = 0.0f};
+	std::memcpy(spot.data(), &coords, sizeof(coords));
+	const auto farmer = world_import::WorkOf(
+	    static_cast<uint8_t>(VillagerStates::FarmerArrivesAtFarm),
+	    {ImportedStateValue {.object = std::nullopt, .bytes = spot}, ImportedStateValue {.object = 1048, .bytes = {}}});
+	ASSERT_TRUE(farmer.has_value());
+	EXPECT_EQ(farmer->target, 1048U);
+	ASSERT_TRUE(farmer->spot.has_value());
+	EXPECT_EQ(farmer->spot->x, 11950536);
+	EXPECT_EQ(farmer->spot->z, 18509796);
+	// A fisherman keeps its fish farm
+	const auto fisherman =
+	    world_import::WorkOf(static_cast<uint8_t>(VillagerStates::Fishing), {ImportedStateValue {.object = 85, .bytes = {}}});
+	ASSERT_TRUE(fisherman.has_value());
+	EXPECT_EQ(fisherman->target, 85U);
+	EXPECT_FALSE(fisherman->spot.has_value());
+	// Another state gives no work
+	EXPECT_FALSE(
+	    world_import::WorkOf(static_cast<uint8_t>(VillagerStates::MoveOnPath),
+	                         {ImportedStateValue {.object = 1, .bytes = {}}, ImportedStateValue {.object = 2, .bytes = {}}})
+	        .has_value());
+}
+
+TEST(VanillaWorldImport, MetresAndSpeedsGiveTheWholeUnitsOfTheFileAgain)
+{
+	// Every speed of a walk in whole units a turn
+	for (uint32_t whole = 0; whole <= 0xFFFF; ++whole)
+	{
+		ASSERT_EQ(openblack::ecs::wall_hug::WholeSpeed(world_import::WalkSpeedOf(static_cast<uint16_t>(whole))),
+		          static_cast<int32_t>(whole))
+		    << whole;
+	}
+	// Map positions across the land, and the positions of the walks of Land 1
+	for (const int32_t whole : {0, 1, 65535, 65536, 8090858, 11950536, 12295289, 16737624, 18509796})
+	{
+		const auto metres = world_import::MetresOfWhole(whole);
+		ASSERT_TRUE(metres.has_value()) << whole;
+		EXPECT_EQ(openblack::map_coords::ToFixed(*metres), whole);
+	}
+	// The product of a float with the metres in a whole unit rounds to an even number above 2^24, so no metre value
+	// gives an odd number there
+	EXPECT_FALSE(world_import::MetresOfWhole(16777217).has_value());
+	EXPECT_FALSE(world_import::MetresOfWhole(33554431).has_value());
 }
 
 TEST(VanillaWorldImport, VillagersInTheseStatesAreInTheirHomes)
@@ -625,4 +688,129 @@ TEST(VanillaSceneryImport, SavedGamesOfLandOneImportTheirForests)
 		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
 	}
 	EXPECT_GT(*files, 0U);
+}
+
+TEST(VanillaSceneryImport, ReadsTheFieldsAndTheFishFarmsOfTheFile)
+{
+	FakeWorld fake;
+	fake.Record(VanillaType::Game);
+	// 2: a field of the town 9, with its crop and two farmers
+	fake.Record(VanillaType::Field)
+	    .Position(100, 200)
+	    .Value("info", AbodeRowNumber(AbodeInfo::CelticField))
+	    .Value("heading", 0.5f)
+	    .Ref("town", 9)
+	    .Value("cropInfo", world_import::k_FirstFieldTypeRowNumber - static_cast<uint32_t>(FieldTypeInfo::Corn))
+	    .Value("food", 200.5f)
+	    .Ref("fieldTown", 9)
+	    .Value<uint32_t>("growthTurn", 7)
+	    .Value<uint8_t>("timesSown", 30)
+	    .Value("age", 1202.5f)
+	    .Refs("farmers", {11, 12});
+	// 3: a fish farm of the town 9 with one fisherman
+	fake.Record(VanillaType::FishFarm).Position(300, 400).Refs("fishermen", {11}).Ref("town", 9).Value("fish", 1400.0f);
+	// 4: a field with no row of the table of crops
+	fake.Record(VanillaType::Field)
+	    .Position(0, 0)
+	    .Value("info", AbodeRowNumber(AbodeInfo::CelticField))
+	    .Value<uint32_t>("cropInfo", 1)
+	    .Ref("fieldTown", 9);
+
+	const auto imported = world_import::ReadFarms(fake.Make());
+	ASSERT_EQ(imported.fields.size(), 1U);
+	const auto& field = imported.fields[0];
+	EXPECT_EQ(field.number, 2U);
+	EXPECT_EQ(field.row, AbodeInfo::CelticField);
+	EXPECT_EQ(field.type, FieldTypeInfo::Corn);
+	EXPECT_EQ(field.town, 9U);
+	EXPECT_FLOAT_EQ(field.heading, 0.5f);
+	EXPECT_FLOAT_EQ(field.food, 200.5f);
+	EXPECT_FLOAT_EQ(field.age, 1202.5f);
+	EXPECT_EQ(field.timesSown, 30);
+	EXPECT_EQ(field.growthTurn, 7U);
+	EXPECT_EQ(field.farmers, (std::vector<uint32_t> {11, 12}));
+	ASSERT_EQ(imported.fishFarms.size(), 1U);
+	EXPECT_EQ(imported.fishFarms[0].town, 9U);
+	EXPECT_FLOAT_EQ(imported.fishFarms[0].fish, 1400.0f);
+	EXPECT_EQ(imported.fishFarms[0].fishermen, std::vector<uint32_t> {11});
+	EXPECT_EQ(imported.fishFarms[0].position.z, 400);
+	ASSERT_EQ(imported.skipped.size(), 1U);
+	EXPECT_NE(imported.skipped[0].find("object 4"), std::string::npos);
+}
+
+/// The import takes each field and fish farm of a saved game of Land 1, and each crop grows on one of ten turns
+TEST(VanillaSceneryImport, SavedGamesOfLandOneImportTheirFarms)
+{
+	const auto files = ForEachLandOneSave([](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadFarms(world);
+		EXPECT_TRUE(imported.skipped.empty()) << path;
+		EXPECT_EQ(imported.fields.size(), world.OfType(VanillaType::Field).size()) << path;
+		EXPECT_EQ(imported.fishFarms.size(), world.OfType(VanillaType::FishFarm).size()) << path;
+		for (const auto& field : imported.fields)
+		{
+			EXPECT_LT(field.growthTurn, 10U) << path << " " << field.number;
+			EXPECT_GE(field.food, 0.0f) << path << " " << field.number;
+		}
+		for (const auto& farm : imported.fishFarms)
+		{
+			EXPECT_NE(farm.town, 0U) << path << " " << farm.number;
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(*files, 0U);
+}
+
+/// Each villager of a saved game of Land 1 that keeps its states keeps a goal that metres give again, and its work is a
+/// field or a fish farm of the file
+TEST(VanillaWorldImport, SavedGamesOfLandOneKeepWalksAndWork)
+{
+	size_t kept = 0;
+	size_t walking = 0;
+	size_t working = 0;
+	size_t lostGoals = 0;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadTowns(world);
+		for (const auto& villager : imported.villagers)
+		{
+			if (world_import::StartStates(villager.states, villager.moveState, villager.walk.hugsCircle) != villager.states)
+			{
+				continue;
+			}
+			++kept;
+			walking += villager.moveState == 0x0B || villager.moveState == 0x0C ? 1 : 0;
+			// The import makes a villager that walks decide again when no metre value gives its goal
+			if (world_import::UsesWalkGoal(villager.states) &&
+			    (!world_import::MetresOfWhole(villager.walk.goal.x).has_value() ||
+			     !world_import::MetresOfWhole(villager.walk.goal.z).has_value()))
+			{
+				++lostGoals;
+			}
+			auto work = world_import::WorkOf(villager.states[0], villager.topValues);
+			if (!work.has_value())
+			{
+				work = world_import::WorkOf(villager.states[1], villager.finalValues);
+			}
+			if (work.has_value())
+			{
+				++working;
+				const auto* target = world.Record(work->target);
+				ASSERT_NE(target, nullptr) << path << " " << villager.number;
+				EXPECT_TRUE(target->Is(VanillaType::Field) || target->Is(VanillaType::FishFarm))
+				    << path << " " << villager.number;
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(kept, 0U);
+	EXPECT_GT(walking, 0U);
+	EXPECT_GT(working, 0U);
+	EXPECT_LT(lostGoals * 10, kept);
+	std::cout << "Kept " << kept << " villagers, " << walking << " walking and " << working << " working, " << lostGoals
+	          << " goals that metres do not give" << std::endl;
 }

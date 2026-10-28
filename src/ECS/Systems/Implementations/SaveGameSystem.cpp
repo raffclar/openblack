@@ -1524,9 +1524,12 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	                   data.has_value() ? data->gameTurn : 0);
 	// The towns and the villagers of the file replace the towns and the villagers of the land
 	VanillaMade made;
-	ImportVanillaTowns(*read.world, made);
+	VanillaWorks works;
+	ImportVanillaTowns(*read.world, made, works);
 	// The forests, the big forests and the trees of the file replace those of the land
 	ImportVanillaForests(*read.world, made);
+	// The fields and the fish farms of the file replace those of the land
+	ImportVanillaFarms(*read.world, made, works);
 	// The game data of the file has the two seeds of the random draws. After the load, the draws continue from them
 	// as the game's draws do. The creatures and the towns are made first, because the creation of a thing can draw.
 	if (data.has_value() && Locator::gameRandom::has_value())

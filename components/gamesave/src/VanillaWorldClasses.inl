@@ -392,22 +392,22 @@ void ReadField(WorldReader& r)
 	ReadAbode(r);
 	r.Word("cropInfo");
 	r.Word();
-	r.Word();
+	r.Word("food");
 	r.Ref("fieldTown");
-	r.Word();
-	r.Byte();
-	r.Word();
-	r.Refs("crops");
+	r.Word("growthTurn");
+	r.Byte("timesSown");
+	r.Word("age");
+	r.Refs("farmers");
 	r.Byte();
 }
 
 void ReadFishFarm(WorldReader& r)
 {
 	ReadMultiMapFixed(r);
-	r.Refs();
-	r.Ref();
+	r.Refs("fishermen");
+	r.Ref("town");
 	r.Word();
-	r.Word();
+	r.Word("fish");
 }
 
 void ReadSpecialVillager(WorldReader& r)

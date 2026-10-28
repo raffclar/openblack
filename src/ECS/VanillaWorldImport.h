@@ -47,10 +47,70 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 /// True when a villager in the state is in its abode: the game does not show it, and its abode counts it as present
 [[nodiscard]] bool IsInsideHome(VillagerStates state);
 
+/// True when the import can keep the values that the file keeps for the state: a state with no values, or a state of
+/// a fisherman or of a farmer
+[[nodiscard]] bool CanKeepStateValues(uint8_t state);
+
+/// True when the import can keep a walk in the move state of the file. It keeps a walk that stands still, takes its
+/// last step, steps straight through, or goes straight with no circle ahead. It does not keep a walk round a circle.
+[[nodiscard]] bool CanKeepWalk(uint8_t moveState, bool hugsCircle);
+
+/// The states of a villager that decides again: it decides what to do, with no final state and no state before
+[[nodiscard]] std::array<uint8_t, 3> DecideAgain();
+
 /// The three states that a villager starts in after the import: the top state, the final state and the state before.
-/// The import keeps the states of the file when the file keeps all that the states need. openblack does not read the
-/// values of a state or of a walk yet. Thus a villager that walks, or that has a state with more values, decides again.
-[[nodiscard]] std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState);
+/// The import keeps the states of the file when it can keep the walk and the values of the top and final states.
+/// Otherwise the villager decides again.
+[[nodiscard]] std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState,
+                                                 bool hugsCircle = false);
+
+/// One value that a villager keeps in the file for one of its states: the number of an object, or bytes
+struct ImportedStateValue
+{
+	std::optional<uint32_t> object;
+	std::vector<uint8_t> bytes;
+};
+
+/// The work that the values of a state give: the field or the fish farm, and the spot in the field
+struct ImportedWork
+{
+	/// The number of the object of the field or the fish farm in the file
+	uint32_t target {0};
+	/// The spot in the field that a farmer goes to next
+	std::optional<gamesave::MapCoords> spot;
+};
+
+/// The work of a state of a fisherman or of a farmer, from the values of the file. Nothing for another state.
+[[nodiscard]] std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStateValue>& values);
+
+/// The walk of a villager in the file
+struct ImportedWalk
+{
+	/// Where the walk goes to
+	gamesave::MapCoords goal {};
+	/// The step of each turn, in whole map units, and its height
+	int32_t stepX {0};
+	int32_t stepZ {0};
+	float stepAltitude {0.0f};
+	/// Whole map units in a turn
+	uint16_t speed {0};
+	/// The way the walker faces, in game angles (2048 to the circle)
+	uint16_t angle {0};
+	/// Turns until a walker that steps straight through aims at its goal again
+	int8_t turnsUntilStepRebuild {0};
+	/// It heads for or goes round the circle of a thing, of water or of the edge of the land
+	bool hugsCircle {false};
+};
+
+/// True when the villager walks in its top state, or goes back to the walk in the state before
+[[nodiscard]] bool UsesWalkGoal(const std::array<uint8_t, 3>& states);
+
+/// A metre value that gives the whole map units again, as openblack changes metres to whole units. Nothing when no
+/// float near the value does.
+[[nodiscard]] std::optional<float> MetresOfWhole(int32_t whole);
+
+/// A speed in metres a second that gives the whole map units a turn of the file again
+[[nodiscard]] float WalkSpeedOf(uint16_t wholeSpeed);
 
 struct ImportedTown
 {
@@ -115,6 +175,10 @@ struct ImportedVillager
 	/// The three states of the file: the top state, the final state and the state before
 	std::array<uint8_t, 3> states {};
 	uint8_t moveState {0};
+	ImportedWalk walk;
+	/// The values of the top state and of the final state
+	std::vector<ImportedStateValue> topValues;
+	std::vector<ImportedStateValue> finalValues;
 	uint16_t turnsSinceStateChange {0};
 	uint16_t turnsUntilStateChange {0};
 };

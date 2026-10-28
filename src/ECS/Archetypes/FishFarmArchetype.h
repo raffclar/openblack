@@ -20,6 +20,8 @@ public:
 	/// A full fish farm in the middle of the map cell of a point, belonging to the town nearest it, with its shoal out in
 	/// the open sea nearest it
 	static entt::entity Create(const glm::vec3& position);
+	/// A fish farm of a saved game, with the town and the fish of the file
+	static entt::entity CreateLoaded(const glm::vec3& position, entt::entity town, float fish);
 	FishFarmArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

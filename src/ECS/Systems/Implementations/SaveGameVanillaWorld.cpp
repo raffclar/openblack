@@ -26,13 +26,17 @@
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/VillagerWork.h"
+#include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/VanillaWorldImport.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
 #include "SaveGameSystem.h"
@@ -53,7 +57,7 @@ std::shared_ptr<spdlog::logger> ImportLog()
 }
 
 /// The game clears the map before it reads the world of a file. The import removes the villagers of the land, and the
-/// buildings of the kinds that it makes again, before it makes them from the file.
+/// buildings of the kinds that it makes again and the fields, before it makes them from the file.
 void RemoveLandTownsContents(ecs::Registry& registry)
 {
 	std::vector<entt::entity> villagers;
@@ -72,8 +76,8 @@ void RemoveLandTownsContents(ecs::Registry& registry)
 	std::unordered_map<entt::entity, std::vector<entt::entity>> plans;
 	registry.Each<const Town>([&plans](entt::entity entity, const Town& town) { plans[entity] = town.planned; });
 	std::vector<entt::entity> buildings;
-	registry.Each<const Abode>([&buildings](entt::entity entity, const Abode& abode) {
-		if (world_import::IsImportedBuilding(abode.info))
+	registry.Each<const Abode>([&registry, &buildings](entt::entity entity, const Abode& abode) {
+		if (world_import::IsImportedBuilding(abode.info) || registry.AllOf<Field>(entity))
 		{
 			buildings.push_back(entity);
 		}
@@ -122,6 +126,52 @@ entt::entity PutTown(ecs::Registry& registry, const world_import::ImportedTown& 
 	return entity;
 }
 
+/// The tag of the move state of the file, for a walk that the import keeps
+void PutMoveTag(ecs::Registry& registry, entt::entity entity, uint8_t moveState, glm::vec2 at)
+{
+	switch (moveState)
+	{
+	case 0x01:
+		registry.Assign<MoveStateArrivedTag>(entity, MoveStateClockwise::Undefined, at);
+		break;
+	case 0x04:
+		registry.Assign<MoveStateFinalStepTag>(entity, MoveStateClockwise::Undefined, at);
+		break;
+	case 0x0B:
+		registry.Assign<MoveStateStepThroughTag>(entity, MoveStateClockwise::Undefined, at);
+		break;
+	case 0x0C:
+		registry.Assign<MoveStateLinearTag>(entity, MoveStateClockwise::Undefined, at);
+		break;
+	case 0x0D:
+		registry.Assign<MoveStateLinearTag>(entity, MoveStateClockwise::Clockwise, at);
+		break;
+	case 0x0E:
+		registry.Assign<MoveStateLinearTag>(entity, MoveStateClockwise::CounterClockwise, at);
+		break;
+	default:
+		break;
+	}
+}
+
+/// The villager keeps the walk of the file: its goal, its step, its speed, the way it faces and its move state
+void PutWalk(ecs::Registry& registry, entt::entity entity, const world_import::ImportedVillager& villager, glm::vec2 goal)
+{
+	const auto& walk = villager.walk;
+	auto& wallHug = registry.Get<WallHug>(entity);
+	wallHug.goal = goal;
+	wallHug.step = {walk.stepX, walk.stepZ};
+	wallHug.stepAltitude = walk.stepAltitude;
+	wallHug.yAngle = villager.heading;
+	wallHug.speed = world_import::WalkSpeedOf(walk.speed);
+	wallHug.gameAngle = walk.angle;
+	wallHug.turnsUntilStepRebuild = walk.turnsUntilStepRebuild;
+	// The walk holds the villager at the map position of the file
+	wallHug.position = {villager.position.x, villager.position.z};
+	wallHug.placedAt = glm::vec2(registry.Get<Transform>(entity).position.x, registry.Get<Transform>(entity).position.z);
+	PutMoveTag(registry, entity, villager.moveState, ecs::wall_hug::ToPoint(wallHug.position));
+}
+
 } // namespace
 
 glm::vec3 openblack::ecs::systems::vanilla_import::GroundPosition(const gamesave::MapCoords& position)
@@ -134,7 +184,7 @@ glm::vec3 openblack::ecs::systems::vanilla_import::GroundPosition(const gamesave
 	return {map_coords::ToMetres(coords.x), coords.altitude, map_coords::ToMetres(coords.z)};
 }
 
-bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made)
+bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works)
 {
 	const auto imported = world_import::ReadTowns(world);
 	for (const auto& why : imported.skipped)
@@ -183,7 +233,17 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 	uint32_t present = 0;
 	for (const auto& villager : imported.villagers)
 	{
-		const auto states = world_import::StartStates(villager.states, villager.moveState);
+		auto states = world_import::StartStates(villager.states, villager.moveState, villager.walk.hugsCircle);
+		const auto goalX = world_import::MetresOfWhole(villager.walk.goal.x);
+		const auto goalZ = world_import::MetresOfWhole(villager.walk.goal.z);
+		const bool keeps = states == villager.states;
+		// A villager that walks, or that goes back to a walk, to a goal that no metre value gives again decides again.
+		// A villager in another state makes a new walk before it walks again, so its goal is not used.
+		const bool exactGoal = goalX.has_value() && goalZ.has_value();
+		if (keeps && !exactGoal && world_import::UsesWalkGoal(states))
+		{
+			states = world_import::DecideAgain();
+		}
 		const auto entity =
 		    ecs::archetypes::VillagerArchetype::CreateLoaded({.position = GroundPosition(villager.position),
 		                                                      .heading = villager.heading,
@@ -203,6 +263,20 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		                                                      .turnsUntilStateChange = villager.turnsUntilStateChange,
 		                                                      .turnsSinceStateChange = villager.turnsSinceStateChange});
 		made.emplace(villager.number, entity);
+		if (states == villager.states)
+		{
+			PutWalk(registry, entity, villager,
+			        {goalX.value_or(map_coords::ToMetres(villager.walk.goal.x)),
+			         goalZ.value_or(map_coords::ToMetres(villager.walk.goal.z))});
+			if (auto work = world_import::WorkOf(states[0], villager.topValues); work.has_value())
+			{
+				works.emplace_back(entity, *work);
+			}
+			else if (auto finalWork = world_import::WorkOf(states[1], villager.finalValues); finalWork.has_value())
+			{
+				works.emplace_back(entity, *finalWork);
+			}
+		}
 		auto& person = registry.Get<Villager>(entity);
 		person.town = EntityOf(made, villager.town);
 		person.abode = EntityOf(made, villager.home);

@@ -121,4 +121,51 @@ struct ImportedForests
 /// forests, which the game object keeps. A forest that is not in the list comes after the forests of the list.
 [[nodiscard]] ImportedForests ReadForests(const gamesave::VanillaWorld& world);
 
+/// A field of a town and its crop
+struct ImportedField
+{
+	uint32_t number {0};
+	/// The building row of the field, which gives its tribe
+	AbodeInfo row {AbodeInfo::None};
+	/// The kind of crop that grows in it
+	FieldTypeInfo type {FieldTypeInfo::Wheat};
+	/// The number of the object of its town in the file
+	uint32_t town {0};
+	gamesave::MapCoords position {};
+	float heading {0.0f};
+	float scale {1.0f};
+	float life {1.0f};
+	float built {1.0f};
+	uint8_t timesSown {0};
+	float age {0.0f};
+	float food {0.0f};
+	/// Which of every ten turns the crop grows on
+	uint32_t growthTurn {0};
+	/// The numbers of the objects of the villagers that farm it, in the order of the file
+	std::vector<uint32_t> farmers;
+};
+
+/// A stretch of sea that a town fishes
+struct ImportedFishFarm
+{
+	uint32_t number {0};
+	gamesave::MapCoords position {};
+	/// The number of the object of its town in the file, 0 for no town
+	uint32_t town {0};
+	float fish {0.0f};
+	/// The numbers of the objects of the villagers that fish it, in the order of the file
+	std::vector<uint32_t> fishermen;
+};
+
+/// The fields and the fish farms of a world file, in the order of the file
+struct ImportedFarms
+{
+	std::vector<ImportedField> fields;
+	std::vector<ImportedFishFarm> fishFarms;
+	std::vector<std::string> skipped;
+};
+
+/// The fields and the fish farms of the world. A field without a row of the tables goes into the skipped list.
+[[nodiscard]] ImportedFarms ReadFarms(const gamesave::VanillaWorld& world);
+
 } // namespace openblack::ecs::vanilla_world_import

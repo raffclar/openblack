@@ -9,12 +9,18 @@
 
 #include "VanillaWorldImport.h"
 
+#include <cmath>
 #include <cstring>
 
 #include <algorithm>
 #include <bit>
+#include <limits>
 #include <ranges>
+#include <span>
 
+#include "3D/MapCoords.h"
+#include "ECS/VillagerWalkRules.h"
+#include "ECS/WallHugRules.h"
 #include "VanillaWorld.h"
 
 namespace openblack::ecs::vanilla_world_import
@@ -27,6 +33,64 @@ using gamesave::VanillaWorld;
 
 /// The move states that the file gives a thing that does not walk: no state, arrived and the final step
 constexpr std::array<uint8_t, 3> k_StillMoveStates = {0x00, 0x01, 0x04};
+/// The move state of a walk that steps straight through all that is in its way
+constexpr uint8_t k_StepThroughMoveState = 0x0B;
+/// The move states of a walk that goes straight to its goal: with no side to keep, clockwise and counterclockwise
+constexpr std::array<uint8_t, 3> k_LinearMoveStates = {0x0C, 0x0D, 0x0E};
+/// The circle that a walk heads for is "none in reach"
+constexpr uint8_t k_NoCircleInReach = 0xFF;
+
+/// The states of a fisherman that keep the fish farm, and the states of a farmer that keep the spot and the field
+constexpr std::array k_FishermanStates = {VillagerStates::FishermanArrivesAtFishing, VillagerStates::Fishing};
+constexpr std::array k_FarmerStates = {VillagerStates::FarmerArrivesAtFarm, VillagerStates::FarmerPlantsCrop,
+                                       VillagerStates::FarmerDigsUpCrop};
+/// The number of floats on each side of a value that MetresOfWhole tries
+constexpr int k_MetreTries = 4;
+
+bool IsOneOf(uint8_t state, std::span<const VillagerStates> states)
+{
+	return std::ranges::find(states, static_cast<VillagerStates>(state)) != states.end();
+}
+
+/// The values of a state of the villager, in the order of the file
+std::vector<ImportedStateValue> StateValues(const VanillaWorld& world, const VanillaRecord& record, std::string_view name)
+{
+	std::vector<ImportedStateValue> values;
+	for (const auto* field : world.Fields(record, name))
+	{
+		if (field->kind == gamesave::VanillaValue::Reference)
+		{
+			values.push_back({.object = field->number, .bytes = {}});
+		}
+		else if (field->at + field->size <= world.Bytes().size())
+		{
+			const auto bytes = world.Bytes().subspan(field->at, field->size);
+			values.push_back({.object = std::nullopt, .bytes = {bytes.begin(), bytes.end()}});
+		}
+	}
+	return values;
+}
+
+ImportedWalk WalkOf(const VanillaWorld& world, const VanillaRecord& record)
+{
+	ImportedWalk walk {.speed = world.Half(record, "speed").value_or(0),
+	                   .angle = world.Half(record, "angle").value_or(0),
+	                   .turnsUntilStepRebuild = std::bit_cast<int8_t>(world.Byte(record, "turnsUntilStepRebuild").value_or(0))};
+	if (const auto goal = world.Raw(record, "goal"); goal.size() == sizeof(gamesave::MapCoords))
+	{
+		std::memcpy(&walk.goal, goal.data(), sizeof(walk.goal));
+	}
+	// The step is the whole units along x, its height as a float, then the whole units along z
+	if (const auto step = world.Raw(record, "step"); step.size() == 12)
+	{
+		std::memcpy(&walk.stepX, step.data(), 4);
+		std::memcpy(&walk.stepAltitude, step.data() + 4, 4);
+		std::memcpy(&walk.stepZ, step.data() + 8, 4);
+	}
+	const auto turns = world.Byte(record, "hugTurnsToObject");
+	walk.hugsCircle = turns.has_value() && (*turns != k_NoCircleInReach || world.Ref(record, "hugObject").value_or(0) != 0);
+	return walk;
+}
 
 /// The record types of the buildings of a town that the import takes
 constexpr std::array k_AbodeTypes = {VanillaType::Abode, VanillaType::Creche, VanillaType::Graveyard, VanillaType::StoragePit,
@@ -167,6 +231,9 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 	                           .moveState = world.Byte(record, "moveState").value_or(0),
 	                           .turnsSinceStateChange = static_cast<uint16_t>(action[4] | (action[5] << 8)),
 	                           .turnsUntilStateChange = world.Half(record, "turnsToStateChange").value_or(0)};
+	villager.walk = WalkOf(world, record);
+	villager.topValues = StateValues(world, record, "topStateValue");
+	villager.finalValues = StateValues(world, record, "finalStateValue");
 	if (const auto special = world.Word(record, "specialRow"); special.has_value())
 	{
 		villager.nameRow = static_cast<uint8_t>(*special);
@@ -211,13 +278,90 @@ bool IsInsideHome(VillagerStates state)
 	return state == VillagerStates::AtHome || state == VillagerStates::GotoBedAtHome || state == VillagerStates::SleepingAtHome;
 }
 
-std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState)
+bool CanKeepStateValues(uint8_t state)
 {
-	const bool still = std::ranges::find(k_StillMoveStates, moveState) != k_StillMoveStates.end();
-	if (!still || gamesave::VillagerStateKeepsValues(states[0]) || gamesave::VillagerStateKeepsValues(states[1]))
+	return !gamesave::VillagerStateKeepsValues(state) || IsOneOf(state, k_FishermanStates) || IsOneOf(state, k_FarmerStates);
+}
+
+bool CanKeepWalk(uint8_t moveState, bool hugsCircle)
+{
+	if (std::ranges::find(k_StillMoveStates, moveState) != k_StillMoveStates.end() || moveState == k_StepThroughMoveState)
 	{
-		return {static_cast<uint8_t>(VillagerStates::DecideWhatToDo), static_cast<uint8_t>(VillagerStates::InvalidState),
-		        static_cast<uint8_t>(VillagerStates::InvalidState)};
+		return true;
+	}
+	return std::ranges::find(k_LinearMoveStates, moveState) != k_LinearMoveStates.end() && !hugsCircle;
+}
+
+std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStateValue>& values)
+{
+	if (IsOneOf(state, k_FishermanStates) && values.size() == 1 && values[0].object.has_value())
+	{
+		return ImportedWork {.target = *values[0].object, .spot = std::nullopt};
+	}
+	if (IsOneOf(state, k_FarmerStates) && values.size() == 2 && values[0].bytes.size() == sizeof(gamesave::MapCoords) &&
+	    values[1].object.has_value())
+	{
+		gamesave::MapCoords spot;
+		std::memcpy(&spot, values[0].bytes.data(), sizeof(spot));
+		return ImportedWork {.target = *values[1].object, .spot = spot};
+	}
+	return std::nullopt;
+}
+
+bool UsesWalkGoal(const std::array<uint8_t, 3>& states)
+{
+	return villager_walk::Walks(static_cast<VillagerStates>(states[0])) ||
+	       villager_walk::Walks(static_cast<VillagerStates>(states[2]));
+}
+
+std::optional<float> MetresOfWhole(int32_t whole)
+{
+	const float near = map_coords::ToMetres(whole);
+	if (map_coords::ToFixed(near) == whole)
+	{
+		return near;
+	}
+	float up = near;
+	float down = near;
+	for (int i = 0; i < k_MetreTries; ++i)
+	{
+		up = std::nextafter(up, std::numeric_limits<float>::infinity());
+		if (map_coords::ToFixed(up) == whole)
+		{
+			return up;
+		}
+		down = std::nextafter(down, -std::numeric_limits<float>::infinity());
+		if (map_coords::ToFixed(down) == whole)
+		{
+			return down;
+		}
+	}
+	return std::nullopt;
+}
+
+float WalkSpeedOf(uint16_t wholeSpeed)
+{
+	float speed = static_cast<float>(wholeSpeed) * wall_hug::k_TurnsPerSecond / wall_hug::k_WholePerMetre;
+	// The rounding of the float can give one unit more or less: the speed moves to the next float until it agrees
+	for (int i = 0; i < k_MetreTries && wall_hug::WholeSpeed(speed) != wholeSpeed; ++i)
+	{
+		speed = std::nextafter(speed, wall_hug::WholeSpeed(speed) < wholeSpeed ? std::numeric_limits<float>::infinity()
+		                                                                       : -std::numeric_limits<float>::infinity());
+	}
+	return speed;
+}
+
+std::array<uint8_t, 3> DecideAgain()
+{
+	return {static_cast<uint8_t>(VillagerStates::DecideWhatToDo), static_cast<uint8_t>(VillagerStates::InvalidState),
+	        static_cast<uint8_t>(VillagerStates::InvalidState)};
+}
+
+std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState, bool hugsCircle)
+{
+	if (!CanKeepWalk(moveState, hugsCircle) || !CanKeepStateValues(states[0]) || !CanKeepStateValues(states[1]))
+	{
+		return DecideAgain();
 	}
 	return states;
 }

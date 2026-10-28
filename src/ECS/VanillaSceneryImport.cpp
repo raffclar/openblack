@@ -16,6 +16,7 @@
 #include <unordered_set>
 
 #include "VanillaWorld.h"
+#include "VanillaWorldImport.h"
 
 namespace openblack::ecs::vanilla_world_import
 {
@@ -113,6 +114,52 @@ std::optional<ImportedForest> ReadForest(const VanillaWorld& world, const Vanill
 	const auto growing = world.Refs(record, "growingTrees");
 	forest.growing.assign(growing.begin(), growing.end());
 	return forest;
+}
+
+std::optional<ImportedField> ReadField(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
+{
+	const auto position = PositionOf(world, record);
+	const auto row = AbodeRowOf(world.Word(record, "info").value_or(0));
+	const auto type = FieldTypeRowOf(world.Word(record, "cropInfo").value_or(0));
+	const auto town = world.Ref(record, "fieldTown").value_or(world.Ref(record, "town").value_or(0));
+	if (!position.has_value() || !row.has_value() || !type.has_value() || town == 0)
+	{
+		why = "the field has no place, no town, or no row of the tables of buildings and crops";
+		return std::nullopt;
+	}
+	ImportedField field {.number = record.number,
+	                     .row = *row,
+	                     .type = *type,
+	                     .town = town,
+	                     .position = *position,
+	                     .heading = world.Float(record, "heading").value_or(0.0f),
+	                     .scale = world.Float(record, "scale").value_or(1.0f),
+	                     .life = world.Float(record, "life").value_or(1.0f),
+	                     .built = world.Float(record, "built").value_or(1.0f),
+	                     .timesSown = world.Byte(record, "timesSown").value_or(0),
+	                     .age = world.Float(record, "age").value_or(0.0f),
+	                     .food = world.Float(record, "food").value_or(0.0f),
+	                     .growthTurn = world.Word(record, "growthTurn").value_or(0)};
+	const auto farmers = world.Refs(record, "farmers");
+	field.farmers.assign(farmers.begin(), farmers.end());
+	return field;
+}
+
+std::optional<ImportedFishFarm> ReadFishFarm(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
+{
+	const auto position = PositionOf(world, record);
+	if (!position.has_value())
+	{
+		why = "the fish farm has no place";
+		return std::nullopt;
+	}
+	ImportedFishFarm farm {.number = record.number,
+	                       .position = *position,
+	                       .town = world.Ref(record, "town").value_or(0),
+	                       .fish = world.Float(record, "fish").value_or(0.0f)};
+	const auto fishermen = world.Refs(record, "fishermen");
+	farm.fishermen.assign(fishermen.begin(), fishermen.end());
+	return farm;
 }
 
 /// The numbers of the forests in the list of the game object, in the order of the list
@@ -238,6 +285,37 @@ ImportedForests ReadForests(const VanillaWorld& world)
 	}
 	std::ranges::copy_if(forests, std::back_inserter(imported.forests),
 	                     [&listed](const ImportedForest& forest) { return !listed.contains(forest.number); });
+	return imported;
+}
+
+ImportedFarms ReadFarms(const VanillaWorld& world)
+{
+	ImportedFarms imported;
+	for (const auto& record : world.Records())
+	{
+		std::string why;
+		if (record.Is(VanillaType::Field))
+		{
+			if (auto field = ReadField(world, record, why); field.has_value())
+			{
+				imported.fields.push_back(std::move(*field));
+				continue;
+			}
+		}
+		else if (record.Is(VanillaType::FishFarm))
+		{
+			if (auto farm = ReadFishFarm(world, record, why); farm.has_value())
+			{
+				imported.fishFarms.push_back(std::move(*farm));
+				continue;
+			}
+		}
+		else
+		{
+			continue;
+		}
+		imported.skipped.push_back(Skip(record, why));
+	}
 	return imported;
 }
 

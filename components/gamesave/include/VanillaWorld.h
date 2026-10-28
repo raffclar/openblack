@@ -43,6 +43,7 @@ enum class VanillaType : uint32_t
 	Tree = 0x4F,
 	Creche = 0x50,
 	Graveyard = 0x51,
+	FishFarm = 0x5B,
 	TownCentre = 0x60,
 	Player = 0x63,
 	PlayerInterfaceStatus = 0x65,
