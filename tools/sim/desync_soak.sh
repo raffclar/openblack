@@ -14,6 +14,10 @@
 #   --lands L           the lands, divided by commas (default TwoGods,mpm_2p_1,mpm_3p_1,mpm_4p_1)
 #   --seeds S           the seeds of the world (default 1,2,3)
 #   --ai-seeds A        the AI seeds (default 1,2; 0 is the built-in personalities)
+#   --modes M           all-computer, all-but-one or both, divided by commas (default all-computer; all-but-one has one
+#                       human client with a still hand)
+#   --pc-bin DIR        mac: after the soak, play each server_check of the Mac again on the PC with these programs and
+#                       compare the server checksums of the two computers turn by turn (checksum_compare.py)
 #   --observers O       the desktop observers of each game (default 2)
 #   --turns T           the turns of each game (default 20000)
 #   --server-turns T    the turns of each server_check run (default 5000; 0 for no server_check)
@@ -44,6 +48,8 @@ HOURS=8
 LANDS=TwoGods,mpm_2p_1,mpm_3p_1,mpm_4p_1
 SEEDS=1,2,3
 AI_SEEDS=1,2
+MODES=all-computer
+PC_BIN=""
 OBSERVERS=2
 TURNS=20000
 SERVER_TURNS=5000
@@ -58,6 +64,8 @@ while [ $# -gt 0 ]; do
 	--lands) LANDS=$2; shift 2 ;;
 	--seeds) SEEDS=$2; shift 2 ;;
 	--ai-seeds) AI_SEEDS=$2; shift 2 ;;
+	--modes) MODES=$2; shift 2 ;;
+	--pc-bin) PC_BIN=$2; shift 2 ;;
 	--observers) OBSERVERS=$2; shift 2 ;;
 	--turns) TURNS=$2; shift 2 ;;
 	--server-turns) SERVER_TURNS=$2; shift 2 ;;
@@ -67,7 +75,7 @@ while [ $# -gt 0 ]; do
 	esac
 done
 # The options that the mac mode gives to the local mode on the Mac
-PASS=(--hours "$HOURS" --lands "$LANDS" --seeds "$SEEDS" --ai-seeds "$AI_SEEDS" --observers "$OBSERVERS" --turns "$TURNS"
+PASS=(--hours "$HOURS" --lands "$LANDS" --seeds "$SEEDS" --ai-seeds "$AI_SEEDS" --modes "$MODES" --observers "$OBSERVERS" --turns "$TURNS"
 	--server-turns "$SERVER_TURNS" --shuffle-seed "$SHUFFLE")
 DATE=$(date +%Y-%m-%d)
 MINUTES=$(awk -v h="$HOURS" 'BEGIN{printf "%d", h*60}')
@@ -114,7 +122,7 @@ run_local() {
 	mkdir -p "$day/server-check"
 	echo "desync_soak: tree $TREE at $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null), programs $BIN, results $day"
 	local code=0
-	"$PY" "$TREE/tools/sim/ai_soak.py" --lands "$LANDS" --seeds "$SEEDS" --ai-seeds "$AI_SEEDS" --modes all-computer \
+	"$PY" "$TREE/tools/sim/ai_soak.py" --lands "$LANDS" --seeds "$SEEDS" --ai-seeds "$AI_SEEDS" --modes "$MODES" \
 		--observers "$OBSERVERS" --turns "$TURNS" --shuffle-seed "$SHUFFLE" --budget-minutes "$MINUTES" \
 		--bin "$BIN" --out "$day" --date ai-soak --nightly "$day/ai-soak.jsonl" >"$day/ai-soak.log" 2>&1 || code=1
 	# server_check of each land with computer gods: the game alone in the fast mode, then the server at its own pace
@@ -193,10 +201,46 @@ EOF
 	local local_out=${OUT:-E:/openblack/sim-runs/desync-soak/$NAME}
 	mkdir -p "$local_out/$DATE"
 	# The report, the summaries and the logs only: rsync is not on every PC, so tar on the Mac without the programs
-	ssh "${ssh_opts[@]}" "$host" "cd $remote_out && tar czf - --exclude='*/bin' --exclude='*.jsonl.gz' $DATE" |
+	ssh "${ssh_opts[@]}" "$host" "cd $remote_out && COPYFILE_DISABLE=1 tar --no-xattrs -czf - --exclude='*/bin' --exclude='*.jsonl.gz' $DATE" |
 		tar xzf - -C "$local_out"
+	local code
+	code=$(cat "$local_out/$DATE/done" 2>/dev/null || echo 1)
+	if [ -n "$PC_BIN" ]; then
+		cross_check "$local_out/$DATE" || code=1
+	fi
 	cat "$local_out/$DATE/report.md" 2>/dev/null
-	return "$(cat "$local_out/$DATE/done" 2>/dev/null || echo 1)"
+	return "$code"
+}
+
+# Plays each server_check of the Mac again on the PC and compares the server checksums of the two computers. The two
+# builds have other processors and compilers; the world must still turn the same.
+cross_check() {
+	local day=$1 folder land seed ai args rc
+	{
+		echo
+		echo "## The Mac against the PC (server checksums of each server_check, PC programs $PC_BIN)"
+		echo
+		echo "| Land | Seed | AI seed | Result |"
+		echo "|---|---|---|---|"
+	} >>"$day/report.md"
+	rc=0
+	for folder in "$day"/server-check/*/; do
+		[ -f "$folder/server/server.log" ] || continue
+		local name
+		name=$(basename "$folder")
+		land=${name%-s*}
+		seed=${name##*-s}; seed=${seed%%-*}
+		ai=${name##*-ai}
+		args=$(server_land "$land") || continue
+		local pc="$day/pc-server-check/$name"
+		mkdir -p "$pc"
+		eval "python \"$TREE/tools/sim/server_check.py\" $args --seed $seed --all-computer-gods --ai-seed $ai \
+			--turns $SERVER_TURNS --bin \"$PC_BIN\" --out \"$pc\"" >"$pc.log" 2>&1
+		local result
+		result=$(python "$TREE/tools/sim/checksum_compare.py" "$folder/server/server.log" "$pc/server/server.log") || rc=1
+		echo "| $land | $seed | $ai | $result |" >>"$day/report.md"
+	done
+	return $rc
 }
 
 case "$MODE" in
