@@ -49,7 +49,7 @@ public:
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
 	StartResult StartFight(entt::entity creature, entt::entity opponent) override;
-	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent) override;
+	StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool agreed) override;
 	void Withdraw(entt::entity creature) override;
 	void AbortFight(entt::entity creature) override;
 	void CallOff(entt::entity creature) override;
@@ -109,6 +109,8 @@ public:
 	void LoseFightHealth(entt::entity creature, float damage) override;
 
 private:
+	/// The start of a fight. When ask is false, the other creature agreed before and is not asked again.
+	StartResult Start(entt::entity creature, entt::entity opponent, bool ask);
 	/// The turn's parts: fights started by the leash, the stages before and after the
 	/// duel, the duel's moves, and the creatures knocked out
 	void StartFightsFromMinds();

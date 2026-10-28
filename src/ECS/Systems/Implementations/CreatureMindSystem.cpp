@@ -1970,12 +1970,13 @@ creature_mind::HandsState HandsOf(entt::entity creature)
 	}
 	return creature_mind::HandsState::Idle;
 }
-/// The creature's plan has it fight another creature: whether the other creature agreed and the fight started
-CreatureFightSystemInterface::StartResult StartPlannedFight(entt::entity creature, entt::entity opponent)
+/// The creature's plan has it fight another creature: whether the other creature agreed and the fight started. When
+/// agreed is true, the other creature agreed before and is not asked again.
+CreatureFightSystemInterface::StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool agreed)
 {
 	using Result = CreatureFightSystemInterface::StartResult;
 	return Locator::creatureFightSystem::has_value()
-	           ? Locator::creatureFightSystem::value().StartPlannedFight(creature, opponent)
+	           ? Locator::creatureFightSystem::value().StartPlannedFight(creature, opponent, agreed)
 	           : Result::NoOpponent;
 }
 } // namespace openblack::ecs::systems::mind_detail
@@ -2511,14 +2512,18 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		Order(registry, entity, commands);
 		// It asks the other creature to fight. If the other creature does not agree, the rest of the agenda is no use.
 		// When the other creature agrees while a move of a fight that stopped still finishes, the step waits. It starts
-		// again on the next turn.
+		// again on the next turn and keeps the answer: the other creature is asked one time only.
 		if (commands.startFight.has_value())
 		{
 			using Result = CreatureFightSystemInterface::StartResult;
-			const auto started = StartPlannedFight(entity, static_cast<entt::entity>(*commands.startFight));
+			const creature_mind::IdleMind::StepRef here {.serial = mind.idle.serial, .step = mind.idle.step};
+			const auto& kept = mind.idle.fightAgreed;
+			const bool agreed = kept.has_value() && kept->serial == here.serial && kept->step == here.step;
+			const auto started = StartPlannedFight(entity, static_cast<entt::entity>(*commands.startFight), agreed);
 			if (started == Result::Finishing)
 			{
 				mind.idle.stepStarted = false;
+				mind.idle.fightAgreed = here;
 			}
 			else if (started != Result::Started)
 			{

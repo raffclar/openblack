@@ -47,7 +47,7 @@ public:
 		/// dead, or only one of the two is under a script's control
 		Refused,
 		/// The other creature agreed, but one of the two still finishes the move of a fight that stopped. Nothing
-		/// starts: ask again on a later turn.
+		/// starts: try again on a later turn, with the answer that the other creature gave.
 		Finishing,
 	};
 
@@ -79,8 +79,8 @@ public:
 	/// is over.
 	virtual StartResult StartFight(entt::entity creature, entt::entity opponent) = 0;
 	/// A fight that the first creature's own plan starts. That creature can give up the fight for a plan it wants much
-	/// more.
-	virtual StartResult StartPlannedFight(entt::entity creature, entt::entity opponent)
+	/// more. When the other creature agreed on an earlier turn of the same step, it is not asked again: its answer stays.
+	virtual StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool /*agreed*/)
 	{
 		return StartFight(creature, opponent);
 	}
