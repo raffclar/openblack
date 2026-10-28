@@ -1748,9 +1748,8 @@ void Game::UpdateLearningMarks(float milliseconds)
 	}
 	// The bulbs and glows are drawn with the world's effects
 	std::vector<particles::draw::LearningMark> marks;
-	const auto bulb = resources::HashIdentifier(MeshId::ObjectLightBulb);
 	registry.Each<const ecs::components::LearningMarker>(
-	    [&marks, bulb](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
+	    [&marks](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
 		    const auto look = ecs::learning_marker::LookOf(marker);
 		    marks.push_back({.glow = look.glow,
 		                     .glowHalfSize = look.glowHalfSize,
@@ -1758,7 +1757,7 @@ void Game::UpdateLearningMarks(float milliseconds)
 		                     .bulb = look.bulb,
 		                     .bulbScale = look.bulbScale,
 		                     .bulbColour = look.bulbColour,
-		                     .bulbMesh = bulb});
+		                     .bulbMesh = resources::HashIdentifier(MeshId::ObjectLightBulb)});
 	    });
 	Locator::particleSystem::value().SetLearningMarks(std::move(marks));
 }
