@@ -17,6 +17,7 @@
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/MapCoords.h"
 #include "3D/GripLandscapeEffect.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
@@ -29,6 +30,7 @@
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Villager.h"
@@ -109,6 +111,7 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAfterDeath.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
@@ -118,6 +121,16 @@ namespace openblack::simulation
 {
 namespace
 {
+
+/// The things made so far go into their map cells, as the game puts each thing in its cells as it makes it. The turn does this
+/// after each step and each living thing's turn, so that a thing made there is in the cells before anything else looks.
+void FileNewInMap()
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().FileNew();
+	}
+}
 
 void PlayPlayerTurns()
 {
@@ -138,6 +151,16 @@ void PlayPlayerTurns()
 			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
 		}
 		towns.ProcessPlayerTowns(player);
+	}
+}
+
+/// The footpaths go round what came onto the map since the last time, and stop going round what left it. The game does
+/// this as each thing comes onto the map or leaves it, so no walker after it sees the paths as they were.
+void FootpathsCatchUp()
+{
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ProcessObstacleChanges();
 	}
 }
 
@@ -183,7 +206,10 @@ void PlayLivingTurn()
 				    [[maybe_unused]] const auto place = &living - list.data();
 				    [[maybe_unused]] const auto drawsBefore =
 				        Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetSyncedDraws() : 0;
-				    game_turn::PlayCreaturesTurn([&living](game_turn::Step step) { PlayCreatureTurnStep(step, living.id); });
+				    game_turn::PlayCreaturesTurn([&living](game_turn::Step step) {
+					    PlayCreatureTurnStep(step, living.id);
+					    FileNewInMap();
+				    });
 				    SPDLOG_LOGGER_DEBUG(
 				        spdlog::get("game"),
 				        "Creature {} took its turn at place {} of {} in the list of the living: synced draws {} to {}",
@@ -199,6 +225,9 @@ void PlayLivingTurn()
 				    // The flocks fly and the wolves run and hunt
 				    animals.AnimalTurn(living.id);
 			    }
+			    FileNewInMap();
+			    // What it put down or took away changes the paths before the next one takes its turn
+			    FootpathsCatchUp();
 		    });
 	}
 	if (animalsTurn)
@@ -239,6 +268,14 @@ void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 	}
 	case Step::CreaturePhysiology:
 	{
+		// First it goes into the map cell of where its body stands, after its last turn and the pull of its leash. Not
+		// when another creature carries it, nor when its body is off the map.
+		auto& registry = Locator::entitiesRegistry::value();
+		if (Locator::entitiesMap::has_value() && !registry.AllOf<ecs::components::HeldByCreature>(creature) &&
+		    map_coords::InBounds(ecs::thing_map_place::Of(registry, creature)))
+		{
+			Locator::entitiesMap::value().Moved(creature);
+		}
 		// It ages, grows, gets hungry, tired and thirsty, and heals while it sleeps
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
 		Locator::creaturePhysiologySystem::value().CreatureTurn(creature);
@@ -491,10 +528,6 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The turn fixes the reach of each citadel that has no reach yet, on every computer in the same order
 		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
-	case Step::MapCells:
-		// What moved since the last turn goes into its new map cell
-		Locator::entitiesMap::value().Sync();
-		break;
 	case Step::Sharks:
 		// Each shark's turn starts where it is
 		Locator::sharkSystem::value().ProcessTurn();
@@ -649,10 +682,6 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::Living:
 		PlayLivingTurn();
-		break;
-	case Step::MapCellsAfterLiving:
-		// The living that walked this turn go into their new map cells before anything searches them
-		Locator::entitiesMap::value().Sync();
 		break;
 	case Step::Fires:
 		// The game burns its fires here, after the living and before the miracles and the scripts. A fire that a later
@@ -922,7 +951,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::MapCellsAtTurnEnd:
 		// The things that the turn made go into the map's cells, so that the frames find them there and file nothing
-		Locator::entitiesMap::value().FileMade();
+		Locator::entitiesMap::value().FileNew();
 		break;
 	case Step::InfluenceTurnEnd:
 		// The end of the turn fixes the reach of a citadel that the turn made
@@ -953,7 +982,14 @@ void PlayTurn(TurnViewInterface& view)
 #endif
 	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn
 	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
-	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); }, decided);
+	game_turn::PlayTurn(
+	    [&view](game_turn::Step step) {
+		    PlayTurnStep(step, view);
+		    FileNewInMap();
+		    // What the step put down or took away changes the paths before the next step
+		    FootpathsCatchUp();
+	    },
+	    decided);
 }
 
 } // namespace openblack::simulation

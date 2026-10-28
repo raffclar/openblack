@@ -141,6 +141,7 @@
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
@@ -1009,6 +1010,18 @@ void Runner::Start(const Scenario& scenario)
 			}
 		}
 	}
+	if (scenario.townBeliefInRival.has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
+			{
+				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_TWO, *scenario.townBeliefInRival);
+			}
+		}
+	}
 	if (scenario.townOwner.has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
@@ -1074,6 +1087,12 @@ void Runner::Start(const Scenario& scenario)
 	_vortices.assign(scenario.vortices.size(), {});
 	_rewards.assign(scenario.rewards.size(), entt::null);
 	Frame(scenario.framing.shot, scenario.framing.creature, scenario.framing.distance);
+	// In a network game the commands step by the turns from this turn
+	_layoutTurn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
+	if (_layoutTurn.has_value())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The testbed scenario {} is laid out at turn {}", scenario.id, *_layoutTurn);
+	}
 	Log(fmt::format("Started {}", scenario.name));
 }
 
@@ -1204,6 +1223,7 @@ void Runner::Stop()
 	{
 		Locator::footprintSystem::value().SetAprilFoolsOverride(std::nullopt);
 	}
+	SetUpDate(std::nullopt);
 	if (Locator::skySystem::has_value())
 	{
 		Locator::skySystem::value().GetClock().SetRunning(true);
@@ -1211,8 +1231,42 @@ void Runner::Stop()
 	Log("Stopped");
 }
 
+void Runner::SetUpDate(const std::optional<RealDate>& date)
+{
+	if (!Locator::time::has_value())
+	{
+		return;
+	}
+	auto& time = Locator::time::value();
+	if (!date.has_value())
+	{
+		if (_pinnedDateBefore.has_value())
+		{
+			time.PinDate(*_pinnedDateBefore);
+			_pinnedDateBefore.reset();
+		}
+		return;
+	}
+	if (!_pinnedDateBefore.has_value())
+	{
+		_pinnedDateBefore = time.GetPinnedDate();
+	}
+	std::tm local {};
+	local.tm_year = date->year - 1900;
+	local.tm_mon = date->month - 1;
+	local.tm_mday = date->day;
+	local.tm_hour = date->hour;
+	local.tm_min = date->minute;
+	// The computer's time zone tells whether summer time applies on that date
+	local.tm_isdst = -1;
+	const auto unixTime = static_cast<int64_t>(std::mktime(&local));
+	time.PinDate(ecs::systems::PinForDateNow(unixTime, time.GetTicks()));
+	Log(fmt::format("Date set to {:04}-{:02}-{:02} {:02}:{:02}", date->year, date->month, date->day, date->hour, date->minute));
+}
+
 void Runner::SetUpEnvironment(const Environment& environment)
 {
+	SetUpDate(environment.realDate);
 	if (Locator::skySystem::has_value())
 	{
 		auto& sky = Locator::skySystem::value();
@@ -1942,6 +1996,23 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 			return leashes.TieTo(creature, *object) ? "tied" : "can't";
 		}
 		return "it is gone";
+	case Kind::TieLeashToDesireFlag:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		std::optional<entt::entity> found;
+		registry.Each<const ecs::components::TownDesireFlag>(
+		    [&](entt::entity flag, const ecs::components::TownDesireFlag& shown) {
+			    if (!found.has_value() && static_cast<size_t>(shown.desire) == command.value)
+			    {
+				    found = flag;
+			    }
+		    });
+		if (!found.has_value())
+		{
+			return "no flag";
+		}
+		return leashes.TieTo(creature, *found) ? "tied" : "can't";
+	}
 	case Kind::LeashOrderAt:
 	{
 		const auto point = MapPoint(_middle, command.point);
@@ -2337,6 +2408,24 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::ChargeIconWithSeedHeld:
 		return ChargeIconWithSeedHeld(command);
+	case Kind::PressPlainKey:
+	{
+		// The key goes down and comes up again, each as an event of the window
+		const auto scancode = static_cast<SDL_Scancode>(command.value);
+		for (const bool down : {true, false})
+		{
+			SDL_Event key {};
+			key.type = down ? SDL_KEYDOWN : SDL_KEYUP;
+			key.key.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
+			key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
+			key.key.keysym.scancode = scancode;
+			key.key.keysym.sym = SDL_GetKeyFromScancode(scancode);
+			key.key.keysym.mod = KMOD_NONE;
+			input::MarkInjected(key);
+			SDL_PushEvent(&key);
+		}
+		return fmt::format("key {} pressed", SDL_GetScancodeName(scancode));
+	}
 	case Kind::BuildWorshipSites:
 	{
 		if (!Locator::worshipSiteSystem::has_value())
@@ -2858,10 +2947,10 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
-	    command.kind == Kind::FinishBuilding || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::BringCreature)
+	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey ||
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
+	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
+	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::BringCreature)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3501,6 +3590,7 @@ void Runner::Give(const Command& command)
 		break;
 	case Kind::PutOnLeash:
 	case Kind::TieLeash:
+	case Kind::TieLeashToDesireFlag:
 	case Kind::UntieLeash:
 	case Kind::TakeOffLeash:
 	case Kind::ConfineToHome:
@@ -3629,6 +3719,7 @@ void Runner::Give(const Command& command)
 	case Kind::ScriptRelease:
 	case Kind::FillSiteIcons:
 	case Kind::BuildWorshipSites:
+	case Kind::PressPlainKey:
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
@@ -4105,6 +4196,18 @@ void Runner::Update(float seconds)
 	for (const auto index : due)
 	{
 		Give(_scenario->commands[index]);
+	}
+}
+
+void Runner::BeforeTurn()
+{
+	if (!Locator::time::has_value())
+	{
+		return;
+	}
+	if (TurnStepOf(_layoutTurn, Locator::time::value().GetTurn()) == TurnStep::Update)
+	{
+		Update(std::chrono::duration<float>(ecs::systems::TimeSystemInterface::k_TurnDuration).count());
 	}
 }
 
@@ -5455,14 +5558,15 @@ std::string Runner::RecordChallenge(const Command& command) const
 	snapshot.position = position;
 	snapshot.focus = focus;
 	snapshot.quest = command.ctrl;
+	// The title is the number of a help text. The dedicated server has no game interface, so it reads the names from
+	// the same text scripts. Thus the server and the game record the same title.
 	auto* game = Game::Instance();
-	if (game != nullptr && game->GetInterface() != nullptr)
+	const auto* shown = game != nullptr && game->GetInterface() != nullptr ? &game->GetInterface()->GetTexts() : nullptr;
+	const auto loaded = shown == nullptr ? std::optional(gui::GameInterface::LoadTexts()) : std::nullopt;
+	const auto& texts = shown != nullptr ? *shown : *loaded;
+	if (const auto number = HelpTextNumber(texts.GetHelpNames(), command.title); number.has_value())
 	{
-		const auto names = game->GetInterface()->GetTexts().GetHelpNames();
-		if (const auto found = std::ranges::find(names, command.title); found != names.end())
-		{
-			snapshot.title = static_cast<uint32_t>(std::distance(names.begin(), found));
-		}
+		snapshot.title = *number;
 	}
 	chlapi::CHLApi::RecordChallenge(snapshot, script::challenge_snapshots::Call::Start);
 	return fmt::format("challenge {} ({}), {:.0f}% done{}", command.value, command.title, command.amount * 100.0f,

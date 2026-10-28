@@ -88,7 +88,6 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
-#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
@@ -987,8 +986,7 @@ std::optional<bool> WaitedForInMap(const ecs::Registry& registry, const creature
 	{
 		return std::nullopt;
 	}
-	return registry.AllOf<MapCellResident>(object) &&
-	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
+	return ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
 }
 
 /// Whether the creature that the creature's step waits to be still is on its way somewhere or turning. A thing that is

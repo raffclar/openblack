@@ -29,6 +29,7 @@
 #include "3D/TempleMapSpells.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
+#include "Common/FramePace.h"
 #include "Temple/FutureRoomRules.h"
 #include "Temple/SaveGameRoomRules.h"
 #include "Temple/TempleHelp.h"
@@ -79,6 +80,10 @@ public:
 	[[nodiscard]] std::vector<uint32_t> GetHiddenSubMeshes(TempleRoom room) const override;
 	[[nodiscard]] std::span<const uint32_t> GetControlSubMeshes(TempleRoom room) const override;
 	[[nodiscard]] const std::vector<OrientedTextVertex>& GetText() const override { return _text; }
+	[[nodiscard]] const std::vector<temple::scroll_pictures::WorldPicture>& GetScrollPictures() const override
+	{
+		return _scrollPictures;
+	}
 	[[nodiscard]] std::vector<TempleSubMeshGlow> GetControlGlows(TempleRoom room) const override;
 	[[nodiscard]] std::vector<TempleSubMeshOffset> GetControlOffsets(TempleRoom room) const override;
 	[[nodiscard]] const graphics::Texture2D* GetTextTexture() const override;
@@ -178,8 +183,8 @@ private:
 	TempleLight _light;
 	TempleFog _fog;
 	/// The creature's room's belts for how the creature fights, the medals for its miracles and the seeds of its best
-	/// learnt, at the points of the room's mesh, while the room is drawn
-	void UpdateCaveTrophies(float seconds);
+	/// learnt, at the points of the room's mesh, while the room is drawn. The seeds turn and pulse by `gameSeconds`.
+	void UpdateCaveTrophies(float gameSeconds);
 	/// The seeds go, with their effects, as the player leaves the temple
 	void ClearCaveSeeds();
 	/// How the magic scroll last worked out the creature's miracles, which the medals and seeds show; none until the
@@ -196,6 +201,12 @@ private:
 	std::array<std::optional<CaveSeedPlace>, CreatureCaveTrophies::k_BestMiracles> _caveSeedPlaces;
 	/// The seeds drawn this frame
 	std::vector<TempleCaveSeed> _caveSeeds;
+	/// When the effects of the seeds in the creature's room and over the map take their next step, and by how many
+	/// seconds they step in this frame (none in a frame where they do not step)
+	frame_pace::Pace _caveEffectPace;
+	frame_pace::Pace _mapEffectPace;
+	std::optional<float> _caveEffectStep;
+	std::optional<float> _mapEffectStep;
 	float _mapMarkerTurn {0.0f};
 	/// How long the main room's pool has shimmered, in seconds
 	float _poolTime {0.0f};
@@ -256,6 +267,7 @@ private:
 	void SaveIntoSlot(uint32_t slot, std::u16string_view name, gamesave::RoomSave why);
 	/// This frame's text in the rooms
 	std::vector<OrientedTextVertex> _text;
+	std::vector<temple::scroll_pictures::WorldPicture> _scrollPictures;
 	/// Whether the options room has opened the game's options
 	bool _optionsShown {false};
 	/// The multiplayer front end is up over the future room

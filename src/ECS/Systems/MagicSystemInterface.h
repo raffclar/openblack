@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -39,6 +40,7 @@ struct HandCast;
 
 namespace openblack::ecs::systems
 {
+class ObjectDrawListSystemInterface;
 
 /// The running miracles, the seeds the player holds and the miracle dispensers.
 ///
@@ -330,6 +332,14 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// Once a frame: the held miracle follows the hand, the bubbles' seeds spin
 	virtual void Update(float seconds) = 0;
+	/// Once a frame, after the frame makes the land's draw list: the swirls of the dispensers that the frame draws show
+	/// and move on, and the other swirls do not show. They step no more often than 60 times a second, by the game time
+	/// since the last step.
+	virtual void UpdateDispenserFrame(const ObjectDrawListSystemInterface& /*drawList*/,
+	                                  std::chrono::milliseconds /*frameRealTime*/, std::chrono::milliseconds /*frameGameTime*/,
+	                                  bool /*landDrawn*/)
+	{
+	}
 	/// A new land: every miracle goes
 	virtual void Reset() = 0;
 

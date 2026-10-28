@@ -124,6 +124,20 @@ TEST(GameSocket, TheToolModesOfTheSoakGoInTheStartAndAreLeftOutWhenNotSet)
 	    Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"all_computer_gods":3})").has_value());
 }
 
+TEST(GameSocket, TheScenarioOfTheToolsGoesInTheStartAndIsLeftOutWhenNotSet)
+{
+	Start tools {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}, .godsRingMap = false};
+	tools.scenario = "mind.computer_god_rivals";
+	const auto read = RoundTrip(tools);
+	ASSERT_TRUE(read.scenario.has_value());
+	EXPECT_EQ(*read.scenario, "mind.computer_god_rivals");
+	EXPECT_FALSE(
+	    RoundTrip(Start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"}).scenario.has_value());
+	// A scenario that is not a word, or is empty, does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"scenario":3})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"scenario":""})").has_value());
+}
+
 TEST(GameSocket, TheJoinOfTheFrontEndReads)
 {
 	// The front end's join frame (lobby_api::RoomJoinFrame) has the same members

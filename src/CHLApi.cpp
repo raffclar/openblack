@@ -64,6 +64,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "Common/PortableRotations.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
@@ -1657,6 +1658,7 @@ static float LivingAngleOf(entt::entity object, const Transform& transform)
 static void TurnLivingThing(entt::entity object, Transform& transform, float angle)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	const bool turned = angle != LivingAngleOf(object, transform);
 	const auto heading = script::property_rules::LivingAngleToCreatureHeading(angle);
 	if (auto* walk = registry.TryGet<ecs::components::WallHug>(object); walk != nullptr)
 	{
@@ -1677,6 +1679,24 @@ static void TurnLivingThing(entt::entity object, Transform& transform, float ang
 	}
 	transform.rotation = glm::mat3(portable_math::EulerAngleY(heading.Yaw()));
 	registry.SetDirty();
+	// A thing that turns comes out of the map's cells and goes in again, at the front of the list of its cell
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
+}
+
+/// Turns a thing that is not living to the given angles and keeps them. A thing in the map's cells comes out of them and
+/// goes in again: always for a turn of a lean, and for a turn about the upright only when the angle about y changes.
+static void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool turned = lean || angles.y != ecs::placed_turn::AnglesOf(registry, object).y;
+	ecs::placed_turn::SetAngles(registry, object, angles);
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
 }
 
 /// Whether a thing may lean, so that its angles across and forward are its own; the others always stand upright
@@ -2133,7 +2153,7 @@ void SetProperty() // 022 SET_PROPERTY
 		(prop == script::ObjectPropertyType::Angle    ? angles.y
 		 : prop == script::ObjectPropertyType::XAngle ? angles.x
 		                                              : angles.z) = radians;
-		ecs::placed_turn::SetAngles(registry, object, angles);
+		TurnPlacedThing(object, angles, prop != script::ObjectPropertyType::Angle);
 		return;
 	}
 	case script::ObjectPropertyType::Strength:
@@ -2238,11 +2258,17 @@ void SetProperty() // 022 SET_PROPERTY
 			}
 			return;
 		}
-		// The thing is drawn at this size, the same along every axis
+		// The thing is drawn at this size, the same along every axis. A thing in the map's cells that changes its size
+		// comes out of them and goes in again.
 		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
 		{
+			const bool resized = transform->scale.x != value;
 			transform->scale = glm::vec3(value);
 			registry.SetDirty();
+			if (resized)
+			{
+				ecs::thing_map_place::Reinsert(object);
+			}
 		}
 		return;
 	case script::ObjectPropertyType::Age:
@@ -2381,6 +2407,10 @@ void SetPosition() // 024 SET_POSITION
 			// Its walk takes up the new place, and one under the script's control stops there and waits for it
 			ecs::walker_placement::Place(registry, object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
+			if (Locator::entitiesMap::has_value())
+			{
+				Locator::entitiesMap::value().Moved(object);
+			}
 			if (registry.AllOf<ecs::components::ScriptControlled>(object))
 			{
 				ecs::walker_placement::Stop(registry, object);
@@ -2394,6 +2424,10 @@ void SetPosition() // 024 SET_POSITION
 		{
 			Locator::creatureLocomotionSystem::value().PlaceWithoutWalking(object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
+			if (Locator::entitiesMap::has_value())
+			{
+				Locator::entitiesMap::value().Moved(object);
+			}
 			return;
 		}
 		ecs::thing_map_place::Put(registry, object, place, position.y);
@@ -2558,7 +2592,7 @@ static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec
 		// Not finding a thing is no mistake: scripts that wait for one to come (the singing stones put in their places)
 		// ask again and again. Only the closest tracing says which script asks and for what
 		const auto& tasks = Locator::vm::value().GetTasks();
-		const auto task = tasks.find(CurrentTask());
+		[[maybe_unused]] const auto task = tasks.find(CurrentTask());
 		SPDLOG_LOGGER_TRACE(spdlog::get("scripting"), "Thing not found: type {} subtype {} at ({}, {}) radius {} for {}", type,
 		                    subtype, position.x, position.z, radius.value_or(0.0f),
 		                    task != tasks.end() ? task->second.name : std::string("no script"));
@@ -2776,7 +2810,7 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 		const auto& registry = Locator::entitiesRegistry::value();
 		const auto& transform = registry.Get<const Transform>(object);
 		const bool inMap =
-		    registry.AllOf<ecs::components::MapCellResident>(object) &&
+		    ecs::InMapCells(registry, object) &&
 		    !registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics, ecs::components::CarriedByTornado>(object);
 		if (inMap && Locator::creatureMindSystem::has_value())
 		{
@@ -2834,7 +2868,7 @@ static void FacePoint(entt::entity object, glm::vec3 point)
 	}
 	auto angles = ecs::placed_turn::AnglesOf(registry, object);
 	angles.y = angle;
-	ecs::placed_turn::SetAngles(registry, object, angles);
+	TurnPlacedThing(object, angles, false);
 }
 
 void SetFocus() // 034 SET_FOCUS
@@ -4939,17 +4973,15 @@ void GetGameTime() // 113 GET_GAME_TIME
 	Pushf(Locator::skySystem::value().GetClock().GetScriptTime());
 }
 
-/// The local time of the player's computer now
+/// The local time of the player's computer now. In a game for more than one player, the game tells the script that
+/// this is not safe there, and then gives the value.
 static std::tm RealLocalTime()
 {
-	const auto now = std::time(nullptr);
-	std::tm local {};
-#if defined(_WIN32)
-	localtime_s(&local, &now);
-#else
-	localtime_r(&now, &local);
-#endif
-	return local;
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+	{
+		ScriptMessage(script::real_time::k_NotMultiplayerFriendly);
+	}
+	return machine_clock::LocalTime();
 }
 
 void GetRealTime() // 114 GET_REAL_TIME
@@ -5943,12 +5975,17 @@ void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 	{
 		return;
 	}
+	// The leash goes back to the hand and on again, so its leash becomes the picked leash at the temple again
 	auto& leashes = Locator::leashSystem::value();
 	if (leashes.TiedTo(creature).has_value())
 	{
 		leashes.UntieToHand(creature);
 	}
-	else if (!leashes.IsLeashed(creature))
+	if (leashes.IsLeashed(creature))
+	{
+		leashes.PutOn(creature, leashes.TypeOf(creature));
+	}
+	else
 	{
 		leashes.Toggle(creature);
 	}

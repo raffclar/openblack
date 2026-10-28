@@ -47,6 +47,20 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	                   {.kind = 3, .offset = {-15.0f, 10.0f}, .height = 6.0f},
 	                   {.kind = 3, .offset = k_Hut}},
 	});
+	all.push_back({
+	    .id = "scripts.highlight_effects_frames",
+	    .name = "A gold scroll and a started silver scroll close up, their effects stepped in the drawn frames",
+	    .facet = Facet::Objects,
+	    .description = "A gold scroll and a started silver scroll on bare land, close up, with the camera still. Their "
+	                   "glints and the sparkles of the started scroll step in the frames that draw them, no more often "
+	                   "than 60 times a second.",
+	    .expected = "The gold glints and the silver sparkles move as they do at 60 frames a second, also at hundreds of "
+	                "frames a second. They do not move faster or flicker more at a high frame rate. Their random numbers "
+	                "are only this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, 12.0f}, .look = {0.0f, 2.0f, 25.0f}},
+	    .highlights = {{.kind = 3, .offset = {-3.0f, 25.0f}}, {.kind = 2, .offset = {3.0f, 25.0f}, .active = true}},
+	});
 
 	// A lesson's gold scroll, as the creature lessons put it up at the pen, near the camera
 	all.push_back({

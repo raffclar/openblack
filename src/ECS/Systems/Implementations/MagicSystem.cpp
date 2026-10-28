@@ -110,6 +110,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -123,6 +124,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TempleHeartPassOn.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -138,6 +140,7 @@
 #include "Magic/SpellSeedRules.h"
 #include "Magic/WaterRules.h"
 #include "MagicLiving.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleShields.h"
@@ -829,6 +832,8 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 			}
 			tree->maxSize = grown.target;
 			registry.SetDirty();
+			// A tree in the map's cells that the water grows comes out of them and goes in again
+			ecs::thing_map_place::Reinsert(object);
 			// It rustles as it grows
 			if (Locator::audio::has_value() && Locator::gameRandom::has_value())
 			{
@@ -1698,13 +1703,17 @@ void MagicSystem::Update(float /*seconds*/)
 	// (PlaceHandEffect)
 	if (Held().has_value() && registry.Valid(*Held()))
 	{
-		// The miracle shown in the hand steps every frame by the frame's game time in whole milliseconds, at least one
-		// even while the game is paused
+		// The miracle shown in the hand steps by the game time since its last step in whole milliseconds, at least one
+		// even while the game is paused. It steps no more often than 60 times a second; between its steps it is drawn
+		// where the hand moved it to (PlaceHandEffect).
 		auto& seed = registry.Get<SpellSeed>(*Held());
-		if (seed.handEffect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+		const auto step = Locator::time::has_value()
+		                      ? particles::drawn_steps::StepTime(_handEffectPace, Locator::time::value().GetFrameRealTime(),
+		                                                         Locator::time::value().GetFrameGameTime(), true)
+		                      : std::optional(std::chrono::milliseconds {0});
+		if (seed.handEffect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value() && step.has_value())
 		{
-			const auto milliseconds =
-			    Locator::time::has_value() ? std::max<int64_t>(Locator::time::value().GetFrameGameTime().count(), 1) : 1;
+			const auto milliseconds = std::max<int64_t>(step->count(), 1);
 			const auto info = HandEffectInfo(seed);
 			auto& particles = Locator::particleSystem::value();
 			if (!particles.ProcessForSpell(seed.handEffect, info, static_cast<float>(milliseconds) * 0.001f))
@@ -1715,7 +1724,8 @@ void MagicSystem::Update(float /*seconds*/)
 			particles.SetDrawOffset(seed.handEffect, glm::vec3(0.0f));
 		}
 	}
-	// A miracle held from this computer's hand, such as the lightning, keeps up with the hand between turns
+	// A miracle held from this computer's hand, such as the lightning or the rain cloud, keeps up with the hand between
+	// turns. The draw shows its particles that follow the hand at the live hand, with no limit of height.
 	if (Locator::particleSystem::has_value())
 	{
 		for (const auto entity : _spells)
@@ -1724,25 +1734,49 @@ void MagicSystem::Update(float /*seconds*/)
 			                                           spell->caster.player == OwnPlayer() &&
 			                                           spell->effect != ParticleSystemInterface::k_NoEffect)
 			{
-				// The rain cloud, or the grains and logs, of a sprinkled miracle keep to their limit above the land
-				const bool sprinkles =
-				    spell->spellClass == magic::SpellClass::Water || spell->spellClass == magic::SpellClass::Resource;
-				const auto clamped = [this, sprinkles](glm::vec3 point) {
-					if (sprinkles)
-					{
-						point.y = std::min(point.y, _world.LandHeight({point.x, point.z}) + particles::k_MaximumSprinkleHeight);
-					}
-					return point;
-				};
-				Locator::particleSystem::value().SetDrawOffset(spell->effect, clamped(_hand.handPosition) -
-				                                                                  clamped(spell->processInfo.handPosition));
+				Locator::particleSystem::value().SetLiveHand(spell->effect, _hand.handPosition);
 			}
 		}
 	}
 }
 
+void MagicSystem::UpdateDispenserFrame(const ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+                                       std::chrono::milliseconds frameGameTime, bool landDrawn)
+{
+	const auto seconds = particles::drawn_steps::StepSeconds(_swirlPace, frameRealTime, frameGameTime, landDrawn);
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	const auto& registry = EntityRegistry();
+	const auto stepSwirl = [&](entt::entity entity) {
+		const auto* dispenser = registry.TryGet<const SpellDispenser>(entity);
+		if (dispenser == nullptr || dispenser->effect == ParticleSystemInterface::k_NoEffect)
+		{
+			return;
+		}
+		// The swirl shows and moves on only in the frames that draw its dispenser
+		const bool drawn = drawList.Drawn(registry, entity);
+		particles.SetShown(dispenser->effect, drawn);
+		if (drawn && seconds.has_value())
+		{
+			particles.ProcessByFrame(dispenser->effect, *seconds);
+		}
+	};
+	std::vector<entt::entity> dispensers;
+	registry.Each<const SpellDispenser>(
+	    [&dispensers](entt::entity entity, const SpellDispenser&) { dispensers.push_back(entity); });
+	std::ranges::for_each(particles::drawn_steps::DrawOrder(
+	                          drawList.GetList(), dispensers, drawList.GetView().has_value(),
+	                          [&registry, &drawList](entt::entity entity) { return drawList.Decides(registry, entity); }),
+	                      stepSwirl);
+}
+
 void MagicSystem::Reset()
 {
+	_swirlPace = {};
+	_handEffectPace = {};
 	_spells.clear();
 	_links.clear();
 	StopHoldLoop();
@@ -1783,8 +1817,9 @@ entt::entity MagicSystem::CreateDispenser(glm::vec3 position, MagicType type, fl
 	auto& dispenser = EntityRegistry().Get<SpellDispenser>(entity);
 	if (Locator::particleSystem::has_value())
 	{
-		// Its swirl uses only this computer's random numbers: the swirl does not change the world
-		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f);
+		// Its swirl uses only this computer's random numbers: the swirl does not change the world. The swirl moves on in
+		// the frames that draw the dispenser, not in the turns.
+		dispenser.effect = Locator::particleSystem::value().StartByFrame(ParticleType::SpelldispenserVortex, position, 1.0f);
 	}
 	// Its first bubble comes once it has counted its period, as every later one does. A debug tool makes it, so it has
 	// no town.
@@ -1807,8 +1842,9 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 	JoinTown(entity, DispenserTown(town));
 	if (Locator::particleSystem::has_value())
 	{
-		// Its swirl uses only this computer's random numbers: the swirl does not change the world
-		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f);
+		// Its swirl uses only this computer's random numbers: the swirl does not change the world. The swirl moves on in
+		// the frames that draw the dispenser, not in the turns.
+		dispenser.effect = Locator::particleSystem::value().StartByFrame(ParticleType::SpelldispenserVortex, position, 1.0f);
 	}
 	return entity;
 }

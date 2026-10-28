@@ -2322,6 +2322,24 @@ void AddAppearance(std::vector<Scenario>& all)
 	                  .creature = 0,
 	                  .delaySeconds = 1.0f}},
 	});
+	// The land, a hut, trees and the sky as the lowest detail levels draw them, with textures of half the size
+	all.push_back({
+	    .id = "appearance.low_resolution_textures",
+	    .name = "Low resolution textures",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the camera looks north over a hut and two oaks to the far land of the "
+	                   "testbed, with the sky above it. Start the game with --detail-level 1 (Low) or 0 (Minimum) to see "
+	                   "the low resolution textures, and with 4 to compare.",
+	    .expected = "At Low the land, its footprints and the shadows of the hut and the oaks are softer, painted at half "
+	                "the texels. The shadows are half as dark. The hut, the oaks and the sea have softer textures. The "
+	                "sky is the day's sky of the alignment and does not change with the time of day. The far land "
+	                "fades into its coarse texture as at Maximum.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -90.0f}, .look = {0.0f, 0.0f, 60.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-15.0f, -40.0f}},
+	                {.type = TreeInfo::Oak, .offset = {15.0f, -45.0f}},
+	                {.type = TreeInfo::Oak, .offset = {25.0f, -30.0f}}},
+	});
 	// The player's lion mirrored in the lake: its one chroma part keeps the alpha of its texture
 	all.push_back({
 	    .id = "appearance.lion_sea_reflection",
@@ -2712,6 +2730,21 @@ void AddLight(std::vector<Scenario>& all)
 	    .commands = {AtHour(9.0f, 0.0f), AtHour(12.0f, 5.0f), AtHour(15.0f, 5.0f), AtHour(17.5f, 5.0f), AtHour(20.0f, 5.0f),
 	                 AtHour(9.0f, 5.0f)},
 	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "light.boost",
+	    .name = "A light boost brightens the light of the land",
+	    .facet = Facet::Light,
+	    .description = "Start the game with --profile-folder on a folder that holds a Profiles.txt and a settings.json "
+	                   "with {\"detail_level\": 5, \"custom_detail\": {\"light_boost\": 1}}. A tiger, a cow and a giant "
+	                   "ape stand still at midday. Start again with \"light_boost\": 0, or with no light_boost, to compare.",
+	    .expected = "With the boost the land, the sky's haze and the creatures are lit brighter than without it, the "
+	                "brightest parts most; at a boost of 0 the light is the same as at every other detail level.",
+	    .environment = {.hour = 12.0f, .clockRuns = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {40.0f, 0.0f}), Posed(CreatureType::Cow, {0.0f, 0.0f}),
+	                  Posed(CreatureType::GiantApe, {-45.0f, 0.0f})},
 	});
 
 	all.push_back({
@@ -3429,6 +3462,20 @@ void AddFootprints(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "footprints.april_fools_date",
+	    .name = "1 April by the computer's date",
+	    .facet = Facet::Footprints,
+	    .description = "The computer's clock is set to noon on 1 April 2026; nothing else is changed. A tiger walks round "
+	                   "in a circle.",
+	    .expected = "Its footprints are smiley faces, each the size of a tiger's own print.",
+	    .environment = {.realDate = RealDate {.year = 2026, .month = 4, .day = 1, .hour = 12, .minute = 0}},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {50.0f, 0.0f}, 180.0f)},
+	    .commands = circling,
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "footprints.walk_and_run_close",
 	    .name = "Footprints close up, walking and running",
 	    .facet = Facet::Footprints,
@@ -4066,6 +4113,28 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.scroll_pictures",
+	    .name = "The pictures of a gesture and of controls on the library's did you know scroll",
+	    .facet = Facet::Story,
+	    .description = "The player reads three did you know tips on signs: one with the picture of a gesture, two with the "
+	                   "picture of a control. Then the player goes through the temple's main room into the library. After "
+	                   "four seconds the camera looks at the did you know scroll, as a press on it does.",
+	    .expected = "Far from the scroll, the lines of the pictures are blank. Close to the scroll, its text is in front of "
+	                "it, and under each tip is its picture, two lines high: the gesture in white over a black shadow, "
+	                "and the mouse button or the key of each control. The pictures move with the scroll when it turns. "
+	                "A gesture is cut at the top and the bottom of the scroll. A control shows only while all of it is "
+	                "on the scroll.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::ReadTip, .delaySeconds = 0.5f, .value = 4131, .amount = 4.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4138, .amount = 4.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4153, .amount = 4.0f},
+	                 // The other rooms open after the temple draws the main room. Thus the player enters through it.
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 5}},
+	});
+
+	all.push_back({
 	    .id = "temple.map_markers",
 	    .name = "The temple's map showing the miracles cast and the influence",
 	    .facet = Facet::Story,
@@ -4640,6 +4709,22 @@ void AddObjects(std::vector<Scenario>& all)
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -k_Reach}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Stomp"}},
+	});
+
+	all.push_back({
+	    .id = "objects.stomp_lost_villager",
+	    .name = "Stomping on a villager that the hand takes away",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a villager in front of it. A script tells it to stomp on the villager. As "
+	                   "the foot starts to come down, the player's hand takes the villager.",
+	    .expected = "The foot stops and goes back up along the same path, to where the stomp started. Then the tiger "
+	                "stands, and the stomp fails. The villager stays alive in the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Stomp"},
+	                 {.kind = Kind::HandTake, .delaySeconds = 3.7f, .object = 0}},
 	});
 
 	all.push_back({
@@ -6092,6 +6177,50 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
 	});
 
+	// The camera looks north over the land from high up; the pointer starts east of the middle, clear of the testbed's
+	// window
+	all.push_back({
+	    .id = "hand.held_miracle_draw",
+	    .name = "Miracles that follow the hand as it moves",
+	    .facet = Facet::Hand,
+	    .description = "The hand gets a water seed and casts it with the right mouse button held. The pointer moves left "
+	                   "and right, then to the far edge of the testbed and back, then lets go. Then the hand casts "
+	                   "food, wood, lightning and fire, and the pointer moves left and right.",
+	    .expected = "The rain cloud and its rain cone stay exactly on the moving hand, with no lag. The food grains "
+	                "and the logs fall from where they come out and do not move with the hand. The start of the "
+	                "lightning and the fireball in the hand stay on the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -30.0f}, .look = {0.0f, 10.0f, 30.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.6f, 0.8f}},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Water)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.0f, -0.78f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.0f, .point = {0.0f, 0.78f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Food)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Wood)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::LightningBolt)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Fire)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3}},
+	});
+
 	// The camera looks down on an oak from about 150 m, as in play, the pointer on its crown
 	all.push_back({
 	    .id = "hand.tree_tug",
@@ -6648,6 +6777,26 @@ void AddLeash(std::vector<Scenario>& all)
 	all.push_back(templeGlows("leash.temple_glows_night", "The glows round the temple's leashes at night", 23.0f));
 
 	all.push_back({
+	    .id = "leash.l_key_picks_post",
+	    .name = "The leash key picks the leash at the temple",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes and your temple stands in front of the camera. The compassion "
+	                   "leash is tapped at its post, then tapped again, so no leash is picked. Then the leash key puts "
+	                   "the compassion leash on. Last, the leash key takes it off.",
+	    .expected = "After the second tap, no glow is orange and the hand carries no leash. When the leash key puts the "
+	                "leash on, the compassion leash (the rainbow fur) goes round the hand's wrist again and its glow "
+	                "turns orange. When the leash comes off, the leash stays in the hand and its glow stays orange.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-262.0f, 30.0f, 120.0f}, .look = {-300.0f, 5.0f, 100.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 1.0f, .value = 2},
+	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 2.0f, .value = 2},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "leash.pull_to_hand",
 	    .name = "Pulled to the hand",
 	    .facet = Facet::Leash,
@@ -7013,6 +7162,22 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "saves.arena_ring_back",
+	    .name = "Save and load: the ring of the arena shows again",
+	    .facet = Facet::Combat,
+	    .description = "Two tigers are told to fight, and both fight by themselves. 5 seconds later the game saves into "
+	                   "slot 0. 3 seconds after the save the game loads slot 0.",
+	    .expected = "Before the save the ring of light stands round the arena. After the load the ring stands round the "
+	                "arena again while the fight continues, as before the save.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 {.kind = Kind::SaveGame, .delaySeconds = 5.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
 	{
 		// A lion against a tiger, so that two species show their heads
 		auto lion = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);
@@ -7107,6 +7272,30 @@ void AddCombat(std::vector<Scenario>& all)
 	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
 	                 {.kind = Kind::DrawGesture, .delaySeconds = 8.0f, .value = static_cast<size_t>(GestureType::Star)}},
 	});
+
+	{
+		// The player's tiger knows the five miracles that a creature casts in a fight
+		const auto knows = [](MagicType magic) {
+			return Command {
+			    .kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.1f, .value = static_cast<size_t>(magic)};
+		};
+		all.push_back({
+		    .id = "interface.hint_fight_seeds",
+		    .name = "The seeds over the hints of the fight miracles",
+		    .facet = Facet::Interface,
+		    .description = "The player's red tiger knows the fireball, the lightning bolt, the heal, and the weak and the "
+		                   "strong creature spells. It fights a blue tiger, and the two fight by themselves.",
+		    .expected = "When the duel starts, the hints along the bottom right of the screen show the star of the "
+		                "special move and the gesture of each of the five miracles. Over each gesture of a miracle, the "
+		                "seed of the miracle turns slowly, with the effect of its holder over it. The seeds are small, in "
+		                "white light, and they do not go away while the duel continues.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {knows(MagicType::Fireball), knows(MagicType::LightningBolt), knows(MagicType::Heal),
+		                 knows(MagicType::CreatureSpellWeak), knows(MagicType::CreatureSpellStrong),
+		                 Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
 
 	{
 		// Two creatures that are not the player's fight by themselves, and the player's own lion stands near the arena
@@ -10899,8 +11088,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       IsPointerCommand(kind);
+	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox ||
+	       kind == Kind::BringCreature || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10928,7 +11117,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 182> k_Names {
+	constexpr std::array<std::string_view, 184> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10967,6 +11156,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand lets go",
 	    "put on leash",
 	    "tie leash to",
+	    "tie leash to desire flag",
 	    "untie leash",
 	    "take off leash",
 	    "keep at home",
@@ -11107,6 +11297,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "make a dance",
 	    "open a multiplayer box",
 	    "build the worship sites",
+	    "press a key on the keyboard",
 	    "show another god's hand",
 	    "press Join Online Game of the page",
 	    "end box",
@@ -11422,6 +11613,16 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 glm::vec2 testbed_scenarios::MapPoint(glm::vec2 middle, glm::vec2 offset)
 {
 	return middle + offset;
+}
+
+std::optional<uint32_t> testbed_scenarios::HelpTextNumber(std::span<const std::string> names, std::string_view name)
+{
+	const auto found = std::ranges::find(names, name);
+	if (found == names.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(std::distance(names.begin(), found));
 }
 
 float testbed_scenarios::CreatureHeight(float size)

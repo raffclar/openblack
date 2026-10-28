@@ -46,6 +46,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Map.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -624,6 +625,11 @@ void MoveTo(entt::entity entity, glm::vec3 position)
 			locomotion->fromPosition = position;
 			locomotion->toPosition = position;
 		}
+	}
+	// It goes into the map cells of the new place at once
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Refile(entity);
 	}
 	registry.SetDirty();
 }

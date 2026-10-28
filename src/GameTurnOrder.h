@@ -101,7 +101,6 @@ enum class Step : uint8_t
 	ReactionClock,
 	TurnStartPlaces,
 	InfluenceTurnStart,
-	MapCells,
 	Sharks,
 	Storms,
 	Snow,
@@ -168,7 +167,6 @@ enum class Step : uint8_t
 	CreatureHandMoments,
 	/// The turn of the living: each creature, villager and animal in turn, the newest first (see living_turn::Walk)
 	Living,
-	MapCellsAfterLiving,
 	CreatureWebPage,
 	CreatureCarryOver,
 	Fires,
@@ -256,10 +254,10 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Clock, .stage = Stage::StartTurn},
     // The living's reactions count their times by the same turn count as the game
     {.step = Step::ReactionClock, .stage = Stage::StartTurn},
-    // The places of the turn's start, which the frames draw from, and the map's cells of what moved
+    // The places of the turn's start, which the frames draw from. Each thing goes into its new map cells as it moves,
+    // so the turn has no step for them.
     {.step = Step::TurnStartPlaces, .stage = Stage::StartTurn},
     {.step = Step::InfluenceTurnStart, .stage = Stage::StartTurn},
-    {.step = Step::MapCells, .stage = Stage::StartTurn},
     {.step = Step::Sharks, .stage = Stage::StartTurn},
     {.step = Step::Storms, .stage = Stage::Atmosphere},
     {.step = Step::Snow, .stage = Stage::Atmosphere},
@@ -294,7 +292,6 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // of k_CreaturesTurn in its own turn. Each villager takes the step of its walk in its own turn.
     {.step = Step::CreaturesTurnStart, .stage = Stage::Living},
     {.step = Step::Living, .stage = Stage::Living},
-    {.step = Step::MapCellsAfterLiving, .stage = Stage::Living},
     {.step = Step::Fires, .stage = Stage::Fires},
     {.step = Step::Reactions, .stage = Stage::Reactions},
     {.step = Step::WorshipChants, .stage = Stage::Spells},

@@ -68,6 +68,14 @@
 namespace openblack::simulation
 {
 
+bool LandDrawn()
+{
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool landHidden = Locator::videoSystem::has_value() &&
+	                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+	return !inTemple && !landHidden;
+}
+
 void PlayCreaturePoses()
 {
 	auto& profiler = Locator::profiler::value();
@@ -136,7 +144,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
 	if (Locator::vortexSystem::has_value())
 	{
-		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+		Locator::vortexSystem::value().UpdateFrame(clock.GetFrameRealTime(), clock.GetFrameGameTime(), LandDrawn());
 	}
 	// The frame draws the reward chests from the sky between their turns, and their dust fades
 	if (Locator::rewardSystem::has_value())
@@ -235,7 +243,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 	// The flags over the towns' stores ease to their desires and turn to the camera
 	Locator::townDesireSystem::value().UpdateFlags(std::chrono::duration<float>(gameTime).count());
 	// The players' symbols of belief over the village centres move on
-	Locator::townSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+	Locator::townSystem::value().UpdateFrame(clock.GetFrameRealTime(), LandDrawn());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),

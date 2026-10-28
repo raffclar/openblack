@@ -902,6 +902,18 @@ void openblack::ShutDownServices()
 
 	Locator::oceanSystem::reset();
 	Locator::skySystem ::reset();
+	Locator::cameraHelpSystem::reset();
+	Locator::cameraPathSystem::reset();
+	Locator::cloudSystem::reset();
+	Locator::mistSystem::reset();
+	Locator::villageLightSystem::reset();
+	Locator::tutorialSkipSystem::reset();
+	Locator::templeExteriorSystem::reset();
+	Locator::temple::reset();
+	Locator::vegetation::reset();
+	Locator::alignmentSystem::reset();
+	Locator::playerProfileSystem::reset();
+	Locator::playerSystem::reset();
 	Locator::debugGui::reset();
 	// The map listens to the registry's signals, so it goes first: a map left behind would later let go of signals of a
 	// registry that is gone
@@ -917,6 +929,8 @@ void openblack::ShutDownServices()
 	Locator::profiler::reset();
 
 	Locator::vm::reset();
+	Locator::gameRandom::reset();
+	Locator::rng::reset();
 }
 
 bool openblack::StartInspector([[maybe_unused]] uint16_t port)

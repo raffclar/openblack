@@ -1188,6 +1188,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		}
 		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn). A second
 		// turn in the frame follows the turn before it at once: the frame steps only draw, so none come between them.
+		// The tools that act by the turns act first, so that each computer of a network game does them before the same
+		// turn.
+		view.BeforeTurn();
 		simulation::PlayTurn(view);
 
 		_lastGameLoopTime = currentTime;

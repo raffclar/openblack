@@ -450,3 +450,23 @@ TEST(FootprintPaint, TheFasterPaintGivesTheBitsOfTheOldWay)
 		ASSERT_EQ(fast, old) << "round " << round;
 	}
 }
+
+TEST(FootprintPaint, AtTheLowResolutionTheCornersGoToTheSmallerTexture)
+{
+	const std::vector<uint16_t> picture(16 * 16, 0xFFFF);
+	constexpr int k_LowSide = 128;
+	std::vector<uint16_t> block(static_cast<size_t>(k_LowSide) * k_LowSide, 0xF000);
+	const auto square = Square();
+	// 10 units are 8 texels of 128: the square covers texels 0 to 8, both ends too
+	footprint_paint::PaintFootprint(block, {0, 0}, {.width = 16, .height = 16, .texels = picture}, square, {},
+	                                footprint_paint::Mix::Colour, k_LowSide);
+	EXPECT_NE(block[0], 0xF000);
+	EXPECT_NE(block[static_cast<size_t>(8 * k_LowSide)], 0xF000);
+	EXPECT_EQ(block[static_cast<size_t>(9 * k_LowSide)], 0xF000);
+	// The square near the far edge of the block stops at the last texel of the smaller texture
+	std::vector<uint16_t> edge(static_cast<size_t>(k_LowSide) * k_LowSide, 0xF000);
+	footprint_paint::PaintFootprint(edge, {0, 0}, {.width = 16, .height = 16, .texels = picture}, square,
+	                                {.origin = {0.0f, 155.0f}}, footprint_paint::Mix::Colour, k_LowSide);
+	EXPECT_NE(edge[k_LowSide - 1], 0xF000);
+	EXPECT_EQ(edge[static_cast<size_t>(k_LowSide)], 0xF000);
+}

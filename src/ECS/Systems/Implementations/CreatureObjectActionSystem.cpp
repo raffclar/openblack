@@ -60,6 +60,7 @@
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureStomp.h"
 #include "Creature/CreatureThrow.h"
+#include "Creature/CreatureWalkPlanner.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -1037,8 +1038,7 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 /// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off
 bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
 {
-	return registry.AllOf<MapCellResident>(thing) &&
-	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
+	return ecs::InMapCells(registry, thing) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
 }
 
 /// One game turn of walking or turning up to what the creature acts on
@@ -1502,9 +1502,14 @@ bool StartCatch(entt::entity creature, CreatureObjectAction& action, const Creat
 	const auto flight = action.target.has_value() ? FlightOf(*action.target) : std::nullopt;
 	const bool hasAnimations = std::ranges::all_of(creature_catch::k_CatchAnimations,
 	                                               [creature](size_t clip) { return DurationOf(creature, clip) > 0.0f; });
+	if (!hasAnimations || !flight.has_value())
+	{
+		Fail(action, "it can't catch that");
+		return false;
+	}
 	// Its speed is weighed across and up or down, not along the land's other axis, as the game does
-	if (!hasAnimations || !flight.has_value() ||
-	    flight->second.y * flight->second.y + flight->second.x * flight->second.x < creature_catch::k_LeastSpeedSquared)
+	const glm::vec3 velocity = flight->second;
+	if (velocity.y * velocity.y + velocity.x * velocity.x < creature_catch::k_LeastSpeedSquared)
 	{
 		Fail(action, "it can't catch that");
 		return false;
@@ -2494,7 +2499,7 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 	// In the map: in its cells, and out of any hand, flight or tornado
 	const auto* holder = registry.TryGet<const HeldByCreature>(object);
 	const bool inMap =
-	    registry.AllOf<MapCellResident>(object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
+	    ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
 	const bool heldByThisCreature = holder != nullptr && holder->creature == creature;
 	const auto* leash = registry.Valid(creature) ? registry.TryGet<const CreatureLeash>(creature) : nullptr;
 	const bool leashTied = leash != nullptr && leash->worn.has_value() && leash->worn->tiedTo == object;
@@ -2657,7 +2662,7 @@ bool CreatureObjectActionSystem::CanStompOn(entt::entity creature, entt::entity 
 		return StompRule::Short;
 	}();
 	const bool onMap =
-	    registry.AllOf<MapCellResident>(target) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(target);
+	    ecs::InMapCells(registry, target) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(target);
 	return creature_stomp::CanBeStompedOn(
 	    {
 	        .rule = rule,
@@ -2832,6 +2837,25 @@ void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
 	}
 }
 
+namespace
+{
+/// The body plays the animations of the action at its time, with their weights
+void PoseActionSlots(entt::entity creature, const CreatureObjectAction& action, CreatureAnimation& animation)
+{
+	animation.slots.clear();
+	for (size_t i = 0; i < action.animationCount; ++i)
+	{
+		const auto duration = DurationOf(creature, action.animations.at(i));
+		// Each animation holds its last frame
+		const auto time = std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
+		animation.slots.push_back({.animation = action.animations.at(i),
+		                           .timeMs = time,
+		                           .weight = action.weights.at(i),
+		                           .mirrored = action.mirrored});
+	}
+}
+} // namespace
+
 void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2843,10 +2867,12 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 		{
 			return;
 		}
-		// A hurried action doubles the step of its animations. The time that a point holds is the time of the mind,
-		// and does not change.
-		const float step = creature_layers::HurriedStep(
-		    gameTime.count() * creature_layers::BodyRate(ShownSize(body), animation.realTime), action.hurried);
+		// The animations move on by the whole milliseconds that the creature lives in the turn, at the rate of its
+		// size. A frozen creature lives fewer milliseconds. A hurried action doubles the step. The time that a point
+		// holds is the time of the mind, and does not change.
+		const auto turnMs = creature_walk_planner::TurnMs(animation.playbackScale, static_cast<int32_t>(gameTime.count()));
+		const float step = static_cast<float>(creature_layers::HurriedStep(
+		    creature_layers::TurnStepMs(turnMs, ShownSize(body), animation.realTime), action.hurried));
 		if (action.kind == Kind::Catch)
 		{
 			using Catching = CreatureObjectAction::Catching;
@@ -2860,11 +2886,28 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 			}
 			return;
 		}
+		// When the thing got out of reach, the time of the reach decreases by one step each turn, with the last blend.
+		// The action fails when the step of the turn is longer than the time that is left.
+		if (action.withdraws)
+		{
+			const auto back = creature_object_actions::WithdrawStep(action.timeMs, step);
+			if (!back.has_value())
+			{
+				Fail(action, "it got out of reach");
+				animation.slots.clear();
+				return;
+			}
+			action.timeMs = *back;
+			PoseActionSlots(entity, action, animation);
+			return;
+		}
+		const float timeBefore = action.timeMs;
 		action.timeMs = action.kind == Kind::Point
 		                    ? creature_pointing::AdvanceTime(action.timeMs, step, action.pointMs, action.pointEnding)
 		                    : action.timeMs + step;
 
-		// Until it has hold, the reach follows what it reaches for, and fails when it gets out of reach
+		// Until it has hold, the reach follows what it reaches for. When the thing gets out of reach, the time of the
+		// reach starts to decrease.
 		if ((action.kind == Kind::PickUp || action.kind == Kind::Destroy) && !action.eventDone && action.reach.has_value())
 		{
 			const auto* at = action.target.has_value() && registry.Valid(*action.target)
@@ -2877,18 +2920,21 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 				return;
 			}
 			// It reaches for where a villager or an animal that moves will be at the moment of the hold. The time
-			// left is in whole milliseconds.
+			// left is in whole milliseconds, from the time of the reach before this turn.
 			const auto living = LivingOf(registry, *action.target);
 			const auto place = living.has_value() ? creature_lead::PlaceOf(*living) : at->position;
-			const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(action.timeMs);
+			const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(timeBefore);
 			const auto aim = AimAt(living, place, creature_lead::ReachSeconds(ShownSize(body), msLeft));
 			const auto local = ToLocal(AsFacing(registry, entity, transform), aim);
 			const auto corners = creature_reach::Scaled(*action.reach, transform.scale.x);
 			const auto reach = creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(corners) : corners, local);
-			if (!reach.inRange)
+			// A thing that is no longer on the map, for example in the player's hand, is out of reach too
+			if (!OnTheMap(registry, *action.target) || !reach.inRange)
 			{
-				Fail(action, "it got out of reach");
-				animation.slots.clear();
+				// The reach keeps the weights of the last turn. Its time is one step less than its time before this turn.
+				action.withdraws = true;
+				action.timeMs = creature_object_actions::WithdrawStart(timeBefore, step);
+				PoseActionSlots(entity, action, animation);
 				return;
 			}
 			action.weights = reach.weights;
@@ -2951,17 +2997,7 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 			return;
 		}
 
-		animation.slots.clear();
-		for (size_t i = 0; i < action.animationCount; ++i)
-		{
-			const auto duration = DurationOf(entity, action.animations.at(i));
-			// Each animation holds its last frame
-			const auto time = std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
-			animation.slots.push_back({.animation = action.animations.at(i),
-			                           .timeMs = time,
-			                           .weight = action.weights.at(i),
-			                           .mirrored = action.mirrored});
-		}
+		PoseActionSlots(entity, action, animation);
 	};
 	if (registry.Valid(creature) && registry.AllOf<Creature, Transform, CreatureAnimation, CreatureObjectAction>(creature))
 	{
@@ -3217,7 +3253,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 	std::vector<Moment> moments;
 	if (const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
 	    action != nullptr && action->phase == Phase::Playing && action->status == Status::Running && !action->eventDone &&
-	    action->timeMs >= action->eventMs)
+	    !action->withdraws && action->timeMs >= action->eventMs)
 	{
 		moments.push_back({creature});
 	}

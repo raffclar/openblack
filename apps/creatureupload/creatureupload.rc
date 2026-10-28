@@ -1,0 +1,26 @@
+// The dialog of the creature upload tool. It has the size, the font, the controls and the styles of the dialog of the
+// game's upload tool, in the same order. The dialog sets the texts from the language file when it opens.
+
+#include <windows.h>
+#include <commctrl.h>
+
+#include "resource.h"
+
+IDD_CREATUREUPLOAD DIALOGEX 0, 0, 271, 130
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "Black&White Creature Upload Utility"
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+    CONTROL "", IDC_PROFILE, "ComboBox", CBS_DROPDOWNLIST | CBS_SORT | WS_VSCROLL | WS_TABSTOP, 74, 17, 91, 84
+    CONTROL "", IDC_LOGINNAME, "Edit", ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP, 74, 41, 90, 14
+    CONTROL "", IDC_LOGINPASSWORD, "Edit", ES_PASSWORD | ES_AUTOHSCROLL | WS_BORDER | WS_TABSTOP, 74, 60, 90, 14
+    CONTROL "&Upload Creature", IDC_DO_UPLOAD, "Button", BS_DEFPUSHBUTTON | WS_TABSTOP, 175, 7, 89, 14
+    CONTROL "&Exit", IDCANCEL, "Button", BS_PUSHBUTTON | WS_TABSTOP, 176, 23, 89, 14
+    CONTROL "User Validation", IDC_STATIC_GROUPBOX, "Button", BS_GROUPBOX, 7, 7, 164, 78
+    CONTROL "Profile:", IDC_STATIC_PROFILE, "Static", SS_LEFT | WS_GROUP, 15, 22, 41, 8
+    CONTROL "Loginpassword", IDC_STATIC_LOGINPASSWORD, "Static", SS_LEFT | WS_GROUP, 15, 63, 51, 8
+    CONTROL "Progress1", IDC_PROGRESS, "msctls_progress32", WS_BORDER, 7, 109, 257, 14
+    CONTROL "Static", IDC_STATUS, "Static", SS_LEFT | WS_GROUP, 7, 90, 257, 13, WS_EX_STATICEDGE
+    CONTROL "Loginname", IDC_STATIC_LOGINNAME, "Static", SS_LEFT | WS_GROUP, 15, 44, 51, 8
+END
