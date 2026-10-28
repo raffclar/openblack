@@ -24,8 +24,9 @@ This skill runs one check (a **tick**) on a fixed interval to stop both.
 
 ### start
 
-1. Read the config (see below). If the local file is missing, copy `config.example.json` to the local path, tell the
-   developer which values to set, and stop.
+1. Read the config (see below). If `python .claude/obconfig.py where` finds no local file, copy
+   `.claude/openblack.local.example.json` to `.claude/openblack.local.json` in the main checkout, tell the developer
+   which values to set, and stop.
 2. Run one tick.
 3. Schedule the tick with CronCreate, `recurring: true`, at `intervalMinutes`. Do not use minutes 0 and 30 (use, for
    example, `13,43 * * * *` for 30 minutes). The prompt is `/openblack-lead-loop tick`.
@@ -34,13 +35,15 @@ This skill runs one check (a **tick**) on a fixed interval to stop both.
 
 ## Config
 
-The local file is `.claude/openblack-lead-loop.local.json` in the repository root. Git ignores it. Each developer has
-their own paths and machines. `config.example.json` beside this file shows every field:
+All the openblack skills share one settings file: `.claude/openblack.local.json` in the main checkout. Git ignores it.
+Each developer has their own paths and machines. `.claude/openblack.local.example.json` shows every field, and
+`python .claude/obconfig.py get <key>` reads one value (a worktree finds the file in the main checkout). The fields
+this skill uses:
 
 | Field | Meaning |
 |---|---|
 | `slots.local` | Agents that may run on this machine at the same time. The merge agent counts as one. |
-| `slots.remote` | Agents for each remote build machine (`remotes[]`), with the work each may take. 0 or empty if none. |
+| `remotes[]` | Other build machines: `name`, `host`, `user`, `sshKey`, `slots` (agents at the same time) and `work` (the kind of lane each may take). Empty if none. Never put a password here. |
 | `load.cpuMaxPercent`, `load.freeRamMinGB`, `load.freeDiskMinGB`, `load.disk` | Start a new local agent only when all of these are met. |
 | `paths.handovers` | Lane briefs (`<lane>_brief.md`) and handovers (`<lane>_handover.md`). |
 | `paths.workSources` | Files and folders to choose new lanes from (a backlog folder, an audit report, trackers). |

@@ -1,0 +1,53 @@
+{
+  "git": {
+    "remote": "origin",
+    "mainBranch": "master",
+    "githubRepo": "your-name/openblack"
+  },
+  "paths": {
+    "mainCheckout": "",
+    "worktrees": "../openblack-worktrees",
+    "builds": "../openblack-builds",
+    "handovers": "../openblack-work/handovers",
+    "mergeTrain": "../openblack-work/merge-train",
+    "looks": "../openblack-work/looks",
+    "screenshots": "../openblack-work/screenshots",
+    "leadLog": "../openblack-work/handovers/lead_agent_queue_log.md",
+    "laneRules": "",
+    "workSources": [
+      "../openblack-work/handovers/backlog"
+    ],
+    "gameData": "",
+    "bw1DecompDocs": "../bw1-decomp/docs/openblack",
+    "ghidraCatalogue": "../openblack-work/ghidra-catalogue"
+  },
+  "tools": {
+    "python": "python",
+    "clangFormat": "clang-format",
+    "obBuild": "",
+    "ghidraBridge": "http://127.0.0.1:8080",
+    "ghidraBinary": "BW1W120"
+  },
+  "commit": {
+    "trailer": "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
+    "trainTrailer": "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+  },
+  "train": {
+    "extraCheck": ""
+  },
+  "slots": {
+    "local": 4
+  },
+  "remotes": [],
+  "load": {
+    "cpuMaxPercent": 75,
+    "freeRamMinGB": 16,
+    "freeDiskMinGB": 150,
+    "disk": ""
+  },
+  "models": {
+    "lane": "opus",
+    "merge": "sonnet"
+  },
+  "intervalMinutes": 30
+}
