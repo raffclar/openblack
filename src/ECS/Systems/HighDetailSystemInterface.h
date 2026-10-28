@@ -40,6 +40,9 @@ public:
 	/// After a load: the models that the game made for these things while it played are made again. A save keeps the
 	/// names of these models but not the models, and the game that loads it may not have them.
 	virtual void RemakeModelsAfterLoad() {}
+	/// As a land loads: the detailed models and the pieces of their eyes load from their files. Then the first thing
+	/// that a script puts in high detail reads no file.
+	virtual void LoadModels() {}
 	/// Each frame, after the villagers in view get their poses: the eyes of those in view blink and turn. They move by
 	/// the game time of the frame, in whole milliseconds. Then the system puts the eyes on the heads.
 	virtual void PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProjection) = 0;

@@ -1345,6 +1345,11 @@ void Game::WarmUpFirstFrame()
 			gui::Canvas::WarmUp(graphics::RenderPass::Translucent, gui::Canvas::DepthTest::NearerIsGreater, true);
 			// The interface that the game draws over the scene, which the loading screen does not blend in each way
 			gui::Canvas::WarmUp(graphics::RenderPass::Interface);
+			// The debug menu comes up with the game's menu, over all of the game
+			if (Locator::debugGui::has_value())
+			{
+				Locator::debugGui::value().WarmUp();
+			}
 		});
 	}
 	// The first frame makes the draw lists again from what the game's first update changed
