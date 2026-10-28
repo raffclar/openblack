@@ -937,6 +937,37 @@ def leash_state(pid):
     return {key: leash.get(key) for key in ("id", "leashed", "type", "tied_to")}
 
 
+def box_keys_check(pid, log):
+    """Presses the leash key L and the temple key F4 of a desktop client while the information box of the land shows.
+    Tells whether the box still shows after the keys, whether the player went into the temple, the leash after the
+    keys, and the turns that the client compared when the check ended."""
+    for key in ("L", "F4"):
+        inspector_call(pid, "input.key", {"params": {"key": key, "how": "press"}})
+        time.sleep(0.5)
+        inspector_call(pid, "input.key", {"params": {"key": key, "how": "release"}})
+        time.sleep(1.0)
+    time.sleep(1.0)
+    windows = items_of(inspector_call(pid, "gui.windows", {}))
+    interior = inspector_call(pid, "temple.interior", {})
+    counts = session_counts(log)
+    return {"open_after_keys": any(window.get("name") == "land_info_box" and window.get("open") for window in windows),
+            "in_temple": interior.get("active") if isinstance(interior, dict) else None,
+            "leash": leash_state(pid), "checked_after_turns": counts[0] if counts else None}
+
+
+def box_kept_keys(box, server_commands):
+    """Whether the information box of the land kept the keys L and F4 from the controls: the box still showed after the
+    keys, the player stayed out of the temple, the creature wore no leash, and the server got no leash command of the
+    slot up to the turn of the check. None when the box did not show, so there was nothing to check."""
+    if box is None:
+        return None
+    leash = box.get("leash")
+    checked = box.get("checked_after_turns")
+    return (box.get("open_after_keys") is True and box.get("in_temple") is False and isinstance(leash, dict)
+            and not leash.get("leashed") and checked is not None
+            and not any(command[0] <= checked for command in server_commands))
+
+
 def desktop_leash_step(leash, done, pid, log):
     """Presses the next keys of a leash check on a desktop client once its log tells the turns of the key. Gives True
     when the check pressed every key."""
@@ -953,6 +984,10 @@ def desktop_leash_step(leash, done, pid, log):
             box = any(window.get("name") == "land_info_box" and window.get("open") for window in windows)
             print(f"leash: the information box of the land shows on the client with pid {pid}: {box}")
             if box:
+                # While the box shows, the leash key and the temple key must do nothing
+                leash["box"] = box_keys_check(pid, log)
+                print(f"leash: L and F4 with the information box open on the client with pid {pid}: "
+                      f"{json.dumps(leash['box'])[:400]}")
                 inspector_call(pid, "input.key", {"params": {"key": "Escape", "how": "press"}})
                 time.sleep(0.5)
                 inspector_call(pid, "input.key", {"params": {"key": "Escape", "how": "release"}})
@@ -981,8 +1016,9 @@ def leash_result(leash, server_log, logs):
            and command[3].endswith("wears no leash")]
     result = {"client": "web" if leash["client"] == "web" else leash["client"] + 1, "slot": slot,
               "server": [list(command) for command in server], "on": bool(on), "off": bool(off),
-              "held_turns": off[0][0] - on[0][0] if on and off else None, "clients": {}}
-    same = bool(on) and bool(off)
+              "held_turns": off[0][0] - on[0][0] if on and off else None, "clients": {},
+              "box": leash.get("box"), "box_kept_keys": box_kept_keys(leash.get("box"), server)}
+    same = bool(on) and bool(off) and result["box_kept_keys"] is not False
     for name, path, first, last in logs:
         mine = [command for command in sim_report.leash_commands_in_file(path, last) if command[1] == slot]
         theirs = [command for command in server if last is None or command[0] <= last]
