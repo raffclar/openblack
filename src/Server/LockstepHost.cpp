@@ -687,6 +687,8 @@ std::vector<game_socket::God> LockstepHost::Gods() const
 		}
 	}
 	return gods;
+}
+
 void LockstepHost::SetBans(std::set<int64_t> accounts)
 {
 	_bans = std::move(accounts);

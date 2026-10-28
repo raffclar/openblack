@@ -921,6 +921,8 @@ TEST_F(LockstepTest, ARoomWithNoHumanGodIsOverWhenTheObserversThatJoinedAllLeft)
 	Frames({}, 5);
 	EXPECT_EQ(host->Observers(), 0u);
 	EXPECT_TRUE(host->GameOver());
+}
+
 TEST_F(LockstepTest, TheRoomRefusesABannedGodBeforeTheStartWithAKick)
 {
 	MakeHost(3);

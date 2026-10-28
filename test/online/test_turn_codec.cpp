@@ -864,6 +864,8 @@ TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlags)
 	auto wrong = bytes;
 	wrong.back() = 8;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
 TEST(TurnCodec, ALineOfTheChatHasItsPlayersThenItsCharacters)
 {
 	const CommandBlock block {

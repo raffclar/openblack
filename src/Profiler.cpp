@@ -43,7 +43,7 @@ void openblack::Profiler::Begin(Stage stage)
 		assert(scopes.open.size() < 255);
 		scopes.open.push_back({.stage = stage,
 		                       .level = static_cast<uint8_t>(scopes.open.size()),
-		                       .start = std::chrono::system_clock::now(),
+		                       .start = std::chrono::steady_clock::now(),
 		                       .end = {}});
 		return;
 	}
@@ -68,7 +68,7 @@ void openblack::Profiler::End(Stage stage)
 		}
 		auto scope = scopes.open.back();
 		scopes.open.pop_back();
-		scope.end = std::chrono::system_clock::now();
+		scope.end = std::chrono::steady_clock::now();
 		scopes.closed.push_back(scope);
 		return;
 	}
