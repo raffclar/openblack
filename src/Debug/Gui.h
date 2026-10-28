@@ -47,6 +47,7 @@ public:
 	bool PressButton(std::string_view window, std::span<const ButtonPathStep> path) noexcept override;
 	bool Loop() noexcept override;
 	void Draw() noexcept override;
+	void WarmUp() noexcept override;
 
 private:
 	/// Whether the debug windows are kept off the mouse, as while the input is locked or the pointer is driven

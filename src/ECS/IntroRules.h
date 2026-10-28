@@ -139,6 +139,25 @@ struct Frame
 void Step(Light& light, uint32_t milliseconds, const Random& random, Frame& out);
 } // namespace light
 
+/// What the turns keep of the light and of the clip of the hand that lifts the boy, for the scripts. It has the same
+/// rules as the light and the hand that the frames draw, but it moves on by the time of each turn.
+struct LiftClock
+{
+	/// The light falls, holds and fades by these, as light::Light does
+	light::State light {light::State::Falling};
+	int32_t elapsed {0};
+	bool arrived {false};
+	int32_t timer {0};
+	/// The light landed, and the hand lifts the boy
+	bool lifting {false};
+	/// The light has gone, and the lifting clip plays
+	bool clipPlays {false};
+	int32_t clipTime {0};
+};
+/// The clock moves on by a time, as a frame of the same time moves the light and the hand on. True when the lifting
+/// clip came round, which a clip that plays once never does.
+[[nodiscard]] bool StepLiftClock(LiftClock& clock, uint32_t milliseconds, int32_t playTime, bool looping);
+
 /// Where the setting-down hand holds the boy: the grip point taken through the hand's bone posed at the clip's time, in
 /// the world, and the boy hangs a little below it. None once the clip is past the time the hand lets go, or for a bone
 /// the pose doesn't have.

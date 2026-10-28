@@ -15,9 +15,11 @@
 #include <array>
 #include <numbers>
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Common/PortableRotations.h"
+#include "Magic/DispenserRules.h"
 
 using namespace openblack::magic;
 using namespace openblack::magic::visuals;
@@ -182,6 +184,21 @@ glm::vec2 visuals::PhialUvOffset(float frame)
 float visuals::PhialPulseSpeed(int receiveType)
 {
 	return receiveType == k_FreezeReceiveType ? k_FreezePulseSpeed : k_PulseSpeed;
+}
+
+visuals::SeedTurn visuals::TurnSeed(SeedTurn turn, std::optional<int> phialReceiveType, float gameSeconds)
+{
+	turn.spin = std::fmod(turn.spin + (k_OrbSeedSpin * gameSeconds), glm::two_pi<float>());
+	if (turn.spin < 0.0f)
+	{
+		turn.spin += glm::two_pi<float>();
+	}
+	if (phialReceiveType.has_value())
+	{
+		turn.phialFrame = StepPhialFrame(turn.phialFrame, gameSeconds);
+		turn.phialPhase = std::fmod(turn.phialPhase + (PhialPulseSpeed(*phialReceiveType) * gameSeconds), 1.0f);
+	}
+	return turn;
 }
 
 float visuals::PhialPulse(float phase)

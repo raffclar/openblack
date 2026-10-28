@@ -45,7 +45,20 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::ReportedHand::handPoint>("handPoint")
 	    .Field<&components::ReportedHand::camera>("camera")
 	    .Field<&components::ReportedHand::focus>("focus")
-	    .Field<&components::ReportedHand::pickedObject>("pickedObject");
+	    .Field<&components::ReportedHand::pickedObject>("pickedObject")
+	    .Field<&components::ReportedHand::viewReported>("viewReported")
+	    .Field<&components::ReportedHand::viewEye>("viewEye")
+	    .Field<&components::ReportedHand::viewFocus>("viewFocus")
+	    .Field<&components::ReportedHand::viewLens>("viewLens")
+	    .Field<&components::ReportedHand::viewNearClip>("viewNearClip")
+	    .Field<&components::ReportedHand::viewScreenWidth>("viewScreenWidth")
+	    .Field<&components::ReportedHand::viewScreenHeight>("viewScreenHeight")
+	    .Field<&components::ReportedHand::viewAspect>("viewAspect")
+	    .Field<&components::ReportedHand::inclusionDistance>("inclusionDistance")
+	    .Field<&components::ReportedHand::cameraOrders>("cameraOrders")
+	    .Field<&components::ReportedHand::cameraArrived>("cameraArrived")
+	    .Field<&components::ReportedHand::gripsLand>("gripsLand")
+	    .Field<&components::ReportedHand::otherButton>("otherButton");
 	Reflect<components::ResourceLastTaken>(context).Field<&components::ResourceLastTaken::turn>(
 	    "turn", {k_PlayerNamesNames, std::span<const std::string_view> {}});
 	Reflect<components::ResourcePile>(context)
@@ -64,6 +77,7 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::Reward::landingPoint>("landingPoint")
 	    .Field<&components::Reward::madeAt>("madeAt")
 	    .Field<&components::Reward::goesIntoMap>("goesIntoMap")
+	    .Field<&components::Reward::drawn>("drawn")
 	    .Field<&components::Reward::dustMilliseconds>("dustMilliseconds")
 	    .Field<&components::Reward::dust>("dust")
 	    .Field<&components::Reward::opened>("opened")
@@ -81,5 +95,7 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::RisingSoul::clip>("clip")
 	    .Field<&components::RisingSoul::timeMs>("timeMs")
 	    .Field<&components::RisingSoul::alpha>("alpha")
-	    .Field<&components::RisingSoul::bones>("bones");
+	    .Field<&components::RisingSoul::bones>("bones")
+	    .Field<&components::RisingSoul::turns>("turns")
+	    .Field<&components::RisingSoul::shownOut>("shownOut");
 }

@@ -9,6 +9,10 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cmath>
+
+#include <algorithm>
+
 #include <gtest/gtest.h>
 
 #include "ECS/Systems/Implementations/GestureSystem.h"
@@ -23,6 +27,12 @@ GestureSystemInterface::Frame Frame(float seconds)
 {
 	GestureSystemInterface::Frame frame {
 	    .seconds = seconds, .cursor = {100.0f, 100.0f}, .view = {.screenSize = {1024.0f, 768.0f}}};
+	// The steps of the input that a frame of this length takes, at even parts of the frame
+	frame.steps.count = std::min(static_cast<uint32_t>(std::lround(seconds * 60.0f)), input_steps::k_MostSteps);
+	for (uint32_t i = 0; i < frame.steps.count; ++i)
+	{
+		frame.steps.points.at(i) = static_cast<float>(i + 1) / static_cast<float>(frame.steps.count);
+	}
 	// A flat land under the whole screen
 	frame.view.landAt = [](glm::vec2 pixel) { return std::optional<glm::vec3>(glm::vec3(pixel.x, 0.0f, pixel.y)); };
 	return frame;

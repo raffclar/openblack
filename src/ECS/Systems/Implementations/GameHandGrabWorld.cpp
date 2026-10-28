@@ -189,6 +189,9 @@ entt::entity GameHandGrabWorld::Hand() const
 		const auto acting = hands.GetHandsOf(*_acting);
 		return acting.has_value() ? (*acting)[k_Left] : entt::null;
 	}
+	// With no acting player the turn acts with the first player's hand. The turn does the first player's hand first, and
+	// then each other god's hand as its acting player. The input, the frames and the questions of this computer set
+	// its own player as the acting player.
 	return hands.GetPlayerHands()[k_Left];
 }
 
@@ -586,7 +589,8 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 	{
 		return;
 	}
-	auto* data = Entities().TryGet<Player>(Locator::playerSystem::value().GetPlayer(player));
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	auto* data = entity.has_value() && Entities().Valid(*entity) ? Entities().TryGet<Player>(*entity) : nullptr;
 	if (data == nullptr)
 	{
 		return;
@@ -770,6 +774,13 @@ float GameHandGrabWorld::CreatureSizeOf(entt::entity creature) const
 
 void GameHandGrabWorld::CallOffGiving(entt::entity creature)
 {
+	// A creature that took the thing from the hand already keeps it and goes on
+	if (Locator::creatureMindSystem::has_value() && Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureMindSystem::value().IsTakingFromHand(creature) &&
+	    Locator::creatureObjectActionSystem::value().GetHeld(creature).has_value())
+	{
+		return;
+	}
 	// It gives up taking as a failure, and its hand closes on nothing if it was already reaching
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetTakingFromHand(creature).has_value())
@@ -886,6 +897,13 @@ bool GameHandGrabWorld::IsOtherPlayersHand(entt::entity hand) const
 	return player != Locator::handSystem::value().GetOwnPlayer();
 }
 
+std::optional<PlayerNames> GameHandGrabWorld::PlayerOfHand(entt::entity hand) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* god = registry.Valid(hand) ? registry.TryGet<const GodHand>(hand) : nullptr;
+	return god != nullptr ? std::optional(god->player) : std::nullopt;
+}
+
 std::optional<glm::vec3> GameHandGrabWorld::ReportedCollidePoint() const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -952,6 +970,42 @@ void GameHandGrabWorld::SetPose(entt::entity object, const Pose& pose)
 	}
 	transform->position = pose.origin;
 	Locator::entitiesRegistry::value().SetDirty();
+}
+
+void GameHandGrabWorld::DrawPulledPose(entt::entity object, const Pose& pose)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
+	{
+		return;
+	}
+	const auto& stands = registry.Get<const Transform>(object);
+	HandPulled pulled {
+	    .position = pose.origin,
+	    .rotation = glm::mat3(1.0f),
+	    .scale = glm::vec3(1.0f),
+	    .standsAt = stands.position,
+	    .standsRotation = stands.rotation,
+	    .standsScale = stands.scale,
+	};
+	for (glm::length_t column = 0; column < 3; ++column)
+	{
+		const float length = glm::length(pose.axes[column]);
+		pulled.rotation[column] = length > 0.0f ? pose.axes[column] / length : pose.axes[column];
+		pulled.scale[column] = length;
+	}
+	registry.AssignOrReplace<HandPulled>(object, pulled);
+	registry.SetDirty();
+}
+
+void GameHandGrabWorld::ForgetPulledPose(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(object) && registry.AllOf<HandPulled>(object))
+	{
+		registry.Remove<HandPulled>(object);
+		registry.SetDirty();
+	}
 }
 
 glm::mat3 GameHandGrabWorld::UnstretchedAxes(entt::entity object, const glm::mat3& axes) const
@@ -1372,8 +1426,9 @@ bool GameHandGrabWorld::PlayerHasNoWindResistance(PlayerNames player) const
 	{
 		return false;
 	}
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
-	const auto* data = Locator::entitiesRegistry::value().TryGet<const Player>(entity);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* data = entity.has_value() && registry.Valid(*entity) ? registry.TryGet<const Player>(*entity) : nullptr;
 	return data != nullptr && data->windResistance != 0;
 }
 

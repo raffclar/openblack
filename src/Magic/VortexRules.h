@@ -56,12 +56,11 @@ inline constexpr float k_GroundTextureSpan = 160.0f;
 /// turn length, each step as a float
 [[nodiscard]] float ElapsedSeconds(uint32_t turnsSince, float turnFraction, uint32_t millisecondsPerTurn);
 
-/// The part of the current turn that a vortex's turn reads. A single-player turn reads the part that the last frame
-/// measured. A network game's turn reads none, so that the world does not change with the frame rate. A frame always
-/// reads the part, for what it draws.
-[[nodiscard]] constexpr float TurnFractionFor(float frameFraction, bool inTurn, bool networkGame) noexcept
+/// The part of the current turn that a vortex reads. The turn reads none, so that the world does not change with the
+/// frame rate, in a single-player game and in a network game. A frame reads the part, for what it draws.
+[[nodiscard]] constexpr float TurnFractionFor(float frameFraction, bool inTurn) noexcept
 {
-	return inTurn && networkGame ? 0.0f : frameFraction;
+	return inTurn ? 0.0f : frameFraction;
 }
 
 /// How open a vortex is, 0 to 1, eased in and out

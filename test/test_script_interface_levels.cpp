@@ -87,3 +87,15 @@ TEST(ScriptInterfaceLevels, ApplyGivesThePlayerTheLimits)
 	// No player: nothing changes
 	Apply(registry, entt::null, 1);
 }
+
+TEST(ScriptInterfaceLevels, APlayerNotInTheGameHasNoLimits)
+{
+	ecs::Registry registry;
+	EXPECT_TRUE(Same(LimitsOf(registry, std::nullopt), k_None));
+	const auto player = registry.Create();
+	EXPECT_TRUE(Same(LimitsOf(registry, player), k_None));
+	Apply(registry, player, 1);
+	EXPECT_TRUE(Same(LimitsOf(registry, player), k_Both));
+	registry.Destroy(player);
+	EXPECT_TRUE(Same(LimitsOf(registry, player), k_None));
+}

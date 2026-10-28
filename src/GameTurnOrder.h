@@ -101,7 +101,6 @@ enum class Step : uint8_t
 	ReactionClock,
 	TurnStartPlaces,
 	InfluenceTurnStart,
-	MapCells,
 	Sharks,
 	Storms,
 	Snow,
@@ -113,6 +112,8 @@ enum class Step : uint8_t
 	TempleLooks,
 	WorshipSiteLooks,
 	PlayerAlignment,
+	/// The end of a skirmish or a network game
+	GameEnd,
 	VillageTotems,
 	/// The flags over the towns' stores, and the apple barrel at the player's store. The game draws them and keeps no
 	/// object for them: openblack makes their entities in the turn, so that no frame makes an entity of the world.
@@ -147,6 +148,8 @@ enum class Step : uint8_t
 	CreatureFights,
 	CreatureFizz,
 	CreatureHelp,
+	/// The drawn shape of a creature's body follows what it became
+	CreatureMorph,
 	/// The motes and the smoke of a creature's alignment
 	CreatureMotes,
 	/// The blood of a creature's wounds runs down its skin
@@ -164,7 +167,6 @@ enum class Step : uint8_t
 	CreatureHandMoments,
 	/// The turn of the living: each creature, villager and animal in turn, the newest first (see living_turn::Walk)
 	Living,
-	MapCellsAfterLiving,
 	CreatureWebPage,
 	CreatureCarryOver,
 	Fires,
@@ -179,6 +181,12 @@ enum class Step : uint8_t
 	Fireflies,
 	Physics,
 	Vortices,
+	/// The tutorial's hand demonstration plays on for the scripts by the time of the turn
+	HandDemo,
+	/// The opening's light and the clip of the hand that lifts the boy move on for the scripts by the time of the turn
+	IntroLift,
+	/// The scripts' clock of their spoken lines and texts, and the player's clicks on the dialogue
+	ScriptVoices,
 	Scripts,
 	ScriptObjects,
 	ScriptFade,
@@ -210,6 +218,10 @@ enum class Step : uint8_t
 	GlobalStatistics,
 	RealWeather,
 	WalkerLookahead,
+	/// A new creature, or one with a new body, gets the skeleton of its shape and its first pose
+	CreatureShapes,
+	/// The things that the turn made go into the map's cells
+	MapCellsAtTurnEnd,
 	InfluenceTurnEnd,
 	/// The checksum of the synced world, as the turn left it, for a network game
 	SyncChecksum,
@@ -246,10 +258,10 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Clock, .stage = Stage::StartTurn},
     // The living's reactions count their times by the same turn count as the game
     {.step = Step::ReactionClock, .stage = Stage::StartTurn},
-    // The places of the turn's start, which the frames draw from, and the map's cells of what moved
+    // The places of the turn's start, which the frames draw from. Each thing goes into its new map cells as it moves,
+    // so the turn has no step for them.
     {.step = Step::TurnStartPlaces, .stage = Stage::StartTurn},
     {.step = Step::InfluenceTurnStart, .stage = Stage::StartTurn},
-    {.step = Step::MapCells, .stage = Stage::StartTurn},
     {.step = Step::Sharks, .stage = Stage::StartTurn},
     {.step = Step::Storms, .stage = Stage::Atmosphere},
     {.step = Step::Snow, .stage = Stage::Atmosphere},
@@ -270,6 +282,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The temples' looks follow their players' alignments as they were at the end of the last turn
     {.step = Step::TempleLooks, .stage = Stage::Players},
     {.step = Step::WorshipSiteLooks, .stage = Stage::Players},
+    // After the players' turns, a god with no temple is out, and the game is decided when one god is left
+    {.step = Step::GameEnd, .stage = Stage::Players},
     // At the end of the players' turns: their alignments, then the alignment at the camera's eye
     {.step = Step::PlayerAlignment, .stage = Stage::Players},
     {.step = Step::Dances, .stage = Stage::Dances},
@@ -282,7 +296,6 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // of k_CreaturesTurn in its own turn. Each villager takes the step of its walk in its own turn.
     {.step = Step::CreaturesTurnStart, .stage = Stage::Living},
     {.step = Step::Living, .stage = Stage::Living},
-    {.step = Step::MapCellsAfterLiving, .stage = Stage::Living},
     {.step = Step::Fires, .stage = Stage::Fires},
     {.step = Step::Reactions, .stage = Stage::Reactions},
     {.step = Step::WorshipChants, .stage = Stage::Spells},
@@ -294,6 +307,13 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fireflies, .stage = Stage::Fireflies},
     {.step = Step::Physics, .stage = Stage::Physics},
     {.step = Step::Vortices, .stage = Stage::ParticleEnd},
+    // The scripts see the hand demonstration play by the time of the turn alone. The game plays it in its frames, so
+    // the step has no stage of the game's turn.
+    {.step = Step::HandDemo, .stage = std::nullopt},
+    // The same for the light of the opening and the hand that lifts the boy, which the game also moves in its frames
+    {.step = Step::IntroLift, .stage = std::nullopt},
+    // The scripts' clock moves on, and the dialogue takes the player's clicks, just before the scripts look at the world
+    {.step = Step::ScriptVoices, .stage = Stage::Scripts},
     {.step = Step::Scripts, .stage = Stage::Scripts},
     {.step = Step::ScriptObjects, .stage = Stage::Scripts},
     {.step = Step::ScriptFade, .stage = Stage::Scripts},
@@ -327,6 +347,10 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The real-world weather follows the turn of the game, also once the game is over
     {.step = Step::RealWeather, .stage = Stage::AfterTurn},
     {.step = Step::WalkerLookahead, .stage = Stage::AfterTurn},
+    // The frames only draw, so a creature that the turn made gets its skeleton and its first pose at the end of the turn
+    {.step = Step::CreatureShapes, .stage = Stage::AfterTurn},
+    // The frames only read the map's cells, so the things that the turn made go into them at the end of the turn
+    {.step = Step::MapCellsAtTurnEnd, .stage = Stage::AfterTurn},
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
     // The checksum of the world that the turn left, which a network game sends after each turn
     {.step = Step::SyncChecksum, .stage = Stage::AfterTurn},
@@ -356,9 +380,11 @@ inline constexpr std::array k_CreaturesTurn = std::to_array<Step>({
     // After its action: its body follows its fatness, and it fizzes on out of sight or back in
     Step::CreatureBodies,
     Step::CreatureFizz,
-    // Then its body lives the turn: the marks heal, the motes show its alignment, the blood runs and the body sways.
+    // Then its body lives the turn: the marks heal, the shape follows what it became, the motes show its alignment, the blood
+    // runs and the body sways.
     // A fighter moves and strikes, and the body takes its pose.
     Step::CreatureSkin,
+    Step::CreatureMorph,
     Step::CreatureMotes,
     Step::CreatureBlood,
     Step::CreatureSway,
@@ -395,13 +421,38 @@ inline constexpr std::array k_CreaturesTurn = std::to_array<Step>({
 	return true;
 }
 
-/// Does each step of the turn, in the order of the turn
-template <typename Do>
-void PlayTurn(Do&& step)
+/// True when the step of the turn at the index plays after the game is decided. Then the game does only the input of the
+/// players and the steps after the turn. The turn count of the game does not move on. In openblack the turn count moves
+/// on, because the turns of a network game come by that count. A step with no stage follows the stage of the last step
+/// before it that has a stage.
+[[nodiscard]] constexpr bool PlaysOnceDecided(std::span<const Place> turn, size_t index) noexcept
 {
-	for (const auto& place : k_Turn)
+	if (turn[index].step == Step::Clock)
 	{
-		step(place.step);
+		return true;
+	}
+	std::optional<Stage> stage;
+	for (size_t i = 0; i <= index; ++i)
+	{
+		if (turn[i].stage.has_value())
+		{
+			stage = turn[i].stage;
+		}
+	}
+	return !stage.has_value() || *stage == Stage::Input || *stage == Stage::AfterTurn;
+}
+
+/// Does each step of the turn, in the order of the turn. After the game is decided, the turn does only the steps that
+/// PlaysOnceDecided gives.
+template <typename Do>
+void PlayTurn(Do&& step, bool decided = false)
+{
+	for (size_t index = 0; index < k_Turn.size(); ++index)
+	{
+		if (!decided || PlaysOnceDecided(k_Turn, index))
+		{
+			step(k_Turn[index].step);
+		}
 	}
 }
 

@@ -10,6 +10,7 @@
 #include "HelpProfile.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace openblack::help::profile
 {
@@ -117,6 +118,32 @@ std::vector<uint32_t> CameraViewEvents(const WorldCameraView& view)
 		return {k_CameraSeesLand, k_CameraNearAndSteep};
 	}
 	return {k_CameraSeesLand};
+}
+
+void ReportedEvents::Add(uint32_t event)
+{
+	if (event < k_EventCount)
+	{
+		_events |= uint64_t {1} << event;
+	}
+}
+
+uint64_t ReportedEvents::Take()
+{
+	return std::exchange(_events, 0);
+}
+
+std::vector<uint32_t> EventsOf(uint64_t events)
+{
+	std::vector<uint32_t> list;
+	for (uint32_t event = 0; event < k_EventCount; ++event)
+	{
+		if ((events & (uint64_t {1} << event)) != 0)
+		{
+			list.push_back(event);
+		}
+	}
+	return list;
 }
 
 void HelpProfile::Trigger(uint32_t event)
