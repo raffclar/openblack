@@ -2861,7 +2861,9 @@ void MagicSystem::FailCast()
 	const auto point = _hand.point.value_or(_hand.handPosition);
 	if (Locator::particleSystem::has_value())
 	{
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast, point, std::nullopt, entt::null);
+		// Only the hand of this computer failed the cast, so the failure draws on the random numbers of this computer
+		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast, point, std::nullopt, entt::null, 1.0f,
+		                                                 false);
 	}
 	if (Locator::audio::has_value())
 	{
@@ -2929,7 +2931,8 @@ bool MagicSystem::TapFireBall(entt::entity ball)
 	{
 		return false;
 	}
-	return CatchFireBall(ball);
+	SendFireBallCommand(ball, false);
+	return true;
 }
 
 std::optional<entt::entity> MagicSystem::PickedUnderHand() const

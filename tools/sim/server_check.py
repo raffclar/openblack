@@ -144,6 +144,20 @@ def compare_parts(server, game, turns, ignored):
     return different, parts
 
 
+def turns_gone_back(path):
+    """The places in a commands file where the turn goes back, as [turn before, turn after]: the game loaded a saved world
+    there. The server plays on with no load, so the turns after it cannot be compared."""
+    if not os.path.exists(path):
+        return []
+    turns = []
+    with open(path, encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                turns.append(int(json.loads(line).get("turn", 0)))
+    return [[before, after] for before, after in zip(turns, turns[1:]) if after <= before]
+
+
 def count_lines(path):
     """The number of lines of a file, 0 when there is no file"""
     if not os.path.exists(path):
@@ -188,6 +202,9 @@ def main():
     parser.add_argument("--no-relay", action="store_true",
                         help="the server plays first and gets no commands of the game (the hand reports part them)")
     parser.add_argument("--draw-every", type=int, help="the game draws one frame in this many (0 for none)")
+    parser.add_argument("--game-frames", type=int,
+                        help="the game stops after this many frames. A scenario that pauses the game never gets to its "
+                             "last turn: the check then compares the turns that the game played")
     parser.add_argument("--game-args", default="",
                         help="more arguments of the game, divided by spaces, such as the fight autopilot and "
                              "--sim-record-input to record an input for --input")
@@ -196,7 +213,8 @@ def main():
                              "turns, for a difference that waits on a decision")
     options = parser.parse_args()
 
-    folder = options.bin or default_bin(options.config)
+    # The programs run in their own working folders, so a relative folder is made absolute first
+    folder = os.path.abspath(options.bin or default_bin(options.config))
     server_exe = os.path.join(folder, "openblack-server.exe" if os.name == "nt" else "openblack-server")
     game_exe = os.path.join(folder, "openblack.exe" if os.name == "nt" else "openblack")
     out = os.path.abspath(options.out)
@@ -223,8 +241,11 @@ def main():
             events = events.get("events", [])
     relay = not options.no_relay
     commands = os.path.join(game_dir, "commands.jsonl")
-    if os.path.exists(commands):
-        os.remove(commands)
+    # The game writes the commands of its testbed scenario beside its commands, and the server gives them with the game
+    gives = os.path.join(game_dir, "commands.gives.jsonl")
+    for path in (commands, gives):
+        if os.path.exists(path):
+            os.remove(path)
 
     # A Linux server in WSL takes WSL paths
     local = wsl_path if options.wsl_server else (lambda path: path)
@@ -254,7 +275,7 @@ def main():
     game_command = [game_exe, "-g", options.game_path, "--skip-logos", "--seed", str(options.seed),
                     "--sim-fast", "--sim-draw-every", str(draw_every), "--sim-frame-ms", str(options.frame_ms),
                     "--sim-until-turn", str(options.turns + 1), "--sim-record", record,
-                    "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
+                    "--sim-record-every", "1", "--inspect-lock-input", "-n", str(options.game_frames or 4000000000), "--background",
                     "-l", game_log, "--sim-network-game"] + where
     if options.all_computer_gods:
         game_command.append("--sim-all-computer-gods")
@@ -292,6 +313,11 @@ def main():
         # The server needs the commands of the game
         if play_game() != 0:
             return 1
+        # A game that its frame limit stopped early (a paused scenario) played fewer turns: the server plays the same
+        # turns, because a paused server also never gets to the last turn
+        played = game_checksums(record) if options.game_frames else {}
+        if played and max(played) < options.turns:
+            server_command[server_command.index("-n") + 1] = str(max(played))
         code, server_seconds = play_server()
         if code != 0:
             return 1
@@ -302,7 +328,13 @@ def main():
 
     server = server_checksums(server_log)
     game = game_checksums(record)
-    different, compared = compare(server, game, options.turns)
+    # A game that its frame limit stopped before its last turn is compared up to the last turn that it played
+    compared_turns = options.turns
+    ended_by_frames_at_turn = None
+    if options.game_frames and game and max(game) < options.turns:
+        ended_by_frames_at_turn = max(game)
+        compared_turns = ended_by_frames_at_turn
+    different, compared = compare(server, game, compared_turns)
     summary = {
         "turns": options.turns,
         "seed": options.seed,
@@ -314,8 +346,12 @@ def main():
         "different": different[:20],
         # The last turn up to which every checksum is the same
         "same_until": (different[0] - 1) if different else (compared[-1] if compared else 0),
-        "same": not different and len(compared) >= options.turns,
+        "same": not different and len(compared) >= compared_turns,
+        "ended_by_frames_at_turn": ended_by_frames_at_turn,
+        "game_loads": turns_gone_back(commands) if relay else [],
     }
+    if summary["game_loads"]:
+        print(f"the game loaded a saved world (turn before and after): {summary['game_loads']}; the server does not")
     ignored = {name for name in options.ignore_parts.split(",") if name}
     if ignored and (options.hash_parts or options.hash_fields):
         others, parts = compare_parts(synced_records(os.path.join(server_dir, "record.jsonl")), synced_records(record),

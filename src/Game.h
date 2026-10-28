@@ -107,7 +107,8 @@ struct Start;
 namespace command_log
 {
 class Writer;
-}
+class GivesWriter;
+} // namespace command_log
 namespace checksum_log
 {
 class Writer;
@@ -471,6 +472,9 @@ public:
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
+	/// Tools: a run that writes the commands of each turn also writes each command of the testbed scenario that the game
+	/// gives before a turn, so that a dedicated server gives it before the same turn (command_log::GivesPathOf)
+	void RecordScenarioGive(uint32_t turn, size_t command);
 	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
 	/// starts, so that only a load or a turn changes the world. None: the window is gone.
 	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
@@ -626,6 +630,8 @@ private:
 	std::optional<sim_run::Request> _simulation;
 	/// The file that a tool's run writes the commands of each turn to
 	std::unique_ptr<command_log::Writer> _commandLog;
+	/// The file that a tool's run writes the commands of the testbed scenario to, with the turn before which each went
+	std::unique_ptr<command_log::GivesWriter> _scenarioGives;
 	/// The file that a tool's run writes the checksum of each turn to
 	std::unique_ptr<checksum_log::Writer> _checksumLog;
 	/// A tool's run that looks for the frame steps that change the synced world

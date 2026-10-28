@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <numbers>
 
 #include <fmt/format.h>
@@ -11765,6 +11766,17 @@ void testbed_scenarios::Apply(std::span<const DesireOverride> overrides, creatur
 		state.activated = true;
 		state.value = std::clamp(override.fraction, 0.0f, 1.0f) * std::max(state.max, 0.0f);
 	}
+}
+
+std::vector<size_t> testbed_scenarios::GivesAt(const std::map<uint32_t, std::vector<size_t>>& gives, uint32_t turn,
+                                               size_t commands)
+{
+	std::vector<size_t> given;
+	if (const auto found = gives.find(turn); found != gives.end())
+	{
+		std::ranges::copy_if(found->second, std::back_inserter(given), [commands](size_t place) { return place < commands; });
+	}
+	return given;
 }
 
 std::vector<size_t> testbed_scenarios::Advance(Timeline& timeline, std::span<const Command> commands,

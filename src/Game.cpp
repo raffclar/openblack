@@ -841,6 +841,14 @@ Game::~Game() noexcept
 	}
 }
 
+void Game::RecordScenarioGive(uint32_t turn, size_t command)
+{
+	if (_scenarioGives != nullptr)
+	{
+		_scenarioGives->Write(turn, command);
+	}
+}
+
 bool Game::ProcessEvents(const SDL_Event& event) noexcept
 {
 	static bool leftMouseButton = false;
@@ -4424,6 +4432,7 @@ void Game::StartFightTools()
 	if (_simulation.has_value() && _simulation->commandsPath.has_value())
 	{
 		_commandLog = std::make_unique<command_log::Writer>(*_simulation->commandsPath);
+		_scenarioGives = std::make_unique<command_log::GivesWriter>(command_log::GivesPathOf(*_simulation->commandsPath));
 		if (_commandLog->IsOpen())
 		{
 			Locator::playerCommandSystem::value().SetTurnListener(

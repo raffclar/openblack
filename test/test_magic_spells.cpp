@@ -941,6 +941,14 @@ TEST(SpellSeedRules, AShownSeedOutOfInfluenceClosesItsMiracleDown)
 	EXPECT_FALSE(ClosesOutOfInfluence(true, false, true));
 }
 
+TEST(SpellSeedRules, TheTurnFindsASeedThatFollowsItsMiracleAtTheMiracle)
+{
+	const glm::vec3 seed {1.0f, 2.0f, 3.0f};
+	const glm::vec3 spell {10.0f, 20.0f, 30.0f};
+	EXPECT_EQ(PlaceForInfluence(seed, true, spell), glm::vec3(10.0f, 2.0f, 30.0f));
+	EXPECT_EQ(PlaceForInfluence(seed, false, spell), seed);
+}
+
 TEST(SpellSeedRules, AShownSeedSitsOnTheTallestStillThingWhoseCircleMeetsItsOwn)
 {
 	EXPECT_FLOAT_EQ(TopUnderSeed(1.0f, {}), 0.0f);
