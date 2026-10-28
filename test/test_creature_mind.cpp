@@ -506,8 +506,8 @@ TEST(CreatureIdleMind, StepsThatNeedEmptyHands)
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::PointAt)), HandsNeed::Any);
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::Kick)), HandsNeed::Any);
 	EXPECT_EQ(HandsNeededFor(object(ObjectOrder::Kind::PutDown)), HandsNeed::Any);
-	// A fight needs empty hands
-	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Fight}), HandsNeed::Free);
+	// A fight starts with a question, which does not need empty hands. The taunt later needs them.
+	EXPECT_EQ(HandsNeededFor({.kind = Step::Kind::Fight}), HandsNeed::Any);
 }
 
 TEST(CreatureIdleMind, StepsThatNeedAThingInTheHand)

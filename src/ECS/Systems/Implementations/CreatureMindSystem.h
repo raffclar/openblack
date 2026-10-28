@@ -103,13 +103,14 @@ public:
 	void Wake(entt::entity creature) override;
 	void FoughtFight(entt::entity creature, bool won) override;
 	void FightStarted(entt::entity creature, entt::entity opponent, bool planned) override;
+	void FightOrdered(entt::entity creature, entt::entity asker) override;
 	void AbandonAction(entt::entity creature) override;
 	bool ForceDesireOn(entt::entity creature, creature_desires::Desire desire, entt::entity thing) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
 	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
 	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;
-	creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity creature) override;
+	creature_mind::HandsCheck CheckHandsBeforeAction(entt::entity creature) override;
 	[[nodiscard]] bool SeemsFriendly(entt::entity creature, entt::entity other) override;
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
@@ -386,6 +387,8 @@ private:
 	/// of. With no such whole thing, a desire about something is about the nearest town.
 	[[nodiscard]] std::optional<entt::entity> WholeOfForcedPlan(entt::entity creature, components::CreatureMindState& mind,
 	                                                            creature_desires::Desire desire, entt::entity thing);
+	/// Gives the creature a plan for its fight with the other creature, unless a script controls the creature
+	void FightWith(entt::entity creature, entt::entity other, const ForcedPlan& plan);
 	/// The whole thing that a desire is about when the leash shows the creature a thing: the whole thing that the shown
 	/// thing is part of, when the desire can be about it
 	[[nodiscard]] std::optional<ChosenActivity> ShownActivity(entt::entity creature, components::CreatureMindState& mind,

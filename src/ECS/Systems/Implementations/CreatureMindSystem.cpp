@@ -2161,13 +2161,14 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 	// The asker of a joint action can make its mind stand still: its desires and its feelings for other
 	// creatures stand still, and it chooses nothing, but it carries out the orders of the asker
 	const bool demobilised = registry.AllOf<CreatureDemobilised>(entity);
-	// The other creature in a fight obeys the creature that started it: its desires stand still until the fight
-	// is over, or until it wins by a knock-out
+	// The other creature in a fight obeys the creature that started it: its desires stand still from the order to stand
+	// still until the fight is over, or until it wins by a knock-out
 	const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
 	const bool obeysInFight = creature_fight::ObeysInFight({
 	    .fighting = fighting != nullptr,
 	    .startedIt = fighting != nullptr && fighting->madeArena,
 	    .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
+	    .onlyAsked = fighting != nullptr && fighting->part == CreatureFighting::Part::Asked,
 	});
 	// How impressive it finds the other creatures, and the attention they gave it, fade each turn it thinks
 	if (!scripted && !demobilised && mind.learnt.has_value())
@@ -2194,21 +2195,23 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 		registry.Remove<CreatureAfterFight>(entity);
 	}
 	auto* eyes = registry.TryGet<CreatureEyes>(entity);
-	// Paused, fighting or knocked out, the mind leaves the body alone. In a fight, the steps of the fight
-	// choose the point that the head looks at.
-	if (mind.paused || registry.AnyOf<CreatureFighting, CreatureKnockedOut>(entity))
+	// Exhausted, starved or out of life while it is in a fight, it passes out: its fight is called off for both, and
+	// nobody wins
+	if (!mind.paused && Locator::creatureFightSystem::has_value() && fighting != nullptr && needs != nullptr &&
+	    needs->faint.has_value() && mind.turn > k_TurnsBeforePassingOut)
 	{
-		// Exhausted, starved or out of life while it fights, it passes out: its fight is called off for both,
-		// and nobody wins
-		if (!mind.paused && Locator::creatureFightSystem::has_value() && registry.AllOf<CreatureFighting>(entity) &&
-		    needs != nullptr && needs->faint.has_value() && mind.turn > k_TurnsBeforePassingOut)
-		{
-			TellFainting(entity);
-			needs->faint.reset();
-			Locator::creatureFightSystem::value().CallOff(entity);
-			Locator::creatureFightSystem::value().KnockOut(entity);
-			return;
-		}
+		TellFainting(entity);
+		needs->faint.reset();
+		Locator::creatureFightSystem::value().CallOff(entity);
+		Locator::creatureFightSystem::value().KnockOut(entity);
+		return;
+	}
+	// Paused, fighting or knocked out, the mind leaves the body alone. In a fight, the steps of the fight
+	// choose the point that the head looks at. The other creature of a fight continues with what it did until the
+	// first creature tells it to obey.
+	const bool fightMovesBody = fighting != nullptr && fighting->part == CreatureFighting::Part::Obeys;
+	if (mind.paused || fightMovesBody || registry.AllOf<CreatureKnockedOut>(entity))
+	{
 		// A paused body still draws a gesture that it was told to draw
 		if (const auto* drawing = registry.TryGet<const CreatureGestureDrawing>(entity);
 		    mind.paused && drawing != nullptr && !drawing->inDance)
@@ -3391,25 +3394,33 @@ void CreatureMindSystem::FoughtFight(entt::entity creature, [[maybe_unused]] boo
 	}
 }
 
+namespace
+{
+/// The agenda of a creature in a fight: one step that waits for the fight to end
+std::vector<creature_mind::Step> FightAgenda(entt::entity other)
+{
+	return {creature_mind::Step {.kind = creature_mind::Step::Kind::Fight, .object = entt::to_integral(other)}};
+}
+} // namespace
+
+void CreatureMindSystem::FightWith(entt::entity creature, entt::entity other, const ForcedPlan& plan)
+{
+	// The agenda of the creature waits for the fight to end. The fight has started already, so the step that starts it
+	// is marked as started.
+	auto& registry = Locator::entitiesRegistry::value();
+	if (registry.AllOf<ScriptControlled>(creature) || !ForcePlan(creature, plan))
+	{
+		return;
+	}
+	if (auto* mind = registry.TryGet<CreatureMindState>(creature); mind != nullptr && !mind->idle.agenda.empty())
+	{
+		mind->idle.stepStarted = mind->idle.agenda.front().kind == creature_mind::Step::Kind::Fight &&
+		                         mind->idle.agenda.front().object == std::optional(entt::to_integral(other));
+	}
+}
+
 void CreatureMindSystem::FightStarted(entt::entity creature, entt::entity opponent, bool planned)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	// Each creature's agenda waits for the fight to end. The fight has started already, so the step that starts it is
-	// marked as started.
-	const auto fightWith = [&](entt::entity self, entt::entity other, const ForcedPlan& plan) {
-		if (registry.AllOf<ScriptControlled>(self) || !ForcePlan(self, plan))
-		{
-			return;
-		}
-		if (auto* mind = registry.TryGet<CreatureMindState>(self); mind != nullptr && !mind->idle.agenda.empty())
-		{
-			mind->idle.stepStarted = mind->idle.agenda.front().kind == creature_mind::Step::Kind::Fight &&
-			                         mind->idle.agenda.front().object == std::optional(entt::to_integral(other));
-		}
-	};
-	const auto steps = [](entt::entity other) {
-		return std::vector {creature_mind::Step {.kind = creature_mind::Step::Kind::Fight, .object = entt::to_integral(other)}};
-	};
 	// A creature told to fight, by the leash, a script or the debug tools, fights until the fight ends: nothing it wants
 	// stops the fight.
 	// TODO(creature-fight-mind): the leash makes the plan from the desires of the creature for the other creature. Until
@@ -3418,17 +3429,21 @@ void CreatureMindSystem::FightStarted(entt::entity creature, entt::entity oppone
 	{
 		// A fight forced on a creature, like any forced action, makes every free creature agree to joint actions from
 		// now on
-		registry.Context().partnersAlwaysAgree = true;
-		fightWith(creature, opponent,
-		          {.desire = Desire::ObeyPlayer, .action = k_FightAction, .object = opponent, .agenda = steps(opponent)});
+		Locator::entitiesRegistry::value().Context().partnersAlwaysAgree = true;
+		FightWith(creature, opponent,
+		          {.desire = Desire::ObeyPlayer, .action = k_FightAction, .object = opponent, .agenda = FightAgenda(opponent)});
 	}
+}
+
+void CreatureMindSystem::FightOrdered(entt::entity creature, entt::entity asker)
+{
 	// The other creature stops what it does and obeys the first creature until the fight ends. Its plan is an order
 	// that is not forced, with a low priority: it does not decide while it obeys.
-	fightWith(opponent, creature,
+	FightWith(creature, asker,
 	          {.desire = Desire::ObeyCreature,
 	           .action = k_ObeyCreatureAction,
-	           .object = creature,
-	           .agenda = steps(creature),
+	           .object = asker,
+	           .agenda = FightAgenda(asker),
 	           .ordered = true,
 	           .forced = false,
 	           .priority = creature_fight::k_ObeyPlanPriority * creature_planner::k_PriorityScale});

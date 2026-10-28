@@ -208,9 +208,13 @@ public:
 
 	/// A fight the creature was in ended, won or lost: fighting satisfies the desire it is for, and its body pays for it
 	virtual void FoughtFight(entt::entity creature, bool won) = 0;
-	/// A fight started between the two creatures. The fight has the minds of both until it ends. When the first creature
-	/// did not plan the fight itself, it is made to fight. The second creature stops what it does and obeys the first.
+	/// A fight started: the first creature asked the second creature, and the second creature agreed. The fight has the
+	/// mind of the first creature until it ends. When the first creature did not plan the fight itself, it is made to
+	/// fight.
 	virtual void FightStarted(entt::entity /*creature*/, entt::entity /*opponent*/, bool /*planned*/) {}
+	/// The first creature of a fight told the second creature to obey it. The second creature stops what it does, and
+	/// the fight has its mind until the fight ends.
+	virtual void FightOrdered(entt::entity /*creature*/, entt::entity /*asker*/) {}
 	/// What the creature does stops as a failure. The desire becomes fully dominant, and the creature plans to satisfy it
 	/// through the thing. Returns whether the creature has a plan for that desire.
 	virtual bool ForceDesireOn(entt::entity /*creature*/, creature_desires::Desire /*desire*/, entt::entity /*thing*/)
@@ -259,10 +263,10 @@ public:
 	[[nodiscard]] virtual bool IsTakingFromHand(entt::entity /*creature*/) const { return false; }
 	/// Whether the creature lies dead, knocked out or doing one of the actions of lying dead for now or for good
 	[[nodiscard]] virtual bool IsLyingDead(entt::entity /*creature*/) { return false; }
-	/// Before a faint that does not come from its mind starts, the creature checks its hands as before any step that
-	/// needs empty hands. With a thing in the hand, it starts to let go of the thing when its body and hands are free.
-	/// This tells what the check did on this turn.
-	virtual creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity /*creature*/)
+	/// Before an action that needs empty hands and that does not come from its mind starts, the creature checks its
+	/// hands as before a step of the mind. A faint and the taunt before a fight do this check. With a thing in the hand,
+	/// it starts to let go of the thing when its body and hands are free. This tells what the check did on this turn.
+	virtual creature_mind::HandsCheck CheckHandsBeforeAction(entt::entity /*creature*/)
 	{
 		return creature_mind::HandsCheck::Free;
 	}

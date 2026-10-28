@@ -7741,6 +7741,78 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	{
+		// Each tiger holds a rock as the fight starts. It lets go of the rock before its taunt.
+		auto start = Fight(Kind::StartFight, 0, 1, 1.0f);
+		start.waitUntilFree = true;
+		// The minds wait, so that each tiger keeps its rock until the fight
+		auto holder = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto other = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		holder.pauseMind = true;
+		other.pauseMind = true;
+		all.push_back({
+		    .id = "combat.let_go_before_taunt",
+		    .name = "Two tigers let go of their rocks before they taunt",
+		    .facet = Facet::Combat,
+		    .description = "The blue tiger picks up a rock, and a fifth of a second later the red tiger picks up a rock. "
+		                   "A second after the red tiger holds its rock, it asks the blue tiger to fight. Both fight by "
+		                   "themselves.",
+		    .expected = "Each tiger keeps its rock while it turns to face the other tiger. Then each tiger throws its rock "
+		                "away or puts it down with its let-go clip, and after that it taunts. No rock falls from a hand at "
+		                "the start of the fight.",
+		    .framing = ringside,
+		    .creatures = {holder, other},
+		    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {-21.0f, 34.0f}},
+		                {.type = MobileStaticInfo::RockChalk, .offset = {21.0f, 34.0f}}},
+		    .commands = {OnObject(Kind::PickUp, 1, 1, 1.0f), OnObject(Kind::PickUp, 0, 0, 0.2f), start,
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
+	{
+		// The other tiger plays an action as the fight starts. The action plays on, and its turn to face waits for it.
+		auto asker = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto asked = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		asker.pauseMind = true;
+		asked.pauseMind = true;
+		all.push_back({
+		    .id = "combat.face_off_waits_for_body",
+		    .name = "A tiger finishes its action before it turns to fight",
+		    .facet = Facet::Combat,
+		    .description = "The blue tiger starts its impress action. Six seconds later, near the end of the action, the "
+		                   "red tiger asks the blue tiger to fight. Both fight by themselves.",
+		    .expected = "The red tiger turns to face the blue tiger. The blue tiger plays its action to the end, and only "
+		                "then turns to face the red tiger. Then both taunt.",
+		    .framing = ringside,
+		    .creatures = {asker, asked},
+		    .commands = {Play(Kind::PlayAction, 1, animations::k_Impress, 1.0f, false), Fight(Kind::StartFight, 0, 1, 6.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
+	{
+		// The other tiger walks as the fight starts. It continues until the first tiger tells it to obey, two turns later.
+		auto asker = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto asked = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		asker.pauseMind = true;
+		asked.pauseMind = true;
+		all.push_back({
+		    .id = "combat.asked_walks_on",
+		    .name = "A tiger walks on for a moment when it is asked to fight",
+		    .facet = Facet::Combat,
+		    .description = "The blue tiger starts to walk away from the red tiger. One second later, the red tiger asks the "
+		                   "blue tiger to fight. Both fight by themselves.",
+		    .expected = "The red tiger stops at once and turns to face the blue tiger. The blue tiger walks on for two "
+		                "turns, then slows to a stand and turns to face the red tiger. Then both taunt. In the arena, "
+		                "each tiger turns on the spot to face the other. The red tiger does not start its duel before the "
+		                "blue tiger.",
+		    .framing = ringside,
+		    .creatures = {asker, asked},
+		    .commands = {Go(Kind::WalkTo, 1, {25.0f, 0.0f}, 1.0f, false), Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "saves.arena_ring_back",
 	    .name = "Save and load: the ring of the arena shows again",
