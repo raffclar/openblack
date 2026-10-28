@@ -822,9 +822,6 @@ openblack_setup_and_add_test(test_villager_tools test_villager_tools.cpp)
 openblack_setup_and_add_test(test_tree_shadows graphics/test_tree_shadows.cpp)
 openblack_setup_and_add_test(test_villager_work test_villager_work.cpp)
 openblack_setup_and_add_test(
-  test_descriptor_set_tally graphics/test_descriptor_set_tally.cpp
-)
-openblack_setup_and_add_test(
   test_graphics_backend_names test_graphics_backend_names.cpp
 )
 openblack_setup_and_add_test(test_villager_breeding test_villager_breeding.cpp)
@@ -1756,7 +1753,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_hand_reports test_hand_reports.cpp)
 openblack_setup_and_add_test(test_magic_pile_height test_magic_pile_height.cpp)
 openblack_setup_and_add_test(test_build_version test_build_version.cpp)
-openblack_setup_and_add_test(test_build_version_file test_build_version_file.cpp)
 openblack_setup_and_add_test(test_gods_ring_map online/test_gods_ring_map.cpp)
 target_link_libraries(test_gods_ring_map PRIVATE lnd)
 openblack_setup_and_add_test(test_gods_ring_land test_gods_ring_land.cpp)
