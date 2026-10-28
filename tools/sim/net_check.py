@@ -937,15 +937,25 @@ def leash_state(pid):
     return {key: leash.get(key) for key in ("id", "leashed", "type", "tied_to")}
 
 
-def box_keys_check(pid, log):
+def press_key(pid, key, tap):
+    """Presses a key of a desktop client through the inspector. A tap holds the key down for one frame; else the key
+    stays down for half a second, as a player presses it. Gives the answer of the inspector to the key down."""
+    if tap:
+        pressed = inspector_call(pid, "input.key", {"params": {"key": key, "how": "tap"}})
+    else:
+        pressed = inspector_call(pid, "input.key", {"params": {"key": key, "how": "press"}})
+        time.sleep(0.5)
+        inspector_call(pid, "input.key", {"params": {"key": key, "how": "release"}})
+    time.sleep(1.0)
+    return pressed
+
+
+def box_keys_check(pid, log, tap=False):
     """Presses the leash key L and the temple key F4 of a desktop client while the information box of the land shows.
     Tells whether the box still shows after the keys, whether the player went into the temple, the leash after the
     keys, and the turns that the client compared when the check ended."""
     for key in ("L", "F4"):
-        inspector_call(pid, "input.key", {"params": {"key": key, "how": "press"}})
-        time.sleep(0.5)
-        inspector_call(pid, "input.key", {"params": {"key": key, "how": "release"}})
-        time.sleep(1.0)
+        press_key(pid, key, tap)
     time.sleep(1.0)
     windows = items_of(inspector_call(pid, "gui.windows", {}))
     interior = inspector_call(pid, "temple.interior", {})
@@ -985,19 +995,12 @@ def desktop_leash_step(leash, done, pid, log):
             print(f"leash: the information box of the land shows on the client with pid {pid}: {box}")
             if box:
                 # While the box shows, the leash key and the temple key must do nothing
-                leash["box"] = box_keys_check(pid, log)
+                leash["box"] = box_keys_check(pid, log, leash.get("tap", False))
                 print(f"leash: L and F4 with the information box open on the client with pid {pid}: "
                       f"{json.dumps(leash['box'])[:400]}")
-                inspector_call(pid, "input.key", {"params": {"key": "Escape", "how": "press"}})
-                time.sleep(0.5)
-                inspector_call(pid, "input.key", {"params": {"key": "Escape", "how": "release"}})
-                time.sleep(2.0)
-        # A tap of the inspector (down for one frame) does not show to the actions of the controls: the key stays down
-        # for half a second, as a player presses it
-        pressed = inspector_call(pid, "input.key", {"params": {"key": key, "how": "press"}})
-        time.sleep(0.5)
-        inspector_call(pid, "input.key", {"params": {"key": key, "how": "release"}})
-        time.sleep(1.0)
+                press_key(pid, "Escape", leash.get("tap", False))
+                time.sleep(1.0)
+        pressed = press_key(pid, key, leash.get("tap", False))
         done.append({"turns": turns, "key": key, "pressed": pressed, "leash": leash_state(pid)})
         print(f"leash: client with pid {pid} pressed {key} after {turns} turns: {json.dumps(done[-1])[:400]}")
     return True
@@ -1434,6 +1437,9 @@ def main():
                              "goes on its god's creature, holds it HOLD more turns, then goes into the temple (F4, then "
                              "Escape; OFF 'temple', the default) or presses L again (OFF 'key'). TURN and HOLD are "
                              "multiples of 100. The server and every client must tell the same leash commands")
+    parser.add_argument("--key-tap", action="store_true",
+                        help="the leash checks of the desktop clients tap each key (down for one frame) in place of a "
+                             "press of half a second")
     parser.add_argument("--give", type=int, metavar="CLIENT",
                         help="once the client (from 1) compared --hold-after turns, its hand takes a villager near its "
                              "god's creature and gives it to the creature through the inspector; the server and every "
@@ -1664,6 +1670,8 @@ def main():
     give_done = None
     # The keys that each leash check of a desktop client pressed, by the place of the check in the list
     leash_done = {number: [] for number, leash in enumerate(leashes) if leash["client"] != "web"}
+    for leash in leashes:
+        leash["tap"] = options.key_tap
     try:
         server = start(server_command, server_dir)
         processes.append(server)
