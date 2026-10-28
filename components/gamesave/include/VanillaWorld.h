@@ -40,6 +40,8 @@ enum class VanillaType : uint32_t
 	WorshipSite = 0x3C,
 	Forest = 0x4E,
 	Tree = 0x4F,
+	Creche = 0x50,
+	Graveyard = 0x51,
 	TownCentre = 0x60,
 	Player = 0x63,
 	PlayerInterfaceStatus = 0x65,
@@ -47,6 +49,7 @@ enum class VanillaType : uint32_t
 	Creature = 0x69,
 	Game = 0x6A,
 	Feature = 0x74,
+	SpecialVillager = 0x76,
 	Camera = 0x77,
 	Climate = 0xFC,
 };
@@ -185,5 +188,9 @@ struct VanillaWorldResult
 
 /// True when openblack knows the layout of the type
 [[nodiscard]] bool KnowsVanillaType(uint32_t type);
+
+/// True when the file can keep more values for a villager in the state, after the values of the villager. The state of
+/// a disciple that has nothing to do is one of these states, because a disciple that trades keeps more values.
+[[nodiscard]] bool VillagerStateKeepsValues(uint8_t state);
 
 } // namespace openblack::gamesave

@@ -413,7 +413,7 @@ void ReadFishFarm(WorldReader& r)
 void ReadSpecialVillager(WorldReader& r)
 {
 	ReadVillager(r);
-	r.Word();
+	r.Word("specialRow");
 }
 
 void ReadFlock(WorldReader& r)
