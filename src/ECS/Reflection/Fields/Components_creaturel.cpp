@@ -30,6 +30,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturel(entt::meta_
 	Reflect<components::CreatureLeash>(context)
 	    .Field<&components::CreatureLeash::known>("known")
 	    .Field<&components::CreatureLeash::worn>("worn")
+	    .Field<&components::CreatureLeash::lastTiedTurn>("lastTiedTurn")
 	    .Field<&components::CreatureLeash::leashWorks>("leashWorks")
 	    .Field<&components::CreatureLeash::selected>("selected")
 	    .Field<&components::CreatureLeash::drawn>("drawn")

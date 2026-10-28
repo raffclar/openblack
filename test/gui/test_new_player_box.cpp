@@ -135,7 +135,7 @@ TEST(NewPlayerBox, NoNameOrANameTakenBringsUpAMessageInstead)
 	f.box.KeyDown(SDLK_KP_ENTER);
 	EXPECT_TRUE(f.box.IsShowingMessage());
 	ASSERT_EQ(f.box.GetNamedControls().size(), 1u);
-	EXPECT_TRUE(f.Click(NewPlayerBox::k_MessageOk.Centre()));
+	EXPECT_TRUE(f.Click(SetupMessage::k_Ok.Centre()));
 	EXPECT_FALSE(f.box.IsShowingMessage());
 }
 

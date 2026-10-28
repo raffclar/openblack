@@ -37,6 +37,11 @@ glm::vec2 CentreOnLand(glm::vec3 position, const glm::mat3& rotation, float scal
 	return {centre.x, centre.z};
 }
 
+float EdgeGap(glm::vec2 centre, glm::vec2 thing, float thingRadius)
+{
+	return gutils::GetDistanceInMetres(centre, thing) - (k_EffectRadius + thingRadius);
+}
+
 std::optional<uint32_t> NearestFreePlace(const std::array<bool, k_Places>& taken, glm::vec2 temple, glm::vec3 placePoint,
                                          glm::vec2 spot)
 {

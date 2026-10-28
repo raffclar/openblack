@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <utility>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -167,6 +168,60 @@ TEST(IntroRules, LandedTheLightFlashesHoldsHalfASecondAndFadesForOne)
 	EXPECT_EQ(falling.state, light::State::Gone);
 	light::Step(falling, 100, Middle, frame);
 	EXPECT_TRUE(frame.drawn.empty());
+}
+
+TEST(IntroRules, TheTurnsLightFallsHoldsAndFadesAsTheDrawnLightDoes)
+{
+	// The same steps give the same states, as the frames' light and the turns' clock move on
+	for (const uint32_t step : {7u, 17u, 33u, 50u, 100u})
+	{
+		auto drawn = FallingLight();
+		intro_rules::LiftClock clock;
+		light::Frame frame;
+		for (int i = 0; i < 20000 / static_cast<int>(step); ++i)
+		{
+			light::Step(drawn, step, Middle, frame);
+			static_cast<void>(intro_rules::StepLiftClock(clock, step, 1000, false));
+			ASSERT_EQ(clock.light, drawn.state) << step << " " << i;
+			ASSERT_EQ(clock.timer, drawn.timer) << step << " " << i;
+			if (clock.lifting)
+			{
+				break;
+			}
+		}
+		EXPECT_TRUE(clock.lifting) << step;
+		EXPECT_EQ(clock.elapsed, drawn.elapsed) << step;
+	}
+}
+
+TEST(IntroRules, TheLiftingClipPlaysOnceTheLightHasGoneAndOnlyALoopComesRound)
+{
+	const auto run = [](bool looping) {
+		intro_rules::LiftClock clock;
+		int turns = 0;
+		// Turns of 100 ms: the fall of about 8.9 s, the hold of 0.5 s and the fade of 1 s, then the clip of 2 s
+		while (turns < 200 && !intro_rules::StepLiftClock(clock, 100, 2000, looping))
+		{
+			++turns;
+		}
+		return std::pair {turns, clock};
+	};
+	const auto [onceTurns, once] = run(false);
+	EXPECT_EQ(onceTurns, 200);
+	EXPECT_TRUE(once.clipPlays);
+	EXPECT_EQ(once.clipTime, 1999);
+	const auto [loopTurns, loop] = run(true);
+	EXPECT_LT(loopTurns, 200);
+	EXPECT_EQ(loop.light, light::State::Gone);
+	// The clip waits for the light to go, then comes round once its 2 s have played
+	intro_rules::LiftClock gone;
+	int goneTurns = 0;
+	while (!gone.clipPlays)
+	{
+		static_cast<void>(intro_rules::StepLiftClock(gone, 100, 2000, true));
+		++goneTurns;
+	}
+	EXPECT_EQ(loopTurns + 1, goneTurns + 19);
 }
 
 TEST(IntroRules, WhileTheGameStandsStillTheTrailKeepsItsTurns)

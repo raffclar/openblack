@@ -1,0 +1,238 @@
+--- a/bgfx/src/renderer_d3d12.h
++++ b/bgfx/src/renderer_d3d12.h
+@@ -599,6 +599,18 @@
+ 		void addExternal(TextureHandle _handle);
+ 		void removeExternal(TextureHandle _handle);
+ 
++		// Memory to copy an update from, in an upload page that the queue keeps and uses again.
++		struct Staging
++		{
++			ID3D12Resource* m_resource;
++			uint64_t m_offset;
++			uint8_t* m_data;
++		};
++
++		// Gives memory for an update of _size bytes at an offset of _align. False for an update that is too large
++		// for a page: the caller then makes an upload resource of its own.
++		bool allocStaging(uint64_t _size, uint64_t _align, Staging& _staging);
++
+ 		struct CommandList
+ 		{
+ 			ID3D12GraphicsCommandList* m_commandList;
+@@ -660,6 +672,25 @@
+ 		ID3D12QueryHeap* m_pipelineStatsQueryHeap;
+ 		D3D12_QUERY_DATA_PIPELINE_STATISTICS* m_pipelineStats;
+ 		PipelineStats m_pipelineStatsSum;
++
++		// An upload page. The GPU can still read it until the fence has this value.
++		struct StagingPage
++		{
++			ID3D12Resource* m_resource;
++			uint8_t* m_data;
++			uint64_t m_fence;
++		};
++
++		static constexpr uint64_t kStagingPageSize = UINT64_C(4)<<20;
++		static constexpr uint64_t kMaxStagingSize  = kStagingPageSize/4;
++		static constexpr uint32_t kMaxStagingPages = 16;
++
++		ID3D12Device* m_device;
++		StagingPage m_stagingPage;
++		uint64_t m_stagingOffset;
++		typedef stl::vector<StagingPage> StagingPageArray;
++		// The full pages, in the order they became full: thus also in the order of their fences.
++		StagingPageArray m_stagingFull;
+ 	};
+ 
+ 	struct BatchD3D12
+--- a/bgfx/src/renderer_d3d12.cpp
++++ b/bgfx/src/renderer_d3d12.cpp
+@@ -5576,6 +5576,10 @@
+ 	void CommandQueueD3D12::init(ID3D12Device* _device, ID3D12CommandQueue* _queue)
+ 	{
+ 		m_externalQueue = NULL != _queue;
++		m_device        = _device;
++		m_stagingPage   = { NULL, NULL, 0 };
++		m_stagingOffset = 0;
++		m_stagingFull.clear();
+ 
+ 		if (NULL != _queue)
+ 		{
+@@ -5652,6 +5656,20 @@
+ 	{
+ 		finish(UINT64_MAX, true);
+ 
++		// The GPU completed all lists, thus no page is in use
++		for (StagingPageArray::iterator it = m_stagingFull.begin(), itEnd = m_stagingFull.end(); it != itEnd; ++it)
++		{
++			DX_RELEASE(it->m_resource, 0);
++		}
++		m_stagingFull.clear();
++
++		if (NULL != m_stagingPage.m_resource)
++		{
++			DX_RELEASE(m_stagingPage.m_resource, 0);
++		}
++		m_stagingPage   = { NULL, NULL, 0 };
++		m_stagingOffset = 0;
++
+ 		for (uint32_t ii = 0; ii < kMaxCommandLists; ++ii)
+ 		{
+ 			ResourceArray& ra = m_release[ii];
+@@ -5795,6 +5813,78 @@
+ 		return false;
+ 	}
+ 
++	bool CommandQueueD3D12::allocStaging(uint64_t _size, uint64_t _align, Staging& _staging)
++	{
++		if (_size > kMaxStagingSize)
++		{
++			return false;
++		}
++
++		uint64_t offset = bx::alignUp(m_stagingOffset, _align);
++
++		if (NULL == m_stagingPage.m_resource
++		||  offset + _size > kStagingPageSize)
++		{
++			if (NULL != m_stagingPage.m_resource)
++			{
++				// The open command list signals m_currentFence when it is sent, and all copies from this page are in
++				// it or in lists before it. The page waits for one value more: the first value that the queue
++				// signals is the start value of the fence, thus it does not show that the GPU is done.
++				m_stagingPage.m_fence = m_currentFence + 1;
++				m_stagingFull.push_back(m_stagingPage);
++				m_stagingPage = { NULL, NULL, 0 };
++			}
++
++			const uint64_t completed = m_fence->GetCompletedValue();
++
++			// Pages that the GPU is done with, more than the queue keeps, are released
++			while (m_stagingFull.size() > kMaxStagingPages
++			&&     UINT64_MAX != completed
++			&&     m_stagingFull.front().m_fence <= completed)
++			{
++				DX_RELEASE(m_stagingFull.front().m_resource, 0);
++				m_stagingFull.erase(m_stagingFull.begin() );
++			}
++
++			if (!m_stagingFull.empty()
++			&&  UINT64_MAX != completed
++			&&  m_stagingFull.front().m_fence <= completed)
++			{
++				m_stagingPage = m_stagingFull.front();
++				m_stagingFull.erase(m_stagingFull.begin() );
++			}
++			else
++			{
++				ID3D12Resource* resource = createCommittedResource(m_device, HeapProperty::Upload, kStagingPageSize);
++
++				if (NULL == resource)
++				{
++					return false;
++				}
++
++				// An upload page stays mapped while it is alive
++				uint8_t* data = NULL;
++				D3D12_RANGE readRange = { 0, 0 };
++				if (FAILED(resource->Map(0, &readRange, (void**)&data) ) )
++				{
++					DX_RELEASE(resource, 0);
++					return false;
++				}
++
++				m_stagingPage = { resource, data, 0 };
++			}
++
++			offset = 0;
++		}
++
++		_staging.m_resource = m_stagingPage.m_resource;
++		_staging.m_offset   = offset;
++		_staging.m_data     = m_stagingPage.m_data + offset;
++		m_stagingOffset     = offset + _size;
++
++		return true;
++	}
++
+ 	void CommandQueueD3D12::release(IUnknown* _ptr)
+ 	{
+ 		m_release[m_control.m_current].push_back(_ptr);
+@@ -6499,6 +6589,17 @@
+ 			return;
+ 		}
+ 
++		CommandQueueD3D12::Staging page;
++		if (s_renderD3D12->m_cmd.allocStaging(_size, 16, page) )
++		{
++			bx::memCopy(page.m_data, _data, _size);
++
++			D3D12_RESOURCE_STATES state = setState(_commandList, D3D12_RESOURCE_STATE_COPY_DEST);
++			_commandList->CopyBufferRegion(m_ptr, _offset, page.m_resource, page.m_offset, _size);
++			setState(_commandList, state);
++			return;
++		}
++
+ 		ID3D12Resource* staging = createCommittedResource(s_renderD3D12->m_device, HeapProperty::Upload, _size);
+ 
+ 		if (NULL == staging)
+@@ -7658,7 +7759,13 @@
+ 
+ 		const uint32_t rowPitch = layout.Footprint.RowPitch;
+ 
+-		ID3D12Resource* staging = createCommittedResource(s_renderD3D12->m_device, HeapProperty::Upload, totalBytes);
++		CommandQueueD3D12::Staging page;
++		const bool paged = s_renderD3D12->m_cmd.allocStaging(totalBytes, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT, page);
++
++		ID3D12Resource* staging = paged
++			? page.m_resource
++			: createCommittedResource(s_renderD3D12->m_device, HeapProperty::Upload, totalBytes)
++			;
+ 
+ 		if (NULL == staging)
+ 		{
+@@ -7674,8 +7781,16 @@
+ 
+ 		uint8_t* dstData;
+ 
+-		D3D12_RANGE readRange = { 0, 0 };
+-		DX_CHECK(staging->Map(0, &readRange, (void**)&dstData) );
++		if (paged)
++		{
++			dstData = page.m_data;
++			layout.Offset = page.m_offset;
++		}
++		else
++		{
++			D3D12_RANGE readRange = { 0, 0 };
++			DX_CHECK(staging->Map(0, &readRange, (void**)&dstData) );
++		}
+ 
+ 		const uint32_t dstSlicePitch = rowPitch  * numRows;
+ 		const uint32_t srcSlicePitch = copyPitch * numRows;
+@@ -7689,8 +7804,11 @@
+ 			bx::free(g_allocator, temp);
+ 		}
+ 
+-		D3D12_RANGE writeRange = { 0, size_t(totalBytes) };
+-		staging->Unmap(0, &writeRange);
++		if (!paged)
++		{
++			D3D12_RANGE writeRange = { 0, size_t(totalBytes) };
++			staging->Unmap(0, &writeRange);
++		}
+ 
+ 		D3D12_TEXTURE_COPY_LOCATION dst = { m_ptr,   D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, {        } };
+ 		dst.SubresourceIndex = subres;
+@@ -7699,7 +7817,10 @@
+ 
+ 		setState(_commandList, state);
+ 
+-		s_renderD3D12->m_cmd.release(staging);
++		if (!paged)
++		{
++			s_renderD3D12->m_cmd.release(staging);
++		}
+ 	}
+ 
+ 	void TextureD3D12::resolve(ID3D12GraphicsCommandList* _commandList, uint8_t _resolve, uint32_t _layer, uint32_t _numLayers, uint32_t _mip)

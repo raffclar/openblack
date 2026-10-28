@@ -38,6 +38,7 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WallHugRules.h"
@@ -162,12 +163,11 @@ std::optional<entt::entity> BestWorkshop(entt::entity villager)
 	const auto here = GroundOf(villager);
 	for (const auto workshop : workshops)
 	{
-		// TODO(disciples): a workshop's scaffolds and their making belong to the workshop, which openblack lacks; until it
-		// has them a workshop holds none and makes none, so always has room
+		// The workshop wants wood while it has room for a scaffold, or while it lacks the wood for one
 		const auto& abode = Entities().Get<const Abode>(workshop);
+		const int32_t room = Locator::workshopSystem::has_value() ? Locator::workshopSystem::value().RoomOf(workshop) : 0;
 		facts.push_back({.metresAway = gutils::GetDistanceInMetres(here, GroundOf(workshop)),
-		                 .wantsWood = disciple_work::WorkshopWantsWood(disciple_work::WorkshopRoom(false, 0), abode.woodAmount,
-		                                                               ScaffoldWood()),
+		                 .wantsWood = disciple_work::WorkshopWantsWood(room, abode.woodAmount, ScaffoldWood()),
 		                 .functional = villager_home::IsFunctional(workshop)});
 	}
 	const auto best = disciple_work::BestWorkshop(facts);

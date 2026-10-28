@@ -11,12 +11,14 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/InputSteps.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Magic/CastInput.h"
@@ -39,6 +41,7 @@ struct HandCast;
 
 namespace openblack::ecs::systems
 {
+class ObjectDrawListSystemInterface;
 
 /// The running miracles, the seeds the player holds and the miracle dispensers.
 ///
@@ -252,8 +255,9 @@ public:
 
 	// The hand
 
-	/// Once a frame, before any press or release
-	virtual void UpdateHand(const HandFrame& frame, float seconds) = 0;
+	/// Once a frame, before any press or release. The hand's movement and its spin are measured at the steps of the
+	/// input that the frame takes (see input_steps), the hand at its place between the last frame and this frame.
+	virtual void UpdateHand(const HandFrame& frame, const input_steps::Steps& steps) = 0;
 	/// A fireball tapped by the empty hand within the player's influence: another player's is caught into the hand, the
 	/// player's own slips through. Whether it was caught.
 	virtual bool TapFireBall(entt::entity ball) = 0;
@@ -330,6 +334,14 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// Once a frame: the held miracle follows the hand, the bubbles' seeds spin
 	virtual void Update(float seconds) = 0;
+	/// Once a frame, after the frame makes the land's draw list: the swirls of the dispensers that the frame draws show
+	/// and move on, and the other swirls do not show. They step no more often than 60 times a second, by the game time
+	/// since the last step.
+	virtual void UpdateDispenserFrame(const ObjectDrawListSystemInterface& /*drawList*/,
+	                                  std::chrono::milliseconds /*frameRealTime*/, std::chrono::milliseconds /*frameGameTime*/,
+	                                  bool /*landDrawn*/)
+	{
+	}
 	/// A new land: every miracle goes
 	virtual void Reset() = 0;
 

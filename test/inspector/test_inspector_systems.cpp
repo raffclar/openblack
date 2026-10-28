@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 
+#include <array>
 #include <fstream>
 #include <memory>
 #include <regex>
@@ -18,6 +19,7 @@
 #include <variant>
 #include <vector>
 
+#include <Creature/CreatureAnimationLog.h>
 #include <Creature/CreatureDesires.h>
 #include <Creature/CreatureIdleMind.h>
 #include <Creature/CreaturePlanner.h>
@@ -222,6 +224,74 @@ TEST(InspectorCreature, TopDesiresAndThePlan)
 	registry.Assign<CreatureMindState>(Placed(registry, glm::vec3(5.0f)));
 	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.desires"})").Ok());
 	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.desires", "params": {"id": 12345}})").Ok());
+}
+
+TEST(InspectorCreature, TheClipsThatTheBodyPlaysAndPlayed)
+{
+	ecs::Registry registry;
+	const auto creature = Placed(registry, glm::vec3(0.0f));
+	registry.Assign<CreatureMindState>(creature);
+	creature_animation_log::Log log;
+	const auto cause = creature_animation_log::Cause {.by = "object action", .activity = "eat", .objectAction = "eat"};
+	const auto eat = [](float timeMs) {
+		return creature_animation_log::Clip {
+		    .layer = creature_animation_log::Layer::Blend, .animation = 96, .timeMs = timeMs, .durationMs = 2000};
+	};
+	log.Posed(1, std::array {eat(0.0f)}, cause);
+	log.Posed(2, std::array {eat(50.0f)}, cause);
+	log.Posed(3, std::array {creature_animation_log::Clip {.animation = 0, .looping = true}}, {.by = "body"});
+	log.Note({.problem = creature_animation_log::Problem::Refused, .animation = 54, .turn = 3, .by = "mind"});
+	bool cleared = false;
+
+	Inspector inspector;
+	inspector.Add(MakeCreatureProvider({
+	    .world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	              .info = []() -> const InfoConstants* { return nullptr; }},
+	    .tables = []() -> const creature_mind_tables::Tables* { return nullptr; },
+	    .animationLog = [&log](entt::entity /*creature*/) -> const creature_animation_log::Log* { return &log; },
+	    .clipLine = [](entt::entity /*creature*/, size_t clip) -> std::optional<ClipLine> {
+		    if (clip == 96)
+		    {
+			    return ClipLine {.name = "eat", .type = 'N', .set = "object"};
+		    }
+		    return std::nullopt;
+	    },
+	    .clearAnimationLogs = [&cleared]() { cleared = true; },
+	}));
+
+	const auto now = Ask(inspector, R"({"query": "creature.animation"})");
+	EXPECT_EQ(now["turn"], 3);
+	ASSERT_EQ(now["clips"].size(), 1);
+	EXPECT_EQ(now["clips"][0]["clip"], 0);
+	EXPECT_EQ(now["clips"][0]["layer"], "body");
+	EXPECT_EQ(now["clips"][0]["cause"]["by"], "body");
+
+	const auto history = Ask(inspector, R"({"query": "creature.animation_history"})");
+	ASSERT_EQ(history["clips"].size(), 1);
+	const auto& played = history["clips"][0];
+	EXPECT_EQ(played["name"], "eat");
+	EXPECT_EQ(played["set"], "object");
+	EXPECT_EQ(played["start_turn"], 1);
+	EXPECT_EQ(played["end_turn"], 3);
+	EXPECT_EQ(played["turns"], 2);
+	EXPECT_DOUBLE_EQ(played["speed"].get<double>(), 0.5);
+	EXPECT_EQ(played["cause"]["object_action"], "eat");
+	EXPECT_EQ(Ask(inspector, R"({"query": "creature.animation_history", "params": {"last": 0}})")["clips"].size(), 0);
+
+	const auto problems = Ask(inspector, R"({"query": "creature.animation_problems"})");
+	ASSERT_EQ(problems["problems"].size(), 1);
+	EXPECT_EQ(problems["problems"][0]["problem"], "refused");
+	EXPECT_EQ(problems["problems"][0]["clip"], 54);
+
+	EXPECT_TRUE(AskAny(inspector, R"({"query": "creature.animation_clear"})").Ok());
+	EXPECT_TRUE(cleared);
+
+	// Without a log the queries say why
+	Inspector none;
+	none.Add(MakeCreatureProvider({.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	                                         .info = []() -> const InfoConstants* { return nullptr; }}}));
+	EXPECT_FALSE(AskAny(none, R"({"query": "creature.animation"})").Ok());
+	EXPECT_FALSE(AskAny(none, R"({"query": "creature.animation_clear"})").Ok());
 }
 
 TEST(InspectorMap, TheContentsOfACell)

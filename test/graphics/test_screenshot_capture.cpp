@@ -60,6 +60,16 @@ TEST(ScreenshotCapture, AnOpenGlWindowIsAlwaysDrawnAside)
 	EXPECT_NE(noReadBack.why.find("cover"), std::string::npos);
 }
 
+// The browser releases the canvas texture after each frame (WebGPU), thus the renderer always draws the picture aside
+TEST(ScreenshotCapture, AWebGpuCanvasIsAlwaysDrawnAside)
+{
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::ReleasedAfterPresent, false, true, k_WindowSize).route, ScreenshotRoute::Offscreen);
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::ReleasedAfterPresent, true, true, k_WindowSize).route, ScreenshotRoute::Offscreen);
+	const auto noReadBack = PlanScreenshot(WindowBuffers::ReleasedAfterPresent, false, false, k_WindowSize);
+	EXPECT_EQ(noReadBack.route, ScreenshotRoute::Refused);
+	EXPECT_NE(noReadBack.why.find("canvas"), std::string::npos);
+}
+
 // A game launched minimised: SDL still says the window is shown, but the system says it is minimised and Vulkan has a
 // screen of no size to read, so the picture is drawn aside rather than read from it
 TEST(ScreenshotCapture, AWindowStartedMinimisedIsDrawnAside)

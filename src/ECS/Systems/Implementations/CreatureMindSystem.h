@@ -123,6 +123,8 @@ public:
 	bool TryMiracle(entt::entity creature, MagicType type, entt::entity target) override;
 	void KnowMiracle(entt::entity creature, size_t miracle) override;
 	void SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows) override;
+	void LearnAction(entt::entity creature, CreatureActionLearningType type, uint32_t action) override;
+	[[nodiscard]] bool KnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action) const override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	void AteMagicMushroom(entt::entity creature) override;
@@ -132,6 +134,7 @@ public:
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
 	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
 	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
+	bool ObeyGodOrder(entt::entity creature, uint32_t action, entt::entity object) override;
 	[[nodiscard]] bool HasPlayed(entt::entity creature) const override;
 	void ClearAfterPlayed(entt::entity creature) override;
 	[[nodiscard]] float GetInteractionMagnitude(entt::entity creature) const override;

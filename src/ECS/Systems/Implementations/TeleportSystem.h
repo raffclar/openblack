@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -42,6 +43,8 @@ public:
 	bool CarryTurn(entt::entity creature) override;
 	void StopControl(entt::entity creature) override;
 	void ProcessTurn() override;
+	void UpdateFrame(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+	                 std::chrono::milliseconds frameGameTime, bool landDrawn) override;
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
@@ -57,6 +60,8 @@ private:
 	void DropCreatures();
 
 	uint32_t _nextSerial {0};
+	/// When the pools take their next step
+	frame_pace::Pace _poolPace;
 };
 
 } // namespace openblack::ecs::systems

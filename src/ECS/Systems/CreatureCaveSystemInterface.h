@@ -69,7 +69,8 @@ public:
 	virtual void SetCreatureShown(bool shown) = 0;
 	[[nodiscard]] virtual bool IsCreatureShown() const = 0;
 	/// The copy of the player's creature the temple's creature room shows by its fire (see components::CaveCreature),
-	/// none while the player isn't in the temple or has no creature
+	/// none while the player isn't in the temple or has no creature. The copy is a thing of the temple's rooms (see
+	/// TempleInteriorInterface::GetRooms), not of the land.
 	[[nodiscard]] virtual std::optional<entt::entity> GetCaveCreature() const = 0;
 	/// The camera's view of the copy as it zooms onto it, from in front and above
 	[[nodiscard]] virtual std::optional<creature_tattoo_editor::Orbit> GetCaveCreatureView() const = 0;

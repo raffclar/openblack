@@ -72,4 +72,18 @@ liquid_particles::Kind KindOf(uint32_t roll)
 	return roll == 0 ? liquid_particles::Kind::MoteReversed : liquid_particles::Kind::Mote;
 }
 
+std::optional<glm::vec3> PlaceOf(const Watched& watched)
+{
+	switch (watched.kind)
+	{
+	case player_kind::Kind::Computer:
+		return watched.mindOn ? std::optional(watched.mindCamera) : std::nullopt;
+	case player_kind::Kind::Human:
+		return watched.left ? std::nullopt : watched.reportedCamera;
+	case player_kind::Kind::None:
+		break;
+	}
+	return std::nullopt;
+}
+
 } // namespace openblack::player_sparkles

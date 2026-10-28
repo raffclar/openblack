@@ -82,10 +82,9 @@ int32_t IdleTurnsLeft(int32_t turnsLeft, bool townWantsChanged, const std::funct
 	return turnsLeft - 1;
 }
 
-uint32_t WorkshopRoom(bool makingScaffold, uint32_t scaffoldsHeld)
+int32_t WorkshopRoom(bool makingScaffold, uint32_t scaffoldsHeld)
 {
-	const uint32_t taken = scaffoldsHeld + (makingScaffold ? 1 : 0);
-	return taken < k_WorkshopScaffoldPlaces ? k_WorkshopScaffoldPlaces - taken : 0;
+	return static_cast<int32_t>(k_WorkshopScaffoldPlaces - (makingScaffold ? 1u : 0u) - scaffoldsHeld);
 }
 
 float WorkshopWoodShortfall(uint32_t wood, uint32_t scaffoldWood)
@@ -93,7 +92,7 @@ float WorkshopWoodShortfall(uint32_t wood, uint32_t scaffoldWood)
 	return 1.0f - std::min(1.0f, (static_cast<float>(wood) + k_TinyWood) / (static_cast<float>(scaffoldWood) + k_TinyWood));
 }
 
-float WorkshopWantsWood(uint32_t room, uint32_t wood, uint32_t scaffoldWood)
+float WorkshopWantsWood(int32_t room, uint32_t wood, uint32_t scaffoldWood)
 {
 	return room == 0 && WorkshopWoodShortfall(wood, scaffoldWood) <= 0.0f ? 0.0f : 1.0f;
 }

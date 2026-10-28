@@ -22,8 +22,10 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 
@@ -65,7 +67,7 @@ void MusicMoodSystem::LoadFolder()
 
 void MusicMoodSystem::UpdateOnGameTurn(bool reset)
 {
-	const auto listen = []() -> std::optional<uint32_t> {
+	const auto player = []() -> std::optional<uint32_t> {
 		const auto* player = Player();
 		// The music moods work only while the custom music player has tracks
 		if (player == nullptr || !player->IsRunning())
@@ -79,6 +81,7 @@ void MusicMoodSystem::UpdateOnGameTurn(bool reset)
 		}
 		return music_mood::TrackId(player->GetSongName());
 	};
+	const auto listen = music_mood::ForGame(NetworkGame(), player);
 	if (const auto packet = _controller.Turn(music_mood::k_TurnSeconds, reset, listen, Feelings(), machine_clock::UnixTime());
 	    packet.has_value())
 	{
@@ -102,6 +105,11 @@ std::vector<music_mood::Record> MusicMoodSystem::GetRecords() const
 	return {records.begin(), records.end()};
 }
 
+bool MusicMoodSystem::NetworkGame()
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
 std::optional<entt::entity> MusicMoodSystem::LocalCreature()
 {
 	if (!Locator::playerSystem::has_value())
@@ -109,7 +117,8 @@ std::optional<entt::entity> MusicMoodSystem::LocalCreature()
 		return std::nullopt;
 	}
 	const auto& players = Locator::playerSystem::value();
-	const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer());
+	const auto creature = players.GetPrimaryCreature(
+	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
 	if (!creature.has_value() || !Locator::entitiesRegistry::value().Valid(*creature))
 	{
 		return std::nullopt;
@@ -135,8 +144,9 @@ std::optional<music_mood::Emotion> MusicMoodSystem::Feelings()
 
 void MusicMoodSystem::Tell(const music_mood::Packet& packet)
 {
-	// Only a packet of a track that starts makes the creature react; then the player's recent feedback starts again
-	if (packet.id == 0 || !Locator::creatureMindSystem::has_value())
+	// Only a packet of a track that starts makes the creature react; then the player's recent feedback starts again.
+	// A network game has no music moods, so the music of this computer does not change the world of the others.
+	if (packet.id == 0 || NetworkGame() || !Locator::creatureMindSystem::has_value())
 	{
 		return;
 	}

@@ -79,6 +79,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownAreaRules.h"
 #include "ECS/TownDesire.h"
@@ -776,10 +777,21 @@ void FeatureScriptCommands::CreateMobileUStatic(glm::vec3 position, MobileStatic
 	LastObject() = MobileStaticArchetype::Create(onLand, type, verticalOffset, xRotation, yRotation, zRotation, scale);
 }
 
-void FeatureScriptCommands::CreateScaffold(int32_t, [[maybe_unused]] glm::vec3 position, int32_t, int32_t, int32_t)
+void FeatureScriptCommands::CreateScaffold(int32_t townId, glm::vec3 position, [[maybe_unused]] int32_t type, int32_t rotation,
+                                           int32_t size)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The scaffolds have one row in the info table. A scaffold that a script makes has no workshop.
+	if (!Locator::workshopSystem::has_value())
+	{
+		return;
+	}
+	glm::vec3 onLand = position;
+	if (Locator::terrainSystem::has_value())
+	{
+		onLand.y = Locator::terrainSystem::value().GetHeightAt({position.x, position.z});
+	}
+	LastObject() = Locator::workshopSystem::value().CreateScaffold(
+	    onLand, TownWithId(townId), entt::null, static_cast<float>(rotation) * 0.001f, static_cast<float>(size) * 0.001f);
 }
 
 void FeatureScriptCommands::CountryChange([[maybe_unused]] glm::vec3 position, int32_t)

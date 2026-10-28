@@ -19,8 +19,10 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureTeleportAgendas.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -36,8 +38,11 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/ReportedHand.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -1625,6 +1630,26 @@ TEST_F(Reactions, VillagersHeedTheHandPickingUpOrSomethingCrushedWithoutTakingIt
 	}
 }
 
+// The turn finds the hand where the last report of its player put it. The drawn hand follows the pointer of one
+// computer only, so the turn does not use it.
+TEST_F(Reactions, TheTurnFindsTheHandAtItsReportedPlaceAndNotAtItsDrawnPlace)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	PlayTurn();
+	PlayTurn();
+	const auto hand = registry.Create();
+	registry.Assign<Transform>(hand, k_Here + glm::vec3(1000.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ReportedHand>(hand).handPoint = k_Here;
+	auto source = Miracle(Reaction::ReactToHandPickUp);
+	source.initiator = hand;
+	_reactions.Create(source);
+	const auto* memory = registry.TryGet<const VillagerReactionMemory>(_villagers[0]);
+	ASSERT_NE(memory, nullptr);
+	EXPECT_NE(memory->memory.LastReacted(static_cast<uint32_t>(Reaction::ReactToHandPickUp)), 0u);
+	const auto* far = registry.TryGet<const VillagerReactionMemory>(_villagers[2]);
+	EXPECT_TRUE(far == nullptr || far->memory.LastReacted(static_cast<uint32_t>(Reaction::ReactToHandPickUp)) == 0u);
+}
+
 TEST(ReactionRules, OnlyATownsOwnBuildingsAreReactedToWhenBuilt)
 {
 	using magic::villager_reaction::ReactedToWhenBuilt;
@@ -1953,7 +1978,10 @@ TEST_F(Reactions, AnAnimalLooksAtAThingToLookAt)
 	animals.available = true;
 	const auto cow = registry.Create();
 	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	auto& cowAnimal = registry.Assign<Animal>(cow);
+	cowAnimal.type = AnimalInfo::Cow;
+	// The map puts an animal in the cell of its map position, which is where it stands
+	cowAnimal.move.position = {map_coords::ToFixed(k_Here.x + 10.0f), map_coords::ToFixed(k_Here.z)};
 	Locator::entitiesMap::value().Sync();
 	_reactions.Create(Miracle(Reaction::LookAtObject));
 	EXPECT_EQ(animals.lookedAt, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
@@ -1970,7 +1998,10 @@ TEST_F(Reactions, AnAnimalGoesOnlyToFoodThatInterestsIt)
 	animals.available = true;
 	const auto cow = registry.Create();
 	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	auto& cowAnimal = registry.Assign<Animal>(cow);
+	cowAnimal.type = AnimalInfo::Cow;
+	// The map puts an animal in the cell of its map position, which is where it stands
+	cowAnimal.move.position = {map_coords::ToFixed(k_Here.x + 10.0f), map_coords::ToFixed(k_Here.z)};
 	Locator::entitiesMap::value().Sync();
 	_reactions.Create(Miracle(Reaction::ReactToFood));
 	EXPECT_TRUE(animals.wentTo.empty());
@@ -1995,4 +2026,89 @@ TEST_F(Reactions, ANetworkLandStartsTheIdsOfTheReactionsAgain)
 	// Only the next reset does it
 	_reactions.Reset();
 	EXPECT_NE(_reactions.Create(Miracle()), first);
+}
+
+namespace
+{
+/// The reaction to a scaffold reaches as far as a miracle's but no villager takes it up
+void ScaffoldReactionTable(InfoConstants& info)
+{
+	auto& reaction = info.reaction.at(static_cast<size_t>(Reaction::ReactToScaffold));
+	reaction.priority = 0;
+	reaction.whetherItImpresses = 1;
+	reaction.maxReactionDistance = 60.0f;
+	reaction.defaultReactionImpressiveMultiplier = 1.0f;
+	static_cast<GObjectInfo&>(info.scaffold).impressiveValue = 2.0f;
+}
+
+/// A scaffold of a scale of 1, which is worth 3 scaffolds, where the miracles are cast
+entt::entity MakeScaffold()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto scaffold = registry.Create();
+	registry.Assign<Transform>(scaffold, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Scaffold>(scaffold);
+	return scaffold;
+}
+} // namespace
+
+TEST_F(Reactions, AScaffoldImpressesAVillagerByItsValueAndTiresTheTownByItsOwnAmount)
+{
+	ScaffoldReactionTable(*_info);
+	Locator::infoConstants::emplace(*_info);
+	const auto scaffold = MakeScaffold();
+	const auto id = _reactions.Create({.initiator = scaffold,
+	                                   .type = Reaction::ReactToScaffold,
+	                                   .player = PlayerNames::PLAYER_ONE,
+	                                   .position = k_Here,
+	                                   .onCast = true});
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto pending = [&registry, this]() {
+		const auto* impression = registry.TryGet<const TownImpression>(_town);
+		return impression == nullptr ? 0.0f : impression->belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE));
+	};
+	// No villager takes the reaction up
+	EXPECT_FLOAT_EQ(pending(), 0.0f);
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	_reactions.Impress(id, _villagers[0]);
+	// Right by the scaffold: 3 scaffolds times 2, shared by the town's three people against thirty
+	const float share = (30.0f + 0.001f) / (3.0f + 0.001f);
+	EXPECT_FLOAT_EQ(pending(), 6.0f * share);
+	// The villager does not take the reaction up
+	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
+	// The scaffold tires the town by 1 times the share, not by the belief table's amount: the town is fully bored
+	EXPECT_FLOAT_EQ(registry.Get<const TownImpression>(_town).boredom.at(Reaction::ReactToScaffold), 0.0f);
+	_reactions.Impress(id, _villagers[1]);
+	EXPECT_FLOAT_EQ(pending(), 6.0f * share);
+	// A reaction that is gone impresses nobody
+	_reactions.Impress(id + 100, _villagers[1]);
+	EXPECT_FLOAT_EQ(pending(), 6.0f * share);
+}
+
+TEST_F(Reactions, AScaffoldOnASiteImpressesAsMuchAsTheTownWantsTheBuilding)
+{
+	ScaffoldReactionTable(*_info);
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	constexpr uint32_t k_TownId = 9;
+	registry.Assign<Town>(_town, k_TownId, PlayerNames::PLAYER_ONE);
+	registry.Context().towns[k_TownId] = _town;
+	auto& wants = registry.Assign<TownDesire>(_town);
+	wants.raw.at(static_cast<size_t>(TownDesireInfo::ForAbodes)) = 0.25f;
+	wants.boost.at(static_cast<size_t>(TownDesireInfo::ForAbodes)) = 0.25f;
+	wants.raw.at(static_cast<size_t>(TownDesireInfo::ForCivicBuilding)) = 2.0f;
+	const auto site = registry.Create();
+	registry.Assign<Abode>(site).townId = k_TownId;
+	const auto scaffold = MakeScaffold();
+	registry.Get<Scaffold>(scaffold).site = site;
+	const auto id = _reactions.Create({.initiator = scaffold,
+	                                   .type = Reaction::ReactToScaffold,
+	                                   .player = PlayerNames::PLAYER_ONE,
+	                                   .position = k_Here,
+	                                   .onCast = true});
+	_reactions.Impress(id, _villagers[0]);
+	// The building is an abode: the town's want for abodes with its boosts, one half, multiplies the 6
+	const float share = (30.0f + 0.001f) / (3.0f + 0.001f);
+	EXPECT_FLOAT_EQ(registry.Get<const TownImpression>(_town).belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)),
+	                3.0f * share);
 }

@@ -282,7 +282,18 @@ void HelpTextSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _dialogue != nullptr);
 	if (_dialogue != nullptr)
 	{
-		reflection::Save(out, *_dialogue);
+		// The real times of the text go into the save as times from the moment of the save. The real clock of a run starts
+		// at a different time in each run, so a save of a loaded game then has the same bytes as the save that the game
+		// loaded.
+		const auto realNow =
+		    Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()) : 0;
+		// A load empties the box and shows the kept texts again, and the newest text reads from the load. The save keeps
+		// the text as the load makes it, so that a save at once after a load has the same bytes.
+		auto saved = *_dialogue;
+		saved.EmptyBox();
+		saved.ShowAgain();
+		saved.ShiftRealTime(-realNow);
+		reflection::Save(out, saved);
 	}
 	reflection::Save(out, _storyHistory);
 }

@@ -16,6 +16,7 @@
 
 #include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
@@ -24,6 +25,7 @@
 namespace openblack::player_commands
 {
 struct HandReport;
+struct ViewReport;
 } // namespace openblack::player_commands
 
 namespace openblack::hand_trace
@@ -80,6 +82,34 @@ public:
 	{
 		return std::nullopt;
 	}
+	/// What the world has of the view of a player, from the last view report of the player that a turn did (see
+	/// player_commands::ViewReport)
+	struct ReportedView
+	{
+		/// The eye and the point that the camera looks at, as the frame draws them
+		glm::vec3 eye;
+		glm::vec3 focus;
+		/// The lens across a 4:3 screen, in radians, and the distance of the near plane
+		float lens;
+		float nearClip;
+		/// The size of the window of the player in pixels, and the shape of the camera's picture (width over height)
+		glm::ivec2 screen;
+		float aspect;
+		/// How far the camera is from the fence of the camera zones
+		float inclusionDistance;
+		/// How many camera orders of the scripts the camera has got, and whether it has arrived where it goes
+		uint32_t cameraOrders;
+		bool cameraArrived;
+		/// The hand grips the land with the select button, and the other button is held too
+		bool gripsLand;
+		bool otherButton;
+	};
+	/// The view of a player: from the last view report of the player that a turn did, none before the first view
+	/// report or for a player with no hands. The world never reads the camera or the input of the frames.
+	[[nodiscard]] virtual std::optional<ReportedView> GetReportedView([[maybe_unused]] PlayerNames player) const noexcept
+	{
+		return std::nullopt;
+	}
 	/// The hands of a player: the first player's are the hands above. The god of another player of a network game has
 	/// hands from the first turn, which the game server's command makes; none before.
 	[[nodiscard]] virtual std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
@@ -112,9 +142,18 @@ public:
 	[[nodiscard]] virtual glm::vec3 GetReportedHandVelocity() const noexcept { return glm::vec3(0.0f); }
 	/// At the turn: a player reports where the hand and the camera are (see player_commands::HandReport)
 	virtual void Report([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report) {}
-	/// At the turn of a network game: a player reports the thing under the cursor (see player_commands::HandPick)
+	/// This computer sends a report of its hand (see throw_lead::ReportLatency)
+	virtual void ReportSent([[maybe_unused]] const player_commands::HandReport& report) {}
+	/// The milliseconds from the send of a report of this computer's hand to the turn that did it, from the last report
+	/// that a turn did. A throw moves its start along the flight by this latency.
+	[[nodiscard]] virtual uint32_t GetReportLatencyMs() const noexcept { return 0; }
+	/// A tool run gives a fixed report latency, so that its throws are the same each run. None measures it again.
+	virtual void FixReportLatency([[maybe_unused]] std::optional<uint32_t> latencyMs) {}
+	/// At the turn: a player reports its view (see player_commands::ViewReport)
+	virtual void ReportView([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::ViewReport& report) {}
+	/// At the turn: a player reports the thing under the cursor (see player_commands::HandPick)
 	virtual void ReportPick([[maybe_unused]] PlayerNames player, [[maybe_unused]] entt::entity object) {}
-	/// The thing under the cursor of the player's hand from the last pick that a turn did. None in a single game.
+	/// The thing under the cursor of the player's hand from the last pick that a turn did. None before the first pick.
 	[[nodiscard]] virtual entt::entity GetReportedPick() const noexcept { return entt::null; }
 	/// Each frame the hands catch up with their player's alignment once it has moved far enough, and blend their skin
 	/// again as they go into or out of the player's influence, tested at the point picked under the cursor (see
