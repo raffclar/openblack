@@ -189,6 +189,9 @@ entt::entity GameHandGrabWorld::Hand() const
 		const auto acting = hands.GetHandsOf(*_acting);
 		return acting.has_value() ? (*acting)[k_Left] : entt::null;
 	}
+	// With no acting player the turn acts with the first player's hand. The turn does the first player's hand first, and
+	// then each other god's hand as its acting player. The input, the frames and the questions of this computer set
+	// its own player as the acting player.
 	return hands.GetPlayerHands()[k_Left];
 }
 
@@ -586,7 +589,8 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 	{
 		return;
 	}
-	auto* data = Entities().TryGet<Player>(Locator::playerSystem::value().GetPlayer(player));
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	auto* data = entity.has_value() && Entities().Valid(*entity) ? Entities().TryGet<Player>(*entity) : nullptr;
 	if (data == nullptr)
 	{
 		return;
@@ -891,6 +895,13 @@ bool GameHandGrabWorld::IsOtherPlayersHand(entt::entity hand) const
 	const auto* god = registry.Valid(hand) ? registry.TryGet<const GodHand>(hand) : nullptr;
 	const auto player = god != nullptr ? god->player : PlayerNames::PLAYER_ONE;
 	return player != Locator::handSystem::value().GetOwnPlayer();
+}
+
+std::optional<PlayerNames> GameHandGrabWorld::PlayerOfHand(entt::entity hand) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* god = registry.Valid(hand) ? registry.TryGet<const GodHand>(hand) : nullptr;
+	return god != nullptr ? std::optional(god->player) : std::nullopt;
 }
 
 std::optional<glm::vec3> GameHandGrabWorld::ReportedCollidePoint() const
@@ -1415,8 +1426,9 @@ bool GameHandGrabWorld::PlayerHasNoWindResistance(PlayerNames player) const
 	{
 		return false;
 	}
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
-	const auto* data = Locator::entitiesRegistry::value().TryGet<const Player>(entity);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* data = entity.has_value() && registry.Valid(*entity) ? registry.TryGet<const Player>(*entity) : nullptr;
 	return data != nullptr && data->windResistance != 0;
 }
 

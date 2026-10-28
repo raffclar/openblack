@@ -142,6 +142,7 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const HandGive& command) {
 		               out.Entity(command.creature);
 		               out.Entity(command.object);
+		               out.Byte(command.leftHand ? 1 : 0);
 	               },
 	               [&out](const LeashOrder& command) {
 		               out.Byte(static_cast<uint8_t>(command.kind));
@@ -232,6 +233,19 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Byte(static_cast<uint8_t>(command.hasGround ? 1 : 0));
 		               out.Vector(command.ground);
 	               },
+	               [&out](const ViewReport& command) {
+		               out.Vector(command.eye);
+		               out.Vector(command.focus);
+		               out.Float(command.lens);
+		               out.Float(command.nearClip);
+		               out.Number(command.screenWidth);
+		               out.Number(command.screenHeight);
+		               out.Float(command.aspect);
+		               out.Float(command.inclusionDistance);
+		               out.Number(command.cameraOrders);
+		               out.Byte(static_cast<uint8_t>((command.cameraArrived ? 1u : 0u) | (command.gripsLand ? 2u : 0u) |
+		                                             (command.otherButton ? 4u : 0u)));
+	               },
 	               [&out](const GiveCallOff& command) { out.Entity(command.creature); },
 	               [&out](const CreatureTattoo& command) {
 		               out.Entity(command.creature);
@@ -251,6 +265,8 @@ void WriteAction(Writer& out, const Action& action)
 		               }
 	               },
 	               [&out](const LeashLength& command) { out.Float(command.length); },
+	               [](const CreatureFightCheat& /*command*/) {},
+	               [](const TempleLeashOff& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -307,7 +323,8 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandGive:
 	{
 		const auto creature = in.Entity();
-		action = HandGive {.creature = creature, .object = in.Entity()};
+		const auto object = in.Entity();
+		action = HandGive {.creature = creature, .object = object, .leftHand = in.Byte() != 0};
 		return DecodeError::None;
 	}
 	case CommandTag::LeashOrder:
@@ -500,6 +517,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandShakeOff:
 		action = HandShakeOff {};
 		return DecodeError::None;
+	case CommandTag::CreatureFightCheat:
+		action = CreatureFightCheat {};
+		return DecodeError::None;
 	case CommandTag::GripDust:
 		action = GripDust {.point = in.Vector()};
 		return DecodeError::None;
@@ -532,6 +552,29 @@ DecodeError ReadAction(Reader& in, Action& action)
 		query.hasGround = hasGround == 1;
 		query.ground = in.Vector();
 		action = query;
+		return DecodeError::None;
+	}
+	case CommandTag::ViewReport:
+	{
+		ViewReport report {};
+		report.eye = in.Vector();
+		report.focus = in.Vector();
+		report.lens = in.Float();
+		report.nearClip = in.Float();
+		report.screenWidth = in.Number<uint16_t>();
+		report.screenHeight = in.Number<uint16_t>();
+		report.aspect = in.Float();
+		report.inclusionDistance = in.Float();
+		report.cameraOrders = in.Number<uint32_t>();
+		const auto flags = in.Byte();
+		if (flags > 7)
+		{
+			return DecodeError::Value;
+		}
+		report.cameraArrived = (flags & 1u) != 0;
+		report.gripsLand = (flags & 2u) != 0;
+		report.otherButton = (flags & 4u) != 0;
+		action = report;
 		return DecodeError::None;
 	}
 	case CommandTag::GiveCallOff:
@@ -578,6 +621,8 @@ DecodeError ReadAction(Reader& in, Action& action)
 	}
 	case CommandTag::LeashLength:
 		action = LeashLength {.length = in.Float()};
+	case CommandTag::TempleLeashOff:
+		action = TempleLeashOff {};
 		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
@@ -694,9 +739,12 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const GripDust& /*command*/) { return CommandTag::GripDust; },
 	                      [](const HelpReport& /*command*/) { return CommandTag::HelpReport; },
 	                      [](const HelpQuery& /*command*/) { return CommandTag::HelpQuery; },
+	                      [](const ViewReport& /*command*/) { return CommandTag::ViewReport; },
 	                      [](const GiveCallOff& /*command*/) { return CommandTag::GiveCallOff; },
 	                      [](const CreatureTattoo& /*command*/) { return CommandTag::CreatureTattoo; },
 	                      [](const LeashLength& /*command*/) { return CommandTag::LeashLength; },
+	                      [](const CreatureFightCheat& /*command*/) { return CommandTag::CreatureFightCheat; },
+	                      [](const TempleLeashOff& /*command*/) { return CommandTag::TempleLeashOff; },
 	                  },
 	                  action);
 }
@@ -707,12 +755,14 @@ size_t SizeOf(const Action& action) noexcept
 	const size_t fields =
 	    std::visit(Overloaded {
 	                   [](const LeashKey& /*command*/) { return size_t {1}; },
+	                   [](const CreatureFightCheat& /*command*/) { return size_t {0}; },
+	                   [](const TempleLeashOff& /*command*/) { return size_t {0}; },
 	                   [](const LeashTap& /*command*/) { return k_Entity; },
 	                   [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
 	                   [](const HandTake& /*command*/) { return k_Entity; },
 	                   [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
 	                   [](const HandTap& /*command*/) { return k_Entity; },
-	                   [](const HandGive& /*command*/) { return 2 * k_Entity; },
+	                   [](const HandGive& /*command*/) { return 2 * k_Entity + 1; },
 	                   [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
 	                   [](const LeashPostTap& /*command*/) { return k_Entity; },
 	                   [](const HandReport& /*command*/) { return 4 * k_Vector; },
@@ -740,6 +790,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const GripDust& /*command*/) { return k_Vector; },
 	                   [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
 	                   [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
+	                   [](const ViewReport& /*command*/) { return 2 * k_Vector + 6 * 4 + 1; },
 	                   [](const GiveCallOff& /*command*/) { return k_Entity; },
 	                   [](const CreatureTattoo& command) {
 		                   return k_Entity + 5 * creature_tattoo::k_SlotCount + 1 + 2 + command.pictures.size();

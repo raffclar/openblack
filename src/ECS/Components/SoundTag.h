@@ -33,14 +33,14 @@ struct SoundTag
 	/// The distance above the object's position where it sounds from
 	glm::vec3 offset;
 	bool active;
-	/// The emitter that plays it, if one plays it
+	/// The emitter that plays it, if one plays it. It is an entity of the audio of this run, which a save does not keep.
 	entt::entity emitter {entt::null};
 	/// True for a point's sound, false for an object's sound. Only the saves of older versions have the tags of points:
 	/// the sounds at points are not in the world now (see ecs::systems::PointSound), and a load removes these tags.
 	bool point {false};
 	/// True while a point's sound travels to the camera, in the saves of older versions
 	bool delayed {false};
-	/// Game turns since the tag was made
+	/// Game turns since the tag was made. A save does not keep it, as a load makes the tags new.
 	uint16_t turns {0};
 	/// The object an attached tag sounds from. Null for a point or for a tag on its object.
 	entt::entity owner {entt::null};

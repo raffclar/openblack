@@ -67,4 +67,14 @@ void Apply(ecs::Registry& registry, entt::entity player, int32_t level)
 	registry.AssignOrReplace<ecs::components::InterfaceLimits>(player, after);
 }
 
+ecs::components::InterfaceLimits LimitsOf(const ecs::Registry& registry, std::optional<entt::entity> player)
+{
+	if (!player.has_value() || !registry.Valid(*player))
+	{
+		return {};
+	}
+	const auto* limits = registry.TryGet<const ecs::components::InterfaceLimits>(*player);
+	return limits != nullptr ? *limits : ecs::components::InterfaceLimits {};
+}
+
 } // namespace openblack::script::interface_levels

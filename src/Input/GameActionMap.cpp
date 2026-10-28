@@ -26,6 +26,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "InjectedInput.h"
 #include "Locator.h"
 #include "ScriptedMouse.h"
@@ -61,10 +62,29 @@ void WarpMouse(int x, int y)
 	                                           IsBackground());
 }
 
+// The clock that the help times the messages of the mouse with: the game's ticks, which follow the fixed frame time
+// in a deterministic run
+uint32_t HelpClockNow()
+{
+	using openblack::Locator;
+	return Locator::time::has_value() ? Locator::time::value().GetTicks() : SDL_GetTicks();
+}
+
 glm::ivec2 WindowSize()
 {
 	using openblack::Locator;
 	return Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(1, 1);
+}
+
+/// A place in the window's units (CSS pixels on the web) in pixels of the back buffer
+glm::ivec2 WindowPointToPixels(glm::ivec2 point)
+{
+	using openblack::Locator;
+	if (!Locator::windowing::has_value())
+	{
+		return point;
+	}
+	return openblack::windowing::PointToPixels(point, Locator::windowing::value().GetPixelScale());
 }
 
 } // namespace
@@ -331,7 +351,12 @@ uint32_t GameActionMap::PointerState(glm::ivec2* position) const
 	}
 	if (position != nullptr)
 	{
-		return SDL_GetMouseState(&position->x, &position->y);
+		const auto buttons = SDL_GetMouseState(&position->x, &position->y);
+		if constexpr (k_Platform == Platform::Web)
+		{
+			*position = WindowPointToPixels(*position);
+		}
+		return buttons;
 	}
 	return SDL_GetMouseState(nullptr, nullptr);
 }
@@ -425,8 +450,9 @@ void GameActionMap::FollowPagePointerLock()
 	{
 		// The pointer starts at the click that took the pointer. When the page does not know the click, the pointer starts
 		// where the game's cursor was, or in the middle of the window before the game saw the cursor.
-		const auto start =
-		    web::PointerLockClick().value_or(_playerCursorSeen ? glm::ivec2(_mousePosition) : RestingPointer(WindowSize()));
+		const auto click = web::PointerLockClick();
+		const auto start = click.has_value() ? WindowPointToPixels(*click)
+		                                     : (_playerCursorSeen ? glm::ivec2(_mousePosition) : RestingPointer(WindowSize()));
 		_scaledPointer.Place(start);
 		_pointerScaled = true;
 		_playerCursorSeen = true;
@@ -503,6 +529,36 @@ void GameActionMap::StopScaledPointer()
 	windowing::system_pointer::SetRelative(false, IsBackground());
 }
 
+void GameActionMap::ToBackBufferPixels(SDL_Event& event)
+{
+	if (!Locator::windowing::has_value())
+	{
+		return;
+	}
+	const auto scale = Locator::windowing::value().GetPixelScale();
+	if (event.type == SDL_MOUSEMOTION)
+	{
+		const auto at = windowing::PointToPixels({event.motion.x, event.motion.y}, scale);
+		const auto by = _movementPixels.Move({event.motion.xrel, event.motion.yrel}, scale);
+		event.motion.x = at.x;
+		event.motion.y = at.y;
+		event.motion.xrel = by.x;
+		event.motion.yrel = by.y;
+	}
+	else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP)
+	{
+		const auto at = windowing::PointToPixels({event.button.x, event.button.y}, scale);
+		event.button.x = at.x;
+		event.button.y = at.y;
+	}
+	else if (event.type == SDL_MOUSEWHEEL)
+	{
+		const auto at = windowing::PointToPixels({event.wheel.mouseX, event.wheel.mouseY}, scale);
+		event.wheel.mouseX = at.x;
+		event.wheel.mouseY = at.y;
+	}
+}
+
 void GameActionMap::PointPlayerEvent(SDL_Event& event)
 {
 	if (IsInjected(event))
@@ -513,6 +569,7 @@ void GameActionMap::PointPlayerEvent(SDL_Event& event)
 	// action map, so the lock state is read here too.
 	if constexpr (k_Platform == Platform::Web)
 	{
+		ToBackBufferPixels(event);
 		FollowPagePointerLock();
 	}
 	else
@@ -840,7 +897,7 @@ void GameActionMap::Frame()
 		    .cursorFrozen = _cursorFreeze.IsFrozen(),
 		    .playerMouseBlocked = _playerMouseBlocked,
 		});
-		_helpMouseMoves.Wait(SDL_GetTicks(), glm::ivec2(_mousePosition), stillMessages);
+		_helpMouseMoves.Wait(HelpClockNow(), glm::ivec2(_mousePosition), stillMessages);
 	}
 	_mouseMotion.NewFrame();
 	_pushMotion = glm::ivec2(0);
@@ -1003,7 +1060,9 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 		// The help counts the player's own movements of the mouse, not the moves of a hand demonstration
 		if (!_playerMouseBlocked && !_cursorFreeze.IsFrozen())
 		{
-			_helpMouseMoves.Message(event.motion.timestamp, {event.motion.x, event.motion.y});
+			const bool fixedFrameTime = Locator::time::has_value() && Locator::time::value().GetFixedFrameTime().has_value();
+			_helpMouseMoves.Message(help::MessageTime(event.motion.timestamp, SDL_GetTicks(), HelpClockNow(), fixedFrameTime),
+			                        {event.motion.x, event.motion.y});
 		}
 		// While the window has the mouse, its own movement was taken as the event came in
 		if (!_pointerScaled)

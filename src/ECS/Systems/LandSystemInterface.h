@@ -17,6 +17,8 @@
 #include <optional>
 #include <string_view>
 
+#include <glm/vec2.hpp>
+
 #include "Gui/LoadingScreenRules.h"
 #include "LandChange.h"
 #include "Simulation/TurnBody.h"
@@ -41,6 +43,9 @@ public:
 	virtual void ShowLoadingFrame() = 0;
 	/// The load is complete and the loading screen goes
 	virtual void EndLoadingScreen() = 0;
+	/// A load with no loading screen is complete: the view prepares the work of the first frame, as at the end of a
+	/// loading screen, but draws no frame
+	virtual void EndLoadWithoutScreen() = 0;
 	/// Closes the start-of-game question with no answer. Gives true when the question was open.
 	virtual bool WithdrawSkipBox() = 0;
 	/// Closes the menu before the land changes
@@ -51,6 +56,9 @@ public:
 	virtual void StartLandAudio() = 0;
 	/// The testbed is ready for play
 	virtual void TestbedLoaded() = 0;
+	/// A game starts on the land: the camera starts at the temple of the player and flies to it, as the temple key
+	/// makes it fly. Without a temple of the player, the camera stays where it is.
+	virtual void StartCameraAtTemple() = 0;
 	/// Pauses the game and asks the start-of-game question. Gives false when the view cannot ask it.
 	virtual bool AskStartQuestion(bool hasCreature) = 0;
 	/// The challenge file of the scripts. None for the file in its usual folder.
@@ -64,11 +72,13 @@ public:
 	void BeginLoadingScreen(loading::LoadingClock::Mode /*look*/) override {}
 	void ShowLoadingFrame() override {}
 	void EndLoadingScreen() override {}
+	void EndLoadWithoutScreen() override {}
 	bool WithdrawSkipBox() override { return false; }
 	void CloseMenuForNewLand() override {}
 	void MakeSymbolSheet() override {}
 	void StartLandAudio() override {}
 	void TestbedLoaded() override {}
+	void StartCameraAtTemple() override {}
 	bool AskStartQuestion(bool /*hasCreature*/) override { return false; }
 	[[nodiscard]] std::optional<std::filesystem::path> ChallengeFile() override { return std::nullopt; }
 };
@@ -108,11 +118,15 @@ public:
 	                           const std::function<bool()>& restore, SavedLandUse use) = 0;
 	/// Loads the landscape that the map script of the land names
 	virtual void LoadLandscape(const std::filesystem::path& path) = 0;
+	/// The map script of the land gives the start place of the camera, in map units
+	virtual void SetStartCameraPlace(glm::ivec2 place) = 0;
 
 	/// Whether the script of a land is one of the playground lands, which the game plays as a skirmish
 	[[nodiscard]] virtual bool IsPlaygroundLand(const std::filesystem::path& path) const = 0;
 	/// The map script of the land that loaded last, or the path of the testbed. Empty before a land loads.
 	[[nodiscard]] virtual const std::filesystem::path& GetLandPath() const = 0;
+	/// The land is the testbed. It has no temples, so a developer tool's network game on it asks for none.
+	[[nodiscard]] bool OnTestbed() const { return GetLandPath().string() == k_TestbedLandPath; }
 	/// The landscape file of the land, as the map script of the land gave it
 	[[nodiscard]] virtual const std::filesystem::path& GetLandscapePath() const = 0;
 	/// The challenge file of the scripts
@@ -123,6 +137,13 @@ public:
 	/// The humans of a land of a network game come from the network session at the start of the game. Without a session,
 	/// the player of this computer is the one human when the land loads.
 	virtual void SetHumansFromSession(bool fromSession) = 0;
+	/// The map script of a land of a network game runs now. While it runs, its lines do not switch a computer mind on or
+	/// off: the slots with no human get their computer gods after the script.
+	[[nodiscard]] virtual bool RunsNetworkMapScript() const = 0;
+
+	/// Tools only (the AI soak): every god with a citadel is a computer god when the land loads, also the god of this
+	/// computer. The slots fill then, and no human joins.
+	virtual void SetAllComputerGods(bool allComputer) = 0;
 	/// Starts the scripts of the challenge: the script machine reads the challenge file, and the story starts if asked.
 	/// Gives false when the challenge file is not there.
 	virtual bool StartChallengeScripts(bool startStory) = 0;

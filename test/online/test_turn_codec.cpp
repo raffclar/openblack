@@ -44,7 +44,7 @@ std::vector<Action> EachCommand()
 	        .velocity = {1.5f, -2.25f, 1e-30f},
 	        .start = {.angularMomentum = {0.0f, -0.0f, 2.0f}, .origin = {100.5f, 7.0f, -9.0f}, .angles = {0.1f, -3.1f, 1.5f}}},
 	    HandTap {.object = entt::null},
-	    HandGive {.creature = Entity(10), .object = Entity(11)},
+	    HandGive {.creature = Entity(10), .object = Entity(11), .leftHand = true},
 	    LeashOrder {.kind = LeashOrder::Kind::AtPlace, .object = entt::null, .place = {1000.5f, 12.0f, -3.0f}},
 	    LeashPostTap {.post = Entity(12)},
 	    HandReport {.collidePoint = {1.0f, 2.0f, 3.0f},
@@ -94,6 +94,20 @@ std::vector<Action> EachCommand()
 	                .cameraNearAndSteep = true,
 	                .cameraSeesSky = false},
 	    HelpQuery {.thing = Entity(26), .hasGround = true, .ground = {1.0f, 2.0f, 3.0f}},
+	    CreatureFightCheat {},
+	    ViewReport {.eye = {1.0f, 2.0f, 3.0f},
+	                .focus = {4.0f, 5.0f, 6.0f},
+	                .lens = 1.2f,
+	                .nearClip = 0.5f,
+	                .screenWidth = 1280,
+	                .screenHeight = 1024,
+	                .aspect = 1.25f,
+	                .inclusionDistance = 30.0f,
+	                .cameraOrders = 7,
+	                .cameraArrived = true,
+	                .gripsLand = false,
+	                .otherButton = true},
+	    TempleLeashOff {},
 	    GiveCallOff {.creature = Entity(27)},
 	    CreatureTattoo {.creature = Entity(28),
 	                    .slots = {creature_tattoo::Slot {.design = 3, .site = 1, .colour = {10, 20, 30}}},
@@ -123,7 +137,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 37)
+	switch (bits(random) % 40)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -140,7 +154,7 @@ Action RandomAction(std::mt19937& random)
 	case 5:
 		return HandTap {.object = entity()};
 	case 6:
-		return HandGive {.creature = entity(), .object = entity()};
+		return HandGive {.creature = entity(), .object = entity(), .leftHand = bits(random) % 2 == 1};
 	case 7:
 		return LeashOrder {.kind = static_cast<LeashOrder::Kind>(bits(random) % 4), .object = entity(), .place = vector()};
 	case 8:
@@ -235,8 +249,21 @@ Action RandomAction(std::mt19937& random)
 	case 32:
 		return HelpQuery {.thing = entity(), .hasGround = bits(random) % 2 == 0, .ground = vector()};
 	case 33:
-		return GiveCallOff {.creature = entity()};
+		return ViewReport {.eye = vector(),
+		                   .focus = vector(),
+		                   .lens = number(),
+		                   .nearClip = number(),
+		                   .screenWidth = static_cast<uint16_t>(bits(random)),
+		                   .screenHeight = static_cast<uint16_t>(bits(random)),
+		                   .aspect = number(),
+		                   .inclusionDistance = number(),
+		                   .cameraOrders = bits(random),
+		                   .cameraArrived = bits(random) % 2 == 0,
+		                   .gripsLand = bits(random) % 2 == 0,
+		                   .otherButton = bits(random) % 2 == 0};
 	case 34:
+		return GiveCallOff {.creature = entity()};
+	case 35:
 	{
 		CreatureTattoo tattoo {.creature = entity()};
 		for (auto& slot : tattoo.slots)
@@ -256,8 +283,12 @@ Action RandomAction(std::mt19937& random)
 		}
 		return tattoo;
 	}
-	case 35:
+	case 36:
 		return LeashLength {.length = number()};
+	case 37:
+		return CreatureFightCheat {};
+	case 38:
+		return TempleLeashOff {};
 	default:
 		return PlayerLeft {};
 	}
@@ -319,23 +350,18 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5, 9, 18, 5,  49, 17, 5, 5,  5,  9,  12, 1,  18, 11,
-	                                 5, 21, 15, 3, 5,  1, 2, 1,  61, 5,  2,  1, 13, 10, 18, 5,  51, 5};
+	const std::vector<size_t> sizes {2,  5,  9, 5, 53, 5, 10, 18, 5, 49, 17, 5,  5,  5,  9, 12, 1, 18, 11, 5,
+	                                 21, 15, 3, 5, 1,  2, 1, 61, 5, 2,  1,  13, 10, 18, 1, 50, 1, 5,  51, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
 		EXPECT_EQ(SizeOf(commands[i]), sizes[i]) << i;
-		// The tags follow the order of the commands. The leave of the server has tag 17. Tags 35 to 37 belong to commands
-		// of other branches, so the commands after them have tags three higher.
+		// The tags follow the order of the commands. The leave of the server has tag 17.
 		size_t tag = i + 1;
 		if (std::holds_alternative<PlayerLeft>(commands[i]))
 		{
 			tag = 17;
-		}
-		else if (tag > 34)
-		{
-			tag += 3;
 		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
@@ -749,6 +775,26 @@ TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }
 
+TEST(TurnCodec, AGiveCarriesTheSideOfTheHandOfTheGiver)
+{
+	for (const bool leftHand : {false, true})
+	{
+		const auto bytes =
+		    Encode(CommandBlock {.sequence = 0,
+		                         .turn = 0,
+		                         .actions = {HandGive {.creature = Entity(3), .object = Entity(4), .leftHand = leftHand}}});
+		const auto decoded = Decode(bytes);
+		ASSERT_EQ(decoded.error, DecodeError::None);
+		ASSERT_TRUE(decoded.frame.has_value());
+		const auto& give = std::get<HandGive>(std::get<CommandBlock>(*decoded.frame).actions.at(0));
+		EXPECT_EQ(give.creature, Entity(3));
+		EXPECT_EQ(give.object, Entity(4));
+		EXPECT_EQ(give.leftHand, leftHand);
+		// The side is the last byte of the command
+		EXPECT_EQ(bytes.back(), leftHand ? 1 : 0);
+	}
+}
+
 TEST(TurnCodec, AHelpReportKeepsItsEventsAndRefusesUnknownFlags)
 {
 	const HelpReport report {.events = uint64_t {1} << 48, .boxShows = true, .cameraSeesSky = true};
@@ -762,5 +808,31 @@ TEST(TurnCodec, AHelpReportKeepsItsEventsAndRefusesUnknownFlags)
 	// refused.
 	auto wrong = bytes;
 	wrong.back() = 32;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlags)
+{
+	const ViewReport report {.eye = {10.0f, 20.0f, 30.0f},
+	                         .focus = {-1.0f, 0.0f, 1.0f},
+	                         .lens = 1.2217305f,
+	                         .nearClip = 2.0f,
+	                         .screenWidth = 0x0A0B,
+	                         .screenHeight = 0x0C0D,
+	                         .aspect = 1.7777778f,
+	                         .inclusionDistance = 12.5f,
+	                         .cameraOrders = 0x01020304,
+	                         .cameraArrived = false,
+	                         .gripsLand = true,
+	                         .otherButton = true};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	EXPECT_EQ(std::get<ViewReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
+
+	// The byte of the flags comes last. A flag after the third is refused.
+	auto wrong = bytes;
+	wrong.back() = 8;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }

@@ -100,6 +100,9 @@ struct HandGive
 {
 	entt::entity creature;
 	entt::entity object;
+	/// Whether the player who gives has a left hand. The creature takes the thing with its matching hand on every
+	/// computer, so the command carries the side of the hand of the computer that sends it.
+	bool leftHand {false};
 };
 
 /// An order to the player's creature on its leash
@@ -349,6 +352,12 @@ struct HandShakeOff
 {
 };
 
+/// Tools: the creature of the player starts a fight with the nearest creature, or a fight that it is in stops. Only a
+/// game server with its test commands on lets this command through.
+struct CreatureFightCheat
+{
+};
+
 /// The hand of the player gripped the land: the turn makes a puff of dust at the point on the ground. Thus every computer
 /// makes the same dust at the same turn.
 struct GripDust
@@ -415,12 +424,51 @@ struct LeashLength
 	float length {0.0f};
 };
 
+/// The report of the view of the player that the scripts and the advisors' remarks read: the view of the camera, the
+/// arrival of the camera and the grip of the hand on the land. The computer of the player sends it once a turn when
+/// something in it changes, and the turns read it, in a game alone too. Thus the scripts get the same answers at all
+/// frame rates.
+struct ViewReport
+{
+	/// The eye and the point that the camera looks at, as the frame draws them
+	glm::vec3 eye {0.0f};
+	glm::vec3 focus {0.0f};
+	/// The lens: the view across the width of a 4:3 screen, in radians
+	float lens {0.0f};
+	/// How far the near plane is ahead of the eye
+	float nearClip {0.0f};
+	/// The size of the window that the frame draws into, in pixels, and the shape of the camera's picture (width over
+	/// height). The screen tests of the scripts and the advisors' remarks use the window of the player who reports, so
+	/// that every computer and the game server get the same answer.
+	uint16_t screenWidth {0};
+	uint16_t screenHeight {0};
+	float aspect {0.0f};
+	/// How far the camera is from the fence of the camera zones, as the world camera finds it
+	float inclusionDistance {0.0f};
+	/// How many camera orders of the scripts the camera has got (ecs::RegistryContext::scriptCameraOrders)
+	uint32_t cameraOrders {0};
+	/// The camera has arrived where it goes
+	bool cameraArrived {false};
+	/// The hand grips the land with the select button
+	bool gripsLand {false};
+	/// The other button is held too
+	bool otherButton {false};
+
+	bool operator==(const ViewReport& other) const = default;
+};
+
+/// The player goes into their temple. When the player holds the leash of their creature, the leash comes off.
+struct TempleLeashOff
+{
+};
+
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
-                            GripDust, HelpReport, HelpQuery, GiveCallOff, CreatureTattoo, LeashLength>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
+                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
+                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength>;
 
 /// A command and the player that sent it
 struct Command

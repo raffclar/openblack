@@ -97,6 +97,24 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.hint_power_up_rings",
+	    .name = "The seeds and rings over the hints of the power-ups",
+	    .facet = Facet::Interface,
+	    .description = "A storm seed is summoned from the player's worship into the hand, and the hand waits. Then the "
+	                   "hand draws the inverse spiral, the first power-up.",
+	    .expected = "While the seed is in the hand, the hints show the inverse spiral and the spiral. Over each, the "
+	                "storm's seed turns slowly with the effect of its holder, and rings in the player's colour turn "
+	                "round it: one ring over the inverse spiral, two over the spiral. After the inverse spiral, its hint "
+	                "goes, and the scribble shows the storm's seed without rings.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::SummonSeed,
+	                  .delaySeconds = k_DrawSeconds,
+	                  .value = static_cast<size_t>(SpellSeedType::Storm)},
+	                 Draw(GestureType::InverseSpiral, 6.0f)},
+	});
+
+	all.push_back({
 	    .id = "hand.tooltips_held_miracle",
 	    .name = "The name of the miracle in the hand",
 	    .facet = Facet::Hand,

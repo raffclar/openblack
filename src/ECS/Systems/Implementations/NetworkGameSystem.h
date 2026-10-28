@@ -46,7 +46,9 @@ public:
 	bool Join(NetworkJoin join) override;
 	void SetReady(bool ready) override;
 	void PlayAlone() override;
+	void EndNetworkGame() override;
 	void Leave() override;
+	void StopGame() override;
 	[[nodiscard]] std::optional<game_socket::Start> TakeStart() override;
 	void BeginPlay() override;
 	void Update() override;
@@ -78,6 +80,8 @@ private:
 	bool _fromCommandLine {false};
 	/// The reply of the server to the join of the command line was read
 	bool _joinReplyRead {false};
+	/// The clock stopped after the last turn of the game
+	bool _stopped {false};
 	std::optional<game_socket::Start> _pendingStart;
 	bool _endLogged {false};
 	std::optional<uint32_t> _partAt;

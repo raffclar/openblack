@@ -33,6 +33,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -149,7 +150,8 @@ ecs::heartbeat::Danger DangerOf(const ecs::Registry& registry, PlayerNames playe
 /// The beats a second this computer's player's temple holds their heart at while it is destroyed, none otherwise
 std::optional<float> DestructionBeatsOf(const ecs::Registry& registry, PlayerNames player)
 {
-	if (!Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() != player)
+	if (!Locator::playerSystem::has_value() ||
+	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE) != player)
 	{
 		return std::nullopt;
 	}
@@ -224,7 +226,8 @@ void HeartbeatSystem::SoundHeart()
 	{
 		return;
 	}
-	const auto player = Locator::playerSystem::value().GetLocalPlayer();
+	const auto player =
+	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 	const auto state = StateOf(player);
 	auto& registry = Locator::entitiesRegistry::value();
 	std::optional<glm::vec3> place;

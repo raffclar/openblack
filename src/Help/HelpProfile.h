@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <utility>
 #include <vector>
 
 /// The help system's profile of the player: how often and how lately the player has done each of the things the help
@@ -192,7 +193,7 @@ public:
 	[[nodiscard]] EventCount& Count(uint32_t event) { return _counts.at(event); }
 
 	/// Whether the scripts may ask about an event: 1 to 48
-	[[nodiscard]] static constexpr bool ScriptMayAsk(int32_t event) { return event > 0 && event < k_EventCount; }
+	[[nodiscard]] static constexpr bool ScriptMayAsk(int32_t event) { return event > 0 && static_cast<uint32_t>(event) < k_EventCount; }
 
 private:
 	std::array<EventCount, k_EventCount> _counts {};

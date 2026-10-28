@@ -26,6 +26,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ZSort.h"
@@ -38,8 +39,11 @@ using namespace openblack::graphics;
 
 namespace
 {
-/// The player at this computer, whose rope shows over their creature fizzing away
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
+/// The player of this computer, whose rope shows over their creature as it fizzes away
+PlayerNames OwnPlayer()
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
 
 struct Vertex
 {
@@ -187,7 +191,7 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 		const leash_rope::Showing showing {
 		    .scriptShows = leashes.drawn,
 		    .scriptCinema = scriptCinema,
-		    .local = worn.holder == k_LocalPlayer,
+		    .local = worn.holder == OwnPlayer(),
 		    .handHidden = !desc.drawHand,
 		    .handHoldsTiedRope = drawn->held.has_value(),
 		    .creatureFizz = spells != nullptr ? spells->fizz : 0.0f,

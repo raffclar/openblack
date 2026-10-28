@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "Commands/PlayerCommands.h"
+#include "3D/TempleInteriorInterface.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/CreatureTattooChange.h"
@@ -133,13 +134,43 @@ public:
 		{
 			return std::nullopt;
 		}
-		const auto* of = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureCopy>(*copy);
+		const auto* copies = Copies();
+		const auto* of =
+		    copies != nullptr && copies->Valid(*copy) ? copies->TryGet<const ecs::components::CreatureCopy>(*copy) : nullptr;
 		return of != nullptr && of->creature == creature ? copy : std::nullopt;
+	}
+
+	void ShowCopy(entt::entity copy, std::optional<creature_tattoo::Slots> slots) override
+	{
+		if (auto* tattoos = CopyTattoos(copy); tattoos != nullptr)
+		{
+			tattoos->shown = slots;
+		}
+	}
+
+	void PaintCopy(entt::entity copy) override
+	{
+		if (auto* tattoos = CopyTattoos(copy); tattoos != nullptr)
+		{
+			++tattoos->revision;
+		}
 	}
 
 private:
 	/// The block of pictures that waits for the next change of the slots of the creature
 	std::optional<std::pair<entt::entity, std::vector<uint8_t>>> _pictures;
+
+	/// The registry of the copy in the cave: the temple's rooms
+	[[nodiscard]] static ecs::Registry* Copies()
+	{
+		return Locator::temple::has_value() ? &Locator::temple::value().GetRooms() : nullptr;
+	}
+
+	[[nodiscard]] static ecs::components::CreatureTattoos* CopyTattoos(entt::entity copy)
+	{
+		auto* copies = Copies();
+		return copies != nullptr && copies->Valid(copy) ? copies->TryGet<ecs::components::CreatureTattoos>(copy) : nullptr;
+	}
 };
 } // namespace
 
@@ -167,13 +198,10 @@ void TattooEditorSystem::Open(entt::entity creature, const creature_tattoo_edito
 	// The copy in the cave shows the tattoos being edited. The masks are made again with the player's own pictures.
 	if (_caveCopy.has_value())
 	{
-		_skin->Show(*_caveCopy, _session.slots);
+		_skin->ShowCopy(*_caveCopy, _session.slots);
 	}
 	_skin->RemakeMasks(creature, creature_tattoo::Sheet::OwnPictures);
-	if (const auto shown = Shown(); shown.has_value())
-	{
-		_skin->Paint(*shown);
-	}
+	PaintShown();
 }
 
 void TattooEditorSystem::OpenFromMenu(std::optional<entt::entity> playerCreature, entt::entity shown,
@@ -204,8 +232,8 @@ void TattooEditorSystem::Close()
 	// The copy in the cave shows the creature's own tattoos again, painted with the masks as they are
 	if (_open && _caveCopy.has_value())
 	{
-		_skin->Show(*_caveCopy, std::nullopt);
-		_skin->Paint(*_caveCopy);
+		_skin->ShowCopy(*_caveCopy, std::nullopt);
+		_skin->PaintCopy(*_caveCopy);
 	}
 	_open = false;
 	_creature.reset();
@@ -254,7 +282,7 @@ bool TattooEditorSystem::Drop(uint8_t design, const glm::u8vec3& colour)
 	}
 	Remake();
 	// The player's creature in the world is painted again too
-	if (_creature.has_value() && _creature != Shown())
+	if (_creature.has_value() && !ShowsCreature())
 	{
 		_skin->Paint(*_creature);
 	}
@@ -310,21 +338,38 @@ void TattooEditorSystem::Remake()
 		_skin->RemakeMasks(*_creature, creature_tattoo::Sheet::OwnPictures);
 	}
 	// Without a copy in the cave or a creature of the menu, the player's creature shows its own tattoos
-	if (const auto shown = _shown.has_value() ? _shown : _caveCopy; shown.has_value())
+	if (_shown.has_value())
 	{
-		_skin->Show(*shown, _session.slots);
+		_skin->Show(*_shown, _session.slots);
 	}
-	if (const auto shown = Shown(); shown.has_value())
+	else if (_caveCopy.has_value())
 	{
-		_skin->Paint(*shown);
+		_skin->ShowCopy(*_caveCopy, _session.slots);
 	}
+	PaintShown();
 }
 
-std::optional<entt::entity> TattooEditorSystem::Shown() const
+void TattooEditorSystem::PaintShown()
 {
 	if (_shown.has_value())
 	{
-		return _shown;
+		_skin->Paint(*_shown);
 	}
-	return _caveCopy.has_value() ? _caveCopy : _creature;
+	else if (_caveCopy.has_value())
+	{
+		_skin->PaintCopy(*_caveCopy);
+	}
+	else if (_creature.has_value())
+	{
+		_skin->Paint(*_creature);
+	}
+}
+
+bool TattooEditorSystem::ShowsCreature() const
+{
+	if (_shown.has_value())
+	{
+		return _shown == _creature;
+	}
+	return !_caveCopy.has_value();
 }

@@ -352,6 +352,10 @@ public:
 /// Whether a move from the queue teaches a creature to lean: a step teaches every creature, the other moves teach only
 /// the human player's creature. The moves that the computer chooses do not go into the queue, thus they teach nothing.
 [[nodiscard]] bool LearnsFromMove(Move::Kind kind, bool humanPlayers);
+/// Whether the moves that a player sends teach the creature of the player to lean. In a game alone, only the creature of
+/// the first player learns. In a network game, the creature of each human god learns on each computer, thus the worlds
+/// stay the same.
+[[nodiscard]] bool LearnsFromPresses(bool networkGame, bool firstPlayer, bool humanGod);
 /// A creature's first fight starts it leaning against its alignment: evil creatures attack, good ones defend
 [[nodiscard]] float FirstTendency(float alignment);
 /// The lean a creature has learnt, as it starts a fight that it asked for. Until it completes a fight (a knock-out or a
@@ -445,6 +449,8 @@ constexpr float k_HighDamage = 0.05f;
 constexpr float k_LowDamage = 0.03f;
 /// A blocked blow does a tenth of the damage
 constexpr float k_BlockedShare = 0.1f;
+/// The damage compares the strengths of the two bodies after it adds this to each
+constexpr float k_StrengthShift = 3.0f;
 constexpr float k_MinDamageFactor = 0.04f;
 constexpr float k_MaxDamageFactor = 2.0f;
 
@@ -453,9 +459,9 @@ struct Blow
 {
 	float attackerSize {1.0f};
 	float defenderSize {1.0f};
-	/// From 0 (weak) to 1 (strong)
-	float attackerStrength {0.5f};
-	float defenderStrength {0.5f};
+	/// The strength that the body shows, from -1 (weak) to 1 (strong): see creature_morph::StrengthLook
+	float attackerStrength {0.0f};
+	float defenderStrength {0.0f};
 	/// How fast the blow played, by its charge
 	float speed {1.0f};
 	bool special {false};
@@ -463,8 +469,8 @@ struct Blow
 	float heightShare {0.5f};
 	bool blocked {false};
 };
-/// How hard a blow lands: the attacker's size and strength against the defender's, times its speed, kept from 0.04
-/// to 2, and twice that for a special move
+/// How hard a blow lands: the attacker's strength and size against the defender's, times its speed, kept from 0.04
+/// to 2, and two times that for a special move. Each strength adds 3 before the division.
 [[nodiscard]] float DamageFactor(const Blow& blow);
 
 enum class RecoilDirection : uint8_t
@@ -597,8 +603,8 @@ enum class Control : uint8_t
 	Player,
 	Computer,
 };
-/// The computer leaves a player's creature alone for 3 seconds as a fight starts, and for 15 after each of the
-/// player's moves
+/// The computer leaves a player's creature alone for 3 seconds as a fight starts. After each move that the player gives,
+/// and each time the creature looks at a queued move in range in its stance or its block, the wait is 15 seconds again.
 constexpr float k_ComputerWaitsAtStartMs = 3000.0f;
 constexpr float k_ComputerWaitsMs = 15000.0f;
 
@@ -639,6 +645,10 @@ void Enter(Fighter& fighter, State state, std::optional<size_t> animation = std:
 /// The player (or a script) adds a move: a creature the computer was fighting with is given back to the player, and
 /// the computer waits 15 seconds
 bool PlayerMove(Fighter& fighter, const Move& move, bool replace);
+/// One turn of the wait before the computer takes over a player's creature. The wait goes down by the creature's own
+/// milliseconds in its stance, its moves, its block and its reels in the block. It ends only in the stance or the block,
+/// when it is below 0. Returns true when the computer takes over in this turn.
+bool CountComputerWait(Fighter& fighter, int32_t turnMs);
 /// As PlayerMove, with the sparkles that mark the queued moves on the computer of the player: a move in place of the
 /// queue keeps only the newest sparkle
 bool PlayerMove(Fighter& fighter, marks::MarkList& marks, const Move& move, bool replace);
@@ -662,7 +672,8 @@ struct Order
 	float speed {1.0f};
 };
 /// The move at the front of the queue taken off it, if one can be made now: only in range of the opponent, in the
-/// stance or blocking (when anything ends the block), and a blow only once its charge is known
+/// stance or blocking (when anything ends the block), and a blow only once its charge is known. In range, in the stance
+/// or the block, a queued move makes the wait for the computer 15 seconds again, also when the move stays in the queue.
 [[nodiscard]] std::optional<Order> TakeOrder(Fighter& fighter, bool inRange);
 /// As TakeOrder, with the sparkles that mark the queued moves: the sparkle of each move taken off the queue goes
 [[nodiscard]] std::optional<Order> TakeOrder(Fighter& fighter, marks::MarkList& marks, bool inRange);
@@ -676,7 +687,6 @@ enum class Opponent : uint8_t
 	EndingCast,
 	BlockRecoil,
 	Attacking,
-	Casting,
 	SteppingForward,
 	OtherAction,
 	Blocking,
@@ -838,6 +848,9 @@ struct StepLengths
 /// Whether the living around the winner see a fight won: only when a blow knocked the loser out and the winner has a
 /// player. A loser that a miracle or a loss of life knocked out gives no such sight.
 [[nodiscard]] bool FightWonIsSeen(bool byBlow, bool winnerHasPlayer);
+/// Whether a creature in a duel wins it because its opponent has no life left (life at zero or less). A creature that
+/// a script controls does not win this way, and it continues its duel.
+[[nodiscard]] bool WinsByOpponentsLife(float opponentLife, bool scriptControlled);
 /// The priority of the winner's plan after a knock out, before the planner's scale
 constexpr float k_WinPlanPriority = 1.0f;
 /// Whether the winner's plan after a knock out is forced. It is not forced when a blow knocked the loser out, and it is

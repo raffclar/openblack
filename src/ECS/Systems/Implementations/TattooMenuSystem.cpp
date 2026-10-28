@@ -47,6 +47,7 @@
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/TattooSites.h"
@@ -124,7 +125,8 @@ void TattooMenuSystem::Open()
 	if (Locator::playerSystem::has_value())
 	{
 		const auto& players = Locator::playerSystem::value();
-		player = players.GetPrimaryCreature(players.GetLocalPlayer());
+		player = players.GetPrimaryCreature(
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
 	}
 	if (Locator::tattooEditorSystem::has_value())
 	{
@@ -218,12 +220,13 @@ void TattooMenuSystem::Update(float milliseconds, glm::ivec2 pointer, bool butto
 	animation->lookAt = body.lookAt;
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		Locator::creatureAnimationSystem::value().PoseCopy(*_copy, frameMs);
+		Locator::creatureAnimationSystem::value().PoseCopy(Locator::entitiesRegistry::value(), *_copy, frameMs);
 	}
 	// Its hair swings from the new pose by the whole time of the frame, as the game is paused under the menu
 	if (Locator::creatureHairSystem::has_value())
 	{
-		Locator::creatureHairSystem::value().StepCopy(*_copy, std::chrono::duration<float, std::milli>(milliseconds));
+		Locator::creatureHairSystem::value().StepCopy(Locator::entitiesRegistry::value(), *_copy,
+		                                              std::chrono::duration<float, std::milli>(milliseconds));
 	}
 	HoverSites(pointer);
 }

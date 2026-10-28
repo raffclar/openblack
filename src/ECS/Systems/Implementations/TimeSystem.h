@@ -95,6 +95,7 @@ public:
 	[[nodiscard]] int64_t GetUnixTime() const override;
 	void RestartClock(std::optional<int64_t> unixTime) override;
 	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return _pinnedDate; }
+	void PinDate(std::optional<int64_t> pinnedDate) override { _pinnedDate = pinnedDate; }
 
 private:
 	/// The tick count the clock goes by: the tick source's, or while frames take a fixed time, one moved on by that

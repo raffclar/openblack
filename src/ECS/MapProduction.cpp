@@ -11,6 +11,7 @@
 #include "MapProduction.h"
 
 #include <algorithm>
+#include <unordered_set>
 #include <utility>
 
 #include <glm/geometric.hpp>
@@ -28,9 +29,11 @@
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/FixedOutline.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/GroundPrint.h"
@@ -57,6 +60,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/FixedOutlineSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -111,17 +115,6 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<RewardOnLand>();
 }
 
-/// The model whose box a thing covers: its own, or a vortex's cylinder, which is never drawn. An altar has its model
-/// before the model shows.
-std::optional<entt::id_type> OutlineMeshOf(const Registry& registry, entt::entity entity)
-{
-	if (registry.AllOf<Vortex>(entity))
-	{
-		return resources::HashIdentifier(MeshId::SpellVortexCylinder);
-	}
-	return thing_model::ModelOf(registry, entity);
-}
-
 /// A building's outline on the ground, from its model's box as it is placed
 std::optional<map_cells::Outline> OutlineOf(const Transform& transform, std::optional<entt::id_type> meshId)
 {
@@ -141,7 +134,7 @@ std::optional<map_cells::Outline> OutlineOf(const Transform& transform, std::opt
 /// The outline of a thing from its model in the resources
 std::optional<map_cells::Outline> ModelOutlineOf(const Registry& registry, entt::entity entity)
 {
-	return OutlineOf(registry.Get<const Transform>(entity), OutlineMeshOf(registry, entity));
+	return OutlineOf(registry.Get<const Transform>(entity), thing_model::OutlineModelOf(registry, entity));
 }
 } // namespace
 
@@ -164,10 +157,15 @@ MapProduction::MapProduction(OutlineSource outlines)
 	});
 	_connections.push_back(_registry->OnDestroy<Transform>().connect<&MapProduction::OnGone>(*this));
 	_connections.push_back(_registry->OnDestroy<MapCellResident>().connect<&MapProduction::OnResidentGone>(*this));
-	// Anything already made is filed too
-	ForEachMapComponent([this]<typename Component>() {
-		_registry->Each<const Component>([this](entt::entity entity, const auto&... /*unused*/) {
-			if (std::ranges::find(_made, entity) == _made.end())
+	_connections.push_back(_registry->OnDestroying().connect<&MapProduction::OnDestroying>(*this));
+	// The lists that filing writes exist before any entity goes, so that the filing done as an entity goes adds no list
+	static_cast<void>(_registry->Size<MapCellMover>());
+	static_cast<void>(_registry->Size<FixedOutline>());
+	// Anything already made is filed too, each thing once, in the order the components first name it
+	std::unordered_set<entt::entity> listed(_made.begin(), _made.end());
+	ForEachMapComponent([this, &listed]<typename Component>() {
+		_registry->Each<const Component>([this, &listed](entt::entity entity, const auto&... /*unused*/) {
+			if (listed.insert(entity).second)
 			{
 				_made.push_back(entity);
 			}
@@ -250,6 +248,12 @@ void MapProduction::OnResidentGone(entt::registry& /*registry*/, entt::entity en
 	TakeOut(entity);
 }
 
+void MapProduction::OnDestroying(entt::entity /*entity*/)
+{
+	// The things made before it went, itself too, are in their cells before it comes out of its own
+	FileMadeBeforeLook();
+}
+
 void MapProduction::FileMadeBeforeLook() const
 {
 	if (_made.empty() || _registry == nullptr)
@@ -260,9 +264,10 @@ void MapProduction::FileMadeBeforeLook() const
 	_made.clear();
 	for (const auto entity : made)
 	{
-		// What is held by a hand or moving in the physics stays out of the map's cells until it is put back
+		// A thing stays out of the map's cells while a hand or a creature holds it, or while it moves in the physics.
+		// A load makes again a thing that a creature holds. That thing stays out of the cells, as before the save.
 		if (!_registry->Valid(entity) || _registry->AllOf<MapCellResident>(entity) ||
-		    _registry->AnyOf<InHand, InPhysics>(entity))
+		    _registry->AnyOf<InHand, InPhysics, HeldByCreature>(entity))
 		{
 			continue;
 		}
@@ -281,7 +286,6 @@ void MapProduction::FileMadeBeforeLook() const
 
 std::vector<uint32_t> MapProduction::CellsFor(entt::entity entity, const Kind& kind) const
 {
-	const auto& transform = _registry->Get<const Transform>(entity);
 	std::vector<uint32_t> cells;
 	if (kind.coversOutline)
 	{
@@ -300,11 +304,34 @@ std::vector<uint32_t> MapProduction::CellsFor(entt::entity entity, const Kind& k
 		}
 		return cells;
 	}
-	if (const auto index = _lists.IndexOf(map_coords::CellOf(transform.position)))
+	if (const auto index = CellOfPlace(entity))
 	{
 		cells.push_back(*index);
 	}
 	return cells;
+}
+
+std::optional<uint32_t> MapProduction::CellOfPlace(entt::entity entity) const
+{
+	return _lists.IndexOf(map_coords::Cell(thing_map_place::Of(*_registry, entity)));
+}
+
+bool MapProduction::MovedSinceFiled(entt::entity entity) const
+{
+	const auto* resident = _registry->TryGet<const MapCellResident>(entity);
+	const auto* transform = _registry->TryGet<const Transform>(entity);
+	if (resident == nullptr || transform == nullptr || !_registry->AllOf<MapCellMover>(entity))
+	{
+		return false;
+	}
+	// A building as soon as it is anywhere else
+	if (resident->coversOutline)
+	{
+		return transform->position != resident->filedAt;
+	}
+	// Anything else once it is in another cell
+	const auto now = CellOfPlace(entity);
+	return resident->cells.empty() ? now.has_value() : (!now.has_value() || *now != resident->cells.front());
 }
 
 void MapProduction::KnowLandBlocks() const
@@ -443,12 +470,9 @@ void MapProduction::Sync()
 	// What can move goes into its new cell: a building as soon as it is anywhere else, anything else once it is in
 	// another cell
 	std::vector<entt::entity> moved;
-	_registry->Each<const MapCellMover, const MapCellResident, const Transform>(
-	    [&moved](entt::entity entity, const MapCellResident& resident, const Transform& transform) {
-		    const bool changed = resident.coversOutline
-		                             ? transform.position != resident.filedAt
-		                             : map_coords::CellOf(transform.position) != map_coords::CellOf(resident.filedAt);
-		    if (changed)
+	_registry->Each<const MapCellMover, const MapCellResident>(
+	    [this, &moved](entt::entity entity, const MapCellResident& /*resident*/) {
+		    if (MovedSinceFiled(entity))
 		    {
 			    moved.push_back(entity);
 		    }
@@ -457,11 +481,6 @@ void MapProduction::Sync()
 	{
 		Refile(entity);
 	}
-}
-
-void MapProduction::FileMade()
-{
-	FileMadeBeforeLook();
 }
 
 void MapProduction::SaveState(reflection::BinaryWriter& out) const
@@ -515,9 +534,63 @@ bool MapProduction::InMap(entt::entity entity) const
 	return !KindOf(*_registry, entity).has_value() || _registry->AllOf<MapCellResident>(entity);
 }
 
+void MapProduction::Moved(entt::entity entity)
+{
+	if (_registry == nullptr)
+	{
+		return;
+	}
+	// The things made before it moved are in their cells first
+	FileMadeBeforeLook();
+	if (_registry->Valid(entity) && MovedSinceFiled(entity))
+	{
+		TakeOut(entity);
+		if (const auto kind = KindOf(*_registry, entity))
+		{
+			File(entity, *kind);
+		}
+	}
+}
+
+void MapProduction::Reinsert(entt::entity entity)
+{
+	if (_registry == nullptr)
+	{
+		return;
+	}
+	// The things made before it changed are in their cells first
+	FileMadeBeforeLook();
+	if (!_registry->Valid(entity) || !_registry->AllOf<Transform>(entity))
+	{
+		return;
+	}
+	// What a hand holds or the physics moves is not in the cells
+	const auto* resident = _registry->TryGet<const MapCellResident>(entity);
+	if (resident == nullptr || resident->cells.empty() || _registry->AnyOf<InHand, InPhysics>(entity))
+	{
+		return;
+	}
+	if (const auto kind = KindOf(*_registry, entity))
+	{
+		TakeOut(entity);
+		File(entity, *kind);
+	}
+}
+
+void MapProduction::FileNew()
+{
+	FileMadeBeforeLook();
+}
+
 void MapProduction::Refile(entt::entity entity)
 {
-	if (_registry == nullptr || !_registry->Valid(entity) || !_registry->AllOf<Transform>(entity))
+	if (_registry == nullptr)
+	{
+		return;
+	}
+	// The things made before it moved are in their cells first
+	FileMadeBeforeLook();
+	if (!_registry->Valid(entity) || !_registry->AllOf<Transform>(entity))
 	{
 		return;
 	}
