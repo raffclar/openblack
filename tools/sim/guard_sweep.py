@@ -56,6 +56,9 @@ LANDS = {
     "ring32": ["--gods-ring-map", "--sim-network-game", "--sim-all-computer-gods", "--sim-ai-seed", "1"],
 }
 LAND_PREFIX = "land:"
+# The launch switches of the game: the game finds them anywhere on its command line after a "-" or a "/"
+SWITCH_IN_PATH = re.compile(r"[-/\\](skirmish|newgame|multiplayer|land|convert|version|editor|noloadmusic|"
+                            r"preintrovideo|forceinetconn|noinetconn|settings:)", re.IGNORECASE)
 
 
 def kind_of(part):
@@ -140,6 +143,10 @@ def run(options):
     if not os.path.exists(game):
         print(f"no game at {game}")
         return 1
+    for path in (game, options.game_path):
+        if SWITCH_IN_PATH.search(os.path.abspath(path)):
+            print(f"the path {path} has a launch switch of the game in it; choose another folder")
+            return 1
     items = [LAND_PREFIX + name for name in land_names(options.lands)] + scenario_ids(game, options.scenarios)
     if options.limit:
         items = items[: options.limit]
@@ -166,7 +173,9 @@ def run(options):
         if os.path.exists(log):
             os.remove(log)
         started = time.monotonic()
-        process = subprocess.Popen(game_command(game, options.game_path, item, log, options), cwd=folder,
+        # The log path is relative to the game's folder: a folder such as multiplayer.page would put a launch switch
+        # of the game after a "/" on its command line
+        process = subprocess.Popen(game_command(game, options.game_path, item, "game.log", options), cwd=folder,
                                    env=environment, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL, creationflags=flags)
         with open(os.path.join(options.out, "pid.txt"), "w", encoding="utf-8") as file:
@@ -283,6 +292,8 @@ def self_test():
     lines, _, _ = summarise([record], systems=True)
     assert "a.b  FrameEffects  snow  system  turn 1 (values 0,2)" in lines, lines
     assert kind_of("synced random draws") == ("draws", "-")
+    assert SWITCH_IN_PATH.search("/x/multiplayer.page") and SWITCH_IN_PATH.search("E:\\b\\-Land2")
+    assert not SWITCH_IN_PATH.search("E:/openblack/builds/mp-guard-sweep-2/bin/openblack")
     print("self-test passed")
     return 0
 
