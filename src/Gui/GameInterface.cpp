@@ -2103,6 +2103,9 @@ void GameInterface::DrawTempleScrollPictures(glm::u16vec2 resolution)
 	for (const auto& control : shown.controls)
 	{
 		DrawBubbleControl(control, bindings, pixelScale);
+	}
+}
+
 void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 {
 	namespace tip = help::tip_bubble;
