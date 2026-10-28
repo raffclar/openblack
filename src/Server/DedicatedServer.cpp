@@ -157,6 +157,8 @@ public:
 
 	void PlayViewStep(game_turn::Step /*step*/, glm::vec3 /*cameraPosition*/) override {}
 	[[nodiscard]] int32_t FrameRate() const override { return _frameRate.Rate(); }
+	/// The testbed scenario gives its commands before the turns, as on each client of the network game
+	void BeforeTurn() override;
 
 private:
 	ServerSettings _settings;
@@ -377,6 +379,14 @@ void ServerWorld::StartPlayView()
 	}
 }
 
+void ServerWorld::BeforeTurn()
+{
+	if (_scenarioRunner != nullptr)
+	{
+		_scenarioRunner->BeforeTurn();
+	}
+}
+
 bool ServerWorld::Frame()
 {
 	auto& profiler = Locator::profiler::value();
@@ -410,18 +420,11 @@ bool ServerWorld::Frame()
 	{
 		Locator::handDemoSystem::value().Update();
 	}
-	// The scenario starts in the first frame. From the second frame, it gives its commands in the frames before the
-	// turns, at the time of the game's debug windows.
-	switch (ScenarioStepOf(_scenarioRunner != nullptr, _scenario != nullptr))
+	// The scenario is laid out in the first frame in which the world turns: after the start of a network game, before its
+	// first turn, as each client lays it out
+	if (_scenario != nullptr && !clock.IsPaused())
 	{
-	case ScenarioStep::None:
-		break;
-	case ScenarioStep::Start:
 		_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
-		break;
-	case ScenarioStep::Update:
-		_scenarioRunner->Update(std::chrono::duration<float>(clock.GetFrameGameTime()).count());
-		break;
 	}
 	// The tools check that a world state loads into the same world: the server loads its own world once
 	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&
@@ -585,6 +588,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .godsRingMap = settings.godsRingMap,
 	    .allComputerGods = settings.soak.allComputerGods,
 	    .aiSeed = settings.soak.aiSeed,
+	    .scenario = settings.scenario,
 	};
 	// A land of a network game has a god slot for each citadel, as the room of the land has a team for each citadel. The
 	// other lands of the tools and the testbed keep the default slots.
@@ -686,15 +690,6 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 		simulation.hashParts = settings.recordFields ? sim_run::HashDetail::Fields : sim_run::HashDetail::Components;
 	}
 	return simulation;
-}
-
-ScenarioStep ScenarioStepOf(bool hasScenario, bool waitsToStart)
-{
-	if (!hasScenario)
-	{
-		return ScenarioStep::None;
-	}
-	return waitsToStart ? ScenarioStep::Start : ScenarioStep::Update;
 }
 
 std::string ChecksumLine(uint32_t turn, uint64_t checksum)

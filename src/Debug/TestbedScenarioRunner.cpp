@@ -1074,6 +1074,12 @@ void Runner::Start(const Scenario& scenario)
 	_vortices.assign(scenario.vortices.size(), {});
 	_rewards.assign(scenario.rewards.size(), entt::null);
 	Frame(scenario.framing.shot, scenario.framing.creature, scenario.framing.distance);
+	// In a network game the commands step by the turns from this turn
+	_layoutTurn = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
+	if (_layoutTurn.has_value())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The testbed scenario {} is laid out at turn {}", scenario.id, *_layoutTurn);
+	}
 	Log(fmt::format("Started {}", scenario.name));
 }
 
@@ -4105,6 +4111,18 @@ void Runner::Update(float seconds)
 	for (const auto index : due)
 	{
 		Give(_scenario->commands[index]);
+	}
+}
+
+void Runner::BeforeTurn()
+{
+	if (!Locator::time::has_value())
+	{
+		return;
+	}
+	if (TurnStepOf(_layoutTurn, Locator::time::value().GetTurn()) == TurnStep::Update)
+	{
+		Update(std::chrono::duration<float>(ecs::systems::TimeSystemInterface::k_TurnDuration).count());
 	}
 }
 

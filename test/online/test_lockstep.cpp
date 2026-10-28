@@ -181,6 +181,21 @@ protected:
 		                          .keptTurns = 3200});
 	}
 
+	/// A room of the tools whose game plays a testbed scenario from the first turn
+	void MakeScenarioHost(uint32_t gods)
+	{
+		game_socket::Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
+		start.scenario = "mind.computer_god_rivals";
+		host = std::make_unique<LockstepHost>(
+		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
+		    server::HostSettings {.start = std::move(start),
+		                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+		                          .minGods = gods,
+		                          .godSlots = 7,
+		                          .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+		                          .keptTurns = 3200});
+	}
+
 	/// One frame of the server and of each computer: 100 ms of time, and a turn when the world turns
 	void Frame(std::vector<Computer*> computers)
 	{
@@ -695,6 +710,31 @@ TEST_F(LockstepTest, PlayersWhoJoinAfterTheStartAreObserversWithTheWorldOfTheSer
 	dave.session.Send(HandTap {.object = Entity(3)});
 	Frames({&alice, &dave, &carol}, 5);
 	EXPECT_TRUE(host->Seats()[1].commands.empty());
+}
+
+// The state of a testbed scenario is not in the world: every computer plays the scenario from the first turn. An observer
+// in the room before the start gets the scenario with the start, and nobody joins the game as it turns.
+TEST_F(LockstepTest, TheStartGivesTheScenarioAndNobodyJoinsTheRunningGameOfAScenario)
+{
+	MakeScenarioHost(1);
+	GiveWorldState();
+	Computer watcher(network, now, "observer:carol");
+	Computer alice(network, now, "god:alice");
+	Frames({&watcher, &alice}, 30);
+	ASSERT_TRUE(host->Started());
+	for (const auto* computer : {&watcher, &alice})
+	{
+		ASSERT_TRUE(computer->session.GetStart().has_value());
+		EXPECT_EQ(computer->session.GetStart()->scenario, "mind.computer_god_rivals");
+		EXPECT_GT(computer->world.turns, 10u);
+		EXPECT_EQ(computer->session.GetCompares().compared, computer->session.GetCompares().same);
+	}
+
+	Computer late(network, now, "observer:dave");
+	Frames({&watcher, &alice, &late}, 3);
+	EXPECT_EQ(late.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(late.session.RefusedReason(), "started");
+	EXPECT_EQ(late.loads, 0u);
 }
 
 TEST_F(LockstepTest, ThePlayerOfADefeatedGodComesBackAsAnObserver)
