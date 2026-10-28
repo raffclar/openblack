@@ -167,4 +167,7 @@ void CountOut(World& world, State& state, PlayerNames god, ecs::components::OutR
 /// The end of the game for one turn
 [[nodiscard]] std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state);
 
+/// The number of events of a turn that decide the game. The game tells the lobby one time for each of these events.
+[[nodiscard]] size_t DecidingEvents(std::span<const Event> events);
+
 } // namespace openblack::game_end

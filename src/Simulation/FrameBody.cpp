@@ -62,6 +62,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LiquidParticles.h"
 #include "Profiler.h"
@@ -243,6 +244,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 	Locator::artefactSystem::value().UpdateFrame(static_cast<float>(gameTime.count()));
 	// The flags over the towns' stores ease to their desires and turn to the camera
 	Locator::townDesireSystem::value().UpdateFlags(std::chrono::duration<float>(gameTime).count());
+	// The wood flags of the workshops ease to the wood that their workshops need and turn to the camera
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().UpdateFlagsForFrame(std::chrono::duration<float>(gameTime).count());
+	}
 	// The players' symbols of belief over the village centres move on
 	Locator::townSystem::value().UpdateFrame(clock.GetFrameRealTime(), LandDrawn());
 	Locator::fieldSystem::value().Update(gameTime);

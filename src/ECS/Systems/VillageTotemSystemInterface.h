@@ -63,6 +63,10 @@ public:
 	virtual void DoGrip(PlayerNames /*player*/, entt::entity /*totem*/) {}
 	/// At the turn: the town of the totem takes the share that the hand let go of it at (player_commands::TotemShare)
 	virtual void DoShare(PlayerNames /*player*/, entt::entity /*totem*/, float /*share*/) {}
+	/// In the turn of a computer god: the hand of the god takes the totem, which the creature of the god and the living near
+	/// it see. Then the town of the totem takes the share, and the creature of the town's player takes it that the player
+	/// wants to impress, by half. The god does not slide the totem, and no number floats up.
+	virtual void RaiseByGod(PlayerNames /*player*/, entt::entity /*totem*/, float /*share*/) {}
 	/// The totem the hand holds, if any
 	[[nodiscard]] virtual std::optional<entt::entity> GetGripped() const = 0;
 	/// How the hand holds a totem: where it is, how far it tips, and how far it closes round the icon

@@ -14,6 +14,10 @@
 #include <cstring>
 
 #include <algorithm>
+#include <chrono>
+#include <exception>
+#include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -28,19 +32,26 @@
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "ComputerGameHandObjects.h"
+#include "ComputerMindCreature.h"
 #include "ComputerMindWorld.h"
 #include "Creature/CreatureFileLoad.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/CreatureNaming.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Gui/TextDatabase.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -56,18 +67,32 @@ namespace
 /// Where the hand of a god with no temple starts, in metres
 constexpr glm::vec3 k_HandWithoutTemple {2150.0f, 0.0f, 2620.0f};
 
-/// The entity of the player. The game makes the player when the land has none, and the player is known to the players at
-/// once, so that a creature made for it next is its creature.
-entt::entity PlayerEntity(PlayerNames player)
+/// The entity of the player, none when the land has no such player
+entt::entity FoundPlayer(PlayerNames player)
 {
-	auto& registry = Locator::entitiesRegistry::value();
 	entt::entity entity = entt::null;
-	registry.Each<const Player>([&entity, player](entt::entity each, const Player& name) {
+	Locator::entitiesRegistry::value().Each<const Player>([&entity, player](entt::entity each, const Player& name) {
 		if (name.name == player && entity == entt::null)
 		{
 			entity = each;
 		}
 	});
+	return entity;
+}
+
+/// A component of the player, none when the land has no such player or the player has no such component
+template <typename Component>
+Component* PlayerComponent(PlayerNames player)
+{
+	const auto entity = FoundPlayer(player);
+	return entity != entt::null ? Locator::entitiesRegistry::value().TryGet<Component>(entity) : nullptr;
+}
+
+/// The entity of the player. The game makes the player when the land has none, and the player is known to the players at
+/// once, so that a creature made for it next is its creature.
+entt::entity PlayerEntity(PlayerNames player)
+{
+	entt::entity entity = FoundPlayer(player);
 	if (entity == entt::null)
 	{
 		entity = ecs::archetypes::PlayerArchetype::Create(player);
@@ -177,13 +202,10 @@ public:
 
 	float GameFloatRand(float most) override { return Locator::gameRandom::value().GameFloatRand(most); }
 
-	void SetPersonality([[maybe_unused]] PlayerNames player, [[maybe_unused]] std::string_view need,
-	                    [[maybe_unused]] float weight) override
+	void SetPersonality(PlayerNames player, std::string_view need, float weight) override
 	{
-		// The weights of the decision tree have no place in the game yet: a god keeps the weight in the log until the
-		// tree reads it
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "AI seed: the computer god {} weighs {} at {:.3f}", static_cast<int>(player),
-		                    need, weight);
+		// The weight goes to the node of the need in the decision tree of the god
+		Locator::computerPlayerSystem::value().SetPersonality(player, need, weight);
 	}
 };
 
@@ -264,6 +286,35 @@ public:
 private:
 	ComputerPlayerSystemInterface& _minds;
 };
+
+/// The places of a personality file, in the order that a load looks at them. A full path is the only place. A relative
+/// name is in the profile folder, then in the game folder. A save writes only to the first place.
+std::vector<std::filesystem::path> PersonalityPlaces(std::string_view file)
+{
+	std::vector<std::filesystem::path> places;
+	const std::filesystem::path name(file);
+	if (name.empty())
+	{
+		return places;
+	}
+	if (name.is_absolute())
+	{
+		places.push_back(name);
+		return places;
+	}
+	if (Locator::profileFolderSystem::has_value())
+	{
+		if (const auto folder = Locator::profileFolderSystem::value().GetFolder(); folder.has_value())
+		{
+			places.push_back(*folder / name);
+		}
+	}
+	if (Locator::filesystem::has_value())
+	{
+		places.push_back(Locator::filesystem::value().GetGamePath() / name);
+	}
+	return places;
+}
 
 } // namespace
 
@@ -435,12 +486,12 @@ std::optional<glm::vec3> ComputerPlayerSystem::HandPosition(PlayerNames player)
 
 void ComputerPlayerSystem::SetPersonality(PlayerNames player, std::string_view name, float weight)
 {
-	computer_mind::SetPersonality(MindOf(player).mind, name, weight);
+	computer_mind::SetPersonality(MindOf(player).mind, name, weight, computer_world::SharedNodeNames());
 }
 
 void ComputerPlayerSystem::SetSuppression(PlayerNames player, std::string_view name, float suppression)
 {
-	computer_mind::SetSuppression(MindOf(player).mind, name, suppression);
+	computer_mind::SetSuppression(MindOf(player).mind, name, suppression, computer_world::SharedNodeNames());
 }
 
 bool ComputerPlayerSystem::Ready(PlayerNames player)
@@ -448,54 +499,168 @@ bool ComputerPlayerSystem::Ready(PlayerNames player)
 	return !computer_hand::Busy(MindOf(player).hand);
 }
 
+void ComputerPlayerSystem::SetAttitude(PlayerNames player, PlayerNames other, float attitude)
+{
+	const auto index = static_cast<size_t>(other);
+	if (index >= k_PlayerRecordSize)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = PlayerEntity(player);
+	auto* attitudes = registry.TryGet<ComputerAttitudes>(entity);
+	auto& kept = attitudes != nullptr ? *attitudes : registry.Assign<ComputerAttitudes>(entity);
+	kept.kept.at(index) = player_relations::KeptAttitude(attitude);
+}
+
+float ComputerPlayerSystem::Attitude(PlayerNames player, PlayerNames other) const
+{
+	const auto index = static_cast<size_t>(other);
+	if (index >= k_PlayerRecordSize)
+	{
+		return 0.0f;
+	}
+	const auto* attitudes = PlayerComponent<const ComputerAttitudes>(player);
+	return player_relations::ReadAttitude(attitudes != nullptr ? attitudes->kept.at(index) : ComputerAttitudes::k_StartValue);
+}
+
+bool ComputerPlayerSystem::SavePersonality(PlayerNames player, std::string_view file)
+{
+	const auto places = PersonalityPlaces(file);
+	if (places.empty() || !Locator::filesystem::has_value())
+	{
+		return false;
+	}
+	// A player with no mind yet has the first weights of each node
+	const auto* found = FindMind(player);
+	const auto bytes = computer_mind::PersonalityFile(found != nullptr ? found->mind : computer_mind::MakeMind(),
+	                                                  computer_world::SharedNodeNames());
+	return Locator::filesystem::value().WriteAll(places.front(), bytes);
+}
+
+bool ComputerPlayerSystem::LoadPersonality(PlayerNames player, std::string_view file)
+{
+	if (!Locator::filesystem::has_value())
+	{
+		return false;
+	}
+	auto& files = Locator::filesystem::value();
+	for (const auto& place : PersonalityPlaces(file))
+	{
+		if (!files.Exists(place))
+		{
+			continue;
+		}
+		std::vector<uint8_t> bytes;
+		try
+		{
+			bytes = files.ReadAll(place);
+		}
+		catch (const std::exception& error)
+		{
+			// The game cannot open a folder or a locked file, so the load looks at the next place
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The personality file {} did not open: {}", place.string(), error.what());
+			continue;
+		}
+		// The names in the file become the names of the nodes for all the gods
+		auto& names = computer_world::SharedNodeNamesToChange();
+		computer_mind::ReadPersonalityFile(MindOf(player).mind, names, bytes);
+		return true;
+	}
+	return false;
+}
+
 void ComputerPlayerSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<std::pair<PlayerNames, entt::entity>> minds;
-	registry.Each<const Player, const ComputerPlayer>(
-	    [&minds](entt::entity entity, const Player& player, const ComputerPlayer& /*mind*/) {
-		    minds.emplace_back(player.name, entity);
-	    });
-	// The players take their turns in the order of their numbers
-	std::ranges::sort(minds, {}, &std::pair<PlayerNames, entt::entity>::first);
+	std::vector<std::pair<PlayerNames, entt::entity>> players;
+	registry.Each<const Player>(
+	    [&players](entt::entity entity, const Player& player) { players.emplace_back(player.name, entity); });
+	// The players take their turns in the order of their numbers. After its mind, each player notes its influence
+	// power, so a mind sees the players before it as they are in this turn.
+	std::ranges::sort(players, {}, &std::pair<PlayerNames, entt::entity>::first);
 	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	for (const auto& [name, entity] : minds)
+	for (const auto& [name, entity] : players)
 	{
-		auto* mind = registry.TryGet<ComputerPlayer>(entity);
+		if (_timesEvery == 0)
+		{
+			MindTurn(name, entity, turn);
+		}
+		else
+		{
+			_seeMs = 0.0;
+			_handMs = 0.0;
+			const auto start = std::chrono::steady_clock::now();
+			if (MindTurn(name, entity, turn))
+			{
+				const auto fullMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+				_times.Add(static_cast<int>(name), turn, _seeMs, _handMs, fullMs);
+				if (fullMs >= computer_god_times::k_SlowTurnMs)
+				{
+					SPDLOG_LOGGER_INFO(spdlog::get("game"), "Computer god {} slow turn {}: {:.3f} ms, see {:.3f} hand {:.3f}",
+					                   static_cast<int>(name), turn, fullMs, _seeMs, _handMs);
+				}
+			}
+		}
+		if (auto* power = registry.TryGet<PlayerInfluencePower>(entity); power != nullptr)
+		{
+			power->power =
+			    Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().InfluencePower(name) : 0.0f;
+			power->average = player_relations::NextAverageInfluence(power->average, power->power);
+		}
+	}
+	if (_timesEvery != 0 && turn % _timesEvery == 0 && !_times.Gods().empty())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", _times.Report(turn));
+	}
+}
+
+bool ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint32_t turn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.TryGet<ComputerPlayer>(entity);
+	if (mind == nullptr)
+	{
+		return false;
+	}
+	if (mind->mind.nodes.empty())
+	{
+		mind->mind = computer_mind::MakeMind();
+	}
+	computer_world::Validate(*mind);
+	if (!mind->switchedOn || mind->mind.paused || computer_world::HeldByHelp(*mind))
+	{
+		return false;
+	}
+	if (computer_player::DueToStart(*mind))
+	{
+		// The hand starts at the temple, or at a fixed place when the god has none
+		mind->hand.hand = computer_world::StartingHand(name).value_or(k_HandWithoutTemple);
+		// A start can make a creature, so the mind is found again after it
+		if (_aiSeed.has_value())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The computer god {} starts with the personality of AI seed {}",
+			                   static_cast<int>(name), *_aiSeed);
+		}
+		computer_player::Start(*_world, name, *mind, _aiSeed);
+		mind = registry.TryGet<ComputerPlayer>(entity);
 		if (mind == nullptr)
 		{
-			continue;
+			return false;
 		}
-		if (mind->mind.nodes.empty())
-		{
-			mind->mind = computer_mind::MakeMind();
-		}
-		computer_world::Validate(*mind);
-		if (!mind->switchedOn || mind->mind.paused || computer_world::HeldByHelp(*mind))
-		{
-			continue;
-		}
-		if (computer_player::DueToStart(*mind))
-		{
-			// The hand starts at the temple, or at a fixed place when the god has none
-			mind->hand.hand = computer_world::StartingHand(name).value_or(k_HandWithoutTemple);
-			// A start can make a creature, so the mind is found again after it
-			if (_aiSeed.has_value())
-			{
-				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The computer god {} starts with the personality of AI seed {}",
-				                   static_cast<int>(name), *_aiSeed);
-			}
-			computer_player::Start(*_world, name, *mind, _aiSeed);
-			mind = registry.TryGet<ComputerPlayer>(entity);
-			if (mind == nullptr)
-			{
-				continue;
-			}
-		}
-		computer_world::SeeNearHand(*mind, turn);
-		computer_world::GameMindWorld world(name, *mind);
-		computer_mind::ProcessTurn(mind->mind, world, turn);
 	}
+	const auto seeStart = std::chrono::steady_clock::now();
+	computer_world::SeeNearHand(*mind, turn);
+	if (_timesEvery != 0)
+	{
+		_seeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - seeStart).count();
+	}
+	computer_world::CheckCreatureLeash(name);
+	computer_world::GameMindWorld world(name, *mind);
+	world.TimeHand(_timesEvery != 0);
+	computer_mind::ProcessTurn(mind->mind, world, turn);
+	_handMs = world.HandMs();
+	return true;
 }
 
 void ComputerPlayerSystem::FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans)

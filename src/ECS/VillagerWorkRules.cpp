@@ -146,7 +146,8 @@ std::optional<size_t> villager_work::NearestTownForest(std::span<const ForestCan
 
 std::optional<size_t> villager_work::CentreTree(std::optional<float> nearestGrown, std::optional<float> nearestGrowing)
 {
-	if (nearestGrown.has_value() && (!nearestGrowing.has_value() || *nearestGrown < *nearestGrowing))
+	// The grown tree also wins when both are as near
+	if (nearestGrown.has_value() && (!nearestGrowing.has_value() || !(*nearestGrown > *nearestGrowing)))
 	{
 		return 0;
 	}

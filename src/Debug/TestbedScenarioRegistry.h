@@ -303,11 +303,11 @@ struct CreatureSetup
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot
 /// or pile of food or wood, a building or field of the scenario's town, which is made with the first of them, or an
-/// animal, or a fish farm (which joins the nearest town)
+/// animal, a fish farm (which joins the nearest town), or a scaffold of no workshop and no town
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo>
+	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo, ScaffoldInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};
@@ -1040,6 +1040,19 @@ struct Command
 		/// k_ChatSays, the god (player) says the action to all of the players. With value k_ChatTypes, the chat of this
 		/// computer opens and the action is in its line. Needs no creature.
 		Chat,
+		/// The god of the player (player) gets the weight (amount) for each node of its mind of the name (action), as a
+		/// script's SET_COMPUTER_PLAYER_PERSONALITY gives it. Needs no creature.
+		ComputerPersonality,
+		/// The god of the player (player) counts sends (amount) of its creature for a kind of miracle (value: 0 to
+		/// impress, 1 kind, 2 angry). The god then wants to teach the creature that kind. Needs no creature.
+		ComputerUntaughtSends,
+		/// The skirmish box shows over the game with the lands of the playground folder, as after Start Skirmish Game
+		/// (value 0). Value 1 opens the main menu as it shows in a skirmish. Value 2 shows the box and picks its second land,
+		/// as a click on it does. Value 3 shows the land information box with the lines of the script of Two Gods. Value 4
+		/// opens the main menu of a skirmish and presses Leave Skirmish Game, so that the menu asks its question. Value 5
+		/// makes the god of the player bring the creature of the mind file (mindFile) of the creature mind folder, as a
+		/// skirmish starts with the creature that the profile keeps. Needs no creature.
+		SkirmishBox,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1211,6 +1224,48 @@ struct FootpathSetup
 	std::vector<size_t> leadsFrom;
 };
 
+/// A thing that a testbed tool gives to a forced action of a computer god
+struct ComputerActionThing
+{
+	enum class Kind : uint8_t
+	{
+		/// No thing
+		None,
+		/// The town that the land script made with the number
+		Town,
+		/// The icon of the miracle at a worship site of the god
+		Icon,
+		/// The scenario's object at the index
+		Object,
+		/// The scenario's creature at the index
+		Creature,
+		/// The newest workshop of the town that the land script made with the number
+		Workshop,
+		/// The first creature of the player that owner gives
+		PlayerCreature,
+	};
+	Kind kind {Kind::None};
+	uint32_t townId {0};
+	MagicType type {MagicType::None};
+	/// The index of the scenario's object or creature
+	size_t object {0};
+	PlayerNames owner {PlayerNames::PLAYER_ONE};
+};
+
+/// A testbed tool step: the computer god of a player does the action of a node of its mind with two things. The tool
+/// puts the action in the queue of the god, as a land script does, at a game turn after the scenario is laid out.
+struct ComputerActionSetup
+{
+	PlayerNames player {PlayerNames::PLAYER_TWO};
+	/// The game turns after the start of the scenario at which the tool puts the action in the queue. A wait lets the
+	/// worshippers come to the site first, so that they can chant for the miracle.
+	uint32_t afterTurns {0};
+	/// The name of the node, as a land script gives it
+	std::string_view node;
+	ComputerActionThing first;
+	ComputerActionThing second;
+};
+
 struct Scenario
 {
 	/// Unique and never changed, for picking it from the command line or a test
@@ -1277,6 +1332,8 @@ struct Scenario
 	/// The things are made after the lines of the land script run, so that a thing of the scenario's town joins the town
 	/// that the script made
 	bool objectsAfterLandScript {false};
+	/// Actions of computer gods that the testbed tool forces once the scenario is laid out, in order
+	std::vector<ComputerActionSetup> computerActions;
 	/// The debug window opened as the scenario starts, by its name; none when empty
 	std::string_view debugWindow;
 	/// After the land script, the start of a network game fills each slot with no player, as for a game where player

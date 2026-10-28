@@ -10,11 +10,14 @@
 #include "ComputerMind.h"
 
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 
 #include <algorithm>
+#include <bit>
 #include <functional>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -213,7 +216,7 @@ bool ForceWithThings(Mind& mind, World& world, uint16_t node, entt::entity first
 }
 
 /// Calls the function for each node that the name finds, depth first from the root
-void ForEachNamed(const Mind& mind, std::string_view name, const std::function<void(uint16_t)>& each)
+void ForEachNamed(const Mind& mind, const NodeNames& names, std::string_view name, const std::function<void(uint16_t)>& each)
 {
 	std::vector<uint16_t> stack {0};
 	while (!stack.empty())
@@ -222,7 +225,11 @@ void ForEachNamed(const Mind& mind, std::string_view name, const std::function<v
 		stack.pop_back();
 		const auto& node = mind.nodes[index];
 		// A node name ends at its last colon. A longer name that starts with the node name also finds the node.
-		auto own = InfoOf(node.kind).name;
+		auto own = NameOf(names, node.kind);
+		if (const auto colon = own.rfind(':'); colon != std::string_view::npos)
+		{
+			own = own.substr(0, colon);
+		}
 		if (name.size() >= own.size() && name.substr(0, own.size()) == own)
 		{
 			each(index);
@@ -243,6 +250,22 @@ Mind openblack::computer_mind::MakeMind()
 	return mind;
 }
 
+Mind openblack::computer_mind::StartAgain(const Mind& saved)
+{
+	// A mind that has no tree yet makes its tree when the god first needs it
+	Mind mind = saved.nodes.empty() ? Mind {} : MakeMind();
+	for (size_t i = 0; i < std::min(mind.nodes.size(), saved.nodes.size()); ++i)
+	{
+		mind.nodes[i].suppression = saved.nodes[i].suppression;
+		mind.nodes[i].weight = saved.nodes[i].weight;
+	}
+	mind.paused = saved.paused;
+	mind.scriptHold = saved.scriptHold;
+	mind.castRequested = saved.castRequested;
+	mind.queue = saved.queue;
+	return mind;
+}
+
 float openblack::computer_mind::WorkOut(Mind& mind, World& world, uint16_t node, uint32_t turn)
 {
 	{
@@ -250,6 +273,7 @@ float openblack::computer_mind::WorkOut(Mind& mind, World& world, uint16_t node,
 		RecoverSuppression(self, turn);
 		self.bestLeaf.reset();
 		self.object = entt::null;
+		self.siteTown = entt::null;
 		self.lastWorkedOut = turn;
 		self.value = 0.0f;
 	}
@@ -356,23 +380,23 @@ void openblack::computer_mind::ProcessTurn(Mind& mind, World& world, uint32_t tu
 	}
 }
 
-std::vector<uint16_t> openblack::computer_mind::FindNodes(const Mind& mind, std::string_view name)
+std::vector<uint16_t> openblack::computer_mind::FindNodes(const Mind& mind, std::string_view name, const NodeNames& names)
 {
 	std::vector<uint16_t> found;
-	ForEachNamed(mind, name, [&found](uint16_t node) { found.push_back(node); });
+	ForEachNamed(mind, names, name, [&found](uint16_t node) { found.push_back(node); });
 	return found;
 }
 
-bool openblack::computer_mind::SetPersonality(Mind& mind, std::string_view name, float weight)
+bool openblack::computer_mind::SetPersonality(Mind& mind, std::string_view name, float weight, const NodeNames& names)
 {
-	const auto found = FindNodes(mind, name);
+	const auto found = FindNodes(mind, name, names);
 	std::ranges::for_each(found, [&mind, weight](uint16_t node) { mind.nodes[node].weight = weight; });
 	return !found.empty();
 }
 
-bool openblack::computer_mind::SetSuppression(Mind& mind, std::string_view name, float suppression)
+bool openblack::computer_mind::SetSuppression(Mind& mind, std::string_view name, float suppression, const NodeNames& names)
 {
-	const auto found = FindNodes(mind, name);
+	const auto found = FindNodes(mind, name, names);
 	std::ranges::for_each(found, [&mind, suppression](uint16_t node) { mind.nodes[node].suppression = suppression; });
 	return !found.empty();
 }
@@ -380,7 +404,7 @@ bool openblack::computer_mind::SetSuppression(Mind& mind, std::string_view name,
 bool openblack::computer_mind::ForceAction(Mind& mind, World& world, std::string_view name, entt::entity first,
                                            entt::entity second, float value, uint32_t turn)
 {
-	const auto found = FindNodes(mind, name);
+	const auto found = FindNodes(mind, name, world.Names());
 	if (found.empty())
 	{
 		return false;
@@ -460,5 +484,110 @@ void openblack::computer_mind::SeeNearHand(std::vector<SeenThing>& seen, const m
 			}
 		}
 		map_coords::AddCells(coords, spiral.Next());
+	}
+}
+
+std::string openblack::computer_mind::PersonalityName(NodeKind kind)
+{
+	const auto& info = InfoOf(kind);
+	std::string name(info.name);
+	if (info.text.has_value())
+	{
+		name += ": " + std::to_string(*info.text) + " ";
+	}
+	return name;
+}
+
+namespace
+{
+
+/// The bytes that a name takes in a personality file: the name and its zero byte, or all of an entry with no zero byte
+size_t FileLength(const std::string& entry)
+{
+	const auto zero = entry.find('\0');
+	return zero == std::string::npos ? entry.size() : zero + 1;
+}
+
+/// The entry of a kind of node. A table that has no entry for the kind gets the first name of the kind.
+std::string& EntryOf(NodeNames& names, NodeKind kind)
+{
+	const auto index = static_cast<size_t>(kind);
+	const auto& first = FirstNodeNames();
+	if (names.size() < first.size())
+	{
+		names.insert(names.end(), first.begin() + static_cast<std::ptrdiff_t>(names.size()), first.end());
+	}
+	return names.at(index);
+}
+
+} // namespace
+
+openblack::computer_mind::NodeNames openblack::computer_mind::MakeNodeNames()
+{
+	NodeNames names;
+	names.reserve(static_cast<size_t>(NodeKind::_Count));
+	for (size_t kind = 0; kind < static_cast<size_t>(NodeKind::_Count); ++kind)
+	{
+		// The entry has room for the name and its zero byte
+		auto name = PersonalityName(static_cast<NodeKind>(kind));
+		name.push_back('\0');
+		names.push_back(std::move(name));
+	}
+	return names;
+}
+
+const openblack::computer_mind::NodeNames& openblack::computer_mind::FirstNodeNames()
+{
+	static const NodeNames k_First = MakeNodeNames();
+	return k_First;
+}
+
+std::string_view openblack::computer_mind::NameOf(const NodeNames& names, NodeKind kind)
+{
+	const auto index = static_cast<size_t>(kind);
+	const auto& entry = index < names.size() ? names[index] : FirstNodeNames().at(index);
+	const std::string_view bytes(entry);
+	return bytes.substr(0, bytes.find('\0'));
+}
+
+std::vector<uint8_t> openblack::computer_mind::PersonalityFile(const Mind& mind, const NodeNames& names)
+{
+	// The nodes of a mind are in the order of the file: a node, then the whole branch of each child in turn
+	std::vector<uint8_t> bytes;
+	for (const auto& node : mind.nodes)
+	{
+		const auto index = static_cast<size_t>(node.kind);
+		const auto& entry = index < names.size() ? names[index] : FirstNodeNames().at(index);
+		bytes.insert(bytes.end(), entry.begin(), entry.begin() + static_cast<std::ptrdiff_t>(FileLength(entry)));
+		const auto bits = std::bit_cast<uint32_t>(node.weight);
+		for (uint32_t shift = 0; shift < 32; shift += 8)
+		{
+			bytes.push_back(static_cast<uint8_t>(bits >> shift));
+		}
+	}
+	return bytes;
+}
+
+void openblack::computer_mind::ReadPersonalityFile(Mind& mind, NodeNames& names, std::span<const uint8_t> bytes)
+{
+	size_t at = 0;
+	for (auto& node : mind.nodes)
+	{
+		// The load reads as many bytes as the name has now into the name. It does not compare the two names. A name
+		// with no zero byte reads only the bytes of its entry.
+		auto& entry = EntryOf(names, node.kind);
+		const auto length = std::min(FileLength(entry), bytes.size() - at);
+		std::copy_n(bytes.begin() + static_cast<std::ptrdiff_t>(at), length, entry.begin());
+		at += length;
+		auto bits = std::bit_cast<uint32_t>(node.weight);
+		for (uint32_t shift = 0; shift < 32 && at < bytes.size(); shift += 8, ++at)
+		{
+			bits = (bits & ~(0xFFu << shift)) | (static_cast<uint32_t>(bytes[at]) << shift);
+		}
+		node.weight = std::bit_cast<float>(bits);
+		if (at >= bytes.size())
+		{
+			return;
+		}
 	}
 }

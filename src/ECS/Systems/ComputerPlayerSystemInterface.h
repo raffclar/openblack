@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstdint>
+
 #include <optional>
 #include <span>
 #include <string_view>
@@ -59,6 +60,17 @@ public:
 	virtual void SetHand(PlayerNames player, glm::vec3 place, bool fixedHeight) = 0;
 	/// Where the hand of the god is, at the height of the land under it. None for a player with no computer mind.
 	[[nodiscard]] virtual std::optional<glm::vec3> HandPosition(PlayerNames player) = 0;
+	/// A land script sets what the mind of the player thinks of another player. The mind keeps two times the value. The
+	/// game makes the player when the land has none yet.
+	virtual void SetAttitude(PlayerNames /*player*/, PlayerNames /*other*/, float /*attitude*/) {}
+	/// What the mind of the player thinks of another player, as a land script reads it: half of the kept value
+	[[nodiscard]] virtual float Attitude(PlayerNames /*player*/, PlayerNames /*other*/) const { return 0.0f; }
+	/// A land script saves the weights of the mind of the player in a personality file. A relative name is in the
+	/// profile folder. The save makes the file or writes over it. Returns true when it wrote the whole file.
+	virtual bool SavePersonality(PlayerNames /*player*/, std::string_view /*file*/) { return false; }
+	/// A land script loads the weights of a personality file into the mind of the player. The load looks for a relative
+	/// name in the profile folder first, then in the game folder. Returns true when it found the file.
+	virtual bool LoadPersonality(PlayerNames /*player*/, std::string_view /*file*/) { return false; }
 	/// In the turn of the players: each mind that is switched on and did not start on the land starts
 	virtual void ProcessTurn() = 0;
 	/// At the start of a network game, in the order of the gods of the slots: each god with a citadel that no human and
@@ -74,6 +86,8 @@ public:
 	/// as it starts. None: each god keeps its built-in personality. The seed is not part of the saved world: every
 	/// computer of a network game sets it before its land loads.
 	virtual void SetAiSeed(std::optional<uint32_t> seed) = 0;
+	/// Tools: log the time of the mind and the hand of each computer god each time this many turns go by (0 for never)
+	virtual void SetTimesReport(uint32_t /*everyTurns*/) {}
 };
 
 } // namespace openblack::ecs::systems

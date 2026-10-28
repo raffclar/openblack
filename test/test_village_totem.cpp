@@ -581,3 +581,24 @@ TEST(VillageTotemRules, TheSymbolsSitOverTheTopOfTheCarvingWhateverItsHeight)
 	const float plinthY = 26.0f;
 	EXPECT_FLOAT_EQ(vt::TopY(plinthY + vt::k_IconAbovePlinth, 11.5f), plinthY + 2.729f + 11.5f);
 }
+
+TEST(VillageTotemSystem, AComputerGodRaisesItWithNoSlideAndNoNumber)
+{
+	auto village = MakeVillage(true);
+	auto& system = *village.system;
+	system.RaiseByGod(PlayerNames::PLAYER_TWO, village.totem, 1.0f);
+	// The living near it see the hand of the god take it
+	ASSERT_EQ(village.world->reactions.size(), 1u);
+	EXPECT_EQ(village.world->reactions[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(village.world->reactions[0].position, glm::vec3(5.0f, 3.0f, 5.0f));
+	// The creature of the town's player feels it, and the town takes the share
+	ASSERT_EQ(village.world->empathies.size(), 1u);
+	EXPECT_EQ(village.world->empathies[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_FLOAT_EQ(village.world->registry.Get<Town>(village.town).worshipShare, 1.0f);
+	EXPECT_TRUE(village.world->numbers.empty());
+	EXPECT_FALSE(system.GetGripped().has_value());
+	// Raised to none, the creature still feels it
+	system.RaiseByGod(PlayerNames::PLAYER_TWO, village.totem, 0.0f);
+	EXPECT_EQ(village.world->empathies.size(), 2u);
+	EXPECT_FLOAT_EQ(village.world->registry.Get<Town>(village.town).worshipShare, 0.0f);
+}

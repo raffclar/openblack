@@ -15,6 +15,7 @@
 #include <map>
 #include <numbers>
 #include <set>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -31,6 +32,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -74,6 +76,15 @@ public:
 		registry.Assign<OneOffSpellSeed>(globe, OneOffSpellSeed {.seedType = SpellSeedType::Food, .position = position});
 		sizes[globe] = {.radius = 1.0f, .height = 2.0f};
 		return globe;
+	}
+
+	entt::entity AddScaffold(glm::vec3 position)
+	{
+		const auto scaffold = registry.Create();
+		registry.Assign<Transform>(scaffold, position, glm::mat3(1.0f), glm::vec3(0.7f));
+		registry.Assign<Scaffold>(scaffold);
+		sizes[scaffold] = {.radius = 2.0f, .height = 3.0f};
+		return scaffold;
 	}
 
 	entt::entity AddTree(glm::vec3 position, float weight)
@@ -168,6 +179,7 @@ public:
 	void HeatHeld(entt::entity object) override { heated.push_back(object); }
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override { globesTaken.emplace_back(globe, player); }
+	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override { scaffoldsTaken.emplace_back(scaffold, player); }
 	void PlaySample(uint32_t sample, glm::vec3) override { samples.push_back(sample); }
 	bool TapThing(entt::entity object, glm::vec3, PlayerNames) override
 	{
@@ -420,6 +432,14 @@ public:
 	{
 		return stores.contains(target) || (plinths.contains(target) && gateStones.contains(held));
 	}
+	[[nodiscard]] bool JoinsScaffold(entt::entity target, entt::entity held) const override
+	{
+		return scaffolds.contains(target) && scaffolds.contains(held);
+	}
+	void JoinScaffold(entt::entity target, entt::entity held) override
+	{
+		joined.emplace_back(target, held, registry.AllOf<InHand>(held));
+	}
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override
 	{
 		if (!plinths.contains(plinth) || !gateStones.contains(stone))
@@ -492,6 +512,7 @@ public:
 	int pathsForgotten {0};
 	std::vector<entt::entity> artefactsTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
+	std::vector<std::pair<entt::entity, PlayerNames>> scaffoldsTaken;
 	std::vector<uint32_t> samples;
 	std::vector<entt::entity> tapped;
 	std::vector<entt::entity> villagersInHand;
@@ -545,6 +566,10 @@ public:
 	std::set<entt::entity> plinths;
 	std::set<entt::entity> gateStones;
 	std::vector<std::pair<entt::entity, entt::entity>> laidStones;
+	/// The scaffolds that the hand can join, and each join: the target, the held scaffold, and whether the hand still
+	/// held it then
+	std::set<entt::entity> scaffolds;
+	std::vector<std::tuple<entt::entity, entt::entity, bool>> joined;
 	std::map<entt::entity, uint32_t> stored;
 	std::vector<uint32_t> pouredAmounts;
 	std::vector<entt::entity> usedUp;
@@ -795,6 +820,37 @@ TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAGlobeFromTheSide)
 	ASSERT_TRUE(pose.has_value());
 	EXPECT_EQ(pose->hold, HoldType::Side);
 	EXPECT_FLOAT_EQ(world->registry.Get<HandGrab>(world->hand).lowering, 0.7f * 2.0f);
+}
+
+TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAScaffoldFromTheSideAndItsWorkshopIsTold)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(*system->GetHeld(), scaffold);
+	EXPECT_TRUE(world->tapped.empty());
+	// The hand tells the workshop one time, so that the workshop keeps the scaffold's place in its yard
+	ASSERT_EQ(world->scaffoldsTaken.size(), 1u);
+	EXPECT_EQ(world->scaffoldsTaken.front().first, scaffold);
+	const auto pose = system->GetHeldPose();
+	ASSERT_TRUE(pose.has_value());
+	EXPECT_EQ(pose->hold, HoldType::Side);
+}
+
+TEST_F(HandGrabSystemWithWorld, AShortPressOnAScaffoldTakesNothing)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	Frame(50);
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->scaffoldsTaken.empty());
 }
 
 TEST_F(HandGrabSystemWithWorld, WithTheLeashHeldAShortPressIsAnOrderInsteadOfATap)
@@ -1916,6 +1972,31 @@ TEST_F(HandGrabSystemWithWorld, AGateStonePressedOntoThePlinthIsLaidInIt)
 	EXPECT_EQ(world->laidStones.front().second, stone);
 	// The stone is used up, leaving its ghost, and the hand is empty
 	EXPECT_EQ(world->usedUp, std::vector<entt::entity> {stone});
+	EXPECT_TRUE(world->takenWhole.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, AScaffoldPressedOntoAScaffoldJoinsIt)
+{
+	const auto held = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->scaffolds.insert(held);
+	world->underCursor = held;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	const auto target = world->AddTree({20.0f, 0.0f, 0.0f}, 10.0f);
+	world->scaffolds.insert(target);
+	world->underCursor = target;
+	EXPECT_TRUE(Press());
+	// The hand lets go of the held scaffold before the join, and is empty after it
+	ASSERT_EQ(world->joined.size(), 1u);
+	EXPECT_EQ(std::get<0>(world->joined.front()), target);
+	EXPECT_EQ(std::get<1>(world->joined.front()), held);
+	EXPECT_FALSE(std::get<2>(world->joined.front()));
 	EXPECT_TRUE(world->takenWhole.empty());
 	EXPECT_FALSE(system->GetHeld().has_value());
 }

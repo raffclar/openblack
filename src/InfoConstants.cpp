@@ -110,6 +110,18 @@ AbodeInfo GAbodeInfo::Find(Tribe tribe, AbodeNumber abodeNumber)
 	                         " + " + k_AbodeNumberStrs.at(static_cast<size_t>(abodeNumber)).data());
 }
 
+std::optional<AbodeInfo> GAbodeInfo::FindFirst(std::span<const GAbodeInfo> rows, Tribe tribe, AbodeNumber abodeNumber)
+{
+	const auto row = std::ranges::find_if(rows, [tribe, abodeNumber](const GAbodeInfo& abode) {
+		return (abode.tribeType == tribe || abode.tribeType == Tribe::NONE) && abode.abodeNumber == abodeNumber;
+	});
+	if (row == rows.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<AbodeInfo>(std::distance(rows.begin(), row));
+}
+
 FeatureInfo GFeatureInfo::Find(const std::string& name)
 {
 	// TODO (#749) use std::views::enumerate

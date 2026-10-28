@@ -700,15 +700,9 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 {
 	auto& registry = Entities();
 	auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
-	if (component == nullptr || component->charging || HeldSeedOf(*component) != entt::null ||
-	    !Locator::infoConstants::has_value())
-	{
-		return false;
-	}
-	const auto& info = Locator::infoConstants::value();
-	const auto plain =
-	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, component->seed), magic::k_BasePowerUpLevel);
-	if (!IsEnabled(player, plain))
+	// Only an icon that charges already refuses the god. A seed of the icon in a hand does not stop the charge, and the
+	// god asked only for a miracle that it may cast.
+	if (component == nullptr || component->charging)
 	{
 		return false;
 	}
@@ -730,6 +724,12 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 	component->powerUp = magic::k_BasePowerUpLevel;
 	component->charger = player;
 	component->chargeStartTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// An icon that is full already gives its miracle to the hand of the god. Only the hand of a human player takes it,
+	// so the hand of a computer god never holds the seed: the god casts from the store of the icon.
+	if (icons::ReadyForHand(ChargeOf(*component, player), HandReady(player)))
+	{
+		GiveSeed(icon);
+	}
 	return true;
 }
 

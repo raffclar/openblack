@@ -55,14 +55,14 @@ namespace detail
 constexpr std::array<MindDomain, static_cast<size_t>(NodeKind::_Count)> k_Domains {{
     MindDomain::Core,         // Root
     MindDomain::Core,         // TopPlayerInteract
-    MindDomain::Core,         // TopCreatureInteract
+    MindDomain::CreatureCare, // TopCreatureInteract
     MindDomain::Core,         // TopTownInteract
-    MindDomain::Core,         // TopDefeatPlayer
+    MindDomain::Attitudes,    // TopDefeatPlayer
     MindDomain::Core,         // TopReactToPlayer
     MindDomain::Core,         // TopWorldInteract
-    MindDomain::Core,         // NeedGiveToPlayer
-    MindDomain::Core,         // NeedTalktoPlayer
-    MindDomain::Core,         // NeedExpandInfluence
+    MindDomain::Attitudes,    // NeedGiveToPlayer
+    MindDomain::Attitudes,    // NeedTalktoPlayer
+    MindDomain::Conquest,     // NeedExpandInfluence
     MindDomain::Core,         // NeedLookaftercreature
     MindDomain::Core,         // NeedTeachCreature
     MindDomain::Core,         // NeedPlayWithCreature
@@ -71,14 +71,14 @@ constexpr std::array<MindDomain, static_cast<size_t>(NodeKind::_Count)> k_Domain
     MindDomain::Core,         // NeedExpandTown
     MindDomain::Core,         // NeedAttendToWorshippersWorshippers
     MindDomain::Core,         // NeedIncreaseTownPopulation
-    MindDomain::Core,         // NeedDefeatPlayer
-    MindDomain::Core,         // NeedPlayerWithMoreSpells
-    MindDomain::Core,         // NeedPlayerWithBetterCreature
-    MindDomain::Core,         // NeedPlayerWithMoreWorshippers
+    MindDomain::Attitudes,    // NeedDefeatPlayer
+    MindDomain::Attitudes,    // NeedPlayerWithMoreSpells
+    MindDomain::Attitudes,    // NeedPlayerWithBetterCreature
+    MindDomain::Attitudes,    // NeedPlayerWithMoreWorshippers
     MindDomain::Core,         // NeedReactToPlayer
-    MindDomain::Core,         // NeedCheckTownsForBeliefAttack
-    MindDomain::Core,         // NeedCheckTownForDamage
-    MindDomain::Core,         // NeedCheckTownForProtection
+    MindDomain::Defence,      // NeedCheckTownsForBeliefAttack
+    MindDomain::Miracles,     // NeedCheckTownForDamage
+    MindDomain::Defence,      // NeedCheckTownForProtection
     MindDomain::War,          // ActionThrowThingAtPlayer
     MindDomain::Attitudes,    // ActionSendNiceTextToPlayer
     MindDomain::Attitudes,    // ActionSendNastyTextToPlayer
@@ -144,7 +144,7 @@ constexpr std::array<MindDomain, static_cast<size_t>(NodeKind::_Count)> k_Domain
     MindDomain::Towns,        // ObjectGetWoodFromForest
     MindDomain::Towns,        // ObjectGetWoodFromOtherTown
     MindDomain::Worship,      // ObjectCastFoodSpellOnWorshipSite
-    MindDomain::Towns,        // ObjectShallCastWoodSpellAgain
+    MindDomain::Worship,      // ObjectShallCastWoodSpellAgain
     MindDomain::Towns,        // ObjectCastFoodSpellOn
     MindDomain::Towns,        // ObjectCastWoodSpellOn
     MindDomain::Worship,      // ObjectFindFreeVillagerBuilderInTown

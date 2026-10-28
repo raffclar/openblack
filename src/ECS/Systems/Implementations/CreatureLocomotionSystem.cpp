@@ -1439,6 +1439,15 @@ void CreatureLocomotionSystem::ResetPace(entt::entity creature)
 	}
 }
 
+void CreatureLocomotionSystem::SetKeptFraction(entt::entity creature, float fraction)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* self = registry.TryGet<CreatureLocomotion>(creature))
+	{
+		self->fraction = fraction > 0.0f ? std::min(fraction, 1.0f) : 0.0f;
+	}
+}
+
 float CreatureLocomotionSystem::KeptFraction(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();

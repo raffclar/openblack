@@ -664,6 +664,16 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	{
 		registry.Context().explorationMap = std::move(exploration);
 	}
+	// A loaded skirmish starts as a skirmish starts: in the first turn the god of the player tries to bring the creature
+	// that the profile keeps. When the save kept the creature of the god, the god brings no second creature. The world
+	// of a game server continues and brings no creature.
+	if (use == SavedLandUse::SavedGame &&
+	    land_change::LoadBringsProfileCreature(registry.Context().skirmish, Locator::time::value().IsNetworkGame()))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "A saved skirmish loads: the god of the player tries to bring the creature again");
+		Locator::playerCommandSystem::value().SetPlayersCreatureDue(true);
+	}
 	timer.Step("start");
 	if (keepsLand)
 	{
@@ -869,8 +879,9 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 		Locator::chatSystem::value().Reset();
 	}
 	Locator::handDemoSystem::value().Reset();
-	// The commands that the players made on the old land do nothing on the new land
+	// The commands that the players made on the old land do nothing on the new land, and no creature of a skirmish is due
 	Locator::playerCommandSystem::value().Reset();
+	Locator::playerCommandSystem::value().SetPlayersCreatureDue(false);
 	Locator::creatureFightSystem::value().Reset();
 	// The new land's temples get their own leash posts
 	if (Locator::leashSystem::has_value())
@@ -1018,6 +1029,12 @@ void LandSystem::StartNewLand(land_change::Kind change)
 		Locator::scriptMusicSystem::value().Reset();
 	}
 	View().StartLandAudio();
+	// A skirmish starts: in the first turn the god of the player brings the creature that the profile keeps. The commands
+	// of that turn come first, and the computer gods start after it.
+	if (land_change::RulesFor(change).profileCreatureBrought && !clock.IsNetworkGame())
+	{
+		Locator::playerCommandSystem::value().SetPlayersCreatureDue(true);
+	}
 }
 
 void LandSystem::LoadLandscape(const std::filesystem::path& path)

@@ -30,6 +30,13 @@ void SwitchOn(ecs::components::ComputerPlayer& player, bool on)
 	}
 }
 
+void StartAgainAfterLoad(ecs::components::ComputerPlayer& player)
+{
+	player.mind = computer_mind::StartAgain(player.mind);
+	player.creatureLike.reset();
+	player.hand.locked = false;
+}
+
 bool DueToStart(const ecs::components::ComputerPlayer& player)
 {
 	return player.switchedOn && !player.started;

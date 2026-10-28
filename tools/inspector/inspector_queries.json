@@ -907,7 +907,7 @@
   "writes": true
  },
  {
-  "description": "The debug windows and the game's own (its menu, the start-of-game question skip_box, the tattoo_editor, the custom music controls music_player, the multiplayer front end multiplayer, the end box end_box, the Creature Cave): name, kind, open; the menu's page (or question), the multiplayer box (choose_connection, find_games, login, game_list, room, conditions, or message: its text), the controls of the game's dialogs that can be pressed by name, the skip box's answer picked, and the multiplayer lines (the games of game_list, or the last 10 lines of the room's chat)",
+  "description": "The debug windows and the game's own (its menu, the start-of-game question skip_box, the tattoo_editor, the custom music controls music_player, the multiplayer front end multiplayer, the end box end_box, the skirmish box skirmish_box, the land information box land_info_box, the Creature Cave): name, kind, open; the menu's page (or question), the multiplayer box (choose_connection, find_games, login, game_list, room, conditions, or message: its text), the controls of the game's dialogs that can be pressed by name, the skip box's answer picked, the multiplayer lines (the games of game_list, or the last 10 lines of the room's chat), the skirmish box's lands as lines with the land picked as selected, and the land information box's title as its page and its list as lines",
   "kind": "list",
   "parameters": [],
   "query": "gui.windows"
@@ -941,7 +941,7 @@
   "writes": true
  },
  {
-  "description": "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The multiplayer front end (multiplayer): the controls of its box, or of its message, by name. The music_player: its buttons by name (Music, Play, Pause, Stop, Previous, Next, Rewind, Fast Forward, Shuffle, Repeat, Play List) while they show. The end box (end_box): its tabs and arrows by name. The game's dialogs are clicked through the game's input, in order behind any input still to come. A debug window's button inside a table row or another scope its window pushed needs path: the labels and numbers leading to it. The press is made at the window's next frame; read what it changed after. When another dialog takes the clicks, no click is sent and the answer gives the reason",
+  "description": "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The multiplayer front end (multiplayer): the controls of its box, or of its message, by name. The music_player: its buttons by name (Music, Play, Pause, Stop, Previous, Next, Rewind, Fast Forward, Shuffle, Repeat, Play List) while they show. The end box (end_box): its tabs and arrows by name. The skirmish box (skirmish_box): Back, Start Game while it shows, or a land of its list by its name. The land information box (land_info_box): Back or Go!. The game's dialogs are clicked through the game's input, in order behind any input still to come. A debug window's button inside a table row or another scope its window pushed needs path: the labels and numbers leading to it. The press is made at the window's next frame; read what it changed after. When another dialog takes the clicks, no click is sent and the answer gives the reason",
   "kind": "object",
   "parameters": [
    {
@@ -1480,6 +1480,12 @@
   "kind": "list",
   "parameters": [],
   "query": "living.fish_farms"
+ },
+ {
+  "description": "The workshops: their room for scaffolds, the turns left on a scaffold, and the scaffolds they count",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.workshops"
  },
  {
   "description": "The scenery the scripts open and close (gates, the gate stone plinth, the piper's cave, the phone box): its open word, place in its clip and resting place, whether it is in the land's draw list and was on screen, its gate stones' value and the circles a creature's route goes round",

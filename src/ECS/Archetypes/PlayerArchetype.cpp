@@ -11,6 +11,7 @@
 
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -30,6 +31,11 @@ entt::entity PlayerArchetype::Create(PlayerNames name)
 	// Each player has an alignment from the start, which is neutral until the player does good or evil. Thus a player has
 	// the same parts on a land that the game loaded and on a land that the story changed to.
 	registry.Assign<Alignment>(entity);
+	// Each player has no allies at the start, a computer mind that thinks of each player at the start value, and no
+	// influence power yet
+	registry.Assign<PlayerAllies>(entity);
+	registry.Assign<ComputerAttitudes>(entity);
+	registry.Assign<PlayerInfluencePower>(entity);
 	// A player made again on a later land is as they were on the last
 	if (Locator::playerSystem::has_value())
 	{

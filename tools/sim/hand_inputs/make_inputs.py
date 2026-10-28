@@ -10,10 +10,11 @@ object can also have an "expect", the least count of each deed of the hand that 
 
 writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json,
 twogods_totem.json, strokes.json, twogods_scoop_throw.json, gods_ring_slot1_scoop_throw.json, casts.json,
-twogods_slot1_tree_press.json, busy_hand.json, cast_edge.json and the store inputs of the online maps
-(<map>_slot<n>_store.json) beside this script. strokes.json plays on the testbed scenario hand.recorded_strokes
-(server_check.py --scenario hand.recorded_strokes), casts.json on miracles.recorded_casts and cast_edge.json on
-miracles.cast_at_influence_edge. The twogods inputs play on the
+twogods_slot1_tree_press.json, busy_hand.json, cast_edge.json, scaffold_yard.json, workshop_wood.json, scaffold_build.json and
+the store inputs of the online maps (<map>_slot<n>_store.json) beside this script. strokes.json plays on the testbed scenario
+hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes), scaffold_yard.json on objects.scaffold_snaps_into_yard,
+workshop_wood.json on objects.workshop_wood_by_hand, scaffold_build.json on objects.scaffold_starts_building, casts.json on
+miracles.recorded_casts and cast_edge.json on miracles.cast_at_influence_edge. The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 
 fight.json is not made here: it is the recording of the fight autopilot on the testbed scenario combat.recorded_presses,
@@ -257,6 +258,65 @@ def scoop_throw(pile):
     return script.events
 
 
+def scaffold_take():
+    """The testbed scenario objects.scaffold_snaps_into_yard: once the scaffold stands in the first place of the yard, the
+    hand takes it with a held press, carries it towards the camera and puts it down with a click. The pixels are of the
+    scenario's own camera, which shows the yard in front of the workshop"""
+    script = Script()
+    script.wait(200)
+    script.move((559, 571), 10)
+    script.wait(10)
+    script.press()
+    script.wait(60)
+    script.move((559, 760), 30)
+    script.release()
+    script.wait(20)
+    script.press()
+    script.release()
+    script.wait(60)
+    return script.events
+
+
+def workshop_wood():
+    """The testbed scenario objects.workshop_wood_by_hand: the hand scoops logs from the workshop's pile with a held
+    press, then clicks on the workshop, which takes the logs into its pile again. The pixels are of the scenario's own
+    camera"""
+    script = Script()
+    script.wait(200)
+    script.move((644, 558), 10)
+    script.wait(10)
+    script.press()
+    script.wait(60)
+    script.release()
+    script.wait(20)
+    script.move((563, 515), 20)
+    script.wait(10)
+    script.press()
+    script.release()
+    script.wait(60)
+    return script.events
+
+
+def scaffold_build():
+    """The testbed scenario objects.scaffold_starts_building: the hand takes the loose scaffold with a held press,
+    carries it near the village centre and holds it still there, so that the scaffold finds the building that the town
+    wants. Then the hand puts the scaffold down with a click, and the building site opens. The pixels are of the
+    scenario's own camera"""
+    script = Script()
+    script.wait(200)
+    script.move((555, 538), 10)
+    script.wait(10)
+    script.press()
+    script.wait(60)
+    script.move((729, 566), 30)
+    script.release()
+    script.wait(60)
+    script.press()
+    script.release()
+    script.wait(60)
+    return script.events
+
+
 # The gesture that powers up the water miracle of miracles.recorded_casts to its first level
 CASTS_POWER_UP = "spiral"
 
@@ -479,6 +539,9 @@ def main():
     write("twogods", two_gods(), TWO_GODS_STORE_CAMERA, {"scoops": 1, "uses": 1})
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("strokes", strokes())
+    write("scaffold_yard", scaffold_take(), expect={"takes": 1, "puts_down": 1})
+    write("workshop_wood", workshop_wood(), expect={"scoops": 1, "uses": 1})
+    write("scaffold_build", scaffold_build(), expect={"takes": 1, "puts_down": 1})
     # The food pile of the first god's store on TwoGods (net_check.py --input, server_check.py --land
     # Playgrounds/TwoGods.txt --input)
     write("twogods_scoop_throw", scoop_throw((712, 437)), TWO_GODS_STORE_CAMERA, {"scoops": 1, "throws": 1})

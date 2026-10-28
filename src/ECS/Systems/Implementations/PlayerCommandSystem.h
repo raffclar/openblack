@@ -29,6 +29,7 @@ public:
 	void SendOpenBlock() override;
 	void RunSent(uint32_t turn) override;
 	void Reset() override;
+	void SetPlayersCreatureDue(bool due) override { _playersCreatureDue = due; }
 	void SetTurnListener(TurnListener listener) override { _listener = std::move(listener); }
 	void Receive(uint32_t turn, std::vector<player_commands::Command> commands) override;
 	void SetSender(PlayerNames player) override { _sender = player; }
@@ -44,6 +45,8 @@ private:
 	void StartGodsAtSentAlignments(std::span<const PlayerNames> joined);
 	/// At the start of a network game, the god of each human that joined brings its player's creature
 	void BringCreatures(std::span<const PlayerNames> joined);
+	/// At the start of a skirmish, the god of this computer's player brings the creature that the profile keeps
+	void BringPlayersCreature();
 
 	player_commands::CommandQueue _queue;
 	PlayerNames _sender {PlayerNames::PLAYER_ONE};
@@ -51,6 +54,8 @@ private:
 	player_commands::TurnCommandSourceInterface* _source {nullptr};
 	/// The commands from other computers, by the turn that does them
 	std::map<uint32_t, std::vector<player_commands::Command>> _received;
+	/// The god of this computer's player brings the creature of the profile in the next turn
+	bool _playersCreatureDue {false};
 };
 
 } // namespace openblack::ecs::systems

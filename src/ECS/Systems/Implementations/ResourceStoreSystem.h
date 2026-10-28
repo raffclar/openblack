@@ -55,6 +55,10 @@ public:
 private:
 	/// A storage pit takes what it will into its piles, without the giving's count in its town
 	uint32_t FillPit(entt::entity store, ResourceType type, uint32_t amount, bool poisoned);
+	/// A workshop takes wood into its pile: what the pile took
+	uint32_t FillWorkshop(entt::entity store, ResourceType type, uint32_t amount, bool poisoned);
+	/// A workshop gives wood from its pile, else what it counts: what it gave
+	uint32_t TakeFromWorkshop(entt::entity store, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker);
 	/// The store's own count loses what was taken; taking counts against the town's owner, and is remembered of the taker
 	uint32_t RemovedFromStore(entt::entity store, ResourceType type, uint32_t amount, std::optional<PlayerNames> taker);
 	/// What a storage pit's piles give of what is asked, the last wood pile first

@@ -47,7 +47,8 @@ struct Switches
 	std::optional<std::string> settingsFile;
 };
 
-/// The switches in the text of a command line. A switch starts after a "-" or a "/". Its name can be in any case, and
+/// The switches in the text of a command line. The text includes the path of the program, thus a "-" or a "/" in the path
+/// can also start a switch, as in the original game. A switch starts after a "-" or a "/". Its name can be in any case, and
 /// other text can follow the name. The character directly after each "-" or "/" never starts a switch, thus "--NEWGAME"
 /// is not a switch. The -SETTINGS: switch takes the text after the colon up to the next space. Of -NEWGAME and
 /// -MULTIPLAYER, only the first on the line counts.

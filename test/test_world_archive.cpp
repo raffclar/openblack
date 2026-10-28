@@ -19,6 +19,7 @@
 #include <optional>
 #include <regex>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -48,6 +49,7 @@
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Sprite.h"
+#include "ECS/Components/TownAggression.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -648,6 +650,30 @@ TEST(WorldArchive, AWalkCarriesOnFromTheSavedSearch)
 	}
 }
 
+// The heading along the route and the circles that the obstacles leave out come back, so that a loaded walk starts
+// its next leg as the walk that was not saved does
+TEST(WorldArchive, AWalkKeepsItsHeadingAndTheCirclesItLeavesOut)
+{
+	using creature_route::Follower;
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	auto walking = WalkSearchingAgain();
+	ASSERT_NE(walking.GetHeading(), GameHeading {});
+	walking.GetObstacles().LeaveOutCirclesHolding({1200.0f, 1200.0f}, {1300.0f, 1300.0f});
+	const auto bytes = FollowerBytes(context, walking);
+
+	Follower loaded;
+	const EntityRemap identity;
+	BinaryReader in(context, bytes, identity);
+	Load(in, loaded);
+	ASSERT_FALSE(in.Failed());
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_EQ(loaded.GetHeading(), walking.GetHeading());
+	// A circle round a point that the walk leaves out does not go in, and other circles do
+	EXPECT_FALSE(loaded.GetObstacles().Add(7u, {1200.0f, 1205.0f}, 10.0f));
+	EXPECT_TRUE(loaded.GetObstacles().Add(8u, {1250.0f, 1205.0f}, 10.0f));
+}
+
 TEST(WorldArchive, ACreaturesWalkIsKeptWithItsComponent)
 {
 	entt::meta_ctx context;
@@ -674,6 +700,62 @@ TEST(WorldArchive, ACreaturesWalkIsKeptWithItsComponent)
 	ASSERT_TRUE(read.routeWalker.has_value());
 	EXPECT_EQ(read.routeWalker->height, 30.0f);
 	EXPECT_EQ(SaveWorld(loaded, context), bytes);
+}
+
+TEST(WorldArchive, ATownKeepsTheHarmOfTheLastAttackOfEachPlayer)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry original;
+	const auto town = original.create();
+	auto& record = original.emplace<ecs::components::TownAggression>(town).record;
+	record.aggression.at(1) = 4.0f;
+	record.lastTurns.at(1) = 77u;
+	record.lastAggressor = PlayerNames::PLAYER_TWO;
+	record.lastTurn = 77u;
+	record.mercy = 2.5f;
+	record.lastHarms.at(1) = {.burn = 3.0f, .crush = 1.0f, .hit = 0.5f};
+	record.lastHarms.at(2) = {.burn = 0.0f, .crush = 6.0f, .hit = 0.0f};
+	const auto bytes = SaveWorld(original, context);
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	const auto& read = loaded.get<ecs::components::TownAggression>(town).record;
+	EXPECT_EQ(read.lastHarms.at(1).burn, 3.0f);
+	EXPECT_EQ(read.lastHarms.at(1).crush, 1.0f);
+	EXPECT_EQ(read.lastHarms.at(1).hit, 0.5f);
+	EXPECT_EQ(read.lastHarms.at(2).crush, 6.0f);
+	EXPECT_EQ(read.lastHarms.at(3).burn, 0.0f);
+	EXPECT_EQ(read.lastAggressor, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(read.mercy, 2.5f);
+	EXPECT_EQ(SaveWorld(loaded, context), bytes);
+}
+
+TEST(WorldArchive, ARecordOfAnOlderBuildWithNoHarmsStillReadsItsOtherFields)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	ecs::town_aggression::Record record;
+	record.aggression.at(3) = 9.0f;
+	record.lastTurn = 12u;
+	record.protectionMultiplier = 0.5f;
+	record.mercy = 1.5f;
+	record.lastHarms.at(0) = {.burn = 1.0f, .crush = 2.0f, .hit = 3.0f};
+	BinaryWriter whole(context);
+	Save(whole, record);
+	BinaryWriter harms(context);
+	Save(harms, record.lastHarms);
+	ASSERT_GT(whole.Bytes().size(), harms.Bytes().size());
+	// The harms are the last bytes of the record, so an older record is the same bytes without them
+	const auto older = std::span(whole.Bytes()).first(whole.Bytes().size() - harms.Bytes().size());
+	ecs::town_aggression::Record loaded;
+	const EntityRemap identity;
+	BinaryReader in(context, older, identity);
+	Load(in, loaded);
+	EXPECT_EQ(loaded.aggression.at(3), 9.0f);
+	EXPECT_EQ(loaded.lastTurn, 12u);
+	EXPECT_EQ(loaded.protectionMultiplier, 0.5f);
+	EXPECT_EQ(loaded.mercy, 1.5f);
+	EXPECT_EQ(loaded.lastHarms.at(0).burn, 0.0f);
 }
 
 TEST(WorldArchive, SectionsKeepTheirNamesAndBytes)

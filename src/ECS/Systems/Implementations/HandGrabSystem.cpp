@@ -36,6 +36,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
@@ -195,6 +196,11 @@ GrabKind HandGrabSystem::KindOf(entt::entity object) const
 	if (registry.AnyOf<StreetLantern, TeleportStone>(object))
 	{
 		return GrabKind::None;
+	}
+	// The hand holds a scaffold as any loose thing
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return GrabKind::MobileObject;
 	}
 	if (const auto* pot = registry.TryGet<const Pot>(object))
 	{
@@ -954,6 +960,11 @@ bool HandGrabSystem::AppliesTo(const HandGrab& grab, entt::entity target) const
 	{
 		return false;
 	}
+	// A scaffold joins a scaffold under it
+	if (_world->JoinsScaffold(target, held))
+	{
+		return true;
+	}
 	// A pot goes to a store of what it holds, or into a pile or pot of the same. Anything else goes whole to an altar, a
 	// gate stone plinth or a store.
 	const auto pot = _world->PotFactsOf(held);
@@ -1006,6 +1017,15 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	case altar_offering::Answer::NotAnAltar:
 		break;
 	}
+	// A held scaffold joins the scaffold under it and is gone from the hand
+	if (_world->JoinsScaffold(target, held))
+	{
+		_world->Entities().Remove<InHand>(held);
+		_world->JoinScaffold(target, held);
+		_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
+		Empty(grab);
+		return true;
+	}
 	// A pot is given to a store of what it holds, or poured into a pile or pot of the same
 	const auto pot = _world->PotFactsOf(held);
 	if (!pot.has_value())
@@ -1020,7 +1040,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 			return true;
 		}
 		// A tree, a dead tree, a fence, a mushroom or an animal goes whole into a store of what it is worth
-		// TODO(stores): onto a teleport or a scaffold; openblack has none of those yet
+		// TODO(stores): onto a teleport, or a scaffold into a store of wood; openblack has none of those yet
 		if (!_world->TakeIntoStore(target, held))
 		{
 			return false;
@@ -1278,6 +1298,10 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	if (registry.AllOf<OneOffSpellSeed>(object))
 	{
 		_world->GlobeIntoHand(object, player);
+	}
+	if (registry.AllOf<Scaffold>(object))
+	{
+		_world->ScaffoldIntoHand(object, player);
 	}
 	if (registry.AllOf<Pot>(object))
 	{
@@ -1888,6 +1912,7 @@ void HandGrabSystem::ProcessHandTurn()
 	{
 		_world->HeatHeld(grab->object);
 	}
+	_world->HeldTurn(grab->object);
 }
 
 void HandGrabSystem::DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved)

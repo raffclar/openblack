@@ -263,6 +263,12 @@ std::shared_ptr<const creaturemind::MindFileData> CreatureCarryOverSystem::Kept(
 	return _kept;
 }
 
+std::shared_ptr<const creaturemind::MindFileData> CreatureCarryOverSystem::KeptOrRead()
+{
+	ReadIfNoneKept();
+	return _kept;
+}
+
 std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::vec2 place)
 {
 	if (PlayersCreature().has_value())

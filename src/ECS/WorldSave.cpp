@@ -42,6 +42,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Creature/CreatureHandGlow.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureHandGlows.h"
@@ -51,6 +52,7 @@
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/WalkPath.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -668,6 +670,9 @@ void world_save::ForgetUnsavedState(entt::registry& registry)
 	registry.view<components::FootpathFinder>().each([](components::FootpathFinder& finder) { finder.plan.reset(); });
 	// A save from inside the temple has the rooms of the temple, so the load removes them
 	ForgetTempleRooms(registry);
+	// The mind of each computer god starts again. It keeps only the parts that a saved game keeps.
+	registry.view<components::ComputerPlayer>().each(
+	    [](components::ComputerPlayer& player) { computer_player::StartAgainAfterLoad(player); });
 }
 
 void world_save::TakeDanceFilesAgain(entt::registry& registry,

@@ -836,6 +836,30 @@ void LobbyClientSystem::UploadCreature(lobby_api::CreatureUpload upload, LobbyCa
 	});
 }
 
+void LobbyClientSystem::SendSkirmishPing(LobbyCallback<LobbyDone> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	Authorized(Call {
+	    .method = HttpMethod::Post,
+	    .path = "/me/skirmish-pings",
+	    .headers = {{"Accept", std::string(k_JsonType)}},
+	    .body = {},
+	    .done =
+	        [callback = std::move(callback)](HttpResponse&& response) {
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        Succeed(callback, LobbyDone {});
+	        },
+	});
+}
+
 uint32_t LobbyClientSystem::AddEventListener(LobbyEventListener listener)
 {
 	const auto id = _nextListener++;
