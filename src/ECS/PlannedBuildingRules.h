@@ -61,6 +61,8 @@ struct PlannedKind
 	uint32_t maxAdults {0};
 	/// The town's building sites whose building is of the same type, mending ones included
 	uint32_t sitesOfSameType {0};
+	/// The scaffolds that a building of this kind needs, from the kind's info
+	uint32_t scaffoldsRequired {0};
 };
 
 /// How much a town wants one of its planned buildings built, 0 for not at all. A house is wanted less the more room its
@@ -68,7 +70,12 @@ struct PlannedKind
 /// its kind stand. A civic building is wanted while the town has none of it (a crèche, a storage pit, a graveyard, a
 /// village centre or totem), half as much with a workshop already, and a spell dispenser only once all the others
 /// stand. A wonder is wanted by how much the town wants one. Every want is shared out over the sites of its type.
-[[nodiscard]] float DesireToBeBuilt(const PlannedKind& plan, const TownForPlans& town);
+///
+/// A held scaffold offers a building with the value of the scaffolds (0 for a plan of the town). With a value:
+/// - The town wants a house also when it has much room.
+/// - The town wants a wonder with the want 1 when the value is 7 or more.
+/// - Each scaffold above the scaffolds that the kind needs takes three tenths of the want off, down to 0.
+[[nodiscard]] float DesireToBeBuilt(const PlannedKind& plan, const TownForPlans& town, uint32_t scaffoldValue = 0);
 
 /// One of a town's planned buildings, in the order the town planned them
 struct PlannedCandidate

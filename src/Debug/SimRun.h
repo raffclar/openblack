@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "Common/DeveloperTools.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/RowDump.h"
 #endif
@@ -67,6 +68,9 @@ struct Settings
 	bool stillHand {false};
 	/// Tests: the loss of a temple at a turn
 	std::optional<TempleLoss> templeLoss;
+	/// Tests: a god with no temple stays in a network game. For tool runs of a land that makes no temple at its start,
+	/// such as a story land. Each computer of a network game must have the same switch.
+	bool godsNeedNoTemple {false};
 	/// Tests: at this turn the player of a network game leaves it as a player does: Escape, Exit Online Game, Leave Game
 	std::optional<uint32_t> leaveAt;
 };
@@ -75,6 +79,8 @@ struct Settings
 struct Request
 {
 	Settings settings {};
+	/// Tools: the modes of the AI soak for the first land. A game that joins a game server takes them from the server.
+	developer_tools::SoakTools soak;
 	/// The game time of each frame, none for the wall clock
 	std::optional<std::chrono::microseconds> frameTime;
 	/// The file to write the run record to, as JSON lines
@@ -131,8 +137,9 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 /// when it is not from 1 to the longest frame time
 [[nodiscard]] std::optional<std::chrono::microseconds> FrameTimeFromMs(double milliseconds);
 
-/// Whether the game draws this frame
-[[nodiscard]] bool DrawsFrame(const Settings& settings, uint64_t frame);
+/// Whether the game draws this frame. In the fast mode, the game also draws a frame when a tool asks for a picture of
+/// it, because a frame that is not drawn gives no picture.
+[[nodiscard]] bool DrawsFrame(const Settings& settings, uint64_t frame, bool pictureWanted = false);
 
 /// Whether the run is at its end at this turn
 [[nodiscard]] bool Finished(const Settings& settings, uint32_t turn);

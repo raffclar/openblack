@@ -28,7 +28,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include "Common/BuildVersionFile.h"
+#include "Common/BuildVersion.h"
 #include "Common/UserData.h"
 
 // clang-format off

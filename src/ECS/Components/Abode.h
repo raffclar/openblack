@@ -39,6 +39,8 @@ struct Abode
 	/// Its town has put it up for mending, or it went up again from a plan of a finished building, and it hasn't been
 	/// made whole since: its town doesn't put it up again
 	bool putUpForMending {false};
+	/// Its town does not plan it again when it goes: a scaffold started it, and no script gave the scaffold its building
+	bool notPlannedAgain {false};
 	/// How many of its town's passes over its buildings it has stood through, up to the age it counts as settled
 	uint32_t age {0};
 	/// The part of the time to its next loss of life from neglect that went by while it was empty

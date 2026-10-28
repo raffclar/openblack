@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Town.h"
@@ -266,7 +267,11 @@ TEST(VillageTotemSystem, ItEasesEachFrameButRingsTheBellOnlyInAGameTurn)
 	ASSERT_EQ(village.world->bells, 1);
 	system.SetTownShare(village.town, 0.5f);
 	system.Update(100 + 2600);
-	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.5f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.5f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.icon).y, 3.0f + 0.5f * 8.0f + vt::k_IconAbovePlinth);
+	// The frames do not move it in the synced world: the turns go by where it stands on the land
+	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f);
+	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.icon).position.y, 3.0f + vt::k_IconAbovePlinth);
 	system.Update(100 + 5000);
 	EXPECT_EQ(village.world->bells, 1);
 	// The first turn after the pause rings the bell once
@@ -299,7 +304,8 @@ TEST(VillageTotemSystem, TheHandSlidesItAndLettingGoSetsTheTownsShare)
 	system.Slide(200.0f, 600.0f);
 	EXPECT_FLOAT_EQ(registry.Get<VillageTotem>(village.totem).held, 0.2f);
 	// Held, it stands where the hand holds it, the hand at its icon
-	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.2f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.2f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f);
 	const auto hold = system.GetHandHold();
 	ASSERT_TRUE(hold.has_value());
 	EXPECT_FLOAT_EQ(hold->position.y, 3.0f + 0.2f * 8.0f + vt::k_IconAbovePlinth + 1.4f);
@@ -311,11 +317,11 @@ TEST(VillageTotemSystem, TheHandSlidesItAndLettingGoSetsTheTownsShare)
 	const auto& totem = registry.Get<VillageTotem>(village.totem);
 	EXPECT_FLOAT_EQ(totem.ease.duration, 0.2f * 5200.0f);
 	system.Update(520);
-	EXPECT_NEAR(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.2f * 0.6875f * 8.0f, 1e-3f);
+	EXPECT_NEAR(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.2f * 0.6875f * 8.0f, 1e-3f);
 	system.ProcessTurn(520);
 	EXPECT_EQ(village.world->bells, 0);
 	system.Update(1040);
-	EXPECT_FLOAT_EQ(registry.Get<Transform>(village.totem).position.y, 3.0f + 0.2f * 8.0f);
+	EXPECT_FLOAT_EQ(registry.Get<DrawnHeight>(village.totem).y, 3.0f + 0.2f * 8.0f);
 	// The bell rings once, at the first game turn after it arrives
 	EXPECT_EQ(village.world->bells, 0);
 	system.ProcessTurn(1040);
@@ -574,4 +580,25 @@ TEST(VillageTotemRules, TheSymbolsSitOverTheTopOfTheCarvingWhateverItsHeight)
 	// The icon stands on the plinth, so the top is the plinth's place, the icon's rise over it and the carving's height
 	const float plinthY = 26.0f;
 	EXPECT_FLOAT_EQ(vt::TopY(plinthY + vt::k_IconAbovePlinth, 11.5f), plinthY + 2.729f + 11.5f);
+}
+
+TEST(VillageTotemSystem, AComputerGodRaisesItWithNoSlideAndNoNumber)
+{
+	auto village = MakeVillage(true);
+	auto& system = *village.system;
+	system.RaiseByGod(PlayerNames::PLAYER_TWO, village.totem, 1.0f);
+	// The living near it see the hand of the god take it
+	ASSERT_EQ(village.world->reactions.size(), 1u);
+	EXPECT_EQ(village.world->reactions[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(village.world->reactions[0].position, glm::vec3(5.0f, 3.0f, 5.0f));
+	// The creature of the town's player feels it, and the town takes the share
+	ASSERT_EQ(village.world->empathies.size(), 1u);
+	EXPECT_EQ(village.world->empathies[0].player, PlayerNames::PLAYER_ONE);
+	EXPECT_FLOAT_EQ(village.world->registry.Get<Town>(village.town).worshipShare, 1.0f);
+	EXPECT_TRUE(village.world->numbers.empty());
+	EXPECT_FALSE(system.GetGripped().has_value());
+	// Raised to none, the creature still feels it
+	system.RaiseByGod(PlayerNames::PLAYER_TWO, village.totem, 0.0f);
+	EXPECT_EQ(village.world->empathies.size(), 2u);
+	EXPECT_FLOAT_EQ(village.world->registry.Get<Town>(village.town).worshipShare, 0.0f);
 }

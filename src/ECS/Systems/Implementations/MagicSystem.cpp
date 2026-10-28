@@ -110,6 +110,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -123,6 +124,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TempleHeartPassOn.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -138,6 +140,7 @@
 #include "Magic/SpellSeedRules.h"
 #include "Magic/WaterRules.h"
 #include "MagicLiving.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleShields.h"
@@ -654,8 +657,12 @@ void GameMagicWorld::Apply(const magic::EffectValues& values, std::span<const ma
 			const auto& things = Locator::entitiesRegistry::value();
 			const bool appliedByCreature =
 			    source.appliedBy.has_value() && things.Valid(*source.appliedBy) && things.AllOf<Creature>(*source.appliedBy);
-			ecs::world_objects::AttackTown(outcome.entity, outcome.damaged + outcome.burnt, source.player, appliedByCreature,
-			                               cry);
+			// The town keeps the values of the effect itself, before the defence of what it struck
+			const ecs::town_aggression::Harm harm {.burn = values[magic::EffectKind::Burn],
+			                                       .crush = values[magic::EffectKind::Crush],
+			                                       .hit = values[magic::EffectKind::Hit]};
+			ecs::world_objects::AttackTown(outcome.entity, outcome.damaged + outcome.burnt, source.player, harm,
+			                               appliedByCreature, cry);
 		}
 		// A player's miracle, not a creature's, is remembered against them by the player whose object it harmed
 		const auto owner = ecs::world_objects::PlayerOf(outcome.entity);
@@ -829,6 +836,8 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 			}
 			tree->maxSize = grown.target;
 			registry.SetDirty();
+			// A tree in the map's cells that the water grows comes out of them and goes in again
+			ecs::thing_map_place::Reinsert(object);
 			// It rustles as it grows
 			if (Locator::audio::has_value() && Locator::gameRandom::has_value())
 			{
@@ -1251,9 +1260,9 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 	spell.magicType = type;
 	spell.spellClass = magic::ClassOf(type);
 	spell.caster = caster;
-	// A person casts it: the hand of a player that the computer does not play
+	// A person casts it: the hand of a player that a person plays
 	spell.humanCasting = caster.kind == SpellCaster::Kind::Player && player != PlayerNames::NEUTRAL &&
-	                     (Locator::playerSystem::has_value() ? !Locator::playerSystem::value().IsComputerPlayer(player)
+	                     (Locator::playerSystem::has_value() ? Locator::playerSystem::value().IsHumanPlayer(player)
 	                                                         : player == PlayerNames::PLAYER_ONE);
 	magic::SetChants(spell.chants, cast.chants);
 	spell.duration = cast.duration;
@@ -1683,6 +1692,8 @@ void MagicSystem::ProcessTurn()
 			Delete(entity);
 		}
 	}
+	// A seed out of the hand shows over its miracle or not, as the miracles are after their turn
+	ShowSeedsWithSpellsTurn();
 	// The pour lifting and tipping the hand steps once the miracles have had their turn
 	magic::StepPour(_pour, k_TurnSeconds);
 }
@@ -1698,13 +1709,17 @@ void MagicSystem::Update(float /*seconds*/)
 	// (PlaceHandEffect)
 	if (Held().has_value() && registry.Valid(*Held()))
 	{
-		// The miracle shown in the hand steps every frame by the frame's game time in whole milliseconds, at least one
-		// even while the game is paused
+		// The miracle shown in the hand steps by the game time since its last step in whole milliseconds, at least one
+		// even while the game is paused. It steps no more often than 60 times a second; between its steps it is drawn
+		// where the hand moved it to (PlaceHandEffect).
 		auto& seed = registry.Get<SpellSeed>(*Held());
-		if (seed.handEffect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+		const auto step = Locator::time::has_value()
+		                      ? particles::drawn_steps::StepTime(_handEffectPace, Locator::time::value().GetFrameRealTime(),
+		                                                         Locator::time::value().GetFrameGameTime(), true)
+		                      : std::optional(std::chrono::milliseconds {0});
+		if (seed.handEffect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value() && step.has_value())
 		{
-			const auto milliseconds =
-			    Locator::time::has_value() ? std::max<int64_t>(Locator::time::value().GetFrameGameTime().count(), 1) : 1;
+			const auto milliseconds = std::max<int64_t>(step->count(), 1);
 			const auto info = HandEffectInfo(seed);
 			auto& particles = Locator::particleSystem::value();
 			if (!particles.ProcessForSpell(seed.handEffect, info, static_cast<float>(milliseconds) * 0.001f))
@@ -1715,7 +1730,8 @@ void MagicSystem::Update(float /*seconds*/)
 			particles.SetDrawOffset(seed.handEffect, glm::vec3(0.0f));
 		}
 	}
-	// A miracle held from this computer's hand, such as the lightning, keeps up with the hand between turns
+	// A miracle held from this computer's hand, such as the lightning or the rain cloud, keeps up with the hand between
+	// turns. The draw shows its particles that follow the hand at the live hand, with no limit of height.
 	if (Locator::particleSystem::has_value())
 	{
 		for (const auto entity : _spells)
@@ -1724,25 +1740,49 @@ void MagicSystem::Update(float /*seconds*/)
 			                                           spell->caster.player == OwnPlayer() &&
 			                                           spell->effect != ParticleSystemInterface::k_NoEffect)
 			{
-				// The rain cloud, or the grains and logs, of a sprinkled miracle keep to their limit above the land
-				const bool sprinkles =
-				    spell->spellClass == magic::SpellClass::Water || spell->spellClass == magic::SpellClass::Resource;
-				const auto clamped = [this, sprinkles](glm::vec3 point) {
-					if (sprinkles)
-					{
-						point.y = std::min(point.y, _world.LandHeight({point.x, point.z}) + particles::k_MaximumSprinkleHeight);
-					}
-					return point;
-				};
-				Locator::particleSystem::value().SetDrawOffset(spell->effect, clamped(_hand.handPosition) -
-				                                                                  clamped(spell->processInfo.handPosition));
+				Locator::particleSystem::value().SetLiveHand(spell->effect, _hand.handPosition);
 			}
 		}
 	}
 }
 
+void MagicSystem::UpdateDispenserFrame(const ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+                                       std::chrono::milliseconds frameGameTime, bool landDrawn)
+{
+	const auto seconds = particles::drawn_steps::StepSeconds(_swirlPace, frameRealTime, frameGameTime, landDrawn);
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	const auto& registry = EntityRegistry();
+	const auto stepSwirl = [&](entt::entity entity) {
+		const auto* dispenser = registry.TryGet<const SpellDispenser>(entity);
+		if (dispenser == nullptr || dispenser->effect == ParticleSystemInterface::k_NoEffect)
+		{
+			return;
+		}
+		// The swirl shows and moves on only in the frames that draw its dispenser
+		const bool drawn = drawList.Drawn(registry, entity);
+		particles.SetShown(dispenser->effect, drawn);
+		if (drawn && seconds.has_value())
+		{
+			particles.ProcessByFrame(dispenser->effect, *seconds);
+		}
+	};
+	std::vector<entt::entity> dispensers;
+	registry.Each<const SpellDispenser>(
+	    [&dispensers](entt::entity entity, const SpellDispenser&) { dispensers.push_back(entity); });
+	std::ranges::for_each(particles::drawn_steps::DrawOrder(
+	                          drawList.GetList(), dispensers, drawList.GetView().has_value(),
+	                          [&registry, &drawList](entt::entity entity) { return drawList.Decides(registry, entity); }),
+	                      stepSwirl);
+}
+
 void MagicSystem::Reset()
 {
+	_swirlPace = {};
+	_handEffectPace = {};
 	_spells.clear();
 	_links.clear();
 	StopHoldLoop();
@@ -1761,6 +1801,7 @@ void MagicSystem::Reset()
 	_turn = 0;
 	_driven.reset();
 	_lastHandPosition.reset();
+	_lastFrameHandPosition.reset();
 	_handVelocity = glm::vec3(0.0f);
 	_handEffectPoint.reset();
 	_handScale = 1.0f;
@@ -1783,8 +1824,9 @@ entt::entity MagicSystem::CreateDispenser(glm::vec3 position, MagicType type, fl
 	auto& dispenser = EntityRegistry().Get<SpellDispenser>(entity);
 	if (Locator::particleSystem::has_value())
 	{
-		// Its swirl uses only this computer's random numbers: the swirl does not change the world
-		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f);
+		// Its swirl uses only this computer's random numbers: the swirl does not change the world. The swirl moves on in
+		// the frames that draw the dispenser, not in the turns.
+		dispenser.effect = Locator::particleSystem::value().StartByFrame(ParticleType::SpelldispenserVortex, position, 1.0f);
 	}
 	// Its first bubble comes once it has counted its period, as every later one does. A debug tool makes it, so it has
 	// no town.
@@ -1807,8 +1849,9 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 	JoinTown(entity, DispenserTown(town));
 	if (Locator::particleSystem::has_value())
 	{
-		// Its swirl uses only this computer's random numbers: the swirl does not change the world
-		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f);
+		// Its swirl uses only this computer's random numbers: the swirl does not change the world. The swirl moves on in
+		// the frames that draw the dispenser, not in the turns.
+		dispenser.effect = Locator::particleSystem::value().StartByFrame(ParticleType::SpelldispenserVortex, position, 1.0f);
 	}
 	return entity;
 }
@@ -2253,7 +2296,7 @@ bool MagicSystem::TapGlobe(entt::entity orb, PlayerNames player)
 
 // The hand
 
-void MagicSystem::UpdateHand(const HandFrame& mouseFrame, float seconds)
+void MagicSystem::UpdateHand(const HandFrame& mouseFrame, const input_steps::Steps& steps)
 {
 	auto frame = _driven.has_value() ? *_driven : mouseFrame;
 	// The hand a scenario puts is placed from there as the mouse's hand is: kept where a pour began, lifted by the pour
@@ -2273,17 +2316,24 @@ void MagicSystem::UpdateHand(const HandFrame& mouseFrame, float seconds)
 			_handVelocity = glm::vec3(0.0f);
 		}
 	}
-	if (_lastHandPosition.has_value() && seconds > 0.0f)
+	const auto frameStart = _lastFrameHandPosition.value_or(frame.handPosition);
+	for (uint32_t i = 0; i < steps.count; ++i)
 	{
-		const auto step = frame.handPosition - *_lastHandPosition;
-		_handVelocity = magic::FilterHandVelocity(_handVelocity, step / seconds, seconds);
-		// While it holds a miracle, how the way it moves turns is the spin it gives the miracle
-		if (held != entt::null)
+		const auto position = input_steps::Between(frameStart, frame.handPosition, steps.Point(i));
+		if (_lastHandPosition.has_value())
 		{
-			magic::StepHandSpin(_handSpin, step, _handVelocity, seconds);
+			constexpr float k_Seconds = input_steps::k_StepSeconds;
+			const auto step = position - *_lastHandPosition;
+			_handVelocity = magic::FilterHandVelocity(_handVelocity, step / k_Seconds, k_Seconds);
+			// While it holds a miracle, how the way it moves turns is the spin it gives the miracle
+			if (held != entt::null)
+			{
+				magic::StepHandSpin(_handSpin, step, _handVelocity, k_Seconds);
+			}
 		}
+		_lastHandPosition = position;
 	}
-	_lastHandPosition = frame.handPosition;
+	_lastFrameHandPosition = frame.handPosition;
 	_hand = frame;
 }
 
@@ -2543,7 +2593,7 @@ void MagicSystem::SendCast(magic::CastTarget target)
 	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
 	if (!HeldSpellRunsInHand())
 	{
-		// The help counts a cast of a miracle with a power-up, as the hand sends it
+		// The help counts a cast of a miracle with a power-up, as the hand sends it. The count waits for the next report.
 		if (Locator::helpProfileSystem::has_value())
 		{
 			const auto last =
@@ -2555,7 +2605,7 @@ void MagicSystem::SendCast(magic::CastTarget target)
 			                                        .canPowerUp = seed.hasIcon};
 			if (gesture::CountsPoweredUpCast(facts, last.has_value() ? last->request.gesture : GestureType::None))
 			{
-				Locator::helpProfileSystem::value().Trigger(help::profile::k_GestureCastPoweredUp);
+				Locator::helpProfileSystem::value().Report(help::profile::k_GestureCastPoweredUp);
 			}
 		}
 		// The circle drawn is used up by the cast that it sizes
@@ -2934,7 +2984,7 @@ bool MagicSystem::PressFireBall(uint32_t nowMs, uint32_t turn)
 	{
 		if (Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+			Locator::helpProfileSystem::value().Report(help::profile::k_TapThing);
 		}
 		return true;
 	}
@@ -2979,7 +3029,7 @@ void MagicSystem::ReleaseFireBall(uint32_t nowMs, uint32_t turn)
 	{
 		if (Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+			Locator::helpProfileSystem::value().Report(help::profile::k_TapThing);
 		}
 		// The hand sends the tap, which catches the ball at the turn
 		SendFireBallCommand(press.ball, false);

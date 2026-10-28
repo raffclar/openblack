@@ -29,9 +29,11 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -84,8 +86,9 @@ std::optional<entt::entity> PlayersCreature()
 	{
 		return std::nullopt;
 	}
-	auto& players = Locator::playerSystem::value();
-	return players.GetPrimaryCreature(players.GetLocalPlayer());
+	// The creature of the god of this computer, whose hand the autopilot moves
+	const auto own = openblack::input::LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr);
+	return Locator::playerSystem::value().GetPrimaryCreature(own);
 }
 
 float HeightOf(const Creature& creature)

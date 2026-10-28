@@ -516,7 +516,7 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 	}
 	const auto& info = Locator::infoConstants::value();
 	const auto type = static_cast<MagicType>(*magic);
-	// The miracle's own gesture, power-ups too: none in the game's tables
+	// The gesture of the miracle: a power-up has the gesture that powers up its seed, a plain miracle has none
 	const auto gesture = magic::GetMagicInfo(info, type).gestureType;
 	creature_plan_actions::CastInfo cast {
 	    .magicType = *magic,
@@ -1274,6 +1274,42 @@ void CreatureMindSystem::SetKnowsAction(entt::entity creature, CreatureActionLea
 		                                                                : creature_help::Kind::LessonNormalAction;
 		Locator::creatureHelpSystem::value().Raise(creature, {.kind = kind, .parameter = action});
 	}
+}
+
+void CreatureMindSystem::LearnAction(entt::entity creature, CreatureActionLearningType type, uint32_t action)
+{
+	auto* mind = Entities().TryGet<CreatureMindState>(creature);
+	if (mind == nullptr || !mind->learnt.has_value() ||
+	    (type != CreatureActionLearningType::Normal && type != CreatureActionLearningType::Magic))
+	{
+		return;
+	}
+	auto& known =
+	    type == CreatureActionLearningType::Magic ? mind->learnt->knowledge.miraclesKnown : mind->learnt->knowledge.skillsKnown;
+	if (action >= known.size() || known[action])
+	{
+		return;
+	}
+	known[action] = true;
+	if (Locator::creatureHelpSystem::has_value())
+	{
+		const auto kind = type == CreatureActionLearningType::Magic ? creature_help::Kind::LessonMagicAction
+		                                                            : creature_help::Kind::LessonNormalAction;
+		Locator::creatureHelpSystem::value().Raise(creature, {.kind = kind, .parameter = action});
+	}
+}
+
+bool CreatureMindSystem::KnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action) const
+{
+	const auto* mind = Entities().TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->learnt.has_value() ||
+	    (type != CreatureActionLearningType::Normal && type != CreatureActionLearningType::Magic))
+	{
+		return false;
+	}
+	const auto& known =
+	    type == CreatureActionLearningType::Magic ? mind->learnt->knowledge.miraclesKnown : mind->learnt->knowledge.skillsKnown;
+	return action < known.size() && known[action];
 }
 
 bool CreatureMindSystem::TellCast(entt::entity creature, MagicType type, entt::entity target)

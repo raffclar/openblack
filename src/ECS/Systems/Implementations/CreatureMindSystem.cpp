@@ -88,7 +88,6 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
-#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
@@ -111,6 +110,7 @@
 #include "ECS/ReportedCamera.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -986,8 +986,7 @@ std::optional<bool> WaitedForInMap(const ecs::Registry& registry, const creature
 	{
 		return std::nullopt;
 	}
-	return registry.AllOf<MapCellResident>(object) &&
-	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
+	return ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
 }
 
 /// Whether the creature that the creature's step waits to be still is on its way somewhere or turning. A thing that is
@@ -1362,7 +1361,16 @@ bool ClipMissing(entt::entity creature, const CreatureAnimation& animation, cons
 	                                       [creature, &animation](size_t clip) { return HasClip(creature, animation, clip); });
 }
 
-void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation, CreatureEyes* eyes)
+/// The developer log of the clips notes that the body refused a clip, because it played another action
+void NoteRefused(entt::entity creature, creature_animation_log::Layer layer, size_t clip, size_t playing)
+{
+	if (Locator::creatureAnimationLog::has_value())
+	{
+		Locator::creatureAnimationLog::value().Refused(creature, layer, clip, "mind", playing);
+	}
+}
+
+void Apply(entt::entity creature, const creature_mind::Commands& commands, CreatureAnimation& animation, CreatureEyes* eyes)
 {
 	if (commands.endSit || commands.endStaticLoop)
 	{
@@ -1378,12 +1386,22 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 		{
 			animation.body = *body;
 		}
+		else
+		{
+			NoteRefused(creature, creature_animation_log::Layer::Body, creature_layers::animations::k_DanceStart,
+			            creature_layers::CurrentAnimation(animation.body));
+		}
 	}
 	if (commands.playOnce.has_value())
 	{
 		if (auto body = creature_layers::PlayOnce(animation.body, *commands.playOnce, commands.mirrored))
 		{
 			animation.body = *body;
+		}
+		else
+		{
+			NoteRefused(creature, creature_animation_log::Layer::Body, *commands.playOnce,
+			            creature_layers::CurrentAnimation(animation.body));
 		}
 	}
 	if (commands.startSequence.has_value())
@@ -1397,12 +1415,21 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 			body->keepsPace = commands.keepsPace;
 			animation.body = *body;
 		}
+		else
+		{
+			NoteRefused(creature, creature_animation_log::Layer::Body, sequence[0], creature_layers::CurrentAnimation(from));
+		}
 	}
 	if (commands.playOverlay.has_value())
 	{
 		if (auto gesture = creature_layers::PlayGesture(animation.gesture, *commands.playOverlay))
 		{
 			animation.gesture = *gesture;
+		}
+		else
+		{
+			NoteRefused(creature, creature_animation_log::Layer::Gesture, *commands.playOverlay,
+			            animation.gesture.animation.value_or(creature_layers::animations::k_Stand));
 		}
 	}
 	if (commands.relaxFace)
@@ -2441,7 +2468,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		{
 			StartKiss(entity, *commands.kiss, animation);
 		}
-		Apply(commands, animation, eyes);
+		Apply(entity, commands, animation, eyes);
 		if (Move(entity, commands))
 		{
 			GiveUp(mind.idle);
@@ -2760,6 +2787,10 @@ bool CreatureMindSystem::PlayAction(entt::entity creature, size_t animation)
 	{
 		body->body = *played;
 	}
+	else
+	{
+		NoteRefused(creature, creature_animation_log::Layer::Body, animation, creature_layers::CurrentAnimation(body->body));
+	}
 	return played.has_value();
 }
 
@@ -2774,6 +2805,11 @@ bool CreatureMindSystem::PlayGesture(entt::entity creature, size_t animation)
 	if (played.has_value())
 	{
 		body->gesture = *played;
+	}
+	else
+	{
+		NoteRefused(creature, creature_animation_log::Layer::Gesture, animation,
+		            body->gesture.animation.value_or(creature_layers::animations::k_Stand));
 	}
 	return played.has_value();
 }

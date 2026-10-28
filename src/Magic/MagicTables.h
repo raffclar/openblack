@@ -166,6 +166,12 @@ struct PowerUpStep
 /// when it loads them.
 [[nodiscard]] int GetPowerUpLevel(const InfoConstants& info, MagicType type);
 
+/// Fill the seed, the gesture and the power-up of each magic record from the first seed that casts its magic type.
+/// The file keeps no seed, no gesture and no power-up in these records, and the game fills them when it loads the
+/// tables. The record of no magic type stays as it is. A magic type that no seed casts keeps no seed. A plain
+/// miracle keeps no gesture and no power-up, because the seed needs no gesture to cast it.
+void FillMagicRecordsFromSeeds(InfoConstants& info);
+
 /// The row of the fireball table that a fireball uses for its heat, its cooling and its catch. The first power-up
 /// (level 0) uses the second row. All other fireballs use the first row, also a ball with no spell. No fireball
 /// uses the third row.
@@ -177,6 +183,7 @@ struct PowerUpStep
 namespace detail
 {
 [[nodiscard]] const GMagicInfo& SectionRecord(const InfoConstants& info, MagicInfoSlot slot);
+[[nodiscard]] GMagicInfo& SectionRecord(InfoConstants& info, MagicInfoSlot slot);
 
 /// Whether records of a section are of class T (the resource and radius classes each cover two sections)
 template <class T>

@@ -66,6 +66,9 @@ struct Rules
 	/// The game's clock runs on, at the speed it had: only the turn count starts again from 0. Otherwise the clock starts
 	/// afresh at turn 0, running at the normal speed, as a new game's does
 	bool gameClockRunsOn;
+	/// In the first turn, the god of the player brings the creature that the player's profile keeps, to the creature home
+	/// of its temple. A network game brings the creatures of its players in its own way.
+	bool profileCreatureBrought;
 };
 
 [[nodiscard]] constexpr Rules RulesFor(Kind kind)
@@ -80,7 +83,8 @@ struct Rules
 		        .alignmentFromProfile = false,
 		        .gameStarts = false,
 		        .helpTextsKept = true,
-		        .gameClockRunsOn = true};
+		        .gameClockRunsOn = true,
+		        .profileCreatureBrought = false};
 	case Kind::FreshScripts:
 		return {.advisors = Advisors::SentHome,
 		        .scriptScreenKept = false,
@@ -89,7 +93,8 @@ struct Rules
 		        .alignmentFromProfile = false,
 		        .gameStarts = false,
 		        .helpTextsKept = false,
-		        .gameClockRunsOn = false};
+		        .gameClockRunsOn = false,
+		        .profileCreatureBrought = false};
 	case Kind::NewGame:
 	case Kind::Skirmish:
 		return {.advisors = Advisors::Afresh,
@@ -99,7 +104,8 @@ struct Rules
 		        .alignmentFromProfile = true,
 		        .gameStarts = true,
 		        .helpTextsKept = false,
-		        .gameClockRunsOn = false};
+		        .gameClockRunsOn = false,
+		        .profileCreatureBrought = kind == Kind::Skirmish};
 	case Kind::SavedGame:
 		return {.advisors = Advisors::Afresh,
 		        .scriptScreenKept = false,
@@ -108,7 +114,8 @@ struct Rules
 		        .alignmentFromProfile = true,
 		        .gameStarts = true,
 		        .helpTextsKept = false,
-		        .gameClockRunsOn = false};
+		        .gameClockRunsOn = false,
+		        .profileCreatureBrought = false};
 	case Kind::Testbed:
 		break;
 	}
@@ -119,7 +126,17 @@ struct Rules
 	        .alignmentFromProfile = false,
 	        .gameStarts = false,
 	        .helpTextsKept = false,
-	        .gameClockRunsOn = false};
+	        .gameClockRunsOn = false,
+	        .profileCreatureBrought = false};
+}
+
+/// Whether the god of the player brings the creature that the profile keeps, in the first turn after a saved game
+/// loads. A saved skirmish loads as a skirmish, and the god tries to bring the creature again, as at the start of the
+/// skirmish. When the save kept the creature of the god, the god brings no second creature. A network game saves no
+/// game.
+[[nodiscard]] constexpr bool LoadBringsProfileCreature(bool skirmish, bool networkGame)
+{
+	return skirmish && !networkGame;
 }
 
 /// How a land picked from the land menu is loaded: a playground land starts a skirmish, a new game on it; any other land

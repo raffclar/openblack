@@ -212,6 +212,11 @@ void CountOut(World& world, State& state, PlayerNames god, OutReason reason, boo
 	}
 }
 
+bool HasTempleOrNeedsNone(const World& world, const Facts& facts, PlayerNames god)
+{
+	return !facts.templesNeeded || world.HasTemple(god);
+}
+
 std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 {
 	std::vector<Event> events;
@@ -235,7 +240,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 				continue;
 			}
 			auto& standing = world.Standing(god);
-			if (!world.HasTemple(god) && !standing.out)
+			if (!HasTempleOrNeedsNone(world, facts, god) && !standing.out)
 			{
 				templesLost = true;
 			}
@@ -280,7 +285,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 	for (const auto god : gods)
 	{
 		auto& standing = world.Standing(god);
-		if (CanLose(god) && !world.HasTemple(god) && !standing.out)
+		if (CanLose(god) && !HasTempleOrNeedsNone(world, facts, god) && !standing.out)
 		{
 			standing.out = true;
 			world.RemoveCreature(god);
@@ -308,6 +313,13 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 		world.StopMind(god);
 	}
 	return events;
+}
+
+size_t DecidingEvents(std::span<const Event> events)
+{
+	return static_cast<size_t>(std::ranges::count_if(events, [](const Event& event) {
+		return event.kind == Event::Kind::Won || event.kind == Event::Kind::GodOutAndDecided;
+	}));
 }
 
 } // namespace openblack::game_end

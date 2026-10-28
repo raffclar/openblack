@@ -13,10 +13,12 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iterator>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
 #include <intrin.h>
@@ -42,6 +44,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
+#include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
@@ -359,6 +362,73 @@ bool Game::AskForNewPlayer()
 		RefreshPlayersPage();
 	}
 	return !_quitRequested;
+}
+
+std::optional<std::filesystem::path> Game::AskForSkirmishLand()
+{
+	if (!_interface || !Locator::windowing::has_value() || Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The -SKIRMISH switch: there is no window for the skirmish box");
+		return std::nullopt;
+	}
+	// Tools wait while the player chooses
+	const ecs::systems::InspectorLoading asking("skirmish box");
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -SKIRMISH switch: the skirmish box asks for the land");
+	_skirmishLands = ReadSkirmishLands();
+	std::vector<std::u16string> names;
+	names.reserve(_skirmishLands.size());
+	for (const auto& land : _skirmishLands)
+	{
+		names.push_back(land.titleText.has_value() ? std::u16string(_interface->GetTexts().Get(*land.titleText)) : land.stem);
+	}
+	_interface->ShowSkirmishBox(std::move(names));
+	gui::menu_backdrop::Fade fade;
+	auto last = Milliseconds();
+	std::optional<std::filesystem::path> picked;
+	// A run with a number of frames (-n) stops after that number of frames, also in the box
+	const auto frameLimit = Locator::config::value().numFramesToSimulate;
+	uint32_t boxFrames = 0;
+	while (!gui::menu_backdrop::FadeOver(fade) && !_quitRequested)
+	{
+		if (frameLimit > 0 && ++boxFrames > frameLimit)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -SKIRMISH switch: the run stops in the skirmish box after {} frames",
+			                   frameLimit);
+			RequestQuit();
+			break;
+		}
+		const auto now = Milliseconds();
+		const auto frame = static_cast<int>(now - last);
+		last = now;
+		auto& box = _interface->GetSkirmishBox();
+		const auto resolution = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
+		SDL_Event event;
+		while (SDL_PollEvent(&event) != 0)
+		{
+			// On the web the mouse events get the place of the pointer of the game
+			input::PointWindowEvent(event);
+			if (event.type == SDL_QUIT)
+			{
+				RequestQuit();
+			}
+			else
+			{
+				_interface->ProcessSkirmishBoxEvent(event, resolution);
+			}
+		}
+		if (const auto answer = box.TakeAnswer();
+		    answer.choice == gui::SkirmishBox::Choice::Start && answer.land.has_value() && *answer.land < _skirmishLands.size())
+		{
+			picked = Locator::filesystem::value().GetPath<filesystem::Path::Playgrounds>() /
+			         _skirmishLands.at(*answer.land).fileName;
+		}
+		gui::menu_backdrop::StepFade(fade, !box.IsActive(), frame);
+		const auto mouse = input::WindowPointer();
+		PresentStartupFrame([this, mouse, frame, &fade](glm::u16vec2 size) {
+			_interface->DrawNewPlayerScreen(size, mouse, machine_clock::Ticks(), static_cast<float>(frame), fade.alpha);
+		});
+	}
+	return _quitRequested ? std::nullopt : picked;
 }
 
 void Game::PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw)
@@ -760,6 +830,19 @@ void Game::FinishLoadingBehindScreen()
 void Game::PrepareFirstFrames()
 {
 	const auto& config = Locator::config::value();
+	// The maps of where creatures can walk and where they may go read only the land. Other threads make them while
+	// this thread does the rest. A creature's first move needs the first map and the first fight needs the second.
+	std::vector<std::future<void>> landMaps;
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		landMaps.push_back(std::async(std::launch::async, [] {
+			[[maybe_unused]] const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+		}));
+	}
+	if (Locator::creatureFightSystem::has_value())
+	{
+		landMaps.push_back(std::async(std::launch::async, [] { Locator::creatureFightSystem::value().PrepareLand(); }));
+	}
 	// The first scene draw bakes the shadows of the whole island into the land, which takes tens of milliseconds
 	if (config.drawEntities && Locator::rendererInterface::has_value())
 	{
@@ -785,20 +868,15 @@ void Game::PrepareFirstFrames()
 	{
 		Locator::objectDrawListSystem::value().PrepareLand();
 	}
-	// A creature's first move finds where creatures can walk on the whole land
-	if (Locator::creatureLocomotionSystem::has_value())
-	{
-		[[maybe_unused]] const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
-	}
-	// The first fight finds where creatures may go on the whole land
-	if (Locator::creatureFightSystem::has_value())
-	{
-		Locator::creatureFightSystem::value().PrepareLand();
-	}
 	// The first start of each effect reads its file, its models and its light maps
 	if (Locator::particleSystem::has_value())
 	{
 		Locator::particleSystem::value().LoadAllTypes();
+	}
+	// The first thing that a script puts in high detail reads its detailed model and its eyes
+	if (Locator::highDetailSystem::has_value())
+	{
+		Locator::highDetailSystem::value().LoadModels();
 	}
 	// The first frame loads the models of the globes and the gesture templates
 	if (Locator::miracleFxSystem::has_value())
@@ -809,6 +887,17 @@ void Game::PrepareFirstFrames()
 	{
 		Locator::gestureSystem::value().LoadTemplates();
 	}
+	for (auto& map : landMaps)
+	{
+		map.get();
+	}
+}
+
+void Game::EndLoadWithoutScreen()
+{
+	// The renderer made the land's pipelines and resources before the load, so no frame warms them up. The work of the
+	// first frame that depends on the loaded world is done now.
+	PrepareFirstFrames();
 }
 
 void Game::EndLoadingScreen()

@@ -35,6 +35,18 @@ float openblack::magic::ImpressiveValue(const ImpressionInputs& inputs)
 	return watched * shown;
 }
 
+float openblack::magic::ObjectImpressiveValue(const ObjectImpressionInputs& inputs)
+{
+	// Multiplied in the game's order, each step rounded to a float. The shown part is the land's balance times the
+	// thing's value, times the reaction's multiplier. The artefact, the boredom, the power and the distance multiply
+	// first, then the shown part.
+	const float shown = (inputs.landBalance * inputs.impressiveValue) * inputs.reactionMultiplier;
+	float watched = inputs.artefact * inputs.boredom;
+	watched *= k_ObjectPower;
+	watched *= DistanceChangeToBelief(inputs.distance, inputs.maxDistance);
+	return watched * shown;
+}
+
 float openblack::magic::CreatureImpressiveSize(float size, float addition, float multiplier)
 {
 	constexpr float k_Least = 1.0f;

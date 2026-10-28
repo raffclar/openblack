@@ -79,6 +79,8 @@ private:
 	bool OpenSelection(GestureType opening, PlayerNames player);
 	/// The miracle selection waits for its gestures this frame, closes when the hand is not ready, and its time passes
 	void StepSelection(gesture::HandContext& context, const Frame& frame);
+	/// One sample of the cursor goes on the path, and the first gesture waited for that the path draws acts
+	void SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context);
 	/// The recognised gesture's trail on the land, for the particles to show
 	void LayTrail(GestureType gesture, const gesture::Match& match, const Frame& frame) const;
 	/// The hints for what the hand waits for now, replacing those shown when they differ
@@ -92,6 +94,8 @@ private:
 	std::deque<glm::vec2> _drawing;
 	bool _drawingHoldsAction {false};
 	float _sinceSample {0.0f};
+	/// The cursor of the last frame, from which the cursor of this frame moved
+	std::optional<glm::vec2> _lastCursor;
 	/// Where the camera's eye was last frame
 	std::optional<glm::vec3> _lastCameraEye;
 	/// The rest after a gesture, while nothing is recorded

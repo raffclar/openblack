@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -49,6 +50,7 @@ public:
 	void Cancel(HttpRequestId id) override;
 	void Poll() override;
 	[[nodiscard]] size_t Pending() const override;
+	[[nodiscard]] std::optional<uint64_t> SentBytes(HttpRequestId id) const override;
 
 private:
 	struct Transfer;

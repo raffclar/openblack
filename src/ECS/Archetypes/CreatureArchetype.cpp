@@ -9,6 +9,8 @@
 
 #include "CreatureArchetype.h"
 
+#include <tuple>
+
 #include <glm/gtx/euler_angles.hpp>
 
 #include "3D/CreatureBody.h"
@@ -33,6 +35,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
+#include "ECS/LivingBirth.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -97,8 +100,10 @@ CreatureArchetype::Body CreatureArchetype::StartBody(CreatureType species)
 	{
 		return {.alignment = 0.0f, .fatness = info->startFatness, .strength = info->strength};
 	}
-	// A new creature's body spreads the strength first, then the fatness, by the random numbers of the game
+	// The first number of each living thing that the game makes comes before the numbers of the body
 	auto& random = Locator::gameRandom::value();
+	std::ignore = random.GameRand(ecs::living_birth::AgeDrawRange(info->startAge));
+	// A new creature's body spreads the strength first, then the fatness, by the random numbers of the game
 	const auto upTo = [&random](float most) { return random.GameFloatRand(most); };
 	const auto strength = creature_physiology::SpreadStart(info->strength, upTo);
 	const auto fatness = creature_physiology::SpreadStart(info->startFatness, upTo);

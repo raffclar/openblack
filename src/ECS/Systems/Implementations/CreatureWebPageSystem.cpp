@@ -50,6 +50,7 @@
 #include "Help/ScriptSpirits.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -215,7 +216,10 @@ void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
 	}
 	auto name =
 	    fmt::format("{}creature-picture/{}/{}", graphics::ScreenPictures::k_Prefix, entt::to_integral(entity), _asked++);
-	Locator::rendererInterface::value().RequestScreenPicture(name, &creature_web_page::TakePicture);
+	// The renderer takes the picture at the end of a draw, so the request goes to the main thread
+	PostToMainThread(MainThreadApi::Renderer, [name] {
+		Locator::rendererInterface::value().RequestScreenPicture(name, &creature_web_page::TakePicture);
+	});
 	_waiting.push_back({.name = std::move(name), .player = *player, .slot = *slot});
 }
 

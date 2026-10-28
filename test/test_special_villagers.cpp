@@ -7,10 +7,13 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
 
 #include <gtest/gtest.h>
 
+#include "ECS/LivingBirth.h"
 #include "ECS/SpecialVillagers.h"
 
 using namespace openblack;
@@ -31,10 +34,29 @@ std::array<Row, k_NameCount> AlternatingRows()
 
 TEST(SpecialVillagers, TwoInTenTryForAName)
 {
-	EXPECT_TRUE(TriesNamed(0));
-	EXPECT_TRUE(TriesNamed(1));
-	EXPECT_FALSE(TriesNamed(2));
-	EXPECT_FALSE(TriesNamed(9));
+	EXPECT_TRUE(TriesNamed(0, false));
+	EXPECT_TRUE(TriesNamed(1, false));
+	EXPECT_FALSE(TriesNamed(2, false));
+	EXPECT_FALSE(TriesNamed(9, false));
+}
+
+TEST(SpecialVillagers, NetworkGameGivesNoNames)
+{
+	for (uint32_t draw = 0; draw < k_Draw; ++draw)
+	{
+		EXPECT_FALSE(TriesNamed(draw, true));
+	}
+}
+
+TEST(SpecialVillagers, LivingThingDrawsBelowHalfItsStartAge)
+{
+	// The start ages of the villager, creature and animal tables: 25, 23 and 20
+	EXPECT_EQ(ecs::living_birth::AgeDrawRange(25), 12u);
+	EXPECT_EQ(ecs::living_birth::AgeDrawRange(23), 11u);
+	EXPECT_EQ(ecs::living_birth::AgeDrawRange(20), 10u);
+	// A range of 0 draws no number
+	EXPECT_EQ(ecs::living_birth::AgeDrawRange(1), 0u);
+	EXPECT_EQ(ecs::living_birth::AgeDrawRange(0), 0u);
 }
 
 TEST(SpecialVillagers, PickWalksFromTheDrawToTheFirstFreeNameOfTheSex)

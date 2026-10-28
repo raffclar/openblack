@@ -38,6 +38,9 @@ public:
 	virtual void RunSent(uint32_t turn) = 0;
 	/// Remove the commands that wait, as for a new land
 	virtual void Reset() = 0;
+	/// In the next turn, the god of this computer's player brings the creature that the player's profile keeps, as a
+	/// skirmish starts. A reset of the commands does not change it. False takes back a creature that is due.
+	virtual void SetPlayersCreatureDue([[maybe_unused]] bool due) {}
 
 	/// The function that gets the commands of each turn, in the order that the turn does them
 	using TurnListener = std::function<void(uint32_t turn, std::span<const player_commands::Command> commands)>;

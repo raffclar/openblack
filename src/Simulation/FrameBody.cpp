@@ -18,6 +18,7 @@
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -61,12 +62,21 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LiquidParticles.h"
 #include "Profiler.h"
 
 namespace openblack::simulation
 {
+
+bool LandDrawn()
+{
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool landHidden = Locator::videoSystem::has_value() &&
+	                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+	return !inTemple && !landHidden;
+}
 
 void PlayCreaturePoses()
 {
@@ -136,12 +146,13 @@ void PlayFrameEffects(FrameViewInterface& view)
 	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
 	if (Locator::vortexSystem::has_value())
 	{
-		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+		Locator::vortexSystem::value().UpdateFrame(clock.GetFrameRealTime(), clock.GetFrameGameTime(), LandDrawn());
 	}
-	// The reward chests from the sky fall and thump down, and their dust fades
+	// The frame draws the reward chests from the sky between their turns, and their dust fades
 	if (Locator::rewardSystem::has_value())
 	{
-		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
+		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
+		                                      clock.GetTurnFraction());
 	}
 	// The fireflies out drift about where they are between their last two turns
 	if (Locator::fireflySystem::has_value())
@@ -233,8 +244,13 @@ void PlayFrameEffects(FrameViewInterface& view)
 	Locator::artefactSystem::value().UpdateFrame(static_cast<float>(gameTime.count()));
 	// The flags over the towns' stores ease to their desires and turn to the camera
 	Locator::townDesireSystem::value().UpdateFlags(std::chrono::duration<float>(gameTime).count());
+	// The wood flags of the workshops ease to the wood that their workshops need and turn to the camera
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().UpdateFlagsForFrame(std::chrono::duration<float>(gameTime).count());
+	}
 	// The players' symbols of belief over the village centres move on
-	Locator::townSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+	Locator::townSystem::value().UpdateFrame(clock.GetFrameRealTime(), LandDrawn());
 	Locator::fieldSystem::value().Update(gameTime);
 	// The shoals near the camera swim, and dart from what scared them
 	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
@@ -252,7 +268,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const bool clicked = view.TakeDialogueClick();
-		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
+		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying();
 		Locator::helpTextSystem::value().Update({
 		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
 		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
@@ -273,6 +289,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 	}
 	// The tip bubble's time to show runs down by the game's time while it is up
 	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
+	// The speech bubbles of the creatures in the chat run down by the game's time
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
+	}
 	// The names display grows in and out by the game's time
 	view.UpdateVillagerLabels(static_cast<float>(clock.GetFrameGameTime().count()));
 	// The cinema bars coming in hide the game's dialogs

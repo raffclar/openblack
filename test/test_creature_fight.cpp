@@ -293,6 +293,19 @@ TEST(CreatureFight, StepsTeachEveryCreatureAndOtherMovesOnlyTheHumanPlayers)
 	EXPECT_TRUE(LearnsFromMove(Move::Kind::Special, true));
 }
 
+TEST(CreatureFight, PressesTeachTheFirstPlayerAloneAndEachHumanGodInANetworkGame)
+{
+	// A game alone: the creature of the first player learns, a god that has hands but is not first does not
+	EXPECT_TRUE(LearnsFromPresses(false, true, true));
+	EXPECT_FALSE(LearnsFromPresses(false, false, true));
+	EXPECT_FALSE(LearnsFromPresses(false, false, false));
+	// A network game: each human god learns, a computer god does not, also in the first slot
+	EXPECT_TRUE(LearnsFromPresses(true, false, true));
+	EXPECT_TRUE(LearnsFromPresses(true, true, true));
+	EXPECT_FALSE(LearnsFromPresses(true, false, false));
+	EXPECT_FALSE(LearnsFromPresses(true, true, false));
+}
+
 TEST(CreatureFight, TheLeanIsSetAgainstItsAlignmentUntilAFightIsCompleted)
 {
 	// No completed fight: the alignment sets the learnt lean again
@@ -385,10 +398,22 @@ TEST(CreatureFight, DamageFollowsTheFormula)
 	even.heightShare = 0.1f;
 	EXPECT_FLOAT_EQ(ResolveBlow(even, RecoilDirection::Plain).damage, 0.03f);
 
-	// Size, strength and speed scale it
+	// Size, strength and speed scale it. Each shown strength, from -1 to 1, adds 3 before the division.
 	const Blow strong {
-	    .attackerSize = 1.0f, .defenderSize = 1.0f, .attackerStrength = 1.0f, .defenderStrength = 0.5f, .speed = 1.0f};
-	EXPECT_FLOAT_EQ(DamageFactor(strong), 2.5f / 1.5f);
+	    .attackerSize = 1.0f, .defenderSize = 1.0f, .attackerStrength = 1.0f, .defenderStrength = 0.0f, .speed = 1.0f};
+	EXPECT_FLOAT_EQ(DamageFactor(strong), 4.0f / 3.0f);
+	const Blow weak {.attackerStrength = -1.0f, .defenderStrength = 1.0f};
+	EXPECT_FLOAT_EQ(DamageFactor(weak), 0.5f);
+	// The game multiplies the strengths, then the sizes, then the speed, each in float
+	const Blow ogre {.attackerSize = 0.314f,
+	                 .defenderSize = 0.262f,
+	                 .attackerStrength = -0.645f,
+	                 .defenderStrength = -0.345f,
+	                 .speed = 0.5f};
+	const float strengths = (-0.645f + 3.0f) / (-0.345f + 3.0f);
+	const float sizes = 0.314f / 0.262f;
+	const float expected = (strengths * sizes) * 0.5f;
+	EXPECT_EQ(std::bit_cast<uint32_t>(DamageFactor(ogre)), std::bit_cast<uint32_t>(expected));
 	EXPECT_FLOAT_EQ(DamageFactor({.attackerSize = 2.0f, .defenderSize = 1.0f, .speed = 0.5f}), 1.0f);
 	// Kept from 0.04 to 2, doubled for the special move
 	EXPECT_FLOAT_EQ(DamageFactor({.attackerSize = 4.0f, .defenderSize = 1.0f, .speed = 1.5f}), 2.0f);
@@ -582,13 +607,101 @@ TEST(CreatureFight, ComputerChoosesByWhatTheOpponentDoes)
 	EXPECT_FALSE(ComputerEndsBlock(Always(0)));
 }
 
+TEST(CreatureFight, TheComputerDrawsTheCounterLotOnlyWhenItCanCounter)
+{
+	std::vector<uint32_t> ranges;
+	const Random record = [&ranges](uint32_t range) {
+		ranges.push_back(range);
+		return 0u;
+	};
+	// A waiting opponent: the top tier draws its one lot and the band of its blow, and no counter lot
+	EXPECT_EQ(ChooseMove(2, Opponent::Stance, record).kind, Choice::Kind::Blow);
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {1, 3}));
+	ranges.clear();
+	EXPECT_EQ(ChooseMove(2, Opponent::BlockRecoil, record).kind, Choice::Kind::Blow);
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {3}));
+	ranges.clear();
+	// An attack: the counter lot comes first, then the block or the step
+	EXPECT_EQ(ChooseMove(2, Opponent::Attacking, record).kind, Choice::Kind::Block);
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {5, 4}));
+	ranges.clear();
+	// The bottom tier never draws the counter lot
+	EXPECT_EQ(ChooseMove(0, Opponent::Attacking, record).kind, Choice::Kind::Block);
+	EXPECT_EQ(ranges, (std::vector<uint32_t> {4}));
+}
+
+TEST(CreatureFight, TheComputerTakesOverAfterTheWaitInTheStanceOrTheBlock)
+{
+	Fighter fighter;
+	fighter.control = Control::Player;
+	Enter(fighter, State::Stance);
+	EXPECT_FLOAT_EQ(fighter.computerWaitMs, k_ComputerWaitsAtStartMs);
+	// The wait goes down by the creature's own milliseconds: a frozen creature counts fewer
+	EXPECT_FALSE(CountComputerWait(fighter, 100));
+	EXPECT_FALSE(CountComputerWait(fighter, 37));
+	EXPECT_FLOAT_EQ(fighter.computerWaitMs, 2863.0f);
+	// It counts in the moves and the reels in the block, but the computer does not take over there
+	fighter.computerWaitMs = 50.0f;
+	Enter(fighter, State::Action, animations::k_AttackHigh);
+	EXPECT_FALSE(CountComputerWait(fighter, 100));
+	EXPECT_FLOAT_EQ(fighter.computerWaitMs, -50.0f);
+	Enter(fighter, State::BlockRecoil, animations::k_RecoilHigh);
+	EXPECT_FALSE(CountComputerWait(fighter, 100));
+	EXPECT_FLOAT_EQ(fighter.computerWaitMs, -150.0f);
+	EXPECT_EQ(fighter.control, Control::Player);
+	// It does not count in the other states
+	Enter(fighter, State::BlockStart);
+	EXPECT_FALSE(CountComputerWait(fighter, 100));
+	EXPECT_FLOAT_EQ(fighter.computerWaitMs, -150.0f);
+	// In the block the computer takes over when the wait is below 0
+	Enter(fighter, State::Block);
+	EXPECT_TRUE(CountComputerWait(fighter, 100));
+	EXPECT_EQ(fighter.control, Control::Computer);
+	// The wait does not count for the computer or for nobody
+	EXPECT_FALSE(CountComputerWait(fighter, 100));
+	EXPECT_FLOAT_EQ(fighter.computerWaitMs, -250.0f);
+	fighter.control = Control::None;
+	EXPECT_FALSE(CountComputerWait(fighter, 100));
+	// In the stance a wait of exactly 0 is not over
+	fighter.control = Control::Player;
+	fighter.computerWaitMs = 100.0f;
+	Enter(fighter, State::Stance);
+	EXPECT_FALSE(CountComputerWait(fighter, 100));
+	EXPECT_TRUE(CountComputerWait(fighter, 1));
+}
+
+TEST(CreatureFight, AQueuedMoveInRangeStartsTheWaitAgain)
+{
+	Fighter fighter;
+	fighter.control = Control::Player;
+	fighter.queue.Push(AttackMove(Band::High), false);
+	// A blow that the player still charges stays in the queue, but it starts the wait again
+	Enter(fighter, State::Stance);
+	fighter.computerWaitMs = 10.0f;
+	EXPECT_FALSE(TakeOrder(fighter, true).has_value());
+	EXPECT_FLOAT_EQ(fighter.computerWaitMs, k_ComputerWaitsMs);
+	// Out of range, or in a move, the wait does not start again
+	fighter.computerWaitMs = 10.0f;
+	EXPECT_FALSE(TakeOrder(fighter, false).has_value());
+	Enter(fighter, State::Action, animations::k_AttackHigh);
+	EXPECT_FALSE(TakeOrder(fighter, true).has_value());
+	EXPECT_FLOAT_EQ(fighter.computerWaitMs, 10.0f);
+	// In the block it starts again
+	Enter(fighter, State::Block);
+	EXPECT_EQ(TakeOrder(fighter, true)->kind, Order::Kind::EndBlock);
+	EXPECT_FLOAT_EQ(fighter.computerWaitMs, k_ComputerWaitsMs);
+}
+
 TEST(CreatureFight, OpponentStatesAsTheComputerSeesThem)
 {
 	EXPECT_EQ(OpponentOf(State::Action, animations::k_AttackKnee), Opponent::Attacking);
 	EXPECT_EQ(OpponentOf(State::Action, animations::k_StepForward), Opponent::SteppingForward);
 	EXPECT_EQ(OpponentOf(State::Action, animations::k_RecoilMid), Opponent::OtherAction);
 	EXPECT_EQ(OpponentOf(State::BlockEnd, animations::k_EndBlock), Opponent::Blocking);
-	EXPECT_EQ(OpponentOf(State::Cast, animations::k_Cast), Opponent::Casting);
+	// An opponent that starts a cast or casts is always attacked
+	EXPECT_EQ(OpponentOf(State::CastStart, animations::k_Cast), Opponent::OtherAction);
+	EXPECT_EQ(OpponentOf(State::Cast, animations::k_Cast), Opponent::OtherAction);
+	EXPECT_EQ(OpponentOf(State::CastEnd, animations::k_Cast), Opponent::EndingCast);
 	EXPECT_EQ(OpponentOf(State::Start, animations::k_Start), Opponent::Other);
 }
 
@@ -702,6 +815,15 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_FLOAT_EQ(k_WinPlanPriority, 1.0f);
 	EXPECT_EQ(Response(0.8f, 0.5f), animations::k_Happy);
 	EXPECT_EQ(Response(0.4f, 0.5f), animations::k_Sad);
+}
+
+TEST(CreatureFight, AnOpponentWithNoLifeLeftLosesTheDuel)
+{
+	EXPECT_TRUE(WinsByOpponentsLife(0.0f, false));
+	EXPECT_TRUE(WinsByOpponentsLife(-0.1f, false));
+	EXPECT_FALSE(WinsByOpponentsLife(0.01f, false));
+	// A creature that a script controls continues its duel
+	EXPECT_FALSE(WinsByOpponentsLife(0.0f, true));
 }
 
 TEST(CreatureFightHud, AtTheDefaultScreenThePanelIsFlushInTheCorner)

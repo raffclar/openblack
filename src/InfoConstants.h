@@ -485,6 +485,10 @@ struct GAbodeInfo: GMultiMapFixedInfo
 
 	static AbodeInfo Find(const std::string& name);
 	static AbodeInfo Find(Tribe tribe, AbodeNumber abodeNumber);
+	/// The first row of the tribe, or of no tribe, with the abode number; none when no row has it. The game finds the
+	/// buildings that a scaffold offers in this way.
+	[[nodiscard]] static std::optional<AbodeInfo> FindFirst(std::span<const GAbodeInfo> rows, Tribe tribe,
+	                                                        AbodeNumber abodeNumber);
 };
 
 struct GSingleMapFixedInfo: GObjectInfo

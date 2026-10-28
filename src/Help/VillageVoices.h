@@ -12,11 +12,13 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 
 #include "ECS/Components/GuidanceHeard.h"
+#include "Enums.h"
 
 namespace openblack::magic
 {
@@ -145,6 +147,28 @@ struct DesireVoicePick
 [[nodiscard]] float DesireVoiceReachDrawLimit(float best);
 /// The full distance of a desire voice: 200 metres for each point of the best score less a random amount (the draw)
 [[nodiscard]] float DesireVoiceReach(float best, float draw);
+
+/// The voices of awe: when a town gains belief in the player at this computer, its people sometimes call out in awe.
+/// The voice plays only when another player leads the belief of the town. The share is the belief of the town in the
+/// player, against the most belief that it has in any player, from 0 to 1. A small amount added to the two values
+/// lets a town with no belief give a share. No share when the player leads already.
+[[nodiscard]] std::optional<float> BeliefVoiceShare(std::span<const float> beliefs, size_t player);
+/// The largest random amount that comes off the share before the voice is picked: a third of the share
+[[nodiscard]] float BeliefVoiceDrawLimit(float share);
+/// The voice of awe for the share less the random amount (the left share), good or evil:
+/// - 0.7 or more: the most awed voice.
+/// - 0.4 or more: the second voice.
+/// - more than 0.05: the third voice.
+/// - else, or for an alignment that is not good or evil: no voice.
+[[nodiscard]] std::optional<uint32_t> BeliefVoice(GuidanceAlignment alignment, float left);
+/// How much the player wants to hear a voice of awe, from 0 to 1. The voice must be near the point under the cursor.
+/// A long time since the last town desire voice also gives a high value. The voice that played last needs a longer
+/// time since that voice.
+[[nodiscard]] float BeliefVoiceWanted(uint32_t turnsSinceDesireVoice, float distance, bool sameAsLast);
+/// A voice of awe plays only when the value that the player wants it is more than this
+constexpr float k_BeliefVoiceLeast = 0.3f;
+/// The full distance of a voice of awe, in metres
+constexpr float k_BeliefVoiceReach = 200.0f;
 
 /// The volume and the pitch of each guidance voice
 constexpr uint32_t k_VoiceVolume = 127;

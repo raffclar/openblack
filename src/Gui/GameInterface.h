@@ -23,6 +23,7 @@
 #include <glm/vec2.hpp>
 
 #include "Canvas.h"
+#include "ChatControls.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureStatusPanel.h"
 #include "Creature/CreatureTattoo.h"
@@ -33,6 +34,8 @@
 #include "GameMenu.h"
 #include "Hand/HandTricons.h"
 #include "Help/SingAlong.h"
+#include "IncomingMessageStrip.h"
+#include "LandInfoBox.h"
 #include "LogoEffect.h"
 #include "MenuBackdrop.h"
 #include "MultiplayerBoxes.h"
@@ -40,6 +43,7 @@
 #include "SaveGameBoxes.h"
 #include "ScreenFade.h"
 #include "SkipBox.h"
+#include "SkirmishBox.h"
 #include "StoryHistoryBox.h"
 #include "TattooEditorDialog.h"
 #include "TextDatabase.h"
@@ -131,6 +135,22 @@ public:
 	/// The controls of the custom music player at the top right of the screen
 	[[nodiscard]] CustomMusicControls& GetMusicControls() noexcept { return *_musicControls; }
 	[[nodiscard]] const CustomMusicControls& GetMusicControls() const noexcept { return *_musicControls; }
+	/// The incoming message at the bottom left of the screen
+	[[nodiscard]] const IncomingMessageStrip& GetIncomingMessages() const noexcept { return *_incomingMessages; }
+	/// The chat of a network game at the top right of the screen
+	[[nodiscard]] ChatControls& GetChatControls() noexcept { return *_chatControls; }
+	[[nodiscard]] const ChatControls& GetChatControls() const noexcept { return *_chatControls; }
+	/// The keys go to the line of the chat
+	[[nodiscard]] bool ChatWantsKeys() const;
+	/// The window's point on the chat's layout, and back
+	[[nodiscard]] glm::ivec2 ToChatControls(glm::ivec2 screen, glm::u16vec2 resolution);
+	[[nodiscard]] glm::ivec2 FromChatControls(glm::ivec2 layout, glm::u16vec2 resolution);
+	/// The window's point on the incoming message's layout, and back
+	[[nodiscard]] glm::ivec2 ToIncomingMessages(glm::ivec2 screen, glm::u16vec2 resolution);
+	[[nodiscard]] glm::ivec2 FromIncomingMessages(glm::ivec2 layout, glm::u16vec2 resolution);
+	/// What a click on the button of the incoming message does: the camera can follow the player's creature, and the
+	/// message goes
+	void ClickIncomingMessage(bool rightButton);
 	/// The window's point on the custom music controls' layout
 	[[nodiscard]] glm::ivec2 ToMusicControls(glm::ivec2 screen, glm::u16vec2 resolution);
 	/// The custom music controls' point on the window
@@ -138,14 +158,15 @@ public:
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept
 	{
-		return _menu->IsOpen() || _skipBox->IsActive() || _endGameBox->IsOpen();
+		return _menu->IsOpen() || _skipBox->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
 	}
 	/// Whether the active box has a background: the menu and its questions, the start-of-game question, the new
 	/// player's box, the save game room's boxes, or the tattoo editor in its own frame
 	[[nodiscard]] bool IsBoxWithBackgroundActive() const noexcept
 	{
 		return _menu->IsOpen() || _skipBox->IsActive() || _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() ||
-		       _endGameBox->IsOpen() || _multiplayerBoxes->IsActive() || (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+		       _endGameBox->IsOpen() || _multiplayerBoxes->IsActive() || _landInfoBox->IsActive() ||
+		       (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 	}
 	/// The boxes of the multiplayer front end over the temple's future room
 	[[nodiscard]] MultiplayerBoxes& GetMultiplayerBoxes() noexcept { return *_multiplayerBoxes; }
@@ -163,10 +184,29 @@ public:
 	void ShowNewPlayerBoxOverGame(bool canCancel, NewPlayerBox::CheckName checkName);
 	bool ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution);
 	[[nodiscard]] NewPlayerBox& GetNewPlayerBox() noexcept { return *_newPlayerBox; }
+	/// The box in which the player chooses the land of a skirmish, over the swirls of the front end's backdrop. The box shows
+	/// the names of the lands in the order of the list.
+	void ShowSkirmishBox(std::vector<std::u16string> lands);
+	/// The skirmish box after Start Skirmish Game: the screen goes to the front end's backdrop over the game that ended
+	void ShowSkirmishBoxOverGame(std::vector<std::u16string> lands);
+	/// The skirmish box takes the mouse and the keyboard; true when it took the event
+	bool ProcessSkirmishBoxEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	[[nodiscard]] SkirmishBox& GetSkirmishBox() noexcept { return *_skirmishBox; }
+	[[nodiscard]] const SkirmishBox& GetSkirmishBox() const noexcept { return *_skirmishBox; }
+	/// The front end's backdrop covers the game for a box over it: while the box is up, and while the screen fades to
+	/// black after it
+	[[nodiscard]] bool ShowsBoxOverGame() const noexcept { return _boxOverGameFade.has_value(); }
 	/// The save game room's question and name box, over the temple
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
 	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
 	void ShowSaveProblem();
+	/// The script of the land gives a command for the land information box: a title that shows the box with an empty
+	/// list, or a line at the end of its list
+	void ApplyLandMessage(std::u16string text, bool starts);
+	/// The land information box takes the mouse and the keyboard while it shows; true when it took the event
+	bool ProcessLandInfoBoxEvent(const SDL_Event& event);
+	[[nodiscard]] LandInfoBox& GetLandInfoBox() noexcept { return *_landInfoBox; }
+	[[nodiscard]] const LandInfoBox& GetLandInfoBox() const noexcept { return *_landInfoBox; }
 	/// The end box of a skirmish or a network game opens. It closes the game's menu and a message with an OK.
 	void OpenEndGameBox(EndGameBox::Contents contents);
 	/// The end box of a skirmish or a network game
@@ -188,8 +228,8 @@ public:
 	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
 	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.
 	void SetToolTipName(std::u16string name) { _toolTipName = std::move(name); }
-	/// The new player's screen: the backdrop, swirling on by the frame's milliseconds, the box and the pointer, under
-	/// black of an alpha
+	/// The screen of the front end: the backdrop that swirls by the milliseconds of the frame, the new player's box or the
+	/// skirmish box, and the pointer, under black of an alpha
 	void DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, float frameMilliseconds,
 	                         uint8_t black);
 	/// What the logo effect draws over its sky and its dots in a frame
@@ -227,6 +267,8 @@ public:
 
 	/// The tattoo editor's dialog, shown while the tattoo editor is open
 	[[nodiscard]] TattooEditorDialog& GetTattooEditor() noexcept { return *_tattooEditor; }
+	/// For the testbed: the tattoo editor works as in a network game, also in a game alone
+	void SetTattooEditorAsNetworkGame(bool asNetworkGame) noexcept { _tattooEditorAsNetworkGame = asNetworkGame; }
 	/// The mouse buttons held down while the tattoo editor takes the mouse: the left one, and any of them
 	[[nodiscard]] bool IsTattooEditorLeftHeld() const noexcept { return _leftButtonDown; }
 	[[nodiscard]] bool IsTattooEditorButtonHeld() const noexcept { return _leftButtonDown || _otherButtonsDown != 0; }
@@ -266,6 +308,8 @@ public:
 	void SetCreaturePanel(std::optional<creature_panel::Values> values) { _creaturePanel = values; }
 	/// The fight's panel shown this frame, or none: each fighter's name over its health and stamina
 	void SetFightPanel(std::optional<creature_fight_hud::Values> values) { _fightPanel = std::move(values); }
+	/// The text of the player's own ping in the top left corner this frame, or none (deviation 143)
+	void SetPingLine(std::optional<std::u16string> text) { _pingLine = std::move(text); }
 	/// A number floating up from a point of the world, where it is on the screen this frame
 	struct FloatingNumber
 	{
@@ -345,6 +389,14 @@ private:
 	bool ProcessMusicControlsEvent(const SDL_Event& event, glm::u16vec2 resolution);
 	/// Shows the custom music controls when nothing that they must not show over is on the screen
 	void UpdateMusicControls(bool dialogOpen);
+	/// The incoming message's button takes the mouse only over the button; true when it took the event
+	bool ProcessIncomingMessagesEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	/// Shows the incoming message as the custom music controls show, and steps the list of messages
+	void UpdateIncomingMessages(bool dialogOpen, glm::u16vec2 resolution);
+	/// The chat takes the mouse over its controls, and the keys while its line has them; true when it took the event
+	bool ProcessChatEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	/// Shows the chat as the game lets it show, and sends what the player sent in it
+	void UpdateChat(bool dialogOpen, glm::u16vec2 resolution);
 	/// While the tattoo editor is open its dialog takes the mouse and keyboard
 	bool ProcessTattooEditorEvent(const SDL_Event& event);
 	/// What a key or a letter chose in the menu: the game takes it, and Continue closes the menu
@@ -360,6 +412,8 @@ private:
 	void DrawCreaturePanel(glm::u16vec2 resolution);
 	/// The fight's panel, at the top left of the screen
 	void DrawFightPanel(glm::u16vec2 resolution);
+	/// The player's own ping in the top left corner of the screen
+	void DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool cinemaBars);
 	/// A bar of the creature's panels in screen pixels: its framed box, its fill from its left (or its middle, with a line
 	/// there) brightening towards where it ends, and shadows inside its frame
 	void DrawStatBar(const creature_panel::Rect& bar, float fill, glm::u8vec3 colour, bool fromMiddle);
@@ -384,12 +438,19 @@ private:
 	void DrawVillagerLabels(glm::u16vec2 resolution);
 	/// The tip bubble over the "did you know" sign tapped last, with the pointer over it keeping it up
 	void DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse);
+	/// The pictures of gestures and controls on the temple's scroll that the camera is close to
+	void DrawTempleScrollPictures(glm::u16vec2 resolution);
+	/// The bubbles of the chat over the creatures, with the pointer over a bubble keeping it up
+	void DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse);
 	/// A run of the bubble's words' width as the bubble measures it
 	[[nodiscard]] float BubbleTextWidth(std::u16string_view text, float size) const;
 	/// A line of the bubble's words in a colour, fading from its top to its bottom
 	void DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour);
 	/// The same, on another canvas
 	void DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line& line, glm::vec3 colour);
+	/// The same, in another font
+	void DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line& line, glm::vec3 colour, const GameFont& font,
+	                    const graphics::Texture2D* texture);
 	/// The picture of the control that does a tip's action: its mouse buttons or its key cap
 	void DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,
 	                       float pixelScale);
@@ -449,7 +510,10 @@ private:
 	std::optional<new_game_choice::Choice> _skipBoxAnswer;
 	std::unique_ptr<StoryHistoryBox> _storyHistoryBox;
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
+	bool _tattooEditorAsNetworkGame {false};
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
+	std::unique_ptr<SkirmishBox> _skirmishBox;
+	std::unique_ptr<LandInfoBox> _landInfoBox;
 	std::unique_ptr<SaveGameBoxes> _saveGameBoxes;
 	std::unique_ptr<EndGameBox> _endGameBox;
 	bool _resyncShown {false};
@@ -459,6 +523,10 @@ private:
 	std::unique_ptr<MultiplayerBoxes> _multiplayerBoxes;
 	std::u16string _toolTipName;
 	std::unique_ptr<CustomMusicControls> _musicControls;
+	std::unique_ptr<IncomingMessageStrip> _incomingMessages;
+	std::unique_ptr<ChatControls> _chatControls;
+	/// The chat started the text input of the window
+	bool _chatTextInput {false};
 	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates
 	std::unique_ptr<graphics::Texture2D> _backdrop;
 	std::optional<menu_backdrop::Swirls> _backdropSwirls;
@@ -482,6 +550,7 @@ private:
 	std::optional<glm::vec2> _handOnScreen;
 	std::optional<creature_panel::Values> _creaturePanel;
 	std::optional<creature_fight_hud::Values> _fightPanel;
+	std::optional<std::u16string> _pingLine;
 	std::vector<FloatingNumber> _floatingNumbers;
 	std::vector<LearningText> _learningTexts;
 	std::optional<HandTricons> _handTricons;

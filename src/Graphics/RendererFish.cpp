@@ -84,7 +84,12 @@ void Renderer::DrawFishShoals(const DrawSceneDesc& desc) const
 	});
 	if (vertices.empty())
 	{
-		return;
+		// A warm-up draws one triangle of no size, so that the first shoal in sight makes no pipeline
+		if (!_warmingUp)
+		{
+			return;
+		}
+		vertices.resize(k_Triangles.size() / 2);
 	}
 
 	bgfx::VertexLayout layout;
