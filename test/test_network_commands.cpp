@@ -211,6 +211,7 @@ public:
 	bool SetLeashable(entt::entity /*creature*/, bool /*leashable*/) override { return false; }
 	void SetOwner(entt::entity /*creature*/, PlayerNames /*owner*/) override {}
 	void ClaimOnArrival(entt::entity /*creature*/) override {}
+	void PlayHandAttachSound(entt::entity /*creature*/) override {}
 	[[nodiscard]] creature_leash::Refusal WhyNot(PlayerNames /*player*/, entt::entity /*creature*/,
 	                                             LeashType /*type*/) const override
 	{
