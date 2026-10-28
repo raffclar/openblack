@@ -1412,4 +1412,28 @@ struct Timeline
                                           std::optional<size_t> repeatFrom, float seconds,
                                           const std::function<bool(const Command& command)>& isFree);
 
+/// What a testbed scenario does before one turn of a network game. In a network game the scenario steps by the turns, not
+/// by the frames, so that the server and every client give its commands before the same turn.
+enum class TurnStep : uint8_t
+{
+	/// No scenario was laid out
+	None,
+	/// The scenario was laid out before this turn, and gives no commands before it
+	Wait,
+	/// The scenario steps on by the time of one turn and gives the commands that are due
+	Update,
+};
+
+/// The step of a scenario before a turn. startedAt: the turn count at which the scenario was laid out. turn: the turn
+/// count before the turn. A game lays out a scenario in the frame of its first turn and gives the first commands in the
+/// frame after it. Thus the first turn after the layout gives no commands.
+[[nodiscard]] constexpr TurnStep TurnStepOf(std::optional<uint32_t> startedAt, uint32_t turn) noexcept
+{
+	if (!startedAt.has_value())
+	{
+		return TurnStep::None;
+	}
+	return *startedAt == turn ? TurnStep::Wait : TurnStep::Update;
+}
+
 } // namespace openblack::testbed_scenarios

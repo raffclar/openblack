@@ -118,6 +118,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The frames find whether a post hangs its leash, for the hand's picks and tooltips, and show it at its size
     {.component = "LeashPost", .field = "hung", .marker = ""},
     {.component = "Transform", .field = "scale", .marker = "LeashPost"},
+    // The frames put the picked leash of this computer's player in its hand. The turns read the point of the post.
+    {.component = "Transform", .field = "position", .marker = "LeashPost"},
     // The moving bodies are drawn between their last two turns. The turns read the Transform.
     {.component = "PhysicsDrawPose", .field = "", .marker = ""},
     // The particle effects that the frames step
