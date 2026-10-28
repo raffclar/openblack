@@ -303,6 +303,53 @@ struct KeptThing
 	return true;
 }
 
+/// A thing that the draw of another thing draws with it. The draw of a village totem draws the icon on its plinth and
+/// its second, see-through plinth and icon.
+struct Part
+{
+	/// The thing whose draw draws this part
+	entt::entity owner {entt::null};
+	/// The test of this part counts for the owner: the owner stays drawn when it or this part stays drawn
+	bool keepsOwner {false};
+};
+
+/// Each part by its entity's index, so that the test whether a thing is a part is fast
+class Parts
+{
+public:
+	/// Forget all the parts
+	void Clear();
+	/// A thing is a part of an owner
+	void Add(entt::entity part, Part of);
+	/// The owner of a thing and whether the thing keeps it, or none for a thing that is not a part
+	[[nodiscard]] std::optional<Part> Of(entt::entity entity) const;
+
+private:
+	struct Entry
+	{
+		entt::entity entity {entt::null};
+		Part of;
+	};
+	std::vector<entt::entity> _parts;
+	std::vector<Entry> _byIndex;
+};
+
+/// The owners that a part keeps drawn on a full frame. The renderer notes the parts and their owners in any order: an
+/// owner noted after its part also stays drawn.
+class KeptParts
+{
+public:
+	/// A new full frame forgets the parts of the last one
+	void Clear() { _owners.clear(); }
+	/// A part of the owner stays drawn
+	void Keep(entt::entity owner);
+	/// Whether a part of the owner stays drawn on this full frame
+	[[nodiscard]] bool Keeps(entt::entity owner) const { return std::ranges::find(_owners, owner) != _owners.end(); }
+
+private:
+	std::vector<entt::entity> _owners;
+};
+
 /// The frames that make the list again because an event asks. The game keeps one count of frames. Each request sets
 /// the count, so a later request replaces an earlier one, also a larger one. Each frame that makes the list again
 /// decreases the count by one, for all causes.

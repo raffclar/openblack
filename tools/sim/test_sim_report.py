@@ -198,6 +198,30 @@ class UnregisteredTests(unittest.TestCase):
 
 
 
+class LeashCommands(unittest.TestCase):
+    LINES = [
+        "[game] [info] Leash command: player 1 presses the leash key at turn 300: creature 51 wears leash 2 of player 1, "
+        "held in the hand",
+        "[game] [info] Network game: 300 turns compared with the server, 300 the same",
+        "[game] [info] Leash command: player 1 goes into the temple at turn 420: creature 51 wears no leash",
+        "[game] [info] Leash command: player 0 presses the leash key at turn 500: the player has no creature",
+    ]
+
+    def test_gives_each_command_in_its_order(self):
+        self.assertEqual(sim_report.leash_commands_in_text(self.LINES), [
+            (300, 1, "presses the leash key", "creature 51 wears leash 2 of player 1, held in the hand"),
+            (420, 1, "goes into the temple", "creature 51 wears no leash"),
+            (500, 0, "presses the leash key", "the player has no creature"),
+        ])
+
+    def test_a_command_after_the_last_common_turn_is_not_given(self):
+        self.assertEqual([command[0] for command in sim_report.leash_commands_in_text(self.LINES, 499)], [300, 420])
+
+    def test_an_observer_compares_from_the_turn_of_its_world(self):
+        commands = sim_report.leash_commands_in_text(self.LINES)
+        self.assertEqual([command[0] for command in sim_report.leash_commands_from_turn(commands, 420)], [420, 500])
+
+
 class HandDeeds(unittest.TestCase):
     LINES = [
         "[game] [info] Hand deed: the hand of player 0 scoops from thing 140",
@@ -210,6 +234,11 @@ class HandDeeds(unittest.TestCase):
     def test_counts_each_deed_of_each_player(self):
         self.assertEqual(sim_report.hand_deeds_in_text(self.LINES),
                          {0: {"scoops": 1, "throws": 2}, 1: {"takes": 1}})
+
+    def test_a_gift_to_a_creature_is_a_deed_of_its_own(self):
+        lines = ["[game] [info] Hand deed: the hand of player 0 takes thing 77 at turn 300",
+                 "[game] [info] Hand deed: the hand of player 0 gives thing 77 at turn 320"]
+        self.assertEqual(sim_report.hand_deeds_in_text(lines), {0: {"takes": 1, "gives": 1}})
 
     def test_a_deed_after_the_last_common_turn_is_not_counted(self):
         lines = [

@@ -16,6 +16,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "3D/AllMeshes.h"
+#include "ECS/Components/Mesh.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -95,6 +96,9 @@ struct ScaffoldGhost
 	entt::entity scaffold {entt::null};
 	/// Its alpha, 0 to 255
 	uint8_t alpha {0};
+	/// The model that the copy shows in the frames, none when it shows nothing. The copy keeps its model here and has no
+	/// Mesh: the frames must not add or remove rows of a component that the game turns use.
+	std::optional<Mesh> model;
 };
 
 /// The size that a scaffold on a building site shows in the frames, which becomes small as the building grows

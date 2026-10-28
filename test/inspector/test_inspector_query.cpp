@@ -250,6 +250,23 @@ TEST(InspectorQuery, SizeCapTruncatesAndMovesTheCursor)
 	EXPECT_LE(Dump(page).size(), options.maxBytes);
 }
 
+TEST(InspectorQuery, LargeObjectsSayWhichFieldsAreLarge)
+{
+	// An entity with one large component: the sizes say which field of which component to ask for
+	Json entity = {{"id", 1},
+	               {"data", {{"Small", {{"x", 1}}}, {"Large", {{"cache", std::string(5000, 'x')}, {"state", 2}}}}}};
+	QueryOptions options;
+	options.maxBytes = 1000;
+	const auto result = ShapeObject(entity, options);
+	ASSERT_EQ(result["truncated"], true);
+	EXPECT_GT(result["sizes"]["data"]["Large"]["cache"].get<size_t>(), 5000u);
+	EXPECT_LT(result["sizes"]["data"]["Large"]["state"].get<size_t>(), 10u);
+	EXPECT_LT(result["sizes"]["data"]["Small"]["x"].get<size_t>(), 10u);
+
+	options.fields = {"data.Large.state"};
+	EXPECT_EQ(ShapeObject(entity, options), Json({{"data", {{"Large", {{"state", 2}}}}}}));
+}
+
 TEST(InspectorQuery, LargeObjectsListTheirKeys)
 {
 	Json big = {{"a", std::string(5000, 'x')}, {"b", 1}};

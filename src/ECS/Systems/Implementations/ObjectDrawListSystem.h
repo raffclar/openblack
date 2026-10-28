@@ -46,6 +46,7 @@ public:
 	[[nodiscard]] bool Listed(entt::entity entity) const override;
 	[[nodiscard]] bool Drawn(const Registry& registry, entt::entity entity) const override;
 	[[nodiscard]] bool Decides(const Registry& registry, entt::entity entity) const override;
+	[[nodiscard]] bool NotesKept(entt::entity entity) const override;
 	void NoteFullFrame(entt::entity entity, bool staysDrawn) override;
 	[[nodiscard]] std::span<const entt::entity> GetList() const override { return _list; }
 	[[nodiscard]] Summary GetSummary() const override;
@@ -71,6 +72,8 @@ private:
 	/// Whether one or more triangles of a block in view show, with its cells at the heights they have now
 	[[nodiscard]] static bool Shows(const LandBlock& block, const glm::mat4& viewProjection, float nearPlane, glm::vec3 eye);
 	void MakeList();
+	/// The parts that the draw of each village totem draws with it
+	void FindParts();
 	void OnLetGo(entt::registry& registry, entt::entity entity);
 
 	Registry* _registry {nullptr};
@@ -91,6 +94,10 @@ private:
 	/// For each listed thing by its entity's index, whether the last full frame kept it for the frames that do not
 	/// draw all of the list
 	std::vector<bool> _keptByIndex;
+	/// The things that the draw of another thing draws with it
+	object_draw_list::Parts _parts;
+	/// The owners that a part kept drawn on this full frame
+	object_draw_list::KeptParts _keptParts;
 };
 
 } // namespace openblack::ecs::systems

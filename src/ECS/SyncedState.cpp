@@ -427,11 +427,13 @@ bool IsPresentationOnly(std::span<const PresentationPart> parts, std::string_vie
 	});
 }
 
-Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::span<const PresentationPart> presentation,
-            bool byField, const ecs::reflection::RowVisitor& visit, WorkerPool* pool, ecs::reflection::WorldRows* rows)
+namespace
 {
-	// The hash does not include the presentation parts. A part that only some entities have uses the storage of its marker
-	// component. When the registry has no such storage, no entity has the marker, and the hash keeps the part.
+/// The parts that the hash does not include. A part that only some entities have uses the storage of its marker
+/// component. When the registry has no such storage, no entity has the marker, and the hash keeps the part.
+[[nodiscard]] std::vector<ecs::reflection::HashLeaveOut> LeaveOut(const entt::registry& registry,
+                                                                  std::span<const PresentationPart> presentation)
+{
 	std::vector<ecs::reflection::HashLeaveOut> leaveOut;
 	leaveOut.reserve(presentation.size());
 	for (const auto& part : presentation)
@@ -445,7 +447,17 @@ Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 			leaveOut.push_back({.component = part.component, .field = part.field, .marker = marker});
 		}
 	}
-	const auto hashes = ecs::reflection::HashWorld(registry, context, leaveOut, byField, visit, pool, rows);
+	return leaveOut;
+}
+} // namespace
+
+Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::span<const PresentationPart> presentation,
+            bool byField, const ecs::reflection::RowVisitor& visit, WorkerPool* pool, ecs::reflection::WorldRows* rows,
+            ecs::reflection::HashMemo* memo)
+{
+	// The hash does not include the presentation parts
+	const auto leaveOut = LeaveOut(registry, presentation);
+	const auto hashes = ecs::reflection::HashWorld(registry, context, leaveOut, byField, visit, pool, rows, memo);
 	Hash result {.hash = k_HashOffset, .parts = {}};
 	Mix(result.hash, &hashes.entities, sizeof(hashes.entities));
 	result.parts.emplace_back("entities", hashes.entities);
@@ -458,6 +470,12 @@ Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 	result.parts.insert(result.parts.end(), hashes.fields.begin(), hashes.fields.end());
 	result.unregistered = hashes.unregistered;
 	return result;
+}
+
+std::vector<std::pair<std::string, uint64_t>> RowOrdersOf(const entt::registry& registry, const entt::meta_ctx& context,
+                                                          std::span<const PresentationPart> presentation)
+{
+	return ecs::reflection::RowOrders(registry, context, LeaveOut(registry, presentation));
 }
 
 std::string UnregisteredLine(std::span<const std::string> names)

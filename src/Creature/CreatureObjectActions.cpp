@@ -237,6 +237,7 @@ bool creature_object_actions::IsStatic(Thing thing)
 	case Thing::Static:
 	case Thing::Vortex:
 	case Thing::TeleportStone:
+	case Thing::BuildingPiece:
 		return true;
 	default:
 		return false;
@@ -302,7 +303,10 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 	case Thing::Shield:
 	case Thing::Vortex:
 	case Thing::TeleportStone:
+	case Thing::BuildingPiece:
 		return KindRule::Never;
+	case Thing::Scaffold:
+		return KindRule::Scaffold;
 	case Thing::Static:
 		return KindRule::Toy;
 	case Thing::Ball:
@@ -322,6 +326,7 @@ creature_object_actions::KindRule creature_object_actions::RuleOf(Thing thing)
 	case Thing::Bonfire:
 	case Thing::DeadTree:
 	case Thing::Tree:
+	case Thing::Reward:
 		return KindRule::Whole;
 	}
 	return KindRule::Never;
@@ -346,10 +351,19 @@ std::optional<creature_object_actions::Toy> creature_object_actions::ToyOf(MeshI
 	}
 }
 
-bool creature_object_actions::Holdable(Thing thing)
+bool creature_object_actions::CanBePickedUp(Thing thing)
 {
-	return thing != Thing::Other && thing != Thing::Fixture && thing != Thing::Creature && thing != Thing::Lantern &&
-	       thing != Thing::Shield && thing != Thing::MagicMushroom;
+	switch (thing)
+	{
+	case Thing::Other:
+	case Thing::Fixture:
+	case Thing::Lantern:
+	case Thing::Shield:
+	case Thing::MagicMushroom:
+		return false;
+	default:
+		return true;
+	}
 }
 
 bool creature_object_actions::IsLiving(Thing thing)
@@ -373,6 +387,7 @@ bool creature_object_actions::CanBeStoned(Thing thing, bool dead)
 	case Thing::MagicMushroom:
 	case Thing::Shield:
 	case Thing::Fixture:
+	case Thing::BuildingPiece:
 		return true;
 	case Thing::Other:
 	case Thing::Ball:
@@ -384,6 +399,8 @@ bool creature_object_actions::CanBeStoned(Thing thing, bool dead)
 	case Thing::Lantern:
 	case Thing::Vortex:
 	case Thing::TeleportStone:
+	case Thing::Reward:
+	case Thing::Scaffold:
 		return false;
 	}
 	return false;
@@ -399,6 +416,7 @@ bool creature_object_actions::DoesThrowingDamage(Thing thing, bool toy)
 	case Thing::Static:
 	case Thing::Vortex:
 	case Thing::TeleportStone:
+	case Thing::BuildingPiece:
 		return !toy;
 	default:
 		return false;
@@ -430,6 +448,9 @@ bool creature_object_actions::CanBeThrownInTheSea(Thing thing)
 	case Thing::Vortex:
 	case Thing::TeleportStone:
 	case Thing::Tree:
+	case Thing::BuildingPiece:
+	case Thing::Reward:
+	case Thing::Scaffold:
 		return true;
 	default:
 		return false;
@@ -453,19 +474,21 @@ bool creature_object_actions::MayPickUpKind(const KindFacts& kind, const PickUpF
 	case KindRule::Pile:
 		return !facts.cannotBePickedUp && kind.mayFly;
 	case KindRule::Whole:
-		return kind.holdable && MayPickUp(facts);
+		return kind.canBePickedUp && MayPickUp(facts);
+	case KindRule::Scaffold:
+		return kind.handCanTake && kind.canBePickedUp && MayPickUp(facts);
 	}
 	return false;
 }
 
 bool creature_object_actions::MayTakeKindFromHand(const KindFacts& kind, const PickUpFacts& facts)
 {
-	return kind.holdable && MayPickUpWhereverItIs(facts);
+	return kind.canBePickedUp && MayPickUpWhereverItIs(facts);
 }
 
 bool creature_object_actions::MayCatchKind(const KindFacts& kind, const PickUpFacts& facts)
 {
-	return kind.holdable && MayBeCaught(facts);
+	return kind.canBePickedUp && MayBeCaught(facts);
 }
 
 creature_object_actions::EatenThingEnd creature_object_actions::EatenThingEndFor(bool eatGoesOn, bool creatureExists)

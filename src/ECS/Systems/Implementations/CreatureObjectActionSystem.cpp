@@ -93,6 +93,8 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
@@ -132,6 +134,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -2236,6 +2239,11 @@ void CreatureObjectActionSystem::Drop(entt::entity creature)
 	Release(creature, glm::vec3(0.0f));
 }
 
+void CreatureObjectActionSystem::PutDownAtOnce(entt::entity creature)
+{
+	Release(creature, glm::vec3(0.0f), ReleaseFrom::LetGo);
+}
+
 void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2267,14 +2275,18 @@ void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3&
 	{
 		at->position = pose->position;
 		at->rotation = pose->rotation;
-		// A thing that the creature lets go of or throws takes its angles from its turn in the hand. A living thing keeps
-		// its own heading.
-		if (from != ReleaseFrom::Dropped && !registry.AnyOf<Villager, Animal, Creature>(object))
+		// A thing that the creature lets go of or throws takes its angles from its turn in the hand. A held creature keeps
+		// the turn of the hand. A thrown villager or animal stands upright with the heading of the hand. It keeps its own
+		// heading and no angles, and its landing gives it a new heading.
+		if (from != ReleaseFrom::Dropped && !registry.AllOf<Creature>(object))
 		{
 			const auto taken = ecs::placed_turn::TurnFromHeld(
 			    pose->rotation, at->scale.x, ecs::placed_turn::CanLean(registry, object), from == ReleaseFrom::Thrown);
 			at->rotation = taken.turn;
-			ecs::placed_turn::KeepAngles(registry, object, taken.angles);
+			if (!registry.AnyOf<Villager, Animal>(object))
+			{
+				ecs::placed_turn::KeepAngles(registry, object, taken.angles);
+			}
 		}
 	}
 	LetGo(creature, object, velocity);
@@ -2430,6 +2442,20 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 		{
 			return Thing::Ball;
 		}
+		if (registry.AllOf<BuildingPiece>(object))
+		{
+			return Thing::BuildingPiece;
+		}
+		if (registry.AllOf<Reward>(object))
+		{
+			return Thing::Reward;
+		}
+		if (registry.AllOf<Scaffold>(object))
+		{
+			// A creature picks up a scaffold only when a hand could take it
+			facts.handCanTake = Locator::workshopSystem::has_value() && Locator::workshopSystem::value().CanTake(object);
+			return Thing::Scaffold;
+		}
 		if (const auto* pot = registry.TryGet<const Pot>(object))
 		{
 			// A pile of food or wood goes by whether its kind may fly about
@@ -2507,7 +2533,7 @@ creature_object_actions::KindFacts CreatureObjectActionSystem::KindFactsOf(entt:
 	}();
 	facts.thing = thing;
 	facts.rule = creature_object_actions::RuleOf(thing);
-	facts.holdable = creature_object_actions::Holdable(thing);
+	facts.canBePickedUp = creature_object_actions::CanBePickedUp(thing);
 	return facts;
 }
 
@@ -2599,7 +2625,7 @@ bool CreatureObjectActionSystem::CanEatHeld(entt::entity creature) const
 bool CreatureObjectActionSystem::CanTakeFromHand(entt::entity creature, entt::entity object) const
 {
 	const auto kind = KindFactsOf(object);
-	return kind.holdable && creature_object_actions::MayTakeKindFromHand(kind, PickUpFactsOf(creature, object));
+	return creature_object_actions::MayTakeKindFromHand(kind, PickUpFactsOf(creature, object));
 }
 
 bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
@@ -2668,6 +2694,9 @@ bool CreatureObjectActionSystem::CanStompOn(entt::entity creature, entt::entity 
 		case Thing::Bonfire:
 		case Thing::DeadTree:
 		case Thing::Static:
+		case Thing::BuildingPiece:
+		case Thing::Reward:
+		case Thing::Scaffold:
 			return StompRule::Always;
 		case Thing::Vortex:
 		case Thing::TeleportStone:

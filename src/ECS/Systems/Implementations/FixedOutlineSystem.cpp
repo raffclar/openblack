@@ -35,6 +35,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
@@ -90,7 +91,7 @@ Shape ShapeOf(const Registry& registry, entt::entity entity)
 		return Shape::LeaningBox;
 	}
 	if (registry.AnyOf<Abode, Field, Feature, AnimatedStatic, Flowers, SpellDispenser, WorshipAltar, MagicShield, ShieldDome,
-	                   ScriptHighlight>(entity))
+	                   ScriptHighlight, VillageTotem>(entity))
 	{
 		return Shape::UprightBox;
 	}

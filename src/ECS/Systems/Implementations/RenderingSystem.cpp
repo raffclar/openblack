@@ -228,16 +228,25 @@ struct SegmentPasses
 	const uint32_t& last;
 };
 
-/// Call `place` for each entity with the components: in the first pass, then again in a pass for each later segment.
-/// `place` places only the things of the segment that the pass places.
-template <typename... Components, typename Place>
+/// Call `place` for each entity with a model and a transform: in the first pass, then again in a pass for each later
+/// segment. `place` places only the things of the segment that the pass places. The phantom building of a scaffold
+/// keeps its model in the copy, not in a Mesh, so `place` gets the model of the copy.
+template <typename Place>
 void EachBySegment(const Place& place, SegmentPasses passes)
 {
 	using namespace openblack::ecs::components;
+	constexpr auto k_NotPlaced = entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState, VillageTotemGhostHidden>;
 	do
 	{
-		passes.registry.Each<Components...>(
-		    place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState, VillageTotemGhostHidden>);
+		passes.registry.Each<const Mesh, const Transform>(place, k_NotPlaced);
+		passes.registry.Each<const ScaffoldGhost, const Transform>(
+		    [&place](entt::entity entity, const ScaffoldGhost& ghost, const Transform& transform) {
+			    if (ghost.model.has_value())
+			    {
+				    place(entity, *ghost.model, transform);
+			    }
+		    },
+		    k_NotPlaced);
 	} while (passes.placed++ < passes.last);
 }
 
@@ -393,6 +402,15 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		        !HiddenHighlight(registry, entity))
 		    {
 			    prep(entity, mesh, false);
+		    }
+	    },
+	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState, VillageTotemGhostHidden>);
+	// The phantom building of a scaffold keeps its model in the copy, not in a Mesh
+	registry.Each<const ScaffoldGhost, const Transform>(
+	    [&prep](entt::entity entity, const ScaffoldGhost& ghost, const Transform& /*unused*/) {
+		    if (ghost.model.has_value())
+		    {
+			    prep(entity, *ghost.model, false);
 		    }
 	    },
 	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState, VillageTotemGhostHidden>);
@@ -692,7 +710,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		}
 	});
 	const auto drawnHand = DrawnHand();
-	EachBySegment<const Mesh, const Transform>(
+	EachBySegment(
 	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, &fizzOrder, &segmentPlaced, &lastSegment, &filmBoat,
 	     drawBoundingBox, camera, &view, modelDetail, drawList,
 	     drawnHand](entt::entity entity, const Mesh& mesh, const Transform& transform) {
@@ -761,9 +779,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    bool gone = false;
 		    const auto* detail = registry.TryGet<const DetailMeshes>(entity);
 		    // On a frame that draws all of the land's draw list, note which listed things stay drawn while the camera
-		    // stands still. A thing of several meshes uses the box of its standard mesh. Another thing uses its own mesh,
-		    // also a broken building, which shows its broken model.
-		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->Listed(entity);
+		    // stands still. The icon of a village totem is noted too: it keeps its totem drawn. A thing of several meshes
+		    // uses the box of its standard mesh. Another thing uses its own mesh, also a broken building, which shows its
+		    // broken model.
+		    const bool noteKept = drawList != nullptr && drawList->GetFrame().drawAll && drawList->NotesKept(entity);
 		    const auto keptBox =
 		        detail != nullptr ? detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::Standard)) : mesh.id;
 		    bool noted = false;

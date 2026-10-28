@@ -13,13 +13,18 @@
 
 #include <iterator>
 #include <optional>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include <spdlog/spdlog.h>
+
+#include "Creature/LeashReport.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Player.h"
@@ -60,6 +65,94 @@ bool PlayerOfThisComputer(openblack::PlayerNames player)
 {
 	return !openblack::Locator::playerSystem::has_value() ||
 	       openblack::Locator::playerSystem::value().GetLocalPlayer() == player;
+}
+
+/// The words of the leash report for a command that can change the leash of the player's creature, or none for
+/// another command
+std::optional<std::string_view> LeashCommandWords(const Action& action)
+{
+	return std::visit(
+	    [](const auto& command) -> std::optional<std::string_view> {
+		    using Kind = std::decay_t<decltype(command)>;
+		    if constexpr (std::is_same_v<Kind, LeashKey>)
+		    {
+			    switch (command.key)
+			    {
+			    case openblack::creature_leash::LeashKey::Leash:
+				    return "presses the leash key";
+			    case openblack::creature_leash::LeashKey::PreviousLeash:
+				    return "presses the previous leash key";
+			    case openblack::creature_leash::LeashKey::NextLeash:
+				    return "presses the next leash key";
+			    }
+			    return "presses a leash key";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashTap>)
+		    {
+			    return "taps a creature";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashOrder>)
+		    {
+			    return "gives a leash order";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)
+		    {
+			    return "taps a leash post";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashPick>)
+		    {
+			    return "picks a leash";
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandShakeOff>)
+		    {
+			    return "shakes the hand";
+		    }
+		    else if constexpr (std::is_same_v<Kind, TempleLeashOff>)
+		    {
+			    return "goes into the temple";
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashLength>)
+		    {
+			    return "lets go of the rope";
+		    }
+		    else
+		    {
+			    return std::nullopt;
+		    }
+	    },
+	    action);
+}
+
+/// Write the leash of the player's creature after a leash command to the log. Each computer writes the same line for
+/// the same command, so that a network check can compare the leash on the server and on each client.
+void LogLeashCommand(openblack::PlayerNames player, std::string_view words, uint32_t turn)
+{
+	const auto logger = spdlog::get("game");
+	if (logger == nullptr || !openblack::Locator::leashSystem::has_value())
+	{
+		return;
+	}
+	openblack::creature_leash::CommandReport report {
+	    .player = static_cast<uint32_t>(player),
+	    .command = words,
+	    .turn = turn,
+	};
+	if (const auto creature = openblack::Locator::leashSystem::value().PlayersCreature(player); creature.has_value())
+	{
+		report.creature = entt::to_integral(*creature);
+		const auto* leashes =
+		    openblack::Locator::entitiesRegistry::value().TryGet<const openblack::ecs::components::CreatureLeash>(*creature);
+		if (leashes != nullptr && leashes->worn.has_value())
+		{
+			const auto& worn = *leashes->worn;
+			report.worn = openblack::creature_leash::WornReport {
+			    .type = worn.type,
+			    .holder = static_cast<uint32_t>(worn.holder),
+			    .tiedTo = worn.tiedTo.has_value() ? std::optional(entt::to_integral(*worn.tiedTo)) : std::nullopt,
+			};
+		}
+	}
+	SPDLOG_LOGGER_INFO(logger, "{}", openblack::creature_leash::ReportLine(report));
 }
 
 /// Do one command for the player that sent it, at a turn
@@ -465,6 +558,10 @@ void Run(const Command& command, uint32_t turn)
 		    }
 	    },
 	    command.action);
+	if (const auto words = LeashCommandWords(command.action); words.has_value())
+	{
+		LogLeashCommand(command.player, *words, turn);
+	}
 }
 
 } // namespace

@@ -28,7 +28,8 @@ namespace openblack::ecs::thing_model
 [[nodiscard]] std::optional<entt::id_type> ModelOf(const Registry& registry, entt::entity thing);
 
 /// The model whose box gives a thing its outline on the map. A vortex stands over its cylinder, and a teleport stone over
-/// the model of the teleport's standing thing. The game does not draw these two models.
+/// the model of the teleport's standing thing. The game does not draw these two models. A town centre's totem stands
+/// over the icon on its plinth.
 [[nodiscard]] std::optional<entt::id_type> OutlineModelOf(const Registry& registry, entt::entity thing);
 
 } // namespace openblack::ecs::thing_model

@@ -46,7 +46,9 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/PlayerStatistics.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/TownAggression.h"
@@ -630,6 +632,10 @@ TEST(WorldArchive, AWalkCarriesOnFromTheSavedSearch)
 	ASSERT_FALSE(in.Failed());
 	EXPECT_EQ(in.Remaining(), 0u);
 	EXPECT_EQ(FollowerBytes(context, loaded), bytes);
+	// The heading along the route comes back too: the next leg of the walk starts from it
+	ASSERT_NE(walking.GetHeading(), GameHeading {});
+	EXPECT_EQ(loaded.GetHeading(), walking.GetHeading());
+	EXPECT_EQ(loaded.GetPosition(), walking.GetPosition());
 
 	// The loaded walk and the walk that was not saved take the same steps to the same place
 	auto first = Follower::Outcome::None;
@@ -647,6 +653,7 @@ TEST(WorldArchive, AWalkCarriesOnFromTheSavedSearch)
 		const auto a = walking.Advance(3.0f);
 		const auto b = loaded.Advance(3.0f);
 		ASSERT_EQ(a.position, b.position);
+		ASSERT_EQ(a.heading, b.heading);
 	}
 }
 
@@ -884,6 +891,37 @@ TEST(WorldArchive, ASpriteKeepsTheIdsOfItsTextures)
 	const auto& alone = loaded.get<ecs::components::Sprite>(lone);
 	EXPECT_FALSE(alone.alpha.has_value());
 	EXPECT_EQ(graphics::sprite_textures::AlphaId(alone), k_Sheet.value());
+}
+
+// The copy that shows the phantom building of a scaffold keeps its model in itself, so that the frames give it no Mesh
+TEST(WorldArchive, AScaffoldGhostKeepsItsModel)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry original;
+	const auto shown = original.create();
+	const auto empty = original.create();
+	original.emplace<ecs::components::ScaffoldGhost>(
+	    shown, ecs::components::ScaffoldGhost {.scaffold = empty,
+	                                           .alpha = 120,
+	                                           .model = ecs::components::Mesh {.id = 77u, .submeshId = 2, .bbSubmeshId = 1}});
+	original.emplace<ecs::components::ScaffoldGhost>(empty, ecs::components::ScaffoldGhost {.alpha = 255});
+
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	const auto& ghost = loaded.get<ecs::components::ScaffoldGhost>(shown);
+	EXPECT_EQ(ghost.scaffold, empty);
+	EXPECT_EQ(ghost.alpha, 120);
+	ASSERT_TRUE(ghost.model.has_value());
+	EXPECT_EQ(ghost.model->id, 77u);
+	EXPECT_EQ(ghost.model->submeshId, 2);
+	EXPECT_EQ(ghost.model->bbSubmeshId, 1);
+	EXPECT_FALSE(loaded.get<ecs::components::ScaffoldGhost>(empty).model.has_value());
+	// The model of the copy is not a row of the Mesh component
+	EXPECT_EQ(loaded.storage<ecs::components::Mesh>().size(), 0u);
 }
 
 namespace
@@ -1173,6 +1211,45 @@ TEST(WorldArchive, TheHashOfEachFieldShowsWhichFieldChanged)
 	EXPECT_EQ(fieldOf(before, "FakeWalker.counts"), fieldOf(after, "FakeWalker.counts"));
 	// Without the fields asked for, the hashes keep none
 	EXPECT_TRUE(HashWorld(registry, context).fields.empty());
+}
+
+// The memo of the last hash never changes a hash: after a change, an addition and a removal of rows, the hash with the
+// memo is the same as the hash without it
+TEST(WorldArchive, TheHashMemoDoesNotChangeTheHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(4);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakeWalker>(entity, SampleWalker(entity, made[0]));
+	}
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto plain = HashWorld(registry, context);
+		const auto remembered = HashWorld(registry, context, {}, false, {}, nullptr, nullptr, &memo);
+		EXPECT_EQ(plain.entities, remembered.entities);
+		EXPECT_EQ(plain.components, remembered.components);
+	};
+	expectSame();
+	// The same world again: each row comes from the memo
+	expectSame();
+	// A change in a row in the middle
+	registry.get<FakeWalker>(made[2]).name = "Tom";
+	expectSame();
+	// A longer row at the start
+	registry.get<FakeWalker>(made[0]).name = "A much longer name than before";
+	expectSame();
+	// One more row, then one row less
+	const auto added = registry.create();
+	registry.emplace<FakeWalker>(added, SampleWalker(added, added));
+	expectSame();
+	registry.destroy(made[1]);
+	expectSame();
+	registry.destroy(added);
+	expectSame();
 }
 
 // A footpath that the game still looks for keeps its search in a world state. A loaded search goes on to the same route

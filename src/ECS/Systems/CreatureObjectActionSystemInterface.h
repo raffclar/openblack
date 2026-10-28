@@ -124,6 +124,9 @@ public:
 	virtual void Cancel(entt::entity creature) = 0;
 	/// Lets go of what it holds at once, dropping it from the hand
 	virtual void Drop(entt::entity creature) = 0;
+	/// Puts down what it holds at once, as at the end of a put-down clip. The thing keeps the turn of the hand and gets
+	/// its angles from that turn.
+	virtual void PutDownAtOnce(entt::entity creature) { Drop(creature); }
 
 	[[nodiscard]] virtual State GetState(entt::entity creature) const = 0;
 	/// The cause of the last action's failure, when it failed
@@ -150,8 +153,9 @@ public:
 	[[nodiscard]] virtual bool CanEat(entt::entity creature, entt::entity object) const = 0;
 	/// Whether a creature can eat the thing that it holds, with no pick-up first
 	[[nodiscard]] virtual bool CanEatHeld(entt::entity creature) const = 0;
-	/// Whether a creature can take something from a hand that gives it: as picking up, but wherever the thing is, and
-	/// without the rules about artefacts, worshippers and what scripts hold
+	/// Whether a creature can take something from a hand that gives it. Only the kind's own say counts, not the kind's
+	/// rule. The test also does not use the rules about artefacts, worshippers, the place of the thing and what scripts
+	/// hold.
 	[[nodiscard]] virtual bool CanTakeFromHand(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
 	/// Whether a flying thing is of a kind creatures catch and its own state lets them, before its weight is compared
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity /*object*/) const { return false; }

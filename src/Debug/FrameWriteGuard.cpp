@@ -145,8 +145,15 @@ Sample Guard::Take() const
 				rows[entt::to_integral(entity)] = Fnv(bytes, k_FnvOffset);
 			};
 		}
-		sample.hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_context,
-		                                   synced_state::PresentationParts(), _byField, visit);
+		const auto& registry = Locator::entitiesRegistry::value().Underlying();
+		sample.hash = synced_state::HashOf(registry, *_context, synced_state::PresentationParts(), _byField, visit);
+		// A frame that adds or removes a row of a synced component, also a row that the hash leaves out, changes the
+		// order of the rows that the turns go through
+		for (const auto& [name, order] : synced_state::RowOrdersOf(registry, *_context, synced_state::PresentationParts()))
+		{
+			sample.hash.parts.emplace_back(std::string(k_OrderPart) + name, order);
+			sample.hash.hash = Fnv(std::span(reinterpret_cast<const uint8_t*>(&order), sizeof(order)), sample.hash.hash);
+		}
 	}
 	if (Locator::gameRandom::has_value())
 	{

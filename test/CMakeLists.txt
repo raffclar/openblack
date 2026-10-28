@@ -1831,6 +1831,9 @@ add_test(NAME test_row_dump_compare
 add_test(NAME test_ai_soak
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_ai_soak.py
 )
+add_test(NAME test_checksum_compare
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_checksum_compare.py
+)
 openblack_setup_and_add_test(test_start_camera test_start_camera.cpp)
 openblack_setup_and_add_test(test_game_end test_game_end.cpp)
 openblack_setup_and_add_test(test_influence_rules test_influence_rules.cpp)
@@ -2110,3 +2113,11 @@ openblack_setup_and_add_test(test_land_info_box gui/test_land_info_box.cpp)
 openblack_setup_and_add_test(test_skirmish_ping test_skirmish_ping.cpp)
 openblack_setup_and_add_test(test_creature_belief_kinds test_creature_belief_kinds.cpp)
 openblack_setup_and_add_test(test_game_language test_game_language.cpp)
+openblack_setup_and_add_test(test_released_turns test_released_turns.cpp)
+target_link_libraries(test_released_turns PRIVATE psys)
+openblack_setup_and_add_test(test_vanilla_world test_vanilla_world.cpp)
+add_test(NAME test_net_check_web
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_web.py
+)
+openblack_setup_and_add_test(test_leash_report test_leash_report.cpp)
+openblack_setup_and_add_test(test_creature_catch_give_kinds test_creature_catch_give_kinds.cpp)

@@ -53,6 +53,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/LandFollowers.h"
 #include "ECS/Map.h"
+#include "ECS/PlacedTurn.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
@@ -647,13 +648,20 @@ void VortexSystem::ThrowOutOfVortex(entt::entity object, float angle, float scal
 	{
 		return;
 	}
-	// Back onto the land where its particle left it, then thrown
+	// Back onto the land where its particle left it, then thrown. It takes the angles of its turn in the vortex and gets
+	// its turn again from them. A living thing keeps no angles, and stands upright with the angle about y.
 	if (const auto* carried = registry.TryGet<const CarriedByTornado>(object);
 	    carried != nullptr && carried->carried != nullptr)
 	{
+		const auto taken =
+		    ecs::placed_turn::TurnFromBody(carried->carried->rotation, ecs::placed_turn::CanLean(registry, object));
 		auto& transform = registry.Get<Transform>(object);
 		transform.position = carried->carried->position;
-		transform.rotation = carried->carried->rotation;
+		transform.rotation = taken.turn;
+		if (!registry.AnyOf<components::Villager, components::Animal, Creature>(object))
+		{
+			ecs::placed_turn::KeepAngles(registry, object, taken.angles);
+		}
 	}
 	registry.Remove<CarriedByTornado>(object);
 	if (Locator::dynamicsSystem::has_value())

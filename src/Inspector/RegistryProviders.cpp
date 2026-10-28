@@ -193,7 +193,8 @@ std::vector<QueryDescription> RegistryProvider::Describe() const
 	     .kind = ResultKind::List,
 	     .needsNear = false},
 	    {.name = "entity",
-	     .description = "One entity: its kind, label, place and component names; their fields on request",
+	     .description = "One entity: its kind, label, place and component names; their fields on request. A component can be larger than "
+	                    "max_bytes (a creature's animation is): the answer then gives sizes, the bytes of each field, to choose fields from",
 	     .parameters = {{.name = "id", .type = "integer", .description = "The entity's id", .required = true},
 	                    {.name = "components",
 	                     .type = "array or \"all\"",

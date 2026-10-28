@@ -112,6 +112,17 @@ public:
 		std::map<uint8_t, uint32_t> commands;
 	};
 
+	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
+	/// player of a god can. Observers are an addition of openblack to the game.
+	struct Watcher
+	{
+		std::string session;
+		/// None while the observer is away
+		std::optional<ConnectionId> connection;
+		int64_t awaySince {0};
+		uint32_t resumes {0};
+	};
+
 	LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
 	             HostSettings settings);
 	~LockstepHost() override;
@@ -154,12 +165,15 @@ public:
 	[[nodiscard]] bool Starting() const { return _startStep != StartStep::None; }
 	/// True when the game started and no god's player is connected
 	[[nodiscard]] bool Paused() const;
-	/// True when the game started and every god left or was defeated: no player can come back
+	/// True when the game started and every god left or was defeated: no player can come back. A room with no human god
+	/// is over when no observer is connected and no observer can come back.
 	[[nodiscard]] bool GameOver() const;
 	/// The last turn of the game, after a client asked the server to stop the turns of a decided game. None before.
 	[[nodiscard]] std::optional<uint32_t> StoppedAfter() const { return _stoppedAfter; }
 	[[nodiscard]] const std::vector<Seat>& Seats() const { return _seats; }
 	[[nodiscard]] size_t Observers() const;
+	/// The sessions of the observers that are connected or can come back
+	[[nodiscard]] const std::vector<Watcher>& Watchers() const { return _watchers; }
 	/// The blocks of commands that the server did not accept: from an observer, before the start, or a command that only
 	/// the server sends
 	[[nodiscard]] uint32_t RefusedBlocks() const { return _refusedBlocks; }
@@ -180,6 +194,13 @@ private:
 	void Closed(ConnectionId connection);
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
 	void Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume);
+	/// An observer comes back with the secret of its session. False when no observer has the secret.
+	bool ResumeObserver(ConnectionId connection, Peer& peer, const game_socket::Resume& resume, bool world);
+	/// Sends the kept turns from a turn, with the server's checksums, and the stop of the turns if they stopped
+	void SendKeptTurns(ConnectionId connection, uint32_t from);
+	/// Gives a new session to an observer on a connection, and returns its secret. With no secrets, the observer cannot
+	/// come back.
+	[[nodiscard]] std::string NewWatcher(ConnectionId connection);
 	/// A join after the start: the player of a waiting god comes back into it, and any other player is an observer
 	void JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims);
 	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
@@ -218,6 +239,7 @@ private:
 
 	std::vector<Seat> _seats;
 	std::map<ConnectionId, Peer> _peers;
+	std::vector<Watcher> _watchers;
 	bool _started {false};
 	enum class StartStep : uint8_t
 	{
