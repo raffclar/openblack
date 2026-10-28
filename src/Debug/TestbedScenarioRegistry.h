@@ -1215,6 +1215,9 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town believes this much in the player from the start, so that it stays the
 	/// player's rather than going back to the neutral player at its first turn
 	std::optional<float> townBeliefInPlayer;
+	/// A testbed set-up step: the scenario's town also believes this much in the second player from the start. Put the
+	/// second player in the environment's players.
+	std::optional<float> townBeliefInRival;
 	/// A testbed set-up step: the debug tool gives the scenario's town these miracles, as a land file line gives them. A
 	/// town without a worship site then gets its site, on the first land too.
 	std::vector<MagicType> townMiracles;
@@ -1358,6 +1361,10 @@ void AddGodsRingMapScenarios(std::vector<Scenario>& all);
 /// A point given from the middle of the map, on the land
 [[nodiscard]] glm::vec2 MapPoint(glm::vec2 middle, glm::vec2 offset);
 
+/// The number of the help text that has this name, as the scripts give a challenge's title. Empty when no help text has
+/// this name.
+[[nodiscard]] std::optional<uint32_t> HelpTextNumber(std::span<const std::string> names, std::string_view name);
+
 /// About how tall a creature of a size stands
 [[nodiscard]] float CreatureHeight(float size);
 
@@ -1408,5 +1415,29 @@ struct Timeline
 [[nodiscard]] std::vector<size_t> Advance(Timeline& timeline, std::span<const Command> commands,
                                           std::optional<size_t> repeatFrom, float seconds,
                                           const std::function<bool(const Command& command)>& isFree);
+
+/// What a testbed scenario does before one turn of a network game. In a network game the scenario steps by the turns, not
+/// by the frames, so that the server and every client give its commands before the same turn.
+enum class TurnStep : uint8_t
+{
+	/// No scenario was laid out
+	None,
+	/// The scenario was laid out before this turn, and gives no commands before it
+	Wait,
+	/// The scenario steps on by the time of one turn and gives the commands that are due
+	Update,
+};
+
+/// The step of a scenario before a turn. startedAt: the turn count at which the scenario was laid out. turn: the turn
+/// count before the turn. A game lays out a scenario in the frame of its first turn and gives the first commands in the
+/// frame after it. Thus the first turn after the layout gives no commands.
+[[nodiscard]] constexpr TurnStep TurnStepOf(std::optional<uint32_t> startedAt, uint32_t turn) noexcept
+{
+	if (!startedAt.has_value())
+	{
+		return TurnStep::None;
+	}
+	return *startedAt == turn ? TurnStep::Wait : TurnStep::Update;
+}
 
 } // namespace openblack::testbed_scenarios

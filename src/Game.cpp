@@ -61,6 +61,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
+#include "3D/LowResolutionTextures.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
 #include "3D/PlayersSymbols.h"
@@ -966,8 +967,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		}
 		// A lesson can let an empty hand act only on a highlight that a script made. This limit also stops a press on a
 		// fireball, which is not a highlight.
-		const auto picked =
-		    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+		std::optional<entt::entity> picked;
+		if (Locator::pickingSystem::has_value())
+		{
+			picked = Locator::pickingSystem::value().GetPick().object;
+		}
 		const bool highlightUnderHand = picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
 		                                Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(*picked);
 		const bool mayPress = handHoldsThing || script::interface_levels::MayPress(interfaceLimits, highlightUnderHand);
@@ -3525,7 +3529,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			// The globes show their miracles where they are now, a globe in the hand where the hand holds it, each turned
 			// to face the camera as it is drawn
 			auto miracleGlobes = profiler.BeginScoped(Profiler::Stage::MiracleGlobesUpdate);
-			Locator::miracleFxSystem::value().UpdateGlobes(std::chrono::duration<float>(gameTime).count());
+			Locator::miracleFxSystem::value().UpdateGlobes(Locator::time::value().GetFrameRealTime(),
+			                                               Locator::time::value().GetFrameGameTime(), simulation::LandDrawn());
 		}
 
 		// The animation of the hand in this frame, and what is below the hand, for the blend of the drawn hand
@@ -3750,7 +3755,7 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				{
 					Locator::scriptHighlightSystem::value().UpdateFrame(
 					    std::chrono::duration<float, std::milli>(gameTime).count(), clock.GetTurnFraction(),
-					    Locator::camera::value().GetOrigin());
+					    Locator::camera::value().GetOrigin(), clock.GetFrameRealTime(), simulation::LandDrawn());
 				}
 				Locator::animatedStaticSystem::value().Update(clock.GetFrameGameTime());
 			};
@@ -3787,6 +3792,25 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 					{
 						Locator::abodeSoundSystem::value().Update(
 						    std::chrono::duration<float, std::milli>(clock.GetFrameGameTime()));
+					}
+					// The pools of the teleport stones, the swirls of the dispensers and the effects of the vortices over the
+					// land show only while the list draws their things, and move on only in a frame that draws the land
+					const bool landDrawn = simulation::LandDrawn();
+					auto& drawList = Locator::objectDrawListSystem::value();
+					if (Locator::teleportSystem::has_value())
+					{
+						Locator::teleportSystem::value().UpdateFrame(drawList, clock.GetFrameRealTime(),
+						                                             clock.GetFrameGameTime(), landDrawn);
+					}
+					if (Locator::magicSystem::has_value())
+					{
+						Locator::magicSystem::value().UpdateDispenserFrame(drawList, clock.GetFrameRealTime(),
+						                                                   clock.GetFrameGameTime(), landDrawn);
+					}
+					if (Locator::vortexSystem::has_value())
+					{
+						Locator::vortexSystem::value().UpdateDrawnFrame(drawList, clock.GetFrameRealTime(),
+						                                                clock.GetFrameGameTime(), landDrawn);
 					}
 				}
 				updateDrawnScenery();
@@ -5512,13 +5536,15 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 		}
 		StartInputTools();
 	}
-	// The client starts the land as the game server started it: the same new-game start, the same seed and the same
-	// pinned date, as a network game
+	// The client starts the land as the game server started it: the same new-game start and the same seed, as a network
+	// game. Each computer reads the date from its own clock, as in the original game. Only a run of a tool keeps its
+	// pinned date. No synced value reads the date.
 	_newGameStart = start.opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(start.opening);
 	auto& lands = Locator::landSystem::value();
 	lands.SetNewGameStart(_newGameStart);
 	auto& clock = Locator::time::value();
-	clock.RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
+	const auto pinnedDate = clock.GetPinnedDate();
+	clock.RestartClock(pinnedDate);
 	clock.SetNetworkGame(true);
 	// The land starts from the state that the game server started it from
 	simulation::PrepareNetworkLand(start.seed);
@@ -5529,7 +5555,20 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}", *refusal);
 		return false;
 	}
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, date pinned", start.seed);
+	// The testbed scenario of the tools comes from the server too. The scenarios' window lays it out before the first turn,
+	// as the server does. A build for players has no such window and refuses it.
+	if (start.scenario.has_value())
+	{
+		if (const auto refusal = developer_tools::ScenarioRefusalOf(developer_tools::k_Built); refusal.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}", *refusal);
+			return false;
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game plays the testbed scenario {}", *start.scenario);
+		_scenarioRequest = ScenarioRequest {.id = *start.scenario, .hideWindow = true, .benchmark = false};
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, {}", start.seed,
+	                   pinnedDate.has_value() ? "date pinned" : "date from the clock of the computer");
 	_startTestbed = start.testbed;
 	_startGodsRingMap = start.godsRingMap;
 	// The server chose the land: the testbed of a server is not a developer tool of this computer
@@ -5758,7 +5797,13 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 	auto players = players_symbols::MakeSheet(std::move(file), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
 	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
 	auto& textureManager = Locator::resources::value().GetTextures();
-	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {
+	// The lowest detail levels keep the sheet at half its size: each symbol takes every second texel of its full one
+	const bool halve = Locator::config::value().detail.lowResTextures;
+	const auto replace = [&textureManager, halve](const std::string& name, std::vector<uint8_t> bytes) {
+		if (auto halved = halve ? low_resolution_textures::Halve(bytes) : std::nullopt)
+		{
+			bytes = std::move(*halved);
+		}
 		textureManager.Erase(name);
 		try
 		{

@@ -3152,7 +3152,6 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			// acts on the first part of the whole thing that suits the desire and is of use.
 			parts = ShownThingsWithoutWhole(creature, mind, desire, *leashTarget);
 		}
-		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
 		// The actions of the desire, in the order of its list
 		candidates.clear();
 		executors.clear();

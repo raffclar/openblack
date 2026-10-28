@@ -1038,8 +1038,7 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 /// Whether a thing lies on the map, where a creature can stomp on it: not held, flying or carried off
 bool OnTheMap(const ecs::Registry& registry, entt::entity thing)
 {
-	return registry.AllOf<MapCellResident>(thing) &&
-	       !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
+	return ecs::InMapCells(registry, thing) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(thing);
 }
 
 /// One game turn of walking or turning up to what the creature acts on
@@ -1503,9 +1502,14 @@ bool StartCatch(entt::entity creature, CreatureObjectAction& action, const Creat
 	const auto flight = action.target.has_value() ? FlightOf(*action.target) : std::nullopt;
 	const bool hasAnimations = std::ranges::all_of(creature_catch::k_CatchAnimations,
 	                                               [creature](size_t clip) { return DurationOf(creature, clip) > 0.0f; });
+	if (!hasAnimations || !flight.has_value())
+	{
+		Fail(action, "it can't catch that");
+		return false;
+	}
 	// Its speed is weighed across and up or down, not along the land's other axis, as the game does
-	if (!hasAnimations || !flight.has_value() ||
-	    flight->second.y * flight->second.y + flight->second.x * flight->second.x < creature_catch::k_LeastSpeedSquared)
+	const glm::vec3 velocity = flight->second;
+	if (velocity.y * velocity.y + velocity.x * velocity.x < creature_catch::k_LeastSpeedSquared)
 	{
 		Fail(action, "it can't catch that");
 		return false;
@@ -2495,7 +2499,7 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 	// In the map: in its cells, and out of any hand, flight or tornado
 	const auto* holder = registry.TryGet<const HeldByCreature>(object);
 	const bool inMap =
-	    registry.AllOf<MapCellResident>(object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
+	    ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
 	const bool heldByThisCreature = holder != nullptr && holder->creature == creature;
 	const auto* leash = registry.Valid(creature) ? registry.TryGet<const CreatureLeash>(creature) : nullptr;
 	const bool leashTied = leash != nullptr && leash->worn.has_value() && leash->worn->tiedTo == object;
@@ -2658,7 +2662,7 @@ bool CreatureObjectActionSystem::CanStompOn(entt::entity creature, entt::entity 
 		return StompRule::Short;
 	}();
 	const bool onMap =
-	    registry.AllOf<MapCellResident>(target) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(target);
+	    ecs::InMapCells(registry, target) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(target);
 	return creature_stomp::CanBeStompedOn(
 	    {
 	        .rule = rule,

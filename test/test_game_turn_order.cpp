@@ -163,8 +163,7 @@ TEST(GameTurnOrder, TheAnimalsTakeTheirTurnWithTheLivingBeforeTheFires)
 {
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::ForestGrowth, Step::Living));
-	EXPECT_TRUE(recorder.Before(Step::Living, Step::MapCellsAfterLiving));
-	EXPECT_TRUE(recorder.Before(Step::MapCellsAfterLiving, Step::Fires));
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::Fires));
 	EXPECT_TRUE(recorder.Before(Step::Fires, Step::Reactions));
 	EXPECT_TRUE(recorder.Before(Step::Reactions, Step::Miracles));
 }

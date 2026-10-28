@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <chrono>
 #include <numbers>
 #include <vector>
 
@@ -51,6 +52,7 @@
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Particles/ParticleEffect.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -219,8 +221,12 @@ void MiracleFxSystem::PlacePilesOnLand()
 	});
 }
 
-void MiracleFxSystem::UpdateGlobes(float seconds)
+void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+                                   bool landDrawn)
 {
+	const float seconds = std::chrono::duration<float>(std::chrono::duration<float, std::milli>(frameGameTime)).count();
+	// The effects in the globes step at the pace of the screen's refresh
+	const auto holderStep = particles::drawn_steps::StepSeconds(_holderPace, frameRealTime, frameGameTime, landDrawn);
 	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
 	{
 		return;
@@ -261,13 +267,13 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		    }
 		    // The miracle's own effect in the globe steps as the globe is drawn, before the seed's model is placed for this
 		    // frame, so its glints sparkle on where the model was last drawn
-		    // It steps only while the globe shows on the screen
+		    // It steps only while the globe shows on the screen, in the frames where its step is due
 		    if (const auto stepped = _holderEffects.find(entity);
-		        stepped != _holderEffects.end() && particles != nullptr &&
+		        holderStep.has_value() && stepped != _holderEffects.end() && particles != nullptr &&
 		        (!meshes.Contains(bubble) ||
 		         GlobeOnScreen(drawnOrigin, transform.scale.x, globe.middle, *meshes.Handle(bubble), eye)))
 		    {
-			    particles->ProcessByFrame(stepped->second, seconds);
+			    particles->ProcessByFrame(stepped->second, *holderStep);
 		    }
 		    // The seed's model as it is drawn, which glints of its effect sparkle on from the next step: below the middle,
 		    // spun, at the seed's scale and a phial's swell or squash, a big one's growing copy last

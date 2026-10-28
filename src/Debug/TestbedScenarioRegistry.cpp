@@ -2322,6 +2322,24 @@ void AddAppearance(std::vector<Scenario>& all)
 	                  .creature = 0,
 	                  .delaySeconds = 1.0f}},
 	});
+	// The land, a hut, trees and the sky as the lowest detail levels draw them, with textures of half the size
+	all.push_back({
+	    .id = "appearance.low_resolution_textures",
+	    .name = "Low resolution textures",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the camera looks north over a hut and two oaks to the far land of the "
+	                   "testbed, with the sky above it. Start the game with --detail-level 1 (Low) or 0 (Minimum) to see "
+	                   "the low resolution textures, and with 4 to compare.",
+	    .expected = "At Low the land, its footprints and the shadows of the hut and the oaks are softer, painted at half "
+	                "the texels. The shadows are half as dark. The hut, the oaks and the sea have softer textures. The "
+	                "sky is the day's sky of the alignment and does not change with the time of day. The far land "
+	                "fades into its coarse texture as at Maximum.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -90.0f}, .look = {0.0f, 0.0f, 60.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-15.0f, -40.0f}},
+	                {.type = TreeInfo::Oak, .offset = {15.0f, -45.0f}},
+	                {.type = TreeInfo::Oak, .offset = {25.0f, -30.0f}}},
+	});
 	// The player's lion mirrored in the lake: its one chroma part keeps the alpha of its texture
 	all.push_back({
 	    .id = "appearance.lion_sea_reflection",
@@ -2712,6 +2730,21 @@ void AddLight(std::vector<Scenario>& all)
 	    .commands = {AtHour(9.0f, 0.0f), AtHour(12.0f, 5.0f), AtHour(15.0f, 5.0f), AtHour(17.5f, 5.0f), AtHour(20.0f, 5.0f),
 	                 AtHour(9.0f, 5.0f)},
 	    .repeatFrom = 1,
+	});
+
+	all.push_back({
+	    .id = "light.boost",
+	    .name = "A light boost brightens the light of the land",
+	    .facet = Facet::Light,
+	    .description = "Start the game with --profile-folder on a folder that holds a Profiles.txt and a settings.json "
+	                   "with {\"detail_level\": 5, \"custom_detail\": {\"light_boost\": 1}}. A tiger, a cow and a giant "
+	                   "ape stand still at midday. Start again with \"light_boost\": 0, or with no light_boost, to compare.",
+	    .expected = "With the boost the land, the sky's haze and the creatures are lit brighter than without it, the "
+	                "brightest parts most; at a boost of 0 the light is the same as at every other detail level.",
+	    .environment = {.hour = 12.0f, .clockRuns = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {40.0f, 0.0f}), Posed(CreatureType::Cow, {0.0f, 0.0f}),
+	                  Posed(CreatureType::GiantApe, {-45.0f, 0.0f})},
 	});
 
 	all.push_back({
@@ -6142,6 +6175,50 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Food)},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 8.0f, .alignment = -1.0f},
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
+	});
+
+	// The camera looks north over the land from high up; the pointer starts east of the middle, clear of the testbed's
+	// window
+	all.push_back({
+	    .id = "hand.held_miracle_draw",
+	    .name = "Miracles that follow the hand as it moves",
+	    .facet = Facet::Hand,
+	    .description = "The hand gets a water seed and casts it with the right mouse button held. The pointer moves left "
+	                   "and right, then to the far edge of the testbed and back, then lets go. Then the hand casts "
+	                   "food, wood, lightning and fire, and the pointer moves left and right.",
+	    .expected = "The rain cloud and its rain cone stay exactly on the moving hand, with no lag. The food grains "
+	                "and the logs fall from where they come out and do not move with the hand. The start of the "
+	                "lightning and the fireball in the hand stay on the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -30.0f}, .look = {0.0f, 10.0f, 30.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.6f, 0.8f}},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Water)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.0f, -0.78f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.0f, .point = {0.0f, 0.78f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Food)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Wood)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::LightningBolt)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Fire)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3}},
 	});
 
 	// The camera looks down on an oak from about 150 m, as in play, the pointer on its crown
@@ -11536,6 +11613,16 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 glm::vec2 testbed_scenarios::MapPoint(glm::vec2 middle, glm::vec2 offset)
 {
 	return middle + offset;
+}
+
+std::optional<uint32_t> testbed_scenarios::HelpTextNumber(std::span<const std::string> names, std::string_view name)
+{
+	const auto found = std::ranges::find(names, name);
+	if (found == names.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(std::distance(names.begin(), found));
 }
 
 float testbed_scenarios::CreatureHeight(float size)

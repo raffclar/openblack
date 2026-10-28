@@ -87,6 +87,9 @@ struct Start
 	bool allComputerGods {false};
 	/// Tools: the seed of the personalities of the computer gods ("ai_seed", optional). None: the built-in personalities.
 	std::optional<uint32_t> aiSeed;
+	/// Tools: the id of the testbed scenario that every computer plays from the first turn ("scenario", optional). Only a
+	/// developer build plays such a game.
+	std::optional<std::string> scenario;
 	/// The names of the players of the gods, by god slot ("names", optional). A slot with no player has an empty name.
 	std::vector<std::string> names;
 };

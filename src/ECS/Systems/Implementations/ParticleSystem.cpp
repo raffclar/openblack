@@ -1100,6 +1100,25 @@ bool ParticleSystem::ProcessByFrame(EffectId id, float seconds)
 	return true;
 }
 
+ParticleSystemInterface::EffectId ParticleSystem::StartByFrame(ParticleType type, glm::vec3 origin, float magnitude)
+{
+	const auto id = Start(type, origin, magnitude, false);
+	// The turn does not step it, also before its first frame step
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->ownedBySpell = true;
+	}
+	return id;
+}
+
+void ParticleSystem::SetShown(EffectId id, bool shown)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->shown = shown;
+	}
+}
+
 ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType type, glm::vec3 position,
                                                                   std::optional<int> turns, entt::entity owner, float magnitude)
 {
@@ -1191,6 +1210,14 @@ void ParticleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
 	if (const auto it = FindRunning(id); it != _effects.end())
 	{
 		it->drawOffset = offset;
+	}
+}
+
+void ParticleSystem::SetLiveHand(EffectId id, glm::vec3 hand)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->liveHand = hand;
 	}
 }
 
@@ -1506,6 +1533,18 @@ void ParticleSystem::AddRunning(const Running& running, float turnFraction, part
 			joint.position += running.drawOffset * joint.offsetWeight;
 		}
 	}
+	// Move each atom that follows the hand of this computer's cast by the move of the hand since the step
+	if (running.liveHand.has_value())
+	{
+		const auto followHand = [&hand = *running.liveHand](particles::Effect::DrawAtom& atom) {
+			if (atom.handOffset.has_value())
+			{
+				atom.position += particles::LiveHandShift(*atom.handOffset, hand);
+			}
+		};
+		std::ranges::for_each(_walk.atoms, followHand);
+		std::ranges::for_each(_walk.joints, followHand);
+	}
 	particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(), sources);
 }
 
@@ -1524,7 +1563,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	const auto sources = DrawSources();
 	for (const auto& running : _effects)
 	{
-		if (running.inTemple != inTemple || running.drawnAlone)
+		if (running.inTemple != inTemple || running.drawnAlone || !running.shown)
 		{
 			continue;
 		}

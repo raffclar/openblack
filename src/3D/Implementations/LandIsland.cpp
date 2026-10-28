@@ -38,6 +38,7 @@
 #include "3D/MapCoords.h"
 #include "Common/PortableRotations.h"
 #include "Common/WorkerPool.h"
+#include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
@@ -245,13 +246,19 @@ void LandIsland::Build(const LandData& data)
 
 	// Paint each block's texture from the countries, the materials, the noise and the bump map. The texture is made
 	// empty and its layers filled after, so a block can be painted again when the land under it changes height.
+	// The lowest detail levels paint the textures at the low resolution
+	_textureResolution = Locator::config::has_value() && Locator::config::value().detail.lowResTextures
+	                         ? block_texture::Resolution::Low
+	                         : block_texture::Resolution::Full;
 	const auto sources = TextureSources();
+	const auto side = static_cast<uint16_t>(block_texture::SideOf(_textureResolution));
 	_blockTextures = std::make_unique<Texture2D>("LandIslandBlockTextures");
-	_blockTextures->Create(block_texture::k_Side, block_texture::k_Side, static_cast<uint16_t>(_landBlocks.size()),
-	                       TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Linear, nullptr);
+	_blockTextures->Create(side, side, static_cast<uint16_t>(_landBlocks.size()), TextureFormat::RGBA8, Wrapping::ClampEdge,
+	                       Filter::Linear, nullptr);
 	// Threads that live as long as the build paint the blocks, each straight into the memory that bgfx then takes
 	std::vector<const bgfx::Memory*> painted(_landBlocks.size());
-	std::ranges::generate(painted, [] { return bgfx::alloc(static_cast<uint32_t>(block_texture::k_BlockBytes)); });
+	const auto blockBytes = static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution));
+	std::ranges::generate(painted, [blockBytes] { return bgfx::alloc(blockBytes); });
 	WorkerPool painters(WorkerPool::DefaultThreadCount());
 	block_texture::BuildBlocks(
 	    _landBlocks.size(),
@@ -482,15 +489,12 @@ void LandIsland::CommitAltitudeChanges()
 		// The ground's materials follow the height, so the changed cells are painted again. A block's texture has a
 		// row for each texel along x, so x is the texture's height and z its width.
 		const auto cellCount = changed.maximum - changed.minimum + 1;
-		texels.resize(static_cast<size_t>(cellCount.x * cellCount.y) * block_texture::k_TexelsPerCell *
-		              block_texture::k_TexelsPerCell * 4);
+		const auto perCell = block_texture::TexelsPerCellOf(_textureResolution);
+		texels.resize(static_cast<size_t>(cellCount.x * cellCount.y) * perCell * perCell * 4);
 		block_texture::PaintCells(_landBlocks[i].GetLndBlock()->cells, sources, changed.minimum, cellCount, texels);
 		_blockTextures->UpdateLayerRegion(
-		    static_cast<uint16_t>(i),
-		    glm::u16vec2(changed.minimum.y * block_texture::k_TexelsPerCell,
-		                 changed.minimum.x * block_texture::k_TexelsPerCell),
-		    glm::u16vec2(cellCount.y * block_texture::k_TexelsPerCell, cellCount.x * block_texture::k_TexelsPerCell),
-		    texels.data(), static_cast<uint32_t>(texels.size()));
+		    static_cast<uint16_t>(i), glm::u16vec2(changed.minimum.y * perCell, changed.minimum.x * perCell),
+		    glm::u16vec2(cellCount.y * perCell, cellCount.x * perCell), texels.data(), static_cast<uint32_t>(texels.size()));
 		// The game paints the whole block again, with its footprints, when the land under it changes height
 		_repaintedBlocks.push_back(i);
 		changed = {};
@@ -629,6 +633,7 @@ block_texture::Sources LandIsland::TextureSources() const
 	    .materials = _materialTexels,
 	    .noise = _noiseMap,
 	    .bump = _bump,
+	    .resolution = _textureResolution,
 	};
 }
 
@@ -647,7 +652,7 @@ void LandIsland::SetBlockTexels(size_t block, std::span<const uint16_t> texels)
 	{
 		return;
 	}
-	std::vector<uint8_t> rgba(block_texture::k_BlockBytes);
+	std::vector<uint8_t> rgba(block_texture::BlockBytesOf(_textureResolution));
 	block_texture::ToRgba(texels, rgba);
 	_blockTextures->UpdateLayer(static_cast<uint16_t>(block), rgba.data(), static_cast<uint32_t>(rgba.size()));
 }

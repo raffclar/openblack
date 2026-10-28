@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -21,8 +22,8 @@
 
 #include "3D/CameraPath.h"
 #include "Common/WorkerPool.h"
-#include "ECS/DrawnRegistry.h"
 #include "ECS/Components/SnowLevel.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "ECS/SyncedState.h"
@@ -134,6 +135,16 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+// Only the frames of this computer change the hum and the mana path of the hand past the border. The turns change the
+// strength that the hand keeps.
+TEST(SyncedState, TheHumAndTheManaPathOfTheHandPastTheBorderAreNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "shown"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "hum"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "state"));
+}
+
 TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
 {
 	// The frames draw a chest between its turns, lift the lid of an opened chest and fade its dust
@@ -146,6 +157,20 @@ TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "seconds"));
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "RewardSeed", "seed"));
+}
+
+TEST(SyncedState, TheFramesCarryThePickedLeashInTheHandOfThisComputerOnly)
+{
+	// Each computer puts the picked leash of its own player in its own hand, so the place of a post is not synced
+	const auto parts = synced_state::PresentationParts();
+	for (const std::string_view field : {"position", "rotation", "scale"})
+	{
+		EXPECT_TRUE(std::ranges::any_of(parts, [field](const synced_state::PresentationPart& part) {
+			return part.component == "Transform" && part.field == field && part.marker == "LeashPost";
+		})) << field;
+	}
+	// The turns read the point where the post hangs
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "LeashPost", "point"));
 }
 
 TEST(SyncedState, TheRoomsOfTheTempleAreNotSynced)
