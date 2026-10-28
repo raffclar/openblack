@@ -666,6 +666,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 	}
 	case CommandTag::LeashLength:
 		action = LeashLength {.length = in.Float()};
+		return DecodeError::None;
 	case CommandTag::TempleLeashOff:
 		action = TempleLeashOff {};
 		return DecodeError::None;
