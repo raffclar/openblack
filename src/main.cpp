@@ -248,8 +248,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		{
 			for (const auto& scenario : openblack::testbed_scenarios::All())
 			{
-				std::cout << scenario.id << '
-';
+				std::cout << scenario.id << '\n';
 			}
 			std::cout << std::flush;
 			returnCode = EXIT_SUCCESS;
