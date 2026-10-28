@@ -59,6 +59,8 @@ public:
 	void LeavePhysicsAndMap(entt::entity object) override;
 	void CreateReaction(const ReactionRequest& request) override;
 	void RemoveReactions(entt::entity initiator, Reaction type) override;
+	void StopReactionSpreadInHand(entt::entity object) override;
+	void SpreadReactionsAgain(entt::entity object) override;
 	void FireStartedMoving(entt::entity object, bool inHand) override;
 	void CatchFirefly(entt::entity object) override;
 	void CountHelpEvent(uint32_t event) override;

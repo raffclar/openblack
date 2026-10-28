@@ -96,12 +96,14 @@ public:
 		/// The dance the villagers taking it up dance round its thing, made as the first of them joins; it goes with
 		/// the reaction
 		entt::entity dance {entt::null};
+		/// Whether it spreads to more living things in its turn. A hand that holds its initiator can stop it.
+		bool spreads {true};
 
 		/// Gives the values that a saved game keeps to a visitor
 		template <typename Self, typename Visitor>
 		static void VisitSaved(Self& self, Visitor&& visit)
 		{
-			visit(self.id, self.source, self.age, self.reach, self.velocity, self.firstTaken, self.dance);
+			visit(self.id, self.source, self.age, self.reach, self.velocity, self.firstTaken, self.dance, self.spreads);
 		}
 	};
 
@@ -120,6 +122,11 @@ public:
 	virtual void RemoveFrom(entt::entity initiator, Reaction type) = 0;
 	/// One reaction goes, as a fire that has cooled stops alarming the living
 	virtual void Remove(uint32_t id) = 0;
+	/// A hand takes the initiator. Each reaction of the initiator whose table row ends it in a hand stops its spread.
+	/// The reaction stays, grows and ends at its time.
+	virtual void StopSpreadInHand(entt::entity /*initiator*/) {}
+	/// The hand uses or lets go of the initiator. Each reaction of the initiator spreads again.
+	virtual void SpreadAgain(entt::entity /*initiator*/) {}
 	/// A reaction now comes from another object, as a fire's alarm follows the fire to what its object became
 	virtual void SetInitiator(uint32_t id, entt::entity initiator) = 0;
 	/// The newest reaction that an initiator made now belongs to another player, as when a creature becomes a player's

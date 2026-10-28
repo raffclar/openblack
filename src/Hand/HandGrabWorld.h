@@ -144,6 +144,10 @@ public:
 	};
 	virtual void CreateReaction(const ReactionRequest& request) = 0;
 	virtual void RemoveReactions(entt::entity initiator, Reaction type) = 0;
+	/// The thing goes into the hand: each of its reactions that a hand ends stops its spread
+	virtual void StopReactionSpreadInHand(entt::entity object) = 0;
+	/// The hand uses or lets go of the thing: each of its reactions spreads again
+	virtual void SpreadReactionsAgain(entt::entity object) = 0;
 	/// A burning thing starts moving, into a hand (or it is a villager) or not
 	virtual void FireStartedMoving(entt::entity object, bool inHand) = 0;
 	/// A thing goes into the hand from where it stood: a firefly hiding exactly there is caught, for its reward

@@ -161,6 +161,8 @@ public:
 	}
 	void CreateReaction(const ReactionRequest& request) override { reactions.push_back(request); }
 	void RemoveReactions(entt::entity, Reaction) override {}
+	void StopReactionSpreadInHand(entt::entity object) override { spreadStopped.push_back(object); }
+	void SpreadReactionsAgain(entt::entity object) override { spreadAgain.push_back(object); }
 	void FireStartedMoving(entt::entity, bool) override {}
 	void CatchFirefly(entt::entity) override {}
 	void CountHelpEvent(uint32_t event) override { helpEvents.push_back(event); }
@@ -487,6 +489,8 @@ public:
 	std::set<entt::entity> bodies;
 	std::vector<entt::entity> leftWorld;
 	std::vector<ReactionRequest> reactions;
+	std::vector<entt::entity> spreadStopped;
+	std::vector<entt::entity> spreadAgain;
 	std::vector<entt::entity> heated;
 	std::vector<uint32_t> helpEvents;
 	int pathsForgotten {0};
@@ -1005,6 +1009,31 @@ TEST_F(HandGrabSystemWithWorld, TheGesturePathStartsAgainOnATakeAndALetGo)
 }
 
 // The hand says why a press on a thing wouldn't take it, as the inspector shows it
+// The hand stops the spread of the reactions of a thing that it takes. They spread again when the hand lets go.
+TEST_F(HandGrabSystemWithWorld, TheReactionsOfAHeldThingSpreadAgainOnALetGo)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(world->spreadStopped, std::vector<entt::entity> {rock});
+	EXPECT_TRUE(world->spreadAgain.empty());
+	world->underCursor.reset();
+	world->borderX = 10.0f;
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_EQ(world->spreadAgain, std::vector<entt::entity> {rock});
+}
+
 TEST_F(HandGrabSystemWithWorld, ItSaysWhyAThingWouldntBeTaken)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});

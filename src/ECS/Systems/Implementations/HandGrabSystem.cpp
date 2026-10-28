@@ -1002,6 +1002,8 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 		return true;
 	case altar_offering::Answer::Refused:
 		_world->HelpEvent(altar_sacrifice::k_AltarHelpEvent);
+		// The hand keeps the thing, but its reactions spread again
+		_world->SpreadReactionsAgain(held);
 		return true;
 	case altar_offering::Answer::NotAnAltar:
 		break;
@@ -1286,6 +1288,8 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	}
 	// A static, a rock or a dead tree taken stops being its town's artefact
 	_world->ArtefactTaken(object, player);
+	// While the hand holds the thing, its reactions that a hand ends do not spread to more living things
+	_world->StopReactionSpreadInHand(object);
 
 	// The player of most influence where the thing was is where what the hand holds came from
 	_world->NoteTakenAt(_world->PoseOf(object).origin);
@@ -1327,6 +1331,8 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, const std::option
 	// Out of the hand it keeps no light of the hand, on every computer
 	registry.Remove<InHand>(object);
 	registry.Remove<HeldLight>(object);
+	// Its reactions spread again
+	_world->SpreadReactionsAgain(object);
 	// The help counts each thing that the hand lets go of, also a pour or a drop that the hand must do
 	_world->CountHelpEvent(help::profile::k_Throw);
 	// The hand starts the path of its gesture again. A thing that is gone when the hand lets go does not do this.

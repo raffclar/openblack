@@ -444,6 +444,22 @@ void GameHandGrabWorld::RemoveReactions(entt::entity initiator, Reaction type)
 	}
 }
 
+void GameHandGrabWorld::StopReactionSpreadInHand(entt::entity object)
+{
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().StopSpreadInHand(object);
+	}
+}
+
+void GameHandGrabWorld::SpreadReactionsAgain(entt::entity object)
+{
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().SpreadAgain(object);
+	}
+}
+
 void GameHandGrabWorld::FireStartedMoving(entt::entity object, bool inHand)
 {
 	if (Locator::fireSystem::has_value())
