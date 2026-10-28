@@ -46,7 +46,9 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/Mesh.h"
 #include "ECS/Components/PlayerStatistics.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/TownAggression.h"
@@ -889,6 +891,37 @@ TEST(WorldArchive, ASpriteKeepsTheIdsOfItsTextures)
 	const auto& alone = loaded.get<ecs::components::Sprite>(lone);
 	EXPECT_FALSE(alone.alpha.has_value());
 	EXPECT_EQ(graphics::sprite_textures::AlphaId(alone), k_Sheet.value());
+}
+
+// The copy that shows the phantom building of a scaffold keeps its model in itself, so that the frames give it no Mesh
+TEST(WorldArchive, AScaffoldGhostKeepsItsModel)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry original;
+	const auto shown = original.create();
+	const auto empty = original.create();
+	original.emplace<ecs::components::ScaffoldGhost>(
+	    shown, ecs::components::ScaffoldGhost {.scaffold = empty,
+	                                           .alpha = 120,
+	                                           .model = ecs::components::Mesh {.id = 77u, .submeshId = 2, .bbSubmeshId = 1}});
+	original.emplace<ecs::components::ScaffoldGhost>(empty, ecs::components::ScaffoldGhost {.alpha = 255});
+
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	const auto& ghost = loaded.get<ecs::components::ScaffoldGhost>(shown);
+	EXPECT_EQ(ghost.scaffold, empty);
+	EXPECT_EQ(ghost.alpha, 120);
+	ASSERT_TRUE(ghost.model.has_value());
+	EXPECT_EQ(ghost.model->id, 77u);
+	EXPECT_EQ(ghost.model->submeshId, 2);
+	EXPECT_EQ(ghost.model->bbSubmeshId, 1);
+	EXPECT_FALSE(loaded.get<ecs::components::ScaffoldGhost>(empty).model.has_value());
+	// The model of the copy is not a row of the Mesh component
+	EXPECT_EQ(loaded.storage<ecs::components::Mesh>().size(), 0u);
 }
 
 namespace

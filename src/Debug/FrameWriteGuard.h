@@ -48,6 +48,9 @@ struct Sample
 /// The name that a sample gives to the count of synced random numbers, when it changes
 inline constexpr std::string_view k_SyncedDrawsPart = "synced random draws";
 
+/// The start of the name that a sample gives to the order of the rows of a component
+inline constexpr std::string_view k_OrderPart = "order of ";
+
 /// The start of the name that a sample gives to the saved state of a system
 inline constexpr std::string_view k_SystemPart = "system ";
 
