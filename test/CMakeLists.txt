@@ -2119,3 +2119,5 @@ openblack_setup_and_add_test(test_vanilla_world test_vanilla_world.cpp)
 add_test(NAME test_net_check_web
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_web.py
 )
+openblack_setup_and_add_test(test_leash_report test_leash_report.cpp)
+openblack_setup_and_add_test(test_creature_catch_give_kinds test_creature_catch_give_kinds.cpp)

@@ -96,6 +96,18 @@ size_t Bytes(const Json& value)
 	return Dump(value).size();
 }
 
+/// How many bytes each member of an object takes, as far down as the levels asked for, so that a reader sees which
+/// fields make a large result large
+Json Outline(const Json& value, int levels)
+{
+	Json outline = Json::object();
+	for (const auto& [key, member] : value.items())
+	{
+		outline[key] = levels > 1 && member.is_object() && !member.empty() ? Outline(member, levels - 1) : Json(Bytes(member));
+	}
+	return outline;
+}
+
 /// An object result too large to send: what there was of it, to choose fields from
 Json TooLarge(const Json& value, size_t bytes)
 {
@@ -111,7 +123,9 @@ Json TooLarge(const Json& value, size_t bytes)
 	    {"truncated", true},
 	    {"bytes", bytes},
 	    {"keys", std::move(keys)},
-	    {"hint", "the result was larger than max_bytes: choose fields, or raise max_bytes"},
+	    // The bytes of the members, down to the fields of a component, to choose the fields from
+	    {"sizes", value.is_object() ? Outline(value, 3) : Json::object()},
+	    {"hint", "the result was larger than max_bytes: choose fields (see sizes), or raise max_bytes"},
 	};
 }
 
