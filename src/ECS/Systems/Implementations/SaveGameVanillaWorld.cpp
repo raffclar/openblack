@@ -24,8 +24,10 @@
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Town.h"
@@ -37,6 +39,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/VanillaWorldImport.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
@@ -74,9 +77,8 @@ void RemoveLandTownsContents(ecs::Registry& registry)
 	}
 	registry.Context().namedVillagersUsed = {};
 
-	// A building that goes puts a plan of itself into its town. The import keeps only the plans that the towns had.
-	std::unordered_map<entt::entity, std::vector<entt::entity>> plans;
-	registry.Each<const Town>([&plans](entt::entity entity, const Town& town) { plans[entity] = town.planned; });
+	// The file gives the plans of buildings of the towns. A building that goes also puts a plan of itself into its town.
+	// The import removes all these plans, but keeps the plans of temples.
 	std::vector<entt::entity> buildings;
 	registry.Each<const Abode>([&registry, &buildings](entt::entity entity, const Abode& abode) {
 		if (world_import::IsImportedBuilding(abode.info) || registry.AllOf<Field>(entity))
@@ -88,13 +90,14 @@ void RemoveLandTownsContents(ecs::Registry& registry)
 	{
 		ecs::world_objects::Remove(building);
 	}
-	registry.Each<Town>([&registry, &plans](entt::entity entity, Town& town) {
-		const auto& kept = plans[entity];
-		std::vector<entt::entity> added;
-		std::ranges::copy_if(town.planned, std::back_inserter(added),
-		                     [&kept](entt::entity plan) { return std::ranges::find(kept, plan) == kept.end(); });
-		std::erase_if(town.planned, [&added](entt::entity plan) { return std::ranges::find(added, plan) != added.end(); });
-		for (const auto plan : added)
+	registry.Each<Town>([&registry](entt::entity, Town& town) {
+		std::vector<entt::entity> removed;
+		std::ranges::copy_if(town.planned, std::back_inserter(removed), [&registry](entt::entity plan) {
+			return !registry.Valid(plan) || registry.AllOf<PlannedAbode>(plan);
+		});
+		std::erase_if(town.planned,
+		              [&removed](entt::entity plan) { return std::ranges::find(removed, plan) != removed.end(); });
+		for (const auto plan : removed)
 		{
 			if (registry.Valid(plan))
 			{
@@ -104,6 +107,76 @@ void RemoveLandTownsContents(ecs::Registry& registry)
 		town.homelessVillagers.clear();
 	});
 	registry.SetDirty();
+}
+
+/// Each town plans the buildings of the file, in the order of its list
+void PutPlans(ecs::Registry& registry, const world_import::ImportedTowns& imported)
+{
+	std::unordered_map<uint32_t, const world_import::ImportedPlan*> plans;
+	for (const auto& plan : imported.plans)
+	{
+		plans.emplace(plan.number, &plan);
+	}
+	for (const auto& town : imported.towns)
+	{
+		for (const auto number : town.planned)
+		{
+			const auto plan = plans.find(number);
+			if (plan == plans.end())
+			{
+				continue;
+			}
+			const auto& file = *plan->second;
+			const auto entity = ecs::archetypes::AbodeArchetype::CreatePlan(town.id, GroundPosition(file.position), file.row,
+			                                                                file.heading, file.scale);
+			if (entity != entt::null)
+			{
+				registry.Get<PlannedAbode>(entity).wasBuilt = file.wasBuilt;
+			}
+		}
+	}
+}
+
+/// Each town opens the building sites of the file. The list of a town gives the newest site first, so the import opens
+/// the sites from the end of the list. A site keeps the places, the builders, the desire and the wood pile of the file.
+void PutSites(const world_import::ImportedTowns& imported, const std::unordered_map<uint32_t, entt::entity>& made)
+{
+	std::unordered_map<uint32_t, const world_import::ImportedSite*> sites;
+	for (const auto& site : imported.sites)
+	{
+		sites.emplace(site.number, &site);
+	}
+	for (const auto& town : imported.towns)
+	{
+		const auto townEntity = EntityOf(made, town.number);
+		for (const auto number : std::views::reverse(town.sites))
+		{
+			const auto site = sites.find(number);
+			if (site == sites.end())
+			{
+				continue;
+			}
+			const auto& file = *site->second;
+			const auto building = EntityOf(made, file.building);
+			if (building == entt::null || !ecs::construction::OpenSiteForTown(building, townEntity))
+			{
+				continue;
+			}
+			auto* opened = ecs::construction::SiteOf(townEntity, building);
+			opened->desire = file.desire;
+			opened->places = file.places;
+			opened->workerCount = file.workerCount;
+			opened->workers.clear();
+			for (const auto worker : file.workers)
+			{
+				if (const auto villager = EntityOf(made, worker); villager != entt::null)
+				{
+					opened->workers.push_back(villager);
+				}
+			}
+			opened->piles.front() = EntityOf(made, file.woodPile);
+		}
+	}
 }
 
 /// The town takes its belief in each player from the file, and how weary it is of each kind of reaction
@@ -413,8 +486,13 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		                     [&ordered](entt::entity abode) { return std::ranges::find(ordered, abode) == ordered.end(); });
 		component.abodes = std::move(ordered);
 	}
+	PutPlans(registry, imported);
+	PutSites(imported, made);
 	registry.SetDirty();
-	SPDLOG_LOGGER_INFO(ImportLog(), "Imported {} towns, {} buildings and {} villagers of the game's file at turn {}",
-	                   imported.towns.size(), imported.abodes.size(), imported.villagers.size(), imported.turn);
+	SPDLOG_LOGGER_INFO(ImportLog(),
+	                   "Imported {} towns, {} buildings, {} plans, {} building sites and {} villagers of the game's file at "
+	                   "turn {}",
+	                   imported.towns.size(), imported.abodes.size(), imported.plans.size(), imported.sites.size(),
+	                   imported.villagers.size(), imported.turn);
 	return true;
 }

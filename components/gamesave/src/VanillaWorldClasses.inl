@@ -522,21 +522,22 @@ void ReadTownDesireFlags(WorldReader& r)
 void ReadStandardBuildingSite(WorldReader& r)
 {
 	ReadBuildingSite(r);
-	r.Ref();
+	r.Ref("siteWoodPile");
 }
 
 void ReadBuildingSite(WorldReader& r)
 {
-	r.Ref();
+	r.Ref("siteBuilding");
+	r.Refs("siteWorkers");
 	r.Refs();
 	r.Refs();
-	r.Refs();
 	r.Word();
-	r.Bytes(1536);
+	// The places round the building where its builders stand: 128 points of three floats
+	r.Bytes(1536, "sitePlaces");
+	r.Word("siteWorkerCount");
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
+	r.Float("siteDesire");
+	r.Float("siteLife");
 }
 
 void ReadPileFood(WorldReader& r)
@@ -570,19 +571,19 @@ void ReadTotemStatue(WorldReader& r)
 void ReadPlannedAbode(WorldReader& r)
 {
 	ReadPlannedMultiMapFixed(r);
-	r.Ref();
+	r.Ref("town");
 }
 
 void ReadPlannedMultiMapFixed(WorldReader& r)
 {
 	ReadPositioned(r);
+	r.Float("heading");
+	r.Float("scale");
+	r.Word("wasBuilt");
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Ref();
-	r.Word();
+	r.Word("created");
+	r.Ref("footpathLink");
+	r.Word("info");
 }
 
 void ReadInterface(WorldReader& r)

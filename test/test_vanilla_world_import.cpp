@@ -861,3 +861,100 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepTheBeliefAndTheDesiresOfTheTowns
 	}
 	EXPECT_GT(*files, 0U);
 }
+
+TEST(VanillaWorldImport, ReadsThePlansAndTheBuildingSitesOfTheTowns)
+{
+	auto fake = GameAtTurn(100);
+	// Record 2: the town, which lists its plan and its site
+	fake.Record(VanillaType::Town)
+	    .Position(0, 0)
+	    .Value<uint32_t>("id", 0)
+	    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::AZTEC))
+	    .Value<uint8_t>("player", 0)
+	    .Refs("planned", {3})
+	    .Refs("buildingSites", {5});
+	fake.Record(VanillaType::PlannedAbode)
+	    .Position(10, 20)
+	    .Value("heading", 1.5f)
+	    .Value("scale", 0.25f)
+	    .Value("wasBuilt", uint32_t {1})
+	    .Value("info", AbodeRowNumber(AbodeInfo::AztecWonder))
+	    .Ref("town", 2);
+	// Record 4: the building of the site
+	fake.Record(VanillaType::Abode).Position(30, 40).Value("info", AbodeRowNumber(AbodeInfo::AztecHut)).Ref("town", 2);
+	fake.Record(VanillaType::StandardBuildingSite).Ref("siteBuilding", 4).Refs("siteWorkers", {7, 7});
+	std::array<glm::vec3, world_import::k_ImportedSitePlaces> places {};
+	places.at(0) = {1.0f, 2.0f, 3.0f};
+	places.back() = {4.0f, 5.0f, 6.0f};
+	fake.Value("sitePlaces", places).Value("siteWorkerCount", uint32_t {2}).Value("siteDesire", 0.5f).Ref("siteWoodPile", 0);
+	// Record 6: a site without its building
+	fake.Record(VanillaType::StandardBuildingSite).Ref("siteBuilding", 0);
+	const auto imported = world_import::ReadTowns(fake.Make());
+
+	ASSERT_EQ(imported.towns.size(), 1U);
+	EXPECT_EQ(imported.towns[0].planned, std::vector<uint32_t> {3});
+	EXPECT_EQ(imported.towns[0].sites, std::vector<uint32_t> {5});
+	ASSERT_EQ(imported.plans.size(), 1U);
+	const auto& plan = imported.plans[0];
+	EXPECT_EQ(plan.number, 3U);
+	EXPECT_EQ(plan.row, AbodeInfo::AztecWonder);
+	EXPECT_EQ(plan.town, 2U);
+	EXPECT_EQ(plan.position.x, 10);
+	EXPECT_EQ(plan.position.z, 20);
+	EXPECT_FLOAT_EQ(plan.heading, 1.5f);
+	EXPECT_FLOAT_EQ(plan.scale, 0.25f);
+	EXPECT_TRUE(plan.wasBuilt);
+	// The site without its building is not taken
+	ASSERT_EQ(imported.sites.size(), 1U);
+	const auto& site = imported.sites[0];
+	EXPECT_EQ(site.number, 5U);
+	EXPECT_EQ(site.building, 4U);
+	EXPECT_EQ(site.woodPile, 0U);
+	EXPECT_EQ(site.workers, (std::vector<uint32_t> {7, 7}));
+	EXPECT_EQ(site.workerCount, 2);
+	EXPECT_FLOAT_EQ(site.desire, 0.5f);
+	EXPECT_EQ(site.places, places);
+	EXPECT_EQ(imported.skipped.size(), 1U);
+}
+
+TEST(VanillaWorldImport, SavedGamesOfLandOneKeepThePlansAndTheBuildingSitesOfTheTowns)
+{
+	size_t plans = 0;
+	size_t sites = 0;
+	const auto files = ForEachLandOneSave([&plans, &sites](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadTowns(world);
+		size_t listedPlans = 0;
+		size_t listedSites = 0;
+		for (const auto& town : imported.towns)
+		{
+			listedPlans += town.planned.size();
+			listedSites += town.sites.size();
+		}
+		// Each town lists all the plans and the sites of the file
+		EXPECT_EQ(listedPlans, imported.plans.size()) << path;
+		EXPECT_EQ(listedSites, imported.sites.size()) << path;
+		for (const auto& plan : imported.plans)
+		{
+			EXPECT_GT(plan.scale, 0.0f) << path << " " << plan.number;
+		}
+		// In these files each site mends a building of a town: no builder works at it yet
+		for (const auto& site : imported.sites)
+		{
+			EXPECT_TRUE(std::ranges::any_of(imported.abodes,
+			                                [&site](const world_import::ImportedAbode& abode) {
+				                                return abode.number == site.building && abode.built == 1.0f &&
+				                                       abode.life < 1.0f;
+			                                }))
+			    << path << " " << site.number;
+			EXPECT_EQ(site.workerCount, static_cast<int32_t>(site.workers.size())) << path << " " << site.number;
+		}
+		plans += imported.plans.size();
+		sites += imported.sites.size();
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_EQ(plans, 54U);
+	EXPECT_EQ(sites, 55U);
+}

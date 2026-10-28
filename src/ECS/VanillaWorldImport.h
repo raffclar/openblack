@@ -16,6 +16,8 @@
 #include <string>
 #include <vector>
 
+#include <glm/vec3.hpp>
+
 #include "CreatureRecord.h"
 #include "Enums.h"
 
@@ -190,6 +192,9 @@ struct ImportedTown
 	/// The numbers of the objects of its buildings and of its homeless villagers, in the order of the file
 	std::vector<uint32_t> abodes;
 	std::vector<uint32_t> homeless;
+	/// The numbers of the objects of its plans and of its building sites, in the order of the file: the newest site first
+	std::vector<uint32_t> planned;
+	std::vector<uint32_t> sites;
 };
 
 struct ImportedAbode
@@ -246,6 +251,38 @@ struct ImportedVillager
 	uint16_t turnsUntilStateChange {0};
 };
 
+/// A building that a town plans to build later
+struct ImportedPlan
+{
+	uint32_t number {0};
+	AbodeInfo row {AbodeInfo::None};
+	/// The number of the object of its town in the file
+	uint32_t town {0};
+	gamesave::MapCoords position {};
+	float heading {0.0f};
+	float scale {1.0f};
+	/// A building that the town had built and that went from the land left the plan
+	bool wasBuilt {false};
+};
+
+/// The number of places round a building where its builders stand
+inline constexpr size_t k_ImportedSitePlaces = 128;
+
+/// The site of a town at a building that goes up or that its builders mend
+struct ImportedSite
+{
+	uint32_t number {0};
+	/// The numbers of the objects of its building and of its wood pile in the file, 0 for none
+	uint32_t building {0};
+	uint32_t woodPile {0};
+	/// The numbers of the objects of its builders in the file, a builder once each time that it started work
+	std::vector<uint32_t> workers;
+	int32_t workerCount {0};
+	/// The desire for builders that a script forced on the site
+	float desire {0.0f};
+	std::array<glm::vec3, k_ImportedSitePlaces> places {};
+};
+
 /// The towns, buildings and villagers of a world file, in the order of the file
 struct ImportedTowns
 {
@@ -253,6 +290,9 @@ struct ImportedTowns
 	std::vector<ImportedTown> towns;
 	std::vector<ImportedAbode> abodes;
 	std::vector<ImportedVillager> villagers;
+	/// The plans and the building sites of the towns. The lists of each town give their order.
+	std::vector<ImportedPlan> plans;
+	std::vector<ImportedSite> sites;
 	/// Each record that the import does not take, and why
 	std::vector<std::string> skipped;
 };

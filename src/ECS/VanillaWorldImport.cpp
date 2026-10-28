@@ -267,6 +267,10 @@ std::optional<ImportedTown> ReadTown(const VanillaWorld& world, const VanillaRec
 	town.abodes.assign(abodes.begin(), abodes.end());
 	const auto homeless = world.Refs(record, "homeless");
 	town.homeless.assign(homeless.begin(), homeless.end());
+	const auto planned = world.Refs(record, "planned");
+	town.planned.assign(planned.begin(), planned.end());
+	const auto sites = world.Refs(record, "buildingSites");
+	town.sites.assign(sites.begin(), sites.end());
 	return town;
 }
 
@@ -476,6 +480,47 @@ std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t
 	return states;
 }
 
+std::optional<ImportedPlan> ReadPlan(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
+{
+	const auto position = PositionOf(world, record);
+	const auto row = AbodeRowOf(world.Word(record, "info").value_or(0));
+	if (!position.has_value() || !row.has_value())
+	{
+		why = "the plan has no place or no row of the table of buildings";
+		return std::nullopt;
+	}
+	return ImportedPlan {.number = record.number,
+	                     .row = *row,
+	                     .town = world.Ref(record, "town").value_or(0),
+	                     .position = *position,
+	                     .heading = world.Float(record, "heading").value_or(0.0f),
+	                     .scale = world.Float(record, "scale").value_or(1.0f),
+	                     .wasBuilt = world.Word(record, "wasBuilt").value_or(0) != 0};
+}
+
+// The file keeps each place of a builder as three floats
+static_assert(sizeof(glm::vec3) == 3 * sizeof(float));
+
+std::optional<ImportedSite> ReadSite(const VanillaWorld& world, const VanillaRecord& record, std::string& why)
+{
+	const auto places = world.Raw(record, "sitePlaces");
+	const auto building = world.Ref(record, "siteBuilding").value_or(0);
+	if (places.size() != k_ImportedSitePlaces * sizeof(glm::vec3) || building == 0)
+	{
+		why = "the building site has no building or no places for its builders";
+		return std::nullopt;
+	}
+	ImportedSite site {.number = record.number,
+	                   .building = building,
+	                   .woodPile = world.Ref(record, "siteWoodPile").value_or(0),
+	                   .workerCount = std::bit_cast<int32_t>(world.Word(record, "siteWorkerCount").value_or(0)),
+	                   .desire = world.Float(record, "siteDesire").value_or(0.0f)};
+	std::memcpy(site.places.data(), places.data(), places.size());
+	const auto workers = world.Refs(record, "siteWorkers");
+	site.workers.assign(workers.begin(), workers.end());
+	return site;
+}
+
 ImportedTowns ReadTowns(const VanillaWorld& world)
 {
 	ImportedTowns imported;
@@ -499,6 +544,22 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 			if (auto abode = ReadAbode(world, record, why); abode.has_value())
 			{
 				imported.abodes.push_back(std::move(*abode));
+				continue;
+			}
+		}
+		else if (record.Is(VanillaType::PlannedAbode) || record.Is(VanillaType::PlannedTownCentre))
+		{
+			if (auto plan = ReadPlan(world, record, why); plan.has_value())
+			{
+				imported.plans.push_back(*plan);
+				continue;
+			}
+		}
+		else if (record.Is(VanillaType::StandardBuildingSite))
+		{
+			if (auto site = ReadSite(world, record, why); site.has_value())
+			{
+				imported.sites.push_back(std::move(*site));
 				continue;
 			}
 		}
