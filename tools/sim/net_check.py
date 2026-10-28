@@ -1143,7 +1143,27 @@ def leash_key_presses(leash):
     return [(leash["turn"], "L", 0.0), (off_turn, "L", 0.0)]
 
 
-def web_chat_steps(chats, seconds, width=WEB_WIDTH, leashes=()):
+def land_shows_info_box(game_path, land):
+    """Whether the land script opens the information box of the land at the start (its game message). In a network
+    game the box stays open until the player closes it, and it keeps the keys from the controls meanwhile."""
+    if not land.lower().endswith(".txt"):
+        return False
+    try:
+        with open(os.path.join(game_path, "Scripts", land), encoding="latin-1") as file:
+            return any(line.strip().upper().startswith("START_GAME_MESSAGE") for line in file)
+    except OSError:
+        return False
+
+
+def web_leash_presses(leash, close_box):
+    """The keys of a leash check of the web god: an Escape first closes the information box of the land when it shows"""
+    presses = leash_key_presses(leash)
+    if close_box:
+        presses = [(leash["turn"], "Escape", 0.0)] + presses
+    return presses
+
+
+def web_chat_steps(chats, seconds, width=WEB_WIDTH, leashes=(), close_box=False):
     """The cdp-run steps of the lines that the web client says, from (turns, text) pairs: for each line in the order of
     its turns, the page waits for the line of those turns in its log, then the mouse clicks the speech button at the top
     right corner, the keys type the line and Return sends it. A wait moves the next steps later by its time. The keys of
@@ -1152,7 +1172,7 @@ def web_chat_steps(chats, seconds, width=WEB_WIDTH, leashes=()):
     at = 0.0
     events = sorted([(turns, 0, number, text) for number, (turns, text) in enumerate(sorted(chats))] +
                     [(turns, 1, order, (key, before)) for leash in leashes
-                     for order, (turns, key, before) in enumerate(leash_key_presses(leash))],
+                     for order, (turns, key, before) in enumerate(web_leash_presses(leash, close_box))],
                     key=lambda event: (event[0], event[1], event[2]))
     waited = None
     for turns, kind, number, value in events:
@@ -1199,12 +1219,17 @@ def web_join_plan(options, join_url, ticket, turns):
                  "--sim-still-hand", "--sim-checksums", "-", "--join", web_join_path(join_url), "--join-ticket", ticket]
     if getattr(options, "web_part_at", None) is not None:
         arguments += ["--join-part-at", str(options.web_part_at)]
+    if getattr(options, "web_creature", None):
+        # The page reads the game folder at its own path
+        arguments += ["--join-creature", "/game/" + options.web_creature.replace("\\", "/")]
     seconds = run_limit_seconds(turns)
     chats = [(int(value.split(":", 1)[0]), value.split(":", 1)[1]) for value in options.web_chat]
     leashes = [leash for leash in parse_leash(getattr(options, "leash", []), getattr(options, "clients", 0))
                if leash["client"] == "web"]
     return {"join_url": join_url, "arguments": arguments,
-            "actions": web_chat_steps(chats, seconds, leashes=leashes), "turns": turns,
+            "actions": web_chat_steps(chats, seconds, leashes=leashes,
+                                      close_box=bool(leashes) and getattr(options, "web_close_box", False)),
+            "turns": turns,
             "seconds": seconds}
 
 
@@ -1406,6 +1431,9 @@ def main():
     parser.add_argument("--web-chat", action="append", default=[],
                         help="TURNS:TEXT, with --web-god: the web client says the line in the chat after that many turns "
                              "(a multiple of 100)")
+    parser.add_argument("--web-creature", metavar="FILE",
+                        help="with --web-god, the creature file that the web god sends before the start, as a path in "
+                             "the game folder of the page, such as Scripts/CreatureMind/C643e7b7f.erc")
     parser.add_argument("--web-part-at", type=int,
                         help="the world of the web client parts from the server's at this turn (--join-part-at), and "
                              "must come back in step by the server's world state")
@@ -1471,6 +1499,8 @@ def main():
         parser.error(str(error))
     if any(leash["client"] == "web" for leash in leashes) and not (options.web_client and options.web_god):
         parser.error("--leash web needs --web-client and --web-god")
+    # The web god closes the information box of the land with the Escape key before its first leash key
+    options.web_close_box = not options.testbed and land_shows_info_box(options.game_path, options.land)
     waited_observers = options.observers + (1 if options.web_client else 0)
     if options.all_computer_gods and waited_observers == 0:
         parser.error("--all-computer-gods needs --observers or --web-client: the clients watch the game")

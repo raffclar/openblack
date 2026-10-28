@@ -223,5 +223,30 @@ class LeashCheck(unittest.TestCase):
         self.assertTrue(result["same"])
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class LeashCheckOfTheWebGod(unittest.TestCase):
+    def test_a_land_with_a_game_message_shows_the_information_box(self):
+        with tempfile.TemporaryDirectory() as folder:
+            os.makedirs(os.path.join(folder, "Scripts", "Playgrounds"))
+            with open(os.path.join(folder, "Scripts", "Playgrounds", "Two.txt"), "w", encoding="latin-1") as file:
+                file.write('VERSION(2.3)\nSTART_GAME_MESSAGE("Two Gods", 2)\n')
+            with open(os.path.join(folder, "Scripts", "Playgrounds", "One.txt"), "w", encoding="latin-1") as file:
+                file.write('VERSION(2.3)\n')
+            self.assertTrue(net_check.land_shows_info_box(folder, "Playgrounds/Two.txt"))
+            self.assertFalse(net_check.land_shows_info_box(folder, "Playgrounds/One.txt"))
+            self.assertFalse(net_check.land_shows_info_box(folder, "Online Maps/mpm_3p_1.map"))
+            self.assertFalse(net_check.land_shows_info_box(folder, "Playgrounds/Missing.txt"))
+
+    def test_the_escape_key_closes_the_box_before_the_first_leash_key(self):
+        leash = {"client": "web", "slot": 1, "turn": 300, "hold": 100, "off": "key"}
+        self.assertEqual([key for _, key, _ in net_check.web_leash_presses(leash, True)], ["Escape", "L", "L"])
+        self.assertEqual([key for _, key, _ in net_check.web_leash_presses(leash, False)], ["L", "L"])
+
+    def test_the_web_god_sends_its_creature_from_the_game_folder_of_the_page(self):
+        options = argparse.Namespace(frame_ms=20.0, web_chat=[], web_creature="Scripts\\CreatureMind\\C1.erc")
+        arguments = net_check.web_join_plan(options, "wss://127.0.0.1:5000/game/x", "t", 600)["arguments"]
+        self.assertEqual(arguments[arguments.index("--join-creature") + 1], "/game/Scripts/CreatureMind/C1.erc")
+
+
 if __name__ == "__main__":
     unittest.main()
