@@ -153,8 +153,9 @@ public:
 	[[nodiscard]] virtual bool CanEat(entt::entity creature, entt::entity object) const = 0;
 	/// Whether a creature can eat the thing that it holds, with no pick-up first
 	[[nodiscard]] virtual bool CanEatHeld(entt::entity creature) const = 0;
-	/// Whether a creature can take something from a hand that gives it: as picking up, but wherever the thing is, and
-	/// without the rules about artefacts, worshippers and what scripts hold
+	/// Whether a creature can take something from a hand that gives it. Only the kind's own say counts, not the kind's
+	/// rule. The test also does not use the rules about artefacts, worshippers, the place of the thing and what scripts
+	/// hold.
 	[[nodiscard]] virtual bool CanTakeFromHand(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
 	/// Whether a flying thing is of a kind creatures catch and its own state lets them, before its weight is compared
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity /*object*/) const { return false; }
