@@ -1504,6 +1504,8 @@ TEST_F(FrontEndTest, TheRoomsPicturesAreInTheFrameOfTheRoom)
 	room.Next();
 	boxes.Update(0.0f);
 	EXPECT_TRUE(boxes.GetPictureRects().empty());
+}
+
 TEST_F(FrontEndTest, ThePingDisplayIsOffByDefault)
 {
 	ToRoom();
