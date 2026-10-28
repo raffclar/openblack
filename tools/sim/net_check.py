@@ -1051,6 +1051,9 @@ def main():
     parser.add_argument("--part-second-again", action="store_true",
                         help="with --part-second-at, the world parts again after each load of the server's world, so that "
                              "the part stays (tests of the AI soak: the runner must find it)")
+    parser.add_argument("--part-client", type=int, default=2,
+                        help="CLIENT (from 1): the client whose world parts with --part-second-at, 2 by default. A "
+                             "number after the clients that play a god is an observer")
     parser.add_argument("--frame-guard", action="store_true",
                         help="each client logs the frame steps that change the synced world (--sim-frame-guard)")
     parser.add_argument("--client-arg", action="append", default=[],
@@ -1137,6 +1140,8 @@ def main():
     if options.web_client and not os.path.isfile(os.path.join(web_page_of(options), "openblack.wasm")):
         parser.error(f"--web-client needs the web build: no openblack.wasm in {web_page_of(options)}")
     desktop_clients = options.clients + options.observers
+    if options.part_second_at is not None and not 1 <= options.part_client <= desktop_clients:
+        parser.error(f"--part-client takes a client from 1 to {desktop_clients}")
     client_inputs = ([options.input, options.input2, options.input3, options.input4] + [None] * 8)[:max(desktop_clients, 4)]
     client_cameras = ([options.camera1, options.camera2, options.camera3, options.camera4] + [None] * 8)[:max(desktop_clients, 4)]
     if (any(client_cameras) or options.hold_creature) and not os.path.isfile(INSPECTOR_ADAPTER):
@@ -1301,7 +1306,7 @@ def main():
                 profile = os.path.join(client_dir, "profile")
                 write_kept_alignment(profile, alignments[index])
                 command.append(f"--profile-folder={os.path.abspath(profile)}")
-            if index == 1 and options.part_second_at is not None:
+            if index == options.part_client - 1 and options.part_second_at is not None:
                 command += ["--join-part-at", str(options.part_second_at)]
                 if options.part_second_again:
                     command.append("--join-part-again")
@@ -1423,7 +1428,7 @@ def main():
         # A client that catches up does several turns in a frame, and its record keeps only the last of them; the
         # session compares every turn and writes its counts to the log
         counts = session_counts(os.path.join(client_dir, "client.log"))
-        parted_on_purpose = index == 1 and options.part_second_at is not None and not options.part_second_again
+        parted_on_purpose = index == options.part_client - 1 and options.part_second_at is not None and not options.part_second_again
         recovered = lines_with(os.path.join(client_dir, "client.log"), ["The world goes on from the server's world"])
         if parted_on_purpose and recovered:
             back_at = int(re.search(r"of turn (\d+)", recovered[-1]).group(1))
