@@ -11,6 +11,7 @@
 
 #include <utility>
 
+#include "ECS/GameEndConditions.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -29,8 +30,15 @@ public:
 	[[nodiscard]] std::vector<game_end::Event> TakeEventsToShow() override { return std::exchange(_eventsToShow, {}); }
 	[[nodiscard]] std::optional<PlayerNames> LastGodIn() const override;
 	[[nodiscard]] std::vector<GodStanding> Standings() const override;
+	void SetTimeLimit(uint32_t minutes) override { _timeLimitMinutes = minutes; }
+	[[nodiscard]] uint32_t GetTimeLimit() const override;
+	void AddToCondition(std::optional<PlayerNames> player, game_end::Condition condition, int32_t amount) override;
+	void MeasureConditions(PlayerNames player) override;
+	void BuildingWorks(entt::entity building) override;
 
 private:
+	/// The time limit that the game server sent. None: the time limit of a test switch, or the default time limit.
+	std::optional<uint32_t> _timeLimitMinutes;
 	std::vector<game_end::Event> _events;
 	/// The events that the view did not take yet
 	std::vector<game_end::Event> _eventsToShow;

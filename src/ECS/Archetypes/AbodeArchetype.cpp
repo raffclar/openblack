@@ -39,6 +39,7 @@
 #include "ECS/ShepherdRules.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownCentreParts.h"
@@ -262,6 +263,11 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	if (built >= 1.0f && Locator::footpathSystem::has_value())
 	{
 		Locator::footpathSystem::value().BuildingWorking(entity);
+	}
+	// A building made standing starts to work at once, and may make its town a new town
+	if (built >= 1.0f && Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().BuildingWorks(entity);
 	}
 
 	// A building puts up the things it has round itself, built or not

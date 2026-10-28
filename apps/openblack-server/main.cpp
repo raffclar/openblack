@@ -70,6 +70,7 @@ int main(int argc, char* argv[])
 		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
 		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0). Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
+		("time-limit", "Tests: the time limit of the network game in minutes, in place of the default 30. The start sends it to every client.", cxxopts::value<uint32_t>())
 		("all-computer-gods", "Tools: every god with a citadel is a computer god, and the room has no human god. The game starts at once: with --gods N the world turns when N observers joined (for the AI soak).")
 		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
@@ -165,6 +166,10 @@ int main(int argc, char* argv[])
 		if (result.count("temple-loss") != 0)
 		{
 			settings.templeLoss = openblack::sim_run::ParseTempleLoss(result["temple-loss"].as<std::string>());
+		}
+		if (result.count("time-limit") != 0)
+		{
+			settings.timeLimit = result["time-limit"].as<uint32_t>();
 		}
 		settings.frameMilliseconds = result["frame-ms"].as<double>();
 		settings.fast = result.count("fast") != 0;

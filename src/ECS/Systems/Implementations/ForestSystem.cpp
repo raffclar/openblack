@@ -45,6 +45,7 @@
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
@@ -53,6 +54,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/LandForests.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -62,6 +64,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FixedOutlineSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -285,6 +288,21 @@ void RemoveTree(entt::entity tree)
 		Locator::reactionSystem::value().RemoveFrom(tree);
 	}
 	EntityRegistry().Destroy(tree);
+}
+
+/// The player of most influence at a place, as the hand finds the player it takes a thing from
+PlayerNames MostInfluentialPlayerAt(const ecs::Registry& registry, glm::vec3 point)
+{
+	std::vector<influence_rules::PlayerInfluenceAt> players;
+	registry.Each<const Player>([&players, point](entt::entity, const Player& player) {
+		const float influence = Locator::influenceSystem::has_value()
+		                            ? Locator::influenceSystem::value().PlayerInfluence(player.name, point)
+		                            : 0.0f;
+		players.push_back({.player = player.name, .influence = influence});
+	});
+	// The players are asked in the order of their numbers
+	std::ranges::sort(players, {}, &influence_rules::PlayerInfluenceAt::player);
+	return influence_rules::MostInfluentialPlayer(players);
 }
 } // namespace
 
@@ -626,7 +644,17 @@ void ForestSystem::GrowForests()
 		if (pick < grown.size())
 		{
 			const auto parent = grown[pick];
-			[[maybe_unused]] const auto added = PlantBeside(parent);
+			const auto added = PlantBeside(parent);
+			// In a network game the player of most influence at the new tree counts a tree grown, for the winning
+			// condition. The neutral player counts nothing.
+			if (added.has_value() && Locator::gameEndSystem::has_value())
+			{
+				const auto most = MostInfluentialPlayerAt(registry, registry.Get<const Transform>(*added).position);
+				if (most != PlayerNames::NEUTRAL)
+				{
+					Locator::gameEndSystem::value().AddToCondition(most, game_end::Condition::TreesGrown, 1);
+				}
+			}
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: forest {} spread from tree #{} on turn {}: {}", turns.id,
 			                    entt::to_integral(parent), turn, added.has_value() ? "planted" : "no room");
 		}

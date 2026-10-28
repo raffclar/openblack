@@ -14,6 +14,8 @@
 #include <optional>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
+
 #include "ECS/GameEndRules.h"
 
 namespace openblack::ecs::systems
@@ -44,6 +46,20 @@ public:
 		ecs::components::GameStanding standing;
 	};
 	[[nodiscard]] virtual std::vector<GodStanding> Standings() const = 0;
+
+	/// The time limit of a network game in minutes. The game server sets it at the start, and every computer decides
+	/// the game at the same turn. With no time limit set, the limit is the default limit of the game.
+	virtual void SetTimeLimit(uint32_t minutes) = 0;
+	[[nodiscard]] virtual uint32_t GetTimeLimit() const = 0;
+	/// A winning condition of a player goes up by an amount, in a network game and when the player has the condition.
+	/// No player counts nothing.
+	virtual void AddToCondition(std::optional<PlayerNames> player, game_end::Condition condition, int32_t amount) = 0;
+	/// Before the turn of a player, in a network game: the conditions of the player that the world measures take their
+	/// values. These are the food and the wood in the stores, the prayer power and the belief.
+	virtual void MeasureConditions(PlayerNames player) = 0;
+	/// A building of a town starts to work: it is built, repaired or made built with the land. When it completes a new
+	/// town, the town remembers it, and in a network game the player counts a new town.
+	virtual void BuildingWorks(entt::entity building) = 0;
 };
 
 } // namespace openblack::ecs::systems

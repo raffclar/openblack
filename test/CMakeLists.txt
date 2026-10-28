@@ -1906,3 +1906,4 @@ openblack_setup_and_add_test(
   test_creature_upload_dialog online/test_creature_upload_dialog.cpp
 )
 openblack_setup_and_add_test(test_drawn_effect_steps test_drawn_effect_steps.cpp)
+openblack_setup_and_add_test(test_game_end_conditions test_game_end_conditions.cpp)

@@ -90,6 +90,9 @@ struct Start
 	/// Tools: the id of the testbed scenario that every computer plays from the first turn ("scenario", optional). Only a
 	/// developer build plays such a game.
 	std::optional<std::string> scenario;
+	/// The time limit of the game in minutes ("time_limit", optional). Every computer decides the game at the same turn
+	/// when the time is up. None: the default time limit of the game.
+	std::optional<uint32_t> timeLimit;
 	/// The names of the players of the gods, by god slot ("names", optional). A slot with no player has an empty name.
 	std::vector<std::string> names;
 };

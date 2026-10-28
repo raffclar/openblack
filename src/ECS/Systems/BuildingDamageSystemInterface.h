@@ -44,9 +44,10 @@ public:
 	virtual void Smash(entt::entity building, entt::entity creature, float creatureSize) = 0;
 	/// The blows of a creature on a building in one moment, such as the two blows of a kick or a blow of a part of its
 	/// body: each breaks the building where it lands. The building takes the harm once, after the last blow, and makes
-	/// no sound of a stomp.
+	/// no sound of a stomp. The harm of a kick counts as smashed by a creature for the winning conditions of a network
+	/// game; the harm of other blows counts as smashed by the player of the creature.
 	virtual void CreatureBlows(entt::entity /*building*/, entt::entity /*creature*/,
-	                           std::span<const creature_stomp::Blow> /*blows*/)
+	                           std::span<const creature_stomp::Blow> /*blows*/, bool /*kick*/)
 	{
 	}
 	/// A piece comes to rest: a big one goes back into its building as rubble, the rest lie where they are. The object that

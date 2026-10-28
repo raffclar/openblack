@@ -40,6 +40,7 @@
 #include "ECS/ChallengePictures.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/ComputerPlayerStart.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
@@ -599,6 +600,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .allComputerGods = settings.soak.allComputerGods,
 	    .aiSeed = settings.soak.aiSeed,
 	    .scenario = settings.scenario,
+	    .timeLimit = settings.timeLimit.value_or(game_end::k_DefaultTimeLimitMinutes),
 	};
 	// A land of a network game has a god slot for each citadel, as the room of the land has a team for each citadel. The
 	// other lands of the tools and the testbed keep the default slots.
@@ -696,6 +698,7 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 	simulation.settings.untilTurn = settings.turns;
 	simulation.settings.stillHand = true;
 	simulation.settings.templeLoss = settings.templeLoss;
+	simulation.settings.timeLimit = settings.timeLimit;
 	simulation.frameTime = sim_run::FrameTimeFromMs(settings.frameMilliseconds);
 	simulation.traceDrawsPath = settings.traceDrawsPath;
 	if (settings.recordPath.has_value())
