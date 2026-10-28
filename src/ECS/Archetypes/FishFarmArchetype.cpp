@@ -25,6 +25,7 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "Locator.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -73,6 +74,8 @@ entt::entity FishFarmArchetype::Create(const glm::vec3& position)
 	const auto centre = map_coords::ToWorld(island, coords);
 
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	registry.Assign<Transform>(entity, centre, glm::mat3(1.0f), glm::vec3(1.0f));
 	ecs::thing_map_place::Keep(registry, entity, {.x = coords.x, .z = coords.z});
 

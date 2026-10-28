@@ -16,6 +16,7 @@
 #include <glm/mat3x3.hpp>
 
 #include "Common/PortableRotations.h"
+#include "Creature/LeashRules.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -28,6 +29,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -68,10 +70,18 @@ entt::entity CitadelArchetype::Create(const glm::vec3& position, PlayerNames pla
 	}
 	// Its heart is a thing of its own at the same place
 	const auto heart = registry.Create();
+	// The temple itself is not a thing of the world; its heart is, and takes its place in the order of the things made
+	TakeThingMadePlace();
 	registry.Assign<Transform>(heart, position, rotation, size);
 	registry.Assign<TempleHeart>(heart, entity);
 	// The temple's heart, as it is made, puts its entrance where it is, turned as it is
 	const auto entrance = registry.Create();
+	TakeThingMadePlace();
+	// The heart's three leash posts take the next places as it is made, though the posts are put up later
+	for ([[maybe_unused]] const auto post : creature_leash::k_Types)
+	{
+		TakeThingMadePlace();
+	}
 	registry.Assign<Transform>(entrance, position, rotation, size);
 	registry.Assign<TempleEntrance>(entrance, entity);
 	// The entrance is never drawn: the cursor finds it by the entrance model's triangles, tested with the temple, once

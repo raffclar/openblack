@@ -29,6 +29,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/Mesh.h"
@@ -180,6 +181,8 @@ entt::entity RewardSystem::Create(glm::vec3 position, RewardObjectInfo type, std
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	// Given on the land it stands at the height asked for; from the sky it falls to the land itself
 	const glm::vec3 ground {position.x, LandHeight(position), position.z};
 	registry.Assign<Transform>(entity, fromSky ? ground + glm::vec3(0.0f, reward::k_FallFrom, 0.0f) : position, glm::mat3(1.0f),
