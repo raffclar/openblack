@@ -79,6 +79,7 @@ public:
 	[[nodiscard]] std::optional<uint8_t> TopGameStateOf(entt::entity animal) const override;
 	bool SetupReactToFlyingObject(entt::entity animal, entt::entity object, float speed) override;
 	void RememberStateBeforeReaction(entt::entity animal) override;
+	void SetWanderBeforeReaction(entt::entity animal) override;
 	bool SetupLookAtObject(entt::entity animal, entt::entity object) override;
 	bool SetupGotoFood(entt::entity animal, entt::entity food) override;
 	[[nodiscard]] uint32_t ReactToFoodPriority(entt::entity animal, entt::entity food, uint32_t tablePriority) const override;

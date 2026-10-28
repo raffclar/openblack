@@ -2084,7 +2084,9 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		return Locator::abodeKnockSystem::value().Tap(*object, at, true) ? "knocked" : "not knocked";
 	}
 	case Kind::UntieLeash:
+		// As the hand unties it, the leash goes back to the hand with the attach sound
 		leashes.UntieToHand(creature);
+		leashes.PlayHandAttachSound(creature);
 		return {};
 	case Kind::TakeOffLeash:
 		leashes.TakeOff(creature);

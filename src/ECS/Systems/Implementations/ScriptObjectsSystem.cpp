@@ -232,6 +232,14 @@ public:
 		}
 	}
 
+	void SetAnimalWanderBeforeReaction(entt::entity animal) override
+	{
+		if (Locator::animalSystem::has_value())
+		{
+			Locator::animalSystem::value().SetWanderBeforeReaction(animal);
+		}
+	}
+
 	void ReleaseAnimal(entt::entity animal) override
 	{
 		if (Locator::animalSystem::has_value())
@@ -493,8 +501,11 @@ void ScriptObjectsSystem::ReleaseIntoGame(entt::entity object)
 		_world->AbandonCreatureAction(object);
 		break;
 	case Kind::Animal:
-		// TODO(physics): an animal in the physics keeps wandering as the state it takes up after it lands; openblack's
-		// animals keep no such state yet
+		// An animal in the physics gets wandering as its state before a reaction. Its own life starts after it lands.
+		if (_world->IsInPhysics(object))
+		{
+			_world->SetAnimalWanderBeforeReaction(object);
+		}
 		_world->ReleaseAnimal(object);
 		break;
 	case Kind::Other:

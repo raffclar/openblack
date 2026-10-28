@@ -2069,6 +2069,14 @@ void AnimalSystem::RememberStateBeforeReaction(entt::entity entity)
 	}
 }
 
+void AnimalSystem::SetWanderBeforeReaction(entt::entity entity)
+{
+	if (auto* animal = EntityRegistry().TryGet<Animal>(entity))
+	{
+		animal->stateBeforeReaction = static_cast<uint8_t>(GameStateOf(AnimalState::Wander));
+	}
+}
+
 bool AnimalSystem::SetupLookAtObject(entt::entity entity, entt::entity object)
 {
 	auto* animal = EntityRegistry().TryGet<Animal>(entity);

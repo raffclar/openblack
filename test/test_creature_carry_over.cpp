@@ -166,6 +166,7 @@ public:
 	bool PickType(PlayerNames /*player*/, LeashType /*type*/) override { return false; }
 	bool TieTo(entt::entity /*creature*/, entt::entity /*object*/) override { return false; }
 	void UntieToHand(entt::entity /*creature*/) override {}
+	void PlayHandAttachSound(entt::entity /*creature*/) override {}
 	void SetWorks(entt::entity /*creature*/, bool /*works*/) override {}
 	void SetDrawn(bool /*drawn*/) override {}
 	void ConfineToHome(entt::entity /*creature*/, float /*radius*/) override {}

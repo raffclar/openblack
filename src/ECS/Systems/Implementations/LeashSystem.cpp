@@ -327,6 +327,12 @@ std::optional<float> RayBall(const glm::vec3& origin, const glm::vec3& direction
 	return along;
 }
 
+/// The first or the second leash-attach sound
+audio::SoundId AttachSound(int turn)
+{
+	return turn == 0 ? audio::SoundId::G_LeashAttach_01_1 : audio::SoundId::G_LeashAttach_01_2;
+}
+
 void PlaySound(audio::SoundId sound, std::optional<glm::vec3> position)
 {
 	if (Locator::audio::has_value())
@@ -938,8 +944,7 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	// leash of each other creature makes its sound at the thing, and the sound belongs to the player of that creature.
 	// That sound follows the player, who has no point in the world, so the next audio turn stops it. The emitter has no
 	// owner entity, and an emitter that follows no owner stops in the same way.
-	const auto tieSound = _secondAttachSound ? audio::SoundId::G_LeashAttach_01_2 : audio::SoundId::G_LeashAttach_01_1;
-	_secondAttachSound = !_secondAttachSound;
+	const auto tieSound = AttachSound(_tieSounds.Next());
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto owner = body != nullptr ? body->owner : OwnPlayer();
 	if (!leash::TieSoundIsPlaced(owner, OwnPlayer()))
@@ -990,6 +995,19 @@ void LeashSystem::UntieToHand(entt::entity creature)
 	}
 	leashes->worn->tiedTo.reset();
 	LayRopeAfresh(registry, creature);
+}
+
+void LeashSystem::PlayHandAttachSound(entt::entity creature)
+{
+	// The local player hears the sound without a place. Other players do not hear it. The turn changes only when the
+	// sound plays.
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	if (body == nullptr || body->owner != OwnPlayer())
+	{
+		return;
+	}
+	PlaySound(AttachSound(_handSounds.Next()), std::nullopt);
 }
 
 void LeashSystem::SetWorks(entt::entity creature, bool works)
@@ -2047,6 +2065,11 @@ void LeashSystem::DoOrder(PlayerNames player, const player_commands::LeashOrder&
 		{
 			TakeOff(*creature);
 			PutOnFor(player, *creature, type);
+		}
+		// The order plays the attach sound while the creature wears a leash, also when the leash was not tied
+		if (IsLeashed(*creature))
+		{
+			PlayHandAttachSound(*creature);
 		}
 		break;
 	}

@@ -227,6 +227,25 @@ TEST(LeashRules, OnlyTheLeashOfAnotherPlayersCreatureMakesItsTieSoundAtTheThing)
 	EXPECT_TRUE(TieSoundIsPlaced(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
 }
 
+TEST(LeashRules, TheAttachSoundsPlayInTurnFromTheFirst)
+{
+	AttachSoundTurns turns;
+	EXPECT_EQ(turns.Next(), 0);
+	EXPECT_EQ(turns.Next(), 1);
+	EXPECT_EQ(turns.Next(), 0);
+	EXPECT_EQ(turns.Next(), 1);
+}
+
+TEST(LeashRules, TheTieAndTheHandKeepTheirOwnAttachSoundTurns)
+{
+	AttachSoundTurns tie;
+	AttachSoundTurns hand;
+	EXPECT_EQ(tie.Next(), 0);
+	EXPECT_EQ(hand.Next(), 0);
+	EXPECT_EQ(tie.Next(), 1);
+	EXPECT_EQ(hand.Next(), 1);
+}
+
 namespace
 {
 /// A leash on a temple, as the pick rule sees it

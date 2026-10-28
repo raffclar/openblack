@@ -5980,6 +5980,7 @@ void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 	{
 		leashes.Toggle(creature);
 	}
+	leashes.PlayHandAttachSound(creature);
 }
 
 void DetachObjectLeash() // 187 DETACH_OBJECT_LEASH

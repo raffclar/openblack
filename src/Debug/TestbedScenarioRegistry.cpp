@@ -6851,6 +6851,23 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.hand_attach_sounds",
+	    .name = "Attach sounds of the leash in the hand",
+	    .facet = Facet::Leash,
+	    .description = "A tiger on the learning leash is tied to a tree and untied back to the hand two times, every "
+	                   "four seconds.",
+	    .expected = "Each tie and each return to the hand plays a leash-attach sound. The two sounds play in turn. The "
+	                "first return to the hand plays the first sound, and the second return plays the second sound.",
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 10.0f}, {0.0f, 0.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {-40.0f, 10.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::TieLeash, 0, 0, 1.0f, false),
+	                 Act(Kind::UntieLeash, 0, 4.0f), OnObject(Kind::TieLeash, 0, 0, 4.0f, false),
+	                 Act(Kind::UntieLeash, 0, 4.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "leash.tied_thrown",
 	    .name = "Tied to a thrown rock",
 	    .facet = Facet::Leash,

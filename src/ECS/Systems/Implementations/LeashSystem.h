@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "Creature/LeashOrders.h"
+#include "Creature/LeashRules.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -48,6 +49,7 @@ public:
 	bool ChangeType(entt::entity creature, LeashType type) override;
 	bool TieTo(entt::entity creature, entt::entity object) override;
 	void UntieToHand(entt::entity creature) override;
+	void PlayHandAttachSound(entt::entity creature) override;
 	void SetWorks(entt::entity creature, bool works) override;
 	void SetDrawn(bool drawn) override;
 	void ConfineToHome(entt::entity creature, float radius) override;
@@ -127,8 +129,10 @@ private:
 	bool _postsPlaced {false};
 	/// Whether the hand was out when the posts were last shown
 	bool _handShown {true};
-	/// The two leash-tying sounds play in turn
-	bool _secondAttachSound {false};
+	/// The two leash-attach sounds play in turn for a tie
+	creature_leash::AttachSoundTurns _tieSounds;
+	/// The two leash-attach sounds play in turn, on a different turn, for the leash put back in the hand
+	creature_leash::AttachSoundTurns _handSounds;
 	std::optional<Refused> _lastRefusal;
 	/// Tells the Action button's double taps from single ones
 	creature_leash_orders::DoubleTaps _doubleTaps;
