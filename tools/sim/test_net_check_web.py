@@ -222,6 +222,30 @@ class LeashCheck(unittest.TestCase):
             result = net_check.leash_result(leash, server, [("2", early, 0, 650)])
         self.assertTrue(result["same"])
 
+    BOX = {"open_after_keys": True, "in_temple": False, "leash": {"id": 51, "leashed": False}, "checked_after_turns": 250}
+
+    def test_the_information_box_keeps_the_leash_and_temple_keys(self):
+        self.assertIsNone(net_check.box_kept_keys(None, []))
+        self.assertTrue(net_check.box_kept_keys(self.BOX, [(301, 1, "presses the leash key", "x")]))
+        # A key that went through: the box closed, the player went into the temple, the leash came on, or the server
+        # got a command of the slot before the end of the check
+        for change in ({"open_after_keys": False}, {"in_temple": True}, {"in_temple": None},
+                       {"leash": {"id": 51, "leashed": True}}, {"checked_after_turns": None}):
+            self.assertFalse(net_check.box_kept_keys({**self.BOX, **change}, []), change)
+        self.assertFalse(net_check.box_kept_keys(self.BOX, [(250, 1, "presses the leash key", "x")]))
+
+    def test_a_key_that_the_box_let_through_fails_the_leash_check(self):
+        leash = {"client": 1, "slot": 1, "turn": 300, "hold": 400, "off": "temple", "box": self.BOX}
+        with tempfile.TemporaryDirectory() as folder:
+            server = self.write(folder, "server.log", self.SERVER)
+            result = net_check.leash_result(leash, server, [("1", server, 0, None)])
+            self.assertTrue(result["box_kept_keys"])
+            self.assertTrue(result["same"])
+            leash["box"] = {**self.BOX, "in_temple": True}
+            result = net_check.leash_result(leash, server, [("1", server, 0, None)])
+        self.assertFalse(result["box_kept_keys"])
+        self.assertFalse(result["same"])
+
 
 @unittest.skipIf(net_check is None, "net_check needs the cryptography package")
 class LeashCheckOfTheWebGod(unittest.TestCase):
