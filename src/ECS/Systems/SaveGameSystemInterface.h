@@ -115,9 +115,12 @@ public:
 	/// The command of the quick save, at its turn: the game saves into the quick save slot. Returns whether it wrote
 	/// every file of the world.
 	virtual bool DoQuickSave() = 0;
-	/// The command of the quick load, at its turn: the game loads the quick save slot after the turns of the frame
+	/// The command of the quick load, at its turn: the game loads the quick save slot after the draw of the frame
 	virtual void DoQuickLoad() = 0;
-	/// After the turns of the frame: the game loads the slot that a command asked for. Returns whether it loaded.
+	/// Whether a command asked for a load that waits for the end of the frame
+	[[nodiscard]] virtual bool LoadAsked() const = 0;
+	/// At the end of the frame, after its draw: the game loads the slot that a command asked for. Returns whether it
+	/// loaded.
 	virtual bool LoadAskedSlot() = 0;
 	/// A new land starts: the turns go from zero again, so the turn of the last autosave does too
 	virtual void NewLand() = 0;

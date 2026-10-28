@@ -58,6 +58,7 @@ public:
 	bool PressQuickLoad() override;
 	bool DoQuickSave() override;
 	void DoQuickLoad() override;
+	[[nodiscard]] bool LoadAsked() const override { return _askedLoad.has_value(); }
 	bool LoadAskedSlot() override;
 	void NewLand() override;
 	[[nodiscard]] bool AnyPictureWaiting() const override;
@@ -158,7 +159,7 @@ private:
 	/// The turn of the last autosave that the game made, which a save keeps. After a load the next autosave waits from
 	/// the turn of the load, but a save still keeps the turn of the last real autosave.
 	uint32_t _autosaveTurnToSave {0};
-	/// The slot that a command of a turn asked to load. The game loads it after the turns of the frame.
+	/// The slot that a command of a turn asked to load. The game loads it after the draw of the frame.
 	std::optional<uint32_t> _askedLoad;
 };
 

@@ -1847,7 +1847,8 @@ void SaveGameSystem::DoQuickLoad()
 	{
 		return;
 	}
-	// The rest of the turn plays in the world that the player has now. The game loads the slot after the turns.
+	// The rest of the turn and the draw of the frame use the world that the player has now. The game loads the slot
+	// at the end of the frame.
 	_askedLoad = gamesave::k_QuickSaveSlot;
 }
 

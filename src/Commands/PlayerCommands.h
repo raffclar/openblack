@@ -492,7 +492,7 @@ struct QuickSave
 };
 
 /// The quick load key. The key checks the rules of a quick load. The turn asks for the load of the quick save slot, and
-/// the game loads it after the turns of the frame. Only a single player game sends it.
+/// the game loads it after the draw of the frame. Only a single player game sends it.
 struct QuickLoad
 {
 };
