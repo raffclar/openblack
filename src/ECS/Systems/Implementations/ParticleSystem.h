@@ -222,7 +222,7 @@ public:
 	bool ProcessForSpell(EffectId id, const particles::ProcessInfo& info, float seconds) override;
 	bool ProcessByFrame(EffectId id, float seconds) override;
 	EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
-	                         float magnitude) override;
+	                         float magnitude, bool synced) override;
 
 	void SetOrigin(EffectId id, glm::vec3 origin) override;
 	void SetPlayer(EffectId id, int player) override;

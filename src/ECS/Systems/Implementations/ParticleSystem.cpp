@@ -1100,7 +1100,8 @@ bool ParticleSystem::ProcessByFrame(EffectId id, float seconds)
 }
 
 ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType type, glm::vec3 position,
-                                                                  std::optional<int> turns, entt::entity owner, float magnitude)
+                                                                  std::optional<int> turns, entt::entity owner, float magnitude,
+                                                                  bool synced)
 {
 	if (!Locator::infoConstants::has_value())
 	{
@@ -1113,8 +1114,8 @@ ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType
 		return k_NoEffect;
 	}
 	const auto& info = spotVisuals.at(index);
-	// Spot visuals are the same on every machine
-	const auto id = Start(info.particleType, position, magnitude, true);
+	// Spot visuals are the same on every machine, except one that shows only what the hand of this computer did
+	const auto id = Start(info.particleType, position, magnitude, synced);
 	if (const auto it = FindRunning(id); it != _effects.end())
 	{
 		it->turnsLeft = turns.value_or(static_cast<int>(info.life));

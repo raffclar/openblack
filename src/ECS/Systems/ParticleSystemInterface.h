@@ -102,9 +102,10 @@ public:
 	/// gone
 	virtual bool ProcessByFrame(EffectId /*id*/, float /*seconds*/) { return false; }
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
-	/// when negative), staying where it was made, and ending when its owner object (if any) goes
+	/// when negative), staying where it was made, and ending when its owner object (if any) goes. Its random numbers are
+	/// the shared ones, unless it shows only what the hand of this computer did.
 	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
-	                                 float magnitude = 1.0f) = 0;
+	                                 float magnitude = 1.0f, bool synced = true) = 0;
 
 	virtual void SetOrigin(EffectId id, glm::vec3 origin) = 0;
 	virtual void SetPlayer(EffectId id, int player) = 0;
