@@ -54,6 +54,8 @@ public:
 	[[nodiscard]] uint32_t TakeMouseMoves() final;
 	[[nodiscard]] float GetMouseWheelDelta() const final;
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const final;
+	void SplitInput(const input_steps::Steps& steps) final;
+	void UseInputStep(std::optional<uint32_t> step) final;
 
 	[[nodiscard]] std::span<const KeyBinding> GetKeyBindings() const final;
 	void SetKeyBinding(BindableActionMap action, std::optional<KeyChord> key) final;
@@ -132,6 +134,15 @@ private:
 	/// The places of the pointer that the help compares to count the movements of the mouse
 	help::MouseMoves _helpMouseMoves;
 	float _mouseWheelDelta = 0.0f;
+	/// The actions that the wheel pressed in this frame
+	uint64_t _wheelActions {0};
+	/// Where the cursor was at the end of the last frame, and whether the game put it somewhere in this frame
+	glm::ivec2 _lastFramePosition {0, 0};
+	bool _cursorJumped {false};
+	/// The mouse of this frame divided across the fixed steps of the input, and the step that the mouse reads as now
+	input_steps::MouseSplit _mouseSplit;
+	std::array<input_steps::StepMouse, input_steps::k_MostSteps> _stepMice {};
+	std::optional<uint32_t> _inputStep;
 	/// Holds the cursor while the mouse turns the camera
 	CursorFreeze _cursorFreeze;
 	bool _cursorFreezeAllowed {false};

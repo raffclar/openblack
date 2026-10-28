@@ -242,7 +242,13 @@ void GameActionMap::ApplyQueuedPresses()
 
 bool GameActionMap::GetBindable(BindableActionMap action) const
 {
-	return (static_cast<uint64_t>(_bindableMap) & static_cast<uint64_t>(action) & ~static_cast<uint64_t>(_blocked)) != 0;
+	auto held = static_cast<uint64_t>(_bindableMap);
+	// A step of the input sees the actions that the wheel pressed only when it takes the wheel
+	if (_inputStep.has_value())
+	{
+		held = (held & ~_wheelActions) | _stepMice.at(*_inputStep).wheelActions;
+	}
+	return (held & static_cast<uint64_t>(action) & ~static_cast<uint64_t>(_blocked)) != 0;
 }
 
 bool GameActionMap::GetUnbindable(UnbindableActionMap action) const
@@ -276,6 +282,10 @@ bool GameActionMap::GetUnbindableRepeat(UnbindableActionMap action) const
 
 glm::uvec2 GameActionMap::GetMousePosition() const
 {
+	if (_inputStep.has_value())
+	{
+		return glm::uvec2(glm::max(_stepMice.at(*_inputStep).position, glm::ivec2(0)));
+	}
 	return _mousePosition;
 }
 
@@ -724,12 +734,12 @@ bool GameActionMap::IsCursorFrozen() const
 
 glm::ivec2 GameActionMap::GetMouseDelta() const
 {
-	return _mouseMotion.Delta();
+	return _inputStep.has_value() ? _stepMice.at(*_inputStep).delta : _mouseMotion.Delta();
 }
 
 glm::ivec2 GameActionMap::GetMousePushDelta() const
 {
-	return _pushMotion;
+	return _inputStep.has_value() ? _stepMice.at(*_inputStep).pushDelta : _pushMotion;
 }
 
 uint32_t GameActionMap::TakeMouseMoves()
@@ -739,7 +749,28 @@ uint32_t GameActionMap::TakeMouseMoves()
 
 float GameActionMap::GetMouseWheelDelta() const
 {
-	return _mouseWheelDelta;
+	return _inputStep.has_value() ? _stepMice.at(*_inputStep).wheel : _mouseWheelDelta;
+}
+
+void GameActionMap::SplitInput(const input_steps::Steps& steps)
+{
+	_inputStep.reset();
+	_stepMice = _mouseSplit.Split(
+	    {
+	        .from = _lastFramePosition,
+	        .to = glm::ivec2(_mousePosition),
+	        .jumped = _cursorJumped || _cursorWarp.has_value(),
+	        .delta = _mouseMotion.Delta(),
+	        .pushDelta = _pushMotion,
+	        .wheel = _mouseWheelDelta,
+	        .wheelActions = _wheelActions,
+	    },
+	    steps);
+}
+
+void GameActionMap::UseInputStep(std::optional<uint32_t> step)
+{
+	_inputStep = step.has_value() && *step < input_steps::k_MostSteps ? step : std::nullopt;
 }
 
 void GameActionMap::Frame()
@@ -848,6 +879,8 @@ void GameActionMap::Frame()
 			}
 			WarpPlayerCursor(*cursor.warpTo);
 		}
+		_lastFramePosition = glm::ivec2(_mousePosition);
+		_cursorJumped = cursor.warpTo.has_value();
 		_mousePosition = glm::clamp(cursor.cursor, glm::zero<decltype(screenSize)>(), screenSize);
 		// A pinned cursor's image stays where it was pinned; the pointer itself is still followed
 		if (_cursorPinned && !_cursorPinnedAt.has_value())
@@ -869,6 +902,8 @@ void GameActionMap::Frame()
 	_mouseMotion.NewFrame();
 	_pushMotion = glm::ivec2(0);
 	_mouseWheelDelta = 0.0f;
+	_wheelActions = 0;
+	_inputStep.reset();
 	_bindableMapPrevious = _bindableMap;
 	_bindableMap =
 	    static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) &
@@ -962,6 +997,10 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	else if (event.type == SDL_MOUSEWHEEL)
 	{
 		_mouseWheelDelta += event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.preciseY : event.wheel.preciseY;
+		const auto wheelAction = event.wheel.y > 0   ? _mouseWheelBinding[0].value_or(BindableActionMap::NONE)
+		                         : event.wheel.y < 0 ? _mouseWheelBinding[1].value_or(BindableActionMap::NONE)
+		                                             : BindableActionMap::NONE;
+		_wheelActions |= static_cast<uint64_t>(wheelAction);
 		if (event.wheel.y > 0)
 		{
 			_bindableMap =

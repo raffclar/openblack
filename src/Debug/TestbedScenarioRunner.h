@@ -237,6 +237,8 @@ private:
 	std::optional<std::optional<int64_t>> _pinnedDateBefore;
 	/// Whether the game was a skirmish before a scenario made it one
 	std::optional<bool> _skirmishBefore;
+	/// Whether the world played as a network game before a scenario made it one
+	std::optional<bool> _networkGameBefore;
 	/// The players that the scenario put in the game, which go when it stops
 	std::vector<entt::entity> _addedPlayers;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't

@@ -261,7 +261,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const bool clicked = view.TakeDialogueClick();
-		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
+		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying();
 		Locator::helpTextSystem::value().Update({
 		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
 		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),

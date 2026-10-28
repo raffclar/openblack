@@ -121,6 +121,7 @@ public:
 	void LeaveMultiplayerFrontEnd() override;
 	[[nodiscard]] bool IsMultiplayerFrontEnd() const override { return _multiplayerFrontEnd; }
 	void ShowHelpAfterLoad() override { BringBackDialogue(); }
+	void WarmUpVisit(const std::function<void()>& draw) override;
 	/// A save keeps the dialogue that the temple keeps for the world while the player is inside: its owner, its last six
 	/// texts and the click waits of the newest
 	void SaveState(ecs::reflection::BinaryWriter& out) const override;
@@ -138,6 +139,8 @@ private:
 	void BringBackDialogue();
 
 	bool _active {false};
+	/// True while a warm-up draws a visit, in which the temple draws all of its rooms
+	bool _warmUpVisit {false};
 	/// The things of the rooms, made as the player goes in and taken down as the player leaves
 	std::unique_ptr<ecs::Registry> _rooms;
 	/// The room that the player goes into after the frame that is drawn now

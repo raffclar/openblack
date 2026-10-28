@@ -84,6 +84,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::nextHandRockTap>("nextHandRockTap")
 	    .Field<&openblack::ecs::RegistryContext::nextCreatureRockSmash>("nextCreatureRockSmash")
 	    .Field<&openblack::ecs::RegistryContext::scriptLetsTempleBeEntered>("scriptLetsTempleBeEntered")
+	    .Field<&openblack::ecs::RegistryContext::scriptCameraOrders>("scriptCameraOrders")
 	    .Field<&openblack::ecs::RegistryContext::templeEntrancesTakeCursor>("templeEntrancesTakeCursor", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::RegistryContext::gameOver>("gameOver")
 	    .Field<&openblack::ecs::RegistryContext::skirmish>("skirmish")

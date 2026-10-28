@@ -33,6 +33,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Input/BindableActions.h"
 #include "Particles/ParticleTypes.h"
+#include "ScriptHeaders/ScriptEnums.h"
 #include "TestbedDispenserGrid.h"
 
 using namespace openblack;
@@ -6261,6 +6262,26 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 3}},
 	});
 
+	// The camera looks down at 45 degrees on a very large oak from about 150 m. The hand pulls it for a tenth of a second
+	// and lets go before it comes out, so the oak stays drawn in the lean of the pull.
+	all.push_back({
+	    .id = "hand.tree_tug_let_go",
+	    .name = "Letting go of a tree before it comes out",
+	    .facet = Facet::Hand,
+	    .description = "Seen from about 150 m away at 45 degrees, the hand grips a very large oak, pulls it up the screen "
+	                   "for a tenth of a second, then lets go before the oak comes out of the ground.",
+	    .expected = "The oak leans and stretches a little towards the pull. After the hand lets go, the oak stays in "
+	                "that lean in a game alone. In a network game, it stands straight again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 106.0f, -66.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, 40.0f}, .scale = 2.5f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.42f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.1f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.8f, 0.8f}}},
+	});
+
 	// The camera looks at a conifer from 25 m, 20 degrees down, the pointer on its crown. A press of a fifth of a second
 	// is shorter than a tap, but the pull starts after the 0.13 s fade and the hand is far from its grip on the trunk.
 	// Thus the conifer comes free on the first frame of the pull and the hand takes it. The same press does the same in
@@ -8006,6 +8027,36 @@ void AddCombat(std::vector<Scenario>& all)
 		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 16.0f, 18.0f}, .look = {0.0f, 8.0f, 40.0f}},
 		    .creatures = {horse, blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
 		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
+	{
+		// The needs of the blue tiger are not set again each frame, so the script can take its life
+		auto loser = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		loser.hold = false;
+		all.push_back({
+		    .id = "combat.opponent_out_of_life",
+		    .name = "An opponent with no life left loses the duel",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger of the player and a blue tiger fight by themselves, and the creatures do not faint. "
+		                   "When the duel is on, a script sets the life of the blue tiger to zero. Its fight health stays.",
+		    .expected = "On its next turn, the red tiger wins. It finishes its move, stands and plays the happy response. "
+		                "An advisor says one of the lines for good news, because the place of the red tiger is on screen. "
+		                "The blue tiger does not faint. It stops and plays the sad response. The fight view ends a few "
+		                "seconds later. The fight transcript shows a win with by_blow false.",
+		    .environment = {.fainting = false},
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), loser},
+		    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+		                 Fight(Kind::StartFight, 0, 1, 0.5f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 {.kind = Kind::CallNative,
+		                  .delaySeconds = 12.0f,
+		                  .script = "SET_PROPERTY",
+		                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+		                                       .number = static_cast<float>(script::ObjectPropertyType::Health)},
+		                                      {.kind = ScriptArgument::Kind::Creature, .index = 1},
+		                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
 		});
 	}
 
