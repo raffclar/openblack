@@ -127,10 +127,10 @@ private:
 
 	// The grazers
 	void GrazerTurn(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
-	/// A grazer's needs grow, and a young grazer grows, in the states that see to the needs
-	void GrazerNeedsTurn(entt::entity entity, const components::Animal& animal, components::Grazer& grazer);
-	/// A turn in the player's hand or in the hand of a creature
-	void InHandTurn(entt::entity entity, components::Animal& animal);
+	/// The needs of an animal of each kind grow, and a young animal grows, in the states that see to the needs
+	void NeedsTurn(entt::entity entity, components::Animal& animal);
+	/// An animal lets go of its target when the target is gone or in the player's hand. Whether it let go
+	bool DropTarget(entt::entity entity, components::Animal& animal);
 	void GrazerDecide(entt::entity entity, components::Animal& animal, components::Grazer& grazer);
 	/// Off wandering about its herd's leader, as far as its herd's reach
 	void GrazerStartWander(entt::entity entity, components::Animal& animal);

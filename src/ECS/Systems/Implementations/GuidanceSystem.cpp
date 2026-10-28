@@ -26,6 +26,7 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Creature.h"
@@ -153,7 +154,7 @@ bool NearPointUnderCursor(entt::entity thing)
 
 /// The point under the cursor of the player at this computer, as the last report of a turn tells it (zero until the
 /// first report)
-glm::vec3 ReportedPointUnderCursor()
+glm::vec3 ReportedPointOrZero()
 {
 	if (!Locator::handSystem::has_value() || !Locator::entitiesRegistry::has_value())
 	{
@@ -532,7 +533,7 @@ void GuidanceSystem::BeliefVoice(glm::vec3 at, float share, GuidanceAlignment al
 		return;
 	}
 	const auto turn = Turn();
-	const float distance = gutils::GetDistanceInMetres(ReportedPointUnderCursor(), at);
+	const float distance = gutils::GetDistanceInMetres(ReportedPointOrZero(), at);
 	const auto sinceDesireVoice = turn - heard->lastTurn.at(static_cast<size_t>(guidance::Kind::TownDesireSound));
 	// The game compares the voice with a last voice that it clears on each land and never sets, so the two are never
 	// the same

@@ -97,6 +97,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/IntroSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -882,6 +883,11 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	Locator::playerCommandSystem::value().Reset();
 	Locator::playerCommandSystem::value().SetPlayersCreatureDue(false);
 	Locator::creatureFightSystem::value().Reset();
+	// The new land's temples get their own leash posts
+	if (Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().Reset();
+	}
 	Locator::explosionSystem::value().Reset();
 	Locator::floatingNumberSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);

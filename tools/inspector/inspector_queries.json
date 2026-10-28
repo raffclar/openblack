@@ -1368,7 +1368,7 @@
   "query": "living.action"
  },
  {
-  "description": "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, and a grazer's needs",
+  "description": "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, the hunger of a kind that is not a grazer, a grazer's needs, and a spell wolf's prey and target",
   "kind": "object",
   "parameters": [
    {
