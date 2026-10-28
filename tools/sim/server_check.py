@@ -230,7 +230,7 @@ def main():
     local = wsl_path if options.wsl_server else (lambda path: path)
     server_command = [server_exe, "-g", options.game_path] + server_where + [
                       "--seed", str(options.seed), "-n", str(options.turns), "--frame-ms", str(options.frame_ms),
-                      "-l", local(server_log)]
+                      "-l", local(server_log), "--log-checksums"]
     if options.wsl_server:
         server_command = ["wsl", "-d", options.wsl_distro, "--", options.wsl_server, "-g",
                           local(options.game_path)] + server_command[3:]
