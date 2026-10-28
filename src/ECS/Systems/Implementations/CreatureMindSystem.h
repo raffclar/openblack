@@ -109,7 +109,7 @@ public:
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;
 	[[nodiscard]] bool IsTakingFromHand(entt::entity creature) const override;
 	[[nodiscard]] bool IsLyingDead(entt::entity creature) override;
-	creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity creature) override;
+	creature_mind::HandsCheck CheckHandsBeforeAction(entt::entity creature) override;
 	[[nodiscard]] bool SeemsFriendly(entt::entity creature, entt::entity other) override;
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override;
 	void ReactToFire(entt::entity creature, entt::entity burning) override;
