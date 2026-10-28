@@ -405,6 +405,14 @@ void TownDesireSystem::SetBoost(entt::entity town, TownDesireInfo desire, float 
 namespace
 {
 
+/// The height of the ground at a point, 0 while no land is loaded
+float GroundAt(glm::vec2 point)
+{
+	return Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded()
+	           ? Locator::terrainSystem::value().GetHeightAt(point)
+	           : 0.0f;
+}
+
 /// Each new store of its town takes the flag to its own place for it, from the store's model, over the ground
 void PlaceOnStore(TownDesireFlag& flag, entt::entity store)
 {
@@ -422,9 +430,7 @@ void PlaceOnStore(TownDesireFlag& flag, entt::entity store)
 		}
 	}
 	flag.place = transform.position + (transform.rotation * (local * transform.scale));
-	const float ground =
-	    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({flag.place.x, flag.place.z}) : 0.0f;
-	flag.overGround = flag.place.y - ground;
+	flag.overGround = flag.place.y - GroundAt({flag.place.x, flag.place.z});
 }
 
 /// The flag stands at its place in the map, upright and at its full size. Only the frames turn it to the camera and
@@ -476,9 +482,7 @@ void TownDesireSystem::MakeFlags(entt::entity town)
 		{
 			placeWithoutStore = town_desire_flags::PlaceWithoutStore(townPlace, static_cast<uint32_t>(slot));
 			const glm::vec2 metres {map_coords::ToMetres(placeWithoutStore->x), map_coords::ToMetres(placeWithoutStore->z)};
-			const float ground =
-			    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(metres) : 0.0f;
-			component.place = {metres.x, ground, metres.y};
+			component.place = {metres.x, GroundAt(metres), metres.y};
 			component.overGround = 0.0f;
 		}
 		StandAtPlace(registry, flag, component);

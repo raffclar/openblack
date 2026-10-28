@@ -507,7 +507,7 @@ TEST_F(Fireflies, ALandClosingRemovesThemAndTopsUpAgain)
 	_system->Reset();
 	EXPECT_TRUE(_system->GetFireflies().empty());
 	Turns(1);
-	EXPECT_EQ(_system->GetFireflies().size(), 49u);
+	EXPECT_EQ(_system->GetFireflies().size(), 50u);
 }
 
 TEST_F(Fireflies, OutTheyAreDrawnBetweenTheirLastTwoTurnsAndFadeWithDistance)
@@ -610,7 +610,7 @@ TEST_F(Fireflies, ASavedWorldKeepsTheFirefliesTheRewardsTheLimitAndTheTopUp)
 	_world->Add(FakeWorld::Kind::Tree, k_Here);
 	Turns(1);
 	_system->SetRewardWeight("HEAL", 1.0f);
-	ASSERT_EQ(_system->GetFireflies().size(), 49u);
+	ASSERT_EQ(_system->GetFireflies().size(), 50u);
 
 	entt::meta_ctx context;
 	ecs::reflection::RegisterComponents(context);
