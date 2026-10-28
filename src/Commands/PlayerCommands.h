@@ -228,25 +228,16 @@ struct FightCharge
 	uint32_t heldMs;
 };
 
-/// A stroke or a slap of the creature that the hand holds, in a network game: every computer plays the creature's
-/// reaction at the same turn
+/// A stroke or a slap of the creature that the hand holds, which the creature takes: every computer plays the creature's
+/// reaction at the same turn. The face of a stroke is not part of it: only the computer of the hand shows that face.
 struct CreatureReaction
 {
 	entt::entity creature;
 	/// The animation of the reaction and whether it plays mirrored
 	uint32_t animation;
 	bool mirrored;
-	/// The face that the reaction pulls, if it pulls one: the face (a creature_face::Face), how long and why (a
-	/// creature_face::Cue)
-	bool pullsFace;
-	uint8_t face;
-	float faceMs;
-	uint8_t cue;
 	/// The share of the way through what the body plays that the reaction can stop it at
 	float interruptsAfter;
-	/// The creature refused the body action in the frame of the stroke, so the turn pulls only the face. The body does
-	/// not play, also when the creature can take the action at the turn.
-	bool faceOnly;
 };
 
 /// A click of the hand in a network game: the turn writes the click that the scripts read, so that the scripts of

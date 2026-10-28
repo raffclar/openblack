@@ -13,10 +13,9 @@
 
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureSentReactions.h"
+#include "Creature/CreatureShownFace.h"
 
 using namespace openblack;
-using creature_hand::ReactionSend;
-using creature_hand::ReactionToSend;
 using creature_hand::SentReactions;
 using creature_hand::TakesReaction;
 
@@ -90,13 +89,22 @@ TEST(CreatureSentReactions, AReactionWithNoLimitInterruptsAWaitingReaction)
 	EXPECT_FALSE(TakesReaction(true, 0.0f, false));
 }
 
-TEST(CreatureSentReactions, ARefusedStrokeSendsOnlyItsFaceAndARefusedSlapSendsNothing)
+TEST(CreatureShownFace, TheShownFaceStaysUntilTheWorldChangesItsFace)
 {
-	// The creature takes the reaction: the turn plays it whole, with or without a face
-	EXPECT_EQ(ReactionToSend(true, true), ReactionSend::Whole);
-	EXPECT_EQ(ReactionToSend(true, false), ReactionSend::Whole);
-	// The creature refuses a stroke: the turn pulls only its face
-	EXPECT_EQ(ReactionToSend(false, true), ReactionSend::FaceOnly);
-	// The creature refuses a slap, which has no face: the hand sends nothing
-	EXPECT_EQ(ReactionToSend(false, false), ReactionSend::None);
+	const creature_face::Request smile {
+	    .face = creature_face::Face::Smile, .milliseconds = 2000.0f, .cue = creature_face::Cue::None};
+	const creature_layers::FaceLayer world {};
+	const auto shown = creature_shown_face::Pull(world, smile);
+	EXPECT_EQ(shown.wanted, creature_face::AnimationOf(creature_face::Face::Smile));
+	// The body shows the shown face in place of the face of the world
+	EXPECT_EQ(&creature_shown_face::Shown(world, &shown), &shown);
+	EXPECT_EQ(&creature_shown_face::Shown(world, nullptr), &world);
+	// The world did not change its face since the last pose: the shown face stays
+	EXPECT_TRUE(creature_shown_face::StaysBeforePose(world, world));
+	// The world pulled a face of its own: the shown face goes
+	const auto pulled = creature_layers::PullFace(world, 3, 1000.0f, creature_face::Cue::Anger);
+	EXPECT_FALSE(creature_shown_face::StaysBeforePose(world, pulled));
+	// The shown face goes when it is the same as the face of the world
+	EXPECT_TRUE(creature_shown_face::StaysAfterPose(shown, world));
+	EXPECT_FALSE(creature_shown_face::StaysAfterPose(world, world));
 }

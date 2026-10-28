@@ -6231,9 +6231,11 @@ void AddHand(std::vector<Scenario>& all)
 	    .facet = Facet::Hand,
 	    .description = "The hand holds the player's tiger, which faces the camera, by its middle. It strokes one part of "
 	                   "the body, then moves to another part and strokes it while the first pleased animation plays.",
-	    .expected = "The first stroke plays a pleased animation and its face. A stroke on the other part that comes before "
-	                "that animation is far enough through pulls only its face: the tiger plays no animation for it. The "
-	                "log shows \"pulls only the face of reaction\" at the turn of that stroke.",
+	    .expected =
+	        "The first stroke plays a pleased animation and its face. A stroke on the other part that comes before "
+	        "that animation is far enough through pulls only its face, at once: the tiger plays no animation for it and "
+	        "the hand sends nothing. The log shows \"only this computer shows its face\". In a network game "
+	        "the other computers do not show the face of a stroke.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
 	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},

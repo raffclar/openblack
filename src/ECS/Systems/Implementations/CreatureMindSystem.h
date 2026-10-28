@@ -92,9 +92,7 @@ public:
 	void ChangeDesireSource(entt::entity creature, uint32_t type, float amount) override;
 	[[nodiscard]] bool CanForceAction(entt::entity creature, size_t animation, bool mirrored,
 	                                  float interruptsAfter) const override;
-	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	                 float interruptsAfter) override;
-	void PullReactionFace(entt::entity creature, const creature_face::Request& face) override;
+	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, float interruptsAfter) override;
 	bool Sleep(entt::entity creature) override;
 	bool Eat(entt::entity creature, std::optional<entt::entity> food) override;
 	bool Drink(entt::entity creature) override;

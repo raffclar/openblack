@@ -231,12 +231,7 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.creature);
 		               out.Number(command.animation);
 		               out.Byte(static_cast<uint8_t>(command.mirrored ? 1 : 0));
-		               out.Byte(static_cast<uint8_t>(command.pullsFace ? 1 : 0));
-		               out.Byte(command.face);
-		               out.Float(command.faceMs);
-		               out.Byte(command.cue);
 		               out.Float(command.interruptsAfter);
-		               out.Byte(static_cast<uint8_t>(command.faceOnly ? 1 : 0));
 	               },
 	               [](const PlayerLeft& /*command*/) {},
 	               [](const PlayerJoined& /*command*/) {},
@@ -504,24 +499,12 @@ DecodeError ReadAction(Reader& in, Action& action)
 		reaction.creature = in.Entity();
 		reaction.animation = in.Number<uint32_t>();
 		const auto mirrored = in.Byte();
-		const auto pullsFace = in.Byte();
-		reaction.face = in.Byte();
-		reaction.faceMs = in.Float();
-		reaction.cue = in.Byte();
 		reaction.interruptsAfter = in.Float();
-		const auto faceOnly = in.Byte();
-		// No face has its bytes empty, so that each command has one way of bytes
-		const bool noFaceEmpty =
-		    pullsFace != 0 || (reaction.face == 0 && std::bit_cast<uint32_t>(reaction.faceMs) == 0 && reaction.cue == 0);
-		// A reaction that pulls only the face has a face
-		if (mirrored > 1 || pullsFace > 1 || reaction.face >= creature_face::k_FaceCount ||
-		    reaction.cue >= creature_face::k_CueCount || !noFaceEmpty || faceOnly > 1 || (faceOnly != 0 && pullsFace == 0))
+		if (mirrored > 1)
 		{
 			return DecodeError::Value;
 		}
 		reaction.mirrored = mirrored != 0;
-		reaction.pullsFace = pullsFace != 0;
-		reaction.faceOnly = faceOnly != 0;
 		action = reaction;
 		return DecodeError::None;
 	}
@@ -909,7 +892,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
 	                   [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
 	                   [](const FightCharge& /*command*/) { return size_t {4}; },
-	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 3 + 4 + 1 + 4 + 1; },
+	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 1 + 4; },
 	                   [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
 	                   [](const SeedGesture& /*command*/) { return size_t {2}; },
 	                   [](const PlayerLeft& /*command*/) { return size_t {0}; },

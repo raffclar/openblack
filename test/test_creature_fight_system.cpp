@@ -106,7 +106,7 @@ public:
 	bool SitDown(entt::entity) override { return false; }
 	void StandUp(entt::entity) override {}
 	void ReceiveFeedback(entt::entity, float) override {}
-	bool ForceAction(entt::entity, size_t, bool, std::optional<creature_face::Request>, float) override { return false; }
+	bool ForceAction(entt::entity, size_t, bool, float) override { return false; }
 	bool Sleep(entt::entity) override { return false; }
 	bool Eat(entt::entity, std::optional<entt::entity>) override { return false; }
 	bool Drink(entt::entity) override { return false; }

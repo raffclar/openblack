@@ -63,15 +63,7 @@ std::vector<Action> EachCommand()
 	    FightGround {.creature = Entity(19), .point = {-1.5f, 2.0f, 3.25f}, .replace = true},
 	    FightMove {.target = Entity(20), .kind = 6, .value = 0x01020304, .replace = false},
 	    FightCharge {.heldMs = 1200},
-	    CreatureReaction {.creature = Entity(21),
-	                      .animation = 0x0A0B0C0D,
-	                      .mirrored = true,
-	                      .pullsFace = true,
-	                      .face = 3,
-	                      .faceMs = 2000.0f,
-	                      .cue = 15,
-	                      .interruptsAfter = 0.25f,
-	                      .faceOnly = true},
+	    CreatureReaction {.creature = Entity(21), .animation = 0x0A0B0C0D, .mirrored = true, .interruptsAfter = 0.25f},
 	    HandClick {.thing = Entity(22), .release = true, .hasPlace = true, .placeX = -5, .placeZ = 0x7FFFFFFF},
 	    SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = -1},
 	    HandPick {.object = Entity(23)},
@@ -188,18 +180,8 @@ Action RandomAction(std::mt19937& random)
 	case 17:
 		return FightCharge {.heldMs = bits(random)};
 	case 18:
-	{
-		const bool face = bits(random) % 2 == 0;
-		return CreatureReaction {.creature = entity(),
-		                         .animation = bits(random),
-		                         .mirrored = bits(random) % 2 == 0,
-		                         .pullsFace = face,
-		                         .face = face ? static_cast<uint8_t>(bits(random) % 12) : uint8_t {0},
-		                         .faceMs = face ? number() : 0.0f,
-		                         .cue = face ? static_cast<uint8_t>(bits(random) % 19) : uint8_t {0},
-		                         .interruptsAfter = number(),
-		                         .faceOnly = face && bits(random) % 2 == 0};
-	}
+		return CreatureReaction {
+		    .creature = entity(), .animation = bits(random), .mirrored = bits(random) % 2 == 0, .interruptsAfter = number()};
 	case 22:
 		return HandPick {.object = entity()};
 	case 20:
@@ -381,7 +363,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 10, 18, 5,  49, 17, 5, 5,  5, 9, 12, 1, 18, 11, 5, 22, 15, 3,
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 10, 18, 5,  49, 17, 5, 5,  5, 9, 12, 1, 18, 11, 5, 14, 15, 3,
 	                                 5, 1, 2, 1, 61, 5, 2,  1,  13, 10, 18, 1, 50, 1, 5, 51, 5, 16, 7,  1, 1,  13};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
@@ -584,22 +566,11 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	move[14] = 6;
 	move.back() = 2;
 	EXPECT_EQ(Decode(move).error, DecodeError::Value);
-	// A reaction with no face keeps the bytes of the face empty
+	// A reaction is mirrored or not
 	auto reaction = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {CreatureReaction {.creature = Entity(1)}}});
 	EXPECT_EQ(Decode(reaction).error, DecodeError::None);
-	reaction[20] = 1;
+	reaction[18] = 2;
 	EXPECT_EQ(Decode(reaction).error, DecodeError::Value);
-	// A reaction that pulls only the face has a face, and its mark is 0 or 1
-	reaction[20] = 0;
-	reaction[30] = 1;
-	EXPECT_EQ(Decode(reaction).error, DecodeError::Value);
-	auto faceOnly = Encode(CommandBlock {
-	    .sequence = 0, .turn = 0, .actions = {CreatureReaction {.creature = Entity(1), .pullsFace = true, .faceOnly = true}}});
-	ASSERT_EQ(faceOnly.size(), reaction.size());
-	ASSERT_EQ(Decode(faceOnly).error, DecodeError::None);
-	EXPECT_TRUE(std::get<CreatureReaction>(std::get<CommandBlock>(*Decode(faceOnly).frame).actions[0]).faceOnly);
-	faceOnly[30] = 2;
-	EXPECT_EQ(Decode(faceOnly).error, DecodeError::Value);
 	// A press of the hand has no place
 	auto click = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {HandClick {.thing = Entity(1)}}});
 	EXPECT_EQ(Decode(click).error, DecodeError::None);
