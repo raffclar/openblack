@@ -67,6 +67,11 @@ bool magic::ClosesOutOfInfluence(bool shown, bool inInfluence, bool closedDown)
 	return shown && !inInfluence && !closedDown;
 }
 
+glm::vec3 magic::PlaceForInfluence(glm::vec3 seed, bool followsSpell, glm::vec3 spell)
+{
+	return followsSpell ? glm::vec3 {spell.x, seed.y, spell.z} : seed;
+}
+
 float magic::TopUnderSeed(float seedRadius, std::span<const ThingUnderSeed> things)
 {
 	float top = 0.0f;

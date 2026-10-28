@@ -159,6 +159,11 @@ void MagicSystem::KeepSeedInInfluence(entt::entity spellEntity, const Spell& spe
 	{
 		position = ReportedHandOf(*holder).value_or(position);
 	}
+	else
+	{
+		// Out of the hand, only the frames move a seed that follows its miracle
+		position = magic::PlaceForInfluence(position, seed->followsSpell, spell.position);
+	}
 	if (magic::ClosesOutOfInfluence(SeedShownWithSpell(*seed, spell), _world.InInfluence(seed->player, position),
 	                                spell.closedDown))
 	{
