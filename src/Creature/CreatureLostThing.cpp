@@ -61,3 +61,12 @@ bool creature_lost_thing::Lost(const InUse& inUse, const std::function<bool(uint
 	}
 	return std::ranges::any_of(inUse.stepThings, [&](uint32_t thing) { return !itsOwn(thing) && notThere(thing); });
 }
+
+void creature_lost_thing::StopUseBeforeThrowIntoStore(creature_planner::Plan& plan, const creature_mind::ObjectOrder& order,
+                                                      uint32_t self)
+{
+	if (order.kind == creature_mind::ObjectOrder::Kind::ThrowInStore)
+	{
+		plan.instrument = self;
+	}
+}
