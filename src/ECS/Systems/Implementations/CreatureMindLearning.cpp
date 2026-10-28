@@ -113,7 +113,9 @@
 #include "ECS/Components/LearningMarker.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicPile.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
@@ -901,6 +903,17 @@ std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::enti
 	if (const auto* pile = registry.TryGet<const MagicPile>(thing))
 	{
 		return PlayerNumberOf(pile->player);
+	}
+	// A shield is of the player of the miracle that keeps it up, and of the neutral player when the miracle let go of it
+	if (const auto* shield = registry.TryGet<const MagicShield>(thing))
+	{
+		return registry.Valid(shield->spell) && shield->spell != thing ? BeliefPlayerOf(registry, shield->spell)
+		                                                               : PlayerNumberOf(PlayerNames::NEUTRAL);
+	}
+	// A fireball is of the player of its miracle, and of the neutral player when its miracle has no player
+	if (const auto* fireball = registry.TryGet<const MagicFireBall>(thing))
+	{
+		return PlayerNumberOf(fireball->hasPlayer ? fireball->player : PlayerNames::NEUTRAL);
 	}
 	if (const auto* icon = registry.TryGet<const TownCentreIcon>(thing))
 	{
