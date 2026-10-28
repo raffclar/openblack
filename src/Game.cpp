@@ -97,7 +97,9 @@
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
+#include "Common/SideThread.h"
 #include "Common/StringUtils.h"
 #include "Common/UserData.h"
 #include "Common/X87Vector.h"
@@ -175,6 +177,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -227,6 +230,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -259,6 +263,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
@@ -309,6 +314,7 @@
 #include "Gui/LoadingScreen.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/OnlineMapTexts.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Gui/StatisticsBoxRules.h"
@@ -702,6 +708,18 @@ struct Game::FrameLoop
 	uint32_t startTicks {0};
 	std::optional<debug::FrameStatsLog> frameStats;
 	std::chrono::steady_clock::time_point frameStart;
+	/// The thread of the turns that play beside the draw (deviation row 153), made the first time it is used
+	std::unique_ptr<SideThread> turnThread;
+	/// The turns that play beside the draw: the turn count before them and their start
+	uint32_t turnBefore {0};
+	std::chrono::steady_clock::time_point turnsStart;
+	std::chrono::steady_clock::time_point turnsEnd;
+	/// The clock of the next frame moved on already, and its turns played beside the draw of this frame
+	bool turnsPlayedBeside {false};
+	/// The clock of the machine for the statistics of this frame, read before the clock of the next frame moved on
+	std::optional<uint32_t> statisticsTicks;
+	/// Open while the turns play beside the draw: the main thread then does not use the services that the turns hold
+	std::optional<MainThreadQueue::TurnElsewhere> turnsElsewhere;
 };
 
 Game::Game(Arguments&& args) noexcept
@@ -738,6 +756,8 @@ Game::Game(Arguments&& args) noexcept
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
+    , _turnApiCheck(args.turnApiCheck)
+    , _turnBesideDraw(args.turnBesideDraw)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	// The log of each part of the game
@@ -757,6 +777,7 @@ Game::Game(Arguments&& args) noexcept
 	config.lobbyOrigin = args.lobbyOrigin;
 	config.lobbyTestAuthorities = args.lobbyTestAuthorities;
 	config.useInternetWeather = args.useInternetWeather;
+	config.showPing = args.showPing;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	// The settings of this computer give what the command line did not
@@ -804,6 +825,14 @@ Game::~Game() noexcept
 	{
 		Locator::pauseTextSystem::value().SetInterface(nullptr);
 	}
+	if (Locator::incomingMessageSystem::has_value())
+	{
+		Locator::incomingMessageSystem::value().SetTexts(nullptr);
+	}
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().SetTexts(nullptr);
+	}
 	if (Locator::saveGameSystem::has_value())
 	{
 		Locator::saveGameSystem::value().SetShowBox({});
@@ -827,6 +856,7 @@ Game::~Game() noexcept
 	{
 		Locator::landSystem::value().SetView(nullptr);
 	}
+	ReportTurnApiCheck();
 	ShutDownServices();
 	// A later caller of Instance must not get this game once it is gone
 	if (sInstance == this)
@@ -2256,6 +2286,17 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	    },
 	};
 	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
+	// The music heard follows the world's clock of the scripts' music
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+		music.script = {
+		    .type = script.GetType(),
+		    .started = script.IsStarted(),
+		    .playCount = script.GetPlayCount(),
+		    .place = script.GetPlace(),
+		};
+	}
 	music.film = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
 	if (Locator::infoConstants::has_value())
 	{
@@ -2444,6 +2485,11 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		if (_scenarioStager && _scenarioRequest.has_value())
 		{
 			_scenarioStager();
+		}
+		// The turns of this frame played beside the draw of the last frame (deviation row 153)
+		if (_frameLoop != nullptr && std::exchange(_frameLoop->turnsPlayedBeside, false))
+		{
+			return true;
 		}
 		return PlayTurns();
 	}
@@ -2728,7 +2774,11 @@ void Game::StartFrame(FrameState& frame)
 	frame.deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(current - previous);
 
 	Locator::debugGui::value().SetScale(config.guiScale);
-	Locator::time::value().Update();
+	// The clock of this frame moved on at the end of the last frame, when this frame's turns played beside its draw
+	if (_frameLoop == nullptr || !_frameLoop->turnsPlayedBeside)
+	{
+		Locator::time::value().Update();
+	}
 	// The debug inspector answers what was asked since the last frame, and holds or releases the game for stepping,
 	// before the frame's input and turn
 	if (Locator::inspector::has_value())
@@ -2955,6 +3005,15 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		_interface->SetFightPanel(creature_fight_hud::PanelAllowed(inTemple, scriptHasCamera)
 		                              ? Locator::creatureFightSystem::value().GetPanel()
 		                              : std::nullopt);
+		// The player's own ping, with --show-ping in a network game (deviation 143)
+		std::optional<uint64_t> roundTrip = _demoRoundTrip;
+		if (!roundTrip.has_value() && Locator::config::value().showPing && Locator::networkGame::has_value() &&
+		    Locator::networkGame::value().InGame())
+		{
+			const auto* session = Locator::networkGame::value().Session();
+			roundTrip = session != nullptr ? session->RoundTrip() : std::nullopt;
+		}
+		_interface->SetPingLine(gui::ping_display::Text(roundTrip));
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
@@ -3117,11 +3176,95 @@ void Game::ReportHelp()
 	}
 }
 
+void Game::ReportTurnApiCheck() const
+{
+	if (!Locator::mainThreadQueue::has_value() || _turnApiCheck == TurnApiCheck::Off)
+	{
+		return;
+	}
+	const auto calls = Locator::mainThreadQueue::value().GetDirectCalls();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The check of the turn's calls found {} places that use a service directly",
+	                   calls.size());
+	for (const auto& call : calls)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Turn check: step {} {} {} {} calls ({})",
+		                   call.turnStep.has_value() ? std::to_string(*call.turnStep) : std::string("?"), Name(call.api),
+		                   call.what, call.count, call.where);
+	}
+}
+
 bool Game::PlayTurns()
 {
 	// The game is the view of the turns
 	Locator::landSystem::value().PlayTurns(*this);
 	return true;
+}
+
+bool Game::StartTurnsBesideDraw()
+{
+	if (!_turnBesideDraw || _frameLoop == nullptr || !Locator::mainThreadQueue::has_value())
+	{
+		return false;
+	}
+	// The turns start early only when the end of this frame changes nothing that they read: no scenario waits to be laid
+	// out, the player does not go into the temple after this frame, no picture waits for its screen and the game does not
+	// close. Else they play in the next frame, as usual.
+	const bool templeEntry = Locator::temple::has_value() && Locator::temple::value().GoesInAfterFrame();
+	const bool pictureWaits =
+	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
+	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
+	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
+	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || _closeAsked)
+	{
+		return false;
+	}
+	auto& loop = *_frameLoop;
+	if (!loop.turnThread)
+	{
+		loop.turnThread = std::make_unique<SideThread>();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns play on their own thread, beside the end of the draw of the frame "
+		                                        "before (deviation row 153)");
+	}
+	// The turns read the camera of the game, not the camera that the inspector shows
+	ShowInspectorCamera(false);
+	// The clock of the next frame moves on now, so that the turns that are due in the next frame play now. The statistics
+	// of this frame keep the clock of this frame.
+	loop.statisticsTicks = machine_clock::Ticks();
+	auto& time = Locator::time::value();
+	time.Update();
+	loop.turnsPlayedBeside = true;
+	loop.turnBefore = time.GetTurn();
+	loop.turnsStart = std::chrono::steady_clock::now();
+	auto& queue = Locator::mainThreadQueue::value();
+	loop.turnsElsewhere.emplace(queue);
+	loop.turnThread->Start(
+	    [this, &loop] {
+		    Locator::landSystem::value().PlayTurnSteps(*this);
+		    loop.turnsEnd = std::chrono::steady_clock::now();
+	    },
+	    [&queue] { queue.Wake(); });
+	return true;
+}
+
+void Game::FinishTurnsBesideDraw()
+{
+	auto& loop = *_frameLoop;
+	auto& queue = Locator::mainThreadQueue::value();
+	// Meanwhile the main thread does the calls that the turns wait for, such as the load of the next land
+	queue.ServeUntil([&loop] { return loop.turnThread->Done(); });
+	loop.turnsElsewhere.reset();
+	try
+	{
+		loop.turnThread->Wait();
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The turns beside the draw stopped: {}", e.what());
+		std::abort();
+	}
+	Locator::landSystem::value().FinishTurns(loop.turnBefore, loop.turnsStart, loop.turnsEnd);
+	// The scopes of the turns go into this frame's entry of the profiler
+	Locator::profiler::value().MergeThreads();
 }
 
 void Game::UpdateCreaturePoses()
@@ -3198,9 +3341,13 @@ void Game::UpdateSingAlong(bool inTemple)
 	}
 	const auto& clock = Locator::time::value();
 	std::optional<int32_t> word;
-	if (_gameMusic && help::sing_along::IsSungVerse(static_cast<int32_t>(_gameMusic->GetScriptType())))
+	if (Locator::scriptMusicSystem::has_value())
 	{
-		word = _gameMusic->GetMusicLyrics().word;
+		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+		if (help::sing_along::IsSungVerse(static_cast<int32_t>(script.GetType())))
+		{
+			word = script.GetLyrics().word;
+		}
 	}
 	_interface->SetSingAlong(word, help::sing_along::StepMilliseconds(inTemple,
 	                                                                  static_cast<int32_t>(clock.GetFrameRealTime().count()),
@@ -4041,6 +4188,7 @@ bool Game::Initialize() noexcept
 	using filesystem::Path;
 	// The services that the game shares with the dedicated server come first, then the services that show the world
 	InitializeSimulationCore();
+	Locator::mainThreadQueue::value().SetCheck(_turnApiCheck);
 	if (!InitializeEngine(config.graphicsBackend, config.vsync))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
@@ -4085,6 +4233,12 @@ bool Game::Initialize() noexcept
 			}
 			// The multiplayer front end's boxes take the keyboard and the mouse while they are up, Escape too
 			if (_interface && _interface->GetMultiplayerBoxes().IsActive() && Locator::windowing::has_value() &&
+			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			{
+				return;
+			}
+			// The line of the chat takes the keyboard while it has the focus, Escape and Return too
+			if (_interface && _interface->ChatWantsKeys() && Locator::windowing::has_value() &&
 			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
 			{
 				return;
@@ -4306,6 +4460,14 @@ const gui::TextDatabase* Game::MakeInterface()
 		if (Locator::pauseTextSystem::has_value())
 		{
 			Locator::pauseTextSystem::value().SetInterface(_interface.get());
+		}
+		if (Locator::incomingMessageSystem::has_value())
+		{
+			Locator::incomingMessageSystem::value().SetTexts(&_interface->GetTexts());
+		}
+		if (Locator::chatSystem::has_value())
+		{
+			Locator::chatSystem::value().SetTexts(&_interface->GetTexts());
 		}
 	}
 	return _interface ? &_interface->GetTexts() : nullptr;
@@ -4753,6 +4915,9 @@ void Game::BeforeFirstFrame(bool continued)
 
 bool Game::RunFrame() noexcept
 {
+	// The work of the frame starts here. In a web browser, the wait for the display frame is before this point.
+	const auto workStart = std::chrono::steady_clock::now();
+	const auto turnBefore = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 	if (!Update())
 	{
 		return false;
@@ -4835,9 +5000,15 @@ bool Game::RunFrame() noexcept
 			}
 		}
 
+		// The turns of the next frame may play beside the end of the draw (deviation row 153)
+		const bool turnsBeside = StartTurnsBesideDraw();
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::RendererFrame);
 			Locator::rendererInterface::value().Frame();
+		}
+		if (turnsBeside)
+		{
+			FinishTurnsBesideDraw();
 		}
 		// The challenges' pictures whose screens are back
 		auto& renderer = Locator::rendererInterface::value();
@@ -4867,7 +5038,11 @@ bool Game::RunFrame() noexcept
 			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
 		}
-		ShowInspectorCamera(false);
+		// The turns beside the draw had the camera of the game back before they started
+		if (!turnsBeside)
+		{
+			ShowInspectorCamera(false);
+		}
 
 		// Clear the stale screenshot request
 		if (_requestScreenshot.has_value())
@@ -4881,7 +5056,8 @@ bool Game::RunFrame() noexcept
 		_frameCount++;
 		// The frame rate of the statistics uses the machine clock of the game. When each frame has a fixed time, each run
 		// gets the same rate.
-		_statisticsFrameRate.Frame(machine_clock::Ticks(), _frameCount);
+		_statisticsFrameRate.Frame(std::exchange(_frameLoop->statisticsTicks, std::nullopt).value_or(machine_clock::Ticks()),
+		                           _frameCount);
 		// The game is playable from its first frame drawn
 		if (_startupTimer.has_value())
 		{
@@ -4889,6 +5065,7 @@ bool Game::RunFrame() noexcept
 			_startupTimer.reset();
 		}
 
+		const auto workEnd = std::chrono::steady_clock::now();
 		// A simulation run at the normal speed waits until the frame took its fixed game time in real time too
 		auto& simulation = Locator::simulation::value();
 		if (const auto wait = sim_run::PaceWait(
@@ -4911,8 +5088,11 @@ bool Game::RunFrame() noexcept
 		}
 		if (frameStats.has_value())
 		{
-			frameStats->Frame(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(), profiler,
-			                  Locator::rendererInterface::value().GetPipelinesMade(), Locator::time::value().GetTurn());
+			frameStats->Frame({.milliseconds = std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(),
+			                   .workMilliseconds = std::chrono::duration<float, std::milli>(workEnd - workStart).count(),
+			                   .playedTurn = Locator::time::has_value() && turnBefore != Locator::time::value().GetTurn(),
+			                   .turn = Locator::time::value().GetTurn()},
+			                  profiler, Locator::rendererInterface::value().GetPipelinesMade());
 		}
 		frameStart = frameEnd;
 		// A close of the window ends the game here, at the end of the frame, but not during a script's cut scene
@@ -5005,6 +5185,10 @@ void Game::StartLandAudio()
 	{
 		// The -NOLOADMUSIC switch: the game loads none of its music banks, so none of its music plays
 		_gameMusic = std::make_unique<audio::GameMusic>(!_launchSwitches.noLoadMusic);
+		if (Locator::scriptMusicSystem::has_value())
+		{
+			Locator::scriptMusicSystem::value().SetBanksLoaded(!_launchSwitches.noLoadMusic);
+		}
 		if (!_launchSwitches.noLoadMusic)
 		{
 			audio::GameMusic::RegisterBanks();
@@ -5370,6 +5554,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	auto maps = gui::ReadOnlineMapTexts();
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);
+	settings.showPing = Locator::config::value().showPing;
 	return std::make_unique<gui::MultiplayerFrontEnd>(std::move(services), std::move(settings));
 }
 

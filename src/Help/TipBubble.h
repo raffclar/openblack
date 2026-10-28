@@ -64,8 +64,9 @@ constexpr float k_DisplayTimePerHundredth = 0.0002f;
 
 /// A value's share of the way from a to b, held to 0..1
 [[nodiscard]] float Fraction(float value, float a, float b);
-/// The sizes at a depth in front of the camera
-[[nodiscard]] Sizes SizesAt(float depth);
+/// The sizes at a depth in front of the camera, from the near sizes of a bubble: the tip's, unless the caller gives
+/// others
+[[nodiscard]] Sizes SizesAt(float depth, const Sizes& nearSizes = k_NearSizes);
 /// How much of the bubble shows at a depth: fading in close to the camera and out far away
 [[nodiscard]] float DistanceAlpha(float depth);
 
@@ -88,7 +89,8 @@ struct Placement
 /// left of the tail the closer the sign is to either edge. Nothing keeps it on the screen. The game's sizes are
 /// pixels of its default screen: every size (the box, margin, line, tail offset, words' shadow) is multiplied by
 /// `pixelScale` so the bubble takes the same share of the screen as there.
-[[nodiscard]] std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth, float pixelScale);
+[[nodiscard]] std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth, float pixelScale,
+                                             const Sizes& nearSizes = k_NearSizes);
 
 /// A corner of the box's shape: a pixel, a place on the bubble's texture and an alpha from 0 to 1
 struct Corner
@@ -239,6 +241,8 @@ struct Line
 	float bottomAlpha {0.0f};
 	float clipTop {0.0f};
 	float clipBottom {0.0f};
+	/// The item of the line, from the bottom up
+	size_t item {0};
 };
 /// The words of the bubble, their shadows first
 struct Words

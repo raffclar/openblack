@@ -508,9 +508,22 @@ void List::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /
 				    {.min = {rect.min.x, std::max(top, rect.min.y)}, .max = {boxRight, std::min(bottom, rect.max.y)}}, 0,
 				    DialogPainter::All, glm::vec4(1.0f));
 			}
-			const auto colour = selected                  ? DialogPainter::k_FocusColour
-			                    : item.colour.has_value() ? *item.colour
-			                                              : TextColour(hoveredItem == i, focused);
+			auto colour = selected                  ? DialogPainter::k_FocusColour
+			              : item.colour.has_value() ? *item.colour
+			                                        : TextColour(hoveredItem == i, focused);
+			if (item.bar.has_value())
+			{
+				const auto x0 = static_cast<float>(rect.min.x + 2);
+				const auto x1 = static_cast<float>(boxRight - 2);
+				const auto y0 = static_cast<float>(std::max(top + 2, rect.min.y));
+				const auto y1 = static_cast<float>(std::min(bottom - 2, rect.max.y));
+				if (y1 > y0)
+				{
+					const auto fill = *item.bar;
+					painter.DrawShape({glm::vec2(x0, y0), {x1, y0}, {x1, y1}, {x0, y1}}, {fill, fill, fill, fill});
+				}
+				colour = DialogPainter::k_ShadowColour;
+			}
 
 			if (drawUnder)
 			{

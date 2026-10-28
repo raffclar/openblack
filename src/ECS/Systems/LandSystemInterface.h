@@ -152,6 +152,14 @@ public:
 
 	/// Plays the turn of the world when it is due, and the own turns of the temple while the player is in it
 	virtual void PlayTurns(simulation::TurnViewInterface& view) = 0;
+	/// The turns of PlayTurns without the work after them, on the calling thread. That thread can be another thread than
+	/// the main thread, while the main thread does no turn and does not change the world. Then the main thread calls
+	/// FinishTurns.
+	virtual void PlayTurnSteps(simulation::TurnViewInterface& view) = 0;
+	/// On the main thread after PlayTurnSteps: the main thread does the work that the turns gave it, and the run record
+	/// keeps the time of the turns played since `turnBefore`, from `start` to `end` (with no end, to now)
+	virtual void FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
+	                         std::optional<std::chrono::steady_clock::time_point> end) = 0;
 	/// The real time between the last two turns
 	[[nodiscard]] virtual std::chrono::steady_clock::duration GetTurnDeltaTime() const = 0;
 	/// Every some turns, the profile of the player keeps the alignment of the player, but not on the testbed

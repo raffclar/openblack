@@ -37,11 +37,13 @@
 /// - Command: tag (u8), then the fields of the command in the order of its structure. A thing is its entity number
 ///   (u32). A place or a velocity is three floats. A let-go has the velocity, then the spin, the origin and the
 ///   angles of the start. A seed or a leash is its number (u8).
+/// - A line of the chat: the count of the players that get it (u8), the god slot of each (u8), then the count of its
+///   characters (u16) and each character as UTF-16 (u16). A taunt has its number (u32) in place of the characters.
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 17;
+inline constexpr uint8_t k_Version = 18;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -100,6 +102,8 @@ enum class CommandTag : uint8_t
 	GiveCallOff = 38,
 	CreatureTattoo = 39,
 	LeashLength = 40,
+	ChatSpeech = 41,
+	ChatTaunt = 42,
 };
 
 /// The sizes of the parts of the frames, in bytes
@@ -119,6 +123,9 @@ inline constexpr size_t k_Ping = k_Header + 12;
 /// The turn, the part and the count of the parts of a world part, before its bytes
 inline constexpr size_t k_WorldPartHead = k_Header + 8;
 } // namespace sizes
+
+/// The most characters in a line of the chat. The game keeps this many characters of a line that comes in.
+inline constexpr size_t k_MostChatCharacters = 1023;
 
 /// The most bytes of the world state in one world part
 inline constexpr size_t k_WorldPartBytes = 60 * 1024;

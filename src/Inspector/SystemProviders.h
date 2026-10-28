@@ -221,6 +221,11 @@ struct AudioState
 	std::string musicPlaying;
 	std::string landMusic;
 	std::string scriptMusic;
+	/// The world's clock of the script's music: the last line cue, the word of that line, and the time since its
+	/// channel started in milliseconds (none when no channel plays)
+	int32_t scriptMusicLine {0};
+	int32_t scriptMusicWord {0};
+	std::optional<int64_t> scriptMusicMs;
 	bool alignmentMusic {false};
 	/// Music scripts have attached to objects, the most recently attached first: the music's name and the object
 	std::vector<std::pair<std::string, uint32_t>> attachedMusic;

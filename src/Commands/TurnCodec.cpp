@@ -12,7 +12,9 @@
 #include <algorithm>
 #include <bit>
 #include <limits>
+#include <string>
 #include <type_traits>
+#include <utility>
 
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFight.h"
@@ -119,6 +121,37 @@ private:
 	size_t _at {0};
 	bool _bad {false};
 };
+
+/// The players that get a line of the chat: their count, then the god slot of each
+void WriteRecipients(Writer& out, const std::vector<PlayerNames>& recipients)
+{
+	out.Byte(static_cast<uint8_t>(recipients.size()));
+	for (const auto recipient : recipients)
+	{
+		out.Byte(static_cast<uint8_t>(recipient));
+	}
+}
+
+/// Reads the players that get a line of the chat. A count or a slot past the slots of the game is out of range.
+DecodeError ReadRecipients(Reader& in, std::vector<PlayerNames>& recipients)
+{
+	const auto count = in.Byte();
+	if (count > player_slots::k_MaxPlayers)
+	{
+		return DecodeError::Value;
+	}
+	recipients.resize(count);
+	for (auto& recipient : recipients)
+	{
+		const auto slot = in.Byte();
+		if (slot >= player_slots::k_MaxPlayers)
+		{
+			return DecodeError::Value;
+		}
+		recipient = static_cast<PlayerNames>(slot);
+	}
+	return in.Bad() ? DecodeError::Truncated : DecodeError::None;
+}
 
 void WriteAction(Writer& out, const Action& action)
 {
@@ -267,6 +300,18 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const LeashLength& command) { out.Float(command.length); },
 	               [](const CreatureFightCheat& /*command*/) {},
 	               [](const TempleLeashOff& /*command*/) {},
+	               [&out](const ChatSpeech& command) {
+		               WriteRecipients(out, command.recipients);
+		               out.Number(static_cast<uint16_t>(command.text.size()));
+		               for (const auto character : command.text)
+		               {
+			               out.Number(static_cast<uint16_t>(character));
+		               }
+	               },
+	               [&out](const ChatTaunt& command) {
+		               WriteRecipients(out, command.recipients);
+		               out.Number(command.taunt);
+	               },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -630,6 +675,41 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::TempleLeashOff:
 		action = TempleLeashOff {};
 		return DecodeError::None;
+	case CommandTag::ChatSpeech:
+	{
+		ChatSpeech speech;
+		if (const auto error = ReadRecipients(in, speech.recipients); error != DecodeError::None)
+		{
+			return error;
+		}
+		const auto length = in.Number<uint16_t>();
+		if (length > k_MostChatCharacters)
+		{
+			return DecodeError::Value;
+		}
+		if (in.Left() < size_t {length} * 2)
+		{
+			return DecodeError::Truncated;
+		}
+		speech.text.resize(length);
+		for (auto& character : speech.text)
+		{
+			character = static_cast<char16_t>(in.Number<uint16_t>());
+		}
+		action = std::move(speech);
+		return DecodeError::None;
+	}
+	case CommandTag::ChatTaunt:
+	{
+		ChatTaunt taunt;
+		if (const auto error = ReadRecipients(in, taunt.recipients); error != DecodeError::None)
+		{
+			return error;
+		}
+		taunt.taunt = in.Number<uint32_t>();
+		action = std::move(taunt);
+		return DecodeError::None;
+	}
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -664,9 +744,28 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 	return DecodeError::None;
 }
 
+/// The players of a line of the chat are slots of the game, and the line is not too long
+[[nodiscard]] bool ValidChat(const Action& action)
+{
+	const auto validRecipients = [](const std::vector<PlayerNames>& recipients) {
+		return recipients.size() <= player_slots::k_MaxPlayers && std::ranges::all_of(recipients, [](PlayerNames recipient) {
+			       return static_cast<size_t>(recipient) < player_slots::k_MaxPlayers;
+		       });
+	};
+	if (const auto* speech = std::get_if<ChatSpeech>(&action); speech != nullptr)
+	{
+		return validRecipients(speech->recipients) && speech->text.size() <= k_MostChatCharacters;
+	}
+	if (const auto* taunt = std::get_if<ChatTaunt>(&action); taunt != nullptr)
+	{
+		return validRecipients(taunt->recipients);
+	}
+	return true;
+}
+
 [[nodiscard]] bool ValidActions(const std::vector<Action>& actions)
 {
-	return actions.size() <= k_MostBlockCommands;
+	return actions.size() <= k_MostBlockCommands && std::ranges::all_of(actions, ValidChat);
 }
 
 [[nodiscard]] bool ValidFrame(const Frame& frame)
@@ -751,6 +850,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const LeashLength& /*command*/) { return CommandTag::LeashLength; },
 	                      [](const CreatureFightCheat& /*command*/) { return CommandTag::CreatureFightCheat; },
 	                      [](const TempleLeashOff& /*command*/) { return CommandTag::TempleLeashOff; },
+	                      [](const ChatSpeech& /*command*/) { return CommandTag::ChatSpeech; },
+	                      [](const ChatTaunt& /*command*/) { return CommandTag::ChatTaunt; },
 	                  },
 	                  action);
 }
@@ -802,6 +903,8 @@ size_t SizeOf(const Action& action) noexcept
 		                   return k_Entity + 5 * creature_tattoo::k_SlotCount + 1 + 2 + command.pictures.size();
 	                   },
 	                   [](const LeashLength& /*command*/) { return size_t {4}; },
+	                   [](const ChatSpeech& command) { return 1 + command.recipients.size() + 2 + (2 * command.text.size()); },
+	                   [](const ChatTaunt& command) { return 1 + command.recipients.size() + 4; },
 	               },
 	               action);
 	return 1 + fields;

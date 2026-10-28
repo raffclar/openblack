@@ -479,6 +479,16 @@ std::vector<std::string> UnregisteredReporter::Fresh(std::span<const std::string
 	return fresh;
 }
 
+uint64_t MixValues(uint64_t stateHash, std::span<const int64_t> values)
+{
+	uint64_t hash = stateHash;
+	for (const auto value : values)
+	{
+		Mix(hash, &value, sizeof(value));
+	}
+	return hash;
+}
+
 uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws)
 {
 	uint64_t hash = k_HashOffset;

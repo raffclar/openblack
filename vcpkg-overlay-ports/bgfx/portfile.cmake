@@ -30,6 +30,8 @@ vcpkg_download_distfile(
 # - webgpu-occlusion-one-map: the occlusion queries copy their results into the readback buffer only while it is not
 #   mapped, and map it once for each copy. A submit that used the mapped buffer was not valid, the browser dropped it,
 #   and after some minutes of such frames the browser stopped the frames of the page.
+# - webgpu-one-submit-per-frame: all passes of a frame go into one command buffer and one submit. A submit for each
+#   pass cost a trip to the GPU process of the browser for each view, and the GPU waited between the submits.
 # A change to shaderc's ESSL output (the WebGL 2 shaders). It does not change the SPIR-V, WGSL, Metal or Direct3D
 # shaders:
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
@@ -62,6 +64,8 @@ vcpkg_extract_source_archive(
     webgpu-vertex-texture-caps.patch
     webgpu-min-max-blend-factors.patch
     webgpu-occlusion-one-map.patch
+    webgpu-one-submit-per-frame.patch
+    webgpu-pipeline-by-content.patch
     essl-no-inline.patch
     d3d12-upload-pages.patch
     d3d12-screenshot-frame.patch

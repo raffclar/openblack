@@ -44,6 +44,7 @@
 #include "Camera/StartCamera.h"
 #include "Common/LoadTimer.h"
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/StringUtils.h"
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
@@ -69,6 +70,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -110,6 +112,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -129,6 +132,7 @@
 #include "LHScriptX/Script.h"
 #include "Level.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
 #include "Online/GodsRingMap.h"
 #include "Online/OnlineMapLand.h"
 #include "Profiler.h"
@@ -181,6 +185,12 @@ std::filesystem::path LandSystem::ChallengePath()
 
 bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change)
 {
+	// A land loads on the main thread. A turn on another thread, such as a script of the story that goes to the next land,
+	// waits while the main thread loads it, and then goes on as it does on the main thread.
+	if (InTurnOnOtherThread())
+	{
+		return CallOnMainThread(MainThreadApi::Renderer, [this, &path, look, change] { return LoadMap(path, look, change); });
+	}
 	const InspectorLoading loading(path.filename().generic_string());
 	auto& fileSystem = Locator::filesystem::value();
 
@@ -316,6 +326,11 @@ bool LandSystem::IsPlaygroundLand(const std::filesystem::path& path) const
 
 bool LandSystem::LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change)
 {
+	if (InTurnOnOtherThread())
+	{
+		return CallOnMainThread(MainThreadApi::Renderer,
+		                        [this, &path, change] { return LoadMapWithFreshScripts(path, change); });
+	}
 	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
 	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
 	// again. None of the last land's scripts go on running on the new land.
@@ -849,6 +864,10 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	// Nor the beat of its scrolls
 	Locator::scriptHighlightSystem::value().Reset();
 	Locator::tipBubbleSystem::value().Reset();
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().Reset();
+	}
 	Locator::handDemoSystem::value().Reset();
 	// The commands that the players made on the old land do nothing on the new land
 	Locator::playerCommandSystem::value().Reset();
@@ -992,6 +1011,11 @@ void LandSystem::StartNewLand(land_change::Kind change)
 		// The game starts running, at the normal speed, as Black & White does
 		clock.StartGameClock(false);
 		clock.SetSpeed(1.0f / k_NormalTurnDurationMultiplier);
+	}
+	// A new land starts with no music of the scripts
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		Locator::scriptMusicSystem::value().Reset();
 	}
 	View().StartLandAudio();
 }
@@ -1243,12 +1267,43 @@ void LandSystem::PlayTurns(simulation::TurnViewInterface& view)
 	auto gameLogic = profiler.BeginScoped(Profiler::Stage::GameLogic);
 	const auto turnBefore = Locator::time::value().GetTurn();
 	const auto logicStart = std::chrono::steady_clock::now();
+	PlayDueTurns(view);
+	FinishTurns(turnBefore, logicStart, std::nullopt);
+}
+
+void LandSystem::PlayTurnSteps(simulation::TurnViewInterface& view)
+{
+	auto gameLogic = Locator::profiler::value().BeginScoped(Profiler::Stage::GameLogic);
+	PlayDueTurns(view);
+}
+
+void LandSystem::PlayDueTurns(simulation::TurnViewInterface& view)
+{
+	// The queue knows that this thread does the turns, so that the check can find turn code that uses the services of the
+	// main thread directly
+	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
+	std::optional<MainThreadQueue::TurnScope> turnScope;
+	if (queue != nullptr)
+	{
+		turnScope.emplace(*queue);
+	}
 	GameLogicLoop(view);
+}
+
+void LandSystem::FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
+                             std::optional<std::chrono::steady_clock::time_point> end)
+{
+	// The main thread does the work that the turns gave it. Turns on the main thread do their work at once, so then no
+	// work waits here.
+	if (Locator::mainThreadQueue::has_value())
+	{
+		Locator::mainThreadQueue::value().RunPending();
+	}
 	// The run record keeps the time of each turn
 	if (Locator::time::value().GetTurn() != turnBefore)
 	{
 		Locator::simulation::value().TurnPlayed(
-		    std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - logicStart).count());
+		    std::chrono::duration<float, std::milli>(end.value_or(std::chrono::steady_clock::now()) - start).count());
 	}
 }
 

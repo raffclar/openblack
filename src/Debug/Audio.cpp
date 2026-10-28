@@ -26,6 +26,7 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Game.h"
@@ -178,10 +179,18 @@ void Audio::Music() noexcept
 	{
 		ImGui::Text("Playing: %s", std::string(audio::GetMusicTypeName(gameMusic->GetPlaying())).c_str());
 		ImGui::Text("Land music: %s", std::string(audio::GetMusicTypeName(gameMusic->GetLandType())).c_str());
-		ImGui::Text("Script music: %s", std::string(audio::GetMusicTypeName(gameMusic->GetScriptType())).c_str());
 		ImGui::Text("Played out: %s, %u turns ago", std::string(audio::GetMusicTypeName(gameMusic->GetBlockedType())).c_str(),
 		            gameMusic->GetBlockedTurns());
 		ImGui::Text("Alignment music %s", gameMusic->IsAlignmentMusicEnabled() ? "enabled" : "disabled");
+	}
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+		const auto time = script.GetChannelTime();
+		ImGui::Text("Script music: %s, line %d, word %d, %lld ms",
+		            std::string(audio::GetMusicTypeName(script.GetType())).c_str(), script.GetLyrics().line,
+		            script.GetLyrics().word,
+		            static_cast<long long>(time ? std::chrono::duration_cast<std::chrono::milliseconds>(*time).count() : 0));
 	}
 	// Moves the player's alignment to hear the land's music change version, where the player is the most influential
 	if (Locator::alignmentSystem::has_value())

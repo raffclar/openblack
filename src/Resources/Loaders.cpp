@@ -47,6 +47,7 @@
 #include "3D/LowResolutionTextures.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/ClipSounds.h"
+#include "Audio/MusicTimingFile.h"
 #include "Audio/SoundDecoder.h"
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
@@ -179,6 +180,19 @@ ClipSoundsLoader::result_type ClipSoundsLoader::operator()(FromDiskTag, const st
 ClipSoundsLoader::result_type ClipSoundsLoader::operator()(EmptyTag) const
 {
 	return std::make_shared<audio::clip_sounds::ClipSoundTable>();
+}
+
+MusicTimingLoader::result_type MusicTimingLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	const auto data = Locator::filesystem::value().ReadAll(path);
+	auto timing = audio::ReadMusicTiming(data);
+	return timing.has_value() ? std::make_shared<audio::MusicTiming>(std::move(*timing))
+	                          : std::make_shared<audio::MusicTiming>();
+}
+
+MusicTimingLoader::result_type MusicTimingLoader::operator()(EmptyTag) const
+{
+	return std::make_shared<audio::MusicTiming>();
 }
 
 PhysicsMaterialsLoader::result_type PhysicsMaterialsLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

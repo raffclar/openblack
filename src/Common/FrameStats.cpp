@@ -25,7 +25,7 @@ Summary Summarise(std::span<const float> milliseconds)
 	}
 	std::vector<float> sorted(milliseconds.begin(), milliseconds.end());
 	std::ranges::sort(sorted);
-	// The nearest rank: the smallest time that at least the given part of the frames are no longer than
+	// The nearest rank: the smallest time that at least this part of the frames are no longer than
 	const auto rank = [&sorted](size_t percent) {
 		return sorted.at(std::max<size_t>((sorted.size() * percent + 99) / 100, 1) - 1);
 	};
@@ -33,6 +33,7 @@ Summary Summarise(std::span<const float> milliseconds)
 	return {
 	    .count = sorted.size(),
 	    .average = static_cast<float>(total / static_cast<double>(sorted.size())),
+	    .p50 = rank(50),
 	    .p95 = rank(95),
 	    .p99 = rank(99),
 	    .max = sorted.back(),

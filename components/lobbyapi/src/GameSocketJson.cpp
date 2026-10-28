@@ -235,6 +235,28 @@ bool ReadStart(const Json& object, Start& start)
 			start.names.push_back(name.get<std::string>());
 		}
 	}
+	// Each god of the list has a slot and a name
+	const auto gods = object.find("gods");
+	if (gods == object.end())
+	{
+		return true;
+	}
+	if (!gods->is_array())
+	{
+		return false;
+	}
+	constexpr uint64_t k_MostSlot = std::numeric_limits<uint8_t>::max();
+	for (const auto& entry : *gods)
+	{
+		God god;
+		uint64_t slot = 0;
+		if (!entry.is_object() || !ReadUnsigned(entry, "slot", k_MostSlot, slot) || !ReadString(entry, "name", god.name))
+		{
+			return false;
+		}
+		god.slot = static_cast<uint8_t>(slot);
+		start.gods.push_back(std::move(god));
+	}
 	return true;
 }
 
@@ -281,6 +303,14 @@ void WriteStart(const Start& start, Json& object)
 	if (!start.names.empty())
 	{
 		object["names"] = start.names;
+	}
+	if (!start.gods.empty())
+	{
+		auto& gods = object["gods"] = Json::array();
+		for (const auto& god : start.gods)
+		{
+			gods.push_back({{"slot", god.slot}, {"name", god.name}});
+		}
 	}
 }
 

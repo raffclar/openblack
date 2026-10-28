@@ -151,6 +151,8 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-row-dump", .takesValue = true},
     DeveloperOption {.name = "sim-row-dump-turn", .takesValue = true},
     DeveloperOption {.name = "sim-row-dump-keep", .takesValue = true},
+    DeveloperOption {.name = "turn-api-check", .takesValue = true},
+    DeveloperOption {.name = "turn-beside-draw"},
     DeveloperOption {.name = "sim-record", .takesValue = true},
     DeveloperOption {.name = "sim-record-every", .takesValue = true},
     DeveloperOption {.name = "sim-start-paused"},

@@ -70,6 +70,7 @@
 #include "Blast/RootsPile.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/Platform.h"
 #include "Common/UserData.h"
 #include "Common/WorkerPool.h"
@@ -1452,7 +1453,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				bindings.diffuse = UINT16_MAX;
 				if (subMeshTexture != nullptr)
 				{
-					program->SetTextureSampler("s_diffuse", 0, *subMeshTexture);
+					setSampler(MeshUniform::Diffuse, 0, *subMeshTexture);
 					bindings.diffuse = toBgfx(*subMeshTexture).idx;
 				}
 				else if (desc.skinTexture != nullptr && prim.skinID != 0xFFFFFFFF)
@@ -1464,7 +1465,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				{
 					const auto diffuse =
 					    desc.useMaterialAddressing && !material_stages::TextureRepeats(prim.materialFlags, false)
-					        ? program->FindUniform("s_diffuse")
+					        ? uniforms[static_cast<size_t>(MeshUniform::Diffuse)]
 					        : std::nullopt;
 					if (diffuse.has_value())
 					{
@@ -1478,7 +1479,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				}
 				else if (!desc.isSky && _whiteTexture)
 				{
-					program->SetTextureSampler("s_diffuse", 0, *_whiteTexture);
+					setSampler(MeshUniform::Diffuse, 0, *_whiteTexture);
 					bindings.diffuse = toBgfx(*_whiteTexture).idx;
 				}
 			}
@@ -1522,17 +1523,17 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const bool before = desc.heldMirror.has_value() && _before.texturesKept;
 				if (before)
 				{
-					program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosityBefore());
-					program->SetTextureSampler("s_landColour", 8, *_before.colour);
+					setSampler(MeshUniform::LandLuminosity, 6, GetLandLuminosityBefore());
+					setSampler(MeshUniform::LandColour, 8, *_before.colour);
 				}
 				else
 				{
-					program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
-					program->SetTextureSampler("s_landColour", 8, GetLandColour());
+					setSampler(MeshUniform::LandLuminosity, 6, GetLandLuminosity());
+					setSampler(MeshUniform::LandColour, 8, GetLandColour());
 				}
-				program->SetTextureSampler(
-				    "s_landLight", 7,
-				    desc.heldMirror.has_value() && _before.landLight.has_value() ? *_before.landLight : GetLandLightTexture());
+				setSampler(MeshUniform::LandLightTexture, 7,
+				           desc.heldMirror.has_value() && _before.landLight.has_value() ? *_before.landLight
+				                                                                        : GetLandLightTexture());
 				setUniform(MeshUniform::LandLight, &u_landLight);
 			}
 			if (has(MeshUniform::Haze))
@@ -5968,6 +5969,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 
 bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::WarmUpScene");
 	// The draws into the window keep to one pixel. The renderer makes a pipeline for each draw that has pixels.
 	for (const auto view : warm_up::k_WindowSceneViews)
 	{
@@ -6006,6 +6008,7 @@ bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const n
 
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
 	SelectDrawnCreatures(drawDesc);
 	// A warm-up gives no creature a skin texture: each creature gets them in its first frame
 	if (!_warmingUp)
@@ -6458,19 +6461,24 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			if (!blocks.empty())
 			{
-				// The land's pass keeps the order the blocks come in, so they come the nearest first
-				std::vector<size_t> order(blocks.size());
-				std::iota(order.begin(), order.end(), size_t {0});
-				std::ranges::stable_sort(order, {}, [&](size_t index) { return blockDepth(blocks[index]); });
-				setTerrainUniforms();
 				// Only the blocks in view of the scene's own camera are drawn, also when they are mirrored
 				const bool culled = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Reflection;
-				for (const auto index : order)
+				// The land's pass keeps the order the blocks come in, so they come the nearest first. Each block's depth is
+				// found one time, and only the blocks that are drawn are put in order.
+				std::vector<std::pair<decltype(blockDepth(blocks.front())), size_t>> order;
+				order.reserve(blocks.size());
+				for (size_t index = 0; index < blocks.size(); ++index)
 				{
 					if (!culled || index >= _landDetail.inView.size() || _landDetail.inView[index])
 					{
-						submitBlock(index);
+						order.emplace_back(blockDepth(blocks[index]), index);
 					}
+				}
+				std::ranges::stable_sort(order, {}, [](const auto& entry) { return entry.first; });
+				setTerrainUniforms();
+				for (const auto& entry : order)
+				{
+					submitBlock(entry.second);
 				}
 			}
 			_shaderManager->DiscardBindings();
@@ -8156,6 +8164,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 
 void Renderer::BakeLandShadows(bool drawVegetation) const noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::BakeLandShadows");
 	// The game bakes the shadows of the buildings, rocks and other things, and of the trees and big forests, into the
 	// land as it paints it. The trees' shadows that move with them are drawn each frame, not baked.
 	const bool movingTrees = drawVegetation && Locator::config::value().dynamicTreeShadows;
@@ -8186,6 +8195,7 @@ void Renderer::ReleaseGpuWorkMemory() noexcept
 
 void Renderer::Frame() noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::Frame");
 	// In a warm-up's frame the loading screen's view first clears all of the window as the main view clears it. This is
 	// set after every draw of the frame, as the loading screen sets its view too.
 	const bool warmUp = std::exchange(_warmUpInFrame, false);
@@ -8220,13 +8230,15 @@ void Renderer::Frame() noexcept
 
 void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::RequestScreenshot");
 	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
 	const auto size = Locator::windowing::has_value() ? glm::u16vec2(Locator::windowing::value().GetSize()) : glm::u16vec2(0);
 	// All the renderers of bgfx can copy and read back textures
 	constexpr bool k_CanReadBack = true;
 	// Vulkan releases the window's buffers while the window is minimised. OpenGL on the desktop reads the window's own
 	// pixels, which have no defined value where other windows cover the window. This often occurs in background runs.
-	// The other renderers keep the whole frame in the window's buffers.
+	// In a browser, WebGPU gets a new canvas texture for each frame and releases it after it shows the frame. The other
+	// renderers keep the whole frame in the window's buffers.
 	auto buffers = graphics::WindowBuffers::Kept;
 	switch (bgfx::getRendererType())
 	{
@@ -8235,6 +8247,9 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 		break;
 	case bgfx::RendererType::OpenGL:
 		buffers = graphics::WindowBuffers::UncoveredOnly;
+		break;
+	case bgfx::RendererType::WebGPU:
+		buffers = graphics::WindowBuffers::ReleasedAfterPresent;
 		break;
 	default:
 		break;
@@ -8270,6 +8285,7 @@ std::optional<std::string> Renderer::TakeScreenshotFailure(const std::filesystem
 
 void Renderer::RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::RequestScreenPicture");
 	_bgfxCallback->pictures.Ask(name, std::move(picturer));
 	RequestScreenshot(name);
 }

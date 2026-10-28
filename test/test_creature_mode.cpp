@@ -73,6 +73,14 @@ TEST(CreatureFollow, StaysAboutAsCloseWhenAlreadyClose)
 	EXPECT_FLOAT_EQ(view.distance, 30.0f);
 }
 
+TEST(CreatureFollow, AClickOnTheIncomingMessageAlwaysStartsAtTheViewingDistance)
+{
+	const glm::vec3 creature {0.0f, 0.0f, 0.0f};
+	const auto view =
+	    creature_follow::Start({0.0f, 30.0f, -40.0f}, creature, creature, 15.0f, creature_follow::StartDistance::Viewing);
+	EXPECT_FLOAT_EQ(view.distance, 120.0f);
+}
+
 TEST(CreatureFollow, KeepsWithinItsBounds)
 {
 	auto view = creature_follow::Clamped(View(0.0f, -1.0f, 0.5f));

@@ -22,7 +22,7 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/GameMusic.h"
+#include "Audio/MusicType.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
@@ -62,6 +62,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -71,7 +72,6 @@
 #include "ECS/TownCentreParts.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSiteConstruction.h"
-#include "Game.h"
 #include "Graphics/MeshDetail.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -144,7 +144,7 @@ std::optional<int32_t> TownOf(entt::entity building)
 /// A temple finished plays its music and saves the game, as the rules let it
 void TempleFinished(PlayerNames owner)
 {
-	auto* music = Game::Instance() != nullptr ? Game::Instance()->GetGameMusic() : nullptr;
+	auto* music = Locator::scriptMusicSystem::has_value() ? &Locator::scriptMusicSystem::value() : nullptr;
 	// The game server and an observer have no player of their own
 	const bool local =
 	    Locator::handSystem::has_value() ? Locator::handSystem::value().IsOwnPlayer(owner) : owner == PlayerNames::PLAYER_ONE;
@@ -157,14 +157,14 @@ void TempleFinished(PlayerNames owner)
 	const auto temple = building_construction::FinishedTemple {
 	    .localPlayers = local,
 	    .scriptCutScene = cutScene,
-	    .scriptMusic = music != nullptr && music->GetScriptType() != audio::MusicType::None,
+	    .scriptMusic = music != nullptr && music->GetMusic().GetType() != audio::MusicType::None,
 	    .landNumber = Entities().Context().mapScriptGlobals.landNumber,
 	    .skirmish = Entities().Context().skirmish,
 	    .networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
 	};
 	if (music != nullptr && building_construction::PlaysFinishedMusic(temple))
 	{
-		music->StartScriptMusic(k_FinishedTempleMusic);
+		music->Start(k_FinishedTempleMusic);
 	}
 	// Then the game saves itself into the slot of the save on exit
 	if (building_construction::SavesOnFinish(temple) && Locator::saveGameSystem::has_value())

@@ -21,11 +21,13 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <LobbyApiJson.h>
 #include <gtest/gtest.h>
 
+#include "Commands/TurnCodec.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
@@ -34,6 +36,7 @@
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
 #include "Gui/ScreenFit.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkSession.h"
@@ -264,6 +267,8 @@ struct FrontEndTest: public ::testing::Test
 	FakeLan lan;
 	std::vector<std::string> opened;
 	std::unique_ptr<MultiplayerFrontEnd> frontEnd;
+	/// The ping display of the room, as --show-ping turns it on
+	bool showPing {false};
 
 	void Make(bool withLan = false)
 	{
@@ -284,6 +289,7 @@ struct FrontEndTest: public ::testing::Test
 		    .browser = false,
 		    .localMaps = std::string(k_LocalMaps),
 		    .conditionTemplate = std::string(k_Conditions),
+		    .showPing = showPing,
 		};
 		frontEnd = std::make_unique<MultiplayerFrontEnd>(std::move(services), std::move(settings));
 	}
@@ -380,6 +386,7 @@ TEST(MultiplayerRules, JoinFailuresGiveTheGamesMessages)
 	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "email_required"), Message::EmailRequired);
 	EXPECT_EQ(JoinFailureMessage("already", LobbyKind::Internet), Message::AlreadyInRoom);
 	EXPECT_EQ(JoinFailureMessage("started", LobbyKind::Internet), Message::ConnectionFailed);
+	EXPECT_EQ(JoinFailureMessage("kicked", LobbyKind::Internet), Message::ConnectionFailed);
 	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Internet), Message::ConnectionFailed);
 	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Lan), Message::CouldNotConnect);
 	EXPECT_EQ(ButtonsOf(Message::IncorrectPassword), MessageButtons::Ok);
@@ -861,6 +868,24 @@ TEST_F(FrontEndTest, TheServerRefusesAnAccountThatIsInTheRoom)
 	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "already"}));
 	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::AlreadyInRoom);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_FALSE(frontEnd->IsBusy());
+}
+
+TEST_F(FrontEndTest, AJoinThatTheServerRefusesForABanShowsConnectionFailed)
+{
+	// The game server refuses the join of a banned god with a kick. The player was not in the room, so the game shows
+	// the failed join, as the channel of a host refuses a banned player.
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "kicked"}));
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
 	EXPECT_FALSE(frontEnd->IsBusy());
 }
@@ -1498,4 +1523,38 @@ TEST_F(FrontEndTest, TheRoomsPicturesAreInTheFrameOfTheRoom)
 	room.Next();
 	boxes.Update(0.0f);
 	EXPECT_TRUE(boxes.GetPictureRects().empty());
+}
+
+TEST_F(FrontEndTest, ThePingDisplayIsOffByDefault)
+{
+	ToRoom();
+	EXPECT_FALSE(frontEnd->ShowsPing());
+}
+
+TEST_F(FrontEndTest, TheRoomGivesTheRoundTripOfTheOwnGameSocket)
+{
+	showPing = true;
+	ToRoom();
+	EXPECT_TRUE(frontEnd->ShowsPing());
+	EXPECT_FALSE(frontEnd->GetRoundTrip().has_value());
+	const auto socket = sockets.order.back();
+	sockets.TakeSent(socket);
+	// The session pings the server one second after the join
+	network.now = 1'000'000;
+	Step();
+	std::optional<turn_codec::Ping> ping;
+	for (const auto& sent : sockets.TakeSent(socket))
+	{
+		const auto decoded = sent.text ? turn_codec::DecodeResult {} : turn_codec::Decode(sent.bytes);
+		if (decoded.frame.has_value() && std::holds_alternative<turn_codec::Ping>(*decoded.frame))
+		{
+			ping = std::get<turn_codec::Ping>(*decoded.frame);
+		}
+	}
+	ASSERT_TRUE(ping.has_value());
+	network.now += 48'000;
+	sockets.ServerBinary(socket, turn_codec::Encode(turn_codec::Pong {.id = ping->id, .time = ping->time}));
+	Step();
+	EXPECT_EQ(frontEnd->GetRoundTrip(), 48'000u);
+	EXPECT_EQ(ping_display::Text(frontEnd->GetRoundTrip()), u"ping 48");
 }

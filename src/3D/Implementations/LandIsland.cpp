@@ -37,6 +37,7 @@
 #include "3D/LandNormal.h"
 #include "3D/LandReuse.h"
 #include "3D/MapCoords.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/PortableRotations.h"
 #include "Common/WorkerPool.h"
 #include "EngineConfig.h"
@@ -511,6 +512,7 @@ size_t LandIsland::RestoreBuiltAltitudes()
 
 void LandIsland::CommitAltitudeChanges()
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "LandIsland::CommitAltitudeChanges");
 	if (_changedCorners.Empty())
 	{
 		return;

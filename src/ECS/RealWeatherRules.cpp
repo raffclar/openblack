@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <ranges>
 
 #include <fmt/format.h>
 
@@ -222,6 +223,83 @@ std::string PlaceText(std::string_view city, std::string_view area, std::string_
 		return fmt::format("{} ({})", city, country);
 	}
 	return fmt::format("{} ({},{})", city, area, country);
+}
+
+std::vector<Country> ParseCountries(std::string_view text)
+{
+	// The game reads the file as text, thus a byte 26 stops the file
+	if (const auto end = text.find('\x1A'); end != std::string_view::npos)
+	{
+		text = text.substr(0, end);
+	}
+	const auto atEnd = [](char c) { return c == '\0' || c == '\n'; };
+	std::vector<Country> countries;
+	while (!text.empty())
+	{
+		// One read takes the text up to and with the next line feed, but no more than the longest line
+		const auto length = std::min({text.find('\n'), text.size() - 1, k_CountryLineBytes - 1}) + 1;
+		std::string line(text.substr(0, length));
+		text.remove_prefix(length);
+		// The game reads the file as text, which drops the carriage return before a line feed
+		if (line.ends_with("\r\n"))
+		{
+			line.erase(line.size() - 2, 1);
+		}
+		const auto codeEnd = std::ranges::find_if(line, [&atEnd](char c) { return atEnd(c) || c == '='; });
+		auto code = std::string(line.begin(), codeEnd);
+		auto nameStart = codeEnd;
+		if (nameStart != line.end() && *nameStart != '\0')
+		{
+			++nameStart;
+		}
+		auto name = std::string(nameStart, std::find_if(nameStart, line.end(), atEnd));
+		// The name goes three bytes after the start of the code, over the letters of the code after the third
+		if (code.size() >= 3)
+		{
+			code = code.substr(0, 3) + name;
+		}
+		countries.push_back({.code = std::move(code), .name = std::move(name)});
+	}
+	return countries;
+}
+
+std::string_view CountryName(std::span<const Country> countries, std::string_view code)
+{
+	auto lastFirst = countries | std::views::reverse;
+	const auto found = std::ranges::find(lastFirst, code, &Country::code);
+	return found == lastFirst.end() ? k_NoCountryName : std::string_view(found->name);
+}
+
+std::vector<uint8_t> DaysFile(std::span<const KeptDay> days)
+{
+	constexpr std::string_view k_Magic = "LHWD";
+	std::vector<uint8_t> bytes(k_DaysHeaderBytes + days.size() * k_DayBytes, 0);
+	std::memcpy(bytes.data(), k_Magic.data(), k_Magic.size());
+	const auto count = static_cast<uint32_t>(days.size());
+	std::memcpy(bytes.data() + k_Magic.size(), &count, sizeof(count));
+
+	for (size_t index = 0; index < days.size(); ++index)
+	{
+		const auto& kept = days[index];
+		const auto day = std::span(bytes).subspan(k_DaysHeaderBytes + index * k_DayBytes, k_DayBytes);
+		const auto text = [&day](size_t offset, size_t space, std::string_view value) {
+			std::memcpy(day.data() + offset, value.data(), std::min(value.size(), space - 1));
+		};
+		const auto number = [&day](size_t offset, auto value) { std::memcpy(day.data() + offset, &value, sizeof(value)); };
+		text(0x000, k_DayCountryBytes, kept.country);
+		text(0x003, k_DayPlaceBytes, kept.area);
+		text(0x099, k_DayPlaceBytes, kept.city);
+		number(0x130, static_cast<int16_t>(kept.temperature));
+		number(0x132, static_cast<int16_t>(kept.unusedFirst));
+		number(0x134, static_cast<int16_t>(kept.visibility));
+		number(0x136, static_cast<int16_t>(kept.unusedThird));
+		number(0x138, static_cast<uint8_t>(kept.unusedSecond));
+		number(0x139, static_cast<uint8_t>(kept.day));
+		number(0x13A, static_cast<uint8_t>(kept.month));
+		number(0x13C, static_cast<int16_t>(kept.year));
+		number(0x140, kept.type);
+	}
+	return bytes;
 }
 
 } // namespace openblack::ecs::real_weather

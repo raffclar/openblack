@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Online/StartRules.h"
+#include "Server/LobbyBans.h"
 
 namespace openblack::server
 {
@@ -219,6 +220,12 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 	    .role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name, .start = _settings.start};
 	if (claims.role == game_socket::Role::God)
 	{
+		// The room refuses a god that the lobby banned, as the host's channel refuses a banned player
+		if (lobby_bans::IsBanned(claims.subject, _bans))
+		{
+			Refuse(connection, "kicked");
+			return;
+		}
 		const auto same = std::ranges::find_if(
 		    _seats, [&claims](const Seat& seat) { return seat.state != SeatState::Open && seat.account == claims.subject; });
 		if (same != _seats.end())
@@ -354,6 +361,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	});
 	auto start = _settings.start;
 	start.turn = _turnsDone;
+	start.gods = Gods();
 	game_socket::Joined joined {
 	    .role = game_socket::Role::Observer, .slot = std::nullopt, .session = {}, .name = claims.name, .start = start};
 	if (own != _seats.end())
@@ -653,6 +661,7 @@ void LockstepHost::StartGame()
 	{
 		start.names.push_back(seat.state == SeatState::Taken ? seat.name : std::string());
 	}
+	start.gods = Gods();
 	const auto gods = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 	Log(spdlog::level::info, fmt::format("The network game starts with {} gods", gods));
 	// The first turn names the humans of the game on every computer: each gets its player and its hands, and the slots
@@ -665,6 +674,45 @@ void LockstepHost::StartGame()
 		}
 	}
 	Broadcast(start);
+}
+
+std::vector<game_socket::God> LockstepHost::Gods() const
+{
+	std::vector<game_socket::God> gods;
+	for (size_t i = 0; i < _seats.size(); ++i)
+	{
+		if (_seats[i].state == SeatState::Taken || _seats[i].state == SeatState::Away)
+		{
+			gods.push_back({.slot = static_cast<uint8_t>(i), .name = _seats[i].name});
+		}
+	}
+	return gods;
+}
+
+void LockstepHost::SetBans(std::set<int64_t> accounts)
+{
+	_bans = std::move(accounts);
+	if (_started)
+	{
+		return;
+	}
+	const auto banned = lobby_bans::BannedSeats(_seats, _bans);
+	for (const auto seat : banned)
+	{
+		// The server takes the banned god out of the room, as the host kicks a player that it bans
+		Log(spdlog::level::info, fmt::format("The lobby banned the player of slot {}: the player leaves the room", seat));
+		const auto connection = _seats[seat].connection;
+		_seats[seat] = Seat {};
+		if (connection.has_value())
+		{
+			Refuse(*connection, "kicked");
+		}
+	}
+	// A god who leaves during the start stops the start
+	if (!banned.empty() && Starting())
+	{
+		StopStart(game_socket::StartStop {});
+	}
 }
 
 void LockstepHost::StopStart(const game_socket::Frame& why)

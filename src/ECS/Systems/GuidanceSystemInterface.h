@@ -78,6 +78,8 @@ public:
 	virtual void AlignmentTurn(float change) = 0;
 	/// A remark said at most once a land, at its chance
 	virtual void SayOneOff(guidance::OneOff oneOff) = 0;
+	/// The advisors say a text at once, as they say a remark of this kind, and the kind counts as heard
+	virtual void SayText([[maybe_unused]] uint32_t text, [[maybe_unused]] guidance::Kind kind) {}
 	/// The player here killed a villager: the advisors speak of it when the villager is on screen
 	virtual void KilledVillager(entt::entity villager) = 0;
 	/// A creature won its duel because its opponent has no life left. For a creature of the player here, the advisors

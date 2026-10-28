@@ -113,6 +113,7 @@ public:
 	void Activate(TempleRoom room) override;
 	void ActivateAfterFrame(TempleRoom room) override;
 	void FrameDrawn() override;
+	[[nodiscard]] bool GoesInAfterFrame() const override { return _activateAfterFrame.has_value(); }
 	void EnterLockedRoom(TempleRoom room) override;
 	[[nodiscard]] bool TakeGameEnded() override { return _lock.TakeEnded(); }
 	void Deactivate() override;
