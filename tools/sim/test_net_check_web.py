@@ -57,16 +57,18 @@ class WebJoinPlan(unittest.TestCase):
         return argparse.Namespace(frame_ms=20.0, web_chat=chats)
 
     def test_the_plan_joins_with_the_ticket_and_plays_the_turns(self):
-        plan = net_check.web_join_plan(self.options([]), "wss://127.0.0.1:5000/game/x", "ticket", "spki", 600)
+        plan = net_check.web_join_plan(self.options([]), "wss://127.0.0.1:5000/game/x", "ticket", 600)
         arguments = plan["arguments"]
-        self.assertEqual(arguments[arguments.index("--join") + 1], "wss://127.0.0.1:5000/game/x")
+        # The page opens its game socket on its own origin, which passes it to the game server
+        self.assertEqual(arguments[arguments.index("--join") + 1], "/game/x")
+        self.assertEqual(plan["join_url"], "wss://127.0.0.1:5000/game/x")
         self.assertEqual(arguments[arguments.index("--join-ticket") + 1], "ticket")
         self.assertEqual(arguments[arguments.index("--sim-until-turn") + 1], "600")
         self.assertEqual(plan["actions"], [])
         self.assertEqual(plan["seconds"], net_check.run_limit_seconds(600))
 
     def test_a_line_of_the_text_keeps_its_colons(self):
-        plan = net_check.web_join_plan(self.options(["300:a:b"]), "wss://127.0.0.1:5000/game/x", "t", "s", 600)
+        plan = net_check.web_join_plan(self.options(["300:a:b"]), "wss://127.0.0.1:5000/game/x", "t", 600)
         keys = "".join(step["key"] for step in plan["actions"] if step["do"] == "key" and len(step["key"]) == 1)
         self.assertEqual(keys, "a:b")
 
@@ -96,25 +98,18 @@ import serve  # noqa: E402
 
 
 class ServePage(unittest.TestCase):
-    PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "web", "page", "index.html")
+    def test_the_proxy_takes_only_a_game_server_on_this_computer(self):
+        self.assertEqual(serve.upstream_of("wss://127.0.0.1:5000"), ("127.0.0.1", 5000))
+        self.assertIsNone(serve.upstream_of("wss://example.com:5000"))
+        self.assertIsNone(serve.upstream_of("ws://127.0.0.1:5000"))
 
-    def test_the_meta_policy_of_the_page_lets_the_page_connect_to_the_test_server(self):
-        with open(self.PAGE, encoding="utf-8") as file:
-            html = file.read()
-        served = serve.page_with_connect(html, "wss://127.0.0.1:5000")
-        self.assertIn("connect-src 'self' wss://127.0.0.1:5000;", served)
-        self.assertEqual(served.count("wss://127.0.0.1:5000"), 1)
+    def test_the_request_goes_on_with_the_host_of_the_game_server(self):
+        head = serve.request_head("GET /game/x HTTP/1.1", {"Host": "127.0.0.1:443", "Upgrade": "websocket"},
+                                  "127.0.0.1:5000")
+        self.assertEqual(head, b"GET /game/x HTTP/1.1\r\nHost: 127.0.0.1:5000\r\nUpgrade: websocket\r\n\r\n")
 
-    def test_with_no_origin_the_page_stays_as_it_is(self):
-        html = "<meta http-equiv=\"Content-Security-Policy\" content=\"connect-src 'self'; img-src 'self'\">"
-        self.assertEqual(serve.page_with_connect(html, ""), html)
-
-    def test_only_the_connect_src_of_the_meta_policy_changes(self):
-        html = ("<p>connect-src 'self'</p><meta http-equiv=\"Content-Security-Policy\" "
-                "content=\"default-src 'self'; connect-src 'self'; img-src 'self'\">")
-        self.assertEqual(serve.page_with_connect(html, "ws://127.0.0.1:1"),
-                         "<p>connect-src 'self'</p><meta http-equiv=\"Content-Security-Policy\" "
-                         "content=\"default-src 'self'; connect-src 'self' ws://127.0.0.1:1; img-src 'self'\">")
+    def test_the_path_of_the_join_is_on_the_origin_of_the_page(self):
+        self.assertEqual(net_check.web_join_path("wss://127.0.0.1:5000/game/net-check-1"), "/game/net-check-1")
 
 
 if __name__ == "__main__":

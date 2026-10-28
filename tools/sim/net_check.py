@@ -1040,40 +1040,49 @@ def web_chat_steps(chats, seconds, width=WEB_WIDTH):
     return steps
 
 
-def web_join_plan(options, join_url, ticket, spki, turns):
-    """What the web client needs to play: the arguments of the game in the page, the steps of its input, the turns, the
-    time limit of the run and the key of the test server's certificate. A remote web client gets it as web/join.json."""
+def web_join_path(join_url):
+    """The path of the game socket that the page opens on its own origin: the web build opens no socket to another
+    origin, so the server of the page passes this path to the game server, as the proxy of the site does"""
+    return "/" + join_url.split("://", 1)[1].split("/", 1)[1]
+
+
+def web_join_plan(options, join_url, ticket, turns):
+    """What the web client needs to play: the address of the game server, the arguments of the game in the page, the
+    steps of its input, the turns and the time limit of the run. A remote web client gets it as web/join.json."""
     arguments = ["--skip-logos", "--sim-frame-ms", str(options.frame_ms or 20.0), "--sim-until-turn", str(turns),
-                 "--sim-still-hand", "--sim-checksums", "-", "--join", join_url, "--join-ticket", ticket]
+                 "--sim-still-hand", "--sim-checksums", "-", "--join", web_join_path(join_url), "--join-ticket", ticket]
     if getattr(options, "web_part_at", None) is not None:
         arguments += ["--join-part-at", str(options.web_part_at)]
     seconds = run_limit_seconds(turns)
     chats = [(int(value.split(":", 1)[0]), value.split(":", 1)[1]) for value in options.web_chat]
     return {"join_url": join_url, "arguments": arguments, "actions": web_chat_steps(chats, seconds), "turns": turns,
-            "seconds": seconds, "spki": spki}
+            "seconds": seconds}
 
 
 def run_web_plan(plan, folder, page, chrome, game_path, processes):
     """One web client in headless Chrome: a server for the web page on 127.0.0.1, and cdp-run.mjs, which starts the Chrome
-    with its own profile folder in the folder of the run. The page joins the game server of the plan and writes the
-    checksum of each turn (--sim-checksums -) to checksums.jsonl. Returns the cdp-run process."""
+    with its own profile folder in the folder of the run. The server of the page has a test certificate of its own and
+    passes the game socket of the page to the game server of the plan. The page writes the checksum of each turn
+    (--sim-checksums -) to checksums.jsonl. Returns the cdp-run process."""
     os.makedirs(folder, exist_ok=True)
     checksums = os.path.join(folder, "checksums.jsonl")
     if os.path.exists(checksums):
         os.remove(checksums)
     port = free_port()
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    # The page may connect to the test game server of this run, and to nothing else but itself
+    # The page is an HTTPS page, and its game socket goes to its own origin, which passes it to the game server
+    certs = make_certificates(os.path.join(folder, "page-keys"))
     server = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "scripts", "serve.py"), page, str(port),
-                               "--connect", plan["join_url"].split("/game/")[0]],
+                               "--tls", certs["server.pem"], certs["server.key"],
+                               "--game-proxy", plan["join_url"].split("/game/")[0]],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
     processes.append(server)
     time.sleep(1.0)
     query = "autoplay&args=" + "%20".join(plan["arguments"])
-    url = f"http://127.0.0.1:{port}/index.html?{query}"
+    url = f"https://127.0.0.1:{port}/index.html?{query}"
     command = [DEFAULT_NODE, os.path.join(ROOT, "web", "scripts", "cdp-run.mjs"), chrome, url, str(plan["seconds"]),
                folder, "--game-folder", game_path, "--checksums", checksums, "--checksum-turns", str(plan["turns"]),
-               "--trust-spki", plan["spki"], "--size", f"{WEB_WIDTH}x1024"]
+               "--trust-spki", spki_hash(certs["server.pem"]), "--size", f"{WEB_WIDTH}x1024"]
     if plan["actions"]:
         actions = os.path.join(folder, "web_actions.json")
         with open(actions, "w", encoding="utf-8") as file:
@@ -1090,7 +1099,7 @@ def start_web_client(options, out, join_url, ticket, certs, turns, processes):
     for tools/sim/web_remote.py. Returns the folder of the run and the cdp-run process (none for a remote client)."""
     folder = os.path.join(out, "web")
     os.makedirs(folder, exist_ok=True)
-    plan = web_join_plan(options, join_url, ticket, spki_hash(certs["server.pem"]), turns)
+    plan = web_join_plan(options, join_url, ticket, turns)
     if not options.web_remote:
         return folder, run_web_plan(plan, folder, web_page_of(options), options.chrome, options.game_path, processes)
     for name in ("done", "checksums.jsonl", "console.log", "page-log.txt"):
