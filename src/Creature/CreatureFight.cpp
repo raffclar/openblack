@@ -1357,6 +1357,25 @@ bool creature_fight::WinsByOpponentsLife(float opponentLife, bool scriptControll
 	return !(0.0f < opponentLife) && !scriptControlled;
 }
 
+bool creature_fight::LifePaysAtStop(State state)
+{
+	switch (state)
+	{
+	case State::Start:
+	case State::Stance:
+	case State::Action:
+	case State::BlockStart:
+	case State::Block:
+	case State::BlockEnd:
+	case State::CastStart:
+	case State::Cast:
+	case State::CastEnd:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool creature_fight::WinPlanForced(bool byBlow)
 {
 	return !byBlow;
