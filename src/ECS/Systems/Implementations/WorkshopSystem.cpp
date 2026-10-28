@@ -1233,9 +1233,9 @@ void WorkshopSystem::PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand)
 			shown = PlaceSiteGhost(scaffold, ghost);
 		}
 		// A copy that shows nothing has no model
-		if (!shown && registry.AllOf<Mesh>(ghost))
+		if (!shown)
 		{
-			registry.Remove<Mesh>(ghost);
+			registry.Get<ScaffoldGhost>(ghost).model.reset();
 		}
 		// The scaffold on a site becomes small as the building grows
 		const auto site = registry.Get<const Scaffold>(scaffold).site;
@@ -1299,9 +1299,9 @@ bool WorkshopSystem::PlaceHeldGhost(entt::entity scaffold, entt::entity ghost, g
 	auto& data = registry.Get<ScaffoldGhost>(ghost);
 	data.alpha = scaffold_ghost::k_HeldAlpha;
 	const auto mesh = resources::HashIdentifier(phantom.shown->mesh);
-	if (const auto* drawn = registry.TryGet<const Mesh>(ghost); drawn == nullptr || drawn->id != mesh)
+	if (!data.model.has_value() || data.model->id != mesh)
 	{
-		registry.AssignOrReplace<Mesh>(ghost, mesh, static_cast<int8_t>(0), static_cast<int8_t>(0));
+		data.model = Mesh {.id = mesh, .submeshId = 0, .bbSubmeshId = 0};
 	}
 	return true;
 }
@@ -1322,12 +1322,11 @@ bool WorkshopSystem::PlaceSiteGhost(entt::entity scaffold, entt::entity ghost)
 	}
 	// The phantom on the site is a copy of the building, which fades as the building grows
 	registry.Get<Transform>(ghost) = *building;
-	registry.Get<ScaffoldGhost>(ghost).alpha = scaffold_ghost::SiteAlpha(ecs::construction::BuiltOf(site));
-	// Copied out first: adding to a pool may move what is in it
-	const Mesh copy = *model;
-	if (const auto* drawn = registry.TryGet<const Mesh>(ghost); drawn == nullptr || drawn->id != copy.id)
+	auto& data = registry.Get<ScaffoldGhost>(ghost);
+	data.alpha = scaffold_ghost::SiteAlpha(ecs::construction::BuiltOf(site));
+	if (!data.model.has_value() || data.model->id != model->id)
 	{
-		registry.AssignOrReplace<Mesh>(ghost, copy);
+		data.model = *model;
 	}
 	return true;
 }

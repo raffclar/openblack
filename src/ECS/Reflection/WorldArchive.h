@@ -157,6 +157,13 @@ struct WorldRows
                                     std::span<const HashLeaveOut> leaveOut = {}, bool byField = false,
                                     const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr);
 
+/// Tools: the hash of the order of the rows of each registered component that the hash of the world keeps values of, by
+/// the name of the component, in the order of the names. The order includes the rows that the hash leaves out. When one
+/// computer adds a row that the other computers do not have, the next removal moves another row on that computer. A
+/// component with no values is not in the list, because the hash takes its rows in the order of their entities.
+[[nodiscard]] std::vector<std::pair<std::string, uint64_t>>
+RowOrders(const entt::registry& registry, const entt::meta_ctx& context, std::span<const HashLeaveOut> leaveOut = {});
+
 /// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
 /// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the
 /// others at once.
