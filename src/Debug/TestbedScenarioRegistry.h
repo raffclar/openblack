@@ -356,7 +356,7 @@ struct ObjectSetup
 	/// position. They show the clip of an animal that a script holds still.
 	bool living {false};
 	/// A villager is held by a script where it is put, standing still, as a land's script holds one it makes. An animal
-	/// is made as a land's script makes one, and the script controls it.
+	/// is made as a land's script makes one, and the script controls it. A building is held by a script.
 	bool inScript {false};
 	/// A villager is under the control of a script, as a script controls a villager that it moves: it takes up no
 	/// reaction until the script releases it

@@ -106,6 +106,9 @@ struct EffectDeath
 };
 /// As above; a villager's death is then remembered as killed by an effect, put down to the effect's player
 void DestroyedByEffect(entt::entity object, const EffectDeath& death);
+/// A building that a script holds stays when an effect destroys it. Its town gets a site there if it has none. A building
+/// of no town stays as it is, with its fire. Else an unfinished building gets all of its life again, and its fire stops.
+void KeepForScript(entt::entity building);
 
 /// The player an object belongs to, whom a fire a script lights on it is put down to: a creature's owner; a villager's,
 /// a building's or a field's town's owner; a magic tree's caster. A villager or field without a town, a tree and a dead

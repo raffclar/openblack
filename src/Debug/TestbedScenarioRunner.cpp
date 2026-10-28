@@ -625,6 +625,11 @@ void SetLifeAndPoison(entt::entity entity, const ObjectSetup& object)
 	{
 		registry.AssignOrReplace<ecs::components::Immovable>(entity);
 	}
+	// A building is held by a script as a script holds a thing that one of its variables names
+	if (object.inScript && registry.AnyOf<ecs::components::Abode, ecs::components::SpellDispenser>(entity))
+	{
+		registry.AssignOrReplace<ecs::components::InScript>(entity);
+	}
 	if (object.inScript && registry.AllOf<ecs::components::Villager>(entity) && Locator::livingActionSystem::has_value())
 	{
 		Locator::livingActionSystem::value().VillagerSetScriptState(entity, VillagerStates::InScript);

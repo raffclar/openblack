@@ -13,9 +13,14 @@
 #include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/Construction.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
+#include "ECS/Components/Physics.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -152,4 +157,38 @@ TEST_F(EffectReceivers, OnlyTheHelpReadsTheRowOfTheVortex)
 	registry.Assign<Ball>(ball);
 	EXPECT_EQ(ecs::world_objects::HelpInfoOf(ball), &Locator::infoConstants::value().ball);
 	EXPECT_EQ(ecs::world_objects::HelpInfoOf(Made()), nullptr);
+}
+
+TEST_F(EffectReceivers, AScriptsBuildingOfNoTownStaysAsItIsWhenAnEffectDestroysIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hut = Made();
+	registry.Assign<Abode>(hut, Abode {.type = AbodeNumber::A, .townId = 7});
+	registry.Assign<InScript>(hut);
+	registry.Assign<BuildProgress>(hut, BuildProgress {.built = 0.5f});
+	registry.Assign<ObjectLife>(hut, ObjectLife {.life = 0.0f});
+	ecs::world_objects::DestroyedByEffect(hut, {});
+	ASSERT_TRUE(registry.Valid(hut));
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 0.0f);
+	EXPECT_FALSE(registry.AllOf<BuildingSites>(hut));
+}
+
+TEST_F(EffectReceivers, AScriptsUnfinishedBuildingWithASiteGetsAllItsLifeAgain)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hut = Made();
+	registry.Assign<Abode>(hut, Abode {.type = AbodeNumber::A, .townId = 7});
+	registry.Assign<InScript>(hut);
+	registry.Assign<BuildProgress>(hut, BuildProgress {.built = 0.5f});
+	registry.Assign<ObjectLife>(hut, ObjectLife {.life = 0.0f});
+	registry.Assign<BuildingSites>(hut, BuildingSites {.sites = {BuildingSite {.takesBroughtWood = true}}});
+	ecs::world_objects::DestroyedByEffect(hut, {});
+	ASSERT_TRUE(registry.Valid(hut));
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 1.0f);
+	// A finished one keeps no life
+	registry.Remove<BuildProgress>(hut);
+	registry.AssignOrReplace<ObjectLife>(hut, ObjectLife {.life = 0.0f});
+	ecs::world_objects::DestroyedByEffect(hut, {});
+	ASSERT_TRUE(registry.Valid(hut));
+	EXPECT_FLOAT_EQ(ecs::world_objects::LifeOf(hut), 0.0f);
 }

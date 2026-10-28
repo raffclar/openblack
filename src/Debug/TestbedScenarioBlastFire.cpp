@@ -181,6 +181,50 @@ void AddFire(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "miracles.burnt_buildings",
+	    .name = "Huts burnt down, two of them held by a script",
+	    .facet = Facet::Miracles,
+	    .description = "Three huts in a row, each with little life left, catch fire. A script holds the middle hut and "
+	                   "the east hut. Only a twentieth of the east hut stands built.",
+	    .expected = "When the fire takes the last of its life, a ghost of each hut flickers out where it stands. The west "
+	                "hut goes from the land. The middle hut and the east hut stay, and their fires stop. Nothing of the "
+	                "east hut stays built, but it gets all of its life again and stays a building site.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Ground - glm::vec2(20.0f), k_Ground + glm::vec2(20.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Ground + glm::vec2(-12.0f, 0.0f), .life = 0.02f, .alight = true},
+	                {.type = AbodeInfo::CelticHut, .offset = k_Ground, .life = 0.02f, .inScript = true, .alight = true},
+	                {.type = AbodeInfo::CelticHut,
+	                 .offset = k_Ground + glm::vec2(12.0f, 0.0f),
+	                 .inScript = true,
+	                 .built = 0.05f,
+	                 .alight = true}},
+	});
+
+	all.push_back({
+	    .id = "miracles.broken_hut_burns",
+	    .name = "A burning hut broken by thrown boulders",
+	    .facet = Facet::Miracles,
+	    .description = "A hut catches fire. One second later, two boulders thrown from the south break holes in it.",
+	    .expected = "The new flames of the fire start on the broken hut only where its walls stand. No flame starts in a "
+	                "hole that a boulder made.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Ground - glm::vec2(15.0f), k_Ground + glm::vec2(15.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Ground + glm::vec2(0.0f, 10.0f), .alight = true},
+	                {.type = MobileStaticInfo::Boulder2Chalk, .offset = k_Ground + glm::vec2(-1.0f, -20.0f)},
+	                {.type = MobileStaticInfo::Boulder2Chalk, .offset = k_Ground + glm::vec2(1.0f, -20.0f)}},
+	    .throws = {{.object = 1,
+	                .from = k_Ground + glm::vec2(-1.0f, -20.0f),
+	                .height = 4.0f,
+	                .velocity = {0.0f, 4.0f, 20.0f},
+	                .delaySeconds = 1.0f},
+	               {.object = 2,
+	                .from = k_Ground + glm::vec2(1.0f, -20.0f),
+	                .height = 4.0f,
+	                .velocity = {0.0f, 4.0f, 20.0f},
+	                .delaySeconds = 1.5f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.fire_paused",
 	    .name = "A pause while a forest burns and the hand holds fire",
 	    .facet = Facet::Miracles,
