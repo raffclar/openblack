@@ -13,8 +13,10 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <string>
 #include <utility>
 
+#include <entt/meta/context.hpp>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
@@ -22,6 +24,9 @@
 #include "Creature/CreatureExplorationAgendas.h"
 #include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreaturePlanActions.h"
+#include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Reflection/WorldArchive.h"
+#include "ECS/RegistryContext.h"
 
 using namespace openblack;
 using namespace openblack::creature_exploration;
@@ -85,6 +90,39 @@ TEST(CreatureExploration, RegionsTakeTheirKindsFromTheirCells)
 	EXPECT_TRUE(map.At({20, 3}).Is(Kind::Sea));
 	EXPECT_FALSE(map.At({20, 3}).Is(Kind::Land));
 	EXPECT_FLOAT_EQ(map.At({20, 3}).highest, 0.0f);
+}
+
+// A save keeps the map: a game that loads it finds the regions of the map that the land made at its start, not a new map
+// of the towns at the time of the load (a client that joins a network game late must find the same regions)
+TEST(CreatureExploration, ASaveKeepsTheMap)
+{
+	entt::meta_ctx reflection;
+	ecs::reflection::RegisterComponents(reflection);
+	ecs::RegistryContext saved;
+	saved.explorationMap = RegionMap::Make(FakeCell, FakeTowns {.cells = {{42, 43}}}.At());
+	std::set<ecs::reflection::UnsavedValue> unsaved;
+	const auto bytes = ecs::reflection::SaveValue(reflection, saved, &unsaved);
+	for (const auto& value : unsaved)
+	{
+		EXPECT_EQ(value.place.find("explorationMap"), std::string::npos) << value.place << " " << value.type;
+	}
+
+	ecs::RegistryContext loaded;
+	ASSERT_TRUE(ecs::reflection::LoadValue(reflection, bytes, loaded, {}));
+	ASSERT_TRUE(loaded.explorationMap.has_value());
+	const auto& back = *loaded.explorationMap;
+	const auto& kept = *saved.explorationMap;
+	EXPECT_FLOAT_EQ(back.Highest(), kept.Highest());
+	ASSERT_EQ(back.regions.size(), kept.regions.size());
+	for (size_t i = 0; i < kept.regions.size(); ++i)
+	{
+		EXPECT_EQ(back.regions[i].kinds, kept.regions[i].kinds) << i;
+		EXPECT_EQ(back.regions[i].highestCell, kept.regions[i].highestCell) << i;
+		EXPECT_EQ(back.regions[i].firstCoast, kept.regions[i].firstCoast) << i;
+		EXPECT_EQ(back.regions[i].firstSea, kept.regions[i].firstSea) << i;
+		EXPECT_FLOAT_EQ(back.regions[i].highest, kept.regions[i].highest) << i;
+	}
+	EXPECT_TRUE(back.At({5, 5}).Is(Kind::Town));
 }
 
 TEST(CreatureExploration, TheLastOfTheHighestCellsCounts)

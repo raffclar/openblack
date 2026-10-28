@@ -56,9 +56,10 @@ sys.path.insert(0, HERE)
 import openblack_inspector_mcp as inspector  # noqa: E402
 import save_diff  # noqa: E402
 import sim_report  # noqa: E402
+import sim_paths  # noqa: E402
 
-DEFAULT_GAME_PATH = os.environ.get("OB_GAME_PATH", "C:/projects/black")
-DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
+DEFAULT_GAME_PATH = sim_paths.DEFAULT_GAME_PATH
+DEFAULT_BUILDS = sim_paths.DEFAULT_BUILDS
 # The frame time of a run, in milliseconds: five frames a turn, near the screen's 60 a second
 DEFAULT_FRAME_MS = 20
 # How long the driver waits for the game to start, and for a step to end, in seconds
@@ -83,8 +84,7 @@ def worktree_root():
 
 
 def default_exe(config):
-    name = os.path.basename(worktree_root())
-    return os.path.join(DEFAULT_BUILDS, name, "bin", config, "openblack.exe")
+    return sim_paths.program(sim_paths.default_bin(config), "openblack")
 
 
 def game_arguments(options, record, log, until_turn, fast, driven):

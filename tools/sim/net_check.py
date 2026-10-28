@@ -77,7 +77,7 @@ citadel a computer god, starts at once, and turns the world when the --observers
 observer, and the clients and the server must stay in step. --ai-seed gives the computer gods the personality of that
 seed. --observers N adds N desktop observers to the gods (up to 4), --web-client adds one more observer in headless
 Chrome (through web/scripts/cdp-run.mjs, with the web build of this tree), --until-end plays until the game is decided
-(at most --turns, up to 18000). The summary has an "ai" block: the computer gods of the game and, for each god, the
+(at most --turns, up to 100000). The summary has an "ai" block: the computer gods of the game and, for each god, the
 needs that it chose, the deeds of its hand and the miracles that it cast, as the server's log tells. tools/sim/ai_soak.py
 runs many such games.
 
@@ -128,10 +128,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sim_report  # noqa: E402
 import row_dump  # noqa: E402
+import sim_paths  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
-DEFAULT_GAME_PATH = os.environ.get("OB_GAME_PATH", "C:/projects/black")
+DEFAULT_BUILDS = sim_paths.DEFAULT_BUILDS
+DEFAULT_GAME_PATH = sim_paths.DEFAULT_GAME_PATH
 CHECKSUM_LINE = re.compile(r"turn (\d+) checksum ([0-9a-f]{16})")
 LISTEN_LINE = re.compile(r"The game server listens on [0-9.]+:(\d+)")
 SERVER_ID = "net-check-1"
@@ -139,8 +140,9 @@ SERVER_ID = "net-check-1"
 # started
 INPUT_OFFSET_FRAMES = 2500
 RUN_LIMIT_SECONDS = 900
-# The most turns of a game: the time limit of a game is 30 minutes of 10 turns a second
-MOST_TURNS = 18000
+# The most turns of a game. The game has no time limit; a soak of 100000 turns takes about 3 hours at 10 turns a
+# second.
+MOST_TURNS = 100000
 # The run of a long game: a turn takes 100 ms on the server and the clients follow, with the time to load
 SECONDS_PER_TURN = 0.1
 LOAD_SECONDS = 600
@@ -154,7 +156,7 @@ def worktree_root():
 
 
 def default_bin(config):
-    return os.path.join(DEFAULT_BUILDS, os.path.basename(worktree_root()), "bin", config)
+    return sim_paths.default_bin(config)
 
 
 def b64(data):
@@ -1078,7 +1080,7 @@ def main():
                              "clients are observers (--observers, --web-client)")
     parser.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods")
     parser.add_argument("--until-end", action="store_true",
-                        help="play until the game is decided, at most --turns turns (up to 18000)")
+                        help="play until the game is decided, at most --turns turns (up to 100000)")
     parser.add_argument("--expect-ai-action", action="store_true",
                         help="the run fails when no computer god chose a need, did a deed of the hand or cast a miracle")
     parser.add_argument("--trace-draws", action="store_true",
@@ -1124,7 +1126,7 @@ def main():
     if options.all_computer_gods:
         options.clients = 0
     if not 1 <= options.turns <= MOST_TURNS:
-        parser.error(f"--turns takes 1 to {MOST_TURNS} (the time limit of a game is 30 minutes)")
+        parser.error(f"--turns takes 1 to {MOST_TURNS}")
     waited_observers = options.observers + (1 if options.web_client else 0)
     if options.all_computer_gods and waited_observers == 0:
         parser.error("--all-computer-gods needs --observers or --web-client: the clients watch the game")
