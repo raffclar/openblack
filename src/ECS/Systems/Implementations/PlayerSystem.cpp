@@ -55,6 +55,18 @@ std::optional<entt::entity> PlayerSystem::FindPlayer(PlayerNames playerName) con
 	return player != _players.end() ? std::optional(player->second) : std::nullopt;
 }
 
+entt::entity PlayerSystem::EnsurePlayer(PlayerNames playerName)
+{
+	// A player of a land that is gone is not a player of this land
+	if (const auto player = FindPlayer(playerName); player.has_value() && Locator::entitiesRegistry::value().Valid(*player))
+	{
+		return *player;
+	}
+	const auto entity = openblack::ecs::archetypes::PlayerArchetype::Create(playerName);
+	AddPlayer(entity);
+	return entity;
+}
+
 openblack::player_kind::Facts PlayerSystem::FactsOf(PlayerNames name) const
 {
 	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
@@ -219,12 +231,7 @@ void PlayerSystem::SetAlly(PlayerNames player, PlayerNames other, float strength
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto allies = [this, &registry](PlayerNames name) -> PlayerAllies& {
-		auto entity = FindPlayer(name).value_or(entt::null);
-		if (!registry.Valid(entity))
-		{
-			entity = openblack::ecs::archetypes::PlayerArchetype::Create(name);
-			AddPlayer(entity);
-		}
+		const auto entity = EnsurePlayer(name);
 		auto* found = registry.TryGet<PlayerAllies>(entity);
 		return found != nullptr ? *found : registry.Assign<PlayerAllies>(entity);
 	};
