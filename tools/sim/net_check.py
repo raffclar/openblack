@@ -1071,6 +1071,7 @@ def run_web_plan(plan, folder, page, chrome, game_path, processes):
     port = free_port()
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     # The page is an HTTPS page, and its game socket goes to its own origin, which passes it to the game server
+    os.makedirs(os.path.join(folder, "page-keys"), exist_ok=True)
     certs = make_certificates(os.path.join(folder, "page-keys"))
     server = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "scripts", "serve.py"), page, str(port),
                                "--tls", certs["server.pem"], certs["server.key"],
