@@ -223,6 +223,13 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SpellDispenser", .field = "effect", .marker = ""},
     {.component = "TownArtefact", .field = "effect", .marker = ""},
     {.component = "MagicShield", .field = "effect", .marker = ""},
+    {.component = "TeleportStone", .field = "pool", .marker = ""},
+    {.component = "ShieldDome", .field = "effect", .marker = ""},
+    {.component = "ResourcePile", .field = "speedUpVisual", .marker = ""},
+    {.component = "CreatureSwap", .field = "beam", .marker = ""},
+    {.component = "CreatureGestureDrawing", .field = "chain", .marker = ""},
+    // Where the camera of this computer was when its player set a bookmark. Only the camera of this computer flies there.
+    {.component = "CameraBookmark", .field = "cameraOffset", .marker = ""},
     // The number of the spot visual that a temple's heart fires its beams from, as the particles of this computer
     // numbered it
     {.component = "Temple", .field = "beamSource", .marker = ""},
@@ -399,6 +406,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The lid of an opened chest lifts in the frames that draw it, and its dust fades in the frames
     {.component = "Reward", .field = "clipPlace", .marker = ""},
     {.component = "Reward", .field = "dustMilliseconds", .marker = ""},
+    // Each computer makes the dust of a chest with its own local random numbers. Only the frames draw it.
+    {.component = "Reward", .field = "dust", .marker = ""},
     // The miracle above an opened chest spins and pulses in the frames
     {.component = "RewardSeed", .field = "spin", .marker = ""},
     {.component = "RewardSeed", .field = "phialFrame", .marker = ""},

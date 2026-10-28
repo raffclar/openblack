@@ -108,6 +108,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreaturePlacement.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
@@ -123,6 +124,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/Implementations/MagicLiving.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -448,6 +450,13 @@ void Consume(ecs::Registry& registry, entt::entity creature, entt::entity food)
 		{
 			graveyards::TownPersonDied(registry.Get<const Villager>(food).town);
 		}
+	}
+	// In a network game each villager that the creature eats, alive or dead, counts for the winning condition of its
+	// player
+	if (registry.AllOf<Villager>(food) && Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(registry.Get<const Creature>(creature).owner,
+		                                               game_end::Condition::VillagersKilledByCreature, 1);
 	}
 	if (const auto* villager = registry.TryGet<const Villager>(food))
 	{
@@ -780,7 +789,7 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 		const auto blows = creature_stomp::KickBlows(kick, land);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} kicks building {}", entt::to_integral(creature),
 		                    entt::to_integral(target));
-		Locator::buildingDamageSystem::value().CreatureBlows(target, creature, blows);
+		Locator::buildingDamageSystem::value().CreatureBlows(target, creature, blows, true);
 		return;
 	}
 	if (Locator::dynamicsSystem::has_value() && !registry.AllOf<Immovable>(target) &&
@@ -3123,7 +3132,7 @@ void KnockAbout(ecs::Registry& registry, entt::entity creature, const Creature& 
 				SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} knocks building {}", entt::to_integral(creature),
 				                    entt::to_integral(thing));
 				const std::array blows {creature_stomp::TrampleBlow(point, move, sphereRadius)};
-				Locator::buildingDamageSystem::value().CreatureBlows(thing, creature, blows);
+				Locator::buildingDamageSystem::value().CreatureBlows(thing, creature, blows, false);
 			}
 			continue;
 		}

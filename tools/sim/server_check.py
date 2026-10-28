@@ -144,6 +144,20 @@ def compare_parts(server, game, turns, ignored):
     return different, parts
 
 
+def turns_gone_back(path):
+    """The places in a commands file where the turn goes back, as [turn before, turn after]: the game loaded a saved world
+    there. The server plays on with no load, so the turns after it cannot be compared."""
+    if not os.path.exists(path):
+        return []
+    turns = []
+    with open(path, encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                turns.append(int(json.loads(line).get("turn", 0)))
+    return [[before, after] for before, after in zip(turns, turns[1:]) if after <= before]
+
+
 def count_lines(path):
     """The number of lines of a file, 0 when there is no file"""
     if not os.path.exists(path):
@@ -180,6 +194,10 @@ def main():
     parser.add_argument("--wsl-distro", default="Ubuntu", help="with --wsl-server, the WSL distribution")
     parser.add_argument("--out", default=os.path.join(os.getcwd(), "server-check"))
     parser.add_argument("--server-args", default="", help="more arguments for the server, such as \"--reload-at 50\"")
+    parser.add_argument("--run-limit", type=int, default=RUN_LIMIT_SECONDS,
+                        help="the seconds that the server and the game each have to finish (a long run past turn 18000 needs more)")
+    parser.add_argument("--conditions", help="the winning conditions of the network game on both, as the server's "
+                        "--conditions and the game's --sim-conditions: [LAND:]NAME=VALUE,...")
     parser.add_argument("--server-fast", action="store_true", help="the server too plays with no wait")
     parser.add_argument("--hash-parts", action="store_true",
                         help="both runs record the hash of each component, to find what made them part")
@@ -188,6 +206,9 @@ def main():
     parser.add_argument("--no-relay", action="store_true",
                         help="the server plays first and gets no commands of the game (the hand reports part them)")
     parser.add_argument("--draw-every", type=int, help="the game draws one frame in this many (0 for none)")
+    parser.add_argument("--game-frames", type=int,
+                        help="the game stops after this many frames. A scenario that pauses the game never gets to its "
+                             "last turn: the check then compares the turns that the game played")
     parser.add_argument("--game-args", default="",
                         help="more arguments of the game, divided by spaces, such as the fight autopilot and "
                              "--sim-record-input to record an input for --input")
@@ -196,7 +217,8 @@ def main():
                              "turns, for a difference that waits on a decision")
     options = parser.parse_args()
 
-    folder = options.bin or default_bin(options.config)
+    # The programs run in their own working folders, so a relative folder is made absolute first
+    folder = os.path.abspath(options.bin or default_bin(options.config))
     server_exe = os.path.join(folder, "openblack-server.exe" if os.name == "nt" else "openblack-server")
     game_exe = os.path.join(folder, "openblack.exe" if os.name == "nt" else "openblack")
     out = os.path.abspath(options.out)
@@ -223,8 +245,11 @@ def main():
             events = events.get("events", [])
     relay = not options.no_relay
     commands = os.path.join(game_dir, "commands.jsonl")
-    if os.path.exists(commands):
-        os.remove(commands)
+    # The game writes the commands of its testbed scenario beside its commands, and the server gives them with the game
+    gives = os.path.join(game_dir, "commands.gives.jsonl")
+    for path in (commands, gives):
+        if os.path.exists(path):
+            os.remove(path)
 
     # A Linux server in WSL takes WSL paths
     local = wsl_path if options.wsl_server else (lambda path: path)
@@ -241,6 +266,8 @@ def main():
         server_command += ["--ai-seed", str(options.ai_seed)]
     if options.server_fast:
         server_command.append("--fast")
+    if options.conditions:
+        server_command += ["--conditions", options.conditions]
     if options.hash_parts or options.hash_fields:
         server_command += ["--record", local(os.path.join(server_dir, "record.jsonl"))]
     if options.hash_fields:
@@ -254,12 +281,14 @@ def main():
     game_command = [game_exe, "-g", options.game_path, "--skip-logos", "--seed", str(options.seed),
                     "--sim-fast", "--sim-draw-every", str(draw_every), "--sim-frame-ms", str(options.frame_ms),
                     "--sim-until-turn", str(options.turns + 1), "--sim-record", record,
-                    "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
+                    "--sim-record-every", "1", "--inspect-lock-input", "-n", str(options.game_frames or 4000000000), "--background",
                     "-l", game_log, "--sim-network-game"] + where
     if options.all_computer_gods:
         game_command.append("--sim-all-computer-gods")
     if options.ai_seed is not None:
         game_command += ["--sim-ai-seed", str(options.ai_seed)]
+    if options.conditions:
+        game_command += ["--sim-conditions", options.conditions]
     if events is None:
         game_command.append("--sim-still-hand")
     else:
@@ -275,14 +304,14 @@ def main():
     def play_server():
         started = time.monotonic()
         # The output of wsl.exe goes to a file, which tells why a Linux server did not start
-        code = run(server_command, server_dir,
+        code = run(server_command, server_dir, limit=options.run_limit,
                    output=os.path.join(server_dir, "wsl-output.txt") if options.wsl_server else None)
         if code != 0:
             print(f"the server ended with exit code {code}; see {server_log}")
         return code, time.monotonic() - started
 
     def play_game():
-        code = run(game_command, game_dir)
+        code = run(game_command, game_dir, limit=options.run_limit)
         if code != 0:
             print(f"the game ended with exit code {code}; see {game_log}")
         return code
@@ -292,6 +321,11 @@ def main():
         # The server needs the commands of the game
         if play_game() != 0:
             return 1
+        # A game that its frame limit stopped early (a paused scenario) played fewer turns: the server plays the same
+        # turns, because a paused server also never gets to the last turn
+        played = game_checksums(record) if options.game_frames else {}
+        if played and max(played) < options.turns:
+            server_command[server_command.index("-n") + 1] = str(max(played))
         code, server_seconds = play_server()
         if code != 0:
             return 1
@@ -302,7 +336,13 @@ def main():
 
     server = server_checksums(server_log)
     game = game_checksums(record)
-    different, compared = compare(server, game, options.turns)
+    # A game that its frame limit stopped before its last turn is compared up to the last turn that it played
+    compared_turns = options.turns
+    ended_by_frames_at_turn = None
+    if options.game_frames and game and max(game) < options.turns:
+        ended_by_frames_at_turn = max(game)
+        compared_turns = ended_by_frames_at_turn
+    different, compared = compare(server, game, compared_turns)
     summary = {
         "turns": options.turns,
         "seed": options.seed,
@@ -314,8 +354,12 @@ def main():
         "different": different[:20],
         # The last turn up to which every checksum is the same
         "same_until": (different[0] - 1) if different else (compared[-1] if compared else 0),
-        "same": not different and len(compared) >= options.turns,
+        "same": not different and len(compared) >= compared_turns,
+        "ended_by_frames_at_turn": ended_by_frames_at_turn,
+        "game_loads": turns_gone_back(commands) if relay else [],
     }
+    if summary["game_loads"]:
+        print(f"the game loaded a saved world (turn before and after): {summary['game_loads']}; the server does not")
     ignored = {name for name in options.ignore_parts.split(",") if name}
     if ignored and (options.hash_parts or options.hash_fields):
         others, parts = compare_parts(synced_records(os.path.join(server_dir, "record.jsonl")), synced_records(record),
@@ -338,7 +382,8 @@ def main():
     # A land with no temple for the player's god (Land 1) decides the network game at its first turn: the
     # god is out, its creature goes, and the end box takes the mouse, so a recorded input does nothing there
     with open(game_log, encoding="utf-8", errors="replace") as file:
-        decided = [re.search(r"Turn (\d+):", line) for line in file if "and the game is decided" in line]
+        decided = [re.search(r"Turn (\d+):", line) for line in file
+                   if "and the game is decided" in line or "won the game" in line]
     summary["decided_at_turn"] = int(decided[0].group(1)) if decided and decided[0] else None
     if events is not None and summary["decided_at_turn"] is not None:
         print(f"the game was decided at turn {summary['decided_at_turn']}: the end box takes the input of the hand")
@@ -346,6 +391,17 @@ def main():
         summary["same"] = False
         print(f"the hand did not do what its input expects: {missing}" if missing
               else f"the game and the server count other deeds of the hand: game {game_deeds}, server {server_deeds}")
+    # The winning conditions: each god gets them, completes them and wins at the same turns on the game and the server
+    if options.conditions:
+        game_events = sim_report.condition_events_in_file(game_log, last_compared)
+        server_events = sim_report.condition_events_in_file(server_log, last_compared)
+        summary["conditions"] = sim_report.condition_summary(server_events)
+        summary["condition_events"] = len(server_events)
+        summary["condition_events_same"] = game_events == server_events
+        if game_events != server_events or not server_events:
+            summary["same"] = False
+            print(f"the game and the server tell other events of the winning conditions: game {game_events[:10]}, "
+                  f"server {server_events[:10]}")
     # A component with no registration is left out of the checksum: a change in it would never show here
     unregistered = sim_report.unregistered_in_files(server_log, game_log, record,
                                                     os.path.join(server_dir, "record.jsonl"))

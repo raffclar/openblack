@@ -46,6 +46,9 @@ struct EffectSource
 	std::optional<glm::vec3> point;
 	/// The magic of the miracle that applies it, if a miracle does
 	std::optional<MagicType> magicType;
+	/// A building that takes the harm counts as smashed by a creature: a creature kicked it, or a creature threw what
+	/// struck it
+	bool creatureSmash {false};
 };
 
 /// A drop of the water miracle's rain

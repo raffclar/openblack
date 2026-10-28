@@ -49,9 +49,11 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/CrecheRules.h"
 #include "ECS/Creches.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -383,8 +385,11 @@ entt::entity ChildBorn(entt::entity mother)
 	{
 		villager_skeleton::Set(child, true);
 	}
-	// TODO(villager-reproduction): in a multiplayer game a player counting births in its town as a win condition counts
-	// this one
+	// In a network game the player of the mother counts the birth, for the winning condition
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().AddToCondition(world_objects::PlayerOf(mother), game_end::Condition::VillagersBorn, 1);
+	}
 	auto& towns = Locator::townSystem::value();
 	if (const auto abode = AbodeOf(mother); abode != entt::null)
 	{
