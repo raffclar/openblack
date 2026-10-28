@@ -16,10 +16,11 @@
 namespace openblack::ecs::components
 {
 
-/// The apple barrel drawn beside the local player's storage pit: only drawn, never met by the cursor or anything else
+/// The apple barrel drawn beside the storage pit of the player at this computer: a thing of the drawn registry, only
+/// drawn, never met by the cursor or anything else
 struct AppleBarrel
 {
-	/// The storage pit it stands beside
+	/// The storage pit it stands beside, a thing of the land
 	entt::entity store {entt::null};
 	/// The worm on its top
 	entt::entity worm {entt::null};

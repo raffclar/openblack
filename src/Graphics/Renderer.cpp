@@ -7207,9 +7207,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				});
 			};
 			// The gates and other scenery the scripts open and close, each posed by its own clip: those fading out in the
-			// distance and those that blend by their materials (an opened reward chest) with the blended things
-			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool blended) {
-				const auto* still = desc.entities.TryGet<const ecs::components::AnimatedStaticPose>(entity);
+			// distance and those that blend by their materials (an opened reward chest) with the blended things. `from`
+			// is the registry of the thing: the land's, or the drawn registry.
+			const auto drawPosedStillOf = [&](const ecs::Registry& from, entt::entity entity, uint32_t instance, bool blended) {
+				const auto* still = from.TryGet<const ecs::components::AnimatedStaticPose>(entity);
 				if (still == nullptr)
 				{
 					return;
@@ -7218,7 +7219,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// The sea mirrors none of the explorers' boat film this way, even one sharing its model with things it
 				// mirrors
 				const bool reflection = desc.viewId == RenderPass::Reflection;
-				if (reflection && desc.entities.AllOf<ecs::components::BoatFilmPart>(entity))
+				if (reflection && from.AllOf<ecs::components::BoatFilmPart>(entity))
 				{
 					return;
 				}
@@ -7245,6 +7246,30 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				drawInstances(meshId, *placers, fading ? false : placers->materialBlending, instance, 1, &entityPose);
 				submitDesc.detailLevel = 1;
+			};
+			const auto drawPosedStill = [&](entt::entity entity, uint32_t instance, bool blended) {
+				drawPosedStillOf(desc.entities, entity, instance, blended);
+			};
+			// The posed things that only the frames make, as the worm on the apple barrel, are in the first segment
+			const auto drawDrawnPosedStills = [&](bool blended) {
+				if (!Locator::drawnRegistry::has_value())
+				{
+					return;
+				}
+				const auto& drawn = Locator::drawnRegistry::value();
+				for (const auto& [entity, instance] : renderCtx.drawnEntityDraws)
+				{
+					if (instance >= renderCtx.instanceUniforms.size() || mirroredWithHand(instance))
+					{
+						continue;
+					}
+					if (blended)
+					{
+						submitDesc.sortDepth =
+						    zsort::Depth(glm::vec3(renderCtx.instanceUniforms.at(instance).model[3]), cameraOrigin);
+					}
+					drawPosedStillOf(drawn, entity, instance, blended);
+				}
 			};
 			// The animals of a model drawn at once, in their light: the brightest of the land's, or white
 			for (const auto& [meshId, group] : _animalBoneGroups)
@@ -7274,6 +7299,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.objectLook.reset();
 				submitDesc.boneTexture = nullptr;
 			}
+			drawDrawnPosedStills(false);
 			for (const auto& [entity, instance] : renderCtx.entityDraws)
 			{
 				if (mirroredWithHand(instance))
@@ -7420,6 +7446,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						drawPartialBuild(build);
 					}
 				}
+				drawDrawnPosedStills(true);
 				for (const auto& [entity, instance] : renderCtx.entityDraws)
 				{
 					if (instance < renderCtx.instanceUniforms.size() && !mirroredWithHand(instance))
