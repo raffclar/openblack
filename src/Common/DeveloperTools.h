@@ -188,6 +188,7 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "row-dump-keep", .takesValue = true},
     DeveloperOption {.name = "commands", .takesValue = true},
     DeveloperOption {.name = "reload-at", .takesValue = true},
+    DeveloperOption {.name = "log-checksums"},
     DeveloperOption {.name = "all-computer-gods"},
     DeveloperOption {.name = "ai-seed", .takesValue = true},
 };

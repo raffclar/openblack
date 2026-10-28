@@ -20,6 +20,7 @@
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "Physics/BodyShapes.h"
+#include "Physics/PairRules.h"
 #include "Physics/TurnRules.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -155,6 +156,8 @@ private:
 	/// While the physics runs its turn, bodies aren't taken out of it from outside
 	bool _inTurnUpdate {false};
 	physics::turn::SoundPairs _soundPairs;
+	/// What decides the pairs of bodies in a step, one for each body, kept so that a step does not ask for new memory
+	std::vector<physics::PairMember> _pairMembers;
 	/// Each creature model's bones' boxes, by the model, worked out once
 	std::unordered_map<entt::id_type, std::vector<physics::shapes::BoneBox>> _creatureBoxes;
 	/// The machine's milliseconds as the game reads them, which pick the fly-by whoosh

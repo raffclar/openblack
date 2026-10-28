@@ -110,7 +110,7 @@ public:
 	}
 	void PaintBlockTexels(size_t block, std::span<uint16_t> texels) const override;
 	void SetBlockTexels(size_t block, std::span<const uint16_t> texels) override;
-	[[nodiscard]] std::vector<size_t> TakeRepaintedBlocks() override;
+	[[nodiscard]] std::vector<RepaintedBlock> TakeRepaintedBlocks() override;
 
 	[[nodiscard]] glm::mat4 GetOrthoView() const override { return _view; }
 	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return _proj; }
@@ -134,7 +134,7 @@ private:
 	std::unique_ptr<SharedIndexLists<graphics::IndexBuffer>> _blockTriangles;
 
 	/// The blocks whose textures were painted again with no footprints since the footprints last caught up
-	std::vector<size_t> _repaintedBlocks;
+	std::vector<RepaintedBlock> _repaintedBlocks;
 	glm::mat4 _proj;
 	glm::mat4 _view;
 	glm::u16vec2 _extentIndexMin;
