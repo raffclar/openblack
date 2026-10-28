@@ -9,6 +9,8 @@
 
 #include <cmath>
 
+#include <optional>
+
 #include <gtest/gtest.h>
 
 #include "Magic/HandMotion.h"
@@ -93,6 +95,26 @@ TEST(MiracleVisuals, PhialsRunBackwardsAndPulse)
 	EXPECT_NEAR(PhialScale(6, 0.25f).y, 1.0f, k_Epsilon);
 	EXPECT_NEAR(PhialScale(6, 0.25f).z, 0.3f, k_Epsilon);
 	EXPECT_NEAR(PhialScale(1, 0.25f).x, 1.0f, k_Epsilon);
+}
+
+TEST(MiracleVisuals, ATempleSeedTurnsByTheGameTimeOnly)
+{
+	const SeedTurn start {.spin = 1.0f, .phialFrame = 9.0f, .phialPhase = 0.25f};
+	// A paused game gives no time: the seed and its phial do not move
+	const auto paused = TurnSeed(start, 0, 0.0f);
+	EXPECT_EQ(paused.spin, start.spin);
+	EXPECT_EQ(paused.phialFrame, start.phialFrame);
+	EXPECT_EQ(paused.phialPhase, start.phialPhase);
+	// Two radians a second, kept inside a full turn; a seed that is not a phial keeps its phial values
+	const auto orb = TurnSeed(start, std::nullopt, 3.0f);
+	EXPECT_NEAR(orb.spin, std::fmod(7.0f, 2.0f * 3.14159265f), 1e-5f);
+	EXPECT_EQ(orb.phialFrame, start.phialFrame);
+	EXPECT_EQ(orb.phialPhase, start.phialPhase);
+	// A phial runs its texture backwards and its pulse by the same time
+	const auto phial = TurnSeed(start, 0, 0.2f);
+	EXPECT_NEAR(phial.spin, 1.4f, k_Epsilon);
+	EXPECT_NEAR(phial.phialFrame, 6.0f, k_Epsilon);
+	EXPECT_NEAR(phial.phialPhase, 0.25f + (0.35f * 0.2f), k_Epsilon);
 }
 
 TEST(MiracleVisuals, ShrinkingAndGrowingPhialsAreLitInWhiteTheOthersByTheLand)

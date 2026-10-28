@@ -1100,6 +1100,25 @@ bool ParticleSystem::ProcessByFrame(EffectId id, float seconds)
 	return true;
 }
 
+ParticleSystemInterface::EffectId ParticleSystem::StartByFrame(ParticleType type, glm::vec3 origin, float magnitude)
+{
+	const auto id = Start(type, origin, magnitude, false);
+	// The turn does not step it, also before its first frame step
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->ownedBySpell = true;
+	}
+	return id;
+}
+
+void ParticleSystem::SetShown(EffectId id, bool shown)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->shown = shown;
+	}
+}
+
 ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType type, glm::vec3 position,
                                                                   std::optional<int> turns, entt::entity owner, float magnitude)
 {
@@ -1524,7 +1543,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	const auto sources = DrawSources();
 	for (const auto& running : _effects)
 	{
-		if (running.inTemple != inTemple || running.drawnAlone)
+		if (running.inTemple != inTemple || running.drawnAlone || !running.shown)
 		{
 			continue;
 		}

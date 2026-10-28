@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -16,6 +17,7 @@
 #include <entt/signal/sigh.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/FramePace.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "Magic/VortexCrossingFile.h"
 
@@ -40,7 +42,9 @@ public:
 	bool SetArrival(entt::entity vortex, const components::Vortex::Arrival& arrival) override;
 	[[nodiscard]] float GetOpenness(entt::entity vortex) const override;
 	void ProcessTurn() override;
-	void UpdateFrame(float gameSeconds) override;
+	void UpdateFrame(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime, bool landDrawn) override;
+	void UpdateDrawnFrame(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+	                      std::chrono::milliseconds frameGameTime, bool landDrawn) override;
 	[[nodiscard]] std::span<const GroundMark> GetGroundMarks() const override { return _groundMarks; }
 	std::optional<Taken> EnterVortex(const std::shared_ptr<particles::CarriedObject>& carried) override;
 	void ThrowOutOfVortex(entt::entity object, float angle, float scale) override;
@@ -100,6 +104,10 @@ private:
 	static void StartAgainAfterLoad();
 
 	std::vector<GroundMark> _groundMarks;
+	/// When the swirls take their next step
+	frame_pace::Pace _effectPace;
+	/// When the effects over the land of the vortices that the draw list draws take their next step
+	frame_pace::Pace _drawnEffectPace;
 	/// The crossing file, written by the vortex that last started to lead away while that vortex is in the world
 	vortex::CrossingFile _crossing;
 	/// Tells the crossing file when a vortex goes, also when the land clears all its things
