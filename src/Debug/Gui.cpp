@@ -16,6 +16,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 
 #include "Graphics/EmbeddedShaders.h"
@@ -507,6 +508,26 @@ bool Gui::Loop() noexcept
 	return false;
 }
 
+namespace
+{
+/// The states that each draw of the debug windows has
+constexpr uint64_t k_ImGuiState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_MSAA;
+/// The blend of the text and of the pictures that have their alpha
+constexpr uint64_t k_ImGuiAlphaBlend = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+
+/// The corners of the debug windows' triangles: a place, a texture place and a colour
+[[nodiscard]] bgfx::VertexLayout ImGuiLayout() noexcept
+{
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .end();
+	return layout;
+}
+} // namespace
+
 /// Returns true if both internal transient index and vertex buffer have
 /// enough space.
 ///
@@ -558,12 +579,7 @@ void Gui::RenderDrawDataBgfx(ImDrawData* drawData) noexcept
 		const auto numVertices = static_cast<uint32_t>(drawList->VtxBuffer.size());
 		const auto numIndices = static_cast<uint32_t>(drawList->IdxBuffer.size());
 
-		bgfx::VertexLayout layout;
-		layout.begin()
-		    .add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
-		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-		    .end();
+		const auto layout = ImGuiLayout();
 
 		if (!checkAvailTransientBuffers(numVertices, layout, numIndices))
 		{
@@ -590,11 +606,7 @@ void Gui::RenderDrawDataBgfx(ImDrawData* drawData) noexcept
 			}
 			else if (0 != cmd->ElemCount)
 			{
-				uint64_t state = 0                      //
-				                 | BGFX_STATE_WRITE_RGB //
-				                 | BGFX_STATE_WRITE_A   //
-				                 | BGFX_STATE_MSAA      //
-				    ;
+				uint64_t state = k_ImGuiState;
 
 				bgfx::TextureHandle th = toBgfx(_texture);
 				bgfx::ProgramHandle program = toBgfx(_program);
@@ -611,9 +623,7 @@ void Gui::RenderDrawDataBgfx(ImDrawData* drawData) noexcept
 							uint8_t mip;
 						} s;
 					} texture = {cmd->GetTexID()};
-					state |= 0 != (IMGUI_FLAGS_ALPHA_BLEND & texture.s.flags)
-					             ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA)
-					             : BGFX_STATE_NONE;
+					state |= 0 != (IMGUI_FLAGS_ALPHA_BLEND & texture.s.flags) ? k_ImGuiAlphaBlend : BGFX_STATE_NONE;
 					th = texture.s.handle;
 					if (0 != texture.s.mip)
 					{
@@ -624,7 +634,7 @@ void Gui::RenderDrawDataBgfx(ImDrawData* drawData) noexcept
 				}
 				else
 				{
-					state |= BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+					state |= k_ImGuiAlphaBlend;
 				}
 
 				// Project scissor/clipping rectangles into framebuffer space
@@ -659,6 +669,42 @@ void Gui::Draw() noexcept
 	ImGui::SetCurrentContext(_imgui);
 
 	RenderDrawDataBgfx(ImGui::GetDrawData());
+}
+
+void Gui::WarmUp() noexcept
+{
+	// One triangle with its corners in one place for each program and each blend. The first open of the debug menu
+	// then makes no new states of the graphics card.
+	constexpr uint32_t k_Corners = 3;
+	const std::array programs {toBgfx(_program), toBgfx(_imageProgram)};
+	constexpr std::array k_States {k_ImGuiState | k_ImGuiAlphaBlend, k_ImGuiState};
+	const glm::vec4 lodEnabled = {1.0f, 1.0f, 0.0f, 0.0f};
+	const auto layout = ImGuiLayout();
+	for (const auto program : programs)
+	{
+		for (const auto state : k_States)
+		{
+			if (!checkAvailTransientBuffers(k_Corners, layout, k_Corners))
+			{
+				return;
+			}
+			bgfx::TransientVertexBuffer vertices;
+			bgfx::TransientIndexBuffer indices;
+			bgfx::allocTransientVertexBuffer(&vertices, k_Corners, layout);
+			bgfx::allocTransientIndexBuffer(&indices, k_Corners, sizeof(ImDrawIdx) == 4);
+			std::fill_n(reinterpret_cast<ImDrawVert*>(vertices.data), k_Corners, ImDrawVert {});
+			std::fill_n(reinterpret_cast<ImDrawIdx*>(indices.data), k_Corners, ImDrawIdx {0});
+			if (program.idx == toBgfx(_imageProgram).idx)
+			{
+				bgfx::setUniform(toBgfx(_u_imageLodEnabled), glm::value_ptr(lodEnabled));
+			}
+			bgfx::setState(state);
+			bgfx::setTexture(0, toBgfx(_s_tex), toBgfx(_texture));
+			bgfx::setVertexBuffer(0, &vertices);
+			bgfx::setIndexBuffer(&indices);
+			bgfx::submit(_viewId, program);
+		}
+	}
 }
 
 bool Gui::ShowMenu() noexcept
