@@ -63,3 +63,19 @@ TEST(BuildSizedSave, SizesComeBack)
 	EXPECT_EQ(list, (std::vector<std::size_t> {5, 6}));
 	EXPECT_EQ(difference, -9);
 }
+
+TEST(BuildSizedSave, AWriterForToolsKeepsTheEndOfEachOuterValue)
+{
+	const entt::meta_ctx context;
+	BinaryWriter out(context);
+	out.KeepValueEnds();
+	Save(out, std::size_t {1});
+	// A list is one value, with its count and its items in it
+	Save(out, std::vector<std::size_t> {1, 2, 3});
+	Save(out, uint8_t {7});
+	EXPECT_EQ(out.ValueEnds(), (std::vector<size_t> {8u, 8u + 4u + 24u, 8u + 4u + 24u + 1u}));
+	// A usual writer keeps none
+	BinaryWriter usual(context);
+	Save(usual, std::size_t {1});
+	EXPECT_TRUE(usual.ValueEnds().empty());
+}

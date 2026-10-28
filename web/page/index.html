@@ -37,7 +37,10 @@
     <ul id="check-list"></ul>
     <p id="check-version"></p>
     <p id="copy-progress" hidden></p>
-    <button id="play" type="button" disabled>Play</button>
+    <div class="play-buttons">
+      <button id="play" type="button" disabled>Play</button>
+      <button id="play-online" type="button" disabled>Join Online Game</button>
+    </div>
   </section>
 </main>
 
@@ -50,9 +53,11 @@
   <summary>Game log</summary>
   <pre id="log"></pre>
 </details>
-<!-- While the game plays, this small line in the top right corner names the build and opens the game log -->
+<!-- While the game plays, this small line in the top right corner names the build, opens the multiplayer front end
+     and opens the game log -->
 <aside id="build-badge" hidden>
   <a class="build-link" target="_blank" rel="noopener">unknown</a>
+  <button id="join-online" type="button">Join Online Game</button>
   <button id="log-toggle" type="button">Log</button>
 </aside>
 <script src="launcher.js"></script>

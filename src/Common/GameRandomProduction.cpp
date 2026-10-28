@@ -15,24 +15,60 @@
 
 using namespace openblack;
 
-uint32_t GameRandomProduction::GameRand(uint32_t n)
+void GameRandomProduction::CountSyncedDraw([[maybe_unused]] const DrawSite& site)
+{
+	++_syncedDraws;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_trace != nullptr)
+	{
+		_trace->Draw(_syncedDraws, site);
+	}
+#endif
+}
+
+uint32_t GameRandomProduction::SyncedRand(uint32_t n, DrawSite site)
 {
 	if (n == 0)
 	{
 		return 0;
 	}
-	++_syncedDraws;
+	CountSyncedDraw(site);
 	return game_random::LHRand(n, _seeds.synced);
 }
 
-float GameRandomProduction::GameFloatRand(float x)
+float GameRandomProduction::SyncedFloatRand(float x, DrawSite site)
 {
 	// A float of 0 or not a number gives 0 without a draw
 	if (x != 0.0f && !std::isnan(x))
 	{
-		++_syncedDraws;
+		CountSyncedDraw(site);
 	}
 	return game_random::FloatRand(x, _seeds.synced);
+}
+
+void GameRandomProduction::SetSyncedDraws(uint64_t draws)
+{
+	_syncedDraws = draws;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_trace != nullptr)
+	{
+		_trace->SetDraws(draws);
+	}
+#endif
+}
+
+void GameRandomProduction::Restart()
+{
+	_seeds = {};
+	_particleStream = ParticleRandomStream::None;
+	_crtSeed = 1;
+	_syncedDraws = 0;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_trace != nullptr)
+	{
+		_trace->Restart();
+	}
+#endif
 }
 
 uint32_t GameRandomProduction::LocalRand(int32_t n)

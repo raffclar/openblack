@@ -59,11 +59,11 @@ ecs::Registry& EntityRegistry()
 void MagicSystem::ShowHeldSeed()
 {
 	auto& registry = EntityRegistry();
-	if (!_held.has_value() || !registry.Valid(*_held) || !Locator::infoConstants::has_value())
+	if (!Held().has_value() || !registry.Valid(*Held()) || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
-	const auto entity = *_held;
+	const auto entity = *Held();
 	auto& seed = registry.Get<SpellSeed>(entity);
 	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
 	seed.holdType = magic::hand_hold::HoldTypeOf(seed.ready, seedInfo.holdType);
@@ -102,11 +102,11 @@ void MagicSystem::PlaceHandEffect(glm::vec3 point, float handScale)
 	_handEffectPoint = point;
 	_handScale = handScale;
 	auto& registry = EntityRegistry();
-	if (!_held.has_value() || !registry.Valid(*_held) || !Locator::particleSystem::has_value())
+	if (!Held().has_value() || !registry.Valid(*Held()) || !Locator::particleSystem::has_value())
 	{
 		return;
 	}
-	const auto& seed = registry.Get<const SpellSeed>(*_held);
+	const auto& seed = registry.Get<const SpellSeed>(*Held());
 	if (seed.handEffect == ParticleSystemInterface::k_NoEffect)
 	{
 		return;
@@ -130,7 +130,7 @@ bool MagicSystem::PlayerHasSpellIcon(PlayerNames player, SpellSeedType seed) con
 bool MagicSystem::IsHandInInfluence() const
 {
 	auto& registry = EntityRegistry();
-	if (!_held.has_value() || !registry.Valid(*_held))
+	if (!Held().has_value() || !registry.Valid(*Held()))
 	{
 		return false;
 	}
@@ -138,18 +138,18 @@ bool MagicSystem::IsHandInInfluence() const
 	{
 		return true;
 	}
-	const auto& seed = registry.Get<const SpellSeed>(*_held);
+	const auto& seed = registry.Get<const SpellSeed>(*Held());
 	return _hand.point.has_value() && _world.HandInInfluence(seed.player, *_hand.point);
 }
 
 std::optional<magic::HeldCastAtPointer> MagicSystem::HeldCastAt(std::optional<entt::entity> pointed) const
 {
 	auto& registry = EntityRegistry();
-	if (!_held.has_value() || !registry.Valid(*_held) || !Locator::infoConstants::has_value())
+	if (!Held().has_value() || !registry.Valid(*Held()) || !Locator::infoConstants::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto& seed = registry.Get<const SpellSeed>(*_held);
+	const auto& seed = registry.Get<const SpellSeed>(*Held());
 	const auto type = HeldMagicType();
 	auto& self = const_cast<MagicSystem&>(*this);
 	magic::HeldCastAtPointer held {

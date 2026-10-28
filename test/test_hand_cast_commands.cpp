@@ -30,8 +30,8 @@ TEST(HandCastCommands, ACastWithAnEmptyHandDoesNothing)
 	EXPECT_EQ(magic.GetLastHandResult(), MagicSystem::HandResult::None);
 }
 
-// The hand of this computer is the hand of the first player: the casts of another player change nothing
-TEST(HandCastCommands, ACastOfAnotherPlayerDoesNothing)
+// Another player whose hand holds nothing: the cast and the let go of that player change nothing
+TEST(HandCastCommands, ACastOfAnotherPlayerWithAnEmptyHandDoesNothing)
 {
 	MagicSystem magic;
 	magic.DoCast(PlayerNames::PLAYER_TWO, player_commands::HandCast {.object = static_cast<entt::entity>(7)});

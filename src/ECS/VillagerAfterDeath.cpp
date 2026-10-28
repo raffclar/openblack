@@ -42,6 +42,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -173,7 +174,8 @@ void villager_after_death::Hear(entt::entity villager, DeathReason reason, std::
 	{
 		return;
 	}
-	const auto here = Locator::playerSystem::value().GetLocalPlayer();
+	const auto here =
+	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 	const auto owner = OwnerOf(villager).value_or(PlayerNames::NEUTRAL);
 	switch (villager_death::WhoHears(reason, killer.value_or(PlayerNames::NEUTRAL) == here, owner == here))
 	{
@@ -202,7 +204,8 @@ void villager_after_death::WarnOfTownLoss(entt::entity villager, entt::entity to
 	{
 		return;
 	}
-	const auto here = Locator::playerSystem::value().GetLocalPlayer();
+	const auto here =
+	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 	// A villager or a death of nobody's counts as the neutral player's
 	const auto owner = OwnerOf(villager).value_or(PlayerNames::NEUTRAL);
 	const auto by = killer.value_or(PlayerNames::NEUTRAL);

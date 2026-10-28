@@ -108,6 +108,12 @@ void Texture2D::UpdateLayer(uint16_t layer, const void* data, uint32_t size) con
 	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y, bgfx::copy(data, size));
 }
 
+void Texture2D::UpdateLayerFromMemory(uint16_t layer, const void* memory) const
+{
+	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y,
+	                      static_cast<const bgfx::Memory*>(memory));
+}
+
 void Texture2D::DumpTexture() const
 {
 	assert(!_name.empty());

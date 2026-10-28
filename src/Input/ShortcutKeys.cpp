@@ -22,6 +22,7 @@
 #include "Camera/CameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Camera/StartCamera.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -33,6 +34,7 @@
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -41,19 +43,20 @@
 #include "Gui/VillagerLabels.h"
 #include "Help/HelpProfile.h"
 #include "Help/HelpQuery.h"
+#include "LocalPlayer.h"
 #include "Locator.h"
 
 namespace openblack::input
 {
 namespace
 {
-/// Where the player's temple stands, if they have one
-[[nodiscard]] std::optional<glm::vec3> PlayerTemplePosition()
+/// Where the temple of a player stands, if the player has one
+[[nodiscard]] std::optional<glm::vec3> PlayerTemplePosition(PlayerNames player)
 {
 	std::optional<glm::vec3> position;
 	Locator::entitiesRegistry::value().Each<const ecs::components::Temple, const ecs::components::Transform>(
-	    [&position](const ecs::components::Temple& temple, const ecs::components::Transform& transform) {
-		    if (temple.owner == PlayerNames::PLAYER_ONE)
+	    [&position, player](const ecs::components::Temple& temple, const ecs::components::Transform& transform) {
+		    if (temple.owner == player)
 		    {
 			    position = transform.position;
 		    }
@@ -238,7 +241,9 @@ void ShortcutKeys::Update()
 		{
 			clickDistance = world->RefreshClickDistance(camera);
 		}
-		const auto templePosition = PlayerTemplePosition();
+		// The key flies to the temple of the player of this computer
+		const auto templePosition =
+		    PlayerTemplePosition(LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr));
 		press = zoom_to::TempleKey(now, current,
 		                           templePosition.has_value() ? std::optional(glm::vec2(templePosition->x, templePosition->z))
 		                                                      : std::nullopt,
@@ -256,6 +261,41 @@ void ShortcutKeys::Update()
 	camera.GetModel().SetFlight(flight->view.origin, flight->view.focus, flight->rise);
 	// The help's profile counts every flight to the temple or over the realm, and back, but not a single tap's view
 	if (flight->toPlace && Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Report(help::profile::k_CameraFlyToTemple);
+	}
+}
+
+void ShortcutKeys::StartAtTemple(PlayerNames player)
+{
+	// The start makes a new camera, which has no flight to fly back from and no last tap
+	_zoomTo = zoom_to::ZoomToPlaces {};
+	const auto temple = PlayerTemplePosition(player);
+	if (!temple.has_value())
+	{
+		return;
+	}
+	// The camera starts over the temple, as over the start place that a land's script gives
+	auto& camera = Locator::camera::value();
+	const auto& land = Locator::terrainSystem::value();
+	const glm::vec3 focus {temple->x, land.GetHeightAt(glm::vec2(temple->x, temple->z)), temple->z};
+	camera.Place(start_camera::OriginOver(focus), focus);
+	// Then it flies to the temple as a double tap of the temple key makes it fly
+	const zoom_to::Press press {.now = machine_clock::Ticks(),
+	                            .current = {.origin = camera.GetOrigin(), .focus = camera.GetFocus()},
+	                            .place = glm::vec2(temple->x, temple->z),
+	                            .distance = zoom_to::k_TempleDistance,
+	                            .pitch = zoom_to::k_TemplePitch,
+	                            .tapAllowed = false,
+	                            .clickDistance = std::nullopt};
+	const auto flight = _zoomTo.Act(press, [&land](int32_t mapX, int32_t mapZ) { return land.GetAltitude(mapX, mapZ); });
+	if (!flight.has_value())
+	{
+		return;
+	}
+	camera.GetModel().SetFlight(flight->view.origin, flight->view.focus, flight->rise);
+	// The help's profile counts this flight to the temple as it counts the flights of the temple key
+	if (Locator::helpProfileSystem::has_value())
 	{
 		Locator::helpProfileSystem::value().Trigger(help::profile::k_CameraFlyToTemple);
 	}
