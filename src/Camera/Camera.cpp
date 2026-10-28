@@ -63,9 +63,9 @@ float Camera::GetVerticalFieldOfView() const
 	return camera_lens::VerticalFieldOfView(_xFov, _aspect);
 }
 
-glm::mat4 Camera::GetRotationMatrix() const
+glm::mat4 Camera::GetRotationMatrix(Interpolation interpolation) const
 {
-	return static_cast<glm::mat3>(glm::transpose(GetViewMatrix(Camera::Interpolation::Current)));
+	return static_cast<glm::mat3>(glm::transpose(GetViewMatrix(interpolation)));
 }
 
 glm::mat4 Camera::GetViewMatrix(Interpolation interpolation) const
@@ -82,12 +82,11 @@ glm::mat4 Camera::GetViewMatrix(Interpolation interpolation) const
 camera_drawn::Pose Camera::DrawnPose(Interpolation interpolation) const
 {
 	auto pose = camera_drawn::Pose {.eye = GetOrigin(interpolation), .focus = GetFocus(interpolation)};
-	// The frame draws the world from an eye that is not on its focus and not below the land. The temple draws its inside
-	// from its own camera. The editor's camera goes anywhere.
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	if (interpolation == Interpolation::Current && !inTemple)
+	// The frame draws the world from an eye and a focus that are numbers, with the eye not on its focus and not below the
+	// land. The temple draws its inside from its own camera. The editor's camera goes anywhere.
+	if (interpolation == Interpolation::Current && DrawsTheWorld())
 	{
-		pose = camera_drawn::Separate(pose);
+		pose = camera_drawn::Separate(camera_drawn::WithoutNaN(pose, _lastCorrectPose));
 		if (_model != nullptr && _model->HeldInsideTheWorld() && Locator::terrainSystem::has_value())
 		{
 			pose = camera_drawn::AboveLand(pose, Locator::terrainSystem::value().GetHeightAt(glm::xz(pose.eye)));
@@ -126,6 +125,11 @@ glm::mat4 Camera::GetProjectionMatrix(Projection projection, Interpolation inter
 	return projection == Projection::ReversedZ ? k_ReverseZMatrix * drawn : drawn;
 }
 
+bool Camera::DrawsTheWorld()
+{
+	return !(Locator::temple::has_value() && Locator::temple::value().Active());
+}
+
 void Camera::KeepDrawnView()
 {
 	const auto pose = DrawnPose(Interpolation::Current);
@@ -135,6 +139,12 @@ void Camera::KeepDrawnView()
 	    .projection = _projectionMatrix,
 	    .nearClip = _nearClip,
 	};
+	// The world camera keeps its eye and its focus of this frame when they are numbers. A later eye or focus that is not
+	// a number changes to these.
+	if (DrawsTheWorld())
+	{
+		_lastCorrectPose = camera_drawn::WithoutNaN({.eye = GetOrigin(), .focus = GetFocus()}, _lastCorrectPose);
+	}
 }
 
 Camera::View Camera::GetDrawnView() const
@@ -261,10 +271,10 @@ Camera& Camera::SetInterpolatorT(float t)
 	return *this;
 }
 
-glm::vec3 Camera::GetForward() const
+glm::vec3 Camera::GetForward(Interpolation interpolation) const
 {
 	// Forward is +1 in openblack but is -1 in OpenGL
-	return static_cast<glm::mat3>(GetRotationMatrix()) * glm::vec3(0.0f, 0.0f, 1.0f);
+	return static_cast<glm::mat3>(GetRotationMatrix(interpolation)) * glm::vec3(0.0f, 0.0f, 1.0f);
 }
 
 glm::vec3 Camera::GetRight() const
@@ -272,9 +282,9 @@ glm::vec3 Camera::GetRight() const
 	return static_cast<glm::mat3>(GetRotationMatrix()) * glm::vec3(1.0f, 0.0f, 0.0f);
 }
 
-glm::vec3 Camera::GetUp() const
+glm::vec3 Camera::GetUp(Interpolation interpolation) const
 {
-	return static_cast<glm::mat3>(GetRotationMatrix()) * glm::vec3(0.0f, 1.0f, 0.0f);
+	return static_cast<glm::mat3>(GetRotationMatrix(interpolation)) * glm::vec3(0.0f, 1.0f, 0.0f);
 }
 
 std::unique_ptr<Camera> Camera::Reflect() const

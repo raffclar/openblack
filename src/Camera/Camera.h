@@ -119,9 +119,10 @@ public:
 	/// Where the lens is gliding to, or where it is when still
 	[[nodiscard]] float GetLensDestination() const { return _lens.Destination(); }
 
-	[[nodiscard]] glm::vec3 GetForward() const;
+	/// The direction of the view. The drawn view gives the direction of the view that the game drew last.
+	[[nodiscard]] glm::vec3 GetForward(Interpolation interpolation = Interpolation::Current) const;
 	[[nodiscard]] glm::vec3 GetRight() const;
-	[[nodiscard]] glm::vec3 GetUp() const;
+	[[nodiscard]] glm::vec3 GetUp(Interpolation interpolation = Interpolation::Current) const;
 
 	[[nodiscard]] std::unique_ptr<Camera> Reflect() const;
 
@@ -159,7 +160,7 @@ public:
 	/// start from this view. A command that puts the camera after the step does not change this view.
 	void KeepDrawnView();
 
-	[[nodiscard]] glm::mat4 GetRotationMatrix() const;
+	[[nodiscard]] glm::mat4 GetRotationMatrix(Interpolation interpolation = Interpolation::Current) const;
 	[[nodiscard]] Projection GetCameraProjection() const;
 
 	CameraModel& GetModel() { return *_model; }
@@ -263,6 +264,10 @@ protected:
 		float nearClip;
 	};
 	std::optional<View> _drawnView;
+	/// The last eye and focus of the world camera that have no coordinate that is not a number
+	camera_drawn::Pose _lastCorrectPose {.eye = camera_drawn::k_FirstCorrectPoint, .focus = camera_drawn::k_FirstCorrectPoint};
+	/// True when the frame draws the world from this camera, and false when the temple draws its inside
+	[[nodiscard]] static bool DrawsTheWorld();
 	/// The kept view, or the view now when there is no kept view
 	[[nodiscard]] View GetDrawnView() const;
 	[[nodiscard]] glm::mat4 GetProjectionMatrix(Projection projection, Interpolation interpolation) const;
