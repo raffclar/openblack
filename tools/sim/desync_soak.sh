@@ -24,6 +24,7 @@
 #   --ai-seeds A        the AI seeds (default 1,2; 0 is the built-in personalities)
 #   --modes M           all-computer, all-but-one or both, divided by commas (default all-computer; all-but-one has one
 #                       human client with a still hand)
+#   --maps              every land of ai_soak.py (its --maps), in place of --lands
 #   --part-observer     the world of the last observer of each game parts on purpose at a random turn (from the shuffle
 #                       seed) and must come back in step from the server's world
 #   --pc-bin DIR        mac: after the soak, play each server_check of the Mac again on the PC with these programs and
@@ -87,6 +88,7 @@ while [ $# -gt 0 ]; do
 	--hours) HOURS=$2; shift 2 ;;
 	--lands) LANDS=$2; LANDS_OPTION=(--lands "$LANDS"); shift 2 ;;
 	--part-observer) PART_OBSERVER=1; shift ;;
+	--maps) LANDS_OPTION=(--maps); shift ;;
 	--seeds) SEEDS=$2; shift 2 ;;
 	--ai-seeds) AI_SEEDS=$2; shift 2 ;;
 	--modes) MODES=$2; shift 2 ;;
