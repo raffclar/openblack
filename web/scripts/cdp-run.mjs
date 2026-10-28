@@ -379,7 +379,13 @@ const takeChecksums = async () => {
     checksumCount += got.lines.length;
     checksumTurnLines += got.lines.filter((line) => line.startsWith('{"turn":')).length;
   }
-  return checksumTurns > 0 && checksumTurnLines >= checksumTurns;
+  if (checksumTurns > 0 && checksumTurnLines >= checksumTurns) {
+    return true;
+  }
+  // A game that loaded the world state of the server after a part has no checksum for the turns between the two: its
+  // count stays below the turns. The run also ends once the game stopped.
+  return checksumTurns > 0 &&
+    await evaluate("(globalThis.openblackLogText?.() ?? '').includes('The game stopped with the code')") === true;
 };
 
 let taken = 0;

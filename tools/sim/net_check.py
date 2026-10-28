@@ -1021,6 +1021,9 @@ def free_port():
 
 
 WEB_WIDTH = 1280
+# The click on the speech button of the web client, from the top right corner of the page: below the small line of the
+# page (the build, Join Online Game and Log) that lies over the top of the button
+WEB_SPEECH_FROM_CORNER = (16, 24)
 
 
 def web_chat_steps(chats, seconds, width=WEB_WIDTH):
@@ -1033,7 +1036,8 @@ def web_chat_steps(chats, seconds, width=WEB_WIDTH):
         steps.append({"at": at, "do": "wait-log", "text": f"Network game: {turns} turns compared", "seconds": seconds})
         at += 0.5
         for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
-            steps.append({"at": at, "do": "mouse", "type": kind, "x": width - 8, "y": 8,
+            steps.append({"at": at, "do": "mouse", "type": kind, "x": width - WEB_SPEECH_FROM_CORNER[0],
+                          "y": WEB_SPEECH_FROM_CORNER[1],
                           "button": "none" if kind == "mouseMoved" else "left"})
             at += 0.1
         steps.append({"at": at, "do": "shot", "name": f"chat{number}-open"})
@@ -1125,6 +1129,13 @@ def start_web_client(options, out, join_url, ticket, certs, turns, processes):
 def web_log_of(folder):
     """The game log of the web client: cdp-run writes the log that the page keeps to page-log.txt at the end"""
     return os.path.join(folder, "page-log.txt")
+
+
+def web_back_at(log):
+    """The turn of the last world state of the server that a client loaded after a part, or None"""
+    recovered = lines_with(log, ["The world goes on from the server's world"])
+    match = re.search(r"of turn (\d+)", recovered[-1]) if recovered else None
+    return int(match.group(1)) if match else None
 
 
 def web_remote_done(folder):
@@ -1708,6 +1719,13 @@ def main():
         web = web_checksums(web_folder)
         compared = [turn for turn in sorted(web) if turn in server_checks]
         different = [turn for turn in compared if web[turn].lower() != server_checks[turn].lower()]
+        # A part on purpose (--web-part-at): the turns up to the world state of the server that the page loaded differ
+        back_at = web_back_at(web_log_of(web_folder)) if options.web_part_at is not None else None
+        if back_at is not None:
+            different = [turn for turn in different if turn > back_at]
+        elif options.web_part_at is not None:
+            print("the web client parted on purpose, but did not load the world state of the server")
+            different = different or [options.web_part_at]
         web_same = not different and len(compared) >= max(1, (options.turns - 1 - min(web, default=0)) // 2)
         all_same = all_same and web_same
         summary["clients"].append({"client": "web", "turns": len(web), "compared": len(compared),

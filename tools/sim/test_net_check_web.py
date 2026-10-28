@@ -12,6 +12,7 @@
 import argparse
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,7 +34,7 @@ class WebChatSteps(unittest.TestCase):
                                     "seconds": 900})
         clicks = [step for step in steps if step["do"] == "mouse"]
         self.assertEqual([step["type"] for step in clicks], ["mouseMoved", "mousePressed", "mouseReleased"])
-        self.assertTrue(all(step["x"] == 1272 and step["y"] == 8 for step in clicks))
+        self.assertTrue(all(step["x"] == 1264 and step["y"] == 24 for step in clicks))
         self.assertEqual(clicks[0]["button"], "none")
         self.assertEqual(clicks[1]["button"], "left")
         keys = [step["key"] for step in steps if step["do"] == "key"]
@@ -81,6 +82,25 @@ class ChatCameTo(unittest.TestCase):
 
     def test_the_text_must_be_the_same(self):
         self.assertEqual(net_check.chat_came_to([[(310, 1, "hi")]], 1, "hello"), [False])
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class WebBackAt(unittest.TestCase):
+    def test_the_last_world_state_that_the_page_loaded_counts(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log = os.path.join(folder, "page-log.txt")
+            with open(log, "w", encoding="utf-8") as file:
+                file.write("[game] [warning] The world parts from the server's world at turn 601
+"
+                           "[game] [info] The world goes on from the server's world of turn 612
+"
+                           "[game] [info] The world goes on from the server's world of turn 840
+")
+            self.assertEqual(net_check.web_back_at(log), 840)
+
+    def test_a_page_with_no_load_gives_none(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertIsNone(net_check.web_back_at(os.path.join(folder, "page-log.txt")))
 
 
 @unittest.skipIf(web_remote is None, "web_remote needs net_check")
