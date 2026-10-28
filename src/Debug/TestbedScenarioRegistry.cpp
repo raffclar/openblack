@@ -11009,6 +11009,22 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.low_detail_scroll_text",
+	    .name = "At the lowest detail levels the scrolls have textures of half the size",
+	    .facet = Facet::Appearance,
+	    .description = "Start the game with --detail-level 1 (Low) or 0 (Minimum). The player has a temple and is put in "
+	                   "its main room. Look at the scrolls on the walls from a distance, then start again with "
+	                   "--detail-level 4 to compare.",
+	    .expected = "At Low and Minimum the text and the parchment of each scroll are softer, with half the texels "
+	                "along each side. Each texel is the mean of four texels of the full text. When the camera goes "
+	                "close to a scroll, the text in front of it is as sharp as at other levels.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
 	    .id = "temple.way_out_glow",
 	    .name = "A white light grows at the temple's way out as the player leaves",
 	    .facet = Facet::Story,
