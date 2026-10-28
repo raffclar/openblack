@@ -23,6 +23,7 @@
 #include <Audio/AudioManagerNoOp.h>
 #include <Camera/Camera.h>
 #include <Camera/DefaultWorldCameraModel.h>
+#include <Camera/ScriptCameraModel.h>
 #include <ECS/Registry.h>
 #include <ECS/Systems/CameraHelpSystemInterface.h>
 #include <ECS/Systems/Implementations/ScriptControlSystem.h>
@@ -159,6 +160,81 @@ TEST_P(CameraHandback, ThePlayersCameraLooksTheWayTheScriptLeftIt)
 
 // With and without the player turning from the first frame, and with and without the camera tilting itself
 INSTANTIATE_TEST_SUITE_P(TurningAndTilting, CameraHandback, testing::Combine(testing::Bool(), testing::Bool()));
+
+namespace
+{
+/// The player does nothing and the camera does not tilt itself
+class GlideAfterHandback: public CameraHandback
+{
+};
+
+// Where a script sends the camera just before it gives the camera back: higher, and looking further away
+constexpr glm::vec3 k_SentOrigin {1493.645f, 50.0f, 2091.68f};
+constexpr glm::vec3 k_SentFocus {1520.0f, 6.726f, 2140.0f};
+} // namespace
+
+TEST_P(GlideAfterHandback, TheCameraGlidesOnToWhereTheScriptSentIt)
+{
+	ScriptControlSystem control;
+	ASSERT_TRUE(control.StartCameraControl(_camera, {.task = 7, .templeScript = false, .insideTemple = false}, FlatLand));
+	auto* script = dynamic_cast<ScriptCameraModel*>(&_camera.GetModel());
+	ASSERT_NE(script, nullptr);
+	script->MoveOrigin(k_SentOrigin, 3.0f);
+	script->MoveFocus(k_SentFocus, 3.0f);
+	for (int frame = 0; frame < 30; ++frame)
+	{
+		_camera.Update(k_Frame);
+	}
+	const auto released = _camera.GetOrigin();
+	const auto speed = script->GetOriginSpeed();
+	ASSERT_GT(speed.y, 1.0f);
+	ASSERT_LT(released.y, k_SentOrigin.y - 5.0f);
+
+	ASSERT_TRUE(control.EndCameraControl(_camera, 7));
+	ASSERT_NE(dynamic_cast<const DefaultWorldCameraModel*>(&_camera.GetModel()), nullptr);
+
+	// On the first frame it continues up at about the speed that it had
+	_camera.HandleActions(k_Frame);
+	_camera.Update(k_Frame);
+	_camera.HandleKeys(k_Frame);
+	const auto risen = _camera.GetOrigin().y - released.y;
+	EXPECT_GT(risen, 0.0f);
+
+	// After a few seconds it is where the script sent it, and looks at the point the script chose
+	for (int frame = 0; frame < 300; ++frame)
+	{
+		_camera.HandleActions(k_Frame);
+		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
+	}
+	EXPECT_LT(glm::distance(_camera.GetOrigin(), k_SentOrigin), 0.01f);
+	EXPECT_GT(glm::dot(glm::normalize(_camera.GetFocus() - _camera.GetOrigin()), glm::normalize(k_SentFocus - k_SentOrigin)),
+	          0.9999f);
+}
+
+TEST_P(GlideAfterHandback, AScriptThatPutsTheCameraAndGivesItBackAtOnceLeavesItThere)
+{
+	ScriptControlSystem control;
+	ASSERT_TRUE(control.StartCameraControl(_camera, {.task = 7, .templeScript = false, .insideTemple = false}, FlatLand));
+	auto* script = dynamic_cast<ScriptCameraModel*>(&_camera.GetModel());
+	ASSERT_NE(script, nullptr);
+	// The script puts the camera and gives it back before the camera's next frame
+	script->SetOrigin(k_SentOrigin);
+	script->SetFocus(k_SentFocus);
+	ASSERT_TRUE(control.EndCameraControl(_camera, 7));
+
+	// The camera is at the place at once, and stays there
+	EXPECT_LT(glm::distance(_camera.GetOrigin(), k_SentOrigin), 0.01f);
+	for (int frame = 0; frame < 60; ++frame)
+	{
+		_camera.HandleActions(k_Frame);
+		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
+		EXPECT_LT(glm::distance(_camera.GetOrigin(), k_SentOrigin), 0.01f) << "frame " << frame;
+	}
+}
+
+INSTANTIATE_TEST_SUITE_P(StillPlayer, GlideAfterHandback, testing::Values(std::make_tuple(false, false)));
 
 namespace
 {

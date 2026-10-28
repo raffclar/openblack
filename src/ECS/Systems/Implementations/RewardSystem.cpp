@@ -74,9 +74,10 @@ constexpr entt::hashed_string k_SmokeSheetAlpha = entt::hashed_string("raw/smoke
 /// origin rather than the chest
 constexpr glm::vec3 k_ShakeCentre {0.0f};
 
-float LocalRandom(float a, float b)
+/// The dust is only a picture, so it draws on the random numbers of the C library, as the frames do
+float CrtRandom(float a, float b)
 {
-	return Locator::gameRandom::has_value() ? a + Locator::gameRandom::value().LocalFloatRand(b - a) : (a + b) * 0.5f;
+	return Locator::gameRandom::has_value() ? Locator::gameRandom::value().CrtRandom(a, b) : (a + b) * 0.5f;
 }
 
 float LandHeight(glm::vec3 point)
@@ -191,7 +192,7 @@ entt::entity RewardSystem::Create(glm::vec3 position, RewardObjectInfo type, std
 	chest.landingPoint = ground;
 	chest.madeAt = position;
 	// Its dust is made with it, and only shown once it has fallen
-	chest.dust = reward::MakeDust(LocalRandom);
+	chest.dust = reward::MakeDust(CrtRandom);
 	if (fromSky)
 	{
 		chest.state = Reward::State::Falling;
