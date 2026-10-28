@@ -40,7 +40,7 @@ protected:
 
 	void Give(Kind kind, CreatureObjectAction::Phase phase, Status status)
 	{
-		Locator::entitiesRegistry::value().Assign<CreatureObjectAction>(
+		Locator::entitiesRegistry::value().AssignOrReplace<CreatureObjectAction>(
 		    creature, CreatureObjectAction {.kind = kind, .phase = phase, .status = status});
 	}
 
