@@ -86,7 +86,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Shark::position>("position")
 	    .Field<&components::Shark::turnStart>("turnStart")
 	    .Field<&components::Shark::heading>("heading")
-	    .Field<&components::Shark::clipPlace>("clipPlace");
+	    .Field<&components::Shark::clipPlace>("clipPlace")
+	    .Field<&components::Shark::drawn>("drawn");
 	Reflect<components::SkyDome>(context)
 	    .Field<&components::SkyDome::meshId>("meshId")
 	    .Field<&components::SkyDome::textureId>("textureId")
@@ -119,10 +120,10 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")
 	    .Field<&components::SoundTag::active>("active")
-	    .Field<&components::SoundTag::emitter>("emitter")
+	    .RunField<&components::SoundTag::emitter>("emitter")
 	    .Field<&components::SoundTag::point>("point")
 	    .Field<&components::SoundTag::delayed>("delayed")
-	    .Field<&components::SoundTag::turns>("turns")
+	    .RunField<&components::SoundTag::turns>("turns")
 	    .Field<&components::SoundTag::owner>("owner")
 	    .Field<&components::SoundTag::loops>("loops");
 	Reflect<components::SpellCaster>(context)

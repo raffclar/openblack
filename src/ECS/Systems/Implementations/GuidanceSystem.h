@@ -40,6 +40,7 @@ public:
 	void AlignmentTurn(float change) override;
 	void SayOneOff(guidance::OneOff oneOff) override;
 	void KilledVillager(entt::entity villager) override;
+	void CreatureWonFight(entt::entity creature) override;
 	void WorshipperDied() override;
 	void LosingVillager(entt::entity villager) override;
 	void LowOnPeople(entt::entity town) override;

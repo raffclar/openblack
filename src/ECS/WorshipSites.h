@@ -42,7 +42,8 @@ inline constexpr float k_FoodPotTurn = 1.5f;
 inline constexpr uint32_t k_RestPoint = 7;
 /// The site's middle, which villagers are judged near or far from, in the model's own space
 inline constexpr glm::vec3 k_CentrePoint {12.55f, 0.0f, -26.1f};
-/// How far round its middle a site takes the effects of miracles and the heat of fires, whatever its size
+/// How far round its middle a site reaches, whatever its size. The site takes the effects of miracles and the heat of
+/// fires in this radius, and the distance to the site is measured from the edge of this radius.
 inline constexpr float k_EffectRadius = 14.0f;
 /// The food pot is made smaller than its kind, until the food in it sets its size
 inline constexpr float k_FoodPotScale = 0.7f;
@@ -63,6 +64,10 @@ inline constexpr int32_t k_LandWithoutSites = 1;
 /// The site's middle on the land, for a site standing at a spot, turned and scaled as its model is drawn: what food and
 /// wood poured onto the site are judged near or far from
 [[nodiscard]] glm::vec2 CentreOnLand(glm::vec3 position, const glm::mat3& rotation, float scale);
+
+/// The distance from the edge of a site to the edge of a thing: the distance from the middle of the site, less the reach
+/// of the site and the radius of the thing. A value of 0 or less means that the thing touches the site.
+[[nodiscard]] float EdgeGap(glm::vec2 centre, glm::vec2 thing, float thingRadius);
 
 /// Of the free places around a temple, the one whose site would stand nearest a spot on the land, judged by where the
 /// model's place point would be. The game turns the point only by the place's own share of a turn, not by the way the

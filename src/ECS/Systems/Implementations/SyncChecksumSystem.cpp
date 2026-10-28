@@ -68,8 +68,16 @@ void SyncChecksumSystem::ProcessTurn()
 	{
 		_pool = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
 	}
+	ecs::reflection::WorldRows* rows = nullptr;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	ecs::reflection::WorldRows keptRows;
+	if (_rowDump)
+	{
+		rows = &keptRows;
+	}
+#endif
 	const auto hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
-	                                       synced_state::PresentationParts(), _keepParts && _byField, visit, _pool.get());
+	                                       synced_state::PresentationParts(), _keepParts && _byField, visit, _pool.get(), rows);
 	uint32_t seed = 0;
 	uint64_t draws = 0;
 	if (Locator::gameRandom::has_value())
@@ -78,6 +86,16 @@ void SyncChecksumSystem::ProcessTurn()
 		seed = random.GetSeeds().synced;
 		draws = random.GetSyncedDraws();
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The rows go to the dump before the listener compares the checksum, so that a part at this turn finds them. The
+	// checksum also mixes the synced seed and the count of the synced draws, so the rows keep them too.
+	if (_rowDump)
+	{
+		row_dump::AddValue(keptRows, "GameRandom.seed", std::span(reinterpret_cast<const uint8_t*>(&seed), sizeof(seed)));
+		row_dump::AddValue(keptRows, "GameRandom.draws", std::span(reinterpret_cast<const uint8_t*>(&draws), sizeof(draws)));
+		_rowDump->Keep(turn, std::move(keptRows));
+	}
+#endif
 	// A component with no registration is left out of the checksum, so a change in it is never seen: tell of each name once
 	if (const auto fresh = _reported.Fresh(hash.unregistered); !fresh.empty())
 	{
@@ -100,3 +118,26 @@ void SyncChecksumSystem::ProcessTurn()
 		_listener(*_last);
 	}
 }
+
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+bool SyncChecksumSystem::StartRowDump(const std::filesystem::path& path, row_dump::Settings settings)
+{
+	_rowDump.reset();
+	_rowFile = std::make_unique<std::ofstream>(path, std::ios::binary | std::ios::trunc);
+	if (!_rowFile->is_open())
+	{
+		_rowFile.reset();
+		return false;
+	}
+	_rowDump = std::make_unique<row_dump::RowDump>(*_rowFile, settings);
+	return true;
+}
+
+void SyncChecksumSystem::DumpPart(uint32_t turn, std::string_view reason, uint32_t source)
+{
+	if (_rowDump)
+	{
+		_rowDump->Part(turn, reason, source);
+	}
+}
+#endif

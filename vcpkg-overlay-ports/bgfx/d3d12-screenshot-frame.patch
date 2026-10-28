@@ -1,0 +1,24 @@
+--- a/bgfx/src/renderer_d3d12.cpp
++++ b/bgfx/src/renderer_d3d12.cpp
+@@ -2360,7 +2360,9 @@ namespace bgfx { namespace d3d12
+ 			{
+ 				int64_t start = bx::getHPCounter();
+ 
+-				m_cmd.finish(m_backBufferColorFence[(m_backBufferColorIdx-1) % m_scd.bufferCount]);
++				// Wait for the frame before the one that is presented. The index goes back one place in the ring of
++				// buffers, also from place 0 when the number of buffers is not a power of two.
++				m_cmd.finish(m_backBufferColorFence[(m_backBufferColorIdx+m_scd.bufferCount-1) % m_scd.bufferCount]);
+ 
+ 				HRESULT hr = S_OK;
+ 				uint32_t syncInterval = !!(m_reset & BGFX_RESET_VSYNC);
+@@ -2906,7 +2908,9 @@ namespace bgfx { namespace d3d12
+ 			}
+ 			else if (NULL != mainFrameBuffer().m_swapChain)
+ 			{
+-				uint32_t idx = (m_backBufferColorIdx-1) % m_scd.bufferCount;
++				// The screenshot comes after submit and before the flip, thus the buffer that submit drew into holds the
++				// frame of the request.
++				uint32_t idx = m_backBufferColorIdx;
+ 				m_cmd.finish(m_backBufferColorFence[idx]);
+ 				backBuffer = mainFrameBuffer().m_backBufferColor[idx];
+ 			}

@@ -39,6 +39,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -47,6 +48,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -182,10 +184,8 @@ bool TurnTowards(entt::entity villager, const glm::vec3& point, float step = k_W
 	{
 		turn = std::copysign(step, turn);
 	}
-	wallHug.yAngle += turn;
 	// Turning the walker turns the way its walk faces as well
-	wallHug.gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(wallHug.yAngle));
-	transform.rotation = portable_math::EulerAngleY(-wallHug.yAngle - std::numbers::pi_v<float> * 0.5f);
+	openblack::ecs::living_facing::FaceAngle(registry, villager, wallHug.yAngle + turn);
 	return faces;
 }
 /// The awe of a town's people at the belief that it gained: the guidance sometimes plays a voice at the thing

@@ -9,6 +9,9 @@
 
 #pragma once
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include <fstream>
+#endif
 #include <functional>
 #include <memory>
 #include <optional>
@@ -50,6 +53,11 @@ public:
 	}
 	[[nodiscard]] std::optional<TurnChecksum> GetLast() const override { return _last; }
 	void SetTurnListener(std::function<void(const TurnChecksum&)> listener) override { _listener = std::move(listener); }
+	[[nodiscard]] std::function<void(const TurnChecksum&)> GetTurnListener() const override { return _listener; }
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	bool StartRowDump(const std::filesystem::path& path, row_dump::Settings settings) override;
+	void DumpPart(uint32_t turn, std::string_view reason, uint32_t source) override;
+#endif
 
 private:
 	/// The names of the saved components, by which the checksum reads the world
@@ -65,6 +73,11 @@ private:
 	/// The unregistered components that the log already told of
 	synced_state::UnregisteredReporter _reported;
 	std::function<void(const TurnChecksum&)> _listener;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	/// Tools: the file of the row dump, and the dump that writes to it
+	std::unique_ptr<std::ofstream> _rowFile;
+	std::unique_ptr<row_dump::RowDump> _rowDump;
+#endif
 };
 
 } // namespace openblack::ecs::systems

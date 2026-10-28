@@ -833,6 +833,10 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 		}
 	}
 	record["entities"] = entities;
+	// How many entities the world made and lost since it started: a count that two computers do not share shows a step
+	// that made or removed an entity outside the turns
+	record["entities_made"] = registry->GetEntitiesMade();
+	record["entities_gone"] = registry->GetEntitiesGone();
 	record["hash"] = fmt::format("{:016x}", TransformHash(*registry));
 	// The hashes of the transforms of the entities of each component, to find what made two runs part
 	if (_hashParts != sim_run::HashDetail::None)

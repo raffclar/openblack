@@ -14,6 +14,7 @@
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -33,6 +34,11 @@ entt::entity PlayerArchetype::Create(PlayerNames name)
 	if (Locator::playerSystem::has_value())
 	{
 		Locator::playerSystem::value().TakeUpKept(entity);
+	}
+	// A player made after the land made its towns may cast what its towns offer
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().PlayerMade(name);
 	}
 	return entity;
 }

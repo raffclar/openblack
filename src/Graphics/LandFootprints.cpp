@@ -75,10 +75,10 @@ namespace land_footprints = ecs::land_footprints;
 }
 
 void Paint(std::span<uint16_t> texels, glm::ivec2 block, const L3DMesh::Footprint& footprint,
-           const footprint_paint::Placement& placement, footprint_paint::Mix mix)
+           const footprint_paint::Placement& placement, footprint_paint::Mix mix, int side)
 {
 	const footprint_paint::Picture picture {.width = footprint.width, .height = footprint.height, .texels = footprint.texels};
-	footprint_paint::PaintFootprint(texels, block, picture, footprint.triangles, placement, mix);
+	footprint_paint::PaintFootprint(texels, block, picture, footprint.triangles, placement, mix, side);
 }
 } // namespace
 
@@ -150,10 +150,19 @@ void LandFootprints::MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock)
 void LandFootprints::FindChangedThings()
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	for (auto& known : _known)
+	// A thing that went while the land was not drawn, as in the temple of a network game where the world goes on, can
+	// leave its number to a new thing. The footprint of the thing that went comes off first.
+	std::vector<entt::entity> gone;
+	for (const auto [entity, known] : _known.each())
 	{
 		known.seen = false;
+		if (!registry.Valid(entity))
+		{
+			MarkBlocks(known.lowBlock, known.highBlock);
+			gone.push_back(entity);
+		}
 	}
+	_known.erase(gone.begin(), gone.end());
 	// Only a thing filed in the map's cells counts: the game paints a footprint when its thing goes into the cells, and
 	// paints it no more once the thing comes out of them. A known thing that is not in the cells now is not seen, and the
 	// loop after this one removes it.
@@ -299,6 +308,7 @@ void LandFootprints::PaintBlock(size_t block)
 	const auto& landBlock = island.GetBlocks().at(block);
 	const auto position = landBlock.GetBlockPosition();
 	const auto corner = landBlock.GetMapPosition();
+	const auto side = island.GetBlockTextureSide();
 
 	const auto things = land_footprints::ThingsOverBlock(
 	    position, [&map](glm::ivec2 cell) { return map.GetFiledFixedInGridCell(ecs::MapInterface::CellId(cell)); },
@@ -330,7 +340,7 @@ void LandFootprints::PaintBlock(size_t block)
 	auto& own = _ownTexels[block];
 	if (own.empty())
 	{
-		own.resize(static_cast<size_t>(footprint_paint::k_BlockTexels) * footprint_paint::k_BlockTexels);
+		own.resize(static_cast<size_t>(side) * static_cast<size_t>(side));
 		island.PaintBlockTexels(block, own);
 	}
 	_texels = own;
@@ -342,12 +352,12 @@ void LandFootprints::PaintBlock(size_t block)
 		const auto placement = known != nullptr && SameTransform(known->transform, transform)
 		                           ? known->placement
 		                           : PlacementFor(registry, entity, transform);
-		Paint(_texels, position, *footprint, placement, footprint_paint::Mix::Colour);
+		Paint(_texels, position, *footprint, placement, footprint_paint::Mix::Colour, side);
 	}
 	for (const auto* print : loose)
 	{
 		Paint(_texels, position, *print->footprint, print->placement,
-		      print->channel ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour);
+		      print->channel ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour, side);
 	}
 	island.SetBlockTexels(block, _texels);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"),

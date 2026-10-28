@@ -605,9 +605,14 @@ std::optional<Json> reflection::detail::ScalarFromText(const Json& value)
 Json reflection::ComponentToJson(const entt::meta_ctx& context, const entt::type_info& info, const void* component)
 {
 	const auto type = entt::resolve(context, info);
-	if (!type || type.data().begin() == type.data().end() || component == nullptr)
+	if (!type || component == nullptr)
 	{
 		return nullptr;
+	}
+	if (type.data().begin() == type.data().end())
+	{
+		// A component that is one number or one enumeration has no fields: it is written as that value
+		return type.is_enum() || type.is_arithmetic() ? AnyToJson(type.from_void(component), 0) : Json(nullptr);
 	}
 	return FieldsToJson(type.from_void(component), 0);
 }

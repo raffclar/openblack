@@ -86,6 +86,32 @@ std::vector<Action> EachCommand()
 	    HandCastUnlock {.seed = Entity(25)},
 	    LeashPick {.type = LeashType::Good},
 	    HandShakeOff {},
+	    GripDust {.point = {2000.5f, 104.25f, -2363.0f}},
+	    HelpReport {.events = 0x0102030405060708,
+	                .boxShows = false,
+	                .cursorOnPoint = true,
+	                .cameraSeesLand = true,
+	                .cameraNearAndSteep = true,
+	                .cameraSeesSky = false},
+	    HelpQuery {.thing = Entity(26), .hasGround = true, .ground = {1.0f, 2.0f, 3.0f}},
+	    ViewReport {.eye = {1.0f, 2.0f, 3.0f},
+	                .focus = {4.0f, 5.0f, 6.0f},
+	                .lens = 1.2f,
+	                .nearClip = 0.5f,
+	                .screenWidth = 1280,
+	                .screenHeight = 1024,
+	                .aspect = 1.25f,
+	                .inclusionDistance = 30.0f,
+	                .cameraOrders = 7,
+	                .cameraArrived = true,
+	                .gripsLand = false,
+	                .otherButton = true},
+	    GiveCallOff {.creature = Entity(27)},
+	    CreatureTattoo {.creature = Entity(28),
+	                    .slots = {creature_tattoo::Slot {.design = 3, .site = 1, .colour = {10, 20, 30}}},
+	                    .hasPictures = true,
+	                    .pictures = {1, 2, 3}},
+	    LeashLength {.length = 12.5f},
 	};
 }
 
@@ -109,7 +135,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 31)
+	switch (bits(random) % 38)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -209,6 +235,54 @@ Action RandomAction(std::mt19937& random)
 		return LeashPick {.type = std::array {LeashType::Evil, LeashType::Rope, LeashType::Good}.at(bits(random) % 3)};
 	case 29:
 		return HandShakeOff {};
+	case 30:
+		return GripDust {.point = vector()};
+	case 31:
+		return HelpReport {.events = (uint64_t {bits(random)} << 32) | bits(random),
+		                   .boxShows = bits(random) % 2 == 0,
+		                   .cursorOnPoint = bits(random) % 2 == 0,
+		                   .cameraSeesLand = bits(random) % 2 == 0,
+		                   .cameraNearAndSteep = bits(random) % 2 == 0,
+		                   .cameraSeesSky = bits(random) % 2 == 0};
+	case 32:
+		return HelpQuery {.thing = entity(), .hasGround = bits(random) % 2 == 0, .ground = vector()};
+	case 33:
+		return ViewReport {.eye = vector(),
+		                   .focus = vector(),
+		                   .lens = number(),
+		                   .nearClip = number(),
+		                   .screenWidth = static_cast<uint16_t>(bits(random)),
+		                   .screenHeight = static_cast<uint16_t>(bits(random)),
+		                   .aspect = number(),
+		                   .inclusionDistance = number(),
+		                   .cameraOrders = bits(random),
+		                   .cameraArrived = bits(random) % 2 == 0,
+		                   .gripsLand = bits(random) % 2 == 0,
+		                   .otherButton = bits(random) % 2 == 0};
+	case 34:
+		return GiveCallOff {.creature = entity()};
+	case 35:
+	{
+		CreatureTattoo tattoo {.creature = entity()};
+		for (auto& slot : tattoo.slots)
+		{
+			slot = {.design = static_cast<uint8_t>(bits(random) % 16),
+			        .site = static_cast<uint8_t>(bits(random) % 16),
+			        .colour = glm::u8vec3(bits(random) % 256, bits(random) % 256, bits(random) % 256)};
+		}
+		tattoo.hasPictures = bits(random) % 2 == 0;
+		if (tattoo.hasPictures)
+		{
+			tattoo.pictures.resize(bits(random) % 64);
+			for (auto& byte : tattoo.pictures)
+			{
+				byte = static_cast<uint8_t>(bits(random));
+			}
+		}
+		return tattoo;
+	}
+	case 36:
+		return LeashLength {.length = number()};
 	default:
 		return PlayerLeft {};
 	}
@@ -270,15 +344,28 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5, 9, 12,
-	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 2, 1};
+	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5, 9, 18, 5,  49, 17, 5, 5,  5,  9,  12, 1,  18, 11,
+	                                 5, 21, 15, 3, 5,  1, 2, 1,  61, 5,  2,  1, 13, 10, 18, 50, 5, 51, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
 		EXPECT_EQ(SizeOf(commands[i]), sizes[i]) << i;
-		// The tags follow the order of the commands. The leave of the server has tag 17.
-		const size_t tag = std::holds_alternative<PlayerLeft>(commands[i]) ? 17 : i + 1;
+		// The tags follow the order of the commands. The leave of the server has tag 17 and the view report tag 36. Tags
+		// 35 and 37 belong to commands of other branches, so the commands after the view report have tags two higher.
+		size_t tag = i + 1;
+		if (std::holds_alternative<PlayerLeft>(commands[i]))
+		{
+			tag = 17;
+		}
+		else if (std::holds_alternative<ViewReport>(commands[i]))
+		{
+			tag = 36;
+		}
+		else if (tag > 34)
+		{
+			tag += 2;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
@@ -474,6 +561,23 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	auto gesture = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {SeedGesture {}}});
 	gesture[10] = 3;
 	EXPECT_EQ(Decode(gesture).error, DecodeError::Value);
+	// A tattoo of a design that is not one of the sixteen, a pictures flag that is not 0 or 1, pictures with no flag, or
+	// a block of pictures larger than eight pictures
+	auto tattoo = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {CreatureTattoo {.creature = Entity(1)}}});
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::None);
+	tattoo[14] = 16;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[14] = 0;
+	tattoo[54] = 2;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[54] = 0;
+	tattoo[55] = 1;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[54] = 1;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Truncated);
+	tattoo[55] = 0x29;
+	tattoo[56] = 0x40;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
 
 	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}});
 	turn[8] = 32;
@@ -671,5 +775,47 @@ TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
 	// A seed number after the last seed of the game is refused
 	auto wrong = bytes;
 	wrong.back() = static_cast<uint8_t>(SpellSeedType::BeamExplosion) + 1;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AHelpReportKeepsItsEventsAndRefusesUnknownFlags)
+{
+	const HelpReport report {.events = uint64_t {1} << 48, .boxShows = true, .cameraSeesSky = true};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	EXPECT_EQ(std::get<HelpReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
+
+	// The byte of the flags comes last, after the tag and the eight bytes of the events. A flag after the fifth is
+	// refused.
+	auto wrong = bytes;
+	wrong.back() = 32;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlags)
+{
+	const ViewReport report {.eye = {10.0f, 20.0f, 30.0f},
+	                         .focus = {-1.0f, 0.0f, 1.0f},
+	                         .lens = 1.2217305f,
+	                         .nearClip = 2.0f,
+	                         .screenWidth = 0x0A0B,
+	                         .screenHeight = 0x0C0D,
+	                         .aspect = 1.7777778f,
+	                         .inclusionDistance = 12.5f,
+	                         .cameraOrders = 0x01020304,
+	                         .cameraArrived = false,
+	                         .gripsLand = true,
+	                         .otherButton = true};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	EXPECT_EQ(std::get<ViewReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
+
+	// The byte of the flags comes last. A flag after the third is refused.
+	auto wrong = bytes;
+	wrong.back() = 8;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }
