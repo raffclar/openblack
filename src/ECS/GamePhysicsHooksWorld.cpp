@@ -83,7 +83,7 @@ GameRandomInterface* GamePhysicsHooksWorld::Random()
 bool GamePhysicsHooksWorld::PersonPlays(PlayerNames player) const
 {
 	return Locator::playerSystem::has_value() && player != PlayerNames::NEUTRAL &&
-	       !Locator::playerSystem::value().IsComputerPlayer(player);
+	       Locator::playerSystem::value().IsHumanPlayer(player);
 }
 
 std::optional<PlayerNames> GamePhysicsHooksWorld::OwnPlayer() const
