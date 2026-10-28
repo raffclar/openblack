@@ -29,6 +29,7 @@ public:
 	[[nodiscard]] bool IsOtherPlayersHand(entt::entity hand) const override;
 	[[nodiscard]] std::optional<PlayerNames> PlayerOfHand(entt::entity hand) const override;
 	[[nodiscard]] glm::vec3 AsMapPlace(glm::vec3 point) const override;
+	[[nodiscard]] glm::vec3 HeldPlaceAt(glm::vec3 point) const override;
 	[[nodiscard]] std::optional<glm::vec3> ReportedCollidePoint() const override;
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return _acting; }
 	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override;

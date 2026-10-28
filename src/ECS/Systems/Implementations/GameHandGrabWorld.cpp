@@ -915,6 +915,16 @@ glm::vec3 GameHandGrabWorld::AsMapPlace(glm::vec3 point) const
 	return map_coords::ToWorld(island, map_coords::FromWorld(island, point));
 }
 
+glm::vec3 GameHandGrabWorld::HeldPlaceAt(glm::vec3 point) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return point;
+	}
+	const auto& island = Locator::terrainSystem::value();
+	return map_coords::ToWorld(island, map_coords::HeldPlace(island, point));
+}
+
 std::vector<PlayerNames> GameHandGrabWorld::OtherHandPlayers() const
 {
 	std::vector<PlayerNames> players;

@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
 #include <vector>
 
 #include <3D/MapCoords.h>
@@ -67,4 +70,25 @@ TEST(MapCoords, SpiralSizes)
 	EXPECT_EQ(map_coords::CellSpiralSize(0.0f), 1);
 	EXPECT_EQ(map_coords::CellSpiralSize(15.0f), 9);
 	EXPECT_EQ(map_coords::IncrementSpiralSize(10.0f, 5.0f), 25);
+}
+
+TEST(MapCoords, AHeldThingHasTheHeightOfTheHandAboveTheGround)
+{
+	MapCoords asked {};
+	const auto place = map_coords::HeldPlace({12.5f, 30.0f, 7.25f}, [&asked](const MapCoords& coords) {
+		asked = coords;
+		return 4.0f;
+	});
+	EXPECT_EQ(place.x, map_coords::ToFixed(12.5f));
+	EXPECT_EQ(place.z, map_coords::ToFixed(7.25f));
+	EXPECT_EQ(place.altitude, 26.0f);
+	// The ground comes from the same map position
+	EXPECT_EQ(asked.x, place.x);
+	EXPECT_EQ(asked.z, place.z);
+}
+
+TEST(MapCoords, AHeldThingAtTheGroundHasAPositiveZeroHeight)
+{
+	const auto place = map_coords::HeldPlace({1.0f, -0.0f, 1.0f}, [](const MapCoords&) { return 0.0f; });
+	EXPECT_EQ(std::bit_cast<uint32_t>(place.altitude), 0u);
 }

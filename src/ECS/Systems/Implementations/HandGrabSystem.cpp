@@ -1895,13 +1895,14 @@ void HandGrabSystem::DoTwist(PlayerNames player, entt::entity object, glm::vec3 
 void HandGrabSystem::PlaceHeldForTurn()
 {
 	// The frames draw a held thing at the hand. The turn has it where the last report put the hand, at the turn and size
-	// that it had as the hand took it.
+	// that it had as the hand took it. The place has the precision of a map position, and the height of the reported
+	// point above the ground.
 	// A thing that the hand of this computer pulls at is not changed here. Only this computer knows of the pull, and
 	// the frames only draw the lean. Thus a pulled villager continues to walk in the same way on every computer.
 	// Each thing at the place of the hand that holds it
 	auto& registry = _world->Entities();
 	registry.Each<const InHand, Transform>([this](const InHand& inHand, Transform& transform) {
-		transform.position = _world->ReportedPlaceOf(inHand.hand);
+		transform.position = _world->HeldPlaceAt(_world->ReportedPlaceOf(inHand.hand));
 		transform.rotation = inHand.rotation;
 		transform.scale = inHand.scale;
 	});
