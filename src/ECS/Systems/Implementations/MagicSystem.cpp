@@ -2895,7 +2895,8 @@ bool MagicSystem::TapFireBall(entt::entity ball)
 	{
 		return false;
 	}
-	return CatchFireBall(ball);
+	SendFireBallCommand(ball, false);
+	return true;
 }
 
 std::optional<entt::entity> MagicSystem::PickedUnderHand() const

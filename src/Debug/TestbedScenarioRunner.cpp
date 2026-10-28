@@ -2635,7 +2635,7 @@ void Runner::FinishTakingFireBall()
 	}
 	else
 	{
-		result = magic.TapFireBall(_fireBallTaken) ? "caught it" : "it slipped through the hand";
+		result = magic.TapFireBall(_fireBallTaken) ? "the tap went to the turn" : "the hand could not tap it";
 	}
 	magic.DriveHand(std::nullopt);
 	Log(fmt::format("{:.1f}s: hand on the fireball: {}", _seconds, result));

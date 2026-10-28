@@ -256,8 +256,9 @@ public:
 	/// Once a frame, before any press or release. The hand's movement and its spin are measured at the steps of the
 	/// input that the frame takes (see input_steps), the hand at its place between the last frame and this frame.
 	virtual void UpdateHand(const HandFrame& frame, const input_steps::Steps& steps) = 0;
-	/// A fireball tapped by the empty hand within the player's influence: another player's is caught into the hand, the
-	/// player's own slips through. Whether it was caught.
+	/// A fireball tapped by the empty hand within the player's influence. The hand sends the tap as a command of the
+	/// player, and every computer catches the ball at the turn: another player's goes into the hand, the player's own
+	/// slips through. Whether the hand sent the tap.
 	virtual bool TapFireBall(entt::entity ball) = 0;
 	/// A one-shot globe tapped by the empty hand: its miracle goes into the hand, charged in full, and the globe pops.
 	/// Whether the hand took the miracle.
