@@ -69,7 +69,7 @@ public:
 	[[nodiscard]] creature_object_actions::Failure GetFailure(entt::entity creature) const override;
 	[[nodiscard]] bool IsCatching(entt::entity creature) const override;
 	[[nodiscard]] bool PlaysOnAlone(entt::entity creature) const override;
-	void StopForPlan(entt::entity creature) override;
+	void StopForPlan(entt::entity creature, bool stopsBody) override;
 	[[nodiscard]] std::optional<float> GetProgress(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity creature) const override;
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;

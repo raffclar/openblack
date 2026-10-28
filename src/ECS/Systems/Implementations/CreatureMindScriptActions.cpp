@@ -141,7 +141,7 @@ void CreatureMindSystem::StopForScript(entt::entity creature)
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().StopForPlan(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 }
 
@@ -213,7 +213,7 @@ void CreatureMindSystem::ForceFinish(entt::entity creature)
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().StopForPlan(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{

@@ -122,7 +122,7 @@ TEST_F(CreatureLetGoTest, AStartedActionPlaysOnAndKnowsThatItsPlanStopped)
 	{
 		Give(kind, CreatureObjectAction::Phase::Playing, Status::Running);
 		EXPECT_TRUE(hands.PlaysOnAlone(creature)) << creature_object_actions::Name(kind);
-		hands.StopForPlan(creature);
+		hands.StopForPlan(creature, true);
 		const auto* action = Locator::entitiesRegistry::value().TryGet<const CreatureObjectAction>(creature);
 		ASSERT_NE(action, nullptr) << creature_object_actions::Name(kind);
 		EXPECT_EQ(action->status, Status::Running);
@@ -139,10 +139,10 @@ TEST_F(CreatureLetGoTest, ATurnToReachPlaysOnButAWalkStops)
 	    creature,
 	    CreatureObjectAction {.kind = Kind::PickUp, .phase = CreatureObjectAction::Phase::Approach, .turnedToReach = true});
 	EXPECT_TRUE(hands.PlaysOnAlone(creature));
-	hands.StopForPlan(creature);
+	hands.StopForPlan(creature, true);
 	EXPECT_TRUE(registry.AllOf<CreatureObjectAction>(creature));
 	Give(Kind::PickUp, CreatureObjectAction::Phase::Approach, Status::Running);
-	hands.StopForPlan(creature);
+	hands.StopForPlan(creature, true);
 	EXPECT_FALSE(registry.AllOf<CreatureObjectAction>(creature));
 }
 
@@ -153,7 +153,7 @@ TEST_F(CreatureLetGoTest, APointPlaysItsEndWhenThePlanStops)
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.AssignOrReplace<CreatureObjectAction>(
 	    creature, CreatureObjectAction {.kind = Kind::Point, .phase = CreatureObjectAction::Phase::Playing, .holdMs = 5000.0f});
-	hands.StopForPlan(creature);
+	hands.StopForPlan(creature, true);
 	const auto& playing = registry.Get<const CreatureObjectAction>(creature);
 	EXPECT_TRUE(playing.pointEnding);
 	EXPECT_EQ(playing.holdMs, 0.0f);
@@ -163,14 +163,24 @@ TEST_F(CreatureLetGoTest, APointPlaysItsEndWhenThePlanStops)
 	registry.AssignOrReplace<CreatureObjectAction>(
 	    creature,
 	    CreatureObjectAction {.kind = Kind::Point, .phase = CreatureObjectAction::Phase::Approach, .pointTurned = true});
-	hands.StopForPlan(creature);
+	hands.StopForPlan(creature, true);
 	const auto& turning = registry.Get<const CreatureObjectAction>(creature);
 	EXPECT_TRUE(turning.pointEnding);
 	EXPECT_EQ(turning.status, Status::Running);
 
+	// A stop that leaves the body alone leaves the point to hold on alone, and the body stays busy
+	registry.AssignOrReplace<CreatureObjectAction>(
+	    creature, CreatureObjectAction {.kind = Kind::Point, .phase = CreatureObjectAction::Phase::Playing, .holdMs = 5000.0f});
+	hands.StopForPlan(creature, false);
+	const auto& holding = registry.Get<const CreatureObjectAction>(creature);
+	EXPECT_FALSE(holding.pointEnding);
+	EXPECT_EQ(holding.holdMs, 5000.0f);
+	EXPECT_TRUE(holding.planStopped);
+	EXPECT_TRUE(hands.PlaysOnAlone(creature));
+
 	// A point that did not start stops at once
 	Give(Kind::Point, CreatureObjectAction::Phase::Approach, Status::Running);
-	hands.StopForPlan(creature);
+	hands.StopForPlan(creature, true);
 	EXPECT_FALSE(registry.AllOf<CreatureObjectAction>(creature));
 }
 
@@ -180,6 +190,6 @@ TEST_F(CreatureLetGoTest, AnEatThatDidNotStartStops)
 {
 	Give(Kind::Eat, CreatureObjectAction::Phase::Approach, Status::Running);
 	EXPECT_FALSE(hands.PlaysOnAlone(creature));
-	hands.StopForPlan(creature);
+	hands.StopForPlan(creature, true);
 	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<CreatureObjectAction>(creature));
 }

@@ -2961,7 +2961,7 @@ void CreatureMindSystem::StartPlanAgain(entt::entity creature, CreatureMindState
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().StopForPlan(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	creature_plan_actions::Situation situation {.instrument = plan.instrument, .activity = plan.activityObject};
 	Situate(creature, situation);
@@ -3105,7 +3105,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	}
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
-		Locator::creatureObjectActionSystem::value().StopForPlan(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
@@ -3512,7 +3512,7 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().StopForPlan(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	// The action that its body plays continues at two times the usual speed
 	if (Locator::creatureAnimationSystem::has_value())
@@ -3673,7 +3673,7 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().StopForPlan(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	Abandon(*mind);
 	ReleaseCast(creature);

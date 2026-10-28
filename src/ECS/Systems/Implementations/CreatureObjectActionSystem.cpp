@@ -2401,11 +2401,11 @@ bool CreatureObjectActionSystem::PlaysOnAlone(entt::entity creature) const
 		return false;
 	}
 	const auto stop = PlanStopOf(*action);
-	return stop == creature_object_actions::PlanStop::PlaysOn ||
+	return action->planStopped || stop == creature_object_actions::PlanStop::PlaysOn ||
 	       (stop == creature_object_actions::PlanStop::EndsPoint && action->pointEnding);
 }
 
-void CreatureObjectActionSystem::StopForPlan(entt::entity creature)
+void CreatureObjectActionSystem::StopForPlan(entt::entity creature, bool stopsBody)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* action = registry.Valid(creature) ? registry.TryGet<CreatureObjectAction>(creature) : nullptr;
@@ -2421,7 +2421,15 @@ void CreatureObjectActionSystem::StopForPlan(entt::entity creature)
 		Cancel(creature);
 		return;
 	case PlanStop::EndsPoint:
-		EndPoint(creature);
+		// A stop that leaves the body alone leaves the point to hold on and end by itself
+		if (stopsBody)
+		{
+			EndPoint(creature);
+		}
+		else
+		{
+			action->planStopped = true;
+		}
 		return;
 	case PlanStop::PlaysOn:
 		break;

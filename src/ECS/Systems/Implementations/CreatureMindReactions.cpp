@@ -445,7 +445,7 @@ bool CreatureMindSystem::ForceDesireAbout(entt::entity creature, CreatureMindSta
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().StopForPlan(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	Abandon(mind);
 	if (Locator::magicSystem::has_value())
