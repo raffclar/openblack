@@ -51,7 +51,8 @@ struct KnownPlayer
 	entt::entity entity;
 };
 
-/// The players that the land has, in the order of their numbers. The neutral player is last, and only when asked.
+/// The players that play, in the order of their numbers. The neutral player is last, and only when asked. A player that
+/// nobody plays is not in the list.
 std::vector<KnownPlayer> PlayersInOrder(bool withNeutral)
 {
 	std::vector<KnownPlayer> players;
@@ -63,7 +64,7 @@ std::vector<KnownPlayer> PlayersInOrder(bool withNeutral)
 	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
 	{
 		const auto name = static_cast<PlayerNames>(number);
-		if (name == PlayerNames::NEUTRAL && !withNeutral)
+		if (name == PlayerNames::NEUTRAL ? !withNeutral : !Locator::playerSystem::value().PlaysInGame(name))
 		{
 			continue;
 		}

@@ -195,11 +195,16 @@ void HeartbeatSystem::ProcessTurn(uint32_t turn)
 	{
 		towns = SeeTowns(registry);
 		registry.Each<const Villager>([&worldPopulation](const Villager& /*unused*/) { ++worldPopulation; });
-		// The neutral player's influence counts towards everyone's
+		// The influence of the players that play and of the neutral player counts towards everyone's. A player that
+		// nobody plays does not count.
 		if (Locator::influenceSystem::has_value())
 		{
 			registry.Each<const Player>([&totalInfluence](const Player& player) {
-				totalInfluence += Locator::influenceSystem::value().InfluencePower(player.name);
+				if (player.name == PlayerNames::NEUTRAL ||
+				    (Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(player.name)))
+				{
+					totalInfluence += Locator::influenceSystem::value().InfluencePower(player.name);
+				}
 			});
 		}
 	}
