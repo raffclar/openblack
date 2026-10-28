@@ -862,6 +862,8 @@ def main():
                         help="the server and the clients write a draw trace, and the summary shows the first draw where "
                              "each client is not the same as the server")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
+    parser.add_argument("--time-limit", type=int,
+                        help="the time limit of the network game in minutes (the server's --time-limit); 30 with none")
     parser.add_argument("--temple-loss", help="PLAYER:TURN: at the turn the temple of the player (from 0) starts its "
                         "destruction on the server and on every client, so that the game is decided and its turns stop")
     parser.add_argument("--leave", help="CLIENT:TURN: at the turn the client (from 0) leaves the game as a player does: "
@@ -966,6 +968,8 @@ def main():
         server_command += ["--trace-draws", server_trace]
     if options.temple_loss:
         server_command += ["--temple-loss", options.temple_loss]
+    if options.time_limit is not None:
+        server_command += ["--time-limit", str(options.time_limit)]
     if options.hash_parts:
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
         if options.hash_fields:
@@ -1123,7 +1127,7 @@ def main():
     stopped_after = int(re.search(r"after turn (\d+)", stop_lines[-1]).group(1)) if stop_lines else None
     summary["stopped_after"] = stopped_after
     all_same = True
-    if options.temple_loss and stopped_after is None:
+    if (options.temple_loss or options.time_limit is not None) and stopped_after is None:
         all_same = False
     for index, client_dir in enumerate(client_dirs):
         client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))

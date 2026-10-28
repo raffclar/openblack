@@ -1912,3 +1912,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_drawn_effect_steps test_drawn_effect_steps.cpp)
 openblack_setup_and_add_test(test_command_log test_command_log.cpp)
+openblack_setup_and_add_test(test_game_end_conditions test_game_end_conditions.cpp)

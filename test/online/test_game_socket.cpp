@@ -138,6 +138,18 @@ TEST(GameSocket, TheScenarioOfTheToolsGoesInTheStartAndIsLeftOutWhenNotSet)
 	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"scenario":""})").has_value());
 }
 
+TEST(GameSocket, TheTimeLimitGoesInTheStartAndIsLeftOutWhenNotSet)
+{
+	Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
+	EXPECT_FALSE(RoundTrip(start).timeLimit.has_value());
+	start.timeLimit = 30;
+	const auto read = RoundTrip(start);
+	ASSERT_TRUE(read.timeLimit.has_value());
+	EXPECT_EQ(*read.timeLimit, 30u);
+	// A time limit that is not a number does not read
+	EXPECT_FALSE(Parse(R"({"type":"game.start","land":"","testbed":true,"seed":1,"turn":0,"time_limit":"30"})").has_value());
+}
+
 TEST(GameSocket, TheJoinOfTheFrontEndReads)
 {
 	// The front end's join frame (lobby_api::RoomJoinFrame) has the same members

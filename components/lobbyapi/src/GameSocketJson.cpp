@@ -181,6 +181,15 @@ bool ReadStart(const Json& object, Start& start)
 		}
 		start.aiSeed = static_cast<uint32_t>(value);
 	}
+	if (const auto* timeLimit = Member(object, "time_limit"); timeLimit != nullptr && !timeLimit->is_null())
+	{
+		uint64_t value = 0;
+		if (!ReadUnsigned(object, "time_limit", k_MostNumber, value))
+		{
+			return false;
+		}
+		start.timeLimit = static_cast<uint32_t>(value);
+	}
 	if (const auto* scenario = Member(object, "scenario"); scenario != nullptr && !scenario->is_null())
 	{
 		if (!scenario->is_string() || scenario->get<std::string>().empty())
@@ -230,6 +239,10 @@ void WriteStart(const Start& start, Json& object)
 	if (start.aiSeed.has_value())
 	{
 		object["ai_seed"] = *start.aiSeed;
+	}
+	if (start.timeLimit.has_value())
+	{
+		object["time_limit"] = *start.timeLimit;
 	}
 	if (start.scenario.has_value())
 	{

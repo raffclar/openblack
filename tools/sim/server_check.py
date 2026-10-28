@@ -194,6 +194,8 @@ def main():
     parser.add_argument("--wsl-distro", default="Ubuntu", help="with --wsl-server, the WSL distribution")
     parser.add_argument("--out", default=os.path.join(os.getcwd(), "server-check"))
     parser.add_argument("--server-args", default="", help="more arguments for the server, such as \"--reload-at 50\"")
+    parser.add_argument("--run-limit", type=int, default=RUN_LIMIT_SECONDS,
+                        help="the seconds that the server and the game each have to finish (a long run past turn 18000 needs more)")
     parser.add_argument("--server-fast", action="store_true", help="the server too plays with no wait")
     parser.add_argument("--hash-parts", action="store_true",
                         help="both runs record the hash of each component, to find what made them part")
@@ -296,14 +298,14 @@ def main():
     def play_server():
         started = time.monotonic()
         # The output of wsl.exe goes to a file, which tells why a Linux server did not start
-        code = run(server_command, server_dir,
+        code = run(server_command, server_dir, limit=options.run_limit,
                    output=os.path.join(server_dir, "wsl-output.txt") if options.wsl_server else None)
         if code != 0:
             print(f"the server ended with exit code {code}; see {server_log}")
         return code, time.monotonic() - started
 
     def play_game():
-        code = run(game_command, game_dir)
+        code = run(game_command, game_dir, limit=options.run_limit)
         if code != 0:
             print(f"the game ended with exit code {code}; see {game_log}")
         return code
@@ -374,7 +376,8 @@ def main():
     # A land with no temple for the player's god (Land 1) decides the network game at its first turn: the
     # god is out, its creature goes, and the end box takes the mouse, so a recorded input does nothing there
     with open(game_log, encoding="utf-8", errors="replace") as file:
-        decided = [re.search(r"Turn (\d+):", line) for line in file if "and the game is decided" in line]
+        decided = [re.search(r"Turn (\d+):", line) for line in file
+                   if "and the game is decided" in line or "won the game" in line]
     summary["decided_at_turn"] = int(decided[0].group(1)) if decided and decided[0] else None
     if events is not None and summary["decided_at_turn"] is not None:
         print(f"the game was decided at turn {summary['decided_at_turn']}: the end box takes the input of the hand")

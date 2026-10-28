@@ -28,6 +28,7 @@
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -436,7 +437,7 @@ void Strike(building_world::World& world, entt::entity building, BuildingDamage&
 
 /// What breaking does to a building: it crashes, and loses life down to what is left of its model
 void ApplyBreakage(building_world::World& world, entt::entity building, entt::entity hitter, std::optional<PlayerNames> player,
-                   bool hitterIsCreature)
+                   bool hitterIsCreature, bool creatureSmash)
 {
 	PlaySound(world, building, k_CrashKeys);
 	auto values = world.Crush();
@@ -472,6 +473,7 @@ void ApplyBreakage(building_world::World& world, entt::entity building, entt::en
 	                      .casterCreature = hitterIsCreature ? hitter : entt::null,
 	                      .appliedBy = validHitter ? hitter : entt::null,
 	                      .playerless = !player.has_value(),
+	                      .creatureSmash = creatureSmash,
 	                  });
 }
 
@@ -555,8 +557,6 @@ void BuildingDamageSystem::Blow(DynamicsSystemInterface& dynamics, entt::entity 
 	case damage::Blow::Breaks:
 		break;
 	}
-	// TODO(buildings): while the blow's effects apply, the game marks a building struck by what a creature threw (a flag
-	// whose reader wasn't found); the rock, not the creature, applies them
 	if (IsBuilt(world, building))
 	{
 		auto* broken = registry.TryGet<BuildingDamage>(building);
@@ -605,8 +605,12 @@ void BuildingDamageSystem::Blow(DynamicsSystemInterface& dynamics, entt::entity 
 			return;
 		}
 	}
-	// The harm is put down to the player of the thing that struck, not the building's own
-	ApplyBreakage(world, building, hitter, hitterEntry->player, false);
+	// The harm is put down to the player of the thing that struck, not the building's own. The rock, not the creature,
+	// applies the harm. When a creature threw the rock, the building counts as smashed by a creature. The building's
+	// own partner in the physics goes first, else what threw the rock.
+	const auto thrower = entry.thrower != entt::null ? entry.thrower : hitterEntry->thrower;
+	const bool creatureThrew = thrower != entt::null && registry.Valid(thrower) && registry.AllOf<Creature>(thrower);
+	ApplyBreakage(world, building, hitter, hitterEntry->player, false, creatureThrew);
 }
 
 void BuildingDamageSystem::Smash(entt::entity building, entt::entity creature, float creatureSize)
@@ -630,11 +634,11 @@ void BuildingDamageSystem::Smash(entt::entity building, entt::entity creature, f
 	{
 		return;
 	}
-	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true);
+	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true, false);
 }
 
 void BuildingDamageSystem::CreatureBlows(entt::entity building, entt::entity creature,
-                                         std::span<const creature_stomp::Blow> blows)
+                                         std::span<const creature_stomp::Blow> blows, bool kick)
 {
 	auto& world = *_world;
 	auto& registry = world.Entities();
@@ -654,7 +658,7 @@ void BuildingDamageSystem::CreatureBlows(entt::entity building, entt::entity cre
 	{
 		return;
 	}
-	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true);
+	ApplyBreakage(world, building, creature, world.PlayerOf(creature), true, kick);
 }
 
 entt::entity BuildingDamageSystem::PieceAtRest(DynamicsSystemInterface& dynamics, PhysicsEntry* entry, entt::entity piece,

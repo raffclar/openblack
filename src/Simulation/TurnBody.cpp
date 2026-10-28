@@ -17,8 +17,8 @@
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
 
-#include "3D/MapCoords.h"
 #include "3D/GripLandscapeEffect.h"
+#include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
@@ -148,6 +148,11 @@ void PlayPlayerTurns()
 	for (uint8_t index = 0; index < static_cast<uint8_t>(PlayerNames::_COUNT); ++index)
 	{
 		const auto player = static_cast<PlayerNames>(index);
+		// In a network game, the winning conditions that the world measures take their values before the player's turn
+		if (Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().MeasureConditions(player);
+		}
 		if (Locator::templeDestructionSystem::has_value())
 		{
 			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);

@@ -42,6 +42,8 @@ struct Town
 	std::vector<entt::entity> abodes;
 	/// When its player gained it, against the player's other towns: earlier gained, smaller
 	uint32_t gained {0};
+	/// It counted once as a new town of its player: it had a storage pit, a town centre and a house, all built
+	bool countedAsNew {false};
 	/// How many of its people are hurt, their life under seven tenths
 	uint32_t injured {0};
 	/// What its people's deaths came to, by the player put down for each (by player number) and what killed them

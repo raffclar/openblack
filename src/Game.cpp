@@ -155,6 +155,7 @@
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/FloatingNumber.h"
+#include "ECS/GameEndConditions.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
 #include "ECS/OtherPlayerSparkles.h"
@@ -5681,6 +5682,11 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	const auto pinnedDate = clock.GetPinnedDate();
 	clock.RestartClock(pinnedDate);
 	clock.SetNetworkGame(true);
+	// The time limit of the game comes from the server, so every computer decides the game at the same turn
+	if (Locator::gameEndSystem::has_value())
+	{
+		Locator::gameEndSystem::value().SetTimeLimit(start.timeLimit.value_or(game_end::k_DefaultTimeLimitMinutes));
+	}
 	// The land starts from the state that the game server started it from
 	simulation::PrepareNetworkLand(start.seed);
 	// The modes of the AI soak come from the server, as the seed does. A build for players refuses them.
