@@ -499,18 +499,39 @@ def say_in_chat(pid, text):
     print(f"chat: client with pid {pid} says {text!r} (click: {clicked})")
 
 
+# The points of the menu's buttons on a window of 1280 by 1024: Options on the first page, the Players tab, and Edit
+# Tattoo on the Players page
+TATTOO_MENU_CLICKS = (("Options", (640, 704)), ("Players", (640, 80)), ("Edit Tattoo", (773, 772)))
+
+
+def menu_page(pid):
+    """The page that the game's menu of a client shows, or none when the menu is shut"""
+    windows = inspector_call(pid, "gui.windows", {}) or {}
+    for item in windows.get("items", []):
+        if isinstance(item, dict) and item.get("name") == "menu":
+            return item.get("page") if item.get("open") else None
+    return None
+
+
 def open_tattoo_menu(pid):
-    """A client opens the tattoo editor from the game's menu as the player does: the menu, its Options, the Players
-    page and Edit Tattoo. The editor shows a creature of its own over the menu. True when the editor is open."""
-    inspector_call(pid, "gui.open", {"params": {"window": "menu"}})
-    for button in ("Options", "Players", "Edit Tattoo"):
-        time.sleep(1.0)
-        inspector_call(pid, "gui.press", {"params": {"window": "menu", "button": button}})
-    time.sleep(2.0)
+    """A client opens the tattoo editor from the game's menu as the player does, with the input of the player only:
+    Escape opens the menu, then clicks on Options, the Players tab and Edit Tattoo. The editor shows a creature of its
+    own over the menu. True when the editor is open."""
+    frame = inspector_call(pid, "engine.frame", {}) or {}
+    width, height = frame.get("window") or [1280, 1024]
+    inspector_call(pid, "input.key", {"params": {"key": "Escape"}})
+    time.sleep(1.5)
+    pages = [menu_page(pid)]
+    for _, (x, y) in TATTOO_MENU_CLICKS:
+        inspector_call(pid, "input.pointer", {"params": {"screen": [round(x * width / 1280), round(y * height / 1024)]}})
+        time.sleep(0.5)
+        inspector_call(pid, "input.button", {"params": {"button": "left", "action": "click"}})
+        time.sleep(1.5)
+        pages.append(menu_page(pid))
     windows = inspector_call(pid, "gui.windows", {}) or {}
     shown = any(item.get("name") == "tattoo_editor" and item.get("open") for item in windows.get("items", [])
                 if isinstance(item, dict))
-    print(f"tattoo menu: client with pid {pid} opened the tattoo editor: {shown}")
+    print(f"tattoo menu: client with pid {pid} opened the tattoo editor: {shown} (menu pages {pages})")
     return shown
 
 
