@@ -153,7 +153,7 @@ bool CreatureMindSystem::IsLyingDead(entt::entity creature)
 	return tables != nullptr && registry.Valid(creature) && mind_detail::IsDead(registry, creature, *tables);
 }
 
-creature_mind::HandsCheck CreatureMindSystem::CheckHandsBeforeFaint(entt::entity creature)
+creature_mind::HandsCheck CreatureMindSystem::CheckHandsBeforeAction(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;

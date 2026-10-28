@@ -2239,11 +2239,6 @@ void CreatureObjectActionSystem::Drop(entt::entity creature)
 	Release(creature, glm::vec3(0.0f));
 }
 
-void CreatureObjectActionSystem::PutDownAtOnce(entt::entity creature)
-{
-	Release(creature, glm::vec3(0.0f), ReleaseFrom::LetGo);
-}
-
 void CreatureObjectActionSystem::Release(entt::entity creature, const glm::vec3& velocity, ReleaseFrom from)
 {
 	auto& registry = Locator::entitiesRegistry::value();
