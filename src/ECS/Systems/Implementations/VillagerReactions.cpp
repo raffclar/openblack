@@ -20,17 +20,12 @@
 #include <optional>
 #include <utility>
 
-#include <PackFile.h>
-#include <fmt/format.h>
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DMesh.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/HeaderOverrides.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -56,7 +51,7 @@
 #include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
-#include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -103,23 +98,6 @@ constexpr float k_WatchTurn = std::numbers::pi_v<float> / 8.0f;
 constexpr float k_BeliefShareSmall = 0.001f;
 /// A symbol of belief is worth the belief by this many
 constexpr float k_BeliefSpriteScale = 10000.0f;
-/// The guidance's voices of a town's awe, good and evil, the most awed first, by their place in its sound bank
-constexpr std::array<uint32_t, 3> k_GoodAwe {187, 188, 189};
-constexpr std::array<uint32_t, 3> k_EvilAwe {174, 175, 176};
-/// A voice of awe is heard no sooner than this many turns after the last, and up to this many more
-constexpr uint32_t k_VoiceLeastGap = 30;
-constexpr float k_VoiceGapSpread = 150.0f;
-/// The guidance's first words seed their clock up to this many turns back
-constexpr uint32_t k_GuidanceLeastGap = 50;
-/// A voice is wanted less within this many turns of the guidance speaking
-constexpr float k_GuidanceQuietTurns = 50.0f;
-/// The belief shares are padded by this
-constexpr float k_VoiceShareSmall = 0.0001f;
-/// A voice is heard within this many metres of the hand, fully within a third of it, and only when wanted more than this
-constexpr float k_VoiceReach = 200.0f;
-constexpr float k_VoiceNearShare = 0.333f;
-constexpr float k_VoiceWanted = 0.3f;
-constexpr uint32_t k_VoicePitch = 100;
 
 ecs::Registry& EntityRegistry()
 {
@@ -210,96 +188,25 @@ bool TurnTowards(entt::entity villager, const glm::vec3& point, float step = k_W
 	openblack::ecs::living_facing::FaceAngle(registry, villager, wallHug.yAngle + turn);
 	return faces;
 }
-/// The awe of a villager's people at a miracle, heard now and then near the hand
-void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, GuidanceAlignment alignment,
-                   villager_reactions::BeliefVoice& voice, uint32_t turn)
+/// The awe of a town's people at the belief that it gained: the guidance sometimes plays a voice at the thing
+void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, GuidanceAlignment alignment)
 {
 	auto& registry = EntityRegistry();
-	if (!Locator::gameRandom::has_value() || !Locator::audio::has_value() || town == entt::null || !registry.Valid(town))
+	if (!Locator::guidanceSystem::has_value() || town == entt::null || !registry.Valid(town))
 	{
 		return;
 	}
-	auto& random = Locator::gameRandom::value();
-	if (!voice.started)
-	{
-		voice.started = true;
-		voice.lastVoice = turn - random.LocalRand(static_cast<int32_t>(k_VoiceLeastGap));
-		voice.lastGuidance = turn - random.LocalRand(static_cast<int32_t>(k_GuidanceLeastGap));
-	}
-	// Only where the player doesn't lead the town's belief already
 	const auto* impression = registry.TryGet<const TownImpression>(town);
 	if (impression == nullptr)
 	{
 		return;
 	}
-	float most = 0.0f;
-	for (const float belief : impression->belief.belief)
-	{
-		most = std::max(most, belief);
-	}
-	const float believed = impression->belief.belief.at(static_cast<size_t>(player));
-	if (!(believed < most))
+	const auto share = guidance::BeliefVoiceShare(impression->belief.belief, static_cast<size_t>(player));
+	if (!share.has_value())
 	{
 		return;
 	}
-	// Now and then: a while after the last, more often a longer while
-	const float r = random.LocalFloatRand(1.0f);
-	const auto spread = static_cast<int32_t>(k_VoiceGapSpread * (1.0f - r * r * r));
-	const uint32_t gap = k_VoiceLeastGap + random.LocalRand(spread);
-	if (!(turn - voice.lastVoice > gap))
-	{
-		return;
-	}
-	float share = (believed + k_VoiceShareSmall) / (most + k_VoiceShareSmall);
-	share -= random.LocalFloatRand(share / 3.0f);
-	if (alignment != GuidanceAlignment::Good && alignment != GuidanceAlignment::Evil)
-	{
-		alignment = random.LocalRand(2) != 0 ? GuidanceAlignment::Evil : GuidanceAlignment::Good;
-	}
-	const auto& samples = alignment == GuidanceAlignment::Good ? k_GoodAwe : k_EvilAwe;
-	std::optional<uint32_t> sample;
-	if (share >= 0.7f)
-	{
-		sample = samples[0];
-	}
-	else if (share >= 0.4f)
-	{
-		sample = samples[1];
-	}
-	else if (share > 0.05f)
-	{
-		sample = samples[2];
-	}
-	if (!sample.has_value())
-	{
-		return;
-	}
-	// Heard near enough the hand of this computer, and not straight after the guidance has spoken. The distance is from
-	// the point under the cursor that the last report of the hand gave.
-	const auto& at = registry.Get<const Transform>(source).position;
-	float distance = k_VoiceReach;
-	if (Locator::handSystem::has_value())
-	{
-		const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-		if (const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr)
-		{
-			distance = gutils::GetDistanceInMetres(reported->collidePoint, at);
-		}
-	}
-	const float away = std::min(distance / k_VoiceReach, 1.0f);
-	const float since = std::min(static_cast<float>(turn - voice.lastGuidance) / k_GuidanceQuietTurns, 1.0f);
-	if (!((1.0f - away * away) * since > k_VoiceWanted))
-	{
-		return;
-	}
-	voice.lastVoice = turn;
-	audio::StartGameSoundEffect(resources::HashIdentifier(fmt::format("Guidance.sad/{}", *sample)),
-	                            {.position = at,
-	                             .pitchPercent = k_VoicePitch,
-	                             .voicePlayType = pack::AudioBankLoop::Once,
-	                             .minDistance = k_VoiceReach * k_VoiceNearShare,
-	                             .maxDistance = k_VoiceReach,
-	                             .callerWins = audio::k_CallerDistancesWin});
+	Locator::guidanceSystem::value().BeliefVoice(registry.Get<const Transform>(source).position, *share, alignment);
 }
 /// A town's celebration with no town centre makes one dance about the town, the dance about a person, as the first
 /// villager takes it up. No villager joins this dance: only a script can put dancers in it.
@@ -1092,14 +999,13 @@ void villager_reactions::ShowTownBelief(const glm::vec3& centre, PlayerNames pla
 	Locator::particleSystem::value().AddBeliefSprite({.position = centre, .amount = amount, .colour = colour});
 }
 
-void villager_reactions::ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment,
-                                    BeliefVoice& voice, uint32_t turn)
+void villager_reactions::ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment)
 {
-	ShowObjectBelief(villager, EntityRegistry().Get<const Villager>(villager).town, player, belief, alignment, voice, turn);
+	ShowObjectBelief(villager, EntityRegistry().Get<const Villager>(villager).town, player, belief, alignment);
 }
 
 void villager_reactions::ShowObjectBelief(entt::entity object, entt::entity town, PlayerNames player, float belief,
-                                          GuidanceAlignment alignment, BeliefVoice& voice, uint32_t turn)
+                                          GuidanceAlignment alignment)
 {
 	auto& registry = EntityRegistry();
 	const auto& transform = registry.Get<const Transform>(object);
@@ -1118,5 +1024,5 @@ void villager_reactions::ShowObjectBelief(entt::entity object, entt::entity town
 		Locator::particleSystem::value().AddBeliefSprite(
 		    {.position = transform.position + glm::vec3(0.0f, height, 0.0f), .amount = amount, .colour = colour});
 	}
-	BeliefVoiceOf(object, town, player, alignment, voice, turn);
+	BeliefVoiceOf(object, town, player, alignment);
 }

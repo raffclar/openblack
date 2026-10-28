@@ -4326,6 +4326,41 @@ void AddAudio(std::vector<Scenario>& all)
 	                 Go(Kind::ThrowAt, 0, k_CryHut, 0.5f)},
 	    .repeatFrom = 3,
 	});
+
+	// A town that believes more in the neutral player sees the player's heal power-up again and again
+	std::vector<ObjectSetup> aweTown;
+	constexpr std::array k_AweVillagers {VillagerInfo::CelticFarmerMale, VillagerInfo::CelticForesterMale,
+	                                     VillagerInfo::CelticHousewifeFemale};
+	for (size_t i = 0; i < 9; ++i)
+	{
+		aweTown.push_back({.type = k_AweVillagers.at(i % 3),
+		                   .offset = {-16.0f + 4.0f * static_cast<float>(i), 30.0f + 3.0f * static_cast<float>(i % 3)},
+		                   .joinTown = true});
+	}
+	all.push_back({
+	    .id = "audio.belief_voice",
+	    .name = "A town calls out in awe at the belief that it gains",
+	    .facet = Facet::Audio,
+	    .description = "Nine villagers of a town that believes 0.2 in the player and 0.3 in the neutral player. The hand "
+	                   "casts food in front of them for four seconds, every ten seconds. The guidance waits end first. The "
+	                   "audio log gives each voice of awe, its sample and its distance from the cursor.",
+	    .expected = "A symbol of belief rises from each impressed villager. While the neutral player leads the town, a good "
+	                "villager voice of awe sometimes plays at a villager, at most once in 30 turns. The voice stops once "
+	                "the town believes most in the player.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 50.0f}}, .distance = 0.7f},
+	    .objects = aweTown,
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {0.0f, 45.0f},
+	                  .handOffset = {0.0f, 45.0f},
+	                  .handHeight = 14.0f,
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 10.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = 0.2f,
+	});
 }
 
 void AddObjects(std::vector<Scenario>& all)
