@@ -70,12 +70,14 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/IntroSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -774,6 +776,19 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::vortexSystem::has_value())
 		{
 			Locator::vortexSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::HandDemo:
+		if (Locator::handDemoSystem::has_value())
+		{
+			Locator::handDemoSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::IntroLift:
+		if (Locator::introSystem::has_value())
+		{
+			Locator::introSystem::value().ProcessTurn(
+			    static_cast<uint32_t>(ecs::systems::TimeSystemInterface::k_TurnDuration.count()));
 		}
 		break;
 	case Step::ScriptVoices:

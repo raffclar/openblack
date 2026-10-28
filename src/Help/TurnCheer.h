@@ -21,7 +21,8 @@ namespace openblack::help::turn_cheer
 
 /// How fast the camera turns at full speed, in radians a second: anything faster counts as full speed
 constexpr float k_FullSpeed = 7.0f;
-/// How much of the way the camera's measured turning speed moves to this frame's speed, each frame
+/// How much of the way the camera's measured turning speed moves to the speed of the last step, at each step of a
+/// sixtieth of a second (the game did it once a frame at the 60 Hz screen refresh)
 constexpr float k_SpeedSmoothing = 0.4f;
 /// A cheer waits for more than this many game turns since the last
 constexpr uint32_t k_TurnsBetweenCheers = 20;

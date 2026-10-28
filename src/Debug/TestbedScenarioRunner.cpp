@@ -1133,6 +1133,11 @@ void Runner::Stop()
 		}
 	}
 	_skirmishBefore.reset();
+	if (_networkGameBefore.has_value() && Locator::time::has_value())
+	{
+		Locator::time::value().SetNetworkGame(*_networkGameBefore);
+	}
+	_networkGameBefore.reset();
 	// The players that the scenario added go
 	if (Locator::entitiesRegistry::has_value())
 	{
@@ -1367,6 +1372,15 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			_skirmishBefore = skirmish;
 		}
 		skirmish = true;
+	}
+	if (environment.networkGame && Locator::time::has_value())
+	{
+		auto& clock = Locator::time::value();
+		if (!_networkGameBefore.has_value())
+		{
+			_networkGameBefore = clock.IsNetworkGame();
+		}
+		clock.SetNetworkGame(true);
 	}
 	// The other players that the scenario puts in the game
 	if (Locator::entitiesRegistry::has_value() && Locator::playerSystem::has_value())

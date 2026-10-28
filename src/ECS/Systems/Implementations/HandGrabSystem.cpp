@@ -360,7 +360,7 @@ bool HandGrabSystem::MarksThing(entt::entity object) const
 	return hand_click::MarksThing(_world->HoldsLooseLeash(), _world->Entities().AllOf<Reward>(object));
 }
 
-void HandGrabSystem::ClickThing(entt::entity object, uint32_t turn)
+void HandGrabSystem::ClickThing(entt::entity object)
 {
 	// The input and the frames of this computer act with its own hand
 	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
@@ -368,19 +368,11 @@ void HandGrabSystem::ClickThing(entt::entity object, uint32_t turn)
 	{
 		return;
 	}
-	// In a network game the turn writes the click, so that the scripts of every computer read the same click
-	if (_world->IsNetworkGame())
-	{
-		_world->SendCommand(player_commands::HandClick {.thing = object, .release = false});
-		return;
-	}
-	if (auto* clicked = Clicked())
-	{
-		hand_click::ClickThing(*clicked, object, turn);
-	}
+	// The turn writes the click, so that the scripts read the same click at each frame rate and on every computer
+	_world->SendCommand(player_commands::HandClick {.thing = object, .release = false});
 }
 
-void HandGrabSystem::ClickReleased(uint32_t turn)
+void HandGrabSystem::ClickReleased()
 {
 	// The input and the frames of this computer act with its own hand
 	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
@@ -393,22 +385,14 @@ void HandGrabSystem::ClickReleased(uint32_t turn)
 		place =
 		    map_coords::MapCoords {.x = map_coords::ToFixed(grab->handPoint->x), .z = map_coords::ToFixed(grab->handPoint->z)};
 	}
-	if (_world->IsNetworkGame())
-	{
-		// A thing under the hand that the click does not mark is not sent: the place is clicked in its stead
-		_world->SendCommand(player_commands::HandClick {
-		    .thing = marks ? *under : entt::null,
-		    .release = true,
-		    .hasPlace = place.has_value(),
-		    .placeX = place.has_value() ? place->x : 0,
-		    .placeZ = place.has_value() ? place->z : 0,
-		});
-		return;
-	}
-	if (auto* clicked = Clicked())
-	{
-		hand_click::ClickReleased(*clicked, under, marks, place, turn);
-	}
+	// A thing under the hand that the click does not mark is not sent: the place is clicked in its stead
+	_world->SendCommand(player_commands::HandClick {
+	    .thing = marks ? *under : entt::null,
+	    .release = true,
+	    .hasPlace = place.has_value(),
+	    .placeX = place.has_value() ? place->x : 0,
+	    .placeZ = place.has_value() ? place->z : 0,
+	});
 }
 
 void HandGrabSystem::DoClick(PlayerNames player, const player_commands::HandClick& click, uint32_t turn)
@@ -499,7 +483,7 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 		// A press the hand can't take clicks the thing, and is a tap on it (clicking and activating)
 		if (object.has_value())
 		{
-			ClickThing(*object, turn);
+			ClickThing(*object);
 			Tap(*object);
 		}
 		return false;
@@ -551,7 +535,7 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		{
 			if (const auto under = _world->ObjectUnderCursor(); under.has_value())
 			{
-				ClickThing(*under, turn);
+				ClickThing(*under);
 			}
 		}
 		if (tap && Exists(object))
@@ -1061,6 +1045,9 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 void HandGrabSystem::StartPull(HandGrab& grab, const Frame& frame)
 {
 	const auto object = grab.object;
+	// A new pull starts from the place, the turn and the size of the thing in the world, not from the lean of an
+	// earlier pull
+	_world->ForgetPulledPose(object);
 	const auto pose = _world->PoseOf(object);
 	hand_grab::Tug tug {.axes = pose.axes, .base = pose.origin};
 	// The pull works in the plane of the land under the thing, at the height the hand's drop below the camera reaches
@@ -1416,18 +1403,17 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	}
 	grab->handSize = frame.handSize;
 	grab->handPoint = frame.cursorGround;
-	// A pull that ended leaves the thing drawn at its own place again
+	// In a game alone, a thing that the hand lets go of before it comes free stays drawn in the lean of the pull. In a
+	// network game, the other computers did not see the lean, so the thing stands again as before the pull.
 	const bool tugs = (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
 	                  grab->tug.has_value() && grab->object == _drawnPull;
 	if (_drawnPull != entt::null && !tugs)
 	{
-		_world->ForgetPulledPose(_drawnPull);
+		if (_world->IsNetworkGame())
+		{
+			_world->ForgetPulledPose(_drawnPull);
+		}
 		_drawnPull = entt::null;
-	}
-	// Clicks are forgotten as the game's turns go by. In a network game the turn writes the clicks and forgets them.
-	if (!_world->IsNetworkGame())
-	{
-		ForgetClicks(frame.turn);
 	}
 	// A pour lasts three quarters of a second of the game's time
 	if (grab->pourEffect.has_value())
@@ -1555,10 +1541,10 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	grab->lowering = grab->hold.loweringMultiplier * size.height;
 	// While it holds something its twist is made ready again, for when it lets go
 	grab->releaseSpinMs = static_cast<int32_t>(hand_grab::k_ReleaseSpinDelayMs);
-	grab->lastTarget = frame.target;
+	const auto lastTarget = std::exchange(grab->lastTarget, frame.target);
 	auto target = offered + glm::vec3(0.0f, grab->rise, 0.0f);
 	// The game time spent holding is counted whether the spring is on or not, scooping too
-	grab->spring.Count(frame.gameMs, frame.seconds * 1000.0f);
+	grab->spring.Count(frame.gameMs);
 	if (grab->scoopSource != entt::null && Exists(grab->scoopSource))
 	{
 		// While the hand scoops, it stays where it started. Its height is the land, plus the height of the source, plus
@@ -1572,7 +1558,8 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	{
 		// The spring's own throw takes the place of a recorded one as soon as it moves the hand
 		grab->recordedThrow.reset();
-		grab->spring.Step(target);
+		// The hand went from its last place to this one in the frame, with its rise and the pull of the offer as now
+		grab->spring.Step(lastTarget + (target - frame.target), target, frame.inputSteps);
 		grab->lastHand = grab->spring.Position();
 		return grab->spring.Position();
 	}
@@ -1636,14 +1623,12 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 	}
 	if (creature_giving::CallsOff(hand, *takePoint, _world->CreatureSizeOf(grab.givenTo)))
 	{
-		// Only the log reads this line. It is not a deed of the turn, as only this computer moves its hand.
-		if (const auto logger = spdlog::get("game"))
+		// The turn calls off the gift on every computer. Until then the hand sends the call off one time only.
+		if (grab.callingOff != grab.givenTo)
 		{
-			SPDLOG_LOGGER_INFO(logger, "The hand calls off its gift of thing {} to creature {}", entt::to_integral(grab.object),
-			                   entt::to_integral(grab.givenTo));
+			grab.callingOff = grab.givenTo;
+			_world->SendCommand(player_commands::GiveCallOff {.creature = grab.givenTo});
 		}
-		_world->CallOffGiving(grab.givenTo);
-		ForgetOffer(grab);
 		return frame.target;
 	}
 	const auto taking = _world->TakingOf(grab.givenTo);
@@ -1694,21 +1679,32 @@ void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::ent
 	}
 	grab->offeredTo = creature;
 	grab->givenTo = creature;
+	grab->callingOff = entt::null;
 }
 
-void HandGrabSystem::ForgetClicks(uint32_t turn)
+void HandGrabSystem::DoGiveCallOff(PlayerNames player, entt::entity creature)
 {
-	if (auto* clicked = Clicked(); clicked != nullptr)
+	// The command acts with the hand of its player
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	if (Exists(creature))
 	{
-		constexpr auto k_MillisecondsPerTurn = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
-		hand_click::Forget(*clicked, turn, k_MillisecondsPerTurn);
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_INFO(logger, "The hand of player {} calls off the gift to creature {}", static_cast<int>(player),
+			                   entt::to_integral(creature));
+		}
+		_world->CallOffGiving(creature);
+	}
+	// The hand of the player forgets the gift, whatever it gives now
+	if (auto* grab = Grab(); grab != nullptr)
+	{
+		ForgetOffer(*grab);
 	}
 }
 
 void HandGrabSystem::InterfaceTurn(uint32_t nowMs, uint32_t turn)
 {
-	// In a network game the turn forgets the old clicks of the hand of every player, the same on every computer
-	if (_world->IsNetworkGame())
+	// The turn forgets the old clicks of the hand of every player, the same at each frame rate and on every computer
 	{
 		static constexpr auto k_MillisecondsPerTurn = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
 		_world->Entities().Each<HandClicked>(
@@ -1743,6 +1739,7 @@ void HandGrabSystem::ForgetOffer(HandGrab& grab)
 {
 	grab.offeredTo = entt::null;
 	grab.givenTo = entt::null;
+	grab.callingOff = entt::null;
 	grab.offer = {};
 }
 

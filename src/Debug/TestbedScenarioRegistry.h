@@ -200,6 +200,9 @@ struct Environment
 	/// The game is a skirmish while the scenario runs: a god with no temple is out, and the last god in wins. The runner
 	/// puts the testbed back when the scenario stops.
 	bool skirmish {false};
+	/// The world plays as a network game while the scenario runs, so that a player with hands of its own is a person at
+	/// another computer. The runner puts the testbed back when the scenario stops.
+	bool networkGame {false};
 };
 
 /// Where the camera looks as the scenario starts

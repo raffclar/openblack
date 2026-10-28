@@ -1171,12 +1171,11 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              return QueryResult::Value(std::move(result));
 	              }));
 	provider->Add(
-	    Query(
-	        "animal",
-	        "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock "
-	        "and town, its kind's radius, where it moves to, whether "
-	        "a creature fears it, and a grazer's needs",
-	        {IdParameter("The animal's entity id")}),
+	    Query("animal",
+	          "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, "
+	          "whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether "
+	          "a creature fears it, and a grazer's needs",
+	          {IdParameter("The animal's entity id")}),
 	    Serve<Locator::animalSystem>(
 	        "the animals", [](const ecs::systems::AnimalSystemInterface& animals, const QueryContext& context) {
 		        const auto entity = EntityParam(context.params);
@@ -1192,6 +1191,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		                       {"final_game_state", animals.FinalGameStateOf(*entity).value_or(0)},
 		                       {"turns_in_state", animal.turnsInState},
 		                       {"turns_until_state_change", animal.turnsUntilStateChange},
+		                       {"dying", animal.dying},
 		                       {"birth_turn", animal.birthTurn},
 		                       {"clip", static_cast<int>(animal.animation)},
 		                       {"speed", animal.move.speed},
@@ -4069,7 +4069,8 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	        }));
 	provider->Add(Query("hand_demo",
 	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "
-	                    "it is at, whether it holds at a mark, and the camera and hints it has"),
+	                    "the turns are at, whether it holds at a mark, the record the frames are at, and the camera and "
+	                    "hints it has"),
 	              Serve<Locator::handDemoSystem>(
 	                  "the hand demonstrations",
 	                  [](const ecs::systems::HandDemoSystemInterface& demos, const QueryContext& /*c*/) -> Json {
@@ -4086,6 +4087,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		                               {"pause_on_trigger", status->pauseOnTrigger},
 		                               {"trigger_reached", status->triggerReached},
 		                               {"holding", status->holding},
+		                               {"replaying", status->replaying},
+		                               {"replay_record", status->replayRecord},
+		                               {"replay_holding", status->replayHolding},
 		                               {"hints", demos.GetHints()}};
 		                  if (const auto camera = demos.GetCamera(); camera.has_value())
 		                  {

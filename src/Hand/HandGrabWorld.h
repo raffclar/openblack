@@ -255,7 +255,8 @@ public:
 	virtual void SetPose(entt::entity object, const Pose& pose) = 0;
 	/// The pose that the frames draw a thing in while the hand pulls at it. The world keeps the thing as it stood.
 	virtual void DrawPulledPose(entt::entity object, const Pose& pose) { SetPose(object, pose); }
-	/// The frames draw the thing at its own place again, as the pull ends
+	/// The frames draw the thing at its own place again: at the take, at the start of a new pull, and at the let go in a
+	/// network game
 	virtual void ForgetPulledPose([[maybe_unused]] entt::entity object) {}
 	/// A thing's axes at its own size, as they are once it stops being stretched
 	[[nodiscard]] virtual glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const = 0;

@@ -1368,7 +1368,7 @@
   "query": "living.action"
  },
  {
-  "description": "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, and a grazer's needs",
+  "description": "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether a creature fears it, and a grazer's needs",
   "kind": "object",
   "parameters": [
    {
@@ -2141,7 +2141,7 @@
   "query": "help.bubble"
  },
  {
-  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record it is at, whether it holds at a mark, and the camera and hints it has",
+  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record the turns are at, whether it holds at a mark, the record the frames are at, and the camera and hints it has",
   "kind": "object",
   "parameters": [],
   "query": "help.hand_demo"

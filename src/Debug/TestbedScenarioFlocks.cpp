@@ -209,6 +209,23 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f}},
 	});
 
+	// A cow that a kill made dying, in the hand for a time and then let go: in the hand it does not die or go
+	all.push_back({
+	    .id = "animals.dying_cow_in_hand",
+	    .name = "The hand holds a dying cow",
+	    .facet = Facet::Miracles,
+	    .description = "A cow with no life falls dying. After a second the hand takes it. Eight seconds later the hand "
+	                   "lets it go.",
+	    .expected = "In the hand the cow plays its clip for the hand. The inspector shows the state of the hand, the mark "
+	                "of a kill, and a hunger that grows each turn. The cow does not fall dead in the hand. Let go, it lies "
+	                "dead at once where it lands, and its body goes after 60 seconds.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {6.0f, 7.0f, 38.0f}, .look = {0.0f, 3.0f, 50.0f}},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 50.0f}, .life = 0.0f, .living = true}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 8.0f}},
+	});
+
 	all.push_back({
 	    .id = "animals.wolves_spare_indestructible_cow",
 	    .name = "Wolves leave alone a cow that nothing can kill",
