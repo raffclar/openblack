@@ -329,6 +329,19 @@ class Playing(unittest.TestCase):
 
 @unittest.skipIf(net_check is None, "net_check needs the cryptography package")
 class NetCheckHelpers(unittest.TestCase):
+    def test_a_part_after_the_recovery_of_the_part_on_purpose_stays(self):
+        # The part on purpose at 300 comes back with the world of 304; the parts at 419 and 464 are real
+        recoveries = net_check.recovery_turns([
+            "[time] The world goes on from the server's world of turn 0",
+            "[time] The world goes on from the server's world of turn 304",
+            "[time] The world goes on from the server's world of turn 422",
+            "[time] The world goes on from the server's world of turn 467"])
+        self.assertEqual(recoveries, [0, 304, 422, 467])
+        self.assertEqual(net_check.purposeful_part_left_out([301, 419, 464], recoveries, 300), [419, 464])
+
+    def test_a_part_on_purpose_with_no_recovery_keeps_every_turn(self):
+        self.assertEqual(net_check.purposeful_part_left_out([301, 302], [0], 300), [301, 302])
+
     def test_a_long_game_gets_a_longer_limit_than_a_short_one(self):
         self.assertEqual(net_check.run_limit_seconds(600), net_check.RUN_LIMIT_SECONDS)
         self.assertEqual(net_check.run_limit_seconds(2000), net_check.RUN_LIMIT_SECONDS)
