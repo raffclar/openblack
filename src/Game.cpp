@@ -1331,25 +1331,45 @@ void Game::WarmUpFirstFrame()
 	const auto start = std::chrono::steady_clock::now();
 	// Some renderers divide the warm-up between some frames, each with a part of the draws
 	bool shown = false;
-	bool partsLeft = true;
-	for (uint32_t part = 0; partsLeft; ++part)
+	const auto warmUp = [&renderer, &shown, this](const graphics::RendererInterface::DrawSceneDesc& desc) {
+		bool partsLeft = true;
+		for (uint32_t part = 0; partsLeft; ++part)
+		{
+			partsLeft = false;
+			const bool partShown = RenderLoadingFrame(true, [&renderer, &desc, &partsLeft, part]() {
+				partsLeft = renderer.WarmUpScene(desc, part);
+				// The interface draws over the scene too, and the cinema bars are its first draw
+				gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
+				// The villagers' labels and the tip bubble test the depth of the scene, sorted among its see-through
+				// things outside the temple
+				gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
+				gui::Canvas::WarmUp(graphics::RenderPass::Translucent, gui::Canvas::DepthTest::NearerIsGreater, true);
+				// The interface that the game draws over the scene, which the loading screen does not blend in each way
+				gui::Canvas::WarmUp(graphics::RenderPass::Interface);
+				// The debug menu comes up with the game's menu, over all of the game
+				if (Locator::debugGui::has_value())
+				{
+					Locator::debugGui::value().WarmUp();
+				}
+			});
+			shown = shown || partShown;
+		}
+	};
+	warmUp(SceneDrawDesc(config, 0, IsHandDrawn()));
+	// The temple's rooms show only while the player is in the temple. A visit draws them with the temple's own pipelines
+	// and targets, thus the warm-up draws a visit too. The temple draws no island and no sea.
+	if (Locator::temple::has_value())
 	{
-		partsLeft = false;
-		shown = RenderLoadingFrame(true, [&renderer, &config, &partsLeft, part, this]() {
-			partsLeft = renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()), part);
-			// The interface draws over the scene too, and the cinema bars are its first draw
-			gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
-			// The villagers' labels and the tip bubble test the depth of the scene, sorted among its see-through things
-			// outside the temple
-			gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
-			gui::Canvas::WarmUp(graphics::RenderPass::Translucent, gui::Canvas::DepthTest::NearerIsGreater, true);
-			// The interface that the game draws over the scene, which the loading screen does not blend in each way
-			gui::Canvas::WarmUp(graphics::RenderPass::Interface);
-			// The debug menu comes up with the game's menu, over all of the game
-			if (Locator::debugGui::has_value())
+		Locator::temple::value().WarmUpVisit([&config, &warmUp, this]() {
+			if (config.drawEntities)
 			{
-				Locator::debugGui::value().WarmUp();
+				Locator::rendereringSystem::value().PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths,
+				                                                config.drawStreams);
 			}
+			auto desc = SceneDrawDesc(config, 0, IsHandDrawn());
+			desc.drawIsland = false;
+			desc.drawWater = false;
+			warmUp(desc);
 		});
 	}
 	// The first frame makes the draw lists again from what the game's first update changed

@@ -320,6 +320,9 @@ constexpr uint64_t SpriteState(bool additive)
 	       BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_ADD);
 }
 
+/// The triangle that a warm-up draws in place of the temple's text or map when they have none: a triangle of no size
+constexpr std::array<OrientedTextVertex, 3> k_WarmUpTriangle {};
+
 } // namespace
 
 RenderPass Renderer::TranslucentView(RenderPass scene)
@@ -1737,7 +1740,9 @@ void Renderer::DrawTempleText(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& temple = Locator::temple::value();
-	const auto& vertices = temple.GetText();
+	// The words come with the rooms' scrolls on a visit. A warm-up draws a triangle of no size in their place.
+	const auto vertices = _warmingUp && temple.GetText().empty() ? std::span<const OrientedTextVertex>(k_WarmUpTriangle)
+	                                                             : std::span<const OrientedTextVertex>(temple.GetText());
 	const auto* texture = temple.GetTextTexture();
 	if (vertices.empty() || texture == nullptr)
 	{
@@ -1983,7 +1988,9 @@ void Renderer::DrawTempleMap(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& temple = Locator::temple::value();
-	const auto& vertices = temple.GetMap();
+	// A visit frames the map. A warm-up draws a triangle of no size in its place.
+	const auto vertices = _warmingUp && temple.GetMap().empty() ? std::span<const OrientedTextVertex>(k_WarmUpTriangle)
+	                                                            : std::span<const OrientedTextVertex>(temple.GetMap());
 	if (vertices.empty())
 	{
 		return;
@@ -2021,12 +2028,20 @@ void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& temple = Locator::temple::value();
-	const auto& markers = temple.GetMapMarkers();
+	// A visit puts the markers on the map. A warm-up draws one of each kind at no size in their place.
+	const bool warmUp = _warmingUp && temple.GetMapMarkers().empty();
+	const std::vector<TempleMapMarker> warmUpMarkers =
+	    warmUp ? std::vector<TempleMapMarker> {{.kind = TempleMapMarkerKind::Temple},
+	                                           {.kind = TempleMapMarkerKind::Creature},
+	                                           {.kind = TempleMapMarkerKind::Challenge}}
+	           : std::vector<TempleMapMarker> {};
+	const auto& markers = warmUp ? warmUpMarkers : temple.GetMapMarkers();
 	if (markers.empty())
 	{
 		return;
 	}
 	const auto origin = temple.GetPosition();
+	const float size = warmUp ? 0.0f : 1.0f;
 
 	// First a glow under each marker, the room's light glow drawn over everything: 1.3 across, a tenth above the marker
 	const auto& textures = Locator::resources::value().GetTextures();
@@ -2043,7 +2058,7 @@ void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 		for (const auto& marker : markers)
 		{
 			const auto glow = marker.glow.value_or(marker.position + glm::vec3(0.0f, 0.1f, 0.0f));
-			const auto model = glm::scale(glm::translate(glm::mat4(1.0f), origin + glow), glm::vec3(k_GlowSize));
+			const auto model = glm::scale(glm::translate(glm::mat4(1.0f), origin + glow), glm::vec3(k_GlowSize * size));
 			bgfx::setTransform(glm::value_ptr(model));
 			spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
 			spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
@@ -2075,7 +2090,7 @@ void Renderer::DrawTempleMapMarkers(const DrawSceneDesc& desc) const
 		}
 		// The game puts the markers in the temple's light
 		const auto model = glm::translate(glm::mat4(1.0f), origin + marker.position) * turn *
-		                   glm::scale(glm::mat4(1.0f), glm::vec3(k_MarkerScale));
+		                   glm::scale(glm::mat4(1.0f), glm::vec3(k_MarkerScale * size));
 		L3DMeshSubmitDesc submitDesc = {};
 		submitDesc.viewId = desc.viewId;
 		submitDesc.program = _shaderManager->GetShader("Object");
@@ -3391,7 +3406,9 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 	static constexpr auto k_TextureId = entt::hashed_string("raw/burn");
 	static constexpr auto k_AlphaTextureId = entt::hashed_string("raw/burna");
 	const auto& textures = Locator::resources::value().GetTextures();
-	if (!alpha.has_value() || !textures.Contains(k_TextureId.value()) || !textures.Contains(k_AlphaTextureId.value()))
+	// The border shows only from high over the land, or on the temple's map. Thus a warm-up draws it at all heights.
+	if ((!alpha.has_value() && !_warmingUp) || !textures.Contains(k_TextureId.value()) ||
+	    !textures.Contains(k_AlphaTextureId.value()))
 	{
 		return;
 	}
@@ -3410,6 +3427,24 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
 	    .end();
 	const auto* program = _shaderManager->GetShader("WorldTextured");
+	// A warm-up draws one triangle of no size, with the border's textures and states
+	if (_warmingUp)
+	{
+		constexpr uint32_t k_Corners = 3;
+		if (bgfx::getAvailTransientVertexBuffer(k_Corners, layout) < k_Corners)
+		{
+			return;
+		}
+		bgfx::TransientVertexBuffer vertexBuffer;
+		bgfx::allocTransientVertexBuffer(&vertexBuffer, k_Corners, layout);
+		std::ranges::fill(std::span(reinterpret_cast<Vertex*>(vertexBuffer.data), k_Corners), Vertex {});
+		program->SetTextureSampler("s_diffuse", 0, *textures.Handle(k_TextureId));
+		program->SetTextureSampler("s_alpha", 1, *textures.Handle(k_AlphaTextureId));
+		bgfx::setVertexBuffer(0, &vertexBuffer);
+		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA);
+		program->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		return;
+	}
 	for (const auto& circle : influenceSystem.GetCircles())
 	{
 		if (!influenceSystem.IsBorderShown(circle.player))
@@ -4030,7 +4065,12 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	const auto resolution =
 	    Locator::windowing::has_value() ? static_cast<glm::vec2>(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
 	const auto toClip = camera.GetViewProjectionMatrix();
-	// A warm-up does not look at the samples: it asks nothing of the drawing, as the next frames read the answers
+	// A warm-up does not look at the samples: it asks nothing of the drawing, as the next frames read the answers. It
+	// draws one square of no size with no query, as a sample draws its square.
+	if (_warmingUp && asksDrawing)
+	{
+		AskGlareSampleDrawn(camera, BGFX_INVALID_HANDLE, glm::vec2(0.0f), glm::vec2(0.0f), sun::GlareHidingDepth(near));
+	}
 	for (size_t i = 0; i < samples.size() && !_warmingUp; ++i)
 	{
 		bool isHidden = Locator::pickingSystem::has_value() &&
