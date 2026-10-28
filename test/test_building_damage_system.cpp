@@ -24,12 +24,15 @@
 
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
+#include <glm/geometric.hpp>
+#include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
 #include "Common/GameRandom.h"
 #include "ECS/BuildingDamageWorld.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -164,13 +167,15 @@ public:
 	int ended {0};
 };
 
-/// A flat land at the sea's level, the house's model a wall of 8 by 2 squares of 2 metres about its middle, and records of what
-/// is drawn, heard, removed and applied
+/// A land at the sea's level, flat unless it is given a slope, the house's model a wall of 8 by 2 squares of 2 metres about its
+/// middle, and records of what is drawn, heard, removed and applied
 class FakeWorld final: public building_world::World
 {
 public:
 	/// How many puffs of dust the pieces threw up
 	int puffs {0};
+	/// How much the land rises for each metre along z
+	float slope {0.0f};
 	struct Effect
 	{
 		entt::entity object;
@@ -186,7 +191,7 @@ public:
 
 	[[nodiscard]] Registry& Entities() override { return registry; }
 	[[nodiscard]] const Registry& Entities() const override { return registry; }
-	[[nodiscard]] float LandHeight(glm::vec2 /*point*/) const override { return 0.0f; }
+	[[nodiscard]] float LandHeight(glm::vec2 point) const override { return slope * point.y; }
 	[[nodiscard]] std::vector<building_world::ModelPart> ModelParts(entt::id_type mesh) const override
 	{
 		if (mesh != k_House)
@@ -436,6 +441,48 @@ TEST(BuildingDamageSystem, TheBrokenModelMarksTheCornersOfItsBackFacesForTheSnow
 		// A wall has two corners of each face, so the faces have as many corners as each other
 		const auto backCorners = std::ranges::count_if(part.vertices, [](const auto& vertex) { return vertex.back; });
 		EXPECT_EQ(static_cast<size_t>(backCorners) * 2, part.vertices.size());
+	}
+}
+
+TEST(BuildingDamageSystem, ABrokenBuildingOnSlopingLandKeepsTheNormalOfEachTriangleInTheWorld)
+{
+	Fixture f;
+	// The wall leans back by 45 degrees and follows land that rises 1 metre for each metre along z
+	f.world->slope = 1.0f;
+	const float half = glm::sqrt(0.5f);
+	auto& transform = f.world->registry.Get<Transform>(f.house);
+	transform.rotation = glm::mat3(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(0.0f, half, half), glm::vec3(0.0f, -half, half));
+	f.world->registry.Assign<MorphWithTerrain>(f.house, 0);
+	f.system->Smash(f.house, entt::null, 1.0f);
+	const auto* broken = f.world->registry.TryGet<const BuildingDamage>(f.house);
+	ASSERT_NE(broken, nullptr);
+
+	// The land lowers the wall by a part of each corner's z, so the wall is a plane in the world with a different normal
+	const auto triangle =
+	    std::ranges::find_if(broken->mesh.primitives, [](const auto& primitive) { return !primitive.triangles.empty(); });
+	ASSERT_NE(triangle, broken->mesh.primitives.end());
+	const auto& c = triangle->triangles.front().corners;
+	const auto worldNormal = glm::normalize(glm::cross(c[1].position - c[0].position, c[2].position - c[0].position));
+
+	const auto& parts = f.world->drawnParts.at(broken->drawMesh);
+	ASSERT_FALSE(parts.empty());
+	const auto& part = parts.front();
+	ASSERT_GE(part.indices.size(), 3U);
+	// The corners in the model's space, which have the land taken off, give a normal that is not the world's
+	const auto& a = part.vertices.at(part.indices.at(0)).position;
+	const auto& b = part.vertices.at(part.indices.at(1)).position;
+	const auto& d = part.vertices.at(part.indices.at(2)).position;
+	const auto cornerNormal = transform.rotation * glm::normalize(glm::cross(b - a, d - a));
+	EXPECT_LT(glm::dot(cornerNormal, worldNormal), 0.99f);
+
+	// Each face is lit and snowed by the normal of its triangle in the world, after the drawing turns it back
+	for (const auto& vertex : part.vertices)
+	{
+		const auto drawn = transform.rotation * vertex.normal;
+		const auto expected = vertex.back ? -worldNormal : worldNormal;
+		EXPECT_NEAR(drawn.x, expected.x, 1e-5f);
+		EXPECT_NEAR(drawn.y, expected.y, 1e-5f);
+		EXPECT_NEAR(drawn.z, expected.z, 1e-5f);
 	}
 }
 
