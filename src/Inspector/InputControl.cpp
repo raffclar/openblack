@@ -379,7 +379,8 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	return {
 	    {.name = "state",
 	     .description =
-	         "The pointer, the buttons held, the hand, what the cursor picks (with whether the Action button takes it "
+	         "The pointer, the buttons held, the actions held and whether a box has the keyboard, the hand, what the "
+	         "cursor picks (with whether the Action button takes it "
 	         "into the hand, or takes hold of a town's totem under it, and why not), and the input still to come",
 	     .parameters = {},
 	     .kind = ResultKind::Object,

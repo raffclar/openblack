@@ -1176,6 +1176,24 @@ bool GameInterface::ChatWantsKeys() const
 	return !_menu->IsOpen() && _chatControls->WantsKeys(wideScreen);
 }
 
+openblack::input::box_keyboard::Boxes GameInterface::KeyboardBoxes() const
+{
+	return {
+	    .menu = _menu->IsOpen(),
+	    .skipBox = _skipBox->IsActive(),
+	    .newPlayerBox = _newPlayerBox->IsActive(),
+	    .skirmishBox = _skirmishBox->IsActive(),
+	    .landInfoBox = _landInfoBox->IsActive(),
+	    .saveGameBoxes = _saveGameBoxes->IsActive(),
+	    .endGameBox = _endGameBox->IsOpen(),
+	    .multiplayerBoxes = _multiplayerBoxes->IsActive(),
+	    .tattooEditor = _tattooEditor->IsOpen(),
+	    .chatTyping = ChatWantsKeys(),
+	    .storyHistory = _storyHistoryBox->IsActive(),
+	    .musicControls = _musicControls->IsActive(),
+	};
+}
+
 glm::ivec2 GameInterface::ToChatControls(glm::ivec2 screen, glm::u16vec2 resolution)
 {
 	_painter.Begin(resolution);
