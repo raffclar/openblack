@@ -254,5 +254,27 @@ class HandDeeds(unittest.TestCase):
         self.assertEqual(sim_report.missing_deeds(deeds, {"takes": 1, "throws": 3}), {"takes": [0, 1], "throws": [2, 3]})
 
 
+
+class DecidedGameTests(unittest.TestCase):
+    def test_the_first_decided_line_gives_the_turn(self):
+        lines = ["[info] Turn 1: the god of player 2 is out of the game",
+                 "[info] [GameEndSystem.cpp:198] Turn 3: the god of player 0 is out of the game, and the game is decided",
+                 "[info] Turn 9: the god of player 1 is out of the game, and the game is decided"]
+        self.assertEqual(sim_report.decided_at_turn_in_text(lines), 3)
+        self.assertIsNone(sim_report.decided_at_turn_in_text(["[info] Turn 4: a villager is born"]))
+
+    def test_a_missing_log_tells_of_no_decision(self):
+        self.assertIsNone(sim_report.decided_at_turn_in_file(os.path.join(tempfile.gettempdir(), "no-such-log.txt")))
+
+    def test_an_input_on_a_game_decided_at_the_start_compares_nothing_of_the_hand(self):
+        self.assertIsNotNone(sim_report.hand_input_on_decided_game(True, 1))
+        self.assertIsNotNone(sim_report.hand_input_on_decided_game(True, 0))
+
+    def test_a_still_hand_or_a_later_decision_is_no_problem(self):
+        self.assertIsNone(sim_report.hand_input_on_decided_game(False, 1))
+        self.assertIsNone(sim_report.hand_input_on_decided_game(True, None))
+        self.assertIsNone(sim_report.hand_input_on_decided_game(True, 2))
+
+
 if __name__ == "__main__":
     unittest.main()
