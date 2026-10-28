@@ -203,6 +203,7 @@ bool ReadStart(const Json& object, Start& start)
 			}
 			start.names.push_back(name.get<std::string>());
 		}
+	}
 	// Each god of the list has a slot and a name
 	const auto gods = object.find("gods");
 	if (gods == object.end())
