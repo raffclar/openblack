@@ -65,6 +65,7 @@ int main(int argc, char* argv[])
 		("frame-ms", "The game time of each frame in milliseconds. A turn is 100 ms.", cxxopts::value<double>()->default_value("100"))
 		("fast", "Tools: play the frames one after the other with no wait for the wall clock.")
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
+		("log-checksums", "Tools: write the checksum of each turn to the log, which server_check and net_check read.")
 		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
 		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
@@ -173,6 +174,7 @@ int main(int argc, char* argv[])
 			settings.profileFolder = std::filesystem::path(result["profile-folder"].as<std::string>());
 		}
 		settings.logFile = result["log-file"].as<std::string>();
+		settings.logChecksums = result.count("log-checksums") != 0;
 		if (result.count("record") != 0)
 		{
 			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
