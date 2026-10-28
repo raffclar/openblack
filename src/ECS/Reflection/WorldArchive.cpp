@@ -335,7 +335,8 @@ void KeepLeftOutRows(const ComponentStorage& component, const TypeCodec* codec, 
 
 /// Hashes the rows of one component. The writer is the scratch memory of the caller.
 [[nodiscard]] ComponentHash HashComponent(const ComponentStorage& component, std::span<const HashLeaveOut> leaveOut,
-                                          bool byField, const RowVisitor& visit, BinaryWriter& out, bool keepRows)
+                                          bool byField, const RowVisitor& visit, BinaryWriter& out, bool keepRows,
+                                          HashMemo::Component* memo)
 {
 	ComponentHash result;
 	// Each row: its entity, then each field that the hash keeps, with the bytes that a save writes
@@ -410,6 +411,16 @@ void KeepLeftOutRows(const ComponentStorage& component, const TypeCodec* codec, 
 	{
 		std::ranges::sort(rows, {}, [](entt::entity entity) { return entt::to_integral(entity); });
 	}
+	// With the memo, the writer keeps all the rows of the component. While each row is the same as in the memo, the
+	// hash after the row comes from the memo. From the first row that changed, the hash mixes each row.
+	const bool remembers = memo != nullptr && !byField && !visit && !keepRows;
+	std::vector<HashMemo::Row> remembered;
+	bool same = remembers;
+	if (remembers)
+	{
+		out.Clear();
+		remembered.reserve(rows.size());
+	}
 	for (const auto row : rows)
 	{
 		if (AnyHas(left.rowMarkers, row))
@@ -417,8 +428,12 @@ void KeepLeftOutRows(const ComponentStorage& component, const TypeCodec* codec, 
 			continue;
 		}
 		result.kept = true;
-		// Each row clears the writer, and its memory stays for the next row
-		out.Clear();
+		// Without the memo, each row clears the writer, and its memory stays for the next row
+		if (!remembers)
+		{
+			out.Clear();
+		}
+		const auto rowStart = out.Size();
 		out.WriteRaw(row);
 		const void* value = component.storage->value(row);
 		if (codec != nullptr)
@@ -460,7 +475,31 @@ void KeepLeftOutRows(const ComponentStorage& component, const TypeCodec* codec, 
 				}
 			}
 		}
-		MixBytes(result.hash, out.Written());
+		const auto bytes = out.Written(rowStart);
+		if (!remembers)
+		{
+			MixBytes(result.hash, bytes);
+			continue;
+		}
+		const auto place = remembered.size();
+		const auto end = out.Size();
+		same = same && place < memo->rows.size() && memo->rows[place].end == end &&
+		       std::ranges::equal(bytes, std::span<const uint8_t>(memo->bytes).subspan(rowStart, bytes.size()));
+		if (same)
+		{
+			result.hash = memo->rows[place].hash;
+		}
+		else
+		{
+			MixBytes(result.hash, bytes);
+		}
+		remembered.push_back({.end = end, .hash = result.hash});
+	}
+	if (remembers)
+	{
+		const auto written = out.Written();
+		memo->bytes.assign(written.begin(), written.end());
+		memo->rows = std::move(remembered);
 	}
 	return result;
 }
@@ -541,7 +580,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
                                                                               const entt::meta_ctx& context,
                                                                               std::span<const HashLeaveOut> leaveOut,
                                                                               bool byField, const RowVisitor& visit,
-                                                                              WorkerPool* pool, WorldRows* rows)
+                                                                              WorkerPool* pool, WorldRows* rows, HashMemo* memo)
 {
 	WorldHashes hashes;
 	{
@@ -559,13 +598,23 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 	}
 	const auto components = RegisteredStorages(registry, context, hashes.unregistered);
 	std::vector<ComponentHash> results(components.size());
+	// The memo of each component, found before the threads share the components
+	std::vector<HashMemo::Component*> memos(components.size(), nullptr);
+	if (memo != nullptr)
+	{
+		for (size_t index = 0; index < components.size(); ++index)
+		{
+			memos[index] = &memo->components[components[index].name];
+		}
+	}
 	// The hash of a component does not use the other components, so the threads of the pool can share them. The
 	// visitor of the tools must get the rows in order, so then this thread does all of them.
 	if (pool != nullptr && !visit)
 	{
 		std::vector<BinaryWriter> writers(pool->GetLaneCount(), BinaryWriter(context));
 		pool->ForEach(components.size(), [&](size_t index, size_t lane) {
-			results[index] = HashComponent(components[index], leaveOut, byField, visit, writers[lane], rows != nullptr);
+			results[index] =
+			    HashComponent(components[index], leaveOut, byField, visit, writers[lane], rows != nullptr, memos[index]);
 		});
 	}
 	else
@@ -573,7 +622,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		BinaryWriter out(context);
 		for (size_t index = 0; index < components.size(); ++index)
 		{
-			results[index] = HashComponent(components[index], leaveOut, byField, visit, out, rows != nullptr);
+			results[index] = HashComponent(components[index], leaveOut, byField, visit, out, rows != nullptr, memos[index]);
 		}
 	}
 	for (size_t index = 0; index < components.size(); ++index)
