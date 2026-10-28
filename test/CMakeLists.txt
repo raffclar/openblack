@@ -1890,3 +1890,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_creature_animation_log test_creature_animation_log.cpp)
 openblack_setup_and_add_test(test_painted_skin_stamp test_painted_skin_stamp.cpp)
+openblack_setup_and_add_test(test_command_log test_command_log.cpp)

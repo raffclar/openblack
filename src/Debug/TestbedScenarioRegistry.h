@@ -14,6 +14,7 @@
 
 #include <functional>
 #include <limits>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -1392,6 +1393,9 @@ struct Timeline
 [[nodiscard]] std::vector<size_t> Advance(Timeline& timeline, std::span<const Command> commands,
                                           std::optional<size_t> repeatFrom, float seconds,
                                           const std::function<bool(const Command& command)>& isFree);
+/// The commands that the computer of the game gave before a turn, in their order, without any place that the scenario
+/// does not have (it has this many commands)
+[[nodiscard]] std::vector<size_t> GivesAt(const std::map<uint32_t, std::vector<size_t>>& gives, uint32_t turn, size_t commands);
 
 /// What a testbed scenario does before one turn of a network game. In a network game the scenario steps by the turns, not
 /// by the frames, so that the server and every client give its commands before the same turn.

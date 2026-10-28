@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -51,6 +52,15 @@ TEST(TestbedScenarios, IdsAreUniqueAndFindable)
 		EXPECT_EQ(Find(scenario.id), &scenario);
 	}
 	EXPECT_EQ(Find("no.such.scenario"), nullptr);
+}
+
+TEST(TestbedScenarios, AServerGivesTheCommandsThatTheGameGaveBeforeATurn)
+{
+	const std::map<uint32_t, std::vector<size_t>> gives {{5, {2, 3}}, {9, {0, 12}}};
+	EXPECT_EQ(GivesAt(gives, 5, 4), (std::vector<size_t> {2, 3}));
+	// A place that the scenario does not have is left out
+	EXPECT_EQ(GivesAt(gives, 9, 4), (std::vector<size_t> {0}));
+	EXPECT_TRUE(GivesAt(gives, 6, 4).empty());
 }
 
 TEST(TestbedScenarios, EveryFacetHasScenarios)

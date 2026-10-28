@@ -241,8 +241,11 @@ def main():
             events = events.get("events", [])
     relay = not options.no_relay
     commands = os.path.join(game_dir, "commands.jsonl")
-    if os.path.exists(commands):
-        os.remove(commands)
+    # The game writes the commands of its testbed scenario beside its commands, and the server gives them with the game
+    gives = os.path.join(game_dir, "commands.gives.jsonl")
+    for path in (commands, gives):
+        if os.path.exists(path):
+            os.remove(path)
 
     # A Linux server in WSL takes WSL paths
     local = wsl_path if options.wsl_server else (lambda path: path)

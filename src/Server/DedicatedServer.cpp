@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <filesystem>
 #include <memory>
 #include <string_view>
 #include <system_error>
@@ -320,6 +321,18 @@ bool ServerWorld::StartLand()
 			return false;
 		}
 		_scenarioRunner = std::make_unique<testbed_scenarios::Runner>();
+		// A server that plays the commands of a game gives the commands of the scenario before the turns that the game
+		// gave them, when the game wrote them
+		if (_settings.commandsPath.has_value())
+		{
+			const auto gives = command_log::GivesPathOf(*_settings.commandsPath);
+			std::error_code error;
+			if (std::filesystem::exists(gives, error))
+			{
+				_scenarioRunner->FollowGives(command_log::ReadGivesFile(gives));
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The scenario gives its commands as the game did: {}", gives.string());
+			}
+		}
 	}
 	// The land starts from the state that every client of the network game starts it from
 	simulation::PrepareNetworkLand(_settings.seed);
