@@ -69,7 +69,8 @@ class DrawTrace
 public:
 	explicit DrawTrace(std::unique_ptr<std::ostream> out);
 
-	/// A trace that writes to a new file at the path, or none when the file does not open
+	/// A trace that writes to a new file at the path, or none when the file does not open. The path "-" writes each line
+	/// to the standard output after the tag of the checksum lines (for the web build).
 	[[nodiscard]] static std::shared_ptr<DrawTrace> ToFile(const std::filesystem::path& path);
 
 	/// The game turn with this number starts. The draws until the end of the turn are in the turn phase.

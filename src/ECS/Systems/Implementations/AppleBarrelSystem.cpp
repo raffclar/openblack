@@ -180,8 +180,7 @@ void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 	{
 		return;
 	}
-	auto& barrel = registry.Get<AppleBarrel>(_barrel);
-	barrel.store = *store;
+	const auto& barrel = registry.Get<const AppleBarrel>(_barrel);
 	registry.Get<Transform>(_barrel).position = barrelSpot;
 	registry.Get<Transform>(barrel.worm).position = wormSpot;
 
@@ -214,6 +213,11 @@ void AppleBarrelSystem::ProcessTurn()
 	}
 	if (_barrel != entt::null)
 	{
+		// The barrel goes to the pit that carries it now
+		if (auto* barrel = registry.TryGet<AppleBarrel>(_barrel))
+		{
+			barrel->store = *store;
+		}
 		return;
 	}
 	// The frames put the barrel and its worm in their places at the pit

@@ -43,8 +43,8 @@ public:
 
 	bool Press(uint32_t nowMs, uint32_t turn) override;
 	std::optional<entt::entity> Release(uint32_t nowMs, uint32_t turn) override;
-	void ClickReleased(uint32_t turn) override;
-	void ClickThing(entt::entity object, uint32_t turn) override;
+	void ClickReleased() override;
+	void ClickThing(entt::entity object) override;
 	glm::vec3 UpdateFrame(const Frame& frame) override;
 	void ProcessTurn() override;
 	/// The turn of the hand that HandGrabWorldInterface::Hand gives now
@@ -56,13 +56,12 @@ public:
 	void DoApply(PlayerNames player, entt::entity target) override;
 	void DoClick(PlayerNames player, const player_commands::HandClick& click, uint32_t turn) override;
 	/// The clicks that the scripts read are forgotten some seconds of turns after they were made
-	void ForgetClicks(uint32_t turn);
 	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
 	void DoShakeOff(PlayerNames player) override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
-	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
+	[[nodiscard]] bool IsInInfluence() const override;
 	[[nodiscard]] bool IsInInfluenceOf(PlayerNames player) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldOf(PlayerNames player) const override;
 	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
@@ -74,9 +73,11 @@ public:
 	void DoLetGo(PlayerNames player, const player_commands::HandLetGo& letGo) override;
 	void DoTap(PlayerNames player, entt::entity object) override;
 	void DoGive(PlayerNames player, entt::entity creature, entt::entity object) override;
+	void DoGiveCallOff(PlayerNames player, entt::entity creature) override;
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
 	[[nodiscard]] std::optional<entt::entity> GetLockedOn() const override;
+	[[nodiscard]] std::optional<entt::entity> GetLockedOnOf(PlayerNames player) const override;
 	[[nodiscard]] bool IsAboutToThrow() const override;
 	[[nodiscard]] bool CreatureTakesHeld(entt::entity creature) const override;
 	[[nodiscard]] bool IsBusy() const override;
@@ -99,6 +100,10 @@ private:
 	/// The hand's grab, made on the hand when first needed; none without a hand
 	[[nodiscard]] components::HandGrab* Grab();
 	[[nodiscard]] const components::HandGrab* Grab() const;
+	/// What the hand of the acting player holds, none when it holds nothing of its own
+	[[nodiscard]] std::optional<entt::entity> HeldNow() const;
+	/// What the hand of the acting player scoops from, none when it scoops from nothing
+	[[nodiscard]] std::optional<entt::entity> LockedOnNow() const;
 	[[nodiscard]] bool Exists(entt::entity object) const;
 	/// How the hand treats a thing
 	[[nodiscard]] hand_grab::GrabKind KindOf(entt::entity object) const;
@@ -169,13 +174,13 @@ private:
 	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, glm::vec3 velocity);
 	/// The hand holds nothing, having let go before taking anything or let go of what it held
 	void Empty(components::HandGrab& grab);
-	/// A thing that the hand pulls at stands again as it stood before the pull
-	void StandAsBeforePull(const components::HandGrab& grab);
 
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] bool HandInInfluence() const;
 
 	std::unique_ptr<hand_grab::HandGrabWorldInterface> _world;
+	/// The thing that the frames of this computer draw in the pose of a pull, until the pull ends
+	entt::entity _drawnPull {entt::null};
 };
 
 } // namespace openblack::ecs::systems

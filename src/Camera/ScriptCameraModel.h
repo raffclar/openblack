@@ -19,6 +19,7 @@
 #include <optional>
 #include <vector>
 
+#include <glm/geometric.hpp>
 #include <glm/vec3.hpp>
 
 #include "CameraModel.h"
@@ -44,6 +45,20 @@ namespace script_camera
 inline constexpr float k_MaxFrameSeconds = 0.1f;
 /// Closer than this, squared, to where it is going, the camera has arrived
 inline constexpr float k_ArrivedDistanceSquared = 0.001f;
+/// The player's camera has arrived once where it is and what it looks at are where it is going
+[[nodiscard]] inline bool PlayerCameraArrived(const glm::vec3& origin, const glm::vec3& targetOrigin, const glm::vec3& focus,
+                                              const glm::vec3& targetFocus)
+{
+	const auto distanceSquared = [](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a - b, a - b); };
+	return distanceSquared(targetOrigin, origin) < k_ArrivedDistanceSquared &&
+	       distanceSquared(targetFocus, focus) < k_ArrivedDistanceSquared;
+}
+/// The turns read the arrival of the camera from the view report of the player. The report counts only when it comes
+/// after the last camera order of the scripts: the camera has not arrived until a report after the order says so.
+[[nodiscard]] constexpr bool ArrivedByReport(bool reportedArrived, uint32_t reportedOrders, uint32_t orders)
+{
+	return reportedArrived && reportedOrders == orders;
+}
 /// The camera is kept within a sphere of 3500 around the middle of the world, at (2560, 0, 2560)
 inline constexpr float k_WorldCentre = 2560.0f;
 inline constexpr float k_WorldRadiusSquared = 1.225e7f;
@@ -353,6 +368,12 @@ public:
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override;
+	/// Where the eye and the focus are now
+	[[nodiscard]] glm::vec3 GetOrigin() const;
+	[[nodiscard]] glm::vec3 GetFocus() const;
+	/// How fast the eye and the focus move now, in units a second
+	[[nodiscard]] glm::vec3 GetOriginSpeed() const;
+	[[nodiscard]] glm::vec3 GetFocusSpeed() const;
 
 private:
 	using Zoomers = std::array<camera::Zoomer, 3>;

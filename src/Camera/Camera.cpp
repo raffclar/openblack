@@ -289,9 +289,31 @@ std::unique_ptr<Camera> Camera::Reflect() const
 void Camera::DeprojectScreenToWorld(glm::vec2 screenCoord, glm::vec3& outWorldOrigin, glm::vec3& outWorldDirection,
                                     Interpolation interpolation) const
 {
+	Deproject(screenCoord, GetViewProjectionMatrix(Projection::Normal, interpolation), outWorldOrigin, outWorldDirection);
+}
+
+void Camera::DeprojectAtStep(glm::vec2 screenCoord, uint32_t step, glm::vec3& outWorldOrigin,
+                             glm::vec3& outWorldDirection) const
+{
+	if (step >= _stepViewCount)
+	{
+		DeprojectScreenToWorld(screenCoord, outWorldOrigin, outWorldDirection);
+		return;
+	}
+	Deproject(screenCoord, GetProjectionMatrix(Projection::Normal) * _stepViews.at(step).view, outWorldOrigin,
+	          outWorldDirection);
+}
+
+glm::vec3 Camera::GetStepOrigin(uint32_t step) const
+{
+	return step < _stepViewCount ? _stepViews.at(step).origin : GetOrigin();
+}
+
+void Camera::Deproject(glm::vec2 screenCoord, const glm::mat4& viewProjection, glm::vec3& outWorldOrigin,
+                       glm::vec3& outWorldDirection)
+{
 	const float screenSpaceX = (screenCoord.x - 0.5f) * 2.0f;
 	const float screenSpaceY = ((1.0f - screenCoord.y) - 0.5f) * 2.0f;
-
 	// The start of the ray trace is defined to be at mousex,mousey,1 in
 	// projection space (z=1 is near, z=0 is far - this gives us better
 	// precision) To get the direction of the ray trace we need to use any z
@@ -300,7 +322,7 @@ void Camera::DeprojectScreenToWorld(glm::vec2 screenCoord, glm::vec3& outWorldOr
 	const glm::vec4 rayEndProjectionSpace = glm::vec4(screenSpaceX, screenSpaceY, 0.5f, 1.0f);
 
 	// Calculate our inverse view projection matrix
-	auto inverseViewProj = glm::inverse(GetViewProjectionMatrix(Projection::Normal, interpolation));
+	auto inverseViewProj = glm::inverse(viewProjection);
 
 	// Get our homogeneous coordinates for our start and end ray positions
 	const glm::vec4 hgRayStartWorldSpace = inverseViewProj * rayStartProjectionSpace;
@@ -356,25 +378,84 @@ bool Camera::ProjectWorldToScreen(glm::vec3 worldPosition, glm::vec4 viewport, g
 
 void Camera::Update(std::chrono::microseconds dt)
 {
-	using namespace std::chrono_literals;
-
-	// The count of the model's time increases first, in whole milliseconds, by at most a tenth of a second a step
-	const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
-	_modelSeconds += std::min(static_cast<float>(milliseconds) * 0.001f, k_LongestModelStep);
+	CountModelTime(dt);
+	_stepViewCount = 0;
 	const auto updateInfo = _model->Update(dt, *this);
-
 	if (updateInfo)
 	{
-		const auto m1 = glm::zero<glm::vec3>();
-		// You have to normalize the velocity with the NEW duration
-		const auto durationSeconds = std::chrono::duration_cast<std::chrono::duration<float>>(updateInfo->duration);
-		SetOriginInterpolator(GetOrigin(), updateInfo->origin, GetOriginVelocity() * durationSeconds.count(), m1);
-		SetFocusInterpolator(GetFocus(), updateInfo->focus, GetFocusVelocity() * durationSeconds.count(), m1);
-		SetInterpolatorDuration(updateInfo->duration);
-		SetInterpolatorTime(0us);
+		SetOff(*updateInfo);
 	}
 	KeepInsideTheWorld();
+	Advance(dt);
+}
 
+void Camera::Update(const input_steps::Steps& steps)
+{
+	_stepViewCount = 0;
+	auto* actions = Locator::gameActionSystem::has_value() ? &Locator::gameActionSystem::value() : nullptr;
+	const auto useStep = [actions](std::optional<uint32_t> step) {
+		if (actions != nullptr)
+		{
+			actions->UseInputStep(step);
+		}
+	};
+	// A frame with no step leaves the camera where it is
+	for (uint32_t i = 0; i < steps.count; ++i)
+	{
+		const auto time = std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(i));
+		// The first step read its mouse and the keys of the last frame at their places in the frame. Each next step first
+		// reads the keys after the step before it, and then the part of the mouse that it takes, as each frame at 60 a
+		// second does.
+		if (i > 0)
+		{
+			useStep(i - 1);
+			_model->HandleKeys(std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(i - 1)));
+			useStep(i);
+			_model->HandleActions(time);
+		}
+		useStep(i);
+		CountModelTime(time);
+		if (const auto updateInfo = _model->Update(time, *this))
+		{
+			SetOff(*updateInfo);
+		}
+		KeepInsideTheWorld();
+		Advance(time);
+		KeepStepView();
+	}
+	useStep(std::nullopt);
+}
+
+void Camera::KeepStepView()
+{
+	if (_stepViewCount < _stepViews.size())
+	{
+		_stepViews.at(_stepViewCount++) = StepView {.origin = GetOrigin(), .view = GetViewMatrix(Interpolation::Current)};
+	}
+}
+
+void Camera::CountModelTime(std::chrono::microseconds dt)
+{
+	// The count of the model's time increases first, in whole milliseconds, by at most a tenth of a second a frame
+	const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+	_modelSeconds += std::min(static_cast<float>(milliseconds) * 0.001f, k_LongestModelStep);
+}
+
+void Camera::SetOff(const CameraModel::CameraInterpolationUpdateInfo& updateInfo)
+{
+	using namespace std::chrono_literals;
+	const auto m1 = glm::zero<glm::vec3>();
+	// You have to normalize the velocity with the NEW duration
+	const auto durationSeconds = std::chrono::duration_cast<std::chrono::duration<float>>(updateInfo.duration);
+	SetOriginInterpolator(GetOrigin(), updateInfo.origin, GetOriginVelocity() * durationSeconds.count(), m1);
+	SetFocusInterpolator(GetFocus(), updateInfo.focus, GetFocusVelocity() * durationSeconds.count(), m1);
+	SetInterpolatorDuration(updateInfo.duration);
+	SetInterpolatorTime(0us);
+}
+
+void Camera::Advance(std::chrono::microseconds dt)
+{
+	using namespace std::chrono_literals;
 	// Each clock runs on until its movement is over, where it stops
 	const auto step = std::min(100'000us, dt);
 	_interpolatorTime = std::min(_interpolatorTime + step, _interpolatorDuration);
@@ -594,6 +675,16 @@ Camera& Camera::SetFocusInterpolator(const glm::vec3& p0, const glm::vec3& p1, c
 	_focusInterpolators = ZoomInterpolator3f(p0, p1, m0, m1);
 
 	return *this;
+}
+
+Camera& Camera::GlideTo(const Glide& origin, const Glide& focus, float seconds)
+{
+	using namespace std::chrono_literals;
+	const auto m1 = glm::zero<glm::vec3>();
+	SetOriginInterpolator(origin.from, origin.to, origin.speed * seconds, m1);
+	SetFocusInterpolator(focus.from, focus.to, focus.speed * seconds, m1);
+	SetInterpolatorDuration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float>(seconds)));
+	return SetInterpolatorTime(0us);
 }
 
 Camera& Camera::SetInterpolatorDuration(std::chrono::microseconds duration)

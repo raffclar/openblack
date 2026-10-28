@@ -45,10 +45,14 @@ struct YoungCreature
 	/// It belongs to the player at this computer
 	bool localPlayers {false};
 	int32_t land {0};
+	/// The game is a network game
+	bool networkGame {false};
 };
 
-/// Every turn a creature of the local player's, off the leash, on the first land and younger than the leaving stage
-/// is kept within the young home radius of its home
+/// Every turn of a game alone, the game keeps a creature of the local player's in the young home radius of its home when:
+/// - it is off the leash
+/// - it is on the first land
+/// - it is younger than the leaving stage
 [[nodiscard]] bool KeptAtHome(const YoungCreature& creature);
 
 } // namespace openblack::creature_development

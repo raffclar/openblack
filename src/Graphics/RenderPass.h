@@ -56,6 +56,13 @@ enum class RenderPass : uint8_t
 	GestureHintCollar0,
 	GestureHintCollar1,
 	GestureHintCollar2,
+	/// The seeds and the globe that the gestures' hints picture, each in a view of its own over its hint's square. A
+	/// row has at most five such pictures: the five miracles that a creature can cast in a fight.
+	GestureHintSeed0,
+	GestureHintSeed1,
+	GestureHintSeed2,
+	GestureHintSeed3,
+	GestureHintSeed4,
 	/// The gestures' hints along the bottom of the screen, over the scene and under the cinema bars
 	GestureHints,
 	/// The cinema bars over the scene: the advisors near the screen are drawn over them
@@ -109,6 +116,11 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Gesture Hint Collar 0 Pass",  //
     "Gesture Hint Collar 1 Pass",  //
     "Gesture Hint Collar 2 Pass",  //
+    "Gesture Hint Seed 0 Pass",    //
+    "Gesture Hint Seed 1 Pass",    //
+    "Gesture Hint Seed 2 Pass",    //
+    "Gesture Hint Seed 3 Pass",    //
+    "Gesture Hint Seed 4 Pass",    //
     "Gesture Hints Pass",          //
     "Cinema Bars Pass",            //
     "Advisors Pass",               //

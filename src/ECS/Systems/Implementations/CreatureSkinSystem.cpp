@@ -23,6 +23,7 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Commands/PlayerCommands.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "ECS/Components/Creature.h"
@@ -31,6 +32,7 @@
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
@@ -148,8 +150,7 @@ void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const
 /// The entity of the player that a creature belongs to. A creature of nobody's uses the masks of the local player.
 std::optional<entt::entity> PlayerEntityOf(const ecs::Registry& registry, PlayerNames owner)
 {
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const auto wanted = owner == PlayerNames::NEUTRAL ? local : owner;
 	std::optional<entt::entity> found;
 	registry.Each<const Player>([&found, wanted](entt::entity entity, const Player& player) {
@@ -180,7 +181,8 @@ const creature_tattoo::Slots& ShownTattoos(const ecs::Registry& registry, Player
 	if (Locator::playerSystem::has_value())
 	{
 		const auto& players = Locator::playerSystem::value();
-		const auto local = players.GetLocalPlayer();
+		const auto local =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		if (owner == local || inTemple)
 		{
@@ -188,12 +190,12 @@ const creature_tattoo::Slots& ShownTattoos(const ecs::Registry& registry, Player
 			{
 				if (const auto* tattoos = registry.TryGet<const CreatureTattoos>(*primary))
 				{
-					return tattoos->slots;
+					return tattoos->shown.has_value() ? *tattoos->shown : tattoos->slots;
 				}
 			}
 		}
 	}
-	return body.slots;
+	return body.shown.has_value() ? *body.shown : body.slots;
 }
 
 /// Paints the skin when what it shows has changed
@@ -243,20 +245,32 @@ void CreatureSkinSystem::Update()
 		    PaintIfChanged(skin, creature, morph, ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
 		                   MasksOf(registry, creature.owner), marks, art);
 	    });
-	// A copy with a skin of its own, as the Creature Cave's copy has, is painted at its own times
-	registry.Each<const CreatureCopy, const CreatureTattoos, CreatureSkin>(
-	    [&](const CreatureCopy& copy, const CreatureTattoos& tattoos, CreatureSkin& skin) {
-		    const auto* creature = registry.TryGet<const Creature>(copy.creature);
-		    const auto* morph = registry.TryGet<const CreatureMorph>(copy.creature);
-		    const auto* body = registry.TryGet<const CreatureTattoos>(copy.creature);
-		    const auto* marks = registry.TryGet<const CreatureMarks>(copy.creature);
-		    if (creature == nullptr || morph == nullptr || body == nullptr || marks == nullptr)
-		    {
-			    return;
-		    }
-		    PaintIfChanged(skin, *creature, *morph, ShownTattoos(registry, creature->owner, tattoos, *body), tattoos.revision,
-		                   MasksOf(registry, creature->owner), *marks, art);
-	    });
+	// A copy with a skin of its own is painted at its own times. The copy of the land's creature in the temple's
+	// creature room is a thing of the temple's rooms.
+	const auto paintCopies = [&](Registry& copies) {
+		copies.Each<const CreatureCopy, const CreatureTattoos, CreatureSkin>(
+		    [&](const CreatureCopy& copy, const CreatureTattoos& tattoos, CreatureSkin& skin) {
+			    if (!registry.Valid(copy.creature))
+			    {
+				    return;
+			    }
+			    const auto* creature = registry.TryGet<const Creature>(copy.creature);
+			    const auto* morph = registry.TryGet<const CreatureMorph>(copy.creature);
+			    const auto* body = registry.TryGet<const CreatureTattoos>(copy.creature);
+			    const auto* marks = registry.TryGet<const CreatureMarks>(copy.creature);
+			    if (creature == nullptr || morph == nullptr || body == nullptr || marks == nullptr)
+			    {
+				    return;
+			    }
+			    PaintIfChanged(skin, *creature, *morph, ShownTattoos(registry, creature->owner, tattoos, *body),
+			                   tattoos.revision, MasksOf(registry, creature->owner), *marks, art);
+		    });
+	};
+	paintCopies(registry);
+	if (Locator::temple::has_value())
+	{
+		paintCopies(Locator::temple::value().GetRooms());
+	}
 }
 
 void CreatureSkinSystem::ProcessTurn()
@@ -324,7 +338,9 @@ void CreatureSkinSystem::RemakeTattooMasks(entt::entity creature, creature_tatto
 		masks = &registry.Assign<TattooMasks>(*player);
 	}
 	const auto& art = *arts.Handle(creature_skin::k_ArtId);
-	creature_tattoo::RemakeMasks(masks->masks, tattoos->slots, tattoos->pictures,
+	// The masks follow what the skin shows: a change from the tattoo editor that waits for its turn comes first
+	creature_tattoo::RemakeMasks(masks->masks, tattoos->shown.value_or(tattoos->slots),
+	                             tattoos->picturesShown ? tattoos->shownPictures : tattoos->pictures,
 	                             sheet == creature_tattoo::Sheet::Shipped ? art.shippedDesigns : art.designs);
 }
 
@@ -334,6 +350,36 @@ void CreatureSkinSystem::PaintTattoos(entt::entity creature)
 	{
 		++tattoos->revision;
 	}
+}
+
+void CreatureSkinSystem::DoTattoo(PlayerNames player, const player_commands::CreatureTattoo& tattoo)
+{
+	auto* tattoos = Locator::entitiesRegistry::value().TryGet<CreatureTattoos>(tattoo.creature);
+	if (tattoos == nullptr)
+	{
+		return;
+	}
+	tattoos->slots = tattoo.slots;
+	if (tattoo.hasPictures)
+	{
+		tattoos->pictures = tattoo.pictures;
+	}
+	// The skin stops showing a change that now is on the creature
+	if (tattoos->shown == tattoos->slots)
+	{
+		tattoos->shown.reset();
+	}
+	if (tattoos->picturesShown && tattoos->shownPictures == tattoos->pictures)
+	{
+		tattoos->picturesShown = false;
+		tattoos->shownPictures.clear();
+	}
+	// The masks of the player are made again and the skin is painted, as the editor does on the computer of the player.
+	// Only the computer of the player has the player's own pictures.
+	const auto local =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	RemakeTattooMasks(tattoo.creature, player == local ? creature_tattoo::Sheet::OwnPictures : creature_tattoo::Sheet::Shipped);
+	PaintTattoos(tattoo.creature);
 }
 
 void CreatureSkinSystem::PutOnTattoos(entt::entity creature, const creature_tattoo::Slots& slots,

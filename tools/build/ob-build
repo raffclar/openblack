@@ -12,10 +12,14 @@
 #   ob-build configure [--worktree PATH] [--build-dir PATH] [--config Debug|RelWithDebInfo|Release] [--fresh]
 #   ob-build build     [options] [target...] [-- ninja arguments]
 #   ob-build test      [options] [-j N] [ctest arguments, e.g. -R regex]
+#                      (builds first, so new tests are in; OB_TEST_NO_BUILD=1 skips that)
 #   ob-build run       [options] [game arguments]      (adds -g C:/projects/black, and the screenshot root)
 #   ob-build clean     [options]                       (deletes the build folder; the next build refills from caches)
 #   ob-build dir       [options]                       (prints the build folder)
-#   ob-build stats                                     (sccache statistics)
+#   ob-build stats     [hours]                         (CPU time of the builds of the last 24 hours, from ob-job)
+#   ob-build store     [options] [commit]              (copies this folder's game and server into the master store)
+#   ob-build master    [options] [commit]              (prints the master store folder of a commit, default me/master,
+#                                                       and builds the game and server for it first when needed)
 #   ob-build env       [options]                       (prints the tools and folders ob-build resolved)
 #   ob-build check     [options]                       (checks the build folder's vcpkg packages aren't mixed)
 #   ob-build install   [folder]                        (copies these scripts to C:/projects/obtools or the folder)
@@ -26,11 +30,25 @@
 # Builds use Ninja Multi-Config with MSVC from the Visual Studio developer environment, sccache in front of cl.exe
 # (through ob-cc.exe, see ob-cc.c) with /Z7 debug info, the build folder's own vcpkg_installed (restored from
 # the shared vcpkg binary cache E:/openblack/cache/vcpkg-binary). Unchanged sources never recompile, even in a new folder or
-# another worktree, because sccache treats every worktree as the same root (see sccache_env).
+# another worktree, because sccache treats every worktree as the same root (see sccache_env). Each command that
+# compiles starts its own sccache server and stops it at the end (see ensure_sccache).
+#
+# CPU: configure, build and test run in ob-job (see ob-job.c), which adds a line with the CPU time of all their
+# processes, their sccache hits and misses to E:/openblack/cache/ob-build-cpu.log. OB_JOB_METER=0 turns it off.
+#
+# Master store: E:/openblack/builds/master-bin/<commit>/<config> holds the game, the server, their PDBs and DLLs of
+# the last OB_MASTER_KEEP (10) master commits. The merge train stores each new master from its car's build folder,
+# so the game of an older master is there for before and after checks without a second build folder.
 #
 # Environment overrides: OB_ROOT (E:/openblack), OB_CONFIG, OB_GAME_PATH (C:/projects/black), OB_VCPKG_ROOT,
 # OB_CMAKE, OB_NINJA, OB_SCCACHE, OB_COMPILE_JOBS (8), OB_LINK_JOBS (4), OB_CTEST_JOBS (8), OB_WERROR (1; 0 turns
 # warnings-as-errors off), OB_LINK_FLAGS_DEBUG (/debug /INCREMENTAL), OB_CMAKE_ARGS (extra configure arguments).
+#
+# Memory: a build runs at most CMAKE_BUILD_PARALLEL_LEVEL (default 8) jobs, and fewer when free memory is low: each job
+# gets OB_MEMORY_PER_JOB_MB (1500) of the free memory above OB_MEMORY_RESERVE_GB (8). Under the reserve, the build
+# waits up to OB_MEMORY_WAIT seconds (600) for memory, then runs one job. OB_MEMORY_JOBS=0 turns this off. Links go
+# through ob-link (see ob-link.c): all builds on the machine together run at most (memory - reserve) /
+# OB_LINK_MEMORY_MB (12000) links, and each link waits for that much free memory, at most OB_LINK_WAIT seconds (900).
 set -uo pipefail
 
 die() {
@@ -67,8 +85,8 @@ resolve_folders() {
 	# Each build folder installs its own packages, restored from the shared binary cache: worktrees on different commits
 	# fight over a shared tree
 	OB_VCPKG_INSTALLED="$B/vcpkg_installed"
-	case "$(echo "$B" | tr 'A-Z' 'a-z')" in
-	"$(echo "$WT" | tr 'A-Z' 'a-z')"/*) die "the build folder $B is inside the worktree; build folders live on E:" ;;
+	case "${B,,}" in
+	"${WT,,}"/*) die "the build folder $B is inside the worktree; build folders live on E:" ;;
 	esac
 	[ "$(basename "$B")" != vcpkg_installed ] || die "$B is a vcpkg tree, not a build folder"
 }
@@ -91,9 +109,10 @@ lock() { # lock NAME [SECONDS]: a lock shared by every ob-build, held by this pr
 		[ $waited != 5 ] || note "waiting for ${3:-the lock $1} (held by process ${owner:-?})"
 		sleep 1
 		waited=$((waited + 1))
-		[ $waited -lt "$limit" ] || die "timed out waiting for the lock $dir"
+		[ $waited -lt "$limit" ] || die "timed out waiting for the lock $dir (held by process ${owner:-?})"
 	done
 	echo $$ >"$dir/pid"
+	[ $waited -lt 5 ] || note "got ${3:-the lock $1} after ${waited}s"
 	OB_HELD_LOCKS="${OB_HELD_LOCKS:-} $1"
 }
 unlock() {
@@ -104,15 +123,26 @@ release_locks() {
 	local name
 	for name in ${OB_HELD_LOCKS:-}; do unlock "$name"; done
 }
-trap release_locks EXIT
+on_exit() {
+	stop_sccache
+	release_locks
+}
+trap on_exit EXIT
 
 find_vs() {
+	# vswhere takes about a second, so its answer is kept while that Visual Studio folder exists
+	local saved="$OB_CACHE/msvc-env/vs-path.txt"
+	if [ -s "$saved" ]; then
+		VS=$(<"$saved")
+		[ -f "$VS/VC/Auxiliary/Build/vcvars64.bat" ] && return 0
+	fi
 	local vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
 	[ -x "$vswhere" ] || die "vswhere not found; install Visual Studio 2022 with the C++ workload"
 	VS=$("$vswhere" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
 		-property installationPath | tr -d '\r' | head -1)
 	[ -n "$VS" ] || die "no Visual Studio with the C++ x64 tools found"
 	VS=$(cygpath -m "$VS")
+	mkdir -p "$OB_CACHE/msvc-env" && printf '%s' "$VS" >"$saved.$$" && mv -f "$saved.$$" "$saved"
 }
 
 first_existing() {
@@ -147,7 +177,7 @@ find_tools() {
 		die "ninja not found; set OB_NINJA"
 	find_sccache
 	# One vcpkg for every worktree (never a worktree's own copy), so packages' ABI hashes agree in the shared binary cache
-	VCPKG_ROOT_DIR=$(cygpath -m "${OB_VCPKG_ROOT:-C:/projects/openblack/vcpkg}")
+	VCPKG_ROOT_DIR=$(cygpath -m "${OB_VCPKG_ROOT:-E:/openblack/vcpkg-5de6d1f}")
 	[ -f "$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake" ] || die "no vcpkg at $VCPKG_ROOT_DIR; set OB_VCPKG_ROOT"
 }
 
@@ -205,95 +235,231 @@ UniversalCRTSdkDir ExtensionSdkDir DevEnvDir Platform CommandPromptType VSCMD_AR
 	OB_MSVC_LOADED=1
 }
 
-# The launcher that keeps Ninja's header dependencies pointing at this folder after a cache hit from another one
-build_ob_cc() {
-	local source="$OB_SCRIPT_DIR/ob-cc.c"
-	[ -f "$source" ] || die "ob-cc.c is missing next to $0"
-	local hash
+# Builds the launcher NAME.c next to this script into the cache once, named by its hash; prints the program's path
+build_launcher() {
+	local name=$1 source="$OB_SCRIPT_DIR/$1.c"
+	[ -f "$source" ] || die "$name.c is missing next to $0"
+	local hash exe
 	hash=$(md5sum "$source" | cut -c1-12)
-	OB_CC="$OB_CACHE/bin/ob-cc-$hash.exe"
-	[ -f "$OB_CC" ] && return 0
+	exe="$OB_CACHE/bin/$name-$hash.exe"
+	if [ ! -f "$exe" ]; then
+		load_msvc
+		mkdir -p "$OB_CACHE/bin"
+		local tmp
+		tmp=$(mktemp -d)
+		(cd "$tmp" && "$CL" //nologo //O2 //W4 //WX //MT "$(cygpath -w "$source")" //Fe:"$name.exe" >build.log 2>&1) ||
+			{ cat "$tmp/build.log" >&2; die "could not build $name.exe"; }
+		mv "$tmp/$name.exe" "$exe" 2>/dev/null || [ -f "$exe" ] || die "could not install $exe"
+		rm -rf "$tmp"
+	fi
+	printf '%s' "$exe"
+}
+
+# ob-cc keeps Ninja's header dependencies pointing at this folder after a cache hit from another one; ob-link limits
+# the links of all builds on the machine to the memory they need
+build_ob_cc() {
 	load_msvc
-	mkdir -p "$OB_CACHE/bin"
-	local tmp
-	tmp=$(mktemp -d)
-	(cd "$tmp" && "$CL" //nologo //O2 //W4 //WX //MT "$(cygpath -w "$source")" //Fe:ob-cc.exe >build.log 2>&1) ||
-		{ cat "$tmp/build.log" >&2; die "could not build ob-cc.exe"; }
-	mv "$tmp/ob-cc.exe" "$OB_CC" 2>/dev/null || [ -f "$OB_CC" ] || die "could not install $OB_CC"
-	rm -rf "$tmp"
+	OB_CC=$(build_launcher ob-cc) || exit 1
+	OB_LINK=$(build_launcher ob-link) || exit 1
 }
 
 # ---------------------------------------------------------------------------------------------------- sccache
 
+# The roots file (see ob-cc.c) lists every worktree ("S"), build folder ("B") and the build folder of each worktree
+# ("P <build>|<worktree>"). The "SW" and "BW" lines name the folders that hold worktrees and build folders, so ob-cc
+# also corrects the paths of folders that this function removed when they no longer existed.
 register_roots() {
 	mkdir -p "$OB_CACHE"
-	lock roots
-	touch "$OB_ROOTS_FILE"
-	local line
-	for line in "S $WT" "B $B"; do
-		# (Git for Windows' grep crashes on -i -x -F with some files, so awk compares the lines)
-		awk -v want="$line" 'BEGIN { want = tolower(want) } { sub(/\r$/, "") } tolower($0) == want { found = 1 }
-			END { exit !found }' "$OB_ROOTS_FILE" || echo "$line" >>"$OB_ROOTS_FILE"
+	lock roots 300 "the roots file"
+	[ -f "$OB_ROOTS_FILE" ] || : >"$OB_ROOTS_FILE"
+	local tmp="$OB_ROOTS_FILE.$$.new"
+	local -A seen=()
+	local line kind path parent dir name key changed=0 removed=0 out=()
+	local wanted=("SW $OB_ROOT/worktrees" "BW $OB_BUILDS" "S $WT" "B $B" "P $B|$WT")
+	while IFS= read -r line || [ -n "$line" ]; do
+		line=${line%$'\r'}
+		[ -n "$line" ] || { changed=1; continue; }
+		key=${line,,}
+		if [ -n "${seen[$key]:-}" ]; then
+			changed=1
+			continue
+		fi
+		kind=${line%% *}
+		path=${line#* }
+		case "$kind" in
+		S) parent="$OB_ROOT/worktrees" ;;
+		B) parent=$OB_BUILDS ;;
+		P) parent=$OB_BUILDS path=${path%%|*} ;;
+		*) parent="" ;;
+		esac
+		# A folder that is gone and was directly in the worktrees or builds folder goes: ob-cc's "SW" and "BW" lines
+		# still correct its paths. Experiment folders always stay.
+		dir=${path%/*}
+		name=${path##*/}
+		if [ -n "$parent" ] && [ "${dir,,}" = "${parent,,}" ] && [[ "${name,,}" != experiment-* ]] &&
+			[ ! -d "$path" ]; then
+			changed=1
+			removed=$((removed + 1))
+			continue
+		fi
+		# A build folder belongs to one worktree: a newer "P" line for it replaces the old one
+		if [ "$kind" = P ]; then
+			[ "${path,,}" != "${B,,}" ] || [ "${line,,}" = "p ${B,,}|${WT,,}" ] || { changed=1; continue; }
+		fi
+		seen[$key]=1
+		out+=("$line")
+	done <"$OB_ROOTS_FILE"
+	for line in "${wanted[@]}"; do
+		[ -n "${seen[${line,,}]:-}" ] && continue
+		seen[${line,,}]=1
+		out+=("$line")
+		changed=1
 	done
+	if [ $changed = 1 ]; then
+		# One rename replaces the file, so ob-cc and other ob-builds read the old or the new file, never a part of one
+		printf '%s\n' "${out[@]}" >"$tmp" || { rm -f "$tmp"; unlock roots; note "warning: could not write $tmp"; return 0; }
+		local attempt
+		for attempt in 1 2 3 4 5 6 7 8 9 10; do
+			mv -f "$tmp" "$OB_ROOTS_FILE" 2>/dev/null && break
+			sleep 0.2 # an ob-cc has the file open
+		done
+		if [ -f "$tmp" ]; then
+			rm -f "$tmp"
+			# Without the rewrite the new roots must still go in, as the older ob-build adds them
+			for line in "S $WT" "B $B" "P $B|$WT"; do
+				awk -v want="$line" 'BEGIN { want = tolower(want) } { sub(/\r$/, "") } tolower($0) == want { found = 1 }
+					END { exit !found }' "$OB_ROOTS_FILE" || echo "$line" >>"$OB_ROOTS_FILE"
+			done
+			note "warning: could not replace $OB_ROOTS_FILE; it keeps its old lines"
+		elif [ $removed != 0 ]; then
+			note "removed $removed roots of deleted folders from $OB_ROOTS_FILE"
+		fi
+	fi
 	unlock roots
 }
 
+# Each ob-build command that compiles starts its own sccache server, which serves only this worktree and this build
+# folder's packages, and stops it when the command ends. All servers share the cache folder, so an object compiled in
+# one folder is still a hit in every other one. One shared server needed a restart for each new worktree (its base
+# directories are fixed when it starts), and each restart sent the compiles of every other build to the compiler
+# without the cache. The server runs in the command's ob-job, so the build's CPU time includes its compiles.
 sccache_env() {
 	export SCCACHE_DIR=${SCCACHE_DIR:-$(cygpath -w "$OB_CACHE/sccache")}
-	export SCCACHE_CACHE_SIZE=${SCCACHE_CACHE_SIZE:-100G}
-	export SCCACHE_IDLE_TIMEOUT=0
+	export SCCACHE_CACHE_SIZE=${SCCACHE_CACHE_SIZE:-150G}
+	# A server that an interrupted ob-build left behind stops by itself
+	export SCCACHE_IDLE_TIMEOUT=${OB_SCCACHE_IDLE:-900}
 	export VCPKG_DEFAULT_BINARY_CACHE=${VCPKG_DEFAULT_BINARY_CACHE:-$(cygpath -w "$OB_CACHE/vcpkg-binary")}
 	mkdir -p "$(cygpath -u "$VCPKG_DEFAULT_BINARY_CACHE")"
-	# The base directories are the worktrees and each build folder's vcpkg packages, not the build folders themselves:
-	# a build folder's path must stay in the cache key wherever a source holds it as text (TEST_BINARY_DIR), so no test
-	# runs with another folder's path built in. Elsewhere build folder paths only appear in include paths, which
-	# sccache doesn't hash, so build folders share objects anyway.
-	local dirs
-	dirs=$(sed -n -e 's/^S //p' -e 's|^B \(.*\)$|\1/vcpkg_installed|p' "$OB_ROOTS_FILE" | tr -d '\r' | paste -sd ';')
-	export SCCACHE_BASEDIRS="$dirs"
+	# The base directories are the worktree and the build folder's vcpkg packages, not the build folder itself: a build
+	# folder's path must stay in the cache key wherever a source holds it as text (TEST_BINARY_DIR), so no test runs
+	# with another folder's path built in. Elsewhere build folder paths only appear in include paths, which sccache
+	# doesn't hash, so build folders share objects anyway.
+	export SCCACHE_BASEDIRS="$WT;$OB_VCPKG_INSTALLED"
 }
 
-server_has_roots() {
-	local json want
-	json=$("$SCCACHE" --show-stats --stats-format json 2>/dev/null | tr 'A-Z' 'a-z') || return 1
-	for want in "$WT/" "$OB_VCPKG_INSTALLED/"; do
-		want=$(echo "$want" | tr 'A-Z' 'a-z')
-		case "$json" in *"\"$want\""*) ;; *) return 1 ;; esac
-	done
-	# A server started with build folders as base directories (by an older ob-build) must be replaced
-	local folder
-	while read -r folder; do
-		folder=$(echo "${folder%$'\r'}/" | tr 'A-Z' 'a-z')
-		case "$json" in *"\"$folder\""*) return 1 ;; esac
-	done < <(sed -n 's/^B //p' "$OB_ROOTS_FILE")
-	return 0
+# True when the JSON statistics (on stdin) come from a server with exactly this folder's base directories
+server_is_ours() {
+	awk -v wt="$WT/" -v pkg="$OB_VCPKG_INSTALLED/" '
+		BEGIN { RS = "\001" }
+		{
+			text = tolower($0)
+			start = index(text, "\"basedirs\":[")
+			if (start == 0) exit 1
+			text = substr(text, start + 12)
+			text = substr(text, 1, index(text, "]") - 1)
+			n = split(text, dirs, ",")
+			if (n != 2) exit 1
+			for (i = 1; i <= n; i++) { d = dirs[i]; gsub(/^"|"$/, "", d); gsub(/\\\\/, "/", d); have[d] = 1 }
+			exit !((tolower(wt) in have) && (tolower(pkg) in have))
+		}'
 }
 
-# Starts the shared sccache server, or restarts it when it doesn't know this worktree yet
-# (base directories are fixed when the server starts). Compiles running elsewhere during a restart finish locally.
+# Starts this command's own server on a free port near a port made from the build folder's name (or takes over the
+# server that an interrupted command in this folder left behind), and exports its port for the compiles
 ensure_sccache() {
 	register_roots
 	sccache_env
-	server_has_roots && return 0
-	lock sccache-server
-	local attempt
-	for attempt in 1 2 3; do
-		if server_has_roots; then
-			unlock sccache-server
+	[ -z "${OB_SERVER_PORT:-}" ] || return 0
+	local base attempt port json
+	base=$((0x$(printf '%s' "${B,,}" | md5sum | cut -c1-6) % 4000 + 4400))
+	for attempt in $(seq 0 39); do
+		port=$((base + attempt))
+		export SCCACHE_SERVER_PORT=$port
+		# (asking for the statistics also starts a server with this environment when none answers on the port)
+		json=$("$SCCACHE" --show-stats --stats-format json 2>/dev/null) || json=""
+		if [ -z "$json" ]; then
+			"$SCCACHE" --start-server >/dev/null 2>&1
+			json=$("$SCCACHE" --show-stats --stats-format json 2>/dev/null) || json=""
+		fi
+		if [ -n "$json" ] && printf '%s' "$json" | server_is_ours; then
+			OB_SERVER_PORT=$port
+			OB_SERVER_START=$(printf '%s' "$json" | server_counts)
 			return 0
 		fi
-		note "restarting the sccache server to add $WT and $B to its base directories"
-		"$SCCACHE" --stop-server >/dev/null 2>&1
-		"$SCCACHE" --start-server >/dev/null 2>&1
 	done
-	unlock sccache-server
-	server_has_roots || note "warning: the sccache server doesn't know $WT or $B (fewer cache hits from other folders)"
+	unset SCCACHE_SERVER_PORT
+	note "warning: no free port for this build's sccache server near $base; the compiles use the default server"
+}
+
+# "hits misses" in the JSON statistics on stdin
+server_counts() {
+	awk 'BEGIN { RS = "\001" }
+		function count(name,   rest) {
+			rest = substr($0, index($0, "\"" name "\":{\"counts\":{") + length(name) + 13)
+			rest = substr(rest, 1, index(rest, "}") - 1)
+			n = split(rest, parts, /[:,]/); sum = 0
+			for (i = 2; i <= n; i += 2) sum += parts[i]
+			return sum
+		}
+		{ print count("cache_hits"), count("cache_misses") }'
+}
+
+# Stops this command's own server; first writes the cache hits and misses of this command into ob-job's note
+stop_sccache() {
+	[ -n "${OB_SERVER_PORT:-}" ] || return 0
+	local json now
+	json=$(SCCACHE_SERVER_PORT=$OB_SERVER_PORT "$SCCACHE" --show-stats --stats-format json 2>/dev/null) || json=""
+	if [ -n "$json" ] && [ -n "${OB_JOB_NOTE:-}" ]; then
+		now=$(printf '%s' "$json" | server_counts)
+		set -- ${OB_SERVER_START:-0 0} $now
+		[ $# = 4 ] && printf 'hits=%s misses=%s' $(($3 - $1)) $(($4 - $2)) >"$OB_JOB_NOTE" 2>/dev/null
+	fi
+	SCCACHE_SERVER_PORT=$OB_SERVER_PORT "$SCCACHE" --stop-server >/dev/null 2>&1
+	OB_SERVER_PORT=""
+}
+
+# The number of build jobs: CMAKE_BUILD_PARALLEL_LEVEL (8), fewer when free memory is low (see the top of this file)
+free_memory_mb() { awk '/^MemFree:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null; }
+
+build_jobs() {
+	local wanted=${CMAKE_BUILD_PARALLEL_LEVEL:-8}
+	case "$wanted" in '' | *[!0-9]*) wanted=8 ;; esac
+	if [ "${OB_MEMORY_JOBS:-1}" = 0 ]; then
+		echo "$wanted"
+		return 0
+	fi
+	local reserve=$((${OB_MEMORY_RESERVE_GB:-8} * 1024)) per_job=${OB_MEMORY_PER_JOB_MB:-1500}
+	local limit=${OB_MEMORY_WAIT:-600} waited=0 free
+	free=$(free_memory_mb)
+	[ -n "$free" ] || { echo "$wanted"; return 0; }
+	while [ "$free" -lt $((reserve + per_job)) ] && [ $waited -lt "$limit" ]; do
+		[ $waited != 0 ] || note "only $free MiB of memory is free (reserve $reserve MiB): waiting up to ${limit}s"
+		sleep 10
+		waited=$((waited + 10))
+		free=$(free_memory_mb)
+	done
+	local jobs=$(((free - reserve) / per_job))
+	[ "$jobs" -ge 1 ] || jobs=1
+	[ "$jobs" -le "$wanted" ] || jobs=$wanted
+	[ "$jobs" = "$wanted" ] || note "$free MiB of memory is free: building with $jobs jobs, not $wanted"
+	echo "$jobs"
 }
 
 # ---------------------------------------------------------------------------------------------------- commands
 
 configure_args() {
 	local launcher="$OB_CC;$OB_ROOTS_FILE;$WT;$B;$SCCACHE"
+	local linker="$OB_LINK;${OB_LINK_MEMORY_MB:-12000};$((${OB_MEMORY_RESERVE_GB:-8} * 1024));${OB_LINK_WAIT:-900}"
 	local werror=ON
 	[ "${OB_WERROR:-1}" != 0 ] || werror=OFF
 	ARGS=(
@@ -302,18 +468,25 @@ configure_args() {
 		"-DCMAKE_CONFIGURATION_TYPES=Debug;RelWithDebInfo;Release"
 		"-DCMAKE_C_COMPILER=$CL" "-DCMAKE_CXX_COMPILER=$CL"
 		"-DCMAKE_C_COMPILER_LAUNCHER=$launcher" "-DCMAKE_CXX_COMPILER_LAUNCHER=$launcher"
+		"-DCMAKE_C_LINKER_LAUNCHER=$linker" "-DCMAKE_CXX_LINKER_LAUNCHER=$linker"
 		# sccache can't cache /Zi (a PDB shared by many compiles); /Z7 puts the debug info in each object
 		-DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded
 		"-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake"
 		-DOPENBLACK_USE_VCPKG=ON -DVCPKG_TARGET_TRIPLET=x64-windows
 		"-DVCPKG_INSTALLED_DIR=$OB_VCPKG_INSTALLED" -DVCPKG_MANIFEST_INSTALL=ON
-		"-DVCPKG_OVERLAY_PORTS=$WT/vcpkg-overlay-ports"
 		# vcpkg's working folders are the build folder's own too: two configures sharing them race
 		"-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=$B/vcpkg-buildtrees;--x-packages-root=$B/vcpkg-packages"
 		"-DOPENBLACK_WARNINGS_AS_ERRORS=$werror"
 		"-DOPENBLACK_COMPILE_JOBS=${OB_COMPILE_JOBS:-8}" "-DOPENBLACK_LINK_JOBS=${OB_LINK_JOBS:-4}"
 		-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 	)
+	# The worktree's own vcpkg overlay ports, when it has them; vcpkg refuses an overlay folder that doesn't exist, so a
+	# branch without one also drops any overlay a previous configure left in the build folder's cache
+	if [ -d "$WT/vcpkg-overlay-ports" ]; then
+		ARGS+=("-DVCPKG_OVERLAY_PORTS=$WT/vcpkg-overlay-ports")
+	else
+		ARGS+=(-UVCPKG_OVERLAY_PORTS)
+	fi
 	# Debug links incrementally: on E: (outside %TEMP%) the incremental state stays right, and a one-file change relinks in
 	# seconds. The game keeps full debug information; the test program links with /DEBUG:FASTLINK (test/CMakeLists.txt)
 	local kind
@@ -329,7 +502,9 @@ configure_args() {
 
 folder_lock() {
 	local name
-	name="build-$(printf '%s' "$B" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '_')"
+	# (the same name as older ob-builds give, so that they and this one share the lock)
+	name=${B,,}
+	name="build-${name//[^a-z0-9]/_}"
 	case " ${OB_HELD_LOCKS:-} " in *" $name "*) return 0 ;; esac
 	lock "$name" 10800 "another build in $B"
 }
@@ -343,7 +518,7 @@ check_existing_folder() {
 	if [ "$generator" != "Ninja Multi-Config" ]; then
 		die "$B was made with '$generator'; run 'ob-build clean' once to replace it with a Ninja folder"
 	fi
-	if [ "$(echo "$home" | tr 'A-Z' 'a-z')" != "$(echo "$WT" | tr 'A-Z' 'a-z')" ]; then
+	if [ "${home,,}" != "${WT,,}" ]; then
 		die "$B belongs to the worktree $home; pass --build-dir, or 'ob-build clean' it first"
 	fi
 }
@@ -358,9 +533,11 @@ do_configure() {
 	ensure_sccache
 	check_existing_folder
 	configure_args
-	local stamp="$B/.ob-build-configure"
+	local stamp="$B/.ob-build-configure" key
+	key=$(vcpkg_key)
+	# The packages' inputs are part of the stamp, so a changed vcpkg.json always configures again with an install
 	local wanted
-	wanted=$(printf '%s\n' "$CMAKE" "${ARGS[@]}")
+	wanted=$(printf '%s\n' "$CMAKE" "${ARGS[@]}" "vcpkg $key")
 	if [ $FRESH = 0 ] && [ -f "$B/build.ninja" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$wanted" ]; then
 		note "$B is already configured (Ninja reconfigures by itself when CMake files change; --fresh forces it)"
 		return 0
@@ -373,7 +550,8 @@ do_configure() {
 		case "$arg" in -DVCPKG_INSTALLED_DIR=*) installed=${arg#*=} ;; esac
 	done
 	if [ -f "$B/CMakeCache.txt" ]; then
-		cached=$(grep -i -o '[A-Za-z]:/[^;]*/vcpkg_installed' "$B/CMakeCache.txt" | tr 'A-Z' 'a-z' | sort -u |
+		# (a library list such as "a.lib][b.lib" must not join two paths into one)
+		cached=$(grep -i -o '[A-Za-z]:/[^];[" ]*/vcpkg_installed' "$B/CMakeCache.txt" | tr 'A-Z' 'a-z' | sort -u |
 			grep -v -x -F "$(echo "$installed" | tr 'A-Z' 'a-z')" | head -1)
 	fi
 	if [ $FRESH = 0 ] && [ -n "$cached" ]; then
@@ -384,10 +562,22 @@ do_configure() {
 	[ $FRESH = 0 ] || fresh=(--fresh)
 	note "configuring $WT into $B with vcpkg $(vcpkg_commit "$VCPKG_ROOT_DIR") from $VCPKG_ROOT_DIR"
 	vcpkg_pin_warning
+	# vcpkg install locks the shared vcpkg folder for every configure on the machine, so configures queue behind each
+	# other. When the folder's packages came from the same inputs, the install is skipped (OB_VCPKG_INSTALL=1 forces it)
+	local run=("${ARGS[@]}") installs=1 i
+	if [ "${OB_VCPKG_INSTALL:-0}" != 1 ] && [ -d "$OB_VCPKG_INSTALLED/x64-windows" ] &&
+		[ "$(cat "$B/.ob-build-vcpkg" 2>/dev/null)" = "$key" ]; then
+		for i in "${!run[@]}"; do
+			[ "${run[$i]}" != -DVCPKG_MANIFEST_INSTALL=ON ] || run[$i]=-DVCPKG_MANIFEST_INSTALL=OFF
+		done
+		installs=0
+		note "the vcpkg packages have the same inputs as at their last install: no vcpkg install"
+	fi
 	local t0=$SECONDS
 	# (no MSYS path conversion: it turns linker flags such as /debug:fastlink into Windows paths)
-	MSYS2_ARG_CONV_EXCL="*" "$CMAKE" "${fresh[@]}" "${ARGS[@]}" || die "configure failed"
+	MSYS2_ARG_CONV_EXCL="*" "$CMAKE" "${fresh[@]}" "${run[@]}" || die "configure failed"
 	check_packages
+	[ $installs = 0 ] || printf '%s' "$key" >"$B/.ob-build-vcpkg"
 	# Files earlier builds made that the build no longer makes (such as test programs since merged into one) go, so a
 	# stale program can't be run by mistake
 	"$NINJA" -C "$B" -t cleandead >/dev/null 2>&1 || true
@@ -396,6 +586,17 @@ do_configure() {
 }
 
 vcpkg_commit() { git -C "$1" rev-parse --short=9 HEAD 2>/dev/null || echo unknown; }
+
+# A hash of everything the build folder's vcpkg packages come from: the vcpkg commit, the manifest and the overlay ports
+vcpkg_key() {
+	{
+		git -C "$VCPKG_ROOT_DIR" rev-parse HEAD 2>/dev/null
+		cat "$WT/vcpkg.json" "$WT/vcpkg-configuration.json" 2>/dev/null
+		if [ -d "$WT/vcpkg-overlay-ports" ]; then
+			(cd "$WT/vcpkg-overlay-ports" && find . -type f | sort | xargs -r md5sum)
+		fi
+	} | md5sum | cut -c1-32
+}
 
 # Every worktree builds with the main checkout's vcpkg; says so when the worktree's own submodule pin differs
 vcpkg_pin_warning() {
@@ -447,19 +648,175 @@ do_build() {
 		targets+=(--target "$1")
 		shift
 	done
+	# An incremental link's state file can't grow past 1 GiB: a link whose .ilk reaches it hangs. A fresh openblack_tests.ilk
+	# is already ~1000 MiB and openblack.ilk ~720 MiB, and one relink can push either over, so any past 500 MiB is
+	# dropped, so that link is a full one (a couple of minutes) instead
+	local ilk
+	while IFS= read -r ilk; do
+		note "dropping $ilk ($(($(stat -c %s "$ilk") / 1048576)) MiB, near the 1 GiB incremental-link limit)"
+		rm -f "$ilk"
+	done < <(find "$B" -maxdepth 3 -name '*.ilk' -size +500M 2>/dev/null)
+	# The stamp names the commit tree of the last full build of the game and the server (for ob-build store); it goes
+	# when the sources differ from it
+	local stamp="$B/.ob-build-tree-$CONFIG" tree
+	tree=$(source_tree) || tree=""
+	[ -n "$tree" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$tree" ] || rm -f "$stamp"
 	local t0=$SECONDS
 	local args=(--build "$B" --config "$CONFIG" "${targets[@]}")
+	# Ninja arguments with their own job count keep it
+	case " ${extra[*]:-} " in
+	*" -j"*) ;;
+	*) args+=(--parallel "$(build_jobs)") ;;
+	esac
 	[ ${#extra[@]} = 0 ] || args+=(-- "${extra[@]}")
 	MSYS2_ARG_CONV_EXCL="*" "$CMAKE" "${args[@]}"
 	local rc=$?
 	note "build $CONFIG ${targets[*]:-all} rc=$rc in $((SECONDS - t0))s ($B)"
+	local covers=0
+	case " ${targets[*]:-} " in
+	"  ") covers=1 ;;
+	*" openblack "*) case " ${targets[*]} " in *" openblack-server "*) covers=1 ;; esac ;;
+	esac
+	if [ $rc = 0 ] && [ $covers = 1 ] && [ -n "$tree" ] && [ "$(source_tree)" = "$tree" ]; then
+		printf '%s' "$tree" >"$stamp"
+	fi
 	return $rc
+}
+
+# The tree of the worktree's commit, when no tracked file has changes (else it fails; the CMake files list every
+# source, so untracked files are not part of the build)
+source_tree() {
+	[ -z "$(git -C "$WT" status --porcelain --untracked-files=no --ignore-submodules=all 2>/dev/null)" ] || return 1
+	git -C "$WT" rev-parse 'HEAD^{tree}' 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------------------------------- master store
+
+OB_MASTER_STORE="$OB_BUILDS/master-bin"
+OB_MAIN_REPO=${OB_MAIN_REPO:-C:/projects/openblack}
+
+# Copies the game and the server of this build folder into the store as <commit>, when the last full build of this
+# config came from exactly the tree of that commit
+do_store() {
+	resolve_folders
+	local commit=${1:-HEAD} hash tree
+	hash=$(git -C "$WT" rev-parse --short=9 "$commit^{commit}" 2>/dev/null) || die "no commit $commit"
+	tree=$(git -C "$WT" rev-parse "$hash^{tree}")
+	[ "$(cat "$B/.ob-build-tree-$CONFIG" 2>/dev/null)" = "$tree" ] ||
+		die "the last full $CONFIG build in $B doesn't come from the tree of $hash (or the worktree has changes)"
+	local from="$B/bin/$CONFIG" dest="$OB_MASTER_STORE/$hash/$CONFIG"
+	if [ -f "$dest/openblack.exe" ]; then
+		note "$dest is already in the store"
+		echo "$dest"
+		return 0
+	fi
+	local file
+	for file in openblack.exe openblack-server.exe; do
+		[ -f "$from/$file" ] || die "no $from/$file"
+	done
+	# A copy under a temporary name, then one rename: other ob-builds see all the files or none
+	local tmp="$dest.$$.tmp"
+	mkdir -p "$OB_MASTER_STORE/$hash" && rm -rf "$tmp" && mkdir "$tmp" || die "could not make $tmp"
+	cp "$from"/openblack.exe "$from"/openblack-server.exe "$from"/*.dll "$tmp"/ || { rm -rf "$tmp"; die "could not copy $from"; }
+	cp "$from"/openblack.pdb "$from"/openblack-server.pdb "$tmp"/ 2>/dev/null
+	# The game reads its commit from version.txt; the stored game gives the stored commit (the same tree)
+	if cp "$from"/version.txt "$tmp"/ 2>/dev/null; then
+		sed -i "s/^[0-9a-f]\{40\}\(-dirty\)\{0,1\}/$(git -C "$WT" rev-parse "$hash")/" "$tmp/version.txt"
+	fi
+	printf 'commit %s\ntree %s\nfrom %s\n' "$(git -C "$WT" rev-parse "$hash")" "$tree" "$B" >"$tmp/ob-store.txt"
+	if ! mv "$tmp" "$dest" 2>/dev/null; then
+		rm -rf "$tmp"
+		[ -f "$dest/openblack.exe" ] || die "could not make $dest"
+	fi
+	note "stored $hash ($CONFIG) from $B"
+	prune_store
+	echo "$dest"
+}
+
+# Keeps the OB_MASTER_KEEP (10) commits stored last
+prune_store() {
+	local keep=${OB_MASTER_KEEP:-10} old
+	lock master-store 120 "the master store lock"
+	while IFS= read -r old; do
+		[ -n "$old" ] || continue
+		note "removing $old from the master store"
+		rm -rf "$old"
+	done < <(ls -1dt "$OB_MASTER_STORE"/*/ 2>/dev/null | sed 's#/$##' | grep -v '\.tmp$' | tail -n +$((keep + 1)))
+	unlock master-store
+}
+
+# Prints the store folder of a commit (default me/master). When the store doesn't have it, builds the game and the
+# server of that commit in its own worktree and build folder (master-<commit>), stores them and deletes both folders.
+do_master() {
+	local commit=${1:-me/master} hash dest
+	hash=$(git -C "$OB_MAIN_REPO" rev-parse --short=9 "$commit^{commit}" 2>/dev/null) || die "no commit $commit"
+	dest="$OB_MASTER_STORE/$hash/$CONFIG"
+	if [ ! -f "$dest/openblack.exe" ]; then
+		# One build for each commit and config: a second ob-build master waits for the first one
+		lock "master-$hash-${CONFIG,,}" 7200 "the build of master $hash"
+		if [ ! -f "$dest/openblack.exe" ]; then
+			local wt="$OB_ROOT/worktrees/master-$hash" b="$OB_BUILDS/master-$hash" made=0
+			note "master $hash ($CONFIG) isn't in the store: building its game and server in $b"
+			if [ ! -d "$wt" ]; then
+				git -C "$OB_MAIN_REPO" worktree add -q --detach "$wt" "$hash" >&2 || die "could not add the worktree $wt"
+				made=1
+			fi
+			"$BASH" "${BASH_SOURCE[0]}" build --worktree "$wt" --build-dir "$b" --config "$CONFIG" openblack openblack-server >&2 &&
+				"$BASH" "${BASH_SOURCE[0]}" store --worktree "$wt" --build-dir "$b" --config "$CONFIG" "$hash" >/dev/null ||
+				die "the build of master $hash failed (see above); $wt and $b stay for a look"
+			if [ "${OB_MASTER_KEEP_BUILD:-0}" != 1 ]; then
+				rm -rf "$b"
+				[ $made = 0 ] || git -C "$OB_MAIN_REPO" worktree remove --force "$wt" >&2
+			fi
+		fi
+		unlock "master-$hash-${CONFIG,,}"
+	fi
+	touch "$OB_MASTER_STORE/$hash"
+	echo "$dest"
+}
+
+# A summary of ob-build-cpu.log for the last [hours] (24): the CPU time of each kind of build folder and command
+do_stats() {
+	local hours=${1:-24} log="$OB_CACHE/ob-build-cpu.log"
+	[ -f "$log" ] || die "no $log yet"
+	local since
+	since=$(date -d "-$hours hours" '+%Y-%m-%d %H:%M:%S')
+	awk -v since="$since" -v hours="$hours" '
+		{ sub(/\r$/, "") }
+		($1 " " $2) < since { next }
+		{
+			split($3, label, "|"); folder = label[3]
+			kind = "lane"
+			if (folder ~ /^prm-/) kind = (folder ~ /old$/ ? "car old master" : "car")
+			else if (folder ~ /^master-/) kind = "master store"
+			else if (folder ~ /-base$/) kind = "lane -base copy"
+			else if (folder ~ /^experiment-/) kind = "experiment"
+			key = kind " " label[1] " " label[2]
+			cpu = 0; wall = 0; hits = 0; misses = 0
+			for (i = 4; i <= NF; i++) {
+				split($i, kv, "=")
+				if (kv[1] == "cpu") cpu = kv[2]; else if (kv[1] == "wall") wall = kv[2]
+				else if (kv[1] == "hits") hits = kv[2]; else if (kv[1] == "misses") misses = kv[2]
+			}
+			n[key]++; c[key] += cpu; w[key] += wall; h[key] += hits; m[key] += misses; total += cpu
+		}
+		END {
+			printf "last %s hours: %.0f CPU seconds (%.1f cores on average)\n", hours, total, total / (hours * 3600)
+			printf "%9s %5s %8s %8s %8s  %s\n", "cpu s", "runs", "wall s", "hits", "misses", "kind command config"
+			for (k in n) printf "%9.0f %5d %8.0f %8d %8d  %s\n", c[k], n[k], w[k], h[k], m[k], k | "sort -n -r"
+		}' "$log"
 }
 
 do_test() {
 	resolve_folders
 	find_tools
 	[ -f "$B/CTestTestfile.cmake" ] || die "$B has no tests yet; run 'ob-build build' first"
+	# Build first (the test programs and the tools the tests run), so that a test source added since the last build is
+	# registered (CMake configures again by itself) and compiled; ctest alone would run the old programs.
+	# OB_TEST_NO_BUILD=1 skips this.
+	if [ "${OB_TEST_NO_BUILD:-0}" != 1 ]; then
+		do_build || die "the build for the tests failed"
+	fi
 	MSYS2_ARG_CONV_EXCL="*" "$CTEST" --test-dir "$B" -C "$CONFIG" -j "$TEST_JOBS" --output-on-failure "$@"
 }
 
@@ -515,7 +872,24 @@ do_env() {
 
 # Everything runs from this function, so bash has read the whole script before it starts: replacing the installed
 # copy while a build runs is safe.
+# Runs this command again inside ob-job, which writes its CPU time to the log when it ends (see ob-job.c)
+run_in_job() {
+	[ -z "${OB_JOB_NOTE:-}" ] && [ "${OB_JOB_METER:-1}" != 0 ] || return 0
+	resolve_folders
+	local job note label
+	job=$( (build_launcher ob-job) 2>/dev/null) || { note "warning: no ob-job; this build has no CPU line"; return 0; }
+	mkdir -p "$OB_CACHE/jobs"
+	note="$OB_CACHE/jobs/$$.note"
+	rm -f "$note"
+	label="$command|$CONFIG|$(basename "$B")"
+	export OB_JOB_NOTE
+	OB_JOB_NOTE=$(cygpath -w "$note")
+	MSYS2_ARG_CONV_EXCL="*" exec "$job" "$(cygpath -w "$OB_CACHE/ob-build-cpu.log")" "$OB_JOB_NOTE" "$label" \
+		"$(cygpath -w "$BASH")" "$(cygpath -w "${BASH_SOURCE[0]}")" "${OB_ARGS[@]}"
+}
+
 main() {
+	OB_ARGS=("$@")
 	command=${1:-}
 	[ -n "$command" ] || { sed -n '/^# ob-build: the one/,/^# folder to E:/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 1; }
 	shift
@@ -535,6 +909,8 @@ main() {
 	done
 	case "$CONFIG" in Debug | RelWithDebInfo | Release) ;; *) die "unknown config '$CONFIG' (Debug, RelWithDebInfo or Release)" ;; esac
 
+	case "$command" in configure | build | test) run_in_job ;; esac
+
 	case "$command" in
 	configure) do_configure ;;
 	build) do_build "$@" ;;
@@ -542,12 +918,15 @@ main() {
 	run) do_run "$@" ;;
 	clean) do_clean ;;
 	dir) resolve_folders && echo "$B" ;;
-	stats)
-		find_sccache
-		mkdir -p "$OB_CACHE" && touch "$OB_ROOTS_FILE"
-		sccache_env
-		"$SCCACHE" --show-stats
+	stats) do_stats "$@" ;;
+	launcher)
+		# (for ob-web) builds the launcher NAME.c next to this script once and prints its path
+		[ -f "$OB_SCRIPT_DIR/${1:-}.c" ] || die "no launcher ${1:-} next to $0"
+		build_launcher "$1"
+		echo
 		;;
+	store) do_store "$@" ;;
+	master) do_master "$@" ;;
 	env) do_env ;;
 	check)
 		resolve_folders
@@ -562,13 +941,14 @@ main() {
 		local target=${1:-C:/projects/obtools} file
 		target=$(cygpath -u "$target")
 		mkdir -p "$target"
-		for file in ob-build ob-build.cmd ob-cc.c; do
+		# The launcher sources go first, so a new ob-build never runs without them
+		for file in ob-cc.c ob-link.c ob-job.c ob-emcc.c ob-web ob-build.cmd ob-build; do
 			cp "$OB_SCRIPT_DIR/$file" "$target/.$file.new" && mv -f "$target/.$file.new" "$target/$file" ||
 				die "could not install $file into $target"
 		done
 		note "installed into $(cygpath -m "$target")"
 		;;
-	*) die "unknown command '$command' (configure, build, test, run, clean, dir, stats, env, check, install)" ;;
+	*) die "unknown command '$command' (configure, build, test, run, clean, dir, stats, store, master, env, check, install)" ;;
 	esac
 }
 

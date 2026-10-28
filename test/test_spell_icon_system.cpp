@@ -15,9 +15,12 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Player.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -63,7 +66,7 @@ public:
 		deleted.push_back(seed);
 		Locator::entitiesRegistry::value().Destroy(seed);
 	}
-	void UpdateHand(const HandFrame&, float) override {}
+	void UpdateHand(const HandFrame&, const input_steps::Steps&) override {}
 	bool TapFireBall(entt::entity) override { return false; }
 	bool TapGlobe(entt::entity, PlayerNames) override { return false; }
 	bool PressFireBall(uint32_t, uint32_t) override { return false; }
@@ -267,3 +270,18 @@ TEST_F(SpellIconSystemTest, ASeedInTheHandOfTheSecondPlayerCountsAtTheSiteOfThat
 	EXPECT_TRUE(_system.ChargesAt(site).at(0).seedHeld);
 }
 } // namespace
+
+TEST_F(SpellIconSystemTest, APlayerMadeAfterItsTownsMayCastWhatTheTownsOffer)
+{
+	auto& registry = Entities();
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, 3u, PlayerNames::PLAYER_TWO);
+	// The town comes to offer a miracle while its player has no entity yet, as a god that joins a network game
+	ASSERT_TRUE(_system.TownHolds(town, MagicType::Heal));
+	const auto playerEntity = registry.Create();
+	registry.Assign<Player>(playerEntity, PlayerNames::PLAYER_TWO);
+	EXPECT_FALSE(player_miracles::IsMagicTypeEnabled(registry.Get<Player>(playerEntity).miracles, MagicType::Heal));
+	_system.PlayerMade(PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(player_miracles::IsMagicTypeEnabled(registry.Get<Player>(playerEntity).miracles, MagicType::Heal));
+	EXPECT_FALSE(player_miracles::IsMagicTypeEnabled(registry.Get<Player>(playerEntity).miracles, MagicType::Teleport));
+}

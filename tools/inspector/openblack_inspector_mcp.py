@@ -593,6 +593,39 @@ TOOLS = [
         "params": ["id"],
     },
     {
+        "name": "creature_animation",
+        "description": "The clips a creature's body plays now (developer log, starts with the inspector): per clip "
+                       "its layer (body, blend, face, gesture, wobble), spec-file index and name, time, speed (clip ms "
+                       "per turn ms), loop, weight and pair blend, and the cause (mind activity, plan action, agenda "
+                       "step, object action, fight stage).",
+        "inputSchema": schema({"id": {"type": "integer"}}),
+        "query": "creature.animation",
+        "params": ["id"],
+    },
+    {
+        "name": "creature_animation_history",
+        "description": "The clips a creature's body played that stopped, newest last (up to 256): start and end turn, "
+                       "turns, speed and cause of each. last limits the count.",
+        "inputSchema": schema({"id": {"type": "integer"}, "last": {"type": "integer"}, **SHAPING}),
+        "query": "creature.animation_history",
+        "params": ["id", "last"],
+    },
+    {
+        "name": "creature_animation_problems",
+        "description": "Clips asked of a creature's body that did not play: missing (the species lacks the clip: "
+                       "the body showed the stand or the action ended at once) or refused (the body was playing "
+                       "another action), with turn, asker and repeats.",
+        "inputSchema": schema({"id": {"type": "integer"}, **SHAPING}),
+        "query": "creature.animation_problems",
+        "params": ["id"],
+    },
+    {
+        "name": "creature_animation_clear",
+        "description": "Empties every creature's clip log; logging continues from the next turn.",
+        "inputSchema": schema(),
+        "query": "creature.animation_clear",
+    },
+    {
         "name": "map_cell",
         "description": "What stands in a map cell (10 by 10), as a search meets it: by a point in it or its cell.",
         "inputSchema": schema({"position": {"type": "array", "items": {"type": "number"}},
@@ -641,7 +674,8 @@ TOOLS = [
     {
         "name": "influence_hand",
         "description": "The hand's share of its player's influence: the influence where the hand is, at its own "
-                       "place and the player's own, and whether the hand is inside.",
+                       "place and the player's own, and whether the hand is inside. With no player: the hand of "
+                       "the god of this computer.",
         "inputSchema": schema({"player": {"type": "integer"}}),
         "query": "influence.hand",
         "params": ["player"],

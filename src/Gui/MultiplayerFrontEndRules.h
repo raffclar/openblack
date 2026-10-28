@@ -239,7 +239,8 @@ struct LocalMap
 
 [[nodiscard]] std::vector<LocalMap> ParseLocalMaps(std::string_view text);
 
-/// The land of the maps that the server plays, by its file or by its name. None when the player does not have it.
+/// The land of the maps that the server plays, by its file, its name or the path of its map file. None when the player
+/// does not have it.
 [[nodiscard]] std::optional<size_t> FindLand(std::span<const LocalMap> maps, std::string_view land);
 
 /// The name of the text that describes one of the first three local lands (Bombardment, King of the hill, The four

@@ -50,7 +50,10 @@ void TellThoseAbout(entt::entity villager);
 void SmokePuff(entt::entity villager, dust_puff::Kind kind);
 /// The villager's soul rises from its body, unless it lies on the sea
 void SoulRises(entt::entity villager);
-/// The souls move on by so many milliseconds of the game's clock, posed by their clips, and go as their clips end
+/// The frames move the souls on by so many milliseconds of the game's clock, posed by their clips, and stop to draw
+/// each soul as its clip ends. The frames change only what the draw reads.
 void MoveSouls(uint32_t elapsedMs);
+/// The turns count the turns since each soul rose, and remove the souls that the frames have drawn to their ends
+void AgeSouls();
 
 } // namespace openblack::ecs::villager_after_death

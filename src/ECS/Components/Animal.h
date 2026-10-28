@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -147,9 +148,21 @@ struct Animal
 	glm::vec3 position {0.0f};
 	float previousHeading {0.0f};
 	float heading {0.0f};
+	/// Where the frame draws it between its last two turns, tilted and leaned on the slope. Only the draw reads it. The
+	/// game turns go by the place and the heading above, and by its Transform.
+	struct DrawnPlace
+	{
+		glm::vec3 position;
+		glm::mat3 rotation;
+	};
+	/// Empty: it is drawn where its Transform puts it, as when a tornado, a hand, a creature or the physics moves it
+	std::optional<DrawnPlace> drawn;
 
 	/// 0 to 1; an animal with none left is dead, which the miracles hurt and heal as the other living things
 	float life {1.0f};
+	/// Whether a kill made it start to die. The mark stays for all of its life. A body that a hunter ate does not have
+	/// the mark. A landing reads the mark, not the state, because the hand and the air change the state.
+	bool dying {false};
 	/// The game turn it was born on: its age counts in years from it, as every living thing's does
 	uint32_t birthTurn {0};
 	/// One count of turns that some states use, and that a new state does not clear: the mouthfuls of a meal, the turns

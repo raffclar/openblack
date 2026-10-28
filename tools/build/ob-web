@@ -25,8 +25,14 @@
 # The web build uses the CMake preset emscripten-vcpkg: the toolchain web/cmake/emscripten-openblack.cmake, the triplet
 # wasm32-emscripten-openblack in web/triplets and the ports in web/ports. ob-web adds the folders of this machine.
 #
+# The compiles go through sccache (EM_COMPILER_WRAPPER), with the cache folder of ob-build: each build starts its own
+# sccache server for this worktree and stops it at the end, so a second web build folder of the same sources compiles
+# almost nothing. OB_WEB_SCCACHE=0 turns the cache off. Configure and build run in ob-job when ob-build has made it, so
+# their CPU time goes to E:/openblack/cache/ob-build-cpu.log (OB_JOB_METER=0 turns it off).
+#
 # Environment overrides: OB_ROOT (E:/openblack), OB_EMSDK (OB_ROOT/tools/emsdk), OB_VCPKG_ROOT
-# (E:/openblack/vcpkg-5de6d1f), OB_CMAKE, OB_NINJA, OB_CHROME, OB_WEB_CONFIG, OB_WEB_JOBS (12), OB_WEB_MIN_FREE_GB (20).
+# (E:/openblack/vcpkg-5de6d1f), OB_CMAKE, OB_NINJA, OB_CHROME, OB_WEB_CONFIG, OB_WEB_JOBS (8; fewer when free memory
+# is low, as in ob-build: OB_MEMORY_RESERVE_GB, OB_MEMORY_PER_JOB_MB, OB_MEMORY_JOBS), OB_WEB_MIN_FREE_GB (20).
 set -uo pipefail
 
 die() {
@@ -131,8 +137,108 @@ cmd_configure() {
 cmd_build() {
 	find_tools
 	check_disk
+	web_sccache
 	[ -f "$B/CMakeCache.txt" ] || cmd_configure
-	"$CMAKE" --build "$B" --config "$CONFIG" --target "${REST[0]:-openblack}" -- -j "${OB_WEB_JOBS:-12}"
+	"$CMAKE" --build "$B" --config "$CONFIG" --target "${REST[0]:-openblack}" -- -j "$(web_jobs)"
+}
+
+# The sccache server of this build: on a free port near a port made from the build folder's name, with this worktree
+# and this folder's packages as base directories, so the objects are hits in the web folders of other worktrees too
+WEB_SERVER_PORT=""
+web_sccache() {
+	[ "${OB_WEB_SCCACHE:-1}" != 0 ] && [ -z "$WEB_SERVER_PORT" ] || return 0
+	local winget sccache base attempt port json
+	winget=$(cygpath -u "${LOCALAPPDATA:-C:/Users/$USERNAME/AppData/Local}")/Microsoft/WinGet/Packages
+	sccache=$(first_existing "${OB_SCCACHE:-}" "$(command -v sccache 2>/dev/null)" \
+		"$(ls -d "$winget"/Mozilla.sccache*/*/sccache.exe 2>/dev/null | head -1)") ||
+		{ note "warning: no sccache; the web build compiles without a cache"; return 0; }
+	SCCACHE=$sccache
+	export SCCACHE_DIR=${SCCACHE_DIR:-$(cygpath -w "$OB_ROOT/cache/sccache")}
+	export SCCACHE_CACHE_SIZE=${SCCACHE_CACHE_SIZE:-150G}
+	export SCCACHE_IDLE_TIMEOUT=${OB_SCCACHE_IDLE:-900}
+	export SCCACHE_BASEDIRS="$WT;$B/vcpkg_installed"
+	base=$((0x$(printf '%s' "${B,,}" | md5sum | cut -c1-6) % 4000 + 4400))
+	for attempt in $(seq 0 39); do
+		port=$((base + attempt))
+		export SCCACHE_SERVER_PORT=$port
+		json=$("$SCCACHE" --show-stats --stats-format json 2>/dev/null) || json=""
+		if [ -z "$json" ]; then
+			"$SCCACHE" --start-server >/dev/null 2>&1
+			json=$("$SCCACHE" --show-stats --stats-format json 2>/dev/null) || json=""
+		fi
+		if [ -n "$json" ] && printf '%s' "$json" | web_server_is_ours; then
+			WEB_SERVER_PORT=$port
+			trap web_sccache_stop EXIT
+			# emcc runs each compile through ob-emcc, which runs it through sccache (see ob-emcc.c)
+			local wrapper
+			wrapper=$("$OB_SCRIPT_DIR/ob-build" launcher ob-emcc 2>/dev/null) && [ -f "$wrapper" ] ||
+				{ note "warning: no ob-emcc next to ob-web; the web build compiles without a cache"; return 0; }
+			export EM_COMPILER_WRAPPER OB_SCCACHE_EXE
+			EM_COMPILER_WRAPPER=$(cygpath -w "$wrapper")
+			OB_SCCACHE_EXE=$(cygpath -w "$SCCACHE")
+			return 0
+		fi
+	done
+	unset SCCACHE_SERVER_PORT
+	note "warning: no free port for the sccache server near $base; the web build compiles without a cache"
+}
+
+web_server_is_ours() {
+	awk -v wt="$WT/" -v pkg="$B/vcpkg_installed/" '
+		BEGIN { RS = "\001" }
+		{
+			text = tolower($0)
+			start = index(text, "\"basedirs\":[")
+			if (start == 0) exit 1
+			text = substr(text, start + 12)
+			text = substr(text, 1, index(text, "]") - 1)
+			n = split(text, dirs, ",")
+			if (n != 2) exit 1
+			for (i = 1; i <= n; i++) { d = dirs[i]; gsub(/^"|"$/, "", d); gsub(/\\\\/, "/", d); have[d] = 1 }
+			exit !((tolower(wt) in have) && (tolower(pkg) in have))
+		}'
+}
+
+web_sccache_stop() {
+	[ -n "$WEB_SERVER_PORT" ] || return 0
+	local stats
+	stats=$(SCCACHE_SERVER_PORT=$WEB_SERVER_PORT "$SCCACHE" --show-stats 2>/dev/null | grep -E '^Cache (hits|misses) +[0-9]' |
+		awk '{ printf "%s%s=%s", (NR > 1 ? " " : ""), $2, $3 }')
+	[ -z "${OB_JOB_NOTE:-}" ] || [ -z "$stats" ] || printf '%s' "$stats" >"$OB_JOB_NOTE" 2>/dev/null
+	note "sccache: $stats"
+	SCCACHE_SERVER_PORT=$WEB_SERVER_PORT "$SCCACHE" --stop-server >/dev/null 2>&1
+	WEB_SERVER_PORT=""
+}
+
+# Runs this command again inside ob-job (made by ob-build), which writes its CPU time to the log when it ends
+web_run_in_job() {
+	[ -z "${OB_JOB_NOTE:-}" ] && [ "${OB_JOB_METER:-1}" != 0 ] || return 0
+	local job note
+	job=$("$OB_SCRIPT_DIR/ob-build" launcher ob-job 2>/dev/null) && [ -f "$job" ] || return 0
+	mkdir -p "$OB_ROOT/cache/jobs"
+	note="$OB_ROOT/cache/jobs/web-$$.note"
+	rm -f "$note"
+	export OB_JOB_NOTE
+	OB_JOB_NOTE=$(cygpath -w "$note")
+	MSYS2_ARG_CONV_EXCL="*" exec "$job" "$(cygpath -w "$OB_ROOT/cache/ob-build-cpu.log")" "$OB_JOB_NOTE" \
+		"web-$COMMAND|$CONFIG|$(basename "$B")" "$(cygpath -w "$BASH")" "$(cygpath -w "${BASH_SOURCE[0]}")" "${WEB_ARGS[@]}"
+}
+
+# OB_WEB_JOBS (8), fewer when the free memory above OB_MEMORY_RESERVE_GB (8) is less than OB_MEMORY_PER_JOB_MB (1500)
+# for each job
+web_jobs() {
+	local wanted=${OB_WEB_JOBS:-8} free jobs
+	case "$wanted" in '' | *[!0-9]*) wanted=8 ;; esac
+	free=$(awk '/^MemFree:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)
+	if [ "${OB_MEMORY_JOBS:-1}" = 0 ] || [ -z "$free" ]; then
+		echo "$wanted"
+		return 0
+	fi
+	jobs=$(((free - ${OB_MEMORY_RESERVE_GB:-8} * 1024) / ${OB_MEMORY_PER_JOB_MB:-1500}))
+	[ "$jobs" -ge 1 ] || jobs=1
+	[ "$jobs" -le "$wanted" ] || jobs=$wanted
+	[ "$jobs" = "$wanted" ] || note "$free MiB of memory is free: building with $jobs jobs, not $wanted"
+	echo "$jobs"
 }
 
 cmd_serve() {
@@ -166,11 +272,13 @@ cmd_env() {
 	echo "python     $PYTHON"
 }
 
+WEB_ARGS=("$@")
 COMMAND=${1:-}
 [ -n "$COMMAND" ] || die "no command; see the top of $OB_SCRIPT_DIR/ob-web"
 shift
 parse_options "$@"
 resolve_folders
+case "$COMMAND" in configure | build) web_run_in_job ;; esac
 case "$COMMAND" in
 configure) cmd_configure ;;
 build) cmd_build ;;

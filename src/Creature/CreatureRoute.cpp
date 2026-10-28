@@ -87,12 +87,27 @@ WalkableLand WalkableLand::Build(const CornerHeight& height, const CellWater& wa
 {
 	WalkableLand land;
 	const auto index = [](int32_t x, int32_t z) { return static_cast<size_t>((z * k_CellsPerSide) + x); };
+	// Each corner is read one time, the last row and column too. A cell reads its four corners from here.
+	constexpr int32_t k_CornersPerSide = k_CellsPerSide + 1;
+	std::vector<float> heights(static_cast<size_t>(k_CornersPerSide * k_CornersPerSide));
+	for (int32_t z = 0; z < k_CornersPerSide; ++z)
+	{
+		for (int32_t x = 0; x < k_CornersPerSide; ++x)
+		{
+			heights[static_cast<size_t>((z * k_CornersPerSide) + x)] = height(x, z);
+		}
+	}
+	const auto cornerHeight = [&heights](int32_t x, int32_t z) {
+		return heights[static_cast<size_t>((z * k_CornersPerSide) + x)];
+	};
 	for (int32_t z = 0; z < k_CellsPerSide; ++z)
 	{
 		for (int32_t x = 0; x < k_CellsPerSide; ++x)
 		{
-			const std::array corners {height(x, z), height(x + 1, z), height(x, z + 1), height(x + 1, z + 1)};
-			const auto [low, high] = std::ranges::minmax(corners);
+			const std::array corners {cornerHeight(x, z), cornerHeight(x + 1, z), cornerHeight(x, z + 1),
+			                          cornerHeight(x + 1, z + 1)};
+			const auto low = std::min({corners[0], corners[1], corners[2], corners[3]});
+			const auto high = std::max({corners[0], corners[1], corners[2], corners[3]});
 			const bool deep = high <= 0.0f;
 			land._cells[index(x, z)] = (high - low > k_SteepRise || deep) ? Ground::Blocked : Ground::CutOff;
 		}
