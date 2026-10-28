@@ -51,14 +51,15 @@ struct CreatureLeash
 		bool works {true};
 		/// What it is tied to, or held in the hand when none
 		std::optional<entt::entity> tiedTo;
-		/// The game turn it was tied
-		uint32_t tiedTurn {0};
 		/// The rest length and the full length of the leash's rope. The frames draw the rope with these lengths (see
 		/// CreatureLeashRope).
 		float slackLength {32.5f};
 		float maxLength {77.0f};
 	};
 	std::optional<Worn> worn;
+	/// The game turn that a leash of the creature was last tied to a thing. It stays while no leash is on, and a leash
+	/// put on later keeps it.
+	uint32_t lastTiedTurn {0};
 	/// Whether a leash put on makes the creature do anything, as scripts set. It is kept while no leash is on, and a
 	/// leash put on takes it.
 	bool leashWorks {true};

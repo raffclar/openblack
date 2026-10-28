@@ -15,6 +15,7 @@
 
 #include <entt/fwd.hpp>
 
+#include "ECS/PlayerKind.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -45,12 +46,26 @@ public:
 	[[nodiscard]] virtual bool KeepAlignmentAt(uint32_t turn) = 0;
 	/// A player made on a land takes up what they kept from the lands before
 	virtual void TakeUpKept(entt::entity playerEntity) = 0;
-	/// The player at this machine, whose hand the mouse moves. openblack is played by one player, the first.
+	/// A land script sets the strength of the alliance of two players, for each of them. The game makes a player when the
+	/// land has none yet.
+	virtual void SetAlly(PlayerNames /*player*/, PlayerNames /*other*/, float /*strength*/) {}
+	/// How strongly the player is the ally of the other player; 0 when the land has no such player
+	[[nodiscard]] virtual float AllyStrength(PlayerNames /*player*/, PlayerNames /*other*/) const { return 0.0f; }
+	/// The first player: the player that the scripts and the turns take as the player of a game alone. It is the same on
+	/// every computer of a network game. The frames, the input and the sounds of a computer use the player of that
+	/// computer instead (see HandSystemInterface::GetOwnPlayer).
 	[[nodiscard]] virtual PlayerNames GetLocalPlayer() const { return PlayerNames::PLAYER_ONE; }
-	/// Whether the computer plays a player: every player but the one at this machine
+	/// Whether a computer mind plays a player (see player_kind::IsComputer). A player that nobody plays is not a computer
+	/// player.
 	[[nodiscard]] virtual bool IsComputerPlayer(PlayerNames name) const
 	{
-		return name != GetLocalPlayer() && name != PlayerNames::NEUTRAL;
+		return player_kind::IsComputer({.player = name, .networkGame = false, .computerMind = false});
+	}
+	/// Whether a person plays a player (see player_kind::IsHuman). A computer god is not a human player, also when it
+	/// has hands.
+	[[nodiscard]] virtual bool IsHumanPlayer(PlayerNames name) const
+	{
+		return player_kind::IsHuman({.player = name, .networkGame = false, .computerMind = false});
 	}
 };
 } // namespace openblack::ecs::systems

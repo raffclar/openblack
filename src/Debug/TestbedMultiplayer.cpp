@@ -9,6 +9,8 @@
 
 #include "TestbedMultiplayer.h"
 
+#include <cstdint>
+
 #include <algorithm>
 #include <array>
 #include <deque>
@@ -25,6 +27,7 @@
 #include <LobbyApi.h>
 #include <LobbyApiJson.h>
 
+#include "Commands/TurnCodec.h"
 #include "Common/BuildVersion.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
@@ -274,6 +277,7 @@ public:
 	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
 	void GetWeather(lobby_api::Date, LobbyCallback<lobby_api::RealWeather>) override {}
 	void UploadCreature(lobby_api::CreatureUpload, LobbyCallback<lobby_api::CreatureUploadReply>) override {}
+	void SendSkirmishPing(LobbyCallback<LobbyDone>) override {}
 	uint32_t AddEventListener(LobbyEventListener listener) override
 	{
 		_listeners[++_nextListener] = std::move(listener);
@@ -317,10 +321,16 @@ private:
 };
 
 /// A game socket with no network: each connection opens at the next frame, and the server lets each join in at the
-/// frame after it
+/// frame after it. The clock of the demonstration moves on by the same time at each frame, and the server answers each
+/// ping at the next frame. Thus each ping has the same round trip.
 class DemoSockets final: public online::WebSocketClientInterface
 {
 public:
+	/// The time that the clock of the demonstration moves on at each frame, in microseconds
+	static constexpr int64_t k_FrameMicroseconds = 48'000;
+
+	[[nodiscard]] int64_t Now() const noexcept { return _now; }
+
 	online::WebSocketId Connect(online::WebSocketRequest, online::WebSocketHandlers handlers) override
 	{
 		const auto id = ++_nextId;
@@ -341,12 +351,38 @@ public:
 		}
 		return true;
 	}
-	bool SendBinary(online::WebSocketId id, std::span<const uint8_t>) override { return IsOpen(id); }
+	bool SendBinary(online::WebSocketId id, std::span<const uint8_t> bytes) override
+	{
+		if (!IsOpen(id))
+		{
+			return false;
+		}
+		const auto decoded = turn_codec::Decode(bytes);
+		if (decoded.frame.has_value())
+		{
+			if (const auto* ping = std::get_if<turn_codec::Ping>(&*decoded.frame))
+			{
+				_pongs.emplace_back(id, turn_codec::Encode(turn_codec::Pong {.id = ping->id, .time = ping->time}));
+			}
+		}
+		return true;
+	}
 	void Close(online::WebSocketId id, uint16_t) override { _sockets.erase(id); }
 	/// The server sends a frame to each open socket at the next frame
 	void ServerSends(const game_socket::Frame& frame) { _toClients.push_back(game_socket::ToJson(frame)); }
 	void Poll() override
 	{
+		_now += k_FrameMicroseconds;
+		auto pongs = std::move(_pongs);
+		_pongs.clear();
+		for (const auto& [id, bytes] : pongs)
+		{
+			const auto found = _sockets.find(id);
+			if (found != _sockets.end() && found->second.handlers.binary)
+			{
+				found->second.handlers.binary(bytes);
+			}
+		}
 		auto toClients = std::move(_toClients);
 		_toClients.clear();
 		for (const auto& text : toClients)
@@ -418,15 +454,18 @@ private:
 	/// The joins to let in, and whether the ticket is an observer's
 	std::vector<std::pair<online::WebSocketId, bool>> _joins;
 	std::vector<std::string> _toClients;
+	/// The answers to the pings, for the next frame
+	std::vector<std::pair<online::WebSocketId, std::vector<uint8_t>>> _pongs;
 	online::WebSocketId _nextId {0};
+	int64_t _now {0};
 };
 
 /// The network game of the demonstration: a session on the demonstration's sockets. Its server never starts a game.
 class DemoNetworkGame final: public ecs::systems::NetworkGameSystemInterface
 {
 public:
-	explicit DemoNetworkGame(online::WebSocketClientInterface& sockets)
-	    : _session(sockets, [] { return int64_t {0}; })
+	explicit DemoNetworkGame(DemoSockets& sockets)
+	    : _session(sockets, [&sockets] { return sockets.Now(); })
 	{
 	}
 
@@ -626,6 +665,7 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 	    .browser = false,
 	    .localMaps = std::move(localMaps),
 	    .conditionTemplate = std::move(conditionTemplate),
+	    .showPing = stage == Stage::RoomPing,
 	};
 	return std::make_unique<MultiplayerFrontEnd>(std::move(services), std::move(settings));
 }

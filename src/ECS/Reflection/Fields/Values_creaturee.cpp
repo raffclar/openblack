@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "Creature/CreatureEmoteAgendas.h"
+#include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreatureEyes.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
@@ -27,6 +28,15 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturee(entt::meta_ctx&
 	Reflect<openblack::creature_emote::RunLookBack>(context, ValueOnly {})
 	    .Field<&openblack::creature_emote::RunLookBack::lookingBack>("lookingBack")
 	    .Field<&openblack::creature_emote::RunLookBack::turns>("turns");
+	Reflect<openblack::creature_exploration::Region>(context, ValueOnly {})
+	    .Field<&openblack::creature_exploration::Region::highest>("highest")
+	    .Field<&openblack::creature_exploration::Region::highestCell>("highestCell")
+	    .Field<&openblack::creature_exploration::Region::firstCoast>("firstCoast")
+	    .Field<&openblack::creature_exploration::Region::firstSea>("firstSea")
+	    .Field<&openblack::creature_exploration::Region::kinds>("kinds");
+	Reflect<openblack::creature_exploration::RegionMap>(context, ValueOnly {})
+	    .Field<&openblack::creature_exploration::RegionMap::regions>("regions")
+	    .Field<&openblack::creature_exploration::RegionMap::highest>("highest");
 	Reflect<openblack::creature_eyes::Blink>(context, ValueOnly {})
 	    .Field<&openblack::creature_eyes::Blink::state>("state")
 	    .Field<&openblack::creature_eyes::Blink::timerMs>("timerMs")

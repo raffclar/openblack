@@ -41,6 +41,7 @@ public:
 	                   const std::function<bool()>& restore, SavedLandUse use) override;
 	void LoadLandscape(const std::filesystem::path& path) override;
 	void SetStartCameraPlace(glm::ivec2 place) override { _startCameraPlace = place; }
+	void ShowLandMessage(const land_message::Message& message) override { View().ShowLandMessage(message); }
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const override { return _landPath; }
@@ -50,10 +51,14 @@ public:
 	void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) override { _newGameStart = start; }
 	void SetHumansFromSession(bool fromSession) override { _humansFromSession = fromSession; }
 	[[nodiscard]] bool RunsNetworkMapScript() const override { return _runsNetworkMapScript; }
+	void SetAllComputerGods(bool allComputer) override { _allComputerGods = allComputer; }
 	bool StartChallengeScripts(bool startStory) override;
 	void StartStoryScripts() override;
 
 	void PlayTurns(simulation::TurnViewInterface& view) override;
+	void PlayTurnSteps(simulation::TurnViewInterface& view) override;
+	void FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
+	                 std::optional<std::chrono::steady_clock::time_point> end) override;
 	[[nodiscard]] std::chrono::steady_clock::duration GetTurnDeltaTime() const override { return _turnDeltaTime; }
 	void KeepAlignmentInProfile() override;
 
@@ -79,6 +84,8 @@ private:
 	bool AskNewGameChoice();
 	/// The turn of the world when it is due, and the temple's own turns
 	void GameLogicLoop(simulation::TurnViewInterface& view);
+	/// The turns that are due, with the queue of the main thread told that this thread does them
+	void PlayDueTurns(simulation::TurnViewInterface& view);
 
 	LandViewInterface* _view {nullptr};
 	NoLandView _noView;
@@ -93,6 +100,7 @@ private:
 	bool _humansFromSession {false};
 	/// The map script of a land of a network game runs now
 	bool _runsNetworkMapScript {false};
+	bool _allComputerGods {false};
 	/// The ticks of the machine at the last turn, as the game reads them
 	uint32_t _lastGameLoopTime {0};
 	/// When the scripts last took a turn in the temple, in real time

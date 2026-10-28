@@ -538,3 +538,34 @@ TEST(GestureRequests, WhileThePlayersCreatureDuelsOnlyItsFightGesturesAreWaitedF
 		return request.purpose == Purpose::FightSpecialMove || request.purpose == Purpose::FightMiracle;
 	}));
 }
+
+TEST(GestureRequests, ThePowerUpsAndTheCancelCarryTheSeedForTheirHints)
+{
+	HandContext context;
+	context.seed = HandContext::Seed {.type = SpellSeedType::Storm,
+	                                  .powerUpGestures = {GestureType::InverseSpiral, GestureType::Spiral, GestureType::None}};
+	auto requests = Requests(context);
+	ASSERT_EQ(requests.size(), 3u);
+	EXPECT_EQ(requests[0],
+	          (Request {.gesture = GestureType::Scribble, .purpose = Purpose::DropSeed, .seed = SpellSeedType::Storm}));
+	EXPECT_EQ(requests[1].seed, SpellSeedType::Storm);
+	EXPECT_EQ(requests[2].seed, SpellSeedType::Storm);
+	// Once a level is asked for, the scribble has that level
+	context.seed->powerUp = 1;
+	requests = Requests(context);
+	ASSERT_EQ(requests.size(), 2u);
+	EXPECT_EQ(requests[0].powerUpLevel, 1);
+}
+
+TEST(GestureRequests, TheSpiralsSayWhoseMiraclesTheyOpen)
+{
+	HandContext context;
+	context.handReady = true;
+	context.ownSelectionOffered = true;
+	context.creatureSelectionOffered = true;
+	const auto requests = Requests(context);
+	ASSERT_EQ(requests.size(), 2u);
+	EXPECT_EQ(requests[0], (Request {.gesture = GestureType::Spiral, .purpose = Purpose::OpenSelection}));
+	EXPECT_EQ(requests[1],
+	          (Request {.gesture = GestureType::InverseSpiral, .purpose = Purpose::OpenSelection, .forCreature = true}));
+}

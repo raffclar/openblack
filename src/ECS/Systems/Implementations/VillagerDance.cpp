@@ -30,6 +30,7 @@
 #include "ECS/DanceMoves.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -114,10 +115,7 @@ void SetGameAngle(entt::entity villager, uint16_t angle)
 	{
 		return;
 	}
-	wallHug->gameAngle = angle;
-	wallHug->yAngle = gutils::ConvertGameAngleTo3D(angle);
-	transform->rotation = portable_math::EulerAngleY(-wallHug->yAngle - glm::radians(90.0f));
-	registry.SetDirty();
+	openblack::ecs::living_facing::FaceGameAngle(registry, villager, angle);
 }
 } // namespace
 

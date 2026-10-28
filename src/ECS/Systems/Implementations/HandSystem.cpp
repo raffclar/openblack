@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/HandMorph.h"
+#include "Common/MachineClock.h"
 #include "ECS/Archetypes/HandArchetype.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
@@ -161,8 +162,18 @@ std::optional<glm::vec3> HandSystem::GetDrawnHandPosition() const noexcept
 	return transform->position;
 }
 
+void HandSystem::ReportSent(const player_commands::HandReport& report)
+{
+	_reportLatency.Sent(report, machine_clock::Ticks());
+}
+
 void HandSystem::Report(PlayerNames player, const player_commands::HandReport& report)
 {
+	// A report of this computer gives the latency of its reports
+	if (IsOwnPlayer(player))
+	{
+		_reportLatency.Done(report, machine_clock::Ticks());
+	}
 	// The report moves the left hand of its player. A player with no hands yet has no report.
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto hands = GetHandsOf(player);
@@ -226,6 +237,61 @@ std::optional<HandSystemInterface::ReportedCamera> HandSystem::GetReportedCamera
 		return std::nullopt;
 	}
 	return ReportedCamera {.origin = reported->camera, .focus = reported->focus};
+}
+
+void HandSystem::ReportView(PlayerNames player, const player_commands::ViewReport& report)
+{
+	// The view belongs to the left hand of its player. A player with no hands yet has no view.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hands = GetHandsOf(player);
+	const auto hand = hands.has_value() ? (*hands)[static_cast<size_t>(Side::Left)] : entt::null;
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	auto& reported = ReportedOf(registry, hand);
+	reported.viewReported = true;
+	reported.viewEye = report.eye;
+	reported.viewFocus = report.focus;
+	reported.viewLens = report.lens;
+	reported.viewNearClip = report.nearClip;
+	reported.viewScreenWidth = report.screenWidth;
+	reported.viewScreenHeight = report.screenHeight;
+	reported.viewAspect = report.aspect;
+	reported.inclusionDistance = report.inclusionDistance;
+	reported.cameraOrders = report.cameraOrders;
+	reported.cameraArrived = report.cameraArrived;
+	reported.gripsLand = report.gripsLand;
+	reported.otherButton = report.otherButton;
+}
+
+std::optional<HandSystemInterface::ReportedView> HandSystem::GetReportedView(PlayerNames player) const noexcept
+{
+	const auto hands = GetHandsOf(player);
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = (*hands)[static_cast<size_t>(Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	if (reported == nullptr || !reported->viewReported)
+	{
+		return std::nullopt;
+	}
+	return ReportedView {
+	    .eye = reported->viewEye,
+	    .focus = reported->viewFocus,
+	    .lens = reported->viewLens,
+	    .nearClip = reported->viewNearClip,
+	    .screen = glm::ivec2(reported->viewScreenWidth, reported->viewScreenHeight),
+	    .aspect = reported->viewAspect,
+	    .inclusionDistance = reported->inclusionDistance,
+	    .cameraOrders = reported->cameraOrders,
+	    .cameraArrived = reported->cameraArrived,
+	    .gripsLand = reported->gripsLand,
+	    .otherButton = reported->otherButton,
+	};
 }
 
 uint32_t HandSystem::GetHandStillTurns() const noexcept

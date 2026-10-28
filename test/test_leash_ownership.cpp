@@ -333,3 +333,15 @@ TEST(CreatureHand, AQuickPressIsAClickAndALongOneAHold)
 	// A click can never last long enough to stroke
 	EXPECT_LE(creature_hand::k_ClickMaxMs, creature_feedback::k_StrokeHoldMs);
 }
+
+TEST(LeashOwnership, TheLeashComesOffAtTheTempleOnlyWhenThePlayerHoldsIt)
+{
+	EXPECT_TRUE(ComesOffAtTemple(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(ComesOffAtTemple(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_TWO));
+	// The creature wears no leash
+	EXPECT_FALSE(ComesOffAtTemple(PlayerNames::PLAYER_ONE, std::nullopt));
+	// Another player holds the leash
+	EXPECT_FALSE(ComesOffAtTemple(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
+	// Nobody goes into a temple
+	EXPECT_FALSE(ComesOffAtTemple(PlayerNames::NEUTRAL, PlayerNames::NEUTRAL));
+}

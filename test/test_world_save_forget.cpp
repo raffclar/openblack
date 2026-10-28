@@ -7,17 +7,24 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <memory>
 #include <vector>
 
+#include <DanceFile.h>
 #include <entt/entity/registry.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/ComputerHand.h"
+#include "ECS/ComputerMind.h"
 #include "ECS/WorldSave.h"
 
 using namespace openblack;
+using openblack::ecs::components::ComputerPlayer;
 using openblack::ecs::components::CreatureMindState;
 
 // The game does not keep the actions that the area that held a creature refused: after a load the creature wants them
@@ -69,4 +76,94 @@ TEST(WorldSaveForget, ASaveInsideTheTempleKeepsTheCameraOfTheWorld)
 	const auto outside = ecs::world_save::CameraToSave(std::nullopt, world);
 	EXPECT_EQ(outside.origin, world.origin);
 	EXPECT_EQ(outside.focus, world.focus);
+}
+
+// The load of a saved game starts the mind of each computer god again, as the game does. The god keeps its weights,
+// its suppressions, the flags and the lists of the save. The turn stamps go to 0, the hand can be stopped again, and
+// the god forgets the player that it takes the size of its creature from.
+TEST(WorldSaveForget, ALoadStartsTheMindOfAComputerGodAgain)
+{
+	entt::registry registry;
+	const auto god = registry.create();
+	const auto town = registry.create();
+	auto& state = registry.emplace<ComputerPlayer>(god);
+	state.switchedOn = true;
+	state.marked = true;
+	state.started = true;
+	state.creatureLike = PlayerNames::PLAYER_ONE;
+	state.mind = computer_mind::MakeMind();
+	state.mind.nodes.at(3).suppression = 0.25f;
+	state.mind.nodes.at(3).weight = 0.5f;
+	state.mind.nodes.at(3).lastPerformed = 700;
+	state.mind.nodes.at(3).lastWorkedOut = 710;
+	state.mind.nodes.at(3).object = town;
+	state.mind.nodes.at(0).bestLeaf = 3;
+	state.mind.doing = 0.75f;
+	state.mind.lastEmptyTurn = 690;
+	state.mind.wasBusy = false;
+	state.mind.scriptHand = true;
+	state.mind.castRequested.at(4) = 7;
+	state.mind.queue.push_back({.name = "DIRECTPickupAndDropObject", .first = town, .turn = 650});
+	state.hand.locked = true;
+	state.hand.part = 1;
+	computer_hand::Add(state.hand, computer_hand::StepKind::CastSpellAtObject, {computer_hand::Argument {.object = town}});
+	state.casts.push_back(town);
+	state.speed = 45.0f;
+	state.seen.push_back({.thing = town, .turn = 600});
+
+	ecs::world_save::ForgetUnsavedState(registry);
+	const auto& loaded = registry.get<ComputerPlayer>(god);
+	EXPECT_EQ(loaded.mind.nodes.at(3).suppression, 0.25f);
+	EXPECT_EQ(loaded.mind.nodes.at(3).weight, 0.5f);
+	EXPECT_EQ(loaded.mind.nodes.at(3).lastPerformed, 0u);
+	EXPECT_EQ(loaded.mind.nodes.at(3).lastWorkedOut, 0u);
+	EXPECT_EQ(loaded.mind.nodes.at(3).object, entt::entity {entt::null});
+	EXPECT_FALSE(loaded.mind.nodes.at(0).bestLeaf.has_value());
+	EXPECT_EQ(loaded.mind.doing, 0.0f);
+	EXPECT_EQ(loaded.mind.lastEmptyTurn, 0u);
+	EXPECT_TRUE(loaded.mind.wasBusy);
+	EXPECT_FALSE(loaded.mind.scriptHand);
+	EXPECT_EQ(loaded.mind.castRequested.at(4), 7u);
+	ASSERT_EQ(loaded.mind.queue.size(), 1u);
+	EXPECT_EQ(loaded.mind.queue.front().first, town);
+	EXPECT_FALSE(loaded.creatureLike.has_value());
+	EXPECT_FALSE(loaded.hand.locked);
+	EXPECT_EQ(loaded.hand.part, 1);
+	EXPECT_EQ(loaded.hand.steps.size(), 1u);
+	EXPECT_TRUE(loaded.switchedOn);
+	EXPECT_TRUE(loaded.marked);
+	EXPECT_TRUE(loaded.started);
+	EXPECT_EQ(loaded.casts.size(), 1u);
+	EXPECT_EQ(loaded.speed, 45.0f);
+	ASSERT_EQ(loaded.seen.size(), 1u);
+	EXPECT_EQ(loaded.seen.front().turn, 600u);
+}
+
+// A save does not keep the file of a dance. After a load each dance takes the file of the row that it dances again, so
+// that its groups continue to move.
+TEST(WorldSaveForget, ALoadGivesEachDanceTheFileOfItsRowAgain)
+{
+	entt::registry registry;
+	const auto worship = std::make_shared<const dance::DanceFile>(dance::DanceFile {.groupCount = 3});
+	const auto meeting = std::make_shared<const dance::DanceFile>(dance::DanceFile {.groupCount = 1});
+	const auto first = registry.create();
+	registry.emplace<ecs::components::Dance>(first).type = DanceInfo::Worship;
+	const auto second = registry.create();
+	registry.emplace<ecs::components::Dance>(second).type = DanceInfo::Meeting;
+	const auto unknown = registry.create();
+	registry.emplace<ecs::components::Dance>(unknown).type = DanceInfo::Creature;
+	ecs::world_save::TakeDanceFilesAgain(registry, [&](DanceInfo type) -> std::shared_ptr<const dance::DanceFile> {
+		switch (type)
+		{
+		case DanceInfo::Worship:
+			return worship;
+		case DanceInfo::Meeting:
+			return meeting;
+		default:
+			return nullptr;
+		}
+	});
+	EXPECT_EQ(registry.get<ecs::components::Dance>(first).file, worship);
+	EXPECT_EQ(registry.get<ecs::components::Dance>(second).file, meeting);
+	EXPECT_EQ(registry.get<ecs::components::Dance>(unknown).file, nullptr);
 }

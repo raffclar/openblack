@@ -49,6 +49,11 @@ Refusal WhyNotBrought(const BroughtRequest& request)
 	{
 		return Refusal::UnknownSpecies;
 	}
+	// A god has one creature. The creature that the god has stays, and the game makes no new creature.
+	if (request.hasCreature)
+	{
+		return Refusal::HasCreature;
+	}
 	// The game does not examine the place. openblack makes no creature off the map.
 	if (!request.onMap)
 	{

@@ -28,6 +28,7 @@ public:
 	void ShowTattoos(entt::entity creature, std::optional<creature_tattoo::Slots> slots) override;
 	void SetTattooPictures(entt::entity creature, std::vector<uint8_t> pictures) override;
 	void RemakeTattooMasks(entt::entity creature, creature_tattoo::Sheet sheet) override;
+	void DoTattoo(PlayerNames player, const player_commands::CreatureTattoo& tattoo) override;
 	void PaintTattoos(entt::entity creature) override;
 	void PutOnTattoos(entt::entity creature, const creature_tattoo::Slots& slots,
 	                  const creature_tattoo::Pictures& pictures) override;

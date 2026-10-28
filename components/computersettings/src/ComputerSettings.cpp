@@ -144,6 +144,8 @@ void ReadCustomDetail(const Json& object, CustomDetail& detail, std::vector<std:
 	read.Bool("object_shadows", detail.objectShadows);
 	read.Bool("low_res_textures", detail.lowResTextures);
 	read.Bool("coarse_land", detail.coarseLand);
+	// Above 1.53 the light would be divided by less than one; the lowest value only keeps the number sensible
+	read.Number("light_boost", detail.lightBoost, -1000.0, true, 1.53);
 }
 
 template <typename T>
@@ -257,6 +259,7 @@ std::string Update(std::string_view oldText, const Settings& changed)
 		Put(custom, "object_shadows", detail.objectShadows);
 		Put(custom, "low_res_textures", detail.lowResTextures);
 		Put(custom, "coarse_land", detail.coarseLand);
+		PutFloat(custom, "light_boost", detail.lightBoost);
 	}
 
 	// Text that is not valid UTF-8 is replaced, because the library must not throw

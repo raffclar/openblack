@@ -11,6 +11,7 @@
 
 #include <chrono>
 #include <optional>
+#include <string>
 
 #include <LobbyApi.h>
 #include <entt/entity/entity.hpp>
@@ -64,6 +65,9 @@ public:
 
 	/// The weather that the lobby gave for this game, if any
 	[[nodiscard]] virtual std::optional<lobby_api::RealWeather> GetWeather() const = 0;
+	/// The place of the weather as the message about the weather shows it, with the full name of the country. None
+	/// when there is no weather.
+	[[nodiscard]] virtual std::optional<std::string> GetPlace() const = 0;
 	/// Whether the real weather changes the land now
 	[[nodiscard]] virtual bool IsApplied() const = 0;
 	/// The storm of the real weather, null when there is none

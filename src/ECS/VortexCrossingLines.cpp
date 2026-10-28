@@ -36,6 +36,7 @@
 #include "ECS/LandFollowers.h"
 #include "ECS/Registry.h"
 #include "ECS/VillagerAge.h"
+#include "ECS/WorkshopRules.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -81,7 +82,8 @@ bool PartOfStoragePit(const ecs::Registry& registry, entt::entity pot)
 	registry.Each<const StoragePit>([pot, &part](const StoragePit& pit) {
 		part = part || pit.foodPile == pot || std::ranges::find(pit.woodPiles, pot) != pit.woodPiles.end();
 	});
-	return part;
+	// A workshop's wood pile is part of its workshop, as a pile of a storage pit is
+	return part || ecs::workshop::IsWoodPile(registry, pot);
 }
 } // namespace
 

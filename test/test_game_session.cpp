@@ -131,3 +131,14 @@ TEST(GameSession, ProfileNamesCompareWithoutTheCaseOfPlainLetters)
 	EXPECT_TRUE(SameProfileName(u"Ann", u"aNN"));
 	EXPECT_FALSE(SameProfileName(u"Ann", u"Anne"));
 }
+
+// Start Skirmish Game in a story ends the story with its save on exit, as any other end of the story does
+TEST(GameSession, AStoryLeftForTheSkirmishBoxSaves)
+{
+	auto facts = PlainQuit();
+	facts.end = End::Skirmish;
+	EXPECT_EQ(ExitSaveFor(facts), ExitSave::Current);
+	// Leaving a skirmish for the box keeps no save
+	facts.skirmish = true;
+	EXPECT_EQ(ExitSaveFor(facts), ExitSave::None);
+}

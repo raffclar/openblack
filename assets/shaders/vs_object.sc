@@ -266,7 +266,12 @@ void main()
 	// lit in a colour of its own that the land's colour doesn't reach (w)
 	vec3 added = HazeColour(hazeT);
 #ifndef USE_LIGHTMAP
-	if (u_landLight.x > 0.0f && u_landLight.w < 0.5f)
+	bool takesLandColour = u_landLight.x > 0.0f && u_landLight.w < 0.5f;
+#ifdef USE_INSTANCING
+	// An instance with a colour of its own below 0 takes no colour of the land
+	takesLandColour = takesLandColour && (heldMirror || i_data4.y >= 0.0f);
+#endif // USE_INSTANCING
+	if (takesLandColour)
 	{
 		added = min(added + LandColourAt(lightOrigin.xz), vec3_splat(255.0f));
 	}

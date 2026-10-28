@@ -65,6 +65,7 @@
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorkshopRules.h"
 #include "GameDynamicsWorld.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -395,6 +396,9 @@ physics_classes::ClassFacts DynamicsSystem::FactsOf(entt::entity object) const
 			}
 		});
 	}
+	// A workshop's wood pile is part of its workshop, as a pile of a storage pit is
+	inputs.partOfStoragePit = inputs.partOfStoragePit || workshop::IsWoodPile(registry, object);
+	inputs.scaffoldInYard = workshop::StandsInYard(registry, object);
 	auto facts = physics_classes::Classify(registry, object, *info, inputs);
 	// Every model moved by bones is drawn from its body turned a quarter about its up axis
 	if (const auto* mesh = registry.TryGet<const Mesh>(object); mesh != nullptr)
@@ -1223,9 +1227,9 @@ void DynamicsSystem::Step(const physics::Ground& ground)
 		entry->body->ClearForces();
 		entry->body->TouchGround(ground);
 	}
-	// Which bodies' points are tested against which bodies' faces
-	std::vector<physics::PairMember> members;
-	members.reserve(_entries.size());
+	// Which bodies' points are tested against which bodies' faces. The list keeps its memory from step to step.
+	auto& members = _pairMembers;
+	members.clear();
 	for (const auto& entry : _entries)
 	{
 		members.push_back({.centre = entry->body->Centre(),

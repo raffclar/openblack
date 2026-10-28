@@ -12,6 +12,7 @@
 #include "ProfileFolderSystem.h"
 
 #include <exception>
+#include <fstream>
 #include <utility>
 
 #include <spdlog/spdlog.h>
@@ -94,6 +95,24 @@ bool ProfileFolderSystem::WritePlayerFile(std::u16string_view player, std::strin
 	}
 	const auto path = *folder / file;
 	const bool written = _fileSystem.WriteAll(path, bytes);
+	if (const auto logger = spdlog::get("game"); !written && logger != nullptr)
+	{
+		SPDLOG_LOGGER_WARN(logger, "The game could not write {}", path.generic_string());
+	}
+	return written;
+}
+
+bool ProfileFolderSystem::AppendPlayerFile(std::u16string_view player, std::string_view file, std::span<const uint8_t> bytes)
+{
+	const auto folder = GetPlayerFolder(player);
+	if (!folder.has_value() || !MakeFolder(folder->lexically_relative(*_folder)).has_value())
+	{
+		return false;
+	}
+	const auto path = *folder / file;
+	std::ofstream stream(path, std::ios::binary | std::ios::app);
+	stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+	const bool written = stream.good();
 	if (const auto logger = spdlog::get("game"); !written && logger != nullptr)
 	{
 		SPDLOG_LOGGER_WARN(logger, "The game could not write {}", path.generic_string());

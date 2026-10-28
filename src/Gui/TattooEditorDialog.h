@@ -14,12 +14,14 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 #include <glm/vec2.hpp>
 
 #include "Common/Zoomer.h"
 #include "Dialog.h"
+#include "SetupMessage.h"
 
 namespace openblack::ecs::systems
 {
@@ -42,6 +44,9 @@ class TextDatabase;
 /// with a tattoo lifts it off to be dragged elsewhere. The palette picks the colour the brightness bar runs through,
 /// and the brightness bar how light or dark the symbols are, which is the colour they go on in. Enter is OK and Escape
 /// Cancel. From the main menu the dialog has a frame of its own; in the temple it stands over the cave.
+///
+/// In a network game, OK after a change first shows a message: the others see the change when the player leaves the
+/// temple. The message has one OK button. Its answer clears the change, so the next OK closes the editor.
 class TattooEditorDialog
 {
 public:
@@ -52,6 +57,10 @@ public:
 	void Open(bool framed);
 	/// Fades out
 	void Close();
+	/// Whether the game is a network game, where OK warns about a change first
+	void SetNetworkGame(bool networkGame) noexcept { _networkGame = networkGame; }
+	/// The warning of OK in a network game shows in front of the dialog
+	[[nodiscard]] bool IsShowingMessage() const noexcept { return _message.IsShown(); }
 	[[nodiscard]] bool IsOpen() const noexcept { return _open; }
 	[[nodiscard]] bool IsVisible() const noexcept { return _open || _fade.GetValue() > 0.0f; }
 
@@ -89,8 +98,12 @@ public:
 	static constexpr int k_RotationSize = 96;
 	[[nodiscard]] static glm::ivec2 GetSymbolPosition(size_t index);
 
-	/// The controls that act and have a name (OK and Cancel), for tools pressing them by name
-	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const { return _dialog.GetNamedControls(); }
+	/// The controls that act and have a name, for tools that press them by name: the OK of the message while it shows,
+	/// else OK and Cancel
+	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const
+	{
+		return _message.IsShown() ? _message.GetNamedControls() : _dialog.GetNamedControls();
+	}
 
 private:
 	void ApplyTint();
@@ -99,6 +112,11 @@ private:
 	void Cancel(ecs::systems::TattooEditorSystemInterface& editor);
 
 	Dialog _dialog;
+	/// The warning of OK in a network game, in front of the dialog
+	SetupMessage _message;
+	std::u16string _warningText;
+	std::u16string _okText;
+	bool _networkGame {false};
 	ColourPicker* _palette {nullptr};
 	ColourPicker* _brightness {nullptr};
 	std::array<DraggedSymbol*, 16> _symbols {};

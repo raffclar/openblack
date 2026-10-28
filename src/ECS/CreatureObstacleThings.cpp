@@ -48,6 +48,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptHighlightRules.h"
@@ -111,7 +112,7 @@ std::optional<obstacles::Thing> creature_obstacle_things::ThingOf(const Registry
 		thing.walking = other->follower.IsFollowing();
 		return thing;
 	}
-	if (registry.AnyOf<Villager, Animal, FishFarm, StreetLantern, TownDesireFlag>(entity))
+	if (registry.AnyOf<Villager, Animal, FishFarm, StreetLantern, TownDesireFlag, WorkshopFlag>(entity))
 	{
 		return std::nullopt;
 	}
