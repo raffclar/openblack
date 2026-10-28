@@ -1688,6 +1688,7 @@ void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::ent
 	grab->offeredTo = creature;
 	grab->givenTo = creature;
 	grab->callingOff = entt::null;
+	LogHandDeed(player, "gives", object);
 }
 
 void HandGrabSystem::DoGiveCallOff(PlayerNames player, entt::entity creature)

@@ -612,6 +612,52 @@ def pixel_on(pid, entity, heights=(0.5, 1.0, 2.0, 3.0, 5.0)):
     return None
 
 
+def give_to_creature(pid):
+    """The hand of a client takes a villager near its god's creature and gives it to the creature, as a player does: a
+    click of the Action button on the villager takes it, and a press on the creature gives it. The camera looks at each
+    thing first, and the pointer goes to a pixel where the interface picks it. Returns what it did."""
+    done = {"creature": None, "object": None, "took": False, "gave": False}
+    own = [item for item in items_of(inspector_call(pid, "players.list", {})) if item.get("local")]
+    creature = own[0].get("primary_creature") if own else None
+    if creature is None:
+        done["why"] = "the god of the client has no creature"
+        return done
+    done["creature"] = creature
+    found = inspector_call(pid, "ecs.entity", {"params": {"id": creature}})
+    at = found.get("position") if isinstance(found, dict) else None
+    if not isinstance(at, list):
+        done["why"] = "the creature has no place"
+        return done
+    villagers = items_of(inspector_call(pid, "objects.find", {"params": {"kind": "Villager"}, "near": [at[0], at[2]],
+                                                              "radius": 120, "limit": 8}))
+    for villager in villagers:
+        pixel = pixel_on(pid, villager["id"])
+        if pixel is None:
+            continue
+        inspector_call(pid, "input.pointer", {"params": {"screen": pixel}})
+        time.sleep(0.3)
+        inspector_call(pid, "input.button", {"params": {"button": "right", "action": "click"}})
+        time.sleep(2.0)
+        done["object"] = villager["id"]
+        done["took"] = True
+        break
+    if not done["took"]:
+        done["why"] = "the pointer found no villager near the creature"
+        return done
+    pixel = pixel_on(pid, creature, heights=(1.0, 2.0, 3.0, 4.0, 5.0))
+    if pixel is None:
+        done["why"] = "the pointer found no pixel on the creature"
+        return done
+    inspector_call(pid, "input.pointer", {"params": {"screen": pixel}})
+    time.sleep(0.3)
+    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
+    time.sleep(0.5)
+    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
+    done["gave"] = True
+    print(f"give: client with pid {pid} gives thing {done['object']} to creature {creature}")
+    return done
+
+
 def slot_totem(pid, player):
     """The hand of the client's god takes hold of a totem of its own towns that it can take hold of, slides it to the top
     and lets go, so that the town's people go to worship and the worship site gathers prayer power. Returns what it
@@ -1119,6 +1165,10 @@ def main():
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
                              "through the inspector, once it compared --hold-after turns")
+    parser.add_argument("--give", type=int, metavar="CLIENT",
+                        help="once the client (from 1) compared --hold-after turns, its hand takes a villager near its "
+                             "god's creature and gives it to the creature through the inspector; the server and every "
+                             "client must then tell the same gift (the deed 'gives')")
     parser.add_argument("--slot-fight", type=int, metavar="SECONDS",
                         help="once the first client compared --hold-after turns, it sends the fight cheat (its god's "
                              "creature fights the nearest creature); then both clients fight with the fight autopilot "
@@ -1328,6 +1378,7 @@ def main():
     processes = []
     miracle_done = None
     fight_done = None
+    give_done = None
     try:
         server = start(server_command, server_dir)
         processes.append(server)
@@ -1396,7 +1447,8 @@ def main():
             camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
             chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
-            if camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight:
+            if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
+                    or options.give == index + 1):
                 command += ["--inspect-port", "0"]
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
@@ -1474,6 +1526,10 @@ def main():
                         print(f"the camera of client {index + 1} was not set again; see {client_dirs[index]}")
                         return 1
                     cameras_again.add(index)
+            giver = (options.give or 0) - 1
+            if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None and lines_with(
+                    os.path.join(client_dirs[giver], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
+                give_done = give_to_creature(clients[giver].pid)
             slot = (options.slot_miracle or 0) - 1
             if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
                     os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
@@ -1641,6 +1697,13 @@ def main():
         summary["slot_miracle"] = miracle_done
     if options.slot_fight:
         summary["slot_fight"] = fight_done
+    if options.give:
+        # The server did the gift of the hand of the giver's god at a turn
+        gifts = sim_report.hand_deeds_in_file(server_log).get(options.give - 1, {}).get("gives", 0)
+        summary["give"] = dict(give_done or {}, server_gifts=gifts)
+        if gifts == 0:
+            print(f"the server did no gift of the hand of client {options.give}: {give_done}")
+            all_same = False
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the",
                                                 "turns of the game stop", "leaves the game"])
     # A component with no registration is left out of the checksum: a change in it would never show here

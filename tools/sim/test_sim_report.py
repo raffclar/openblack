@@ -211,6 +211,11 @@ class HandDeeds(unittest.TestCase):
         self.assertEqual(sim_report.hand_deeds_in_text(self.LINES),
                          {0: {"scoops": 1, "throws": 2}, 1: {"takes": 1}})
 
+    def test_a_gift_to_a_creature_is_a_deed_of_its_own(self):
+        lines = ["[game] [info] Hand deed: the hand of player 0 takes thing 77 at turn 300",
+                 "[game] [info] Hand deed: the hand of player 0 gives thing 77 at turn 320"]
+        self.assertEqual(sim_report.hand_deeds_in_text(lines), {0: {"takes": 1, "gives": 1}})
+
     def test_a_deed_after_the_last_common_turn_is_not_counted(self):
         lines = [
             "[game] [info] Hand deed: the hand of player 1 takes thing 77 at turn 1990",
