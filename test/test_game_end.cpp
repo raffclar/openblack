@@ -123,6 +123,35 @@ TEST(GameEnd, NothingEndsAStoryGame)
 	EXPECT_FALSE(world.gods[k_Two].standing.out);
 }
 
+TEST(GameEnd, AToolRunOnTheTestbedNeedsNoTemple)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	Facts facts = k_Network;
+	facts.templesNeeded = false;
+	EXPECT_TRUE(ProcessTurn(world, facts, state).empty());
+	EXPECT_FALSE(state.decided);
+	EXPECT_FALSE(world.gods[k_One].standing.out);
+	EXPECT_FALSE(world.gods[k_Two].standing.out);
+	EXPECT_TRUE(world.gods[k_One].creature);
+}
+
+TEST(GameEnd, AGodThatLeftIsOutEvenWhenNoTempleIsNeeded)
+{
+	auto world = TwoHumans();
+	world.gods[k_Two].standing.out = true;
+	world.gods[k_Two].standing.reason = OutReason::Left;
+	State state;
+	Facts facts = k_Network;
+	facts.templesNeeded = false;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
+	EXPECT_EQ(events[0].god, k_Two);
+}
+
 TEST(GameEnd, TheLastGodWithATempleDecidesTheGame)
 {
 	auto world = TwoHumans();
@@ -182,6 +211,37 @@ TEST(GameEnd, PlayersFiveToSevenNeverLoseByTheTempleRule)
 	EXPECT_TRUE(ProcessTurn(world, k_Network, state).empty());
 	EXPECT_FALSE(world.gods[k_Five].standing.out);
 	EXPECT_TRUE(world.gods[k_Five].creature);
+}
+
+TEST(GameEnd, TheTempleRuleRunsAtTheFirstTurnWithNoWaitForATemple)
+{
+	// A god that never had a temple is out at the first turn of a network game
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	const auto events = ProcessTurn(world, {.networkGame = true, .skirmish = false, .turn = 1}, state);
+	ASSERT_EQ(events.size(), 2u);
+	EXPECT_TRUE(state.decided);
+}
+
+TEST(GameEnd, ATestRunWithNoTempleRuleKeepsGodsWithNoTempleIn)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	const Facts noTempleRule {.networkGame = true, .skirmish = false, .turn = 1, .templesNeeded = false};
+	EXPECT_TRUE(ProcessTurn(world, noTempleRule, state).empty());
+	EXPECT_FALSE(state.decided);
+	EXPECT_FALSE(world.gods[k_One].standing.out);
+	EXPECT_TRUE(world.gods[k_Two].creature);
+	// A god that left is still counted out
+	world.gods[k_Two].standing.out = true;
+	world.gods[k_Two].standing.reason = OutReason::Left;
+	const auto events = ProcessTurn(world, noTempleRule, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
 }
 
 TEST(GameEnd, AGodThatLeftIsCountedWithItsReason)

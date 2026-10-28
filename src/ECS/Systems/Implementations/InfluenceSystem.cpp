@@ -47,6 +47,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -147,58 +148,59 @@ std::array<entt::entity, static_cast<size_t>(PlayerNames::_COUNT)> Citadels()
 	return citadels;
 }
 
-/// How far a citadel reaches: its heart's reach for the land, fixed the first time, times the land's multiplier
-float CitadelReach(entt::entity temple)
+/// The reach of a citadel's heart for the land that is played now
+float HeartReachForLand()
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* stored = registry.TryGet<const CitadelInfluence>(temple);
-	if (stored == nullptr)
-	{
-		const auto& heart = Locator::infoConstants::value().citadelHeart;
-		const auto land = Globals().landNumber;
-		const float reach = land != 0 ? ForLand(heart.storyInfluence, heart.transferedDamageMultiplier, land) : heart.influence;
-		stored = &registry.Assign<CitadelInfluence>(temple, reach);
-	}
-	return Globals().playerInfluenceMultiplier * stored->reach;
+	const auto& heart = Locator::infoConstants::value().citadelHeart;
+	const auto land = Globals().landNumber;
+	return land != 0 ? ForLand(heart.storyInfluence, heart.transferedDamageMultiplier, land) : heart.influence;
 }
 
-/// The player's hand in the world, if it is in it, as the reports of the player put it. The turns measure from here.
-std::optional<glm::vec3> ReportedHandPosition()
+/// The game turn fixes the reach of a citadel's heart the first time and keeps it on the citadel. Only the turn calls
+/// this, because the order in which the citadels get their reach is part of the synced world.
+CitadelInfluence& FixCitadelReach(entt::entity temple)
 {
-	if (!Locator::handSystem::has_value())
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* stored = registry.TryGet<CitadelInfluence>(temple); stored != nullptr)
 	{
-		return std::nullopt;
+		return *stored;
 	}
-	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	return registry.Assign<CitadelInfluence>(temple, HeartReachForLand());
+}
+
+/// How far a citadel reaches: its heart's reach for the land, as the turn fixed it, times the land's multiplier. Before
+/// the turn fixes it, the answer is the reach that the turn will fix. A question changes nothing in the world.
+float CitadelReach(entt::entity temple)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* stored = registry.TryGet<const CitadelInfluence>(temple);
+	const float reach = stored != nullptr ? stored->reach : HeartReachForLand();
+	return Globals().playerInfluenceMultiplier * reach;
 }
 
 /// This computer's hand where the frames draw it, if it is in the world. Only the frames of this computer measure from
 /// here.
 std::optional<glm::vec3> HandPosition()
 {
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetDrawnHandPosition() : std::nullopt;
+}
+
+/// Where a player's hand is in the world, as the reports of the player put it. The turns measure from here. Each god
+/// with a hand has one: the first player's, and each god of a network game. The computer's gods have no hand in the
+/// world yet, so theirs keep nothing past the border.
+std::optional<glm::vec3> HandOf(PlayerNames player)
+{
 	if (!Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	const auto* transform = registry.TryGet<const Transform>(hand);
-	if (transform == nullptr || transform->position == glm::vec3(0.0f))
-	{
-		return std::nullopt;
-	}
-	return transform->position;
+	return Locator::handSystem::value().GetHandPositionsOf(player)[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 
-/// Where a player's hand is in the world: this computer's player's is the hand that the reports put. The computer's
-/// gods have no hand in the world yet, so theirs keep nothing past the border.
-std::optional<glm::vec3> HandOf(PlayerNames player)
+/// The player whose hand this computer moves and draws. Only the frames of this computer ask.
+PlayerNames OwnPlayer()
 {
-	if (!Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() != player)
-	{
-		return std::nullopt;
-	}
-	return ReportedHandPosition();
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
 /// A player's entity on this land, if they are on it
@@ -332,7 +334,7 @@ void InfluenceSystem::FixCitadelReaches()
 	{
 		if (citadel != entt::null)
 		{
-			CitadelReach(citadel);
+			FixCitadelReach(citadel);
 		}
 	}
 }
@@ -355,8 +357,8 @@ void InfluenceSystem::ProcessCitadels()
 			_borderShown.at(player) =
 			    influence::BorderShows(_borderShown.at(player), progress != nullptr ? progress->built : 1.0f);
 		}
-		const float reach = CitadelReach(citadel);
-		NoteReach(reach, registry.Get<const CitadelInfluence>(citadel).drawnRadius);
+		const auto& fixed = FixCitadelReach(citadel);
+		NoteReach(CitadelReach(citadel), fixed.drawnRadius);
 	}
 }
 
@@ -372,12 +374,13 @@ void InfluenceSystem::DrawBorders()
 		const auto name = static_cast<PlayerNames>(player);
 		if (const auto citadel = citadels.at(player); citadel != entt::null)
 		{
+			auto& fixed = FixCitadelReach(citadel);
 			const float reach = CitadelReach(citadel);
 			if (const auto* transform = registry.TryGet<const Transform>(citadel); transform != nullptr && reach != 0.0f)
 			{
 				influence::AddCircle(_circles, name, transform->position, reach, ground);
 			}
-			registry.Get<CitadelInfluence>(citadel).drawnRadius = reach;
+			fixed.drawnRadius = reach;
 		}
 		registry.Each<const Town, TownInfluence, const Transform>(
 		    [&](const Town& town, TownInfluence& influence, const Transform& transform) {
@@ -427,6 +430,17 @@ bool InfluenceSystem::Shielded(PlayerNames player, const map_coords::MapCoords& 
 		                                                 position) < ring.radius);
 	    });
 	return shielded;
+}
+
+float InfluenceSystem::CitadelReachOf(PlayerNames player) const
+{
+	const auto index = static_cast<size_t>(player);
+	const auto citadels = Citadels();
+	if (index >= citadels.size() || citadels.at(index) == entt::null)
+	{
+		return 0.0f;
+	}
+	return CitadelReach(citadels.at(index));
 }
 
 float InfluenceSystem::InfluencePower(PlayerNames player) const
@@ -548,14 +562,14 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	{
 		return;
 	}
-	const auto player = Locator::playerSystem::value().GetLocalPlayer();
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	const auto player = OwnPlayer();
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(entity) || !registry.AnyOf<VirtualInfluence>(entity))
+	if (!entity.has_value() || !registry.Valid(*entity) || !registry.AnyOf<VirtualInfluence>(*entity))
 	{
 		return;
 	}
-	auto& virtualInfluence = registry.Get<VirtualInfluence>(entity);
+	auto& virtualInfluence = registry.Get<VirtualInfluence>(*entity);
 	const auto& state = virtualInfluence.state;
 	auto& shown = virtualInfluence.shown;
 	auto& audio = Locator::audio::value();
@@ -695,7 +709,7 @@ float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::Map
 		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
 		// player's are measured from where their hand is now
 		auto hand = state->turnHand;
-		if (!_inGameTurn && Locator::playerSystem::has_value() && Locator::playerSystem::value().GetLocalPlayer() == player)
+		if (!_inGameTurn && player == OwnPlayer())
 		{
 			if (const auto live = HandPosition(); live.has_value())
 			{
@@ -734,10 +748,12 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	const auto distanceTo = [&position](const glm::vec3& point) {
 		return gutils::GetDistanceInMetres(map_coords::FromMetres({point.x, point.z}), position);
 	};
-	// In a network game a player with no temple has no influence at all
+	// In a network game a player with no temple has no influence at all. A developer tool's network game on the testbed,
+	// which has no temples, is the exception: its hands could do nothing else.
 	const bool hasTemple = Citadels().at(static_cast<size_t>(player)) != entt::null;
-	if (!openblack::influence_rules::CanHaveInfluence(Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
-	                                                  hasTemple))
+	const bool testbed = Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed();
+	if (!openblack::influence_rules::CanHaveInfluence(
+	        Locator::time::has_value() && Locator::time::value().IsNetworkGame() && !testbed, hasTemple))
 	{
 		return 0.0f;
 	}

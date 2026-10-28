@@ -120,25 +120,6 @@ uint32_t WaitForMate(components::LivingAction& action);
 /// The share of an impression a villager's town takes: its population for unchanged belief over its adults and children
 [[nodiscard]] float TownShare(entt::entity town);
 
-/// When a voice of belief was last heard, and when the guidance last spoke, in game turns; the gap before the next
-struct BeliefVoice
-{
-	bool started {false};
-	uint32_t lastVoice {0};
-	uint32_t lastGuidance {0};
-	uint32_t gap {0};
-
-	/// Gives the values that a saved game keeps to a visitor
-	template <typename Self, typename Visitor>
-	static void VisitSaved(Self& self, Visitor&& visit)
-	{
-		visit(self.started, self.lastVoice, self.lastGuidance, self.gap);
-	}
-};
-/// The belief a villager gained shows as a symbol rising from it, and the awe of its people may be heard: a good or evil
-/// voice, more awed the nearer the player is to leading its town, when the player isn't leading it already, now and then,
-/// near enough the hand
-/// A town's belief gained in a player rises as a symbol from its town centre's foot, in the player's colour
 /// The villager goes at its speed for the state it is to end up in, as the game works it out at each change of state
 void SetStateSpeed(entt::entity villager, VillagerStates state);
 /// The villager goes at a speed from its tables, made its own by when it was made, its age, and as an adult its belly,
@@ -146,12 +127,13 @@ void SetStateSpeed(entt::entity villager, VillagerStates state);
 void SetSpeed(entt::entity villager, int32_t speed);
 /// The town's impression, made as the town first takes one: believing in the neutral player as its tables say
 components::TownImpression& ImpressionOf(entt::entity town);
+/// A town's belief gained in a player rises as a symbol from its town centre's foot, in the player's colour
 void ShowTownBelief(const glm::vec3& centre, PlayerNames player, float belief);
-void ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment, BeliefVoice& voice,
-                uint32_t turn);
+/// The belief that a villager gained shows as a symbol that rises from it. The guidance sometimes plays a good or evil
+/// voice of awe of its people there (see GuidanceSystemInterface::BeliefVoice).
+void ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment);
 /// The same for belief a town gained from a thing, such as an artefact its people dance round: the symbol rises from
 /// the top of the thing, and the town's awe may be heard there
-void ShowObjectBelief(entt::entity object, entt::entity town, PlayerNames player, float belief, GuidanceAlignment alignment,
-                      BeliefVoice& voice, uint32_t turn);
+void ShowObjectBelief(entt::entity object, entt::entity town, PlayerNames player, float belief, GuidanceAlignment alignment);
 
 } // namespace openblack::ecs::systems::villager_reactions

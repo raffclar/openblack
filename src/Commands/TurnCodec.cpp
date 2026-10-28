@@ -28,6 +28,9 @@ using namespace player_commands;
 /// The last kind of a fight move, so that a command with another kind does not read
 constexpr auto k_LastFightMoveKind = static_cast<uint8_t>(creature_fight::Move::Kind::Spell);
 
+/// The largest block of tattoo pictures: its head, and one picture of 64 by 64 four-bit levels for each slot
+constexpr size_t k_MostTattooPictures = 0x28 + creature_tattoo::k_SlotCount * 0x800;
+
 static_assert(sizeof(entt::id_type) == sizes::k_Entity, "An entity goes on the wire as 32 bits");
 static_assert(std::numeric_limits<float>::is_iec559, "A float goes on the wire as its IEEE 754 bits");
 
@@ -217,6 +220,52 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const LeashPick& command) { out.Byte(static_cast<uint8_t>(command.type)); },
 	               [](const HandShakeOff& /*command*/) {},
 	               [&out](const GripDust& command) { out.Vector(command.point); },
+	               [&out](const HelpReport& command) {
+		               out.Number(command.events);
+		               out.Byte(static_cast<uint8_t>((command.boxShows ? 1u : 0u) | (command.cursorOnPoint ? 2u : 0u) |
+		                                             (command.cameraSeesLand ? 4u : 0u) |
+		                                             (command.cameraNearAndSteep ? 8u : 0u) |
+		                                             (command.cameraSeesSky ? 16u : 0u)));
+	               },
+	               [&out](const HelpQuery& command) {
+		               out.Entity(command.thing);
+		               out.Byte(static_cast<uint8_t>(command.hasGround ? 1 : 0));
+		               out.Vector(command.ground);
+	               },
+	               [&out](const ViewReport& command) {
+		               out.Vector(command.eye);
+		               out.Vector(command.focus);
+		               out.Float(command.lens);
+		               out.Float(command.nearClip);
+		               out.Number(command.screenWidth);
+		               out.Number(command.screenHeight);
+		               out.Float(command.aspect);
+		               out.Float(command.inclusionDistance);
+		               out.Number(command.cameraOrders);
+		               out.Byte(static_cast<uint8_t>((command.cameraArrived ? 1u : 0u) | (command.gripsLand ? 2u : 0u) |
+		                                             (command.otherButton ? 4u : 0u)));
+	               },
+	               [&out](const GiveCallOff& command) { out.Entity(command.creature); },
+	               [&out](const CreatureTattoo& command) {
+		               out.Entity(command.creature);
+		               for (const auto& slot : command.slots)
+		               {
+			               out.Byte(slot.design);
+			               out.Byte(slot.site);
+			               out.Byte(slot.colour.r);
+			               out.Byte(slot.colour.g);
+			               out.Byte(slot.colour.b);
+		               }
+		               out.Byte(static_cast<uint8_t>(command.hasPictures ? 1 : 0));
+		               out.Number(static_cast<uint16_t>(command.pictures.size()));
+		               for (const auto byte : command.pictures)
+		               {
+			               out.Byte(byte);
+		               }
+	               },
+	               [&out](const LeashLength& command) { out.Float(command.length); },
+	               [](const CreatureFightCheat& /*command*/) {},
+	               [](const TempleLeashOff& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -466,8 +515,112 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandShakeOff:
 		action = HandShakeOff {};
 		return DecodeError::None;
+	case CommandTag::CreatureFightCheat:
+		action = CreatureFightCheat {};
+		return DecodeError::None;
 	case CommandTag::GripDust:
 		action = GripDust {.point = in.Vector()};
+		return DecodeError::None;
+	case CommandTag::HelpReport:
+	{
+		HelpReport report {};
+		report.events = in.Number<uint64_t>();
+		const auto flags = in.Byte();
+		if (flags > 31)
+		{
+			return DecodeError::Value;
+		}
+		report.boxShows = (flags & 1u) != 0;
+		report.cursorOnPoint = (flags & 2u) != 0;
+		report.cameraSeesLand = (flags & 4u) != 0;
+		report.cameraNearAndSteep = (flags & 8u) != 0;
+		report.cameraSeesSky = (flags & 16u) != 0;
+		action = report;
+		return DecodeError::None;
+	}
+	case CommandTag::HelpQuery:
+	{
+		HelpQuery query {};
+		query.thing = in.Entity();
+		const auto hasGround = in.Byte();
+		if (hasGround > 1)
+		{
+			return DecodeError::Value;
+		}
+		query.hasGround = hasGround == 1;
+		query.ground = in.Vector();
+		action = query;
+		return DecodeError::None;
+	}
+	case CommandTag::ViewReport:
+	{
+		ViewReport report {};
+		report.eye = in.Vector();
+		report.focus = in.Vector();
+		report.lens = in.Float();
+		report.nearClip = in.Float();
+		report.screenWidth = in.Number<uint16_t>();
+		report.screenHeight = in.Number<uint16_t>();
+		report.aspect = in.Float();
+		report.inclusionDistance = in.Float();
+		report.cameraOrders = in.Number<uint32_t>();
+		const auto flags = in.Byte();
+		if (flags > 7)
+		{
+			return DecodeError::Value;
+		}
+		report.cameraArrived = (flags & 1u) != 0;
+		report.gripsLand = (flags & 2u) != 0;
+		report.otherButton = (flags & 4u) != 0;
+		action = report;
+		return DecodeError::None;
+	}
+	case CommandTag::GiveCallOff:
+		action = GiveCallOff {.creature = in.Entity()};
+		return DecodeError::None;
+	case CommandTag::CreatureTattoo:
+	{
+		CreatureTattoo tattoo {.creature = in.Entity()};
+		for (auto& slot : tattoo.slots)
+		{
+			slot.design = in.Byte();
+			slot.site = in.Byte();
+			slot.colour.r = in.Byte();
+			slot.colour.g = in.Byte();
+			slot.colour.b = in.Byte();
+			// A design is one of the sixteen, and a site is four bits
+			if (slot.design >= creature_tattoo::k_DesignCount || slot.site > creature_tattoo::k_NoSite)
+			{
+				return in.Bad() ? DecodeError::Truncated : DecodeError::Value;
+			}
+		}
+		const auto hasPictures = in.Byte();
+		const auto size = in.Number<uint16_t>();
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (hasPictures > 1 || size > k_MostTattooPictures || (hasPictures == 0 && size != 0))
+		{
+			return DecodeError::Value;
+		}
+		if (size > in.Left())
+		{
+			return DecodeError::Truncated;
+		}
+		tattoo.hasPictures = hasPictures == 1;
+		tattoo.pictures.resize(size);
+		for (auto& byte : tattoo.pictures)
+		{
+			byte = in.Byte();
+		}
+		action = std::move(tattoo);
+		return DecodeError::None;
+	}
+	case CommandTag::LeashLength:
+		action = LeashLength {.length = in.Float()};
+	case CommandTag::TempleLeashOff:
+		action = TempleLeashOff {};
 		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
@@ -582,6 +735,14 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const LeashPick& /*command*/) { return CommandTag::LeashPick; },
 	                      [](const HandShakeOff& /*command*/) { return CommandTag::HandShakeOff; },
 	                      [](const GripDust& /*command*/) { return CommandTag::GripDust; },
+	                      [](const HelpReport& /*command*/) { return CommandTag::HelpReport; },
+	                      [](const HelpQuery& /*command*/) { return CommandTag::HelpQuery; },
+	                      [](const ViewReport& /*command*/) { return CommandTag::ViewReport; },
+	                      [](const GiveCallOff& /*command*/) { return CommandTag::GiveCallOff; },
+	                      [](const CreatureTattoo& /*command*/) { return CommandTag::CreatureTattoo; },
+	                      [](const LeashLength& /*command*/) { return CommandTag::LeashLength; },
+	                      [](const CreatureFightCheat& /*command*/) { return CommandTag::CreatureFightCheat; },
+	                      [](const TempleLeashOff& /*command*/) { return CommandTag::TempleLeashOff; },
 	                  },
 	                  action);
 }
@@ -589,41 +750,52 @@ CommandTag TagOf(const Action& action) noexcept
 size_t SizeOf(const Action& action) noexcept
 {
 	using namespace sizes;
-	const size_t fields = std::visit(Overloaded {
-	                                     [](const LeashKey& /*command*/) { return size_t {1}; },
-	                                     [](const LeashTap& /*command*/) { return k_Entity; },
-	                                     [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
-	                                     [](const HandTake& /*command*/) { return k_Entity; },
-	                                     [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
-	                                     [](const HandTap& /*command*/) { return k_Entity; },
-	                                     [](const HandGive& /*command*/) { return 2 * k_Entity; },
-	                                     [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
-	                                     [](const LeashPostTap& /*command*/) { return k_Entity; },
-	                                     [](const HandReport& /*command*/) { return 4 * k_Vector; },
-	                                     [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
-	                                     [](const HandLock& /*command*/) { return k_Entity; },
-	                                     [](const HandUnlock& /*command*/) { return k_Entity; },
-	                                     [](const HandApply& /*command*/) { return k_Entity; },
-	                                     [](const TotemShare& /*command*/) { return k_Entity + 4; },
-	                                     [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
-	                                     [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
-	                                     [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
-	                                     [](const FightCharge& /*command*/) { return size_t {4}; },
-	                                     [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 3 + 4 + 1 + 4; },
-	                                     [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
-	                                     [](const SeedGesture& /*command*/) { return size_t {2}; },
-	                                     [](const PlayerLeft& /*command*/) { return size_t {0}; },
-	                                     [](const HandPick& /*command*/) { return k_Entity; },
-	                                     [](const PlayerJoined& /*command*/) { return size_t {0}; },
-	                                     [](const MiracleRequest& /*command*/) { return size_t {1}; },
-	                                     [](const MiracleRepeat& /*command*/) { return size_t {0}; },
-	                                     [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
-	                                     [](const HandCastUnlock& /*command*/) { return k_Entity; },
-	                                     [](const LeashPick& /*command*/) { return size_t {1}; },
-	                                     [](const HandShakeOff& /*command*/) { return size_t {0}; },
-	                                     [](const GripDust& /*command*/) { return k_Vector; },
-	                                 },
-	                                 action);
+	const size_t fields =
+	    std::visit(Overloaded {
+	                   [](const LeashKey& /*command*/) { return size_t {1}; },
+	                   [](const CreatureFightCheat& /*command*/) { return size_t {0}; },
+	                   [](const TempleLeashOff& /*command*/) { return size_t {0}; },
+	                   [](const LeashTap& /*command*/) { return k_Entity; },
+	                   [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
+	                   [](const HandTake& /*command*/) { return k_Entity; },
+	                   [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
+	                   [](const HandTap& /*command*/) { return k_Entity; },
+	                   [](const HandGive& /*command*/) { return 2 * k_Entity; },
+	                   [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
+	                   [](const LeashPostTap& /*command*/) { return k_Entity; },
+	                   [](const HandReport& /*command*/) { return 4 * k_Vector; },
+	                   [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
+	                   [](const HandLock& /*command*/) { return k_Entity; },
+	                   [](const HandUnlock& /*command*/) { return k_Entity; },
+	                   [](const HandApply& /*command*/) { return k_Entity; },
+	                   [](const TotemShare& /*command*/) { return k_Entity + 4; },
+	                   [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
+	                   [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
+	                   [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
+	                   [](const FightCharge& /*command*/) { return size_t {4}; },
+	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 3 + 4 + 1 + 4; },
+	                   [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
+	                   [](const SeedGesture& /*command*/) { return size_t {2}; },
+	                   [](const PlayerLeft& /*command*/) { return size_t {0}; },
+	                   [](const HandPick& /*command*/) { return k_Entity; },
+	                   [](const PlayerJoined& /*command*/) { return size_t {0}; },
+	                   [](const MiracleRequest& /*command*/) { return size_t {1}; },
+	                   [](const MiracleRepeat& /*command*/) { return size_t {0}; },
+	                   [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
+	                   [](const HandCastUnlock& /*command*/) { return k_Entity; },
+	                   [](const LeashPick& /*command*/) { return size_t {1}; },
+	                   [](const HandShakeOff& /*command*/) { return size_t {0}; },
+	                   [](const GripDust& /*command*/) { return k_Vector; },
+	                   [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
+	                   [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
+	                   [](const ViewReport& /*command*/) { return 2 * k_Vector + 6 * 4 + 1; },
+	                   [](const GiveCallOff& /*command*/) { return k_Entity; },
+	                   [](const CreatureTattoo& command) {
+		                   return k_Entity + 5 * creature_tattoo::k_SlotCount + 1 + 2 + command.pictures.size();
+	                   },
+	                   [](const LeashLength& /*command*/) { return size_t {4}; },
+	               },
+	               action);
 	return 1 + fields;
 }
 

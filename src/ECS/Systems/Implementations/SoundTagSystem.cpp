@@ -376,8 +376,8 @@ void SoundTagSystem::ForgetSavedSounds()
 			gone.push_back(entity);
 			return;
 		}
+		// The count of the turns stays, because it is a part of the synced world
 		tag.emitter = entt::null;
-		tag.turns = 0;
 	});
 	for (const auto entity : gone)
 	{

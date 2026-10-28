@@ -123,9 +123,8 @@ namespace
 {
 constexpr float k_TurnMs = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnSeconds = k_TurnMs / 1000.0f;
-/// Steps of the route search each turn: more on a new walk's first turn
+/// Steps of the route search on a new walk's first turn. In the other turns, the search gets the turn's share.
 constexpr int32_t k_FirstTurnSearchSteps = 256;
-constexpr int32_t k_TurnSearchSteps = 16;
 /// A route costing more than this much a unit of the straight distance, and this much besides, is given up
 constexpr float k_CostPerUnit = 2.0f;
 constexpr float k_BaseCost = 5000.0f;
@@ -1458,8 +1457,22 @@ bool CreatureLocomotionSystem::IsMoving(entt::entity creature) const
 	return self != nullptr && IsMovingMotion(self->motion);
 }
 
+void CreatureLocomotionSystem::ShareSearchSteps()
+{
+	size_t searching = 0;
+	Locator::entitiesRegistry::value().Each<const CreatureLocomotion>(
+	    [&searching](entt::entity /*entity*/, const CreatureLocomotion& self) {
+		    if (self.follower.IsSearching())
+		    {
+			    ++searching;
+		    }
+	    });
+	_searchShare = route::TurnSearchShare(searching);
+}
+
 void CreatureLocomotionSystem::ProcessTurn()
 {
+	ShareSearchSteps();
 	std::vector<entt::entity> walkers;
 	Locator::entitiesRegistry::value().Each<CreatureLocomotion>(
 	    [&walkers](entt::entity entity, CreatureLocomotion& /*self*/) { walkers.push_back(entity); });
@@ -1540,7 +1553,7 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 		if (self.follower.IsSearching() && !self.searchHeld)
 		{
 			const auto first = std::exchange(self.firstSearchTurn, false);
-			switch (self.follower.Update(first ? k_FirstTurnSearchSteps : k_TurnSearchSteps, first, JoinAhead(self)))
+			switch (self.follower.Update(first ? k_FirstTurnSearchSteps : _searchShare, first, JoinAhead(self)))
 			{
 			case route::Follower::Outcome::Found:
 				if (self.motion == Motion::Planning || self.motion == Motion::Confused || self.motion == Motion::Pointing)

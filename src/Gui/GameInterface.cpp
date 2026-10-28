@@ -71,6 +71,7 @@
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple/ChallengeRoomRules.h"
+#include "Temple/ScrollPictures.h"
 
 using namespace openblack::gui;
 using openblack::Locator;
@@ -1156,6 +1157,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// and the fades
 	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
+	DrawTempleScrollPictures(resolution);
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
@@ -1662,6 +1664,69 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 		DrawBubbleLine(canvas, line, glm::vec3(1.0f));
 	}
 	afterDrawing();
+}
+
+void GameInterface::DrawTempleScrollPictures(glm::u16vec2 resolution)
+{
+	namespace pictures = temple::scroll_pictures;
+	if (!Locator::temple::has_value() || !Locator::camera::has_value() || !Locator::temple::value().Active())
+	{
+		return;
+	}
+	const auto& lines = Locator::temple::value().GetScrollPictures();
+	if (lines.empty())
+	{
+		return;
+	}
+	const auto& camera = Locator::camera::value();
+	const auto viewProjection = camera.GetViewProjectionMatrix();
+	const float nearClip = camera.GetNearClip();
+	const auto screen = glm::vec2(resolution);
+	const pictures::ProjectFn project = [&viewProjection, nearClip, screen](glm::vec3 point) {
+		using Seen = pictures::ScreenPoint::Seen;
+		const auto clip = viewProjection * glm::vec4(point, 1.0f);
+		pictures::ScreenPoint out {.depth = clip.w};
+		if (clip.w < nearClip)
+		{
+			return out;
+		}
+		out.pixel = {((clip.x / clip.w) + 1.0f) * screen.x * 0.5f, (1.0f - (clip.y / clip.w)) * screen.y * 0.5f};
+		const bool inside = out.pixel.x >= 0.0f && out.pixel.y >= 0.0f && out.pixel.x < screen.x && out.pixel.y < screen.y;
+		out.seen = inside ? Seen::OnScreen : Seen::OffScreen;
+		return out;
+	};
+	std::span<const input::KeyBinding> bindings;
+	if (Locator::gameActionSystem::has_value())
+	{
+		bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	}
+	const auto keyName = ControlKeyName();
+	const help::tip_bubble::ControlShownFn controlShown = [bindings, &keyName](int action) {
+		return help::control_icons::PictureFor(action, bindings, keyName).has_value();
+	};
+	const float pixelScale = ReferenceScale(resolution.x, resolution.y);
+	pictures::Pictures shown;
+	for (const auto& line : lines)
+	{
+		pictures::Place(shown, line, project, controlShown, pixelScale);
+	}
+	// A gesture's picture is flat on the screen, but the world in front of it hides it
+	auto& canvas = _worldLabelsCanvas;
+	const auto view = PrepareWorldTextCanvas(canvas);
+	for (const auto& [icon, depth] : shown.gestures)
+	{
+		const auto sheet = static_cast<size_t>(icon.sheet);
+		if (sheet < _gestureSheets.size() && _gestureSheets.at(sheet) != nullptr)
+		{
+			canvas.SetDepth(world_text::BufferDepth(view.projection, depth));
+			canvas.DrawQuad(icon.min, icon.max, icon.uvMin, icon.uvMax, icon.colour, _gestureSheets.at(sheet).get());
+		}
+	}
+	// A control's picture goes over all of the world
+	for (const auto& control : shown.controls)
+	{
+		DrawBubbleControl(control, bindings, pixelScale);
+	}
 }
 
 void GameInterface::DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,

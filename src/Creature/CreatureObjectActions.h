@@ -95,6 +95,11 @@ enum class Status : uint8_t
 	Failed,
 };
 
+/// Whether the animations of an action make the pose of the body for the turn, in place of the clips of the walk. This
+/// is true only while the action plays its animations and has not ended. While the creature walks or turns to the
+/// thing, the walk makes the pose.
+[[nodiscard]] bool PosesBody(bool playing, Status status);
+
 /// Why an action failed, to the extent that the mind must know
 enum class Failure : uint8_t
 {
@@ -129,6 +134,18 @@ enum class ApproachStep : uint8_t
 /// - straightReach: how far the hand or foot gets in the reaching animations (creature_reach::StraightReach);
 /// - inRange: the thing lies where the reaching animations get to (creature_reach::Blend::inRange).
 [[nodiscard]] ApproachStep NextApproachStep(bool seen, float flatDistance, float straightReach, bool inRange);
+/// What a creature that walks up to a thing to pick it up or stomp on it does on a turn when it moves
+enum class MovingApproachStep : uint8_t
+{
+	/// It turns on the spot to get the thing in reach. This turn is the start of the reach, so the walk-up does nothing:
+	/// no new walk, no count of the turns with no progress, and no new test of the thing.
+	WaitForTurn,
+	/// It is on its way to the thing: it aims at the thing again
+	AimAgain,
+};
+/// The next step while the creature moves. turnsToReach: it turns on the spot because the thing was outside the corners
+/// of its reach.
+[[nodiscard]] MovingApproachStep NextMovingApproachStep(bool turnsToReach);
 /// How far from the thing the walk near to it stops: twice the creature's radius and the thing's radius added
 [[nodiscard]] float NearWalkDistance(float creatureRadius, float thingRadius);
 /// A thing higher than this above the creature, in metres, can be too high to pick up
@@ -166,6 +183,13 @@ constexpr float k_KickSpeedPerSize = 45.0f;
 
 /// Whether a throw is over: its animation has played out, and, thrown into a store, what it threw has stopped flying
 [[nodiscard]] bool ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying);
+
+/// The time of a reach for a pick-up or a stomp in the turn that the thing gets out of reach: one step less than the
+/// time before the turn, and not less than zero
+[[nodiscard]] float WithdrawStart(float timeBeforeMs, float stepMs);
+/// The time of a reach that lost its thing, one turn later: one step less. Nothing when the step is longer than the
+/// time that is left: then the reach is at its start, and the action fails.
+[[nodiscard]] std::optional<float> WithdrawStep(float timeMs, float stepMs);
 
 /// Whether a creature about to swallow what it holds brings it back up instead, uneaten: a thing made indestructible,
 /// or one the scripts hold while they own the widescreen bars, can't be eaten. The creature then lets it fall and is

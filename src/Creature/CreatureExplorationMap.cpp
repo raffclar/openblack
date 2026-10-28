@@ -82,7 +82,7 @@ bool Region::Is(Kind kind) const
 RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 {
 	RegionMap map;
-	map._regions.resize(k_RegionCount);
+	map.regions.resize(k_RegionCount);
 	// Each cell is read one time: the second walk over the regions reads the cells that the first walk kept, in the same
 	// order
 	std::vector<std::optional<CellLand>> cells;
@@ -92,7 +92,7 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 	{
 		for (int32_t rz = 0; rz < k_RegionsPerSide; ++rz)
 		{
-			auto& region = map._regions.at(IndexOf({rx, rz}));
+			auto& region = map.regions.at(IndexOf({rx, rz}));
 			bool first = true;
 			EachCell({rx, rz}, [&](glm::ivec2 cell) {
 				const auto& land = cells.emplace_back(cellAt(cell));
@@ -106,7 +106,7 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 				}
 				return true;
 			});
-			map._highest = std::max(map._highest, region.highest);
+			map.highest = std::max(map.highest, region.highest);
 		}
 	}
 	size_t kept = 0;
@@ -114,7 +114,7 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 	{
 		for (int32_t rz = 0; rz < k_RegionsPerSide; ++rz)
 		{
-			auto& region = map._regions.at(IndexOf({rx, rz}));
+			auto& region = map.regions.at(IndexOf({rx, rz}));
 			bool town = false;
 			bool land = false;
 			EachCell({rx, rz}, [&](glm::ivec2 cell) {
@@ -150,11 +150,11 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 				region.kinds |= Bit(Kind::Land);
 			}
 			// A hill is higher than half the highest region, and no region next to it is higher
-			bool hill = region.highest > map._highest * k_HillPartOfHighest;
+			bool hill = region.highest > map.highest * k_HillPartOfHighest;
 			for (const auto direction : k_Directions)
 			{
 				const auto next = glm::ivec2 {rx, rz} + direction;
-				if (hill && OnMap(next) && map._regions.at(IndexOf(next)).highest > region.highest)
+				if (hill && OnMap(next) && map.regions.at(IndexOf(next)).highest > region.highest)
 				{
 					hill = false;
 				}
@@ -170,7 +170,7 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 
 const Region& RegionMap::At(glm::ivec2 region) const
 {
-	return _regions.at(IndexOf(region));
+	return regions.at(IndexOf(region));
 }
 
 bool creature_exploration::OnMap(glm::ivec2 region)

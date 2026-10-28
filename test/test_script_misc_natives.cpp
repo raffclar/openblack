@@ -331,6 +331,8 @@ TEST_F(ScriptMiscNatives, AThingThatIsGoneIsNotClickedAndTheLogStaysQuiet)
 	const auto sink = std::make_shared<spdlog::sinks::ringbuffer_sink_mt>(8);
 	const auto logger = std::make_shared<spdlog::logger>("scripting", sink);
 	logger->set_level(spdlog::level::info);
+	// Another test in the same program may have left a logger of this name
+	spdlog::drop("scripting");
 	spdlog::register_logger(logger);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto gone = registry.Create();

@@ -127,6 +127,12 @@ struct Strand
 /// it; the speeds become how far each point really moved.
 void Step(Strand& strand, const Root& root, const Physics& physics, float seconds);
 
+/// The share of its speed that a point of hair keeps over a step of some seconds
+[[nodiscard]] float KeptSpeed(const Physics& physics, float seconds);
+
+/// The same step with the share of speed kept over the step given, so that the strands of one group find it one time
+void Step(Strand& strand, const Root& root, const Physics& physics, float seconds, float kept);
+
 /// The longest step that hair takes at once, in seconds
 constexpr float k_MaxStepSeconds = 1.0f;
 

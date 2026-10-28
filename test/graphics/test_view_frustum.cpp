@@ -100,3 +100,75 @@ TEST(ViewFrustum, ABoxGoesThroughItsModelAndKeepsAMargin)
 	EXPECT_FALSE(view_frustum::SeesBox(camera, glm::translate(glm::mat4(1.0f), {51.0f + (3.0f * justOut), 10.0f, 50.0f}),
 	                                   minima, maxima));
 }
+
+TEST(ViewFrustum, ASweptBoxIsSeenWhenAnyPlaceAlongItsSweepIsInView)
+{
+	const auto camera = Camera(false);
+	const glm::vec3 minima {-1.0f, -1.0f, -1.0f};
+	const glm::vec3 maxima {1.0f, 1.0f, 1.0f};
+	// Over the top side, which is 60 high at 50 along the view
+	const auto above = glm::translate(glm::mat4(1.0f), {0.0f, 70.0f, 50.0f});
+	EXPECT_FALSE(view_frustum::SeesSweptBox(camera, above, minima, maxima, glm::vec3(0.0f)));
+	EXPECT_FALSE(view_frustum::SeesSweptBox(camera, above, minima, maxima, {0.0f, 5.0f, 0.0f}));
+	// Each end of the sweep counts: down by 15, and up by 15 with the sweep turned over
+	EXPECT_TRUE(view_frustum::SeesSweptBox(camera, above, minima, maxima, {0.0f, 15.0f, 0.0f}));
+	EXPECT_TRUE(view_frustum::SeesSweptBox(camera, above, minima, maxima, {0.0f, -15.0f, 0.0f}));
+	// With no sweep, the test is the same as that of SeesBox
+	const auto inFront = glm::translate(glm::mat4(1.0f), {0.0f, 10.0f, 50.0f});
+	EXPECT_EQ(view_frustum::SeesSweptBox(camera, inFront, minima, maxima, glm::vec3(0.0f)),
+	          view_frustum::SeesBox(camera, inFront, minima, maxima));
+}
+
+TEST(ViewFrustum, ALandRiseSweepFollowsTheModelUp)
+{
+	constexpr float k_Rise = 100.0f;
+	// An upright model moves straight up by the rise, whatever its size
+	const auto upright = glm::scale(glm::translate(glm::mat4(1.0f), {5.0f, 2.0f, 7.0f}), glm::vec3(3.0f));
+	EXPECT_EQ(view_frustum::LandRiseSweep(upright, k_Rise), glm::vec3(0.0f, k_Rise, 0.0f));
+	// A tilted model moves along its up by the rise over the length of its first axis
+	const auto tilted =
+	    glm::scale(glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), {0.0f, 0.0f, 1.0f}), glm::vec3(2.0f, 4.0f, 2.0f));
+	const auto sweep = view_frustum::LandRiseSweep(tilted, k_Rise);
+	ASSERT_TRUE(sweep.has_value());
+	EXPECT_NEAR(sweep->x, -2.0f * k_Rise, 0.001f);
+	EXPECT_NEAR(sweep->y, 0.0f, 0.001f);
+	EXPECT_NEAR(sweep->z, 0.0f, 0.001f);
+	// A tilted model of no size has no limit
+	auto flat = tilted;
+	flat[0] = glm::vec4(0.0f);
+	EXPECT_FALSE(view_frustum::LandRiseSweep(flat, k_Rise).has_value());
+}
+
+TEST(ViewFrustum, TheHighestLandUnderAModelReadsTheCellsUnderItsBoxAndOneMore)
+{
+	const glm::vec3 minima {-5.0f, 0.0f, -5.0f};
+	const glm::vec3 maxima {5.0f, 30.0f, 5.0f};
+	const auto at = glm::translate(glm::mat4(1.0f), {100.0f, 3.0f, 200.0f});
+	// A flat land of altitude 2 with one high corner
+	const auto landWith = [](glm::ivec2 high) {
+		return [high](glm::ivec2 corner) { return corner == high ? uint8_t {100} : uint8_t {2}; };
+	};
+	// The box covers the corners 9 to 11 across and 19 to 21 along: one more cell on each side, and the far corner of
+	// the last cell
+	EXPECT_FLOAT_EQ(view_frustum::HighestLandUnder(at, minima, maxima, landWith({12, 22})), 100.0f * 0.67f);
+	EXPECT_FLOAT_EQ(view_frustum::HighestLandUnder(at, minima, maxima, landWith({8, 18})), 100.0f * 0.67f);
+	EXPECT_FLOAT_EQ(view_frustum::HighestLandUnder(at, minima, maxima, landWith({13, 20})), 2.0f * 0.67f);
+	EXPECT_FLOAT_EQ(view_frustum::HighestLandUnder(at, minima, maxima, landWith({10, 17})), 2.0f * 0.67f);
+	// A model far off the map reads no corner
+	const auto off = glm::translate(glm::mat4(1.0f), {-1.0e9f, 0.0f, 1.0e9f});
+	EXPECT_FLOAT_EQ(view_frustum::HighestLandUnder(off, minima, maxima, landWith({0, 511})), 0.0f);
+}
+
+TEST(ViewFrustum, TheRadiusOfASquareIsItsFarthestCornerAfterTheModel)
+{
+	EXPECT_FLOAT_EQ(view_frustum::QuadRadius(glm::mat3(1.0f)), glm::sqrt(2.0f));
+	// Scaled 3 across and 4 up: each corner is 5 from the middle, however the square turns
+	const auto sized = glm::mat3(glm::scale(glm::mat4(1.0f), {3.0f, 4.0f, 7.0f}));
+	EXPECT_FLOAT_EQ(view_frustum::QuadRadius(sized), 5.0f);
+	const auto turned = glm::mat3(glm::rotate(glm::mat4(1.0f), glm::radians(30.0f), {0.0f, 1.0f, 0.0f})) * sized;
+	EXPECT_NEAR(view_frustum::QuadRadius(turned), 5.0f, 0.0001f);
+	// A skew makes one corner go farther than the other
+	glm::mat3 skewed(1.0f);
+	skewed[1] = {1.0f, 1.0f, 0.0f};
+	EXPECT_FLOAT_EQ(view_frustum::QuadRadius(skewed), glm::sqrt(5.0f));
+}

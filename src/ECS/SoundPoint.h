@@ -15,6 +15,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
@@ -62,6 +63,11 @@ namespace openblack::ecs
 	}
 	if (const auto* transform = registry.TryGet<const components::Transform>(thing); transform != nullptr)
 	{
+		// A town's totem sounds from the height where the frames draw it as it rises and sinks
+		if (const auto* height = registry.TryGet<const components::DrawnHeight>(thing); height != nullptr)
+		{
+			return glm::vec3(transform->position.x, height->y, transform->position.z);
+		}
 		return transform->position;
 	}
 	return std::nullopt;
