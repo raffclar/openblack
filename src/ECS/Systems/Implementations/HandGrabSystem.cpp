@@ -1967,6 +1967,26 @@ void HandGrabSystem::ForceDrop()
 	LetGo(*grab, glm::vec3(0.0f), std::nullopt);
 }
 
+void HandGrabSystem::ForceDropFromEveryHand(entt::entity object)
+{
+	const auto dropIfHeld = [this, object] {
+		if (const auto* grab = Grab(); grab != nullptr && Holds(*grab) && grab->object == object)
+		{
+			ForceDrop();
+		}
+	};
+	// The hand of each god with a human, in the order of the turn: the first player's, then the others'
+	{
+		const hand_grab::HandGrabWorldInterface::ActingPlayer first(*_world, PlayerNames::PLAYER_ONE);
+		dropIfHeld();
+	}
+	for (const auto player : _world->OtherHandPlayers())
+	{
+		const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+		dropIfHeld();
+	}
+}
+
 void HandGrabSystem::DoShakeOff(PlayerNames player)
 {
 	// The command acts with the hand of the player that sent it
