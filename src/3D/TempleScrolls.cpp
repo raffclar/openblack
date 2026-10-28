@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 
 #include <PackFile.h>
 #include <bgfx/bgfx.h>
@@ -22,11 +23,13 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
+#include "3D/LowResolutionTextures.h"
 #include "3D/TempleScroll.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/MachineClock.h"
+#include "EngineConfig.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Gui/GameFont.h"
 #include "Gui/TextDatabase.h"
@@ -149,6 +152,8 @@ TempleScrolls::~TempleScrolls()
 void TempleScrolls::Create(const Facts& facts)
 {
 	auto& meshes = Locator::resources::value().GetMeshes();
+	_halfSize = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
+	const uint16_t side = _halfSize ? low_resolution_textures::k_HalfSide : TempleScrollTexture::k_Size;
 	for (const auto& place : k_ScrollPlaces)
 	{
 		Scroll scroll {.room = place.room, .content = place.content, .subMesh = std::nullopt, .texture = std::nullopt};
@@ -171,9 +176,9 @@ void TempleScrolls::Create(const Facts& facts)
 		}
 		if (scroll.subMesh.has_value())
 		{
-			// A texture in memory, 256 texels square, 16 bits a texel
-			scroll.texture = graphics::fromBgfx(bgfx::createTexture2D(TempleScrollTexture::k_Size, TempleScrollTexture::k_Size,
-			                                                          false, 1, bgfx::TextureFormat::BGRA4, BGFX_TEXTURE_NONE));
+			// A texture in memory, 256 texels square, or 128 at the lowest detail levels, 16 bits a texel
+			scroll.texture =
+			    graphics::fromBgfx(bgfx::createTexture2D(side, side, false, 1, bgfx::TextureFormat::BGRA4, BGFX_TEXTURE_NONE));
 			bgfx::setName(graphics::toBgfx(*scroll.texture), fmt::format("Scroll {}", place.subMesh).c_str());
 		}
 		_scrolls.push_back(scroll);
@@ -214,8 +219,17 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 		// game's own memory after the texture's name, read as texels. It is the parchment here.
 		TempleScrollTexture::Draw(texels, _parchment, u"", 0, _font);
 	}
-	bgfx::updateTexture2D(graphics::toBgfx(*scroll.texture), 0, 0, 0, 0, TempleScrollTexture::k_Size,
-	                      TempleScrollTexture::k_Size,
+	// At the lowest detail levels, each texel of the texture is the mean of a two by two square of the full text
+	uint16_t side = TempleScrollTexture::k_Size;
+	if (_halfSize)
+	{
+		if (auto half = low_resolution_textures::HalveByMean4444(texels, side))
+		{
+			texels = std::move(*half);
+			side = low_resolution_textures::k_HalfSide;
+		}
+	}
+	bgfx::updateTexture2D(graphics::toBgfx(*scroll.texture), 0, 0, 0, 0, side, side,
 	                      bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
 }
 
