@@ -767,6 +767,29 @@ void ReactionSystem::RemoveFrom(entt::entity initiator, Reaction type)
 	}
 }
 
+void ReactionSystem::StopSpreadInHand(entt::entity initiator)
+{
+	for (auto& reaction : _reactions)
+	{
+		const auto* info = InfoOf(reaction.source.type);
+		if (reaction.source.initiator == initiator && info != nullptr && info->whetherReactionFinishesIfInitiatorInHand != 0)
+		{
+			reaction.spreads = false;
+		}
+	}
+}
+
+void ReactionSystem::SpreadAgain(entt::entity initiator)
+{
+	for (auto& reaction : _reactions)
+	{
+		if (reaction.source.initiator == initiator)
+		{
+			reaction.spreads = true;
+		}
+	}
+}
+
 std::vector<uint32_t> ReactionSystem::Ids() const
 {
 	std::vector<uint32_t> ids;
@@ -1654,7 +1677,8 @@ void ReactionSystem::ProcessTurn()
 			reaction.velocity = {facing.x, 0.0f, facing.y};
 		}
 	}
-	// One reaction a turn, in turn, grows, ends once its time is up, or is spread again
+	// One reaction a turn, in turn, grows, ends once its time is up, or spreads again. A reaction that a hand stopped
+	// does not spread.
 	if (!_reactions.empty())
 	{
 		// The newest first, one a turn
@@ -1672,7 +1696,7 @@ void ReactionSystem::ProcessTurn()
 		{
 			ShutDown(reaction.id);
 		}
-		else
+		else if (reaction.spreads)
 		{
 			Spread(reaction);
 		}

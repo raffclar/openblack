@@ -318,6 +318,18 @@ std::optional<particles::BeliefSprite> GameParticleWorld::TakeBeliefSprite()
 void ParticleSystem::AddBeliefSprite(const particles::BeliefSprite& sprite)
 {
 	_beliefWanted |= _world.QueueBeliefSprite(sprite);
+	// The inspector shows the last symbols
+	_beliefSpritesSeen.push_front(sprite);
+	if (_beliefSpritesSeen.size() > k_BeliefSpritesSeen)
+	{
+		_beliefSpritesSeen.pop_back();
+	}
+	++_beliefSpriteCount;
+}
+
+ParticleSystemInterface::BeliefSpritesSeen ParticleSystem::GetBeliefSpritesSeen() const
+{
+	return {.recent = {_beliefSpritesSeen.begin(), _beliefSpritesSeen.end()}, .count = _beliefSpriteCount};
 }
 
 std::optional<particles::CreatureSpellBody> GameParticleWorld::CreatureBody(entt::entity creature) const

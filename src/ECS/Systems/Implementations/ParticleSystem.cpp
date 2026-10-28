@@ -1418,6 +1418,8 @@ void ParticleSystem::ProcessTurn()
 void ParticleSystem::Reset()
 {
 	_playerSymbols.clear();
+	_beliefSpritesSeen.clear();
+	_beliefSpriteCount = 0;
 	_fightMarks.clear();
 	_effects.clear();
 	_explodeObject = k_NoEffect;

@@ -218,6 +218,14 @@ public:
 	}
 	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
 	[[nodiscard]] virtual std::vector<EffectInfo> GetEffects() const = 0;
+	/// The symbols of belief that rose last, the newest first, and the count of all symbols since the land started. Only
+	/// the inspector reads these.
+	struct BeliefSpritesSeen
+	{
+		std::vector<particles::BeliefSprite> recent;
+		uint64_t count {0};
+	};
+	[[nodiscard]] virtual BeliefSpritesSeen GetBeliefSpritesSeen() const { return {}; }
 	/// The particle files' names, for the debug window
 	[[nodiscard]] virtual std::vector<std::string> GetFileNames() const = 0;
 	/// Stops stepping effects, for looking at them in the debug window

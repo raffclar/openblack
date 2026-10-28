@@ -187,6 +187,20 @@ Json openblack::inspector::LiquidSummary(std::span<const liquid_particles::Parti
 	};
 }
 
+Json openblack::inspector::BeliefSummary(const ecs::systems::ParticleSystemInterface::BeliefSpritesSeen& seen)
+{
+	Json recent = Json::array();
+	for (const auto& sprite : seen.recent)
+	{
+		recent.push_back({
+		    {"position", Point(sprite.position)},
+		    {"amount", sprite.amount},
+		    {"colour", sprite.colour},
+		});
+	}
+	return {{"count", seen.count}, {"recent", std::move(recent)}};
+}
+
 ParticlesProvider::ParticlesProvider(ParticleSources sources)
     : _sources(std::move(sources))
 {
@@ -222,6 +236,13 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	                     .type = "integer",
 	                     .description = "The other player whose sparkles to count, from 0",
 	                     .required = false}},
+	     .kind = ResultKind::Object,
+	     .needsNear = false},
+	    {.name = "belief",
+	     .description = "The symbols of belief that rose last from things that gained belief, the newest first: place, "
+	                    "amount (the belief by ten thousand) and the player's colour. Also the count of all symbols "
+	                    "since the land started",
+	     .parameters = {},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
 	};
@@ -265,6 +286,11 @@ QueryResult ParticlesProvider::Run(std::string_view query, const QueryContext& c
 		}
 		const auto liquids = _sources.liquids ? _sources.liquids() : std::span<const liquid_particles::Particle> {};
 		return QueryResult::Value(LiquidSummary(liquids));
+	}
+	if (query == "belief")
+	{
+		return QueryResult::Value(
+		    BeliefSummary(_sources.belief ? _sources.belief() : ecs::systems::ParticleSystemInterface::BeliefSpritesSeen {}));
 	}
 	return QueryResult::Error("no query particles." + std::string(query));
 }
