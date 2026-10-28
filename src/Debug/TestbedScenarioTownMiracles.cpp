@@ -232,6 +232,33 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
+	all.push_back({
+	    .id = "miracles.selection_help_events",
+	    .name = "The help events of the miracle selection and the R",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The town and temple of town.miracle_debug_given. When the site has its heal and water icons, the site "
+	        "is built and each icon holds the full charge of its miracle. The hand draws a spiral, then a scribble. Then "
+	        "it draws a spiral and a W, a scribble drops the water miracle, and the hand draws an R.",
+	    .expected = "The first spiral opens the miracle selection and the scribble closes it with a shake of the hand. The "
+	                "second spiral opens it again, and the W chooses the water miracle, which comes into the hand. The "
+	                "inspector query help.profile then counts event 15 two times and events 16, 17 and 21 one time each. "
+	                "After the R it counts event 14 one time. Each event also counts towards events 24, 43 and 48.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = 1.0f},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::Spiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::Scribble)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::Spiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::WShape)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 9.0f, .value = static_cast<size_t>(GestureType::Scribble)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 9.0f, .value = static_cast<size_t>(GestureType::RShape)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
 	// The seeds that the recorded input of the hand draws gestures on and casts, for the dedicated server's check
 	// (tools/sim/hand_inputs/casts.json)
 	all.push_back({

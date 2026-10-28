@@ -986,6 +986,11 @@ bool KeepInArena(ecs::Registry& registry, entt::entity creature, CreatureFightin
 
 CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::entity creature, entt::entity opponent)
 {
+	return Start(creature, opponent, true);
+}
+
+CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entity creature, entt::entity opponent, bool ask)
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto ready = [&registry](entt::entity entity) {
 		return registry.Valid(entity) && registry.AllOf<Creature, Transform, CreatureAnimation, CreatureLocomotion>(entity);
@@ -994,8 +999,17 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	{
 		return StartResult::NoOpponent;
 	}
-	if (registry.AnyOf<CreatureFighting, CreatureKnockedOut>(creature) ||
-	    registry.AnyOf<CreatureFighting, CreatureKnockedOut>(opponent))
+	// A fight that stopped, and that the hand does not hold, is only a move that finishes. The question to the other
+	// creature does not wait for it.
+	const auto finishesMove = [&registry](entt::entity entity) {
+		const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
+		return fighting != nullptr && fighting->stage == CreatureFighting::Stage::Stop && !fighting->held;
+	};
+	const auto busy = [&registry, &finishesMove](entt::entity entity) {
+		return registry.AllOf<CreatureKnockedOut>(entity) ||
+		       (registry.AllOf<CreatureFighting>(entity) && !finishesMove(entity));
+	};
+	if (busy(creature) || busy(opponent))
 	{
 		return StartResult::Busy;
 	}
@@ -1003,18 +1017,28 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 	{
 		return StartResult::TooWeak;
 	}
-	// Every fight starts by asking the other creature, which may refuse
-	const bool dead = Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsLyingDead(opponent);
-	if (!fight::AgreesToFight(HeightOf(ShownSize(registry.Get<const Creature>(opponent))),
-	                          HeightOf(ShownSize(registry.Get<const Creature>(creature))), dead,
-	                          registry.AllOf<ScriptControlled>(opponent), registry.AllOf<ScriptControlled>(creature)))
+	// Every fight starts by asking the other creature, which may refuse. The other creature is asked one time only: a
+	// fight that waits for a move to finish keeps the answer.
+	if (ask)
 	{
-		return StartResult::Refused;
+		const bool dead =
+		    Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().IsLyingDead(opponent);
+		if (!fight::AgreesToFight(HeightOf(ShownSize(registry.Get<const Creature>(opponent))),
+		                          HeightOf(ShownSize(registry.Get<const Creature>(creature))), dead,
+		                          registry.AllOf<ScriptControlled>(opponent), registry.AllOf<ScriptControlled>(creature)))
+		{
+			return StartResult::Refused;
+		}
+		// A creature that does a joint action with a third creature refuses too
+		if (const auto* link = registry.TryGet<const CreaturePartner>(opponent); link != nullptr && link->partner != creature)
+		{
+			return StartResult::Refused;
+		}
 	}
-	// A creature that does a joint action with a third creature refuses too
-	if (const auto* link = registry.TryGet<const CreaturePartner>(opponent); link != nullptr && link->partner != creature)
+	// The other creature agreed. The face-off starts when both moves have finished.
+	if (finishesMove(creature) || finishesMove(opponent))
 	{
-		return StartResult::Refused;
+		return StartResult::Finishing;
 	}
 	// The arena appears only after the face-off, so a fight with no room for an arena starts and then stops
 	for (const auto& [self, other] : {std::pair(creature, opponent), std::pair(opponent, creature)})
@@ -2514,14 +2538,15 @@ void CreatureFightSystem::NoteFightOver(entt::entity creature, std::string_view 
 	transcript.End(creature);
 }
 
-CreatureFightSystemInterface::StartResult CreatureFightSystem::StartPlannedFight(entt::entity creature, entt::entity opponent)
+CreatureFightSystemInterface::StartResult CreatureFightSystem::StartPlannedFight(entt::entity creature, entt::entity opponent,
+                                                                                 bool agreed)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
 	const bool angry = mind != nullptr && mind->planner.current.has_value() &&
 	                   mind->planner.current->desire == creature_desires::Desire::Anger;
 	_startReason = angry ? "anger" : "plan";
-	const auto result = StartFight(creature, opponent);
+	const auto result = Start(creature, opponent, !agreed);
 	_startReason = "request";
 	return result;
 }

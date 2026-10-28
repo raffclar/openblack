@@ -133,6 +133,9 @@ public:
 	}
 	/// Whether its body is taken up by a catch it has started: readying, stepping, reaching or bringing the hand back
 	[[nodiscard]] virtual bool IsCatching(entt::entity creature) const = 0;
+	/// Whether the body continues its action to the end when the plan stops: a catch that it started, or a let-go of the
+	/// thing that it holds
+	[[nodiscard]] virtual bool PlaysOnAlone(entt::entity creature) const { return IsCatching(creature); }
 	/// How far through its animations the action is, 0 to 1, while it plays them
 	[[nodiscard]] virtual std::optional<float> GetProgress(entt::entity creature) const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld(entt::entity creature) const = 0;

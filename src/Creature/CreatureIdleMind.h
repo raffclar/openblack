@@ -641,6 +641,9 @@ struct IdleMind
 	};
 	/// The step that started to let go of the thing in the hand before it starts. Its hands are not checked again.
 	std::optional<StepRef> handsChecked;
+	/// The fight step that the other creature agreed to while a move of a fight that stopped still finished. The step
+	/// tries again on later turns and does not ask again.
+	std::optional<StepRef> fightAgreed;
 	/// The agenda was given up before its end, as a step it needed couldn't be done
 	bool gaveUp {false};
 	/// A script asked if the creature played and so stopped the agenda. The plan stays, with no steps, until the

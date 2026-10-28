@@ -2331,6 +2331,14 @@ bool CreatureObjectActionSystem::IsCatching(entt::entity creature) const
 	       (action->status == Status::Running || action->status == Status::Contact);
 }
 
+bool CreatureObjectActionSystem::PlaysOnAlone(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
+	return action != nullptr && creature_object_actions::PlaysOnWhenPlanStops(action->kind) &&
+	       action->phase == Phase::Playing && (action->status == Status::Running || action->status == Status::Contact);
+}
+
 std::optional<float> CreatureObjectActionSystem::GetProgress(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();

@@ -55,6 +55,10 @@ enum class Kind : uint8_t
 /// go, eating, keeping hold, knocking down and pointing do. Throwing, catching, taking from the hand and kicking keep
 /// their pace.
 [[nodiscard]] bool Hurries(Kind kind);
+/// Whether the body continues an action to its end when the plan that asked for it stops. A catch continues, and so
+/// does a let-go: the creature puts down or tosses away the thing at the moment of the animation. The other actions
+/// stop with the plan.
+[[nodiscard]] bool PlaysOnWhenPlanStops(Kind kind);
 
 /// Whether the arm that holds a thing shows the hold pose over the body, while the body plays the animation of an
 /// action, or no action (none). The animations that move the held thing themselves replace the hold pose: picking up,

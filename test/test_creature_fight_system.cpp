@@ -138,6 +138,11 @@ public:
 		entt::entity object;
 		std::optional<entt::entity> activityObject;
 	};
+	[[nodiscard]] bool IsLyingDead(entt::entity) override
+	{
+		++deathChecks;
+		return false;
+	}
 	creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity) override
 	{
 		++handChecks;
@@ -152,6 +157,8 @@ public:
 	/// What the checks of the hands before a faint do in turn, then Free
 	std::vector<creature_mind::HandsCheck> hands;
 	size_t handChecks {0};
+	/// How many times a creature asked to fight was checked for death, one time for each question
+	size_t deathChecks {0};
 };
 
 /// Legs that do nothing but count the creatures that they stop at once
@@ -896,6 +903,76 @@ TEST_F(CreatureFightSystemTest, ACreatureThatTheHandHoldsInADuelLeavesTheDuelAnd
 	EXPECT_FALSE(registry.AllOf<CreatureFighting>(first));
 	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Stop);
 	EXPECT_TRUE(registry.Get<const CreatureFighting>(second).ended);
+	Locator::creatureHandSystem::reset();
+}
+
+// After the hold, the plan asks the opponent again. The opponent agrees, and the fight starts when its move finished.
+TEST_F(CreatureFightSystemTest, AFightAskedAgainAfterAHoldWaitsForTheMoveThatFinishes)
+{
+	using Result = ecs::systems::CreatureFightSystemInterface::StartResult;
+	auto& hand = static_cast<HoldingHand&>(Locator::creatureHandSystem::emplace<HoldingHand>());
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+		registry.Assign<CreatureNeeds>(self).needs.life = 1.0f;
+	}
+	hand.held = first;
+	fights.FightTurn(first);
+	// While the hand holds it, the fight is not only a move that finishes
+	EXPECT_EQ(fights.StartFight(first, second), Result::Busy);
+	fight::Enter(registry.Get<CreatureFighting>(first).fighter, fight::State::Idle);
+	hand.held.reset();
+	fights.HandLetGo(first);
+	ASSERT_FALSE(registry.AllOf<CreatureFighting>(first));
+	ASSERT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Stop);
+	// The opponent still finishes its move: it agrees, but nothing starts
+	EXPECT_EQ(fights.StartFight(first, second), Result::Finishing);
+	EXPECT_FALSE(registry.AllOf<CreatureFighting>(first));
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Stop);
+	// Its move finished, it leaves the fight, and the new fight starts
+	fight::Enter(registry.Get<CreatureFighting>(second).fighter, fight::State::Idle);
+	fights.ProcessTurn();
+	ASSERT_FALSE(registry.AllOf<CreatureFighting>(second));
+	EXPECT_EQ(fights.StartFight(first, second), Result::Started);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::FaceOff);
+	Locator::creatureHandSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, APlannedFightThatWaitsForAMoveAsksTheOtherCreatureOneTimeOnly)
+{
+	using Result = ecs::systems::CreatureFightSystemInterface::StartResult;
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	auto& hand = static_cast<HoldingHand&>(Locator::creatureHandSystem::emplace<HoldingHand>());
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+		registry.Assign<CreatureNeeds>(self).needs.life = 1.0f;
+	}
+	hand.held = first;
+	fights.FightTurn(first);
+	fight::Enter(registry.Get<CreatureFighting>(first).fighter, fight::State::Idle);
+	hand.held.reset();
+	fights.HandLetGo(first);
+	ASSERT_FALSE(registry.AllOf<CreatureFighting>(first));
+	ASSERT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Stop);
+	// The first question: the other creature agrees, and its move still finishes
+	EXPECT_EQ(fights.StartPlannedFight(first, second, false), Result::Finishing);
+	EXPECT_EQ(minds.deathChecks, 1u);
+	// Now only the other creature is under a script's control, so a new question would get a refusal. The step keeps
+	// the answer that it got and does not ask again.
+	registry.Assign<ScriptControlled>(second);
+	EXPECT_EQ(fights.StartPlannedFight(first, second, true), Result::Finishing);
+	EXPECT_EQ(fights.StartPlannedFight(first, second, true), Result::Finishing);
+	EXPECT_EQ(minds.deathChecks, 1u);
+	// Its move finished, it leaves the fight, and the fight starts on the answer that it kept
+	fight::Enter(registry.Get<CreatureFighting>(second).fighter, fight::State::Idle);
+	fights.ProcessTurn();
+	ASSERT_FALSE(registry.AllOf<CreatureFighting>(second));
+	EXPECT_EQ(fights.StartPlannedFight(first, second, true), Result::Started);
+	EXPECT_EQ(minds.deathChecks, 1u);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::FaceOff);
 	Locator::creatureHandSystem::reset();
 }
 

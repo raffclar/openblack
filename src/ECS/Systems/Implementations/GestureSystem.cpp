@@ -581,7 +581,7 @@ bool GestureSystem::RepeatMiracleByKey(PlayerNames player)
 	{
 		return false;
 	}
-	// No help and no trail, as for the R gesture
+	// The key gives no help event and lays no trail, unlike the R gesture
 	SendRequest(player_commands::MiracleRepeat {});
 	return true;
 }
@@ -641,13 +641,14 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	bool shown = gesture::ShowsRecognition(request.purpose);
 	bool forgets = true;
 	std::optional<player_commands::Action> requested;
+	auto step = gesture::SelectionStep::Nothing;
 	switch (request.purpose)
 	{
 	case Purpose::OpenSelection:
 		// A selection that has nothing to offer stays closed, and the hand keeps its path
 		if (OpenSelection(request.gesture, frame.player))
 		{
-			Help(help::profile::k_GestureOpenSelection);
+			step = gesture::SelectionStep::Opened;
 		}
 		else
 		{
@@ -666,10 +667,10 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 			_requests = gesture::Requests(ContextOf(frame));
 			return false;
 		}
-		Help(help::profile::k_GestureSelectionStep);
+		step = gesture::SelectionStep::Advanced;
 		if (outcome.kind == gesture::MiracleSelection::Outcome::Kind::Chosen)
 		{
-			Help(help::profile::k_GestureSelectionChosen);
+			step = gesture::SelectionStep::Chosen;
 			requested = player_commands::MiracleRequest {.seed = outcome.seed};
 		}
 		break;
@@ -677,14 +678,18 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	case Purpose::CloseSelection:
 		ShakeHand();
 		_selection.Close();
-		Help(help::profile::k_GestureCloseSelection);
+		step = gesture::SelectionStep::Closed;
 		break;
 	case Purpose::RepeatMiracle:
-		Help(help::profile::k_GestureRepeatMiracle);
+		step = gesture::SelectionStep::Repeated;
 		requested = player_commands::MiracleRepeat {};
 		break;
 	default:
 		break;
+	}
+	for (const auto event : gesture::HelpEventsOf(step))
+	{
+		Help(event);
 	}
 
 	// Every gesture but a scribble leaves its trail on the land, heard as it appears, once enough of its path lies on

@@ -295,6 +295,27 @@ std::optional<uint32_t> gesture::HelpEventOf(const Request& request, const HandC
 	}
 }
 
+std::vector<uint32_t> gesture::HelpEventsOf(SelectionStep step)
+{
+	namespace profile = help::profile;
+	switch (step)
+	{
+	case SelectionStep::Opened:
+		return {profile::k_GestureOpenSelection};
+	case SelectionStep::Advanced:
+		return {profile::k_GestureSelectionStep};
+	case SelectionStep::Chosen:
+		return {profile::k_GestureSelectionStep, profile::k_GestureSelectionChosen};
+	case SelectionStep::Closed:
+		return {profile::k_GestureCloseSelection};
+	case SelectionStep::Repeated:
+		return {profile::k_GestureRepeatMiracle};
+	case SelectionStep::Nothing:
+		break;
+	}
+	return {};
+}
+
 bool gesture::ChainFollows(const std::optional<HandContext::Seed>& seed, bool seedTurnedOnLand)
 {
 	if (!seed.has_value())

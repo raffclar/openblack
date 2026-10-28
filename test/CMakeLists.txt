@@ -1922,3 +1922,4 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_testbed_hand_sweep test_testbed_hand_sweep.cpp)
+openblack_setup_and_add_test(test_creature_let_go_plays_on test_creature_let_go_plays_on.cpp)

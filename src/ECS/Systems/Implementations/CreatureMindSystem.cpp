@@ -1969,12 +1969,14 @@ creature_mind::HandsState HandsOf(entt::entity creature)
 	}
 	return creature_mind::HandsState::Idle;
 }
-/// The creature's plan has it fight another creature: whether the other creature agreed and the fight started
-bool StartPlannedFight(entt::entity creature, entt::entity opponent)
+/// The creature's plan has it fight another creature: whether the other creature agreed and the fight started. When
+/// agreed is true, the other creature agreed before and is not asked again.
+CreatureFightSystemInterface::StartResult StartPlannedFight(entt::entity creature, entt::entity opponent, bool agreed)
 {
 	using Result = CreatureFightSystemInterface::StartResult;
-	return Locator::creatureFightSystem::has_value() &&
-	       Locator::creatureFightSystem::value().StartPlannedFight(creature, opponent) == Result::Started;
+	return Locator::creatureFightSystem::has_value()
+	           ? Locator::creatureFightSystem::value().StartPlannedFight(creature, opponent, agreed)
+	           : Result::NoOpponent;
 }
 } // namespace openblack::ecs::systems::mind_detail
 
@@ -2398,6 +2400,9 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		// A catch takes up the body until it is over, but the plan to catch is carried out as soon as the catch starts
 		const bool catching =
 		    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().IsCatching(entity);
+		// A let-go that continues after its plan stopped also keeps the body busy: the new plan waits until it ends
+		const bool playsOn = Locator::creatureObjectActionSystem::has_value() &&
+		                     Locator::creatureObjectActionSystem::value().PlaysOnAlone(entity);
 		const bool catchStep = mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
 		                       mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Object &&
 		                       mind.idle.agenda[mind.idle.step].order.kind == creature_mind::ObjectOrder::Kind::Catch;
@@ -2411,7 +2416,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		const auto [cameraFocus, cameraFocusAhead] = CameraFocusOf(registry, entity, mind.idle);
 		const creature_mind::Senses senses {
 		    .seconds = k_TurnSeconds,
-		    .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
+		    .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || playsOn,
 		    .bodyLooping = creature_layers::IsLooping(animation.body),
 		    .clipMissing = ClipMissing(entity, animation, mind.idle, communication.animation),
 		    .realTime = animation.realTime,
@@ -2505,11 +2510,26 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		}
 		Order(registry, entity, commands);
 		// It asks the other creature to fight. If the other creature does not agree, the rest of the agenda is no use.
-		if (commands.startFight.has_value() && !StartPlannedFight(entity, static_cast<entt::entity>(*commands.startFight)))
+		// When the other creature agrees while a move of a fight that stopped still finishes, the step waits. It starts
+		// again on the next turn and keeps the answer: the other creature is asked one time only.
+		if (commands.startFight.has_value())
 		{
-			mind.idle.step = mind.idle.agenda.size();
-			mind.idle.stepStarted = false;
-			mind.idle.gaveUp = true;
+			using Result = CreatureFightSystemInterface::StartResult;
+			const creature_mind::IdleMind::StepRef here {.serial = mind.idle.serial, .step = mind.idle.step};
+			const auto& kept = mind.idle.fightAgreed;
+			const bool agreed = kept.has_value() && kept->serial == here.serial && kept->step == here.step;
+			const auto started = StartPlannedFight(entity, static_cast<entt::entity>(*commands.startFight), agreed);
+			if (started == Result::Finishing)
+			{
+				mind.idle.stepStarted = false;
+				mind.idle.fightAgreed = here;
+			}
+			else if (started != Result::Started)
+			{
+				mind.idle.step = mind.idle.agenda.size();
+				mind.idle.stepStarted = false;
+				mind.idle.gaveUp = true;
+			}
 		}
 		// A joint action: when the other creature refuses to be its partner, the rest of the agenda is no use
 		if (commands.requestPartner.has_value() &&
@@ -2937,10 +2957,10 @@ void CreatureMindSystem::StartPlanAgain(entt::entity creature, CreatureMindState
 	// The context of the plan stays as it was for the player's feedback
 	const bool contextRunning =
 	    mind.learnt.has_value() && !mind.learnt->contexts.empty() && mind.learnt->contexts.back().running;
-	// A catch is the body's own and carries on
+	// A catch or a let-go is the body's own and carries on
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
@@ -3078,8 +3098,14 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	mind->lastFeedback = CreatureMindState::Feedback {.value = feedback, .activity = mind->idle.activity};
 	// Let go of, however slightly it was stroked or slapped, it stops whatever it was doing: it stops walking, puts down
 	// what it was doing with a thing, drops its agenda and gets up out of a sitting or lying pose. An action it is playing,
-	// such as reeling from the last slap, plays on.
-	if (Locator::creatureObjectActionSystem::has_value())
+	// such as reeling from the last slap, plays on. A catch or a let-go also plays on, because it is the body's own.
+	// A fight that its plan started again after the hold stops for both creatures, with no winner.
+	if (registry.AllOf<CreatureFighting>(creature) && Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().CallOff(creature);
+	}
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
@@ -3645,10 +3671,10 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	// A forced plan first stops the reaction that the creature has
 	EndReaction(creature);
 	// The current action stops as a failure. This occurs also when the creature finds no new plan.
-	// A catch is the body's own and carries on
+	// A catch or a let-go is the body's own and carries on
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
