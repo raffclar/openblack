@@ -448,6 +448,73 @@ TEST_F(Reactions, VillagersInReachTakeUpANiceMiracleAndBelieveOnce)
 	EXPECT_FLOAT_EQ(town.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)), 0.0f);
 }
 
+// A hand that holds the thing stops the spread of its reactions whose kind a hand ends. The reaction stays. It spreads
+// again when the hand lets go of the thing.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AReactionOfAThingInTheHandDoesNotSpreadUntilTheHandLetsGo)
+{
+	// The reactions read the copy of the table that the locator keeps
+	_info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell)).whetherReactionFinishesIfInitiatorInHand = 1;
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto miracle = Miracle();
+	miracle.initiator = registry.Create();
+	const auto id = _reactions.Create(miracle);
+	// The far villager comes into the reach after the reaction spread once
+	const auto late = _villagers[2];
+	registry.Get<Transform>(late).position = k_Here + glm::vec3(3.0f, 0.0f, 0.0f);
+	Locator::entitiesMap::value().Sync();
+	_reactions.StopSpreadInHand(miracle.initiator);
+	ASSERT_TRUE(_reactions.Find(id).has_value());
+	EXPECT_FALSE(_reactions.Find(id)->spreads);
+	// The reactions take their turns one after another: each one has had its turn after a few turns
+	const auto reactsTo = [&registry, late]() {
+		const auto* reaction = registry.TryGet<const LivingReaction>(late);
+		return reaction != nullptr ? reaction->reaction : 0u;
+	};
+	for (int i = 0; i < 4; ++i)
+	{
+		PlayTurn();
+	}
+	EXPECT_NE(reactsTo(), id);
+	// The reaction still ages while it does not spread
+	ASSERT_TRUE(_reactions.IsActive(id));
+	_reactions.SpreadAgain(miracle.initiator);
+	EXPECT_TRUE(_reactions.Find(id)->spreads);
+	for (int i = 0; i < 4 && reactsTo() != id; ++i)
+	{
+		PlayTurn();
+	}
+	EXPECT_EQ(reactsTo(), id);
+}
+
+// A reaction whose kind a hand does not end keeps its spread while the hand holds the thing
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AReactionThatAHandDoesNotEndSpreadsFromTheHand)
+{
+	// The reactions read the copy of the table that the locator keeps
+	_info->reaction.at(static_cast<size_t>(Reaction::LookAtNiceSpell)).whetherReactionFinishesIfInitiatorInHand = 0;
+	Locator::infoConstants::emplace(*_info);
+	auto& registry = Locator::entitiesRegistry::value();
+	auto miracle = Miracle();
+	miracle.initiator = registry.Create();
+	const auto id = _reactions.Create(miracle);
+	const auto late = _villagers[2];
+	registry.Get<Transform>(late).position = k_Here + glm::vec3(3.0f, 0.0f, 0.0f);
+	Locator::entitiesMap::value().Sync();
+	_reactions.StopSpreadInHand(miracle.initiator);
+	EXPECT_TRUE(_reactions.Find(id)->spreads);
+	const auto reactsTo = [&registry, late]() {
+		const auto* reaction = registry.TryGet<const LivingReaction>(late);
+		return reaction != nullptr ? reaction->reaction : 0u;
+	};
+	for (int i = 0; i < 4 && reactsTo() != id; ++i)
+	{
+		PlayTurn();
+	}
+	EXPECT_EQ(reactsTo(), id);
+}
+
 TEST_F(Reactions, TheReactionsGoingOnComeBackFromASave)
 {
 	namespace reflection = openblack::ecs::reflection;

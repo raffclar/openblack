@@ -323,6 +323,29 @@ void AddReactions(std::vector<Scenario>& all)
 	    .townOwner = PlayerNames::NEUTRAL,
 	});
 	all.push_back({
+	    .id = "miracles.belief_symbols",
+	    .name = "Reactions: belief symbols from a miracle that does not touch the villagers",
+	    .facet = Facet::Miracles,
+	    .description = "Lightning held by hand for three seconds every twelve seconds. It strikes the land 24 metres "
+	                   "past nine villagers of a town that the neutral player holds, and touches no villager.",
+	    .expected = "The villagers in reach run from the strike and then turn to watch it. A symbol of belief rises from "
+	                "the top of each impressed villager in the player's colour, wiggling and pulsing, and fades out "
+	                "after a second and a half. No glow of the miracle covers the villagers. The inspector query "
+	                "particles.belief gives the place, amount and colour of each symbol.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 20.0f}, {25.0f, 65.0f}}, .distance = 0.7f},
+	    .objects = believers,
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = {0.0f, 60.0f},
+	                  .handOffset = {0.0f, 45.0f},
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = 3.0f,
+	                  .repeatSeconds = 12.0f,
+	                  .byHand = true}},
+	    .townOwner = PlayerNames::NEUTRAL,
+	});
+	all.push_back({
 	    .id = "miracles.reactions_flee",
 	    .name = "Reactions: villagers flee a frightening miracle",
 	    .facet = Facet::Miracles,
