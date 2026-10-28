@@ -15,7 +15,7 @@ each change as one line: scenario, step, component, kind.
 
     python tools/sim/guard_sweep.py run --out OUT [--bin FOLDER] [--scenarios all|a,b|@file] [--lands all|land1,...]
                                         [--turns 80] [--land-turns 1000] [--fields] [--no-systems] [--draw-every 0] [--timeout 300]
-    python tools/sim/guard_sweep.py summary OUT [--systems] [--json] [--fail]
+    python tools/sim/guard_sweep.py summary OUT [--systems] [--json] [--items] [--fail]
     python tools/sim/guard_sweep.py --self-test
 
 The kinds: rows (a frame step made or removed an entity), order (it added, removed or moved a row of a component, which
@@ -254,6 +254,11 @@ def summarise(records, systems=False):
 def summary(options):
     records = read_records(options.out)
     lines, bad, count = summarise(records, options.systems)
+    if options.items:
+        # The scenarios and lands with a change, one on each line, for a second sweep with --scenarios @file
+        for item in sorted({line.split("  ", 1)[0] for line in lines}):
+            print(item)
+        return 0
     if options.json:
         print(json.dumps({"items": len(records), "changes": lines, "bad": bad}))
     else:
@@ -326,6 +331,7 @@ def main():
     report.add_argument("out")
     report.add_argument("--systems", action="store_true", help="also tell the changes of the systems' saved state")
     report.add_argument("--json", action="store_true")
+    report.add_argument("--items", action="store_true", help="write only the scenarios that have a change")
     report.add_argument("--fail", action="store_true", help="exit 1 when a change or a bad exit is found")
     options = parser.parse_args()
     return run(options) if options.command == "run" else summary(options)
