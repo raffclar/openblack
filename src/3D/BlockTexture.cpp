@@ -169,8 +169,8 @@ void block_texture::BuildBlock(std::span<const lnd::LNDCell> cells, const Source
 void block_texture::PaintCells(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell,
                                glm::ivec2 cellCount, std::span<uint8_t> rgba)
 {
-	std::vector<uint16_t> texels(static_cast<size_t>(std::max(cellCount.x, 0) * std::max(cellCount.y, 0)) * k_TexelsPerCell *
-	                             k_TexelsPerCell);
+	const auto perCell = TexelsPerCellOf(sources.resolution);
+	std::vector<uint16_t> texels(static_cast<size_t>(std::max(cellCount.x, 0) * std::max(cellCount.y, 0)) * perCell * perCell);
 	PaintCellTexels(cells, sources, firstCell, cellCount, texels);
 	// The texels fill the start of rgba, and what is left after them is clear
 	const auto painted = std::min(rgba.size(), texels.size() * 4);
@@ -201,8 +201,11 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
                                     glm::ivec2 cellCount, std::span<uint16_t> texels)
 {
 	std::ranges::fill(texels, uint16_t {0});
-	const auto rows = cellCount.x * k_TexelsPerCell;
-	const auto columns = cellCount.y * k_TexelsPerCell;
+	// The low resolution paints every second texel of the full texture along each axis
+	const auto perCell = TexelsPerCellOf(sources.resolution);
+	const auto step = k_TexelsPerCell / perCell;
+	const auto rows = cellCount.x * perCell;
+	const auto columns = cellCount.y * perCell;
 	if (cells.size() < static_cast<size_t>(k_CellsPerSide * k_CellsPerSide) || cellCount.x <= 0 || cellCount.y <= 0 ||
 	    firstCell.x < 0 || firstCell.y < 0 || firstCell.x + cellCount.x > k_BlockCells ||
 	    firstCell.y + cellCount.y > k_BlockCells || texels.size() < static_cast<size_t>(rows) * columns ||
@@ -216,8 +219,6 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 	const auto countryOf = [&sources](const lnd::LNDCell& cell) -> const lnd::LNDCountry& {
 		return sources.countries[std::min<size_t>(cell.properties.country, sources.countries.size() - 1)];
 	};
-	const auto firstX = firstCell.x * k_TexelsPerCell;
-	const auto firstZ = firstCell.y * k_TexelsPerCell;
 	// Cell by cell: the corners and their countries are the same for all the texels of a cell
 	for (int cellX = firstCell.x; cellX < firstCell.x + cellCount.x; ++cellX)
 	{
@@ -238,10 +239,10 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 			                                                         &countryOf(*corners[2]), &countryOf(*corners[3])};
 			const std::array<int32_t, 4> altitudes = {corners[0]->altitude, corners[1]->altitude, corners[2]->altitude,
 			                                          corners[3]->altitude};
-			for (int i = 0; i < k_TexelsPerCell; ++i)
+			for (int i = 0; i < k_TexelsPerCell; i += step)
 			{
 				const int x = (cellX * k_TexelsPerCell) + i;
-				for (int j = 0; j < k_TexelsPerCell; ++j)
+				for (int j = 0; j < k_TexelsPerCell; j += step)
 				{
 					const int z = (cellZ * k_TexelsPerCell) + j;
 					const auto& weights = coneWeights[static_cast<size_t>((i * k_TexelsPerCell) + j)];
@@ -267,7 +268,9 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 						texel = BlendCorners(painted, weights);
 					}
 
-					texels[static_cast<size_t>(((x - firstX) * columns) + (z - firstZ))] = texel;
+					const auto row = ((cellX - firstCell.x) * perCell) + (i / step);
+					const auto column = ((cellZ - firstCell.y) * perCell) + (j / step);
+					texels[static_cast<size_t>((row * columns) + column)] = texel;
 				}
 			}
 		}

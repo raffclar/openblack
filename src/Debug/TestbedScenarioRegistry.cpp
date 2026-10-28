@@ -2322,6 +2322,24 @@ void AddAppearance(std::vector<Scenario>& all)
 	                  .creature = 0,
 	                  .delaySeconds = 1.0f}},
 	});
+	// The land, a hut, trees and the sky as the lowest detail levels draw them, with textures of half the size
+	all.push_back({
+	    .id = "appearance.low_resolution_textures",
+	    .name = "Low resolution textures",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the camera looks north over a hut and two oaks to the far land of the "
+	                   "testbed, with the sky above it. Start the game with --detail-level 1 (Low) or 0 (Minimum) to see "
+	                   "the low resolution textures, and with 4 to compare.",
+	    .expected = "At Low the land, its footprints and the shadows of the hut and the oaks are softer, painted at half "
+	                "the texels. The shadows are half as dark. The hut, the oaks and the sea have softer textures. The "
+	                "sky is the day's sky of the alignment and does not change with the time of day. The far land "
+	                "fades into its coarse texture as at Maximum.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -90.0f}, .look = {0.0f, 0.0f, 60.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-15.0f, -40.0f}},
+	                {.type = TreeInfo::Oak, .offset = {15.0f, -45.0f}},
+	                {.type = TreeInfo::Oak, .offset = {25.0f, -30.0f}}},
+	});
 	// The player's lion mirrored in the lake: its one chroma part keeps the alpha of its texture
 	all.push_back({
 	    .id = "appearance.lion_sea_reflection",
