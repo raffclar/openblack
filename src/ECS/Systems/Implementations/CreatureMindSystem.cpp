@@ -3142,30 +3142,26 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	LearnFromFeedback(creature, *mind, feedback);
 }
 
-bool CreatureMindSystem::MayInterrupt(entt::entity creature, const CreatureAnimation& body, float interruptsAfter)
+bool CreatureMindSystem::MayInterrupt(entt::entity creature, const CreatureAnimation& body, double interruptsAfter)
 {
-	// Not while it is only just into something
-	if (Locator::creatureObjectActionSystem::has_value())
-	{
-		if (const auto progress = Locator::creatureObjectActionSystem::value().GetProgress(creature);
-		    progress.has_value() && *progress < interruptsAfter)
-		{
-			return false;
-		}
-	}
+	const auto objectActionShare = Locator::creatureObjectActionSystem::has_value()
+	                                   ? Locator::creatureObjectActionSystem::value().GetProgress(creature)
+	                                   : std::nullopt;
+	std::optional<float> bodyShare;
 	if (creature_layers::IsPlaying(body.body) && Locator::creatureAnimationSystem::has_value())
 	{
+		// The time and the duration are whole milliseconds, so the float divide gives the same share as the game
 		const auto duration =
 		    Locator::creatureAnimationSystem::value().AnimationDuration(creature, creature_layers::CurrentAnimation(body.body));
-		if (duration.has_value() && *duration > 0.0f && body.body.timeMs / *duration < interruptsAfter)
+		if (duration.has_value() && *duration > 0.0f)
 		{
-			return false;
+			bodyShare = body.body.timeMs / *duration;
 		}
 	}
-	return true;
+	return creature_feedback::TakesForcedAction(objectActionShare, bodyShare, interruptsAfter);
 }
 
-bool CreatureMindSystem::CanForceAction(entt::entity creature, size_t animation, bool mirrored, float interruptsAfter) const
+bool CreatureMindSystem::CanForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
@@ -3179,7 +3175,7 @@ bool CreatureMindSystem::CanForceAction(entt::entity creature, size_t animation,
 }
 
 bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bool mirrored,
-                                     std::optional<creature_face::Request> face, float interruptsAfter)
+                                     std::optional<creature_face::Request> face, double interruptsAfter)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* body = registry.TryGet<CreatureAnimation>(creature);

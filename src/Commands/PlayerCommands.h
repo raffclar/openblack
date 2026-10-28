@@ -242,8 +242,8 @@ struct CreatureReaction
 	uint8_t face;
 	float faceMs;
 	uint8_t cue;
-	/// The share of the way through what the body plays that the reaction can stop it at
-	float interruptsAfter;
+	/// The reaction stops no body action that is this share of the way through or less
+	double interruptsAfter;
 	/// The creature refused the body action in the frame of the stroke, so the turn pulls only the face. The body does
 	/// not play, also when the creature can take the action at the turn.
 	bool faceOnly;

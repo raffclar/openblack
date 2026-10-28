@@ -183,16 +183,16 @@ public:
 	virtual void NoteLeashOrder(entt::entity /*creature*/) {}
 	/// Every source of a type in the creature's desires goes up or down by an amount
 	virtual void ChangeDesireSource(entt::entity /*creature*/, uint32_t /*type*/, float /*amount*/) {}
-	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through
-	/// what it plays; a face can be pulled with it, which is pulled even when the action can't play. The action plays to
-	/// its end and leaves the mind's plan as it was. Returns whether it played.
+	/// Plays an action at once, as stroking and slapping make it, unless the body action is the limit share of the way
+	/// through or less (see creature_feedback::RefusesInterrupt). The creature pulls the face, also when the action
+	/// cannot play. The action plays to its end and keeps the plan of the mind. Returns whether it played.
 	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	                         float interruptsAfter) = 0;
+	                         double interruptsAfter) = 0;
 	/// Pulls the face of a reaction whose action the body refused, as ForceAction pulls it, and plays no action
 	virtual void PullReactionFace(entt::entity /*creature*/, const creature_face::Request& /*face*/) {}
 	/// Whether ForceAction would play the action now, with no change to the creature
 	[[nodiscard]] virtual bool CanForceAction(entt::entity /*creature*/, size_t /*animation*/, bool /*mirrored*/,
-	                                          float /*interruptsAfter*/) const
+	                                          double /*interruptsAfter*/) const
 	{
 		return false;
 	}

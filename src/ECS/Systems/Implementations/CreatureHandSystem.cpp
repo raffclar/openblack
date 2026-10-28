@@ -491,7 +491,7 @@ void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigi
 }
 
 bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mirrored,
-                               std::optional<creature_face::Request> face, float interruptsAfter)
+                               std::optional<creature_face::Request> face, double interruptsAfter)
 {
 	auto& minds = Locator::creatureMindSystem::value();
 	// The reaction is a command, which the next turn plays, the same at each frame rate and on every computer. The frame

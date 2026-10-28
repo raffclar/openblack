@@ -7,9 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdint>
 
 #include <array>
+#include <bit>
 #include <chrono>
 #include <optional>
 
@@ -428,4 +430,35 @@ TEST(CreatureReleaseFeedback, ACreatureThatIsNotStillGetsFeedback)
 TEST(CreatureReleaseFeedback, TheFeedbackWaitsOneTurnAfterTheCreatureIsFree)
 {
 	EXPECT_EQ(creature_feedback::k_ReleaseFeedbackTurns, 1u);
+}
+
+TEST(CreatureForcedAction, AStrokeTakesTheBodyOnlyPastTheDoubleLimit)
+{
+	// The stroke limit is the double 0.8. The float 0.8f is a little larger, so a share of 0.8f is past the limit.
+	EXPECT_EQ(std::bit_cast<uint64_t>(feedback::k_StrokeInterruptsAfter), 0x3FE999999999999AULL);
+	EXPECT_FALSE(feedback::RefusesInterrupt(0.8f, feedback::k_StrokeInterruptsAfter));
+	// 800 of 1000 milliseconds gives the share 0.8f
+	EXPECT_FALSE(feedback::RefusesInterrupt(800.0f / 1000.0f, feedback::k_StrokeInterruptsAfter));
+	EXPECT_TRUE(feedback::RefusesInterrupt(std::nextafter(0.8f, 0.0f), feedback::k_StrokeInterruptsAfter));
+	EXPECT_TRUE(feedback::RefusesInterrupt(0.0f, feedback::k_StrokeInterruptsAfter));
+}
+
+TEST(CreatureForcedAction, ASlapRefusesTheBodyAtExactlyItsFloatLimit)
+{
+	EXPECT_EQ(std::bit_cast<uint32_t>(static_cast<float>(feedback::k_SlapInterruptsAfter)), 0x3EB33333U);
+	EXPECT_TRUE(feedback::RefusesInterrupt(0.35f, feedback::k_SlapInterruptsAfter));
+	EXPECT_FALSE(feedback::RefusesInterrupt(std::nextafter(0.35f, 1.0f), feedback::k_SlapInterruptsAfter));
+}
+
+TEST(CreatureForcedAction, AnActionOnAnObjectGivesTheShareOfTheBody)
+{
+	// A body with no action takes the forced action
+	EXPECT_TRUE(feedback::TakesForcedAction(std::nullopt, std::nullopt, feedback::k_SlapInterruptsAfter));
+	// The share of the body layer decides when no action on an object plays
+	EXPECT_FALSE(feedback::TakesForcedAction(std::nullopt, 0.35f, feedback::k_SlapInterruptsAfter));
+	EXPECT_TRUE(feedback::TakesForcedAction(std::nullopt, 0.5f, feedback::k_SlapInterruptsAfter));
+	// An action on an object plays in place of the body layer, so its share decides, also at the exact limit
+	EXPECT_FALSE(feedback::TakesForcedAction(0.35f, 0.9f, feedback::k_SlapInterruptsAfter));
+	EXPECT_TRUE(feedback::TakesForcedAction(0.8f, 0.1f, feedback::k_StrokeInterruptsAfter));
+	EXPECT_FALSE(feedback::TakesForcedAction(0.0f, std::nullopt, feedback::k_StrokeInterruptsAfter));
 }

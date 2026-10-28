@@ -24,6 +24,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Commands/PlayerCommands.h"
+#include "Creature/CreatureFeedback.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
@@ -162,7 +163,7 @@ public:
 	void StandUp(entt::entity) override {}
 	void ReceiveFeedback(entt::entity, float) override {}
 	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	                 float interruptsAfter) override
+	                 double interruptsAfter) override
 	{
 		forced.push_back({.creature = creature,
 		                  .animation = animation,
@@ -193,7 +194,7 @@ public:
 		size_t animation;
 		bool mirrored;
 		std::optional<creature_face::Face> face;
-		float interruptsAfter;
+		double interruptsAfter;
 	};
 	std::vector<Forced> forced;
 	std::vector<std::pair<entt::entity, creature_face::Face>> faces;
@@ -278,20 +279,21 @@ TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
 	const auto creature = registry.Create();
 	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
 	ecs::systems::CreatureHandSystem creatures;
-	creatures.DoReaction(PlayerNames::PLAYER_TWO, CreatureReaction {.creature = creature,
-	                                                                .animation = 166,
-	                                                                .mirrored = true,
-	                                                                .pullsFace = true,
-	                                                                .face = 1,
-	                                                                .faceMs = 2000.0f,
-	                                                                .cue = 15,
-	                                                                .interruptsAfter = 0.35f});
+	creatures.DoReaction(PlayerNames::PLAYER_TWO,
+	                     CreatureReaction {.creature = creature,
+	                                       .animation = 166,
+	                                       .mirrored = true,
+	                                       .pullsFace = true,
+	                                       .face = 1,
+	                                       .faceMs = 2000.0f,
+	                                       .cue = 15,
+	                                       .interruptsAfter = creature_feedback::k_SlapInterruptsAfter});
 	ASSERT_EQ(minds.forced.size(), 1u);
 	EXPECT_EQ(minds.forced[0].creature, creature);
 	EXPECT_EQ(minds.forced[0].animation, 166u);
 	EXPECT_TRUE(minds.forced[0].mirrored);
 	EXPECT_EQ(minds.forced[0].face, creature_face::Face::Grimace);
-	EXPECT_EQ(minds.forced[0].interruptsAfter, 0.35f);
+	EXPECT_EQ(minds.forced[0].interruptsAfter, creature_feedback::k_SlapInterruptsAfter);
 	// A slap with no face pulls none
 	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature, .animation = 167});
 	ASSERT_EQ(minds.forced.size(), 2u);
@@ -320,7 +322,7 @@ TEST_F(ReportedHands, TheTurnPullsOnlyTheFaceOfAReactionThatTheCreatureRefused)
 	                                                                .face = 1,
 	                                                                .faceMs = 2000.0f,
 	                                                                .cue = 15,
-	                                                                .interruptsAfter = 0.35f,
+	                                                                .interruptsAfter = creature_feedback::k_SlapInterruptsAfter,
 	                                                                .faceOnly = true});
 	EXPECT_TRUE(minds.forced.empty());
 	ASSERT_EQ(minds.faces.size(), 1u);

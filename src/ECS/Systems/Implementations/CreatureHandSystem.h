@@ -95,7 +95,7 @@ private:
 	/// The held creature reacts to a stroke or a slap: at once with no commands, else at a later turn on every computer.
 	/// Whether the creature takes the reaction now.
 	bool React(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	           float interruptsAfter);
+	           double interruptsAfter);
 
 	/// The camera on the creature while the hand holds it, and where the player's camera was going when it took over
 	CreatureInteractCameraModel* _cameraModel {nullptr};
