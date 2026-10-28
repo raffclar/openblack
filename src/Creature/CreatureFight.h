@@ -847,6 +847,10 @@ struct StepLengths
 /// Whether a creature in a duel wins it because its opponent has no life left (life at zero or less). A creature that
 /// a script controls does not win this way, and it continues its duel.
 [[nodiscard]] bool WinsByOpponentsLife(float opponentLife, bool scriptControlled);
+/// Whether the life of a creature pays for its fight when its fight stops. Its life pays only when its body is in a
+/// state of the fight: it starts, stands in its stance, makes a move, blocks or casts. It does not pay when it finishes,
+/// recoils in its block, faints or gets up, or when it does not fight.
+[[nodiscard]] bool LifePaysAtStop(State state);
 /// The priority of the winner's plan after a knock out, before the planner's scale
 constexpr float k_WinPlanPriority = 1.0f;
 /// Whether the winner's plan after a knock out is forced. It is not forced when a blow knocked the loser out, and it is

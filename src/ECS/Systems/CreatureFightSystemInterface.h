@@ -90,6 +90,13 @@ public:
 	/// winner. Both creatures finish the move they are making and stand, without celebrating or sulking, and each loses
 	/// from its life a quarter of the fight health it lost. A fight still being set up is simply left.
 	virtual void CallOff(entt::entity creature) { AbortFight(creature); }
+	/// The hand took hold of the creature. The fights call it on the first turn of the hold. In a duel, the creature
+	/// leaves the duel: its life pays for the fight, and it finishes its move. Its opponent stays in the duel against it.
+	/// The fight steps of the creature wait while the hand holds it.
+	virtual void HandTookHold(entt::entity /*creature*/) {}
+	/// The hand let go of the creature, and the creature starts its plan again. Its fight stops with no response, and the
+	/// fight of its opponent stops too.
+	virtual void HandLetGo(entt::entity /*creature*/) {}
 	/// Whether the creature is in a fight's setup, going to the arena before the duel: it takes no leash orders then
 	[[nodiscard]] virtual bool IsSettingUpFight(entt::entity /*creature*/) const { return false; }
 	[[nodiscard]] virtual bool IsFighting(entt::entity creature) const = 0;
