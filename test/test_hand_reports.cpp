@@ -171,6 +171,10 @@ public:
 		                  .interruptsAfter = interruptsAfter});
 		return true;
 	}
+	void PullReactionFace(entt::entity creature, const creature_face::Request& face) override
+	{
+		faces.emplace_back(creature, face.face);
+	}
 	bool Sleep(entt::entity) override { return false; }
 	bool Eat(entt::entity, std::optional<entt::entity>) override { return false; }
 	bool Drink(entt::entity) override { return false; }
@@ -192,6 +196,7 @@ public:
 		float interruptsAfter;
 	};
 	std::vector<Forced> forced;
+	std::vector<std::pair<entt::entity, creature_face::Face>> faces;
 };
 
 class ReportedHands: public ::testing::Test
@@ -295,6 +300,32 @@ TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
 	registry.Destroy(creature);
 	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature, .animation = 165});
 	EXPECT_EQ(minds.forced.size(), 2u);
+	EXPECT_TRUE(minds.faces.empty());
+	Locator::creatureMindSystem::reset();
+}
+
+// The creature refused the body action of a stroke in its frame: the turn pulls only the face, also when the body is
+// free by then
+TEST_F(ReportedHands, TheTurnPullsOnlyTheFaceOfAReactionThatTheCreatureRefused)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactingMinds minds;
+	Locator::creatureMindSystem::reset(&minds, [](ecs::systems::CreatureMindSystemInterface* /*unowned*/) {});
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	ecs::systems::CreatureHandSystem creatures;
+	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature,
+	                                                                .animation = 166,
+	                                                                .pullsFace = true,
+	                                                                .face = 1,
+	                                                                .faceMs = 2000.0f,
+	                                                                .cue = 15,
+	                                                                .interruptsAfter = 0.35f,
+	                                                                .faceOnly = true});
+	EXPECT_TRUE(minds.forced.empty());
+	ASSERT_EQ(minds.faces.size(), 1u);
+	EXPECT_EQ(minds.faces[0].first, creature);
+	EXPECT_EQ(minds.faces[0].second, creature_face::Face::Grimace);
 	Locator::creatureMindSystem::reset();
 }
 

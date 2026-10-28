@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <algorithm>
 #include <deque>
 
@@ -63,6 +65,28 @@ private:
 [[nodiscard]] constexpr bool TakesReaction(bool reactionWaiting, float interruptsAfter, bool bodyTakes)
 {
 	return bodyTakes && (!reactionWaiting || interruptsAfter <= 0.0f);
+}
+
+/// What the hand sends for a stroke or a slap
+enum class ReactionSend : uint8_t
+{
+	/// The hand sends nothing
+	None,
+	/// The turn plays the action and pulls the face, if the reaction has a face
+	Whole,
+	/// The turn pulls only the face
+	FaceOnly,
+};
+
+/// What the hand sends for a reaction. A reaction that the creature takes plays whole. If the creature refuses it, the
+/// creature pulls only its face. A refused reaction with no face does nothing in the world, so the hand sends nothing.
+[[nodiscard]] constexpr ReactionSend ReactionToSend(bool takes, bool pullsFace)
+{
+	if (takes)
+	{
+		return ReactionSend::Whole;
+	}
+	return pullsFace ? ReactionSend::FaceOnly : ReactionSend::None;
 }
 
 } // namespace openblack::creature_hand

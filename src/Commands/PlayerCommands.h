@@ -244,6 +244,9 @@ struct CreatureReaction
 	uint8_t cue;
 	/// The share of the way through what the body plays that the reaction can stop it at
 	float interruptsAfter;
+	/// The creature refused the body action in the frame of the stroke, so the turn pulls only the face. The body does
+	/// not play, also when the creature can take the action at the turn.
+	bool faceOnly;
 };
 
 /// A click of the hand in a network game: the turn writes the click that the scripts read, so that the scripts of

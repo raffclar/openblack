@@ -188,6 +188,8 @@ public:
 	/// its end and leaves the mind's plan as it was. Returns whether it played.
 	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
 	                         float interruptsAfter) = 0;
+	/// Pulls the face of a reaction whose action the body refused, as ForceAction pulls it, and plays no action
+	virtual void PullReactionFace(entt::entity /*creature*/, const creature_face::Request& /*face*/) {}
 	/// Whether ForceAction would play the action now, with no change to the creature
 	[[nodiscard]] virtual bool CanForceAction(entt::entity /*creature*/, size_t /*animation*/, bool /*mirrored*/,
 	                                          float /*interruptsAfter*/) const

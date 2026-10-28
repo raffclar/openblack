@@ -3188,11 +3188,10 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	{
 		return false;
 	}
-	// The face is pulled even when the body is too far into something to take the action
+	// The creature pulls the face also when the body is too far into something to take the action
 	if (face.has_value())
 	{
-		body->face =
-		    creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, face->cue);
+		PullReactionFace(creature, *face);
 	}
 	if (!MayInterrupt(creature, *body, interruptsAfter))
 	{
@@ -3215,6 +3214,18 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	// Only the body is taken: the mind goes on with what it was doing once the action has played, as its agenda waits for
 	// a busy body
 	return true;
+}
+
+void CreatureMindSystem::PullReactionFace(entt::entity creature, const creature_face::Request& face)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* body = registry.TryGet<CreatureAnimation>(creature);
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (body == nullptr || mind == nullptr || creature_mind::IsUnconscious(mind->idle))
+	{
+		return;
+	}
+	body->face = creature_layers::PullFace(body->face, creature_face::AnimationOf(face.face), face.milliseconds, face.cue);
 }
 
 bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity activity,
