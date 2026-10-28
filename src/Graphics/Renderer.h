@@ -36,7 +36,6 @@
 
 #include "3D/SkyDome.h"
 #include "Enums.h"
-#include "Graphics/DescriptorSetTally.h"
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
@@ -515,9 +514,6 @@ private:
 	void UploadAnimalBones(const DrawSceneDesc& drawDesc) const;
 	/// What the hand's base mesh is pulled towards for its player's alignment, none while it shows the base
 	[[nodiscard]] std::optional<L3DMeshSubmitDesc::MorphTargets> HandMorphTargets() const;
-	/// Warns when a frame's draws near the descriptor sets Vulkan has for a frame, and skips the sea's reflection for
-	/// a while when they come too near
-	void WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept;
 
 	std::unique_ptr<ShaderManager> _shaderManager;
 	std::unique_ptr<BgfxCallback> _bgfxCallback;
@@ -526,12 +522,6 @@ private:
 	std::unique_ptr<OffscreenScreenshots> _offscreenShots;
 	bool _bgfxDebug = false;
 	bool _bgfxProfile = false;
-	/// Frames left drawing without the sea's reflection, the last frames having come too near Vulkan's descriptor sets
-	uint32_t _reflectionSkips {0};
-	/// Frames left drawing each view in the order its draws come, for the same reason
-	std::array<uint32_t, static_cast<size_t>(RenderPass::_count)> _inOrderViews {};
-	/// Frames left before the next warning about the descriptor sets
-	uint32_t _descriptorSetWarningPause {0};
 	/// While the scene is drawn only to make the renderer's pipelines and targets: nothing that later frames use changes
 	mutable bool _warmingUp {false};
 	/// The next frame holds a warm-up's draws, after which its views are set back

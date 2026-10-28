@@ -231,13 +231,13 @@ std::optional<Animation> BlendAnimation(AdjustedAnimations& adjusted, const Crea
 
 /// An eye's point on the body as drawn: each vertex blended as the body is, placed by its bone, in the world
 std::optional<creature_eyes::SurfacePoint> EyePointOf(const CreatureRig::EyePoint& point, const creature_morph::Morph& morph,
-                                                      const std::vector<glm::mat4>& bones, const glm::mat4& model)
+                                                      creature::PosedBones& posed)
 {
 	if (!point.enabled)
 	{
 		return std::nullopt;
 	}
-	const auto world = creature::PosedTriangle(point.vertices, point.bones, morph, bones, model, creature::k_SkinPointOrder);
+	const auto world = creature::PosedTriangle(point.vertices, point.bones, morph, posed, creature::k_SkinPointOrder);
 	return creature_eyes::PointOnTriangle(world[0], world[1], world[2], point.u, point.v);
 }
 
@@ -246,7 +246,8 @@ void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_
                const std::vector<glm::mat4>& bones, const Transform& transform, float size, int32_t milliseconds,
                Random&& random)
 {
-	const auto model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	// The points of both eyes share bones, so each bone is placed in the world one time
+	creature::PosedBones posed(bones, creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
 	const auto eyeSize = creature_eyes::EyeSize(size, rig.scale, morph.evilGood, eyes.mode);
 	// The model's back axis, which is the way the creature faces across the land
 	const auto back = transform.rotation * k_MeshBack;
@@ -263,7 +264,7 @@ void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_
 	{
 		auto& drawn = eyes.drawn.at(i);
 		drawn = {};
-		const auto point = EyePointOf(rig.points.at(i), morph, bones, model);
+		const auto point = EyePointOf(rig.points.at(i), morph, posed);
 		if (!point)
 		{
 			continue;
@@ -281,7 +282,7 @@ void PlaceEyes(CreatureEyes& eyes, const CreatureRig::Eyes& rig, const creature_
 			turn.Reset(creature_eyes::LookDestination(*point, look));
 			eyes.lookStarted.at(i) = true;
 		}
-		const auto anchor = EyePointOf(rig.points.at(i + 2), morph, bones, model);
+		const auto anchor = EyePointOf(rig.points.at(i + 2), morph, posed);
 		const auto placed =
 		    creature_eyes::PlaceEye(*point, anchor ? std::optional<glm::vec3>(anchor->position) : std::nullopt,
 		                            rig.points.at(i).depth, i == 1, look, rig.lidAngles, eyeSize, turn, milliseconds);
@@ -1104,12 +1105,10 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    if (!animation.newerTurnPose.empty() && animation.olderTurnPose.size() == animation.newerTurnPose.size() &&
 		        transform.scale.x != 0.0f && transform.scale.y != 0.0f && transform.scale.z != 0.0f)
 		    {
-			    std::vector<glm::mat4> drawn(animation.newerTurnPose.size());
-			    creature_turn_pose::Blend(animation.olderTurnPose, animation.newerTurnPose, weight, drawn);
-			    animation.boneMatrices.resize(drawn.size());
-			    creature_turn_pose::ToMesh(drawn,
-			                               creature::PlacementMatrix(transform.position, transform.rotation, transform.scale),
-			                               animation.boneMatrices);
+			    animation.boneMatrices.resize(animation.newerTurnPose.size());
+			    creature_turn_pose::BlendToMesh(
+			        animation.olderTurnPose, animation.newerTurnPose, weight,
+			        creature::PlacementMatrix(transform.position, transform.rotation, transform.scale), animation.boneMatrices);
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {

@@ -821,9 +821,6 @@ openblack_setup_and_add_test(test_villager_tools test_villager_tools.cpp)
 openblack_setup_and_add_test(test_tree_shadows graphics/test_tree_shadows.cpp)
 openblack_setup_and_add_test(test_villager_work test_villager_work.cpp)
 openblack_setup_and_add_test(
-  test_descriptor_set_tally graphics/test_descriptor_set_tally.cpp
-)
-openblack_setup_and_add_test(
   test_graphics_backend_names test_graphics_backend_names.cpp
 )
 openblack_setup_and_add_test(test_villager_breeding test_villager_breeding.cpp)
@@ -1752,7 +1749,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_hand_reports test_hand_reports.cpp)
 openblack_setup_and_add_test(test_magic_pile_height test_magic_pile_height.cpp)
 openblack_setup_and_add_test(test_build_version test_build_version.cpp)
-openblack_setup_and_add_test(test_build_version_file test_build_version_file.cpp)
 openblack_setup_and_add_test(test_gods_ring_map online/test_gods_ring_map.cpp)
 target_link_libraries(test_gods_ring_map PRIVATE lnd)
 openblack_setup_and_add_test(test_gods_ring_land test_gods_ring_land.cpp)
@@ -1923,3 +1919,6 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_testbed_hand_sweep test_testbed_hand_sweep.cpp)
 openblack_setup_and_add_test(test_creature_let_go_plays_on test_creature_let_go_plays_on.cpp)
+openblack_setup_and_add_test(test_entity_storage test_entity_storage.cpp)
+openblack_setup_and_add_test(test_physics_face_search test_physics_face_search.cpp)
+openblack_setup_and_add_test(test_physics_hit_bounds test_physics_hit_bounds.cpp)

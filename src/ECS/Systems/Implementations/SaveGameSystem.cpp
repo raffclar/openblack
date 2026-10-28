@@ -1836,6 +1836,9 @@ bool SaveGameSystem::QuickLoad()
 void SaveGameSystem::NewLand()
 {
 	_lastAutosaveTurn = 0;
+	// The list of the components that a save writes is made while the land loads. Thus the first save of a game, as when
+	// the scripts finish a temple, does not make it in a frame of the game.
+	static_cast<void>(Reflection());
 	_autosaveTurnToSave = 0;
 }
 

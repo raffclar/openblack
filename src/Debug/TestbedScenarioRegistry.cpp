@@ -1636,6 +1636,33 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 12.0f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
 	});
+
+	// The end of a cinema, as the films of the creature trainer end: the script sends the camera up and away, and gives
+	// the camera back before it arrives
+	const auto move = [](std::string_view native, glm::vec2 point, float height, float seconds, float delay) {
+		return Command {
+		    .kind = Kind::CallNative,
+		    .delaySeconds = delay,
+		    .script = native,
+		    .scriptArguments = {{.kind = Argument::Kind::Position, .point = point, .height = height}, {.number = seconds}}};
+	};
+	all.push_back({
+	    .id = "story.cinema_end_glide",
+	    .name = "The camera at the end of a cinema",
+	    .facet = Facet::Story,
+	    .description = "A script takes the camera. It sends the camera up over 2 seconds, looking north. After 1.2 "
+	                   "seconds it sends the camera north over 3 seconds and gives the camera back at once.",
+	    .expected = "The camera rises and turns to look north. It does not stop when the script gives it back. It "
+	                "continues smoothly to the last place that the script chose and stops there about 1.5 seconds "
+	                "later.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, -40.0f}, .look = {0.0f, 4.0f, 0.0f}},
+	    .commands = {{.kind = Kind::CallNative, .delaySeconds = 1.0f, .script = "START_CAMERA_CONTROL"},
+	                 move("MOVE_CAMERA_POSITION", {0.0f, -40.0f}, 45.0f, 2.0f, 0.5f),
+	                 move("MOVE_CAMERA_FOCUS", {0.0f, 60.0f}, 0.0f, 2.0f, 0.0f),
+	                 move("MOVE_CAMERA_POSITION", {5.0f, -20.0f}, 45.0f, 3.0f, 1.2f),
+	                 {.kind = Kind::CallNative, .delaySeconds = 0.0f, .script = "END_CAMERA_CONTROL"}},
+	});
 }
 
 /// The computer gods' creatures of the third and fifth lands: the game's own scripts load each from its mind file for
@@ -2001,6 +2028,21 @@ void AddExplorersBoat(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Dock - glm::vec2 {110.0f, 70.0f}, k_Dock + glm::vec2 {10.0f, 60.0f}},
+	                .distance = 1.0f},
+	    .commands = {{.kind = Kind::PlayBoatFilm, .delaySeconds = 1.0f, .point = k_Dock}},
+	});
+	all.push_back({
+	    .id = "story.explorers_boat_deck_light",
+	    .name = "The deck of the explorers' boat in the light of the boat's place",
+	    .facet = Facet::Story,
+	    .description = "The same film as story.explorers_boat, framed on the lake that the boat crosses at sea. Each thing "
+	                   "on the deck takes the land's light of the place of the boat, and no colour of the land.",
+	    .expected = "About eighteen seconds in, the boat sails across the lake. The cows, the grain and the six people "
+	                "on its deck show the same light as the boat at its middle, also where they stand over the bank. "
+	                "No colour of the land under a part shows on it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Dock - glm::vec2 {170.0f, 150.0f}, k_Dock - glm::vec2 {40.0f, 20.0f}},
 	                .distance = 1.0f},
 	    .commands = {{.kind = Kind::PlayBoatFilm, .delaySeconds = 1.0f, .point = k_Dock}},
 	});
@@ -4325,6 +4367,41 @@ void AddAudio(std::vector<Scenario>& all)
 	                 OnObject(Kind::PickUp, 0, 0, 1.0f),
 	                 Go(Kind::ThrowAt, 0, k_CryHut, 0.5f)},
 	    .repeatFrom = 3,
+	});
+
+	// A town that believes more in the neutral player sees the player's heal power-up again and again
+	std::vector<ObjectSetup> aweTown;
+	constexpr std::array k_AweVillagers {VillagerInfo::CelticFarmerMale, VillagerInfo::CelticForesterMale,
+	                                     VillagerInfo::CelticHousewifeFemale};
+	for (size_t i = 0; i < 9; ++i)
+	{
+		aweTown.push_back({.type = k_AweVillagers.at(i % 3),
+		                   .offset = {-16.0f + 4.0f * static_cast<float>(i), 30.0f + 3.0f * static_cast<float>(i % 3)},
+		                   .joinTown = true});
+	}
+	all.push_back({
+	    .id = "audio.belief_voice",
+	    .name = "A town calls out in awe at the belief that it gains",
+	    .facet = Facet::Audio,
+	    .description = "Nine villagers of a town that believes 0.2 in the player and 0.3 in the neutral player. The hand "
+	                   "casts food in front of them for four seconds, every ten seconds. The guidance waits end first. The "
+	                   "audio log gives each voice of awe, its sample and its distance from the cursor.",
+	    .expected = "A symbol of belief rises from each impressed villager. While the neutral player leads the town, a good "
+	                "villager voice of awe sometimes plays at a villager, at most once in 30 turns. The voice stops once "
+	                "the town believes most in the player.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 50.0f}}, .distance = 0.7f},
+	    .objects = aweTown,
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {0.0f, 45.0f},
+	                  .handOffset = {0.0f, 45.0f},
+	                  .handHeight = 14.0f,
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = 4.0f,
+	                  .repeatSeconds = 10.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = 0.2f,
 	});
 }
 

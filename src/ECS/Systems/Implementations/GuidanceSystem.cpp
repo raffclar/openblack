@@ -26,6 +26,7 @@
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Creature.h"
@@ -148,6 +149,20 @@ bool NearPointUnderCursor(entt::entity thing)
 	const auto point = ReportedPointUnderCursor();
 	const auto* at = Locator::entitiesRegistry::value().TryGet<const Transform>(thing);
 	return point.has_value() && at != nullptr && gutils::GetDistanceInMetres(at->position, *point) < k_WarnReach;
+}
+
+/// The point under the cursor of the player at this computer, as the last report of a turn tells it (zero until the
+/// first report)
+glm::vec3 ReportedPointOrZero()
+{
+	if (!Locator::handSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return glm::vec3(0.0f);
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? reported->collidePoint : glm::vec3(0.0f);
 }
 
 /// Play a voice of the guidance sound bank at a thing on the land. The player hears it at full volume to a third of its
@@ -492,6 +507,44 @@ void GuidanceSystem::CreatureWonFight(entt::entity creature)
 void GuidanceSystem::WorshipperDied()
 {
 	RemarkIfNow(guidance::Kind::WorshippersDying);
+}
+
+void GuidanceSystem::BeliefVoice(glm::vec3 at, float share, GuidanceAlignment alignment)
+{
+	if (!Locator::gameRandom::has_value() || !PlayNow(guidance::Kind::BeliefSound))
+	{
+		return;
+	}
+	auto* heard = Heard();
+	if (heard == nullptr)
+	{
+		return;
+	}
+	auto& random = Locator::gameRandom::value();
+	const float left = share - random.LocalFloatRand(guidance::BeliefVoiceDrawLimit(share));
+	if (alignment != GuidanceAlignment::Good && alignment != GuidanceAlignment::Evil)
+	{
+		alignment = random.LocalRand(2) != 0 ? GuidanceAlignment::Evil : GuidanceAlignment::Good;
+	}
+	const auto sample = guidance::BeliefVoice(alignment, left);
+	if (!sample.has_value())
+	{
+		return;
+	}
+	const auto turn = Turn();
+	const float distance = gutils::GetDistanceInMetres(ReportedPointOrZero(), at);
+	const auto sinceDesireVoice = turn - heard->lastTurn.at(static_cast<size_t>(guidance::Kind::TownDesireSound));
+	// The game compares the voice with a last voice that it clears on each land and never sets, so the two are never
+	// the same
+	constexpr bool k_SameAsLast = false;
+	if (!(guidance::BeliefVoiceWanted(sinceDesireVoice, distance, k_SameAsLast) > guidance::k_BeliefVoiceLeast))
+	{
+		return;
+	}
+	heard->lastTurn.at(static_cast<size_t>(guidance::Kind::BeliefSound)) = turn;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Voice of awe: guidance sample {}, share {:.3f}, {:.0f} m from the cursor",
+	                    *sample, left, distance);
+	PlayVoice(*sample, at, guidance::k_BeliefVoiceReach);
 }
 
 void GuidanceSystem::LosingVillager(entt::entity villager)

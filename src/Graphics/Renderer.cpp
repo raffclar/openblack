@@ -188,6 +188,7 @@
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/VertexBuffer.h"
+#include "Graphics/ViewFrustum.h"
 #include "Graphics/WarmUpViews.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
@@ -358,21 +359,11 @@ struct BgfxCallback: public bgfx::CallbackI
 		          str);
 #endif
 
-		// Vulkan aborts when its pool of descriptor sets runs dry: say so, with what the last frame took
-		std::string message = str;
-		if (std::string_view(str).find("VK_ERROR_OUT_OF_POOL_MEMORY") != std::string_view::npos)
-		{
-			message +=
-			    fmt::format(" (Vulkan ran out of descriptor sets: the last frame counted took {} of the {} a frame "
-			                "has, warned of from {})",
-			                recentDescriptorSets.load(), graphics::k_DescriptorSetsPerFrame, graphics::k_DescriptorSetsNear);
-		}
-
 		// Must terminate, continuing will cause crash anyway. This can come from bgfx's render thread, where nothing
 		// would catch an exception, so it is reported and the game exits from here.
 		if (crash_handler::IsInstalled())
 		{
-			crash_handler::ReportFatal(crash_report::CrashKind::GraphicsFatal, message, filePath, line,
+			crash_handler::ReportFatal(crash_report::CrashKind::GraphicsFatal, str, filePath, line,
 			                           std::string("bgfx ") + codeStr);
 		}
 		throw std::runtime_error(std::string("bgfx: ") + filePath + ":" + std::to_string(line) + ": FATAL (" + codeStr +
@@ -429,8 +420,12 @@ struct BgfxCallback: public bgfx::CallbackI
 	// The driver's compiled pipelines, kept between runs
 	uint32_t cacheReadSize(uint64_t id) override
 	{
-		// The renderer asks for the cache once for each pipeline that it makes
-		++pipelinesMade;
+		// The renderer asks for the cache once for each pipeline that it makes. The Vulkan renderer also asks one time for
+		// all the kept pipelines, as number 0, when it starts.
+		if (id != 0)
+		{
+			++pipelinesMade;
+		}
 		return pipelines.has_value() ? pipelines->ReadSize(id) : 0;
 	}
 	bool cacheRead(uint64_t id, void* data, uint32_t size) override
@@ -503,8 +498,6 @@ struct BgfxCallback: public bgfx::CallbackI
 	graphics::ScreenshotFailures failures;
 	/// The pictures that the game asked for in memory
 	graphics::ScreenPictures pictures;
-	/// The descriptor sets the last frame counted took under Vulkan, for the report if the renderer runs out of them
-	std::atomic<uint32_t> recentDescriptorSets {0};
 	/// The pipelines that the renderer made since it started, counted on its render thread
 	std::atomic<uint32_t> pipelinesMade {0};
 	/// The driver's compiled pipelines on disk. Only the Vulkan and Direct3D 12 renderers keep them, and only when the
@@ -6051,8 +6044,7 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		const bool showsReflection = drawDesc.drawEntities && std::ranges::any_of(instancedDrawDescs, [](const auto& entry) {
 			                             return entry.second.showsReflection;
 		                             });
-		// Left as it was last drawn while frames come too near Vulkan's descriptor sets
-		if ((drawDesc.drawWater || showsReflection) && _reflectionSkips == 0)
+		if (drawDesc.drawWater || showsReflection)
 		{
 			DrawSceneDesc drawPassDesc = drawDesc;
 
@@ -6117,9 +6109,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	// program, would otherwise land after the hand, whose faded wrist writes depth, and leave a hole in the water
 	// where the wrist should show it through.
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	// So is a view whose sorted draws came too near Vulkan's descriptor sets of late
-	const bool inOrder = inTemple || _inOrderViews.at(static_cast<size_t>(desc.viewId)) > 0;
-	_shaderManager->SetViewOrder(desc.viewId, inOrder ? ViewOrder::Sequential : ViewOrder::ByProgram);
+	_shaderManager->SetViewOrder(desc.viewId, inTemple ? ViewOrder::Sequential : ViewOrder::ByProgram);
 	// Outside the temple, what blends in the world is drawn after the rest of the scene in a pass of its own, all of it
 	// together and the farthest first, as the game sorts it
 	const auto translucentViewId = TranslucentView(desc.viewId);
@@ -6788,19 +6778,69 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                                          inSegment(segment, [&] { withoutHeld(first, count, draw); });
 				                                          });
 			};
-			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own
+			// The view of this pass, as the pass sets it. An instance out of it puts no pixel on the screen, so the pass
+			// does not draw it. A warm-up draws all instances, so that each draw makes its pipeline.
+			const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+			                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+			const auto instanceSeen = [&](const L3DMesh& mesh, const RenderContext::InstancedDrawDesc& placers,
+			                              uint32_t instance) {
+				// The bones of a model can move its parts out of its box, and so can the offsets of its submeshes
+				if (_warmingUp || mesh.IsBoned() || placers.bonePalette || placers.perEntity ||
+				    !placers.subMeshOffsets.empty() || instance >= renderCtx.instanceUniforms.size())
+				{
+					return true;
+				}
+				const auto& model = renderCtx.instanceUniforms[instance].model;
+				const auto& box = mesh.GetBoundingBox();
+				const bool boxSeen = view_frustum::SeesBox(seenBy, model, box.minima, box.maxima);
+				if (!placers.morphWithTerrain || boxSeen)
+				{
+					return boxSeen;
+				}
+				// A model that goes with the land moves its points along its up, by no more than the highest land under
+				// its box. The test reads the land only when the highest land that a cell can have puts the box in view.
+				const auto up = view_frustum::LandRiseSweep(model, 1.0f);
+				if (!up.has_value())
+				{
+					return true;
+				}
+				if (!view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * view_frustum::k_HighestLand))
+				{
+					return false;
+				}
+				const auto& land = Locator::terrainSystem::value();
+				const float highestRise =
+				    view_frustum::HighestLandUnder(model, box.minima, box.maxima, [&land](glm::ivec2 corner) {
+					    return land.GetCell(glm::u16vec2(corner)).altitude;
+				    });
+				return view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * highestRise);
+			};
+			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own. A
+			// draw of all the other models' instances starts at the first instance in view and stops after the last.
 			const auto drawPlaced = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
-			                            bool useMaterialBlending, const EntityPose* pose = nullptr) {
+			                            bool useMaterialBlending) {
+				const auto& mesh = *meshManager.Handle(meshId);
 				inSegments(placers, [&](uint32_t first, uint32_t count) {
+					const auto seen = [&](uint32_t instance) { return instanceSeen(mesh, placers, instance); };
 					if (!placers.partsByLevel)
 					{
-						drawInstances(meshId, placers, useMaterialBlending, first, count, pose);
+						const auto instances = std::views::iota(first, first + count);
+						const auto start = std::ranges::find_if(instances, seen);
+						if (start == instances.end())
+						{
+							return;
+						}
+						const auto last = *std::ranges::find_if(instances | std::views::reverse, seen);
+						drawInstances(meshId, placers, useMaterialBlending, *start, last + 1 - *start);
 						return;
 					}
 					for (uint32_t instance = first; instance < first + count; ++instance)
 					{
-						submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
-						drawInstances(meshId, placers, useMaterialBlending, instance, 1, pose);
+						if (seen(instance))
+						{
+							submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+							drawInstances(meshId, placers, useMaterialBlending, instance, 1);
+						}
 					}
 					submitDesc.detailLevel = 1;
 				});
@@ -7517,7 +7557,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
-						if (mirroredWithHand(instance))
+						if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
 						{
 							continue;
 						}
@@ -7583,7 +7623,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
-						if (mirroredWithHand(instance))
+						if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
 						{
 							continue;
 						}
@@ -7982,11 +8022,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				// The sprites name their textures by their ids in the cache
 				const auto& textures = Locator::resources::value().GetTextures();
+				// The view of this pass. A sprite out of it puts no pixel on the screen, so the pass does not draw it.
+				const auto seenBy = view_frustum::FromViewProjection(
+				    desc.camera->GetProjectionMatrix() * desc.camera->GetViewMatrix(Camera::Interpolation::Current));
 				const auto drawSprites = [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin,
-				                          bookmarksShown, leashMarkersShown](const ecs::Registry& from) {
+				                          bookmarksShown, leashMarkersShown, &seenBy](const ecs::Registry& from) {
 					from.Each<const Sprite, const Transform>(
 					    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &from, bookmarksShown,
-					     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+					     leashMarkersShown, &seenBy](entt::entity entity, const Sprite& sprite, const Transform& transform) {
 						    if (!bookmarksShown && from.AllOf<CameraBookmark>(entity))
 						    {
 							    return;
@@ -8024,6 +8067,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    modelMatrix = glm::translate(modelMatrix, placed.position);
 						    modelMatrix *= glm::mat4(placed.rotation);
 						    modelMatrix = glm::scale(modelMatrix, placed.scale);
+						    if (!_warmingUp &&
+						        !view_frustum::SeesSphere(seenBy, placed.position,
+						                                  view_frustum::QuadRadius(glm::mat3(modelMatrix)) +
+						                                      view_frustum::k_BoxMargin))
+						    {
+							    return;
+						    }
 
 						    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
 
@@ -8155,7 +8205,7 @@ void Renderer::Frame() noexcept
 #if defined(__EMSCRIPTEN__)
 	web::PresentFrame();
 #endif
-	// After it, the views are set back, and the frame is not counted for the descriptor sets of the game's frames
+	// After a warm-up frame, set the views back
 	if (warmUp)
 	{
 		for (const auto view : warm_up::k_WindowSceneViews)
@@ -8164,76 +8214,8 @@ void Renderer::Frame() noexcept
 		}
 		bgfx::setViewClear(static_cast<bgfx::ViewId>(warm_up::k_CoverView), BGFX_CLEAR_NONE);
 	}
-	if (const auto sets = _shaderManager->FrameEnded(); sets.has_value() && !warmUp)
-	{
-		WatchDescriptorSets(*sets);
-	}
-	else if (sets.has_value())
-	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "A warm-up frame took {} Vulkan descriptor sets ({} draws)", sets->sets,
-		                    sets->draws);
-	}
+	_shaderManager->FrameEnded();
 	_offscreenShots->FrameEnded(frame, _bgfxCallback->failures, _bgfxCallback->pictures);
-}
-
-void Renderer::WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept
-{
-	_bgfxCallback->recentDescriptorSets = sets.sets;
-	const auto budget = JudgeDescriptorSets(sets.sets);
-	// The frames in flight share one pool, so a frame over its share passes, but not several. For a while after one,
-	// the scene's views are drawn in the order their draws come where that takes far fewer sets (a run of draws that
-	// leaves some textures bound part way alternates when sorted), and the sea's reflection, the one pass the scene can
-	// do without, is left as it was last drawn if that isn't enough.
-	constexpr uint32_t k_ReliefFrames = 60;
-	const bool relieved =
-	    _reflectionSkips > 0 || std::ranges::any_of(_inOrderViews, [](uint32_t frames) { return frames > 0; });
-	const auto countDown = [](uint32_t& frames) { frames = frames > 0 ? frames - 1 : 0; };
-	countDown(_reflectionSkips);
-	std::ranges::for_each(_inOrderViews, countDown);
-	std::string relief;
-	if (budget == DescriptorBudget::Over)
-	{
-		constexpr std::array k_Reorderable = {static_cast<uint16_t>(RenderPass::Main),
-		                                      static_cast<uint16_t>(RenderPass::Reflection)};
-		const auto plan = PlanDescriptorSetRelief(sets, k_Reorderable);
-		for (const auto view : plan.inOrder)
-		{
-			_inOrderViews.at(view) = k_ReliefFrames;
-			relief += fmt::format("; the {} is drawn in the order it comes", k_RenderPassNames.at(view));
-		}
-		if (plan.skipOptional)
-		{
-			_reflectionSkips = k_ReliefFrames;
-			relief += "; the sea's reflection is skipped";
-		}
-		// A relief starting is said at once, whatever the last warning
-		if (!relieved)
-		{
-			_descriptorSetWarningPause = 0;
-		}
-	}
-
-	if (_descriptorSetWarningPause > 0)
-	{
-		--_descriptorSetWarningPause;
-	}
-	if (budget == DescriptorBudget::Fine || _descriptorSetWarningPause > 0)
-	{
-		return;
-	}
-	constexpr uint32_t k_WarningPauseFrames = 600;
-	_descriptorSetWarningPause = k_WarningPauseFrames;
-	std::string views;
-	for (const auto& view : sets.views)
-	{
-		const auto name = view.view < k_RenderPassNames.size() ? std::string(k_RenderPassNames.at(view.view))
-		                                                       : "view " + std::to_string(view.view);
-		views += fmt::format("{}{}: {} sets ({} in order), {} draws", views.empty() ? "" : "; ", name, view.sets,
-		                     view.setsInOrder, view.draws);
-	}
-	SPDLOG_LOGGER_WARN(spdlog::get("graphics"),
-	                   "A frame took {} of the {} Vulkan descriptor sets a frame has ({} draws){}. By view: {}", sets.sets,
-	                   k_DescriptorSetsPerFrame, sets.draws, relief.empty() ? "" : relief + " for a while", views);
 }
 
 void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept

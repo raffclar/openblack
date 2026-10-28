@@ -90,7 +90,6 @@
 #include "Commands/PlayerCommands.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
-#include "Common/BuildVersionFile.h"
 #include "Common/DeveloperToolsGate.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
@@ -753,6 +752,7 @@ Game::Game(Arguments&& args) noexcept
 	config.numFramesToSimulate = args.numFramesToSimulate;
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
+	config.frameStatsOut = args.frameStatsOut;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
 	config.lobbyOrigin = args.lobbyOrigin;
 	config.lobbyTestAuthorities = args.lobbyTestAuthorities;
@@ -4665,7 +4665,8 @@ Game::RunStart Game::StartRun() noexcept
 	if (config.frameStatsInterval > 0)
 	{
 		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
-		                               Locator::rendererInterface::value().GetPipelinesMade());
+		                               Locator::rendererInterface::value().GetPipelinesMade(),
+		                               std::filesystem::path(config.frameStatsOut));
 		if (config.frameStatsViews)
 		{
 			Locator::rendererInterface::value().SetProfile(true);
@@ -4905,7 +4906,7 @@ bool Game::RunFrame() noexcept
 		if (frameStats.has_value())
 		{
 			frameStats->Frame(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(), profiler,
-			                  Locator::rendererInterface::value().GetPipelinesMade());
+			                  Locator::rendererInterface::value().GetPipelinesMade(), Locator::time::value().GetTurn());
 		}
 		frameStart = frameEnd;
 		// A close of the window ends the game here, at the end of the frame, but not during a script's cut scene
