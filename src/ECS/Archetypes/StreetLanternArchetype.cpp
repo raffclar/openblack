@@ -28,6 +28,7 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Utils.h"
 #include "VillageLightArchetype.h"
 
 using namespace openblack;
@@ -57,6 +58,8 @@ entt::entity StreetLanternArchetype::Create(const glm::vec3& position, MobileSta
 		}
 	}
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	// It stands as it was made, unturned
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	const bool country = info != MobileStaticInfo::StreetLantern;

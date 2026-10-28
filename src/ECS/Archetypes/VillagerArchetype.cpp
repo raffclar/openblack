@@ -41,6 +41,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -110,10 +111,8 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	auto& person =
 	    registry.Assign<Villager>(entity, life, villager_age::BirthTurnFor(turn, born.age), born.food, lifeStage, sex,
 	                              info.tribeType, info.villagerNumber, task, entt::null, entt::null, born.lastCheckTurn);
-	// TODO(villager-ageing): the game counts every thing it makes (trees, buildings, animals and the rest) in one order;
-	// only villagers are counted yet, so each villager's own speed difference is drawn from the same spread but not the
-	// same one as the game gives that villager
-	person.creationIndex = registry.Context().thingsMade++;
+	// The villager's place in the order of all the things made gives it its own small difference in speed
+	person.creationIndex = TakeThingMadePlace();
 	person.kind = type;
 	// It goes to the front of the list of the living
 	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});

@@ -56,6 +56,9 @@ public:
 	/// Once a turn: each town gets the entities of its flags, and the flags of a town that has gone go too. Only the turn
 	/// makes and removes these entities, so that every computer keeps the same entities in the world.
 	virtual void ProcessFlags() = 0;
+	/// A new town gets the entities of its flags at once, as it is made, each taking its place in the order of the things
+	/// made. A town that has its flags keeps them.
+	virtual void MakeFlags(entt::entity town) = 0;
 	/// What the hand shows over a flag: the flag's own words, among the game's tooltips, and its town's desire in
 	/// hundredths. None for anything not a flag showing.
 	struct FlagToolTip

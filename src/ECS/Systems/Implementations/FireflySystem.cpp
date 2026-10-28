@@ -17,6 +17,7 @@
 #include <glm/mat3x3.hpp>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/DeadTree.h"
@@ -143,6 +144,8 @@ entt::entity FireflySystem::Create(const map_coords::MapCoords& spot)
 	auto& registry = _world->Entities();
 	const auto drift = fireflies::DrawDrift([this](float x) { return _world->GameFloatRand(x); });
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	registry.Assign<Firefly>(entity, fireflies::Make(spot, drift));
 	registry.Assign<Transform>(entity, _world->ToWorld(spot), glm::mat3(1.0f),
 	                           glm::vec3(fireflies::k_SpriteHalfSize, fireflies::k_SpriteHalfSize, 1.0f));

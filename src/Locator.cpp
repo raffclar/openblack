@@ -115,6 +115,7 @@
 #include "ECS/Systems/Implementations/SaveGameSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #include "ECS/Systems/Implementations/SyncChecksumSystem.h"
+#include "ECS/Systems/Implementations/ThingsMadeSystem.h"
 #include "ECS/Systems/Implementations/TipBubbleSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
@@ -333,6 +334,7 @@ using openblack::ecs::systems::TattooMenuSystem;
 using openblack::ecs::systems::TeleportSystem;
 using openblack::ecs::systems::TempleDestructionSystem;
 using openblack::ecs::systems::TempleExteriorSystem;
+using openblack::ecs::systems::ThingsMadeSystem;
 using openblack::ecs::systems::TimeSystem;
 using openblack::ecs::systems::TipBubbleSystem;
 using openblack::ecs::systems::TornadoSystem;
@@ -740,6 +742,9 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
 	Locator::chimneySmokeSystem::emplace<ChimneySmokeSystem>();
+	// The count of things made goes with the world: a new land starts it again and a saved game keeps it
+	Locator::thingsMadeSystem::emplace<ThingsMadeSystem>(
+	    []() -> uint32_t& { return Locator::entitiesRegistry::value().Context().thingsMade; });
 	Locator::abodeKnockSystem::emplace<AbodeKnockSystem>();
 	Locator::influenceSystem::emplace<InfluenceSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
@@ -987,6 +992,7 @@ void openblack::ShutDownServices()
 	Locator::syncChecksumSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
+	Locator::thingsMadeSystem::reset();
 	Locator::abodeKnockSystem::reset();
 	Locator::rainSystem::reset();
 	Locator::snowfallSystem::reset();

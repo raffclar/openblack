@@ -34,6 +34,7 @@ public:
 	void SetBoost(entt::entity town, TownDesireInfo desire, float boost, bool resort) override;
 	void UpdateFlags(float seconds) override;
 	void ProcessFlags() override;
+	void MakeFlags(entt::entity town) override;
 	[[nodiscard]] std::optional<FlagToolTip> GetFlagToolTip(entt::entity flag) const override;
 };
 

@@ -50,6 +50,8 @@ entt::entity SpellSeedArchetype::Create(const glm::vec3& position, SpellSeedType
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& info = magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType);
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(info.scale));
 	registry.Assign<SpellSeed>(
 	    entity, SpellSeed {.seedType = seedType, .powerUp = powerUp, .player = player, .castMultiplier = multiplier});
@@ -64,6 +66,8 @@ entt::entity OneOffSpellSeedArchetype::Create(const glm::vec3& position, SpellSe
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<OneOffSpellSeed>(
 	    entity,
@@ -78,6 +82,8 @@ entt::entity SpellDispenserArchetype::Create(const glm::vec3& position, MagicTyp
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(building));
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	const auto& transform =
 	    registry.Assign<Transform>(entity, position, glm::mat3(portable_math::EulerAngleY(-yAngleRadians)), glm::vec3(scale));
 	registry.Assign<Mesh>(entity, resources::HashIdentifier(info.meshId), static_cast<int8_t>(0), static_cast<int8_t>(0));

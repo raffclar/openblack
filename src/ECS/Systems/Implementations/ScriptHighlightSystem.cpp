@@ -24,6 +24,7 @@
 
 #include "3D/AllMeshes.h"
 #include "Common/PortableRotations.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -87,6 +88,8 @@ entt::entity ScriptHighlightSystem::Create(uint32_t kind, glm::vec3 at, uint32_t
 	}
 	auto& registry = _world->Entities();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	auto& highlight = registry.Assign<ScriptHighlight>(entity);
 	highlight.kind = static_cast<HighlightInfo>(kind);
 	highlight.scriptId = challenge;

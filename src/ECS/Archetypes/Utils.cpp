@@ -14,6 +14,7 @@
 
 #include "3D/L3DMesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Systems/ThingsMadeSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -46,4 +47,9 @@ openblack::ecs::archetypes::GetFixedObstacleBoundingCircle(entt::id_type meshId,
 	const auto radius = (glm::compMax(bbSize) / glm::compMin(bbSize) > 1.4) ? glm::length(bbSize) : glm::compMax(bbSize);
 
 	return std::make_pair(point, radius);
+}
+
+uint32_t openblack::ecs::archetypes::TakeThingMadePlace()
+{
+	return Locator::thingsMadeSystem::has_value() ? Locator::thingsMadeSystem::value().TakeNext() : 0;
 }

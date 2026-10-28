@@ -22,6 +22,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Common/PortableRotations.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
@@ -380,7 +381,7 @@ namespace
 {
 
 /// A town's flags are made with it, unseen until it has a store standing built
-void MakeFlags(entt::entity town)
+void MakeTownFlags(entt::entity town)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& info = Locator::infoConstants::value().townDesire;
@@ -394,6 +395,8 @@ void MakeFlags(entt::entity town)
 			continue;
 		}
 		const auto flag = registry.Create();
+		// Each flag takes its place in the order of the things made
+		openblack::ecs::archetypes::TakeThingMadePlace();
 		registry.Assign<TownDesireFlag>(
 		    flag, TownDesireFlag {.town = town, .desire = static_cast<TownDesireInfo>(i), .point = *point});
 		registry.Assign<Mesh>(flag, resources::HashIdentifier(info.at(i).worshipSiteMesh), static_cast<int8_t>(0),
@@ -440,7 +443,7 @@ void TownDesireSystem::ProcessFlags()
 	});
 	for (const auto town : towns)
 	{
-		MakeFlags(town);
+		MakeTownFlags(town);
 	}
 	std::vector<entt::entity> orphans;
 	registry.Each<const TownDesireFlag>([&](entt::entity entity, const TownDesireFlag& flag) {
@@ -452,6 +455,14 @@ void TownDesireSystem::ProcessFlags()
 	for (const auto orphan : orphans)
 	{
 		registry.Destroy(orphan);
+	}
+}
+
+void TownDesireSystem::MakeFlags(entt::entity town)
+{
+	if (!Locator::entitiesRegistry::value().AllOf<TownDesireFlags>(town))
+	{
+		MakeTownFlags(town);
 	}
 }
 

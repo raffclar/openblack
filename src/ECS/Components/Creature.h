@@ -42,6 +42,8 @@ struct Creature
 	float size {1.0f};
 	/// The order in which the game made the creatures: a creature made later has a larger number
 	uint64_t made {0};
+	/// Its place in the order of all the things the game made, which the game keeps with it in a save
+	uint32_t creationIndex {0};
 	/// The smaller size its body is shown at while it is in its temple's pen, its own size kept; none elsewhere
 	std::optional<float> penSize;
 	/// The share of the player's creature's size a script keeps it growing or shrinking towards, turn by turn; none

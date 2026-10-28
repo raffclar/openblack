@@ -396,6 +396,7 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 	object.object.info = save_state::CreatureInfo(body.species).value_or(0);
 	object.object.coords = object.position.position;
 	object.object.scale = body.size;
+	object.object.creationIndex = body.creationIndex;
 	object.move.speed = save_state::k_CreatureSpeedWord;
 
 	auto& record = object.creature;

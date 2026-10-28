@@ -1494,6 +1494,12 @@
   "query": "living.chimneys"
  },
  {
+  "description": "The count of the things of the world made since the land was loaded: the place in the order of the next thing made",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.things_made"
+ },
+ {
   "description": "The sounds tagged to things: sound, whether active, its emitter, the object it is attached to, whether it loops",
   "kind": "list",
   "parameters": [],
