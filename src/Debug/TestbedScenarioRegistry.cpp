@@ -7779,13 +7779,13 @@ void AddCombat(std::vector<Scenario>& all)
 		    .id = "combat.face_off_waits_for_body",
 		    .name = "A tiger finishes its action before it turns to fight",
 		    .facet = Facet::Combat,
-		    .description = "The blue tiger starts its impress action. Three tenths of a second later the red tiger asks "
-		                   "the blue tiger to fight. Both fight by themselves.",
+		    .description = "The blue tiger starts its impress action. Six seconds later, near the end of the action, the "
+		                   "red tiger asks the blue tiger to fight. Both fight by themselves.",
 		    .expected = "The red tiger turns to face the blue tiger. The blue tiger plays its action to the end, and only "
 		                "then turns to face the red tiger. Then both taunt.",
 		    .framing = ringside,
 		    .creatures = {asker, asked},
-		    .commands = {Play(Kind::PlayAction, 1, animations::k_Impress, 1.0f, false), Fight(Kind::StartFight, 0, 1, 0.3f),
+		    .commands = {Play(Kind::PlayAction, 1, animations::k_Impress, 1.0f, false), Fight(Kind::StartFight, 0, 1, 6.0f),
 		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 	}
