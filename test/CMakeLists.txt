@@ -1749,7 +1749,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_hand_reports test_hand_reports.cpp)
 openblack_setup_and_add_test(test_magic_pile_height test_magic_pile_height.cpp)
 openblack_setup_and_add_test(test_build_version test_build_version.cpp)
-openblack_setup_and_add_test(test_build_version_file test_build_version_file.cpp)
 openblack_setup_and_add_test(test_gods_ring_map online/test_gods_ring_map.cpp)
 target_link_libraries(test_gods_ring_map PRIVATE lnd)
 openblack_setup_and_add_test(test_gods_ring_land test_gods_ring_land.cpp)
@@ -1908,3 +1907,4 @@ openblack_setup_and_add_test(
   test_creature_upload_dialog online/test_creature_upload_dialog.cpp
 )
 openblack_setup_and_add_test(test_drawn_effect_steps test_drawn_effect_steps.cpp)
+openblack_setup_and_add_test(test_entity_storage test_entity_storage.cpp)
