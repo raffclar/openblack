@@ -12,7 +12,6 @@
 #include <spdlog/spdlog.h>
 
 #include "BoneBudget.h"
-#include "DescriptorSetTally.h"
 #include "DrawWindow.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -26,12 +25,11 @@ static_assert(ShaderProgram::k_DiscardAll == BGFX_DISCARD_ALL);
 
 ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader,
                              std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults,
-                             DescriptorSetTally* tally, DrawWindow* window)
+                             DrawWindow* window)
     : _name(name)
     , _program(BGFX_INVALID_HANDLE)
     , _samplers(std::move(samplers))
     , _samplerDefaults(samplerDefaults)
-    , _tally(tally)
     , _window(window)
 {
 	uint16_t numShaderUniforms = 0;
@@ -87,10 +85,6 @@ void ShaderProgram::Bind(uint8_t bindPoint, UniformHandle sampler, TextureHandle
 {
 	bgfx::setTexture(bindPoint, toBgfx(sampler), toBgfx(texture), samplerFlags);
 	_samplerDefaults.Set(bindPoint);
-	if (_tally != nullptr)
-	{
-		_tally->SetTexture(bindPoint, toBgfx(texture).idx);
-	}
 }
 
 void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint, const Texture2D& texture) const
@@ -142,21 +136,12 @@ void ShaderProgram::Submit(uint16_t viewId, uint32_t depth, uint8_t discardFlags
 			Bind(sampler.stage, *_uniforms.Find(sampler.name), texture);
 		}
 	}
-	const bool dropsBindings = (discardFlags & BGFX_DISCARD_BINDINGS) != 0;
 	if (_window != nullptr && !_window->Admit(viewId))
 	{
 		// The draw goes in a later frame. Its state stays or goes as the draw would keep or drop it.
-		if (_tally != nullptr && dropsBindings)
-		{
-			_tally->DiscardBindings();
-		}
 		bgfx::discard(discardFlags);
 		_samplerDefaults.Discarded(discardFlags);
 		return;
-	}
-	if (_tally != nullptr)
-	{
-		_tally->Submit(viewId, toBgfx(_program).idx, depth, dropsBindings);
 	}
 	bgfx::submit(viewId, toBgfx(_program), depth, discardFlags);
 	_samplerDefaults.Discarded(discardFlags);
