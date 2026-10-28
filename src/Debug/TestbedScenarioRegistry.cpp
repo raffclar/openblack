@@ -2903,17 +2903,20 @@ void AddLight(std::vector<Scenario>& all)
 	                 .offset = {-4.0f, 6.0f},
 	                 .walkTo = glm::vec2 {4.0f, 6.0f},
 	                 .walkRepeatSeconds = 6.0f,
-	                 .woodHeld = 50},
+	                 .walkFinal = VillagerStates::ArrivesAtStoragePitForDropOff,
+	                 .woodHeld = 250},
 	                {.type = VillagerInfo::CelticForesterMale,
 	                 .offset = {4.0f, 10.0f},
 	                 .walkTo = glm::vec2 {-4.0f, 10.0f},
 	                 .walkRepeatSeconds = 6.0f,
-	                 .woodHeld = 50},
+	                 .walkFinal = VillagerStates::ArrivesAtStoragePitForDropOff,
+	                 .woodHeld = 250},
 	                {.type = VillagerInfo::CelticHousewifeFemale,
 	                 .offset = {-3.0f, 3.0f},
 	                 .walkTo = glm::vec2 {3.0f, 3.0f},
 	                 .walkRepeatSeconds = 6.0f,
-	                 .foodHeld = 50}},
+	                 .walkFinal = VillagerStates::HousewifeReturnHomeWithFood,
+	                 .foodHeld = 150}},
 	});
 }
 
