@@ -1192,6 +1192,8 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 	const bool hasSmoke = textures.Contains(k_SmokeId.value()) && textures.Contains(k_SmokeAlphaId.value());
 	auto* random = Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
 	const auto draw = [random] { return random != nullptr ? random->CrtRand() : 0; };
+	// The posts do not take a place in the count of made things here. The temple takes their three places when it is
+	// made
 	for (size_t i = 0; i < points.size(); ++i)
 	{
 		const auto entity = registry.Create();
