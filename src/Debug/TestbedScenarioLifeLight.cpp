@@ -323,6 +323,28 @@ void AddReactions(std::vector<Scenario>& all)
 	    .townOwner = PlayerNames::NEUTRAL,
 	});
 	all.push_back({
+	    .id = "miracles.reactions_food",
+	    .name = "Reactions: villagers react to the food miracle",
+	    .facet = Facet::Miracles,
+	    .description = "The food miracle poured by hand for three seconds, 12 metres beside nine villagers of a town that "
+	                   "the neutral player holds.",
+	    .expected = "The first grain of food that lands starts the miracle's nice reaction: the villagers in reach stop, "
+	                "turn to the falling food and watch it, and a symbol of belief rises from each in the player's "
+	                "colour. The pile of food that the grains make calls the villagers, who walk to it. The inspector "
+	                "query magic.reactions gives the reaction of the miracle and the reaction of the pile.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, 20.0f}, {25.0f, 55.0f}}, .distance = 0.7f},
+	    .objects = believers,
+	    .miracles = {{.type = MagicType::Food,
+	                  .point = {0.0f, 45.0f},
+	                  .handOffset = {0.0f, 45.0f},
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .holdSeconds = 3.0f,
+	                  .byHand = true}},
+	    .townOwner = PlayerNames::NEUTRAL,
+	});
+	all.push_back({
 	    .id = "miracles.belief_symbols",
 	    .name = "Reactions: belief symbols from a miracle that does not touch the villagers",
 	    .facet = Facet::Miracles,

@@ -612,6 +612,36 @@ TEST(SpellBehaviours, FoodLandsOnDryLandAsPilesAndPaysForEveryGrain)
 	EXPECT_TRUE(spells::HasEnoughForRecast(*info, spell));
 }
 
+TEST(SpellBehaviours, TheFirstGrainOfFoodStartsTheNiceReactionEvenInTheWater)
+{
+	auto info = MakeTables();
+	auto& food = info->magicFood.at(0);
+	food.resourceType = ResourceType::Food;
+	food.resourceAmountFirstEvent = 200;
+	food.resourceAmountPerEvent = 18;
+	food.costPerUnit = 7;
+	// The food miracle's row: no reaction when it is cast, the nice reaction on its events
+	auto& effect = Effect(*info, MagicType::Food);
+	effect.initialChants = 5000.0f;
+	effect.createReactionOnCast = 0;
+	effect.createReactionOnEvent = 1;
+	effect.reactionType = Reaction::LookAtNiceSpell;
+	FakeServices services(*info);
+	services.world.wetBelowX = 50.0f;
+	auto spell = MakeSpell(MagicType::Food, 5000.0f);
+	spells::Prepare(services, spell);
+	EXPECT_TRUE(services.reactions.empty());
+	// The grain falls in the water: it puts down no food, but the miracle's reaction starts
+	spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Landed, {10.0f, 0.0f, 100.0f}));
+	EXPECT_TRUE(services.world.resources.empty());
+	ASSERT_EQ(services.reactions.size(), 1u);
+	EXPECT_FALSE(services.reactions[0]);
+	// The next grains keep the one reaction
+	spells::OnEvent(services, spell, EventAt(SpellEventInfo::Type::Landed, {100.0f, 0.0f, 100.0f}));
+	EXPECT_EQ(services.world.resources.size(), 1u);
+	EXPECT_EQ(services.reactions.size(), 1u);
+}
+
 TEST(SpellBehaviours, TheHealGivesItsEffectThePeopleRoundIt)
 {
 	auto info = MakeTables();

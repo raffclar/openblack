@@ -982,9 +982,9 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 			    Locator::particleSystem::value().StartSpotVisual(SpotVisualType::PilefoodSpeedup, point, -1, created, 1.0f);
 		}
 	}
-	// The people come to look at it
+	// The people come to look at it: a new free pile always asks for the reaction of its kind
 	const auto reaction = PotInfoOf(potType).associatedReaction;
-	if (reaction != Reaction::None && Locator::reactionSystem::has_value())
+	if (piles::ReactsWhenMade(PotInfoOf(potType).potType, reaction, true) && Locator::reactionSystem::has_value())
 	{
 		Locator::reactionSystem::value().Create({.initiator = created,
 		                                         .type = reaction,
