@@ -22,7 +22,7 @@
   "query": "ecs.entities"
  },
  {
-  "description": "One entity: its kind, label, place and component names; their fields on request",
+  "description": "One entity: its kind, label, place and component names; their fields on request. A component can be larger than max_bytes (a creature's animation is): the answer then gives sizes, the bytes of each field, to choose fields from",
   "kind": "object",
   "parameters": [
    {
@@ -109,7 +109,7 @@
   "query": "drawn.entities"
  },
  {
-  "description": "One entity: its kind, label, place and component names; their fields on request",
+  "description": "One entity: its kind, label, place and component names; their fields on request. A component can be larger than max_bytes (a creature's animation is): the answer then gives sizes, the bytes of each field, to choose fields from",
   "kind": "object",
   "parameters": [
    {

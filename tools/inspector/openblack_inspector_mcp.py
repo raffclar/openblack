@@ -68,7 +68,9 @@ SHAPING = {
     "cursor": {"type": "integer", "description": "Start from the next_cursor of the last page"},
     "count": {"type": "boolean", "description": "Only how many items match"},
     "summary": {"type": "string", "description": "count/min/max/mean of this numeric field instead of items"},
-    "max_bytes": {"type": "integer", "description": "Cap on the result's size (16384 by default)"},
+    "max_bytes": {"type": "integer", "description": "Cap on the result's size (16384 by default). Goes at the top level of the request, not in params. "
+                                                                 "A larger object answer gives only truncated, keys and sizes (the bytes of each member down to a component's fields): "
+                                                                 "choose fields from sizes, or raise max_bytes"},
 }
 NEAR = {
     "near": {"type": "array", "items": {"type": "number"},
