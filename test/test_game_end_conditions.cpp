@@ -134,8 +134,10 @@ TEST(GameEndConditions, ANewTownNeedsAStoragePitATownCentreAndAHouse)
 	// A building of the town that is not all built does not count
 	const std::vector<TownBuilding> unbuilt {{.type = AbodeType::StoragePit, .built = false}, {.type = AbodeType::TownCentre}};
 	EXPECT_FALSE(CompletesNewTown(unbuilt, AbodeType::LivingQuarters));
-	// The building that starts to work counts while it is not all built
-	EXPECT_TRUE(CompletesNewTown(unbuilt, AbodeType::StoragePit));
+	// The building that starts to work counts, and the unbuilt storage pit of the town does not stop it
+	const std::vector<TownBuilding> withHouse {
+	    {.type = AbodeType::StoragePit, .built = false}, {.type = AbodeType::TownCentre}, {.type = AbodeType::LivingQuarters}};
+	EXPECT_TRUE(CompletesNewTown(withHouse, AbodeType::StoragePit));
 }
 
 TEST(GameEndConditions, ATownThatHadAllThreeIsNotNewAgain)
