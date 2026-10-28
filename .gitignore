@@ -51,3 +51,7 @@ __pycache__/
 
 # The shared build scripts (the build* rule above would hide them)
 !/tools/build/
+
+# Local settings of Claude Code skills (each developer has their own paths)
+.claude/settings.local.json
+.claude/*.local.json
