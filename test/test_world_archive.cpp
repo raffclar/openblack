@@ -1410,3 +1410,67 @@ TEST(WorldArchive, AListOfEnumerationsIsTheBytesOfEachValueInTurn)
 	}
 	EXPECT_EQ(lists.Bytes(), oneByOne.Bytes());
 }
+
+TEST(WorldArchive, AListOfFlagsAndAListOfListsAreTheBytesOfEachValueInTurn)
+{
+	entt::meta_ctx context;
+	const std::vector<bool> flags {true, false, false, true, true};
+	const std::vector<std::vector<uint32_t>> lists {{}, {7, 8}, {}, {0xFFFFFFFFu}};
+	BinaryWriter blocks(context);
+	Save(blocks, flags);
+	Save(blocks, lists);
+	Save(blocks, std::vector<std::vector<uint32_t>> {});
+
+	BinaryWriter oneByOne(context);
+	oneByOne.WriteSize(flags.size());
+	for (const bool flag : flags)
+	{
+		oneByOne.WriteRaw(static_cast<uint8_t>(flag ? 1 : 0));
+	}
+	oneByOne.WriteSize(lists.size());
+	for (const auto& list : lists)
+	{
+		oneByOne.WriteSize(list.size());
+		for (const auto value : list)
+		{
+			oneByOne.WriteRaw(value);
+		}
+	}
+	oneByOne.WriteSize(0);
+	EXPECT_EQ(blocks.Bytes(), oneByOne.Bytes());
+
+	// The bytes load back to the same lists
+	BinaryReader in(context, blocks.Bytes(), EntityRemap {});
+	std::vector<bool> readFlags;
+	std::vector<std::vector<uint32_t>> readLists;
+	Load(in, readFlags);
+	Load(in, readLists);
+	EXPECT_FALSE(in.Failed());
+	EXPECT_EQ(readFlags, flags);
+	EXPECT_EQ(readLists, lists);
+}
+
+TEST(WorldArchive, TheMixOfBytesIsTheHashOfEachByteInTurn)
+{
+	constexpr uint64_t k_Offset = 14695981039346656037ull;
+	constexpr uint64_t k_Prime = 1099511628211ull;
+	// Runs of zero bytes of each length at each place, with bytes that are not zero between them
+	std::vector<uint8_t> bytes;
+	for (uint8_t run = 0; run < 40; ++run)
+	{
+		bytes.insert(bytes.end(), run, uint8_t {0});
+		bytes.push_back(static_cast<uint8_t>(run + 1));
+	}
+	for (size_t from = 0; from < 9; ++from)
+	{
+		const auto part = std::span<const uint8_t>(bytes).subspan(from);
+		uint64_t expected = k_Offset;
+		for (const auto byte : part)
+		{
+			expected = (expected ^ byte) * k_Prime;
+		}
+		uint64_t mixed = k_Offset;
+		MixBytes(mixed, part);
+		EXPECT_EQ(mixed, expected) << "from " << from;
+	}
+}

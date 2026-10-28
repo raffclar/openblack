@@ -280,14 +280,6 @@ struct ComponentHash
 constexpr uint64_t k_HashOffset = 14695981039346656037ull;
 constexpr uint64_t k_HashPrime = 1099511628211ull;
 
-void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
-{
-	for (const auto byte : bytes)
-	{
-		hash = (hash ^ byte) * k_HashPrime;
-	}
-}
-
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 /// Tools: keeps the bytes of each field of each row that the hash leaves out, marked as a part that only shows the world
 template <typename KeepsField>
@@ -1010,4 +1002,38 @@ std::optional<std::vector<NamedSection>> openblack::ecs::reflection::LoadSection
 		return std::nullopt;
 	}
 	return sections;
+}
+
+void openblack::ecs::reflection::MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
+{
+	// A byte of zero only multiplies the hash by the prime. Eight bytes of zero multiply it by the prime to the power of
+	// eight, which gives the same hash with one step. The rows of a world have many bytes of zero.
+	constexpr size_t k_WordBytes = sizeof(uint64_t);
+	constexpr uint64_t k_HashPrimeToEight = [] {
+		uint64_t power = 1;
+		for (size_t i = 0; i < k_WordBytes; ++i)
+		{
+			power *= k_HashPrime;
+		}
+		return power;
+	}();
+	size_t at = 0;
+	for (; at + k_WordBytes <= bytes.size(); at += k_WordBytes)
+	{
+		uint64_t word = 0;
+		std::memcpy(&word, bytes.data() + at, k_WordBytes);
+		if (word == 0)
+		{
+			hash *= k_HashPrimeToEight;
+			continue;
+		}
+		for (const auto byte : bytes.subspan(at, k_WordBytes))
+		{
+			hash = (hash ^ byte) * k_HashPrime;
+		}
+	}
+	for (const auto byte : bytes.subspan(at))
+	{
+		hash = (hash ^ byte) * k_HashPrime;
+	}
 }

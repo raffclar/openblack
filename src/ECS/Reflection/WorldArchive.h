@@ -154,6 +154,9 @@ struct WorldRows
 	std::vector<uint8_t> bytes;
 };
 
+/// Mixes bytes into a hash with FNV-1a, one byte at a time
+void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes);
+
 /// What the last hash of the world kept of each component: the bytes of its rows, and the hash after each row. A hash
 /// that gets the memo of the hash before it mixes again only the rows from the first row that changed. The memo never
 /// changes a hash. Only a hash with no hash of each field, no visitor and no rows uses it.

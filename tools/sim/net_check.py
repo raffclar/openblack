@@ -887,7 +887,18 @@ def shifted_input(path, folder, extra=0, camera=None):
 
 
 def max_turn_ms(record):
-    """The longest turn of a client in milliseconds, from the turn times in its run record (none without a time)"""
+    """The longest turn of a client in milliseconds, from the turn times in its run record (none without a time). The
+    turn time does not include the time of the step that records the run (max_record_ms gives it)."""
+    return longest_of(record, ("turn_ms_max", "turn_ms"))
+
+
+def max_record_ms(record):
+    """The longest time of the step that records the run of a client, in milliseconds (none without a time)"""
+    return longest_of(record, ("record_ms_max", "record_ms"))
+
+
+def longest_of(record, keys):
+    """The largest value of the keys in the lines of a run record, none when no line has one"""
     longest = None
     if not os.path.exists(record):
         return longest
@@ -899,7 +910,7 @@ def max_turn_ms(record):
                 continue
             if not isinstance(value, dict):
                 continue
-            for key in ("turn_ms_max", "turn_ms"):
+            for key in keys:
                 if isinstance(value.get(key), (int, float)):
                     longest = value[key] if longest is None else max(longest, value[key])
     return longest
@@ -1463,6 +1474,7 @@ def main():
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
             "observer": is_observer, "max_turn_ms": max_turn_ms(os.path.join(client_dir, "record.jsonl")),
+            "max_record_ms": max_record_ms(os.path.join(client_dir, "record.jsonl")),
             "last_compared": compared[-1] if compared else None,
             "stopped_after": client_stopped_after,
             "end_box": lines_with(os.path.join(client_dir, "client.log"),

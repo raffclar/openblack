@@ -345,6 +345,16 @@ class NetCheckHelpers(unittest.TestCase):
                 file.write(json.dumps({"turn": 2, "turn_ms": 1.0, "turn_ms_max": 9.0}) + "\n")
                 file.write(json.dumps({"turn": 3, "other": 1}) + "\n")
             self.assertEqual(net_check.max_turn_ms(path), 9.0)
+            self.assertIsNone(net_check.max_record_ms(path))
+
+    def test_the_longest_record_step_comes_from_the_record(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "record.jsonl")
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(json.dumps({"turn": 1, "turn_ms": 2.5, "record_ms": 1.5, "record_ms_max": 2.25}) + "\n")
+                file.write(json.dumps({"turn": 2, "turn_ms": 1.0, "record_ms": 1.0}) + "\n")
+            self.assertEqual(net_check.max_record_ms(path), 2.25)
+            self.assertEqual(net_check.max_turn_ms(path), 2.5)
 
     def test_the_web_client_checksums_are_read_by_turn(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -388,15 +398,16 @@ class NetCheckHelpers(unittest.TestCase):
 
 class Tables(unittest.TestCase):
     ROWS = [{"game": "a", "status": "same", "started": "2026-10-25T23:00:00", "turns_played": 2000, "first_part_turn": None,
-             "ai": {"gods": 2, "needs": 5, "hand": 1, "casts": 0}, "max_turn_ms": [3.0, 4.25]},
+             "ai": {"gods": 2, "needs": 5, "hand": 1, "casts": 0}, "max_turn_ms": [3.0, 4.25],
+             "max_record_ms": [2.0, 2.5]},
             {"game": "b", "status": "part", "started": "2026-10-26T01:00:00", "turns_played": 300, "first_part_turn": 212,
              "ai": {"gods": 7, "needs": 0, "hand": 0, "casts": 0}, "max_turn_ms": [None]}]
 
     def test_the_table_has_a_line_for_each_game(self):
         lines = ai_soak.table_lines(self.ROWS)
         self.assertEqual(len(lines), 4)
-        self.assertIn("| a | same | 2000 | - | 2 / 5 / 1 / 0 | 4.2 |", lines[2])
-        self.assertIn("| b | part | 300 | 212 | 7 / 0 / 0 / 0 | - |", lines[3])
+        self.assertIn("| a | same | 2000 | - | 2 / 5 / 1 / 0 | 4.2 | 2.5 |", lines[2])
+        self.assertIn("| b | part | 300 | 212 | 7 / 0 / 0 / 0 | - | - |", lines[3])
 
     def test_the_rows_of_a_file_can_be_cut_by_the_date(self):
         with tempfile.TemporaryDirectory() as folder:

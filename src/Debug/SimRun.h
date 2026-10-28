@@ -190,13 +190,23 @@ struct Timings
 	float frameLongestMs {0.0f};
 	/// The time of each stage of the profiler over the frames, by the stage's number
 	std::vector<float> stageTotalMs;
+	/// The times of the steps of the tools that record the run. The time of a turn does not include them.
+	uint32_t records {0};
+	float recordTotalMs {0.0f};
+	float recordLongestMs {0.0f};
+	/// The time of the records since the last turn time, which the next turn time does not include
+	float recordSinceTurnMs {0.0f};
 
+	/// Adds a turn time. The time of the records since the last turn time is not part of the turn.
 	void AddTurn(float ms);
+	/// Adds the time of the step that records the run, which is part of the next turn time
+	void AddRecord(float ms);
 	void AddFrame(float ms);
 	/// Adds the time that each stage took in a frame, by the stage's number
 	void AddStages(std::span<const float> ms);
 	[[nodiscard]] float TurnAverageMs() const;
 	[[nodiscard]] float FrameAverageMs() const;
+	[[nodiscard]] float RecordAverageMs() const;
 };
 
 } // namespace openblack::sim_run
