@@ -1345,12 +1345,13 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 		{
 			report.emplace();
 		}
-		// A face that only this computer shows stays until the world pulls or relaxes a face of its own
+		// The world changes a face that only this computer shows when it changes its own face. If the face of the world
+		// changed in a different way since the last pose, the shown face becomes the face of the world, as the one face
+		// of the creature does.
 		auto* shown = registry.TryGet<ShownCreatureFace>(entity);
-		if (shown != nullptr && !creature_shown_face::StaysBeforePose(shown->worldFace, animation->face))
+		if (shown != nullptr)
 		{
-			registry.Remove<ShownCreatureFace>(entity);
-			shown = nullptr;
+			shown->face = creature_shown_face::AfterWorldWrites(shown->face, shown->worldFace, animation->face);
 		}
 		std::vector<glm::mat4> shownMatrices;
 		const auto shownPose =

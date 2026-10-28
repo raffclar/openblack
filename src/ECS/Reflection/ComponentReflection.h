@@ -367,9 +367,29 @@ struct ComponentInfo
 	/// Copies the rows of a storage, for a writer on another thread to encode; none for a component that cannot be
 	/// copied, or that shares values which the game's thread changes
 	StorageCopy (*copy)(const entt::sparse_set& storage) {nullptr};
+	/// Only this computer has the component, as drawn state: the world save, the world parts that the server sends and
+	/// the hashes of the world leave it out. A component tells this with a constant k_LocalOnly that is true.
+	bool localOnly {false};
 };
 
 /// Registers a component and its fields by name: Reflect<Transform>(context).Field<&Transform::position>("position")
+namespace detail
+{
+/// Whether a component is drawn state that only this computer has: it has a constant k_LocalOnly that is true
+template <typename Type>
+[[nodiscard]] constexpr bool IsLocalOnly()
+{
+	if constexpr (requires { Type::k_LocalOnly; })
+	{
+		return Type::k_LocalOnly;
+	}
+	else
+	{
+		return false;
+	}
+}
+} // namespace detail
+
 template <typename Type>
 class Reflect
 {
@@ -381,6 +401,7 @@ public:
 	          .storage = [](entt::registry& registry) -> entt::sparse_set& { return registry.storage<Type>(); },
 	          .codec = {},
 	          .copy = nullptr,
+	          .localOnly = detail::IsLocalOnly<Type>(),
 	      })
 	{
 		if constexpr (std::is_copy_constructible_v<Type>)

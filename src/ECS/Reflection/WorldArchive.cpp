@@ -187,6 +187,11 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 			unregistered.push_back(ShortTypeName(info));
 			continue;
 		}
+		// The world does not keep the drawn state that only this computer has
+		if (component->localOnly)
+		{
+			continue;
+		}
 		components.push_back({.name = ShortTypeName(info), .storage = &storage, .type = type});
 	}
 	std::ranges::sort(components, {}, &ComponentStorage::name);

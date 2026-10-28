@@ -89,6 +89,7 @@
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ShownCreatureFaces.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -1375,7 +1376,9 @@ void CreatureLocomotionSystem::PlaceWithoutWalking(entt::entity creature, glm::v
 	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
 	{
 		animation->body = {};
-		animation->face = creature_layers::DropFace(animation->face);
+		shown_creature_faces::ChangeFace(registry, creature, animation->face, [](const creature_layers::FaceLayer& face) {
+			return creature_layers::DropFace(face);
+		});
 		animation->lookAt.reset();
 		animation->yaw = {};
 		animation->pitch = {};
@@ -1633,8 +1636,10 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 				self.fidgeted = wait.fidgeted;
 				if (turn.fidget == locomotion::Fidget::Puzzled)
 				{
-					animation.face =
-					    creature_layers::PullFace(animation.face, k_PuzzledFace, k_PuzzledMs, creature_face::Cue::Lost);
+					shown_creature_faces::ChangeFace(
+					    registry, entity, animation.face, [](const creature_layers::FaceLayer& face) {
+						    return creature_layers::PullFace(face, k_PuzzledFace, k_PuzzledMs, creature_face::Cue::Lost);
+					    });
 				}
 				else if (turn.fidget == locomotion::Fidget::Confused)
 				{

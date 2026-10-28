@@ -31,12 +31,15 @@ namespace openblack::creature_shown_face
 	return shown != nullptr ? *shown : world;
 }
 
-/// Whether the shown face stays on the body at a turn pose. It stays while the world did not pull or relax a face since
-/// the last pose. `worldAtLastPose` is the face of the world after that pose, and `worldNow` is its face now.
-[[nodiscard]] inline bool StaysBeforePose(const creature_layers::FaceLayer& worldAtLastPose,
-                                          const creature_layers::FaceLayer& worldNow)
+/// The shown face before a pose. A change to the face of the world also changes the shown face in the same way, and
+/// then sets `expectedWorld` to the new face of the world. If the face of the world is not `expectedWorld`, the world
+/// changed its face in a different way: the shown face becomes the face of the world, as the one face slot of the game
+/// does.
+[[nodiscard]] inline creature_layers::FaceLayer AfterWorldWrites(const creature_layers::FaceLayer& shown,
+                                                                 const creature_layers::FaceLayer& expectedWorld,
+                                                                 const creature_layers::FaceLayer& world)
 {
-	return worldNow == worldAtLastPose;
+	return world == expectedWorld ? shown : world;
 }
 
 /// Whether the shown face is still necessary after a pose: the shown face and the face of the world are different
