@@ -5,7 +5,7 @@ does not have the ignored file, so the reader also looks in the main checkout of
 
 The search order:
   1. the file that OPENBLACK_CONFIG names;
-  2. .claude/openblack.local.json in the current worktree;
+  2. .claude/openblack.local.json in the worktree that holds this file;
   3. .claude/openblack.local.json in the main checkout (found from the git common directory).
 Values that are not in the file come from .claude/openblack.local.example.json. A relative path in "paths" is
 relative to the main checkout.
@@ -49,8 +49,9 @@ SHELL_KEYS = {
 
 
 def git(*args):
+    # Ask the checkout that holds this file, so the reader works from any current folder
     try:
-        out = subprocess.run(["git", *args], capture_output=True, text=True, check=True)
+        out = subprocess.run(["git", "-C", str(HERE), *args], capture_output=True, text=True, check=True)
     except (OSError, subprocess.CalledProcessError):
         return None
     return out.stdout.strip()
