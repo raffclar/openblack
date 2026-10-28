@@ -3001,14 +3001,14 @@ void AddLight(std::vector<Scenario>& all)
 	for (const auto& step : std::array {
 	         SnowCoverStep {.id = "light.snow_cover_low",
 	                        .name = "Object snow at a low level",
-	                        .description = "Snow lies 60 deep over the whole island at noon. A hut, two trees, a rock, "
-	                                       "a cow and a villager are new on the land. Their snow increases to the level 39.",
-	                        .depth = 60.0f},
+	                        .description = "Snow lies 100 deep over the whole island at noon. A hut, two trees, a rock, "
+	                                       "a cow and a villager are new on the land. Their snow increases to the level 79.",
+	                        .depth = 100.0f},
 	         SnowCoverStep {.id = "light.snow_cover_mid",
 	                        .name = "Object snow at a middle level",
-	                        .description = "Snow lies 120 deep over the whole island at noon. A hut, two trees, a rock, "
-	                                       "a cow and a villager are new on the land. Their snow increases to the level 99.",
-	                        .depth = 120.0f},
+	                        .description = "Snow lies 160 deep over the whole island at noon. A hut, two trees, a rock, "
+	                                       "a cow and a villager are new on the land. Their snow increases to the level 139.",
+	                        .depth = 160.0f},
 	         SnowCoverStep {.id = "light.snow_cover_deep",
 	                        .name = "Object snow at a high level",
 	                        .description = "Snow lies 255 deep over the whole island at noon. A hut, two trees, a rock, "
@@ -3025,7 +3025,7 @@ void AddLight(std::vector<Scenario>& all)
 		                "as it increases. Each texel is snow or the colour of the thing, with no mix of the two. A "
 		                "deeper snow covers more of each thing.",
 		    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .snowDepth = step.depth},
-		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, -16.0f}, .look = {0.0f, 2.0f, 12.0f}},
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 7.0f, -9.0f}, .look = {0.0f, 2.0f, 12.0f}},
 		    .objects = {{.type = AbodeInfo::CelticHut, .offset = {-10.0f, 16.0f}},
 		                {.type = TreeInfo::Conifer, .offset = {8.0f, 20.0f}, .scale = 1.5f},
 		                {.type = TreeInfo::Birch, .offset = {12.0f, 8.0f}},
