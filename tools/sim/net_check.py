@@ -83,6 +83,17 @@ runs many such games.
 
     python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --all-computer-gods --observers 2 --turns 2000 --ai-seed 1
 
+Cross play: with --web-god the web client plays the god of the slot after the desktop gods, and --web-chat TURNS:TEXT
+makes it say a line in the chat (cdp-run steps: it waits for the line of the turns in its log, clicks the speech button,
+types the line and presses Return). The chat check then also needs the lines of the desktop gods in the web log, and the
+line of the web god in each desktop log. With --web-remote the script starts no Chrome: it writes web/join.json and waits
+for web/done. tools/sim/web_remote.py on another computer reads that file over SSH, opens a tunnel to the server, plays
+the web client there and copies its checksums and its log back into web/. A game on mpm_3p_1 with two human gods has one
+computer god in the third slot:
+
+    python tools/sim/net_check.py --land "Online Maps/mpm_3p_1.map" --clients 1 --web-client --web-god --web-remote
+        --chat 300:1:hello --web-chat 500:hi --turns 2000
+
 With --scenario (developer builds) the server plays a testbed scenario: it lays the scenario out before the first turn,
 and each client gets the scenario with the start and lays it out before the same turn. In a network game a scenario
 gives its commands before the turns, not in the frames, so every computer gives them before the same turn. The state of
@@ -480,6 +491,11 @@ def chat_lines(log_path):
     except OSError:
         pass
     return found
+
+
+def chat_came_to(received, god, text):
+    """For the lines that each client received, as chat_lines gives them, whether the line came from the god"""
+    return [any(sender == god and line == text for _, sender, line in lines) for lines in received]
 
 
 def hold_creature(pid, near, slaps=0):
@@ -928,36 +944,99 @@ def free_port():
         return probe.getsockname()[1]
 
 
-def start_web_client(options, out, join_url, ticket, certs, turns, processes):
-    """One observer in headless Chrome: a server for the web page of this tree on 127.0.0.1, and cdp-run.mjs, which starts
-    the Chrome with its own profile folder in the output folder. The page joins the game server with the ticket and
-    writes the checksum of each turn (--sim-checksums -) to a file. Returns the folder of the run and the cdp-run process."""
-    folder = os.path.join(out, "web")
+WEB_WIDTH = 1280
+
+
+def web_chat_steps(chats, seconds, width=WEB_WIDTH):
+    """The cdp-run steps of the lines that the web client says, from (turns, text) pairs: for each line in the order of
+    its turns, the page waits for the line of those turns in its log, then the mouse clicks the speech button at the top
+    right corner, the keys type the line and Return sends it. A wait moves the next steps later by its time."""
+    steps = []
+    at = 0.0
+    for turns, text in sorted(chats):
+        steps.append({"at": at, "do": "wait-log", "text": f"Network game: {turns} turns compared", "seconds": seconds})
+        at += 0.5
+        for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
+            steps.append({"at": at, "do": "mouse", "type": kind, "x": width - 8, "y": 8,
+                          "button": "none" if kind == "mouseMoved" else "left"})
+            at += 0.1
+        at += 1.0
+        for letter in text:
+            steps.append({"at": at, "do": "key", "key": letter})
+            at += 0.05
+        at += 0.5
+        steps.append({"at": at, "do": "key", "key": "Enter", "code": "Enter", "keyCode": 13})
+        at += 0.5
+    return steps
+
+
+def web_join_plan(options, join_url, ticket, spki, turns):
+    """What the web client needs to play: the arguments of the game in the page, the steps of its input, the turns, the
+    time limit of the run and the key of the test server's certificate. A remote web client gets it as web/join.json."""
+    arguments = ["--skip-logos", "--sim-frame-ms", str(options.frame_ms or 20.0), "--sim-until-turn", str(turns),
+                 "--sim-still-hand", "--sim-checksums", "-", "--join", join_url, "--join-ticket", ticket]
+    if getattr(options, "web_part_at", None) is not None:
+        arguments += ["--join-part-at", str(options.web_part_at)]
+    seconds = run_limit_seconds(turns)
+    chats = [(int(value.split(":", 1)[0]), value.split(":", 1)[1]) for value in options.web_chat]
+    return {"join_url": join_url, "arguments": arguments, "actions": web_chat_steps(chats, seconds), "turns": turns,
+            "seconds": seconds, "spki": spki}
+
+
+def run_web_plan(plan, folder, page, chrome, game_path, processes):
+    """One web client in headless Chrome: a server for the web page on 127.0.0.1, and cdp-run.mjs, which starts the Chrome
+    with its own profile folder in the folder of the run. The page joins the game server of the plan and writes the
+    checksum of each turn (--sim-checksums -) to checksums.jsonl. Returns the cdp-run process."""
     os.makedirs(folder, exist_ok=True)
     checksums = os.path.join(folder, "checksums.jsonl")
     if os.path.exists(checksums):
         os.remove(checksums)
     port = free_port()
-    page = web_page_of(options)
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     # The page may connect to the test game server of this run, and to nothing else but itself
     server = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "scripts", "serve.py"), page, str(port),
-                               "--connect", join_url.split("/game/")[0]],
+                               "--connect", plan["join_url"].split("/game/")[0]],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
     processes.append(server)
     time.sleep(1.0)
-    arguments = ["--skip-logos", "--sim-frame-ms", str(options.frame_ms or 20.0), "--sim-until-turn", str(turns),
-                 "--sim-still-hand", "--sim-checksums", "-", "--join", join_url, "--join-ticket", ticket]
-    query = "autoplay&args=" + "%20".join(arguments)
+    query = "autoplay&args=" + "%20".join(plan["arguments"])
     url = f"http://127.0.0.1:{port}/index.html?{query}"
-    seconds = run_limit_seconds(turns)
-    command = [DEFAULT_NODE, os.path.join(ROOT, "web", "scripts", "cdp-run.mjs"), options.chrome, url, str(seconds), folder,
-               "--game-folder", options.game_path, "--checksums", checksums, "--checksum-turns", str(turns),
-               "--trust-spki", spki_hash(certs["server.pem"])]
+    command = [DEFAULT_NODE, os.path.join(ROOT, "web", "scripts", "cdp-run.mjs"), chrome, url, str(plan["seconds"]),
+               folder, "--game-folder", game_path, "--checksums", checksums, "--checksum-turns", str(plan["turns"]),
+               "--trust-spki", plan["spki"], "--size", f"{WEB_WIDTH}x1024"]
+    if plan["actions"]:
+        actions = os.path.join(folder, "web_actions.json")
+        with open(actions, "w", encoding="utf-8") as file:
+            json.dump(plan["actions"], file, indent=1)
+        command += ["--actions", actions]
     log = open(os.path.join(folder, "cdp-run.log"), "w", encoding="utf-8")
     process = subprocess.Popen(command, cwd=folder, stdout=log, stderr=subprocess.STDOUT, creationflags=flags)
     processes.append(process)
-    return folder, process
+    return process
+
+
+def start_web_client(options, out, join_url, ticket, certs, turns, processes):
+    """The web client of the run: in headless Chrome on this computer, or with --web-remote the plan in web/join.json
+    for tools/sim/web_remote.py. Returns the folder of the run and the cdp-run process (none for a remote client)."""
+    folder = os.path.join(out, "web")
+    os.makedirs(folder, exist_ok=True)
+    plan = web_join_plan(options, join_url, ticket, spki_hash(certs["server.pem"]), turns)
+    if not options.web_remote:
+        return folder, run_web_plan(plan, folder, web_page_of(options), options.chrome, options.game_path, processes)
+    for name in ("done", "checksums.jsonl", "console.log"):
+        if os.path.exists(os.path.join(folder, name)):
+            os.remove(os.path.join(folder, name))
+    # The file appears whole: the remote side never reads half of it
+    with open(os.path.join(folder, "join.json.new"), "w", encoding="utf-8") as file:
+        json.dump(plan, file)
+    os.replace(os.path.join(folder, "join.json.new"), os.path.join(folder, "join.json"))
+    print(f"web: the plan of the remote web client is in {os.path.join(folder, 'join.json')}")
+    return folder, None
+
+
+def web_remote_done(folder):
+    """Whether the remote web client copied its results back"""
+    return os.path.exists(os.path.join(folder, "done"))
 
 
 def web_checksums(folder):
@@ -1070,6 +1149,17 @@ def main():
                         help="one more observer: the web build in headless Chrome (cdp-run.mjs). Needs the web build of "
                              "this tree (--web-page, tools/build/ob-web build)")
     parser.add_argument("--web-page", help="the folder of the web page (the web build's bin/Release)")
+    parser.add_argument("--web-god", action="store_true",
+                        help="with --web-client, the web client plays the god of the slot after the desktop gods")
+    parser.add_argument("--web-chat", action="append", default=[],
+                        help="TURNS:TEXT, with --web-god: the web client says the line in the chat after that many turns "
+                             "(a multiple of 100)")
+    parser.add_argument("--web-part-at", type=int,
+                        help="the world of the web client parts from the server's at this turn (--join-part-at), and "
+                             "must come back in step by the server's world state")
+    parser.add_argument("--web-remote", action="store_true",
+                        help="with --web-client, start no Chrome: write web/join.json and wait for web/done, which "
+                             "tools/sim/web_remote.py writes from another computer")
     parser.add_argument("--chrome", default=os.environ.get("OB_CHROME", "C:/Program Files/Google/Chrome/Application/chrome.exe"))
     parser.add_argument("--all-computer-gods", action="store_true",
                         help="the AI soak: the room has no human god, every god with a citadel is a computer god; all the "
@@ -1131,11 +1221,23 @@ def main():
         parser.error("--all-computer-gods needs --observers or --web-client: the clients watch the game")
     if not options.all_computer_gods and options.clients == 0:
         parser.error("a room with no human god needs --all-computer-gods")
-    if options.scenario and (options.all_computer_gods or options.web_client or options.testbed or options.gods_ring_map):
+    if options.scenario and (options.all_computer_gods or (options.web_client and not options.web_god)
+                             or options.testbed or options.gods_ring_map):
         # The state of a scenario is not in the world, so nobody can join its game as it turns: the room of computer gods
-        # starts at once and the web client joins late. The scenario chooses its own land.
-        parser.error("--scenario does not go with --all-computer-gods, --web-client, --testbed or --gods-ring-map")
-    if options.web_client and not os.path.isfile(os.path.join(web_page_of(options), "openblack.wasm")):
+        # starts at once and the web observer joins late. A web god joins before the start. The scenario chooses its own
+        # land.
+        parser.error("--scenario does not go with --all-computer-gods, a web observer, --testbed or --gods-ring-map")
+    if options.web_part_at is not None and not options.web_client:
+        parser.error("--web-part-at needs --web-client")
+    if (options.web_god or options.web_chat or options.web_remote) and not options.web_client:
+        parser.error("--web-god, --web-chat and --web-remote need --web-client")
+    if options.web_chat and not options.web_god:
+        parser.error("--web-chat needs --web-god: an observer says nothing in the chat")
+    if options.web_god and (options.observers or options.all_computer_gods):
+        # The observers wait for the start of the game, and the start waits for the web god, which joins last
+        parser.error("--web-god does not go with --observers or --all-computer-gods")
+    if options.web_client and not options.web_remote and not os.path.isfile(
+            os.path.join(web_page_of(options), "openblack.wasm")):
         parser.error(f"--web-client needs the web build: no openblack.wasm in {web_page_of(options)}")
     desktop_clients = options.clients + options.observers
     client_inputs = ([options.input, options.input2, options.input3, options.input4] + [None] * 8)[:max(desktop_clients, 4)]
@@ -1182,7 +1284,7 @@ def main():
     elif options.all_computer_gods:
         server_command += ["--min-gods", str(waited_observers)]
     else:
-        server_command += ["--gods", str(options.clients)]
+        server_command += ["--gods", str(options.clients + (1 if options.web_god else 0))]
     if options.all_computer_gods:
         server_command.append("--all-computer-gods")
     if options.slot_fight:
@@ -1326,7 +1428,8 @@ def main():
         web_process = None
         web_folder = None
         if options.web_client:
-            ticket = make_ticket(key, kid, 200, "WebObserver", "observer", 600)
+            ticket = (make_ticket(key, kid, 200, "WebPlayer", "god", 600) if options.web_god
+                      else make_ticket(key, kid, 200, "WebObserver", "observer", 600))
             web_folder, web_process = start_web_client(options, out, url, ticket, certs, options.turns, processes)
         # Each client with a camera and no input looks there once its network game started. A client with an input put
         # its camera as its land started, from the input.
@@ -1347,7 +1450,8 @@ def main():
         cameras_again = set()
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
-                    and (web_process is None or web_process.poll() is not None)):
+                    and (web_process is None or web_process.poll() is not None)
+                    and (web_folder is None or not options.web_remote or web_remote_done(web_folder))):
                 break
             for number, (turns, index, text) in enumerate(chats):
                 if (number not in said and 0 <= index < len(clients) and clients[index].poll() is None and lines_with(
@@ -1505,6 +1609,13 @@ def main():
         all_same = all_same and web_same
         summary["clients"].append({"client": "web", "turns": len(web), "compared": len(compared),
                                    "different": different[:20], "same": web_same})
+        if options.web_god:
+            joins = lines_with(os.path.join(web_folder, "console.log"), ["Joined the game server"])
+            in_slot = any(f"in slot {options.clients}" in line for line in joins)
+            summary["clients"][-1]["god_slot"] = options.clients if in_slot else None
+            if not in_slot:
+                print(f"the web client did not get god slot {options.clients}: {joins[:2]}")
+                all_same = False
     summary["missing_deeds"] = {}
     for index, client_dir in enumerate(client_dirs):
         missing = sim_report.missing_deeds(server_deeds.get(index, {}), sim_report.expected_deeds(client_inputs[index]))
@@ -1541,14 +1652,19 @@ def main():
         all_same = False
         print(sim_report.unregistered_line(unregistered))
     # Each line of the chat came to every client, from the god of the client that said it
-    if options.chat:
+    if options.chat or options.web_chat:
         summary["chat"] = []
-        for turns, client, text in (value.split(":", 2) for value in options.chat):
-            got = []
-            for index, client_dir in enumerate(client_dirs):
-                lines = chat_lines(os.path.join(client_dir, "client.log"))
-                got.append(any(god == int(client) - 1 and line == text for _, god, line in lines))
-            summary["chat"].append({"client": int(client), "text": text, "came_to": got})
+        logs = [os.path.join(client_dir, "client.log") for client_dir in client_dirs]
+        if options.web_god and web_folder is not None:
+            logs.append(os.path.join(web_folder, "console.log"))
+        received = [chat_lines(log) for log in logs]
+        # The web god plays the slot after the desktop gods; its client number is the next one
+        said = [(int(client), text) for _, client, text in (value.split(":", 2) for value in options.chat)]
+        said += [(options.clients + 1, value.split(":", 1)[1]) for value in options.web_chat]
+        for client, text in said:
+            got = chat_came_to(received, client - 1, text)
+            summary["chat"].append({"client": "web" if client > options.clients else client, "text": text,
+                                    "came_to": got})
             if not all(got):
                 print(f"the chat line {text!r} of client {client} did not come to every client: {got}")
                 all_same = False

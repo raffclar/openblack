@@ -1965,3 +1965,6 @@ endif ()
 openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
 openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
 openblack_setup_and_add_test(test_side_thread test_side_thread.cpp)
+add_test(NAME test_net_check_web
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_web.py
+)
