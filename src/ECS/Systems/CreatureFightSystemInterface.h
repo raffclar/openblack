@@ -59,7 +59,8 @@ public:
 	/// In the creature's own turn, with its action: a fight that its leash asks for starts, its fight moves to the next
 	/// stage, and a creature that is knocked out comes round
 	virtual void FightTurn(entt::entity /*creature*/) {}
-	/// In the creature's own turn, as its body lives the turn: the blood of its wounds runs down its skin
+	/// In the creature's own turn, as its body lives the turn: the sparkle of a held press charges, and the blood of its
+	/// wounds runs down its skin
 	virtual void BloodTurn(entt::entity /*creature*/) {}
 	/// In the creature's own turn, as its body lives the turn: a fighter moves and strikes, and its body takes its pose
 	virtual void MovesTurn(entt::entity /*creature*/) {}
