@@ -163,8 +163,8 @@ public:
 	template <typename Self, typename Visitor>
 	static void VisitSaved(Self& self, Visitor&& visit)
 	{
-		visit(self._obstacles, self._state, self._route, self._position, self._routeEnd, self._destination, self._pending,
-		      self._searches, self._chosen, self._met);
+		visit(self._obstacles, self._state, self._route, self._position, self._heading, self._routeEnd, self._destination,
+		      self._pending, self._searches, self._chosen, self._met);
 	}
 };
 } // namespace openblack::creature_route

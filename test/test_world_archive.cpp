@@ -602,6 +602,10 @@ TEST(WorldArchive, AWalkCarriesOnFromTheSavedSearch)
 	ASSERT_FALSE(in.Failed());
 	EXPECT_EQ(in.Remaining(), 0u);
 	EXPECT_EQ(FollowerBytes(context, loaded), bytes);
+	// The heading along the route comes back too: the next leg of the walk starts from it
+	ASSERT_NE(walking.GetHeading(), GameHeading {});
+	EXPECT_EQ(loaded.GetHeading(), walking.GetHeading());
+	EXPECT_EQ(loaded.GetPosition(), walking.GetPosition());
 
 	// The loaded walk and the walk that was not saved take the same steps to the same place
 	auto first = Follower::Outcome::None;
@@ -619,6 +623,7 @@ TEST(WorldArchive, AWalkCarriesOnFromTheSavedSearch)
 		const auto a = walking.Advance(3.0f);
 		const auto b = loaded.Advance(3.0f);
 		ASSERT_EQ(a.position, b.position);
+		ASSERT_EQ(a.heading, b.heading);
 	}
 }
 
