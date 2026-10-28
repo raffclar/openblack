@@ -4055,7 +4055,12 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	const auto resolution =
 	    Locator::windowing::has_value() ? static_cast<glm::vec2>(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
 	const auto toClip = camera.GetViewProjectionMatrix();
-	// A warm-up does not look at the samples: it asks nothing of the drawing, as the next frames read the answers
+	// A warm-up does not look at the samples: it asks nothing of the drawing, as the next frames read the answers. It
+	// draws one square of no size with no query, as a sample draws its square.
+	if (_warmingUp && asksDrawing)
+	{
+		AskGlareSampleDrawn(camera, BGFX_INVALID_HANDLE, glm::vec2(0.0f), glm::vec2(0.0f), sun::GlareHidingDepth(near));
+	}
 	for (size_t i = 0; i < samples.size() && !_warmingUp; ++i)
 	{
 		bool isHidden = Locator::pickingSystem::has_value() &&
