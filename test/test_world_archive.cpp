@@ -39,6 +39,7 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameHeading.h"
+#include "Common/WorkerPool.h"
 #include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreatureRouteFollow.h"
 #include "ECS/Components/AudioEmitter.h"
@@ -1216,6 +1217,39 @@ TEST(WorldArchive, TheHashMemoDoesNotChangeTheHash)
 	registry.destroy(made[1]);
 	expectSame();
 	registry.destroy(added);
+	expectSame();
+}
+
+TEST(WorldArchive, TheThreadsThatShareTheRowsOfAComponentGiveTheSameHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	// Enough rows for the threads to share the rows of the component in parts
+	std::vector<entt::entity> made(300);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		registry.emplace<FakeWalker>(entity, SampleWalker(entity, made[0]));
+	}
+	WorkerPool pool(3);
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto plain = HashWorld(registry, context);
+		const auto shared = HashWorld(registry, context, {}, false, {}, &pool);
+		const auto remembered = HashWorld(registry, context, {}, false, {}, &pool, nullptr, &memo);
+		EXPECT_EQ(plain.entities, shared.entities);
+		EXPECT_EQ(plain.components, shared.components);
+		EXPECT_EQ(plain.components, remembered.components);
+	};
+	expectSame();
+	expectSame();
+	// A change in a row of the second part, and a longer row in the first part
+	registry.get<FakeWalker>(made[100]).name = "Tom";
+	expectSame();
+	registry.get<FakeWalker>(made[3]).name = "A much longer name than before";
+	expectSame();
+	registry.destroy(made[200]);
 	expectSame();
 }
 
