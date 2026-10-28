@@ -118,7 +118,8 @@ def main():
         print(f"web_remote: tunnel 127.0.0.1:{port}; the web client plays {plan['turns']} turns")
         web = net_check.run_web_plan(plan, folder, options.web_page, options.chrome, options.game_path, processes)
         try:
-            web.wait(timeout=plan["seconds"] + 120)
+            # A step that waits for a line of the log moves the end of the run later by its wait
+            web.wait(timeout=2 * plan["seconds"] + 120)
         except subprocess.TimeoutExpired:
             print("web_remote: the web client did not end in its time")
         copied = [name for name in ("checksums.jsonl", "console.log", "page-log.txt", "cdp-run.log")

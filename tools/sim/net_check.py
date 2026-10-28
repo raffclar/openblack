@@ -643,8 +643,14 @@ def give_to_creature(pid, log):
                 return False
             inspector_call(pid, "input.pointer", {"params": {"world": [place[0], place[1] + height, place[2]],
                                                              "timing": "immediate"}})
-            pick = inspector_call(pid, "players.pick", {})
+            state = inspector_call(pid, "input.state", {})
+            pick = state.get("pick") if isinstance(state, dict) else None
             if isinstance(pick, dict) and pick.get("object") == entity:
+                grab = pick.get("grab") or {}
+                if not grab.get("takes"):
+                    # The hand would not take it here: the reason goes to the summary
+                    done.setdefault("why_not", []).append(grab.get("why_not"))
+                    return False
                 inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
                 time.sleep(1.0)
                 inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
@@ -654,7 +660,7 @@ def give_to_creature(pid, log):
     for villager in villagers:
         inspector_call(pid, "camera.frame", {"params": {"id": villager["id"], "yaw": 0, "pitch": 40, "distance": 30}})
         time.sleep(1.0)
-        for _ in range(4):
+        for _ in range(8):
             if not press_on_walker(villager["id"]):
                 continue
             done.setdefault("tries", []).append(villager["id"])
@@ -1023,17 +1029,19 @@ def web_chat_steps(chats, seconds, width=WEB_WIDTH):
     right corner, the keys type the line and Return sends it. A wait moves the next steps later by its time."""
     steps = []
     at = 0.0
-    for turns, text in sorted(chats):
+    for number, (turns, text) in enumerate(sorted(chats)):
         steps.append({"at": at, "do": "wait-log", "text": f"Network game: {turns} turns compared", "seconds": seconds})
         at += 0.5
         for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
             steps.append({"at": at, "do": "mouse", "type": kind, "x": width - 8, "y": 8,
                           "button": "none" if kind == "mouseMoved" else "left"})
             at += 0.1
+        steps.append({"at": at, "do": "shot", "name": f"chat{number}-open"})
         at += 1.0
         for letter in text:
             steps.append({"at": at, "do": "key", "key": letter})
             at += 0.05
+        steps.append({"at": at, "do": "shot", "name": f"chat{number}-typed"})
         at += 0.5
         steps.append({"at": at, "do": "key", "key": "Enter", "code": "Enter", "keyCode": 13})
         at += 0.5
