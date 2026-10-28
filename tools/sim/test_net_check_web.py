@@ -105,6 +105,13 @@ class WebRemote(unittest.TestCase):
     def test_the_port_comes_from_the_address_of_the_join(self):
         self.assertEqual(web_remote.port_of("wss://127.0.0.1:53211/game/net-check-1"), 53211)
 
+    def test_the_tunnel_can_open_on_another_port_here(self):
+        self.assertEqual(web_remote.with_port("wss://127.0.0.1:53211/game/net-check-1", 60000),
+                         "wss://127.0.0.1:60000/game/net-check-1")
+
+    def test_a_free_port_is_free(self):
+        self.assertTrue(web_remote.port_is_free(web_remote.free_port()))
+
     def test_the_remote_path_is_quoted_for_the_shell(self):
         options = argparse.Namespace(remote_out="projects/runs/a b/")
         self.assertEqual(web_remote.remote_path(options, "done"), "'projects/runs/a b/web/done'")

@@ -10,11 +10,11 @@
 """Plays the web client of a net_check run on another computer (net_check.py --web-client --web-remote).
 
 net_check runs the game server and the desktop clients on one computer, for example a Mac, and writes the plan of the
-web client to <out>/web/join.json. This script runs on the computer with Chrome and the web build. It reads the plan over
-SSH, opens an SSH tunnel from the same port of 127.0.0.1 here to the port of the game server there (the test certificate
-is for 127.0.0.1, so the address of the join stays the same), and plays the plan in headless Chrome through
-web/scripts/cdp-run.mjs, as net_check does on one computer. At the end it copies the checksums and the log of the page
-into <out>/web/ there and writes <out>/web/done, so that net_check compares them with the turns of the server.
+web client to <out>/web/join.json. This script runs on the computer with Chrome and the web build. It reads the plan
+over SSH and opens an SSH tunnel from a port of 127.0.0.1 here to the port of the game server there: the same port when
+it is free here, else a free port. Then it plays the plan in headless Chrome through web/scripts/cdp-run.mjs, as
+net_check does on one computer. At the end it copies the checksums and the log of the page into <out>/web/ there and
+writes <out>/web/done, so that net_check compares them with the turns of the server.
 
     python tools/sim/web_remote.py --host user@192.168.1.64 --ssh-key E:/keys/id_ed25519 --known-hosts E:/keys/known_hosts
         --remote-out projects/runs/cross1 --out E:/runs/cross1-web
@@ -65,6 +65,21 @@ def port_is_free(port):
     return True
 
 
+def free_port():
+    """A port of 127.0.0.1 that no process uses now"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def with_port(join_url, port):
+    """The address of the join with another port of 127.0.0.1. The page joins on the path of its own origin, and only
+    its page server connects to this address, so the tunnel can open on any free port here."""
+    scheme, rest = join_url.split("://", 1)
+    path = rest.split("/", 1)[1] if "/" in rest else ""
+    return f"{scheme}://127.0.0.1:{port}/{path}"
+
+
 def read_plan(options):
     """The plan of the web client, once net_check wrote it there; none after the wait"""
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -97,10 +112,9 @@ def main():
     if plan is None:
         print("web_remote: net_check wrote no plan of the web client")
         return 1
-    port = port_of(plan["join_url"])
-    if not port_is_free(port):
-        print(f"web_remote: the port {port} of 127.0.0.1 is in use here, so the tunnel cannot open")
-        return 1
+    remote_port = port_of(plan["join_url"])
+    port = remote_port if port_is_free(remote_port) else free_port()
+    plan["join_url"] = with_port(plan["join_url"], port)
     folder = os.path.abspath(options.out)
     os.makedirs(folder, exist_ok=True)
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -108,7 +122,7 @@ def main():
     result = 1
     try:
         tunnel = subprocess.Popen(ssh_base(options) + ["-N", "-o", "ExitOnForwardFailure=yes", "-L",
-                                                       f"127.0.0.1:{port}:127.0.0.1:{port}", options.host],
+                                                       f"127.0.0.1:{port}:127.0.0.1:{remote_port}", options.host],
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
         processes.append(tunnel)
         time.sleep(3.0)
