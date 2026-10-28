@@ -34,6 +34,7 @@ public:
 	void RegisterPlayers() override;
 	void AddPlayer(entt::entity playerEntity) override;
 	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames playerName) const override;
+	entt::entity EnsurePlayer(PlayerNames playerName) override;
 	void AddCreature(entt::entity creature) override;
 	void MakePrimaryCreature(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;

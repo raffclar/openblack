@@ -28,6 +28,9 @@ public:
 	/// The entity of the player, if the player is in the game. In a network game, the player of each human comes in the
 	/// first turn, so the input of this computer can come before its own player.
 	[[nodiscard]] virtual std::optional<entt::entity> FindPlayer(PlayerNames name) const = 0;
+	/// The entity of the player. The game makes the player when the land has none yet. Every god slot and the neutral
+	/// player have a player from the start of the game, also before the humans of a network game join.
+	virtual entt::entity EnsurePlayer(PlayerNames name) = 0;
 	/// Remembers that the owner of a newly made creature got it, after the creatures they got before
 	virtual void AddCreature(entt::entity creature) = 0;
 	/// Makes the creature the primary creature of its owner, before the creatures that the owner got before
