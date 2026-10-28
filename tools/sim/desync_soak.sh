@@ -32,6 +32,7 @@
 #   --turns T           the turns of each game (default 20000)
 #   --server-turns T    the turns of each server_check run (default 5000; 0 for no server_check)
 #   --shuffle-seed N    the order of the games (default the day of the year, so that each night covers other games)
+#   --date D            the name of the folder of the results in --out (default the date of today)
 #   --out DIR           the results (default <runs>/desync-soak; the Mac uses ~/projects/openblack/sim-runs)
 #
 # Results: <out>/<date>/ai-soak (a folder for each game and summary.jsonl), <out>/<date>/server-check/<land>-s<seed>-ai<n>
@@ -65,6 +66,7 @@ TURNS=20000
 SERVER_TURNS=5000
 SHUFFLE=$((10#$(date +%j)))
 OUT=""
+DATE=$(date +%Y-%m-%d)
 PART_OBSERVER=""
 LANDS_OPTION=(--lands "$LANDS")
 if [ "$MODE" = maps ]; then
@@ -94,16 +96,16 @@ while [ $# -gt 0 ]; do
 	--server-turns) SERVER_TURNS=$2; shift 2 ;;
 	--shuffle-seed) SHUFFLE=$2; shift 2 ;;
 	--out) OUT=$2; shift 2 ;;
+	--date) DATE=$2; shift 2 ;;
 	*) echo "desync_soak: unknown option $1"; exit 2 ;;
 	esac
 done
 # The options that the mac mode gives to the local mode on the Mac
 PASS=(--hours "$HOURS" "${LANDS_OPTION[@]}" --seeds "$SEEDS" --ai-seeds "$AI_SEEDS" --modes "$MODES" --observers "$OBSERVERS" --turns "$TURNS"
-	--server-turns "$SERVER_TURNS" --shuffle-seed "$SHUFFLE")
+	--server-turns "$SERVER_TURNS" --shuffle-seed "$SHUFFLE" --date "$DATE")
 [ -z "$PART_OBSERVER" ] || PASS+=(--part-observer)
 PART_ARGS=()
 [ -z "$PART_OBSERVER" ] || PART_ARGS=(--part-observer)
-DATE=$(date +%Y-%m-%d)
 MINUTES=$(awk -v h="$HOURS" 'BEGIN{printf "%d", h*60}')
 
 # The land arguments of server_check for a land of ai_soak.py
