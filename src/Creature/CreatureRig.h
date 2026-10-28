@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -230,6 +231,36 @@ PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCoun
 /// The world matrix of a bone as posed this frame, the creature's placement included; the placement alone for a bone
 /// the pose lacks
 [[nodiscard]] glm::mat4 PosedBone(uint32_t bone, std::span<const glm::mat4> boneMatrices, const glm::mat4& placement);
+
+/// The world matrices of the bones of a pose at a placement, as `PosedBone` gives them. Each bone's matrix is found the
+/// first time it is wanted and kept, so the triangles of one frame that share a bone find it one time. The pose and the
+/// placement must not change while the object is used.
+class PosedBones
+{
+public:
+	PosedBones(std::span<const glm::mat4> boneMatrices, const glm::mat4& placement);
+
+	/// The world matrix of a bone, the same as `PosedBone(bone, boneMatrices, placement)`
+	[[nodiscard]] glm::mat4 At(uint32_t bone);
+
+	[[nodiscard]] std::span<const glm::mat4> BoneMatrices() const { return _boneMatrices; }
+	[[nodiscard]] const glm::mat4& Placement() const { return _placement; }
+
+private:
+	/// The number of bones whose matrices are kept; a bone after these is found again each time
+	static constexpr size_t k_KeptBones = 128;
+
+	std::span<const glm::mat4> _boneMatrices;
+	glm::mat4 _placement;
+	std::array<glm::mat4, k_KeptBones> _world;
+	std::array<bool, k_KeptBones> _known {};
+};
+
+/// The same triangle as `PosedTriangle`, with the bones' world matrices taken from the posed bones
+[[nodiscard]] std::array<glm::vec3, 3>
+PosedTriangle(const std::array<std::array<glm::vec3, 3>, CreatureRig::k_MeshCount>& vertices,
+              const std::array<uint32_t, 3>& bones, const creature_morph::Morph& morph, PosedBones& posed,
+              const PlacingOrder& order);
 
 /// A pose that game rules read, and the placement that puts it in the world
 struct RulePose
