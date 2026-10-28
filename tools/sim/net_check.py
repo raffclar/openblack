@@ -499,6 +499,21 @@ def say_in_chat(pid, text):
     print(f"chat: client with pid {pid} says {text!r} (click: {clicked})")
 
 
+def open_tattoo_menu(pid):
+    """A client opens the tattoo editor from the game's menu as the player does: the menu, its Options, the Players
+    page and Edit Tattoo. The editor shows a creature of its own over the menu. True when the editor is open."""
+    inspector_call(pid, "gui.open", {"params": {"window": "menu"}})
+    for button in ("Options", "Players", "Edit Tattoo"):
+        time.sleep(1.0)
+        inspector_call(pid, "gui.press", {"params": {"window": "menu", "button": button}})
+    time.sleep(2.0)
+    windows = inspector_call(pid, "gui.windows", {}) or {}
+    shown = any(item.get("name") == "tattoo_editor" and item.get("open") for item in windows.get("items", [])
+                if isinstance(item, dict))
+    print(f"tattoo menu: client with pid {pid} opened the tattoo editor: {shown}")
+    return shown
+
+
 def chat_lines(log_path):
     """The lines of the chat that came to a client, as (turn, god, text)"""
     found = []
@@ -1459,6 +1474,8 @@ def main():
                              "this many times before it lets go")
     parser.add_argument("--chat", action="append", default=[],
                         help="TURNS:CLIENT:TEXT, the client (from 1) says the line in the chat after that many turns")
+    parser.add_argument("--tattoo-menu", action="append", default=[], metavar="TURNS:CLIENT",
+                        help="the client (from 1) opens the tattoo editor from the game's menu after that many turns")
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
                              "through the inspector, once it compared --hold-after turns")
@@ -1770,6 +1787,7 @@ def main():
             camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
             chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
+            chatting = chatting or any(value.split(":", 1)[1] == str(index + 1) for value in options.tattoo_menu)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
                     or options.give == index + 1 or any(leash["client"] == index for leash in leashes)):
                 command += ["--inspect-port", "0"]
@@ -1822,6 +1840,9 @@ def main():
         chats = [(int(turns), int(client) - 1, text) for turns, client, text in
                  (value.split(":", 2) for value in options.chat)]
         said = set()
+        tattoo_menus = [(int(turns), int(client) - 1) for turns, client in
+                        (value.split(":", 1) for value in options.tattoo_menu)]
+        tattooed = set()
         cameras_again = set()
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
@@ -1833,6 +1854,11 @@ def main():
                         os.path.join(client_dirs[index], "client.log"), [f"Network game: {turns} turns compared"])):
                     say_in_chat(clients[index].pid, text)
                     said.add(number)
+            for number, (turns, index) in enumerate(tattoo_menus):
+                if (number not in tattooed and 0 <= index < len(clients) and clients[index].poll() is None and lines_with(
+                        os.path.join(client_dirs[index], "client.log"), [f"Network game: {turns} turns compared"])):
+                    open_tattoo_menu(clients[index].pid)
+                    tattooed.add(number)
             for index, near in holds.items():
                 if index not in held and clients[index].poll() is None and lines_with(
                         os.path.join(client_dirs[index], "client.log"),
