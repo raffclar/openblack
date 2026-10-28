@@ -2762,6 +2762,29 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .commands =
 	        {{.kind = Kind::KnowMiracle, .creature = 1, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)}},
 	});
+
+	// A tiger that only wants to look at things, by a small town whose desire flags stand near its store
+	auto curious = Content(CreatureType::Tiger, {0.0f, -30.0f}, 0.0f, "curious");
+	curious.phase = 13;
+	curious.desires = OnlyDesire(Desire::Curiosity);
+	all.push_back({
+	    .id = "mind.curious_about_desire_flag",
+	    .name = "A curious creature can look at a town's desire flag",
+	    .facet = Facet::Mind,
+	    .description = "A grown tiger that only wants to look at things stands 30 m south of a small town: a Celtic storage "
+	                   "pit with two villagers of the town. The town's desire flags stand over the pit.",
+	    .expected = "The tiger comes across the flags as it comes across the pit. The data of a flag lets a creature act "
+	                "on it and look it over, so a flag can be the thing of a curiosity plan, as the pit and the villagers "
+	                "can. In the first two minutes the inspector's creature plan names a flag as the object of a look "
+	                "(ExamineByLooking). A flag is never the thing "
+	                "of a plan to attack, to play, to sleep by or to pick up.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -40.0f}, {30.0f, 30.0f}}},
+	    .creatures = {curious},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 10.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-12.0f, 4.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {12.0f, 4.0f}, .joinTown = true}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
 }
 
 void AddLight(std::vector<Scenario>& all)
