@@ -288,11 +288,8 @@ void FireflySystem::Fly(entt::entity entity)
 		const auto to = _world->ToWorld(out ? firefly.hover : firefly.home);
 		firefly.at = _world->FromWorld((to - from) * *step.along + from);
 	}
-	// One not drawn stands where it is on the map; one drawn stands where it was drawn, until the next frame draws it
-	if (!registry.AllOf<Sprite>(entity))
-	{
-		registry.Get<Transform>(entity).position = _world->ToWorld(firefly.at);
-	}
+	// It stands where it is on the map. The frames keep the place where they draw it in Firefly::drawn.
+	registry.Get<Transform>(entity).position = _world->ToWorld(firefly.at);
 }
 
 std::optional<fireflies::Found> FireflySystem::Search(const map_coords::MapCoords& from, bool building)
@@ -372,7 +369,6 @@ void FireflySystem::Update(float milliseconds, float turnFraction)
 		const auto previous = _world->ToWorld(firefly.previous);
 		const auto now = _world->ToWorld(firefly.at);
 		firefly.drawn = offset + ((now - previous) * turnFraction + previous);
-		registry.Get<Transform>(entity).position = firefly.drawn;
 		auto* sprite = registry.TryGet<Sprite>(entity);
 		if (sprite == nullptr)
 		{

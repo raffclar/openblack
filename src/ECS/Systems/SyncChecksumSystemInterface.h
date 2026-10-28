@@ -17,6 +17,13 @@
 #include <utility>
 #include <vector>
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include <filesystem>
+#include <string_view>
+
+#include "Debug/RowDump.h"
+#endif
+
 namespace openblack::ecs::systems
 {
 
@@ -56,6 +63,15 @@ public:
 	/// A function that gets the checksum of each turn as the system makes it, as the dedicated server logs it. An empty
 	/// function removes it.
 	virtual void SetTurnListener(std::function<void(const TurnChecksum&)> listener) = 0;
+	[[nodiscard]] virtual std::function<void(const TurnChecksum&)> GetTurnListener() const = 0;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	/// Tools: keep the bytes of each row of the synced world of the last turns, and write them to this file at a turn of
+	/// the settings and at a part (DumpPart). Returns false when the file does not open.
+	virtual bool StartRowDump(const std::filesystem::path& path, row_dump::Settings settings) = 0;
+	/// Tools: the world of this computer parts from the world of the source at this turn: write the kept rows of the turn
+	/// to the file of the row dump, when it started
+	virtual void DumpPart(uint32_t turn, std::string_view reason, uint32_t source) = 0;
+#endif
 };
 
 } // namespace openblack::ecs::systems

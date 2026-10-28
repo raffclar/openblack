@@ -27,14 +27,23 @@ vcpkg_download_distfile(
 # - webgpu-vertex-texture-caps: WebGPU can read textures in vertex shaders, thus the formats get the vertex flag.
 # - webgpu-min-max-blend-factors: min and max blends get the factors one. They do not use the factors, but WebGPU
 #   refuses other factors for them.
-# - webgpu-occlusion-readback-busy: the copy of the occlusion results into the readback buffer waits while the buffer is
-#   mapped or waits for its map, as the copy of the timer results does. A copy into such a buffer is not valid in a
-#   submit, and the browser warns each frame.
+# - webgpu-occlusion-one-map: the occlusion queries copy their results into the readback buffer only while it is not
+#   mapped, and map it once for each copy. A submit that used the mapped buffer was not valid, the browser dropped it,
+#   and after some minutes of such frames the browser stopped the frames of the page.
 # A change to shaderc's ESSL output (the WebGL 2 shaders). It does not change the SPIR-V, WGSL, Metal or Direct3D
 # shaders:
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
 #   returns early makes a block that runs one time, which SPIRV-Cross writes as a do-while(false) loop. ANGLE on
 #   Direct3D compiled the land shader with these loops for more than a minute, and Chrome then lost the context.
+# A change to the Direct3D 12 renderer only:
+# - d3d12-upload-pages: buffer and texture updates of 1 MB or less copy from mapped 4 MB upload pages that the
+#   command queue keeps. A full page is used again when the queue fence shows that the GPU is done with it.
+#   Without this change, each update makes an upload resource and releases it later. That took 6 to 8 ms of each
+#   frame on Land 1. Larger updates keep the old path. The same bytes are copied, thus the pictures stay the same.
+# - d3d12-screenshot-frame: a screenshot of the window reads the buffer that the frame of the request drew into.
+#   Without this change, the screenshot reads the buffer one place back in the ring. With three buffers, the index
+#   wraps incorrectly from place 0, thus a screenshot showed the frame of the request or the frame before it, by
+#   the number of frames that the window showed before. The wait before each flip had the same wrap.
 vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
@@ -46,8 +55,10 @@ vcpkg_extract_source_archive(
     webgpu-missing-vertex-inputs.patch
     webgpu-vertex-texture-caps.patch
     webgpu-min-max-blend-factors.patch
-    webgpu-occlusion-readback-busy.patch
+    webgpu-occlusion-one-map.patch
     essl-no-inline.patch
+    d3d12-upload-pages.patch
+    d3d12-screenshot-frame.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx

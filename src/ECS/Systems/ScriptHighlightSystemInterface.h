@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <chrono>
+
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
@@ -40,8 +42,11 @@ public:
 
 	/// A turn: the beat moves on, and each highlight finds the height it stands at; a sign whose tip has been read starts
 	virtual void ProcessTurn() = 0;
-	/// A frame drawn, of so many milliseconds of game time, from a camera: the highlights spin, scale, glow and glint
-	virtual void UpdateFrame(float frameMilliseconds, float turnFraction, glm::vec3 camera) = 0;
+	/// A frame drawn, of so many milliseconds of game time, from a camera: the highlights spin, scale, glow and glint.
+	/// Their effects step no more often than 60 times a second, each step by all the game time since the last, and only
+	/// in a frame that draws the land.
+	virtual void UpdateFrame(float frameMilliseconds, float turnFraction, glm::vec3 camera,
+	                         std::chrono::milliseconds frameRealTime, bool landDrawn) = 0;
 	/// A new land: the beat starts again
 	virtual void Reset() = 0;
 

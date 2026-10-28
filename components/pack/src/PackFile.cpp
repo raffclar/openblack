@@ -127,7 +127,11 @@
 #include <cstring>
 
 #include <fstream>
+#include <optional>
+#include <span>
+#include <string>
 #include <utility>
+#include <vector>
 
 using namespace openblack::pack;
 
@@ -387,6 +391,49 @@ PackResult PackFile::ResolveAudioBankSampleTableBlock() noexcept
 	return PackResult::Success;
 }
 
+namespace
+{
+/// Reads a DDS file of a pack's texture block: its header, then its texels. Some files give no size of their texels,
+/// so the size comes from the format and the texture's size.
+std::optional<std::pair<DdsHeader, std::vector<uint8_t>>> ReadDds(std::span<const uint8_t> dds)
+{
+	imemstream ddsStream(reinterpret_cast<const char*>(dds.data()), dds.size());
+
+	DdsHeader ddsHeader;
+	ddsStream.read(reinterpret_cast<char*>(&ddsHeader), sizeof(DdsHeader));
+
+	// Verify the header to validate the DDS file
+	if (ddsHeader.size != sizeof(DdsHeader) || ddsHeader.format.size != sizeof(DdsPixelFormat))
+	{
+		return std::nullopt;
+	}
+
+	// Handle cases where this field is not provided
+	// https://docs.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-pguide
+	// Some Creature Isle DXT5 textures lack this field
+	if (ddsHeader.pitchOrLinearSize == 0)
+	{
+		// The block-size is 8 bytes for DXT1, BC1, and BC4 formats, and 16 bytes for other block-compressed formats
+		int blockSize;
+		auto format = std::string(ddsHeader.format.fourCC.data(), ddsHeader.format.fourCC.size());
+		if (format == "DXT1" || format == "BC1" || format == "BC4")
+		{
+			blockSize = 8;
+		}
+		else
+		{
+			blockSize = 16;
+		}
+
+		ddsHeader.pitchOrLinearSize = ((ddsHeader.width + 3) / 4) * ((ddsHeader.height + 3) / 4) * blockSize;
+	}
+
+	std::vector<uint8_t> dssTexels(ddsHeader.pitchOrLinearSize);
+	ddsStream.read(reinterpret_cast<char*>(dssTexels.data()), dssTexels.size());
+	return std::make_pair(ddsHeader, std::move(dssTexels));
+}
+} // namespace
+
 PackResult PackFile::ExtractTexturesFromBlock() noexcept
 {
 	G3DTextureHeader header;
@@ -418,41 +465,28 @@ PackResult PackFile::ExtractTexturesFromBlock() noexcept
 			return PackResult::ErrTextureDuplicate;
 		}
 
-		imemstream ddsStream(reinterpret_cast<const char*>(dds.data()), dds.size());
-
-		DdsHeader ddsHeader;
-		ddsStream.read(reinterpret_cast<char*>(&ddsHeader), sizeof(DdsHeader));
-
-		// Verify the header to validate the DDS file
-		if (ddsHeader.size != sizeof(DdsHeader) || ddsHeader.format.size != sizeof(DdsPixelFormat))
+		auto read = ReadDds(dds);
+		if (!read)
 		{
 			return PackResult::ErrTextureInvalidDDSHeaderSize;
 		}
+		_textures[blockName.data()] = {header, read->first, std::move(read->second)};
 
-		// Handle cases where this field is not provided
-		// https://docs.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-pguide
-		// Some Creature Isle DXT5 textures lack this field
-		if (ddsHeader.pitchOrLinearSize == 0)
+		// The low resolution texture of the lowest detail levels, in the block named LOW and the same number. Its own
+		// header is empty, and its DDS file takes the rest of the block.
+		const auto lowName = std::string("LOW") + blockName.data();
+		if (HasBlock(lowName))
 		{
-			// The block-size is 8 bytes for DXT1, BC1, and BC4 formats, and 16 bytes for other block-compressed formats
-			int blockSize;
-			auto format = std::string(ddsHeader.format.fourCC.data(), ddsHeader.format.fourCC.size());
-			if (format == "DXT1" || format == "BC1" || format == "BC4")
+			const auto& block = GetBlock(lowName);
+			if (block.size() > sizeof(G3DTextureHeader))
 			{
-				blockSize = 8;
+				auto low = ReadDds(std::span(block).subspan(sizeof(G3DTextureHeader)));
+				if (low)
+				{
+					_lowTextures[blockName.data()] = {header, low->first, std::move(low->second)};
+				}
 			}
-			else
-			{
-				blockSize = 16;
-			}
-
-			ddsHeader.pitchOrLinearSize = ((ddsHeader.width + 3) / 4) * ((ddsHeader.height + 3) / 4) * blockSize;
 		}
-
-		std::vector<uint8_t> dssTexels(ddsHeader.pitchOrLinearSize);
-		ddsStream.read(reinterpret_cast<char*>(dssTexels.data()), dssTexels.size());
-
-		_textures[blockName.data()] = {header, ddsHeader, dssTexels};
 	}
 
 	return PackResult::Success;

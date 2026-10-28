@@ -36,9 +36,9 @@ public:
 	/// audio does nothing.
 	virtual void PlayTempleAudioTurn() {}
 
-	/// Between two turns of one frame, as a network game that catches up does them: the frame steps that change the
-	/// world, with the time of a turn. So the world is the same as on a computer that does one turn a frame.
-	virtual void CatchUpFrame() {}
+	/// The developer tools of this computer that act before each turn, as a testbed scenario of a network game does. A
+	/// view with no such tools does nothing.
+	virtual void BeforeTurn() {}
 };
 
 /// A view that does nothing, for a world with no player in front of it. It gives the statistics a fixed frame rate.

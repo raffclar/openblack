@@ -79,6 +79,26 @@ std::optional<entt::id_type> LoadMiscModel(std::string_view file)
 }
 } // namespace
 
+void HighDetailSystem::LoadModels()
+{
+	for (const auto model : k_ModelsWithDetail)
+	{
+		const auto detailed = rules::DetailedModelFor(model);
+		if (!detailed.has_value() || !LoadMiscModel(detailed->file).has_value())
+		{
+			continue;
+		}
+		// The pieces load in order until one is not there, as at the first use
+		for (size_t piece = 0; piece < villager_eyes::k_PieceCount; ++piece)
+		{
+			if (!LoadMiscModel(villager_eyes::PieceFile(detailed->face, static_cast<villager_eyes::Piece>(piece))).has_value())
+			{
+				break;
+			}
+		}
+	}
+}
+
 void HighDetailSystem::Make(entt::entity thing)
 {
 	auto& registry = Locator::entitiesRegistry::value();

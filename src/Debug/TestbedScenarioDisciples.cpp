@@ -7,8 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed scenarios for disciples. One shows the symbol of the work. One shows the work that a villager keeps when
-// the hand releases it. One shows the villagers that follow a disciple to its work.
+// The testbed scenarios for disciples. One shows the symbol of the work. One shows that a disciple in the hand of another
+// god shows no symbol. One shows the work that a villager keeps when the hand releases it. One shows the villagers that
+// follow a disciple to its work.
 
 #include <vector>
 
@@ -38,6 +39,38 @@ void testbed_scenarios::AddDiscipleScenarios(std::vector<Scenario>& all)
 	});
 
 	using Kind = Command::Kind;
+	all.push_back({
+	    .id = "villagers.disciple_symbol_other_god",
+	    .name = "A disciple in the hand of another god",
+	    .facet = Facet::Hand,
+	    .description = "The testbed acts as a network game in which the second player is another god. Two grown villagers of "
+	                   "the player's town are farming disciples and a script holds them still. One stands in the middle of "
+	                   "the screen with the player's hand over it. After a second, the hand of the second player takes the "
+	                   "other villager and holds it 3 m above the land, 5 m to the side of the first villager. This "
+	                   "computer does not draw the hand of the other god.",
+	    .expected = "Both villagers glow orange, their puffs turning. Only the villager under the player's hand shows the "
+	                "yellow wheat symbol of a farmer over its glow. The villager in the hand of the other god shows no "
+	                "symbol.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, -14.0f}, .look = {0.0f, 1.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {0.0f, 0.0f},
+	                 .joinTown = true,
+	                 .inScript = true,
+	                 .disciple = VillagerDisciple::Farmer},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {20.0f, 0.0f},
+	                 .joinTown = true,
+	                 .inScript = true,
+	                 .disciple = VillagerDisciple::Farmer}},
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-5.0f, 0.0f},
+	                  .object = 1,
+	                  .radius = 3.0f}},
+	});
+
 	all.push_back({
 	    .id = "villagers.disciple_letgo",
 	    .name = "What a villager keeps of the work the hand showed it",

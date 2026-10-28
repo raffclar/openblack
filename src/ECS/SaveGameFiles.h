@@ -15,6 +15,7 @@
 #include <functional>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -94,5 +95,10 @@ struct SlotWriteResult
 /// When the temporary world file does not open, the game writes nothing more and tells the player nothing. Else the
 /// files with the world are written, then the world files go through their temporary files.
 [[nodiscard]] SlotWriteResult WriteSlot(filesystem::FileSystemInterface& files, const SlotWrite& slot);
+
+/// The label of a saved game that tells when it was saved: the time, a space, then the date. Each part comes from the
+/// player's own format. A part the computer could not give is empty and counts as nothing; each part it gave counts its
+/// characters and one more. When the two counts together are 62 or more, the label is empty.
+[[nodiscard]] std::u16string SaveDateLabel(std::optional<std::u16string_view> time, std::optional<std::u16string_view> date);
 
 } // namespace openblack::ecs::save_files

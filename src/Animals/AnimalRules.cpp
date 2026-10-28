@@ -142,6 +142,14 @@ glm::mat3 animals::Orientation(float heading, float bank)
 	return glm::mat3(portable_math::EulerAngleY(-(heading + (k_Pi * 0.5f))) * portable_math::EulerAngleZ(bank));
 }
 
+animals::DrawnBetweenTurns animals::DrawnAt(const glm::vec3& previousPosition, const glm::vec3& position, float previousHeading,
+                                            float heading, float turnFraction)
+{
+	const float t = std::clamp(turnFraction, 0.0f, 1.0f);
+	return {.position = previousPosition + ((position - previousPosition) * t),
+	        .heading = previousHeading + (std::remainder(heading - previousHeading, k_TwoPi) * t)};
+}
+
 animals::FormationSlot animals::FormationSlotOf(int place)
 {
 	int k = place;
@@ -189,13 +197,18 @@ bool animals::DeadBodyGoes(int16_t& turnsLeft, bool scriptControlled)
 	return goes;
 }
 
-bool animals::TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead)
+bool animals::TakesOwnTurn(const AnimalHolders& holders)
 {
-	if (holders.tornado || holders.playersHand || holders.physics)
+	return !holders.tornado && !holders.physics;
+}
+
+animals::LandedAs animals::LandsAs(bool alive, bool dying)
+{
+	if (alive)
 	{
-		return false;
+		return LandedAs::Landed;
 	}
-	return !holders.creature || dyingOrDead;
+	return dying ? LandedAs::Dead : LandedAs::Dying;
 }
 
 glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, float height)

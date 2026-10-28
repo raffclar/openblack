@@ -31,7 +31,7 @@ class Registry;
 
 /// The map's cells, filled as things are made and emptied as they go, through the registry's signals: nothing is
 /// rebuilt from the whole registry. Things made since the last look are filed, in the order they were made, before any
-/// search of a cell, and once a turn whatever can move is checked for a new cell.
+/// search of a cell or change of the cells. A thing that moves in the game's turn goes into its new cell as it moves.
 class MapProduction final: public MapInterface
 {
 public:
@@ -59,6 +59,9 @@ public:
 
 	void Sync() override;
 	void Refile(entt::entity entity) override;
+	void Moved(entt::entity entity) override;
+	void Reinsert(entt::entity entity) override;
+	void FileNew() override;
 	void FileResidents() override;
 	[[nodiscard]] bool InMap(entt::entity entity) const override;
 	/// Keeps the order of the things in each cell and each block, and the things made since the last sync
@@ -79,14 +82,20 @@ private:
 	void OnMade(entt::registry& registry, entt::entity entity);
 	void OnGone(entt::registry& registry, entt::entity entity);
 	void OnResidentGone(entt::registry& registry, entt::entity entity);
+	/// Just before an entity goes from the registry
+	void OnDestroying(entt::entity entity);
 
-	/// Files the things made since the last look, in the order they were made
-	void FileMade() const;
+	/// Files the things made since the last look, in the order they were made. The lookups do it before they look.
+	void FileMadeBeforeLook() const;
 	/// Gives the lists the land's blocks, before anything goes on them
 	void KnowLandBlocks() const;
 	void File(entt::entity entity, const Kind& kind) const;
 	void TakeOut(entt::entity entity) const;
 	[[nodiscard]] std::vector<uint32_t> CellsFor(entt::entity entity, const Kind& kind) const;
+	/// Whether a thing in the cells is now somewhere that puts it in other cells
+	[[nodiscard]] bool MovedSinceFiled(entt::entity entity) const;
+	/// The index of the cell of a thing's place on the map, none off the map
+	[[nodiscard]] std::optional<uint32_t> CellOfPlace(entt::entity entity) const;
 
 	Registry* _registry {nullptr};
 	OutlineSource _outlines;

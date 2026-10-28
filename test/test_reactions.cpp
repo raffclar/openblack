@@ -19,6 +19,7 @@
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureTeleportAgendas.h"
 #include "ECS/Components/Animal.h"
@@ -36,6 +37,7 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/TownDesire.h"
@@ -97,8 +99,10 @@ public:
 		}
 		cube.faces = {{0, 1, 3}};
 		cube.radius = glm::length(glm::vec3(0.5f));
-		entry.body =
-		    std::make_unique<physics::Body>(physics::BodySetup {.scale = 1.0f, .halfHeight = 0.5f, .mass = 1.0f}, cube);
+		// A material that keeps part of its spin: a zero share is not a material of the game
+		entry.body = std::make_unique<physics::Body>(
+		    physics::BodySetup {.scale = 1.0f, .halfHeight = 0.5f, .mass = 1.0f, .material = {.spinKeptPerSecond = 0.5f}},
+		    cube);
 		entry.body->velocity = velocity;
 	}
 	[[nodiscard]] PhysicsEntry* Find(entt::entity object) override { return object == entry.entity ? &entry : nullptr; }
@@ -136,8 +140,8 @@ public:
 class AlwaysLowGameRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t) override { return 0; }
-	float GameFloatRand(float) override { return 0.0f; }
+	uint32_t SyncedRand(uint32_t, DrawSite) override { return 0; }
+	float SyncedFloatRand(float, DrawSite) override { return 0.0f; }
 	uint32_t LocalRand(int32_t) override { return 0; }
 	float LocalFloatRand(float) override { return 0.0f; }
 	int32_t CrtRand() override { return 0; }
@@ -240,6 +244,10 @@ protected:
 		Locator::entitiesMap::emplace<MapProduction>();
 		Locator::livingActionSystem::emplace<ecs::systems::LivingActionSystem>();
 		_info = std::make_unique<InfoConstants>();
+		// The fire reaction has a reach, as every reaction of the game's data: a zero reach divides by zero
+		auto& fireRow = _info->reaction.at(static_cast<size_t>(Reaction::ReactToFire));
+		fireRow.maxReactionDistance = 60.0f;
+		fireRow.howImportantIsDistance = 0.25f;
 		for (const auto type : {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield,
 		                        Reaction::FleeFromObject, Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed,
 		                        Reaction::ReactToNewBuilding, Reaction::LookAtObject, Reaction::ReactToFood})
@@ -261,6 +269,11 @@ protected:
 		for (auto& villager : _info->villager)
 		{
 			ReactToEverything(villager);
+			// The town needs share divides by this: zero is not a value of the game's data
+			villager.divisorForTownNeedsSpeedMod = 1.0f;
+			// What a villager carries is a share of its most: a zero most divides by zero
+			villager.maxFoodCarried = villager.maxTraderFoodCarried = 10;
+			villager.maxWoodCarried = villager.maxTraderWoodCarried = 10;
 			// As every kind of villager in the game's data, they walk in the plain walking state
 			villager.moveState = LivingStates::LivingMoveToPos;
 		}
@@ -1614,6 +1627,26 @@ TEST_F(Reactions, VillagersHeedTheHandPickingUpOrSomethingCrushedWithoutTakingIt
 	}
 }
 
+// The turn finds the hand where the last report of its player put it. The drawn hand follows the pointer of one
+// computer only, so the turn does not use it.
+TEST_F(Reactions, TheTurnFindsTheHandAtItsReportedPlaceAndNotAtItsDrawnPlace)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	PlayTurn();
+	PlayTurn();
+	const auto hand = registry.Create();
+	registry.Assign<Transform>(hand, k_Here + glm::vec3(1000.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ReportedHand>(hand).handPoint = k_Here;
+	auto source = Miracle(Reaction::ReactToHandPickUp);
+	source.initiator = hand;
+	_reactions.Create(source);
+	const auto* memory = registry.TryGet<const VillagerReactionMemory>(_villagers[0]);
+	ASSERT_NE(memory, nullptr);
+	EXPECT_NE(memory->memory.LastReacted(static_cast<uint32_t>(Reaction::ReactToHandPickUp)), 0u);
+	const auto* far = registry.TryGet<const VillagerReactionMemory>(_villagers[2]);
+	EXPECT_TRUE(far == nullptr || far->memory.LastReacted(static_cast<uint32_t>(Reaction::ReactToHandPickUp)) == 0u);
+}
+
 TEST(ReactionRules, OnlyATownsOwnBuildingsAreReactedToWhenBuilt)
 {
 	using magic::villager_reaction::ReactedToWhenBuilt;
@@ -1942,7 +1975,10 @@ TEST_F(Reactions, AnAnimalLooksAtAThingToLookAt)
 	animals.available = true;
 	const auto cow = registry.Create();
 	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	auto& cowAnimal = registry.Assign<Animal>(cow);
+	cowAnimal.type = AnimalInfo::Cow;
+	// The map puts an animal in the cell of its map position, which is where it stands
+	cowAnimal.move.position = {map_coords::ToFixed(k_Here.x + 10.0f), map_coords::ToFixed(k_Here.z)};
 	Locator::entitiesMap::value().Sync();
 	_reactions.Create(Miracle(Reaction::LookAtObject));
 	EXPECT_EQ(animals.lookedAt, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
@@ -1959,7 +1995,10 @@ TEST_F(Reactions, AnAnimalGoesOnlyToFoodThatInterestsIt)
 	animals.available = true;
 	const auto cow = registry.Create();
 	registry.Assign<Transform>(cow, k_Here + glm::vec3(10.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	auto& cowAnimal = registry.Assign<Animal>(cow);
+	cowAnimal.type = AnimalInfo::Cow;
+	// The map puts an animal in the cell of its map position, which is where it stands
+	cowAnimal.move.position = {map_coords::ToFixed(k_Here.x + 10.0f), map_coords::ToFixed(k_Here.z)};
 	Locator::entitiesMap::value().Sync();
 	_reactions.Create(Miracle(Reaction::ReactToFood));
 	EXPECT_TRUE(animals.wentTo.empty());
