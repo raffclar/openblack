@@ -109,7 +109,6 @@
 #include "ECS/Components/MistDome.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
-#include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
@@ -5187,20 +5186,19 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 	{
 		return;
 	}
-	// A warm-up draws a ghost of each building model in the world at no size. Thus the first building that goes makes no
-	// new states of the graphics card.
+	// A warm-up draws a ghost of each building model that is loaded, at no size. Thus the first building that goes makes
+	// no new states of the graphics card, also when the building comes after the load.
 	std::vector<ecs::components::DestructionGhost> warmUpGhosts;
-	if (_warmingUp)
+	if (_warmingUp && Locator::infoConstants::has_value())
 	{
-		const auto& registry = Locator::entitiesRegistry::value();
-		registry.Each<const ecs::components::Mesh>([&](entt::entity entity, const ecs::components::Mesh& model) {
-			if (!registry.AnyOf<ecs::components::Abode, ecs::components::SpellDispenser>(entity) ||
-			    std::ranges::any_of(warmUpGhosts, [&model](const auto& ghost) { return ghost.mesh == model.id; }))
+		for (const auto& info : Locator::infoConstants::value().abode)
+		{
+			const auto id = resources::HashIdentifier(info.meshId);
+			if (meshes.Contains(id) && std::ranges::none_of(warmUpGhosts, [id](const auto& ghost) { return ghost.mesh == id; }))
 			{
-				return;
+				warmUpGhosts.push_back({.mesh = id, .model = glm::mat4(0.0f)});
 			}
-			warmUpGhosts.push_back({.mesh = model.id, .model = glm::mat4(0.0f)});
-		});
+		}
 	}
 	const auto ghosts = _warmingUp ? std::span<const ecs::components::DestructionGhost>(warmUpGhosts)
 	                               : Locator::explosionSystem::value().Ghosts();
