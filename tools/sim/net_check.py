@@ -6,8 +6,11 @@ port of 127.0.0.1 (wss), then two openblack clients with --join and a ticket eac
 options go to the server only: each client takes them from the server's reply to its join and loads that land. The
 first client plays recorded hand input (--input), the second keeps a still hand. The world turns only with the turns of the server (authoritative
 lockstep). At the end it compares the checksum of each turn on the server and on both clients.
+An input of the hand needs a map with temples (TwoGods, the online maps, --gods-ring-map); Land 1 and the testbed are
+checks with a still hand. A story land makes no temple at its start, so its network game is decided at the first turn
+and the end box takes the input: a run with an input whose game the server decided at its first turn is not the same.
 
-    python tools/sim/net_check.py --testbed --input tools/sim/hand_inputs/testbed.json --turns 600
+    python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --input tools/sim/hand_inputs/twogods_scoop_throw.json --turns 2000
     python tools/sim/net_check.py --turns 600 --config RelWithDebInfo
     python tools/sim/net_check.py --testbed --turns 400 --stop-second-after 40 --come-back-seconds 5
     python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --turns 2000 --hold-creature 2:2942.91,2607.57
@@ -1133,6 +1136,13 @@ def main():
     summary["stopped_after"] = stopped_after
     all_same = True
     if (options.temple_loss or options.time_limit is not None) and stopped_after is None:
+        all_same = False
+    # An input of the hand on a game that was decided at its first turn compares nothing of the hand
+    summary["decided_at_turn"] = sim_report.decided_at_turn_in_file(server_log)
+    decided_reason = sim_report.hand_input_on_decided_game(any(client_inputs), summary["decided_at_turn"])
+    summary["hand_input_decided"] = decided_reason is not None
+    if decided_reason is not None:
+        print(decided_reason)
         all_same = False
     for index, client_dir in enumerate(client_dirs):
         client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))

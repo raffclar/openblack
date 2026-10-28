@@ -15,6 +15,8 @@
 #include <functional>
 #include <optional>
 
+#include <glm/mat3x3.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
 #include "Common/GameHeading.h"
@@ -78,6 +80,10 @@ constexpr uint32_t k_IdleFidgets = 10;
 [[nodiscard]] GameHeading HeadingTowards(const glm::vec3& from, const glm::vec3& to);
 /// Whether a heading is far enough off the one wanted to turn
 [[nodiscard]] bool MustTurn(GameHeading heading, GameHeading wanted);
+/// The matrix that places the copy in the cave: the turn, then the scale, then the position. A creature leans with the
+/// height of the ground around it. The floor of the cave is level at the seat's height at all points. Thus the copy
+/// does not lean, because its size is never zero.
+[[nodiscard]] glm::mat4 Placement(const glm::vec3& position, const glm::mat3& rotation, const glm::vec3& scale);
 /// The point under the pointer that it looks at, from the camera's eye and the point under the pointer on the near
 /// plane, which is the near distance into the screen
 [[nodiscard]] glm::vec3 PointerPoint(const glm::vec3& eye, const glm::vec3& onNearPlane, float nearDistance);

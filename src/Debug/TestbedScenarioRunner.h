@@ -216,6 +216,8 @@ private:
 	[[nodiscard]] static std::optional<glm::ivec2> CaveCreatureOnScreen(glm::vec2 size);
 	/// Moves the mouse on along a sweep, and lets go of it once the scenario's commands are done
 	void UpdatePointer(float seconds);
+	/// Moves the hand that the scenario holds still to the land under the pointer, at the same height above the land
+	void MoveHeldHand(glm::ivec2 pointer);
 	/// Where the cursor and the hand are on the screen, for the log
 	[[nodiscard]] std::string HandOnScreen() const;
 	/// Sets a desire or the stage of growing up, or rewards what the creature last did by the kind of thing it was to
@@ -336,6 +338,11 @@ private:
 		glm::vec2 remainder {0.0f};
 	};
 	std::optional<PointerSweep> _sweep;
+	/// The hand that the scenario holds still over the land, and its height above the land
+	std::optional<ecs::systems::MagicSystemInterface::HandFrame> _heldHand;
+	float _heldHandHeight {0.0f};
+	/// After the held hand gives its thing to a creature, a sweep of the pointer moves the held hand too
+	bool _sweepMovesHeldHand {false};
 	/// The hand's place on the screen is logged every frame for a while after the mouse's buttons change
 	float _handWatchSeconds {0.0f};
 	/// The testbed took the pointer, and gives it back when it is done; a pointer the debug inspector holds it leaves be

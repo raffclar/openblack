@@ -249,6 +249,9 @@ public:
 	/// A point as the game keeps a place on the map: the ground under it, the height above the ground and the place on
 	/// the map's grid of fixed points
 	[[nodiscard]] virtual glm::vec3 AsMapPlace(glm::vec3 point) const { return point; }
+	/// The world place that a thing in a hand gets at each turn from the reported point of the hand: the map position
+	/// of the thing, with the height of the point above the ground
+	[[nodiscard]] virtual glm::vec3 HeldPlaceAt(glm::vec3 point) const { return point; }
 	virtual void SetPose(entt::entity object, const Pose& pose) = 0;
 	/// The pose that the frames draw a thing in while the hand pulls at it. The world keeps the thing as it stood.
 	virtual void DrawPulledPose(entt::entity object, const Pose& pose) { SetPose(object, pose); }
