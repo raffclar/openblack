@@ -53,10 +53,9 @@ void SetupReactToFlyingObject(entt::entity villager, entt::entity object);
 
 /// The player who threw what a villager was hit by or dropped it, as the hand let it go
 [[nodiscard]] std::optional<PlayerNames> DropperOf(entt::entity object);
-/// The same among given entities: the hand that last let it go is the player's at this machine (the first player's
-/// when there are no players)
-[[nodiscard]] std::optional<PlayerNames> DropperOf(const Registry& registry, entt::entity object,
-                                                   std::optional<PlayerNames> localPlayer);
+/// The same among given entities: the player of the hand that let it go last. When the hands of more players let it go
+/// last, the first player in the order of the players is the dropper.
+[[nodiscard]] std::optional<PlayerNames> DropperOf(const Registry& registry, entt::entity object);
 
 uint32_t Flying(components::LivingAction& action);
 /// Leaving flight or the hand, refused for anything but the hand or flight, landing, death and drowning

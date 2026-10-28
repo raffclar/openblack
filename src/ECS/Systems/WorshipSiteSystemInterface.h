@@ -111,9 +111,13 @@ public:
 		Door,
 		/// Its middle, which villagers are judged near or far from
 		Centre,
+		/// The point where the game holds the site to stand: the place of its first miracle icon on the model
+		Standing,
 	};
 	/// Where a place of a site is on the land, none without the site's model
 	[[nodiscard]] virtual std::optional<glm::vec2> PlaceAt(entt::entity site, SitePlace place) const = 0;
+	/// How high above the sea the point where the game holds the site to stand is, none without the site's model
+	[[nodiscard]] virtual std::optional<float> StandingHeight(entt::entity site) const = 0;
 	/// A villager is counted among a site's worshippers, newest first, unless it is already
 	virtual void AddWorshipper(entt::entity site, entt::entity villager) = 0;
 	/// A villager is no longer counted among a site's worshippers

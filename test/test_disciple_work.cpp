@@ -108,10 +108,12 @@ TEST(DiscipleWork, WaitingDiscipleLooksAgainSoonWhenWantsChange)
 
 TEST(DiscipleWork, WorkshopRoom)
 {
-	EXPECT_EQ(WorkshopRoom(false, 0), 3u);
-	EXPECT_EQ(WorkshopRoom(true, 0), 2u);
-	EXPECT_EQ(WorkshopRoom(true, 2), 0u);
-	EXPECT_EQ(WorkshopRoom(false, 3), 0u);
+	EXPECT_EQ(WorkshopRoom(false, 0), 3);
+	EXPECT_EQ(WorkshopRoom(true, 0), 2);
+	EXPECT_EQ(WorkshopRoom(true, 2), 0);
+	EXPECT_EQ(WorkshopRoom(false, 3), 0);
+	// The game keeps the sign: a workshop that counts too many has room by its test
+	EXPECT_EQ(WorkshopRoom(true, 3), -1);
 }
 
 TEST(DiscipleWork, WorkshopWantsWoodUntilFullAndStocked)

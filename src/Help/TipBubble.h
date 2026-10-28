@@ -64,8 +64,9 @@ constexpr float k_DisplayTimePerHundredth = 0.0002f;
 
 /// A value's share of the way from a to b, held to 0..1
 [[nodiscard]] float Fraction(float value, float a, float b);
-/// The sizes at a depth in front of the camera
-[[nodiscard]] Sizes SizesAt(float depth);
+/// The sizes at a depth in front of the camera, from the near sizes of a bubble: the tip's, unless the caller gives
+/// others
+[[nodiscard]] Sizes SizesAt(float depth, const Sizes& nearSizes = k_NearSizes);
 /// How much of the bubble shows at a depth: fading in close to the camera and out far away
 [[nodiscard]] float DistanceAlpha(float depth);
 
@@ -88,7 +89,8 @@ struct Placement
 /// left of the tail the closer the sign is to either edge. Nothing keeps it on the screen. The game's sizes are
 /// pixels of its default screen: every size (the box, margin, line, tail offset, words' shadow) is multiplied by
 /// `pixelScale` so the bubble takes the same share of the screen as there.
-[[nodiscard]] std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth, float pixelScale);
+[[nodiscard]] std::optional<Placement> Place(glm::vec2 anchor, float depth, float screenWidth, float pixelScale,
+                                             const Sizes& nearSizes = k_NearSizes);
 
 /// A corner of the box's shape: a pixel, a place on the bubble's texture and an alpha from 0 to 1
 struct Corner
@@ -207,6 +209,25 @@ struct ControlBox
 /// The gap between a control's picture and its (empty) label, in pixels of the default screen
 constexpr float k_ControlGap = 2.0f;
 
+/// The bounds of the words and pictures, in pixels: the margins, the rows that cut them, and where they fade in at the
+/// top and start to fade out at the bottom
+struct WordBounds
+{
+	float left;
+	float right;
+	float clipTop;
+	float fadeTopEnd;
+	float fadeBottomStart;
+	float clipBottom;
+};
+/// Adds a gesture's picture, `size` square, centred between the margins from a top down, cut to the rows. Adds nothing
+/// when it cannot fit across or down, or when it is fully outside the rows.
+void AddGesture(std::vector<GestureIcon>& out, int gesture, float top, float size, const WordBounds& bounds, glm::vec4 colour,
+                bool shadow);
+/// Adds a control's picture, `size` high, from a top down, only when it is fully below the top row and above
+/// `boxBottom`. It fades in over the fade at the top and fades out from the fade at the bottom to `boxBottom`.
+void AddControl(std::vector<ControlIcon>& out, int action, float top, float size, const WordBounds& bounds, float boxBottom);
+
 /// Whether a control action has a binding to show
 using ControlShownFn = std::function<bool(int action)>;
 
@@ -220,6 +241,8 @@ struct Line
 	float bottomAlpha {0.0f};
 	float clipTop {0.0f};
 	float clipBottom {0.0f};
+	/// The item of the line, from the bottom up
+	size_t item {0};
 };
 /// The words of the bubble, their shadows first
 struct Words

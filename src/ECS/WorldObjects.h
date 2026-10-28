@@ -17,6 +17,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/ModelSurface.h"
+#include "ECS/TownAggression.h"
 #include "Enums.h"
 #include "Help/VillageVoices.h"
 
@@ -122,9 +123,9 @@ void DestroyedByEffect(entt::entity object, const EffectDeath& death);
 void CountInjury(entt::entity villager, float before, float after);
 /// Harm done to a town's villager or building is an attack on its town by whoever did it; the player at this machine's
 /// advisors may remark on it. A creature doing the harm is told apart. The people of the town may cry out in the voice
-/// that the harm gives, if it gives one.
-void AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature = false,
-                std::optional<guidance::TownAttackVoice> cry = std::nullopt);
+/// that the harm gives, if it gives one. The town keeps how much the attack burnt, crushed and hit.
+void AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
+                bool byCreature = false, std::optional<guidance::TownAttackVoice> cry = std::nullopt);
 
 /// Life given back to an object other than a living thing, as a miracle's heal gives it: never above 1. Its life after.
 float IncreaseLife(entt::entity object, float amount);

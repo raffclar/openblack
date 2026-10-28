@@ -24,25 +24,41 @@
 
 #include <SDL.h>
 #include <bgfx/bgfx.h>
+#include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraDrag.h"
+#include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/FixedFormat.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Creature/CreatureSkin.h"
+#include "ECS/ChatRules.h"
+#include "ECS/Components/Creature.h"
+#include "ECS/Components/Player.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
+#include "ECS/Registry.h"
+#include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -50,9 +66,12 @@
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Graphics/ZSort.h"
+#include "Gui/ChatControlsRules.h"
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
 #include "Gui/GlyphTexture.h"
+#include "Gui/PingDisplay.h"
+#include "Gui/IncomingMessageStripRules.h"
 #include "Gui/SavingBox.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/ScriptTexts.h"
@@ -62,6 +81,7 @@
 #include "Help/ControlIcons.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpTextDisplay.h"
+#include "Help/TextSplitter.h"
 #include "Help/TipBubble.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
@@ -69,8 +89,11 @@
 #include "Input/KeyRebinding.h"
 #include "Input/WindowPointer.h"
 #include "Locator.h"
+#include "Online/NetworkSession.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptPropertyRules.h"
 #include "Temple/ChallengeRoomRules.h"
+#include "Temple/ScrollPictures.h"
 
 using namespace openblack::gui;
 using openblack::Locator;
@@ -285,6 +308,27 @@ WorldTextView PrepareWorldTextCanvas(Canvas& canvas)
 	}
 	return view;
 }
+
+/// The thumbnail of a network land from the resource cache, read from "Online Maps/<file>.thm" the first time
+std::shared_ptr<const land_thumbnail::LandThumbnail> LoadLandThumbnail(const std::string& file)
+{
+	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return nullptr;
+	}
+	const auto path = std::filesystem::path("Online Maps") / (file + ".thm");
+	auto& cache = Locator::resources::value().GetLandThumbnails();
+	const auto id = entt::hashed_string(path.generic_string().c_str()).value();
+	if (!cache.Contains(id))
+	{
+		if (!Locator::filesystem::value().Exists(path))
+		{
+			return nullptr;
+		}
+		cache.Load(id, openblack::resources::LandThumbnailLoader::FromDiskTag {}, path);
+	}
+	return cache.Handle(id).handle();
+}
 } // namespace
 
 TextDatabase GameInterface::LoadTexts()
@@ -388,13 +432,23 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _endGameBox(std::make_unique<EndGameBox>(_texts, _font))
     , _multiplayerBoxes(std::make_unique<MultiplayerBoxes>(_texts, _font))
     , _musicControls(std::make_unique<CustomMusicControls>(_font, _atmos.get()))
+    , _incomingMessages(std::make_unique<IncomingMessageStrip>())
+    , _chatControls(std::make_unique<ChatControls>(_font))
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
 	_menuCreaturePainter.SetPictures(_symbols.get(), _mice.get());
+	_multiplayerBoxes->SetThumbnailSource(LoadLandThumbnail);
 	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "Font full height");
 	_painter.SetFullGlyphs(_fullFontTexture.get());
 	_menuCreaturePainter.SetFullGlyphs(_fullFontTexture.get());
+	// The quick chat list has the taunts, and the list of players has its heading
+	std::vector<std::u16string> taunts;
+	for (uint32_t i = 0; i < chat::k_TauntCount; ++i)
+	{
+		taunts.emplace_back(_texts.GetHelpText(chat::k_FirstTauntText + i).text);
+	}
+	_chatControls->SetTexts(std::move(taunts), std::u16string(_texts.GetHelpText(chat::k_PlayersText).text));
 }
 
 GameInterface::~GameInterface() = default;
@@ -988,6 +1042,309 @@ void GameInterface::UpdateMusicControls(bool dialogOpen)
 	_musicControls->Update(player, emotion, machine_clock::Ticks());
 }
 
+glm::ivec2 GameInterface::ToIncomingMessages(glm::ivec2 screen, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	return _painter.ToDialog(screen - glm::ivec2(incoming_message_strip::Origin(resolution)));
+}
+
+glm::ivec2 GameInterface::FromIncomingMessages(glm::ivec2 layout, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	return _painter.ToScreenPoint(layout) + glm::ivec2(incoming_message_strip::Origin(resolution));
+}
+
+bool GameInterface::ProcessIncomingMessagesEvent(const SDL_Event& event, glm::u16vec2 resolution)
+{
+	const auto mouseButtonDown = (SDL_GetMouseState(nullptr, nullptr) & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK)) != 0;
+	const auto isLeftOrRight = [](uint8_t button) { return button == SDL_BUTTON_LEFT || button == SDL_BUTTON_RIGHT; };
+	switch (event.type)
+	{
+	// The game also sees the pointer move
+	case SDL_MOUSEMOTION:
+		_incomingMessages->MouseMove(ToIncomingMessages({event.motion.x, event.motion.y}, resolution));
+		return false;
+	case SDL_MOUSEBUTTONDOWN:
+		// The button takes a press over it only when no other mouse button is down
+		if (!isLeftOrRight(event.button.button) || !_incomingMessages->WantsMouse(false))
+		{
+			return false;
+		}
+		_incomingMessages->MouseDown(ToIncomingMessages({event.button.x, event.button.y}, resolution),
+		                             event.button.button == SDL_BUTTON_RIGHT);
+		return true;
+	case SDL_MOUSEBUTTONUP:
+	{
+		if (!isLeftOrRight(event.button.button) || !_incomingMessages->WantsMouse(mouseButtonDown))
+		{
+			return false;
+		}
+		// The button clicks as it acts
+		const auto click = _incomingMessages->MouseUp(ToIncomingMessages({event.button.x, event.button.y}, resolution));
+		if (click.has_value())
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+			ClickIncomingMessage(click->rightButton);
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+void GameInterface::ClickIncomingMessage(bool rightButton)
+{
+	if (!Locator::incomingMessageSystem::has_value())
+	{
+		return;
+	}
+	auto& messages = Locator::incomingMessageSystem::value();
+	const auto* top = messages.GetQueue().Top();
+	if (top == nullptr)
+	{
+		return;
+	}
+	incoming_messages::ClickFacts facts {.kind = top->kind, .rightButton = rightButton};
+	if (Locator::camera::has_value())
+	{
+		facts.playersCamera = dynamic_cast<const DefaultWorldCameraModel*>(&Locator::camera::value().GetModel()) != nullptr;
+	}
+	if (Locator::cameraHelpSystem::has_value())
+	{
+		const auto& help = Locator::cameraHelpSystem::value().Get();
+		facts.cameraMoves = (help.features & camera_drag::feature::k_Strafe) != 0;
+		facts.cameraKeys = help.cameraKeys;
+		facts.placeKeys = help.placeKeys;
+	}
+	std::optional<entt::entity> creature;
+	if (Locator::creatureModeSystem::has_value())
+	{
+		creature = Locator::creatureModeSystem::value().PlayersCreature();
+	}
+	facts.hasCreature = creature.has_value();
+	// The camera starts at the creature's viewing distance, however near it is
+	if (incoming_messages::FollowsCreature(facts))
+	{
+		Locator::creatureModeSystem::value().Enter(*creature, creature_follow::StartDistance::Viewing);
+	}
+	messages.Dismiss();
+}
+
+void GameInterface::UpdateIncomingMessages(bool dialogOpen, glm::u16vec2 resolution)
+{
+	const auto layoutWidth = incoming_message_strip::LayoutWidth(resolution);
+	if (!Locator::incomingMessageSystem::has_value())
+	{
+		_incomingMessages->Update(std::nullopt, std::nullopt, layoutWidth);
+		return;
+	}
+	// The message shows where the custom music controls can show: both are parts of one box of the game
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool videoPlays = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
+	const bool wideScreen =
+	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
+	const bool creatureHeld =
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value();
+	const bool shown = custom_music_controls::Shows({.inTemple = inTemple,
+	                                                 .videoPlays = videoPlays,
+	                                                 .wideScreen = wideScreen,
+	                                                 .creatureHeld = creatureHeld,
+	                                                 .dialogOpen = dialogOpen});
+	auto& messages = Locator::incomingMessageSystem::value();
+	const auto& queue = messages.GetQueue();
+	// The button takes the look of the top message before the message can go. The line of text takes the next message
+	// at once, or keeps its text when no message is left.
+	std::optional<incoming_messages::ButtonLook> look;
+	if (const auto* top = queue.Top(); shown && top != nullptr)
+	{
+		look = incoming_messages::LookAt(*top, messages.GetMilliseconds());
+	}
+	messages.Update(look.has_value());
+	std::optional<std::u16string_view> text;
+	if (!queue.Empty())
+	{
+		text = queue.ShownText();
+	}
+	_incomingMessages->Update(look, text, layoutWidth);
+}
+
+bool GameInterface::ChatWantsKeys() const
+{
+	const bool wideScreen =
+	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
+	return !_menu->IsOpen() && _chatControls->WantsKeys(wideScreen);
+}
+
+glm::ivec2 GameInterface::ToChatControls(glm::ivec2 screen, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	return _painter.ToDialog(screen - glm::ivec2(chat_controls::Origin(resolution)));
+}
+
+glm::ivec2 GameInterface::FromChatControls(glm::ivec2 layout, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	return _painter.ToScreenPoint(layout) + glm::ivec2(chat_controls::Origin(resolution));
+}
+
+bool GameInterface::ProcessChatEvent(const SDL_Event& event, glm::u16vec2 resolution)
+{
+	const auto mouseButtonDown = (SDL_GetMouseState(nullptr, nullptr) & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK)) != 0;
+	const bool keys = ChatWantsKeys();
+	switch (event.type)
+	{
+	// The game also sees the pointer move
+	case SDL_MOUSEMOTION:
+		_chatControls->MouseMove(ToChatControls({event.motion.x, event.motion.y}, resolution));
+		return false;
+	case SDL_MOUSEBUTTONDOWN:
+		// The controls take a press over a control only when no other mouse button is down
+		if (event.button.button != SDL_BUTTON_LEFT || !_chatControls->WantsMouse(false))
+		{
+			return false;
+		}
+		_chatControls->MouseDown(ToChatControls({event.button.x, event.button.y}, resolution));
+		return true;
+	case SDL_MOUSEBUTTONUP:
+	{
+		if (event.button.button != SDL_BUTTON_LEFT || !_chatControls->WantsMouse(mouseButtonDown))
+		{
+			return false;
+		}
+		const auto modifiers = SDL_GetModState();
+		const bool shift = (modifiers & KMOD_SHIFT) != 0;
+		const bool ctrl = (modifiers & KMOD_CTRL) != 0;
+		const bool other = (modifiers & (KMOD_ALT | KMOD_GUI)) != 0;
+		// The control clicks as it acts
+		if (_chatControls->MouseUp(ToChatControls({event.button.x, event.button.y}, resolution), shift, ctrl, other))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	}
+	case SDL_MOUSEWHEEL:
+	{
+		if (!_chatControls->WantsMouse(mouseButtonDown))
+		{
+			return false;
+		}
+		_chatControls->Wheel(ToChatControls(input::WindowPointer(), resolution), event.wheel.y);
+		return true;
+	}
+	case SDL_TEXTINPUT:
+		if (!keys)
+		{
+			return false;
+		}
+		_chatControls->TextInput(ToUtf16(event.text.text));
+		return true;
+	case SDL_KEYDOWN:
+		if (!keys)
+		{
+			return false;
+		}
+		return _chatControls->KeyDown(event.key.keysym.sym, (event.key.keysym.mod & KMOD_SHIFT) != 0);
+	case SDL_KEYUP:
+		// The game sees no key of the line
+		return keys;
+	default:
+		return false;
+	}
+}
+
+void GameInterface::UpdateChat(bool dialogOpen, glm::u16vec2 resolution)
+{
+	chat_controls::ShowFacts facts;
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const bool network = Locator::networkGame::has_value() && Locator::networkGame::value().InGame();
+	facts.singlePlayer = !network;
+	facts.connected = !network || (session != nullptr && session->GetState() == online::NetworkSession::State::Playing);
+	const bool videoPlays = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
+	const bool wideScreen =
+	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
+	facts.inGame = !videoPlays;
+	facts.open = _chatControls->IsOpen();
+	facts.incoming = Locator::incomingMessageSystem::has_value() && !Locator::incomingMessageSystem::value().GetQueue().Empty();
+	facts.creatureInteracting =
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value();
+	facts.music =
+	    !videoPlays && !wideScreen && Locator::audio::has_value() && Locator::audio::value().GetCustomMusic() != nullptr;
+	// In a game of one player, the chat button stays out while the chat is shut: the incoming messages and the custom
+	// music do not show it (deviation 68)
+	if (facts.singlePlayer && !facts.open)
+	{
+		facts.incoming = false;
+		facts.music = false;
+	}
+
+	// The other human gods of the game
+	std::optional<PlayerNames> here;
+	if (Locator::handSystem::has_value())
+	{
+		const auto& hands = Locator::handSystem::value();
+		if (hands.IsOwnPlayer(hands.GetOwnPlayer()))
+		{
+			here = hands.GetOwnPlayer();
+		}
+	}
+	if (Locator::chatSystem::has_value())
+	{
+		std::vector<chat::people::Person> others;
+		for (const auto& [slot, name] : Locator::chatSystem::value().GetNames())
+		{
+			if (slot != here)
+			{
+				others.push_back({.slot = slot, .name = name, .selected = false});
+			}
+		}
+		_chatControls->SetPlayers(std::move(others));
+	}
+	const auto modifiers = SDL_GetModState() & (KMOD_SHIFT | KMOD_CTRL | KMOD_ALT | KMOD_GUI);
+	const bool cameOn = _chatControls->Update({.show = facts,
+	                                           .otherBox = dialogOpen,
+	                                           .onlyShift = modifiers != 0 && (modifiers & ~KMOD_SHIFT) == 0,
+	                                           .layoutSize = chat_controls::LayoutSize(resolution)});
+	if (Locator::chatSystem::has_value())
+	{
+		auto& chat = Locator::chatSystem::value();
+		// As the controls come on the screen, the bubble of the player's creature shows again
+		if (cameOn && here.has_value() && Locator::playerSystem::has_value())
+		{
+			if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(*here); creature.has_value())
+			{
+				chat.ShowBubble(*creature);
+			}
+		}
+		const auto recipients = _chatControls->Recipients();
+		for (const auto& sent : _chatControls->TakeSent())
+		{
+			if (sent.taunt.has_value())
+			{
+				chat.SendTaunt(*sent.taunt, recipients);
+			}
+			else if (sent.line.has_value())
+			{
+				chat.SendLine(*sent.line, recipients);
+			}
+		}
+	}
+	// The window gives the typed letters while the line has the keys
+	const bool keys = ChatWantsKeys();
+	if (keys != _chatTextInput)
+	{
+		_chatTextInput = keys;
+		if (keys)
+		{
+			SDL_StartTextInput();
+		}
+		else if (!_menu->IsOpen())
+		{
+			SDL_StopTextInput();
+		}
+	}
+}
+
 void GameInterface::SetSymbolPictures(const creature_tattoo::Pictures& pictures)
 {
 	if (auto symbols = LoadSymbols(pictures))
@@ -1049,7 +1406,15 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	// Escape opening the menu is the game's to decide (OpenMenu)
 	if (!_menu->IsOpen())
 	{
+		if (_chatControls->IsActive() && ProcessChatEvent(event, resolution))
+		{
+			return true;
+		}
 		if (_musicControls->IsActive() && ProcessMusicControlsEvent(event, resolution))
+		{
+			return true;
+		}
+		if (_incomingMessages->IsActive() && ProcessIncomingMessagesEvent(event, resolution))
 		{
 			return true;
 		}
@@ -1245,6 +1610,8 @@ void GameInterface::UpdateTattooEditor(float deltaSeconds)
 		_leftButtonDown = false;
 		_otherButtonsDown = 0;
 	}
+	_tattooEditor->SetNetworkGame(_tattooEditorAsNetworkGame ||
+	                              (Locator::time::has_value() && Locator::time::value().IsNetworkGame()));
 	_tattooEditor->Update(deltaSeconds, editor, palette, _leftButtonDown);
 	_menu->SetCovered(_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 }
@@ -1270,12 +1637,17 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// and the fades
 	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
+	DrawTempleScrollPictures(resolution);
+	DrawChatBubbles(resolution, mouse);
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
 	                      _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
 	                      _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
-	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value());
+	UpdateChat(menuOpen || _boxOverGameFade.has_value(), resolution);
+	// The custom music controls go while the chat is open
+	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value() || (_chatControls->IsActive() && _chatControls->IsOpen()));
+	UpdateIncomingMessages(menuOpen || _boxOverGameFade.has_value(), resolution);
 	// A cut scene leaves some of the interface off the screen
 	const auto& cinema = Locator::cinematicDirectorSystem::value();
 	const cinema_hides::Bars cinemaBars {.in = cinema.IsWideScreenOn(), .heldByScript = cinema.GetWideScreenOwner() != 0};
@@ -1345,10 +1717,17 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	}
 	else
 	{
+		// The chat goes against the top of the screen
+		_canvas.SetOrigin(chat_controls::Origin(resolution));
+		_chatControls->Draw(_painter);
 		// The custom music controls go against the top right of the screen
 		_canvas.SetOrigin(custom_music_controls::Origin(resolution));
 		_musicControls->Draw(_painter);
+		// The incoming message goes against the bottom left of the screen
+		_canvas.SetOrigin(incoming_message_strip::Origin(resolution));
+		_incomingMessages->Draw(_painter, _gatheringText.get());
 		_canvas.SetOrigin(glm::vec2(0.0f));
+		DrawPingLine(resolution, menuOpen, cinemaBars.in);
 		_storyHistoryBox->Draw(_painter);
 		if (_resyncShown)
 		{
@@ -1781,6 +2160,218 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	afterDrawing();
 }
 
+void GameInterface::DrawTempleScrollPictures(glm::u16vec2 resolution)
+{
+	namespace pictures = temple::scroll_pictures;
+	if (!Locator::temple::has_value() || !Locator::camera::has_value() || !Locator::temple::value().Active())
+	{
+		return;
+	}
+	const auto& lines = Locator::temple::value().GetScrollPictures();
+	if (lines.empty())
+	{
+		return;
+	}
+	const auto& camera = Locator::camera::value();
+	const auto viewProjection = camera.GetViewProjectionMatrix();
+	const float nearClip = camera.GetNearClip();
+	const auto screen = glm::vec2(resolution);
+	const pictures::ProjectFn project = [&viewProjection, nearClip, screen](glm::vec3 point) {
+		using Seen = pictures::ScreenPoint::Seen;
+		const auto clip = viewProjection * glm::vec4(point, 1.0f);
+		pictures::ScreenPoint out {.depth = clip.w};
+		if (clip.w < nearClip)
+		{
+			return out;
+		}
+		out.pixel = {((clip.x / clip.w) + 1.0f) * screen.x * 0.5f, (1.0f - (clip.y / clip.w)) * screen.y * 0.5f};
+		const bool inside = out.pixel.x >= 0.0f && out.pixel.y >= 0.0f && out.pixel.x < screen.x && out.pixel.y < screen.y;
+		out.seen = inside ? Seen::OnScreen : Seen::OffScreen;
+		return out;
+	};
+	std::span<const input::KeyBinding> bindings;
+	if (Locator::gameActionSystem::has_value())
+	{
+		bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	}
+	const auto keyName = ControlKeyName();
+	const help::tip_bubble::ControlShownFn controlShown = [bindings, &keyName](int action) {
+		return help::control_icons::PictureFor(action, bindings, keyName).has_value();
+	};
+	const float pixelScale = ReferenceScale(resolution.x, resolution.y);
+	pictures::Pictures shown;
+	for (const auto& line : lines)
+	{
+		pictures::Place(shown, line, project, controlShown, pixelScale);
+	}
+	// A gesture's picture is flat on the screen, but the world in front of it hides it
+	auto& canvas = _worldLabelsCanvas;
+	const auto view = PrepareWorldTextCanvas(canvas);
+	for (const auto& [icon, depth] : shown.gestures)
+	{
+		const auto sheet = static_cast<size_t>(icon.sheet);
+		if (sheet < _gestureSheets.size() && _gestureSheets.at(sheet) != nullptr)
+		{
+			canvas.SetDepth(world_text::BufferDepth(view.projection, depth));
+			canvas.DrawQuad(icon.min, icon.max, icon.uvMin, icon.uvMax, icon.colour, _gestureSheets.at(sheet).get());
+		}
+	}
+	// A control's picture goes over all of the world
+	for (const auto& control : shown.controls)
+	{
+		DrawBubbleControl(control, bindings, pixelScale);
+void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
+{
+	namespace tip = help::tip_bubble;
+	namespace bubbles = chat::speech_bubble;
+	if (!Locator::chatSystem::has_value() || !Locator::camera::has_value() || !Locator::entitiesRegistry::has_value() ||
+	    _gatheringText == nullptr)
+	{
+		return;
+	}
+	auto& chat = Locator::chatSystem::value();
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto screen = glm::vec2(resolution);
+	const auto pixelScale = ReferenceScale(resolution.x, resolution.y);
+	const auto viewProjection = Locator::camera::value().GetViewProjectionMatrix();
+	// The colour of a god in the world: none for a number that has no colour
+	const auto colourOf = [](PlayerNames god) -> std::optional<uint32_t> {
+		const auto index = static_cast<size_t>(god);
+		if (index >= ecs::components::Player::k_Colours.size())
+		{
+			return std::nullopt;
+		}
+		return ecs::components::Player::k_Colours.at(index);
+	};
+	const auto pointer = glm::vec2(mouse);
+	constexpr tip::Sizes k_NearSizes {.width = bubbles::k_NearWidth,
+	                                  .height = bubbles::k_NearHeight,
+	                                  .margin = bubbles::k_NearMargin,
+	                                  .lineHeight = bubbles::k_NearLineHeight};
+	for (const auto& [creature, shown] : chat.GetBubbles())
+	{
+		if (shown.lines.empty() || shown.displayTime <= 0.0f || !registry.Valid(creature))
+		{
+			continue;
+		}
+		const auto* transform = registry.TryGet<const ecs::components::Transform>(creature);
+		const auto* body = registry.TryGet<const ecs::components::Creature>(creature);
+		if (transform == nullptr || body == nullptr)
+		{
+			continue;
+		}
+		// The bubble points at the top of the creature's head
+		const auto anchor = transform->position +
+		                    glm::vec3(0.0f, script::property_rules::CreatureHeight(ecs::components::ShownSize(*body)), 0.0f);
+		const auto clip = viewProjection * glm::vec4(anchor, 1.0f);
+		if (clip.w <= 0.0f)
+		{
+			continue;
+		}
+		const glm::vec2 pixel {(clip.x / clip.w + 1.0f) * screen.x * 0.5f, (1.0f - clip.y / clip.w) * screen.y * 0.5f};
+		const auto placement = tip::Place(pixel, clip.w, screen.x, pixelScale, k_NearSizes);
+		if (!placement.has_value())
+		{
+			continue;
+		}
+		// The pointer over the bubble keeps it on the screen
+		if (tip::Inside(*placement, pointer))
+		{
+			chat.ShowBubble(creature);
+		}
+		auto* bubble = chat.GetBubble(creature);
+		if (bubble == nullptr)
+		{
+			continue;
+		}
+		tip::Scroll scroll {
+		    .lines = bubble->scroll, .contentHeight = bubble->contentHeight, .lineHeight = placement->sizes.lineHeight};
+		tip::ClampScroll(scroll, *placement);
+		bubble->scroll = scroll.lines;
+		const float alpha = std::min(bubble->displayTime, 1.0f) * placement->distanceAlpha;
+		if (alpha <= 0.0f)
+		{
+			continue;
+		}
+
+		// The font goes with the creature's alignment
+		const auto font = bubbles::FontOf(body->alignment);
+		const auto [face, faceTexture] = DialogueFont(font == bubbles::Font::Good   ? help::TextFont::F1
+		                                              : font == bubbles::Font::Evil ? help::TextFont::F3
+		                                                                            : help::TextFont::J0);
+		const GameFont& words = *face;
+
+		// The box, the arrows and the words are at depths in the world as for the tip bubble
+		auto& canvas = _worldLabelsCanvas;
+		const auto view = PrepareWorldTextCanvas(canvas);
+		const float boxDepth = world_text::DrawnDepth(placement->depth, view.pitch, view.nearClip);
+		const float shadowWordsBuffer =
+		    world_text::BufferDepth(view.projection, world_text::WordsDepth(boxDepth - 1.0f, view.nearClip));
+		const float wordsWordsBuffer =
+		    world_text::BufferDepth(view.projection, world_text::WordsDepth(boxDepth - 2.0f, view.nearClip));
+		canvas.SetSortDepth(graphics::zsort::Depth(anchor, view.eye));
+		canvas.SetDepth(world_text::BufferDepth(view.projection, boxDepth));
+		// The box has half of the colour of the creature's god
+		const auto boxBits = bubbles::BoxColour(colourOf(body->owner));
+		const auto boxColour =
+		    glm::vec3(static_cast<float>((boxBits >> 16u) & 0xFFu) / 255.0f,
+		              static_cast<float>((boxBits >> 8u) & 0xFFu) / 255.0f, static_cast<float>(boxBits & 0xFFu) / 255.0f);
+		for (const auto& quad : tip::BoxShape(*placement, alpha))
+		{
+			std::array<glm::vec2, 4> corners {};
+			std::array<glm::vec2, 4> uvs {};
+			std::array<glm::vec4, 4> colours {};
+			for (size_t i = 0; i < quad.size(); ++i)
+			{
+				corners.at(i) = quad.at(i).position;
+				uvs.at(i) = quad.at(i).uv;
+				colours.at(i) = glm::vec4(boxColour, quad.at(i).alpha);
+			}
+			canvas.DrawShape(corners, uvs, colours, _gatheringText.get());
+		}
+		if (_atmos != nullptr && tip::ArrowsLit(machine_clock::Ticks()))
+		{
+			canvas.SetDepth(world_text::BufferDepth(view.projection, view.nearClip));
+			for (const auto& [more, arrow] : {std::pair {scroll.moreAbove, tip::UpArrow(*placement)},
+			                                  std::pair {scroll.moreBelow, tip::DownArrow(*placement)}})
+			{
+				if (more)
+				{
+					canvas.DrawQuad(arrow.min, arrow.max, arrow.uvMin, arrow.uvMax, tip::k_ArrowColour, _atmos.get());
+				}
+			}
+		}
+		// The lines from the bottom up: the newest line at the bottom
+		std::vector<std::u16string_view> items;
+		items.reserve(bubble->lines.size());
+		for (const auto& line : bubble->lines)
+		{
+			items.emplace_back(line.text);
+		}
+		const tip::WidthFn measure = [&words](std::u16string_view text, float size) { return words.GetWidth(text, size); };
+		const tip::WrapFn wrap = [&words](std::u16string_view text, float width, float size) {
+			const auto lines = words.Wrap(text, size, width);
+			return std::vector<std::u16string>(lines.begin(), lines.end());
+		};
+		const auto laid = tip::LayOutWords(*placement, items, scroll.Pixels(), alpha, wrap, measure, {});
+		bubble->contentHeight = laid.contentHeight;
+		canvas.SetDepth(shadowWordsBuffer);
+		for (const auto& line : laid.shadows)
+		{
+			DrawBubbleLine(canvas, line, glm::vec3(0.0f), words, faceTexture);
+		}
+		canvas.SetDepth(wordsWordsBuffer);
+		for (const auto& line : laid.lines)
+		{
+			const auto bits = bubbles::LineColour(colourOf(bubble->lines.at(line.item).sender));
+			const auto colour =
+			    glm::vec3(static_cast<float>((bits >> 16u) & 0xFFu) / 255.0f, static_cast<float>((bits >> 8u) & 0xFFu) / 255.0f,
+			              static_cast<float>(bits & 0xFFu) / 255.0f);
+			DrawBubbleLine(canvas, line, colour, words, faceTexture);
+		}
+	}
+}
+
 void GameInterface::DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,
                                       float pixelScale)
 {
@@ -1890,8 +2481,14 @@ void GameInterface::DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3
 
 void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line& line, glm::vec3 colour)
 {
-	const float scale = line.size / static_cast<float>(_font.GetHeight());
-	const auto atlasSize = glm::vec2(_font.GetAtlasSize());
+	DrawBubbleLine(canvas, line, colour, _font, _fontTexture.get());
+}
+
+void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line& line, glm::vec3 colour, const GameFont& font,
+                                   const graphics::Texture2D* texture)
+{
+	const float scale = line.size / static_cast<float>(font.GetHeight());
+	const auto atlasSize = glm::vec2(font.GetAtlasSize());
 	const float top = line.at.y;
 	const float bottom = line.at.y + line.size;
 	// The line fades from its top row to its bottom
@@ -1901,7 +2498,7 @@ void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line&
 	float pen = line.at.x;
 	for (const auto c : line.text)
 	{
-		const auto* glyph = _font.Find(c);
+		const auto* glyph = font.Find(c);
 		if (glyph == nullptr)
 		{
 			continue;
@@ -1927,7 +2524,7 @@ void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line&
 		                  glm::vec2(left + width, clippedBottom), glm::vec2(left, clippedBottom)},
 		                 {glm::vec2(uvMin.x, uvMin.y), glm::vec2(uvMax.x, uvMin.y), glm::vec2(uvMax.x, uvMax.y),
 		                  glm::vec2(uvMin.x, uvMax.y)},
-		                 {topColour, topColour, bottomColour, bottomColour}, _fontTexture.get());
+		                 {topColour, topColour, bottomColour, bottomColour}, texture);
 	}
 }
 
@@ -2160,6 +2757,33 @@ void GameInterface::DrawStatBar(const creature_panel::Rect& bar, float fill, glm
 	const glm::vec2 bottomRight {bar.max.x - inset, bar.max.y - inset};
 	quad(top, {bottomRight.x, top.y + inset}, {black, black, clear, clear});
 	quad(top, {top.x + inset, bottomRight.y}, {black, clear, clear, black});
+}
+
+void GameInterface::DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool cinemaBars)
+{
+	const bool shows = ping_display::LineShows({
+	    .hasText = _pingLine.has_value(),
+	    .menuOpen = menuOpen,
+	    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+	    .videoPlays = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying(),
+	    .cinemaBars = cinemaBars,
+	    .fightPanel = _fightPanel.has_value(),
+	    .creaturePanelNearTop = _creaturePanel.has_value() && !_creaturePanel->reward.has_value(),
+	});
+	if (!shows)
+	{
+		return;
+	}
+	_canvas.SetOrigin(ping_display::Origin(resolution));
+	_painter.SetAlpha(ping_display::k_Alpha);
+	const auto corner = ping_display::TextCorner();
+	const auto width = DialogPainter::k_Size.x - corner.x;
+	_painter.DrawText(corner + ping_display::k_ShadowOffset, width, DialogPainter::Justify::Left, *_pingLine,
+	                  ping_display::k_TextSize, DialogPainter::k_ShadowColour);
+	_painter.DrawText(corner, width, DialogPainter::Justify::Left, *_pingLine, ping_display::k_TextSize,
+	                  DialogPainter::k_FocusColour);
+	_painter.SetAlpha(1.0f);
+	_canvas.SetOrigin(glm::vec2(0.0f));
 }
 
 void GameInterface::DrawFightPanel(glm::u16vec2 resolution)

@@ -56,12 +56,13 @@ void EndTownTurn(bool& changed, bool& lastTurn);
 
 /// A workshop holds at most this many scaffolds, one fewer while it makes one
 inline constexpr uint32_t k_WorkshopScaffoldPlaces = 3;
-/// The scaffolds a workshop still has room for
-[[nodiscard]] uint32_t WorkshopRoom(bool makingScaffold, uint32_t scaffoldsHeld);
+/// The room of a workshop for more scaffolds: its places less the scaffold it makes and the scaffolds it counts. The game
+/// keeps the sign, so a workshop that counts too many has room by the game's test, which asks only for a value that is not 0.
+[[nodiscard]] int32_t WorkshopRoom(bool makingScaffold, uint32_t scaffoldsHeld);
 /// How far a workshop is from having wood for another scaffold: 1 with none, 0 with enough
 [[nodiscard]] float WorkshopWoodShortfall(uint32_t wood, uint32_t scaffoldWood);
 /// Whether a workshop wants wood: always, unless it has no room for another scaffold and already holds wood enough for one
-[[nodiscard]] float WorkshopWantsWood(uint32_t room, uint32_t wood, uint32_t scaffoldWood);
+[[nodiscard]] float WorkshopWantsWood(int32_t room, uint32_t wood, uint32_t scaffoldWood);
 /// Craftsmen look for workshops this far off, in metres
 inline constexpr float k_WorkshopReach = 500.0f;
 

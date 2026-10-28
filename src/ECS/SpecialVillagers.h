@@ -35,10 +35,11 @@ struct Row
 	bool hasName {false};
 };
 
-/// Whether a draw below ten makes the new villager a named one
-[[nodiscard]] constexpr bool TriesNamed(uint32_t draw)
+/// Whether a draw below ten makes the new villager a named one. In a network game, no villager gets a name, and the
+/// game draws no number for a name. The game always draws the number below ten.
+[[nodiscard]] constexpr bool TriesNamed(uint32_t draw, bool networkGame)
 {
-	return draw <= k_DrawsNamed;
+	return !networkGame && draw <= k_DrawsNamed;
 }
 
 /// The name a villager of a sex gets, starting at a row drawn below the table's size and going round the table once:

@@ -52,14 +52,25 @@ void GameParticleWorld::AddLightSheet(const std::shared_ptr<particles::LightShee
 	_lightSheets.push_back(sheet);
 }
 
+void GameParticleWorld::AddOwnedSheet(const std::shared_ptr<particles::LightSheet>& sheet)
+{
+	const bool listed = std::ranges::any_of(_ownedSheets, [&sheet](const auto& owned) { return owned.lock() == sheet; });
+	if (sheet != nullptr && !listed)
+	{
+		_ownedSheets.push_back(sheet);
+	}
+}
+
 std::vector<std::shared_ptr<particles::LightSheet>> GameParticleWorld::LightSheets() const
 {
-	std::erase_if(_lightSheets, [](const auto& sheet) { return sheet.expired(); });
 	std::vector<std::shared_ptr<particles::LightSheet>> sheets;
-	sheets.reserve(_lightSheets.size());
-	for (const auto& sheet : _lightSheets)
+	for (auto* list : {&_lightSheets, &_ownedSheets})
 	{
-		sheets.push_back(sheet.lock());
+		std::erase_if(*list, [](const auto& sheet) { return sheet.expired(); });
+		for (const auto& sheet : *list)
+		{
+			sheets.push_back(sheet.lock());
+		}
 	}
 	return sheets;
 }
@@ -103,7 +114,8 @@ void ParticleSystem::KeepGestureTrails()
 	}
 	// This computer's own: it draws on its own random numbers, in its player's colour
 	_gestureTrails = Start(ParticleType::Gesture, glm::vec3(0.0f), 1.0f, false);
-	SetPlayer(_gestureTrails, static_cast<int>(PlayerNames::PLAYER_ONE));
+	SetPlayer(_gestureTrails, static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+	                                                                            : PlayerNames::PLAYER_ONE));
 }
 
 void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
@@ -124,7 +136,8 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	if (!IsRunning(_gestureChain))
 	{
 		_gestureChain = Start(ParticleType::GestureLocal, glm::vec3(0.0f), 1.0f, false);
-		SetPlayer(_gestureChain, static_cast<int>(PlayerNames::PLAYER_ONE));
+		SetPlayer(_gestureChain, static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+		                                                                           : PlayerNames::PLAYER_ONE));
 		if (const auto it = FindRunning(_gestureChain); it != _effects.end())
 		{
 			it->everyFrame = true;
@@ -158,7 +171,9 @@ void ParticleSystem::StepSelectionEffect(float gameSeconds, const HandFrame& han
 	if (!IsRunning(_selectionEffect))
 	{
 		_selectionEffect = Start(ParticleType::SpellSelection, glm::vec3(0.0f), 1.0f, false);
-		SetPlayer(_selectionEffect, static_cast<int>(PlayerNames::PLAYER_ONE));
+		SetPlayer(_selectionEffect,
+		          static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+		                                                            : PlayerNames::PLAYER_ONE));
 		if (const auto it = FindRunning(_selectionEffect); it != _effects.end())
 		{
 			it->everyFrame = true;

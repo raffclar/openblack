@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <limits>
 #include <numeric>
 #include <optional>
@@ -54,6 +55,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -62,6 +64,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -72,6 +75,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TemporaryStoreRules.h"
@@ -90,6 +94,7 @@
 #include "Magic/AreaEffect.h"
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "VillagerBreeding.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDiscipleWork.h"
@@ -962,6 +967,11 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 		{
 			continue;
 		}
+		// A workshop makes its scaffolds before it ages as any other building does
+		if (registry.AllOf<Workshop>(abode) && Locator::workshopSystem::has_value())
+		{
+			Locator::workshopSystem::value().ProcessWorkshop(abode);
+		}
 		NeglectAbode(townEntity, abode);
 		// The loss of life can remove the building
 		if (auto* data = registry.Valid(abode) ? registry.TryGet<Abode>(abode) : nullptr)
@@ -1113,7 +1123,8 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 	// The player at this machine hears a town won from someone else
 	if (Locator::playerSystem::has_value())
 	{
-		const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		const auto local =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		if (player == local && previous != local)
 		{
 			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_TakeOverTown_01), std::nullopt);
@@ -1214,8 +1225,11 @@ bool TownSystem::LoadState(reflection::BinaryReader& in)
 	return true;
 }
 
-void TownSystem::UpdateFrame(float gameSeconds)
+void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landDrawn)
 {
+	// The symbols step by a whole turn's time at the pace of the screen's refresh
+	const auto step =
+	    particles::drawn_steps::TurnStepSeconds(_beliefPace, frameRealTime, TimeSystemInterface::k_TurnDuration, landDrawn);
 	if (!Locator::particleSystem::has_value() || _registry == nullptr)
 	{
 		return;
@@ -1252,6 +1266,9 @@ void TownSystem::UpdateFrame(float gameSeconds)
 			particles.AddTarget(effect, entity);
 			found = _beliefSymbols.insert_or_assign(entity, effect).first;
 		}
-		particles.ProcessByFrame(found->second, gameSeconds);
+		if (step.has_value())
+		{
+			particles.ProcessByFrame(found->second, *step);
+		}
 	});
 }

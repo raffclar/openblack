@@ -18,6 +18,7 @@
 
 #include "3D/L3DMesh.h"
 #include "Camera/Camera.h"
+#include "Common/MainThreadQueue.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
@@ -122,13 +123,14 @@ RenderingSystemCommon::~RenderingSystemCommon() = default;
 
 void RenderingSystemCommon::SetDirty()
 {
-	_renderContext.dirty = true;
+	// The changes of the drawn parts mark the draw from any thread. The draw reads the marks only after the turn.
+	_renderContext.dirty.store(true, std::memory_order_relaxed);
 }
 
 void RenderingSystemCommon::SetLayoutDirty()
 {
-	_renderContext.dirty = true;
-	_renderContext.layoutDirty = true;
+	_renderContext.dirty.store(true, std::memory_order_relaxed);
+	_renderContext.layoutDirty.store(true, std::memory_order_relaxed);
 }
 
 void RenderingSystemCommon::UploadRootsPiles()
@@ -189,6 +191,7 @@ void RenderingSystemCommon::UploadRootsPiles()
 
 void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams)
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::PrepareDraw");
 	const auto& registry = Locator::entitiesRegistry::value();
 
 	_renderContext.animatedBoneMatrices.clear();

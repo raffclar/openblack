@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <optional>
 #include <vector>
 
@@ -22,6 +23,20 @@
 
 namespace openblack::creature_route
 {
+/// The search steps that a new creature's route search gets in a turn, before the first share
+inline constexpr int32_t k_FirstShareSearchSteps = 16;
+/// The search steps that all the creatures whose route searches run share in a turn
+inline constexpr int32_t k_SharedSearchSteps = 32;
+
+/// At the start of the turn of the living, each creature gets an equal share of the shared search steps. The share
+/// counts the creatures whose search runs at that time. With no such creature, a creature gets all the steps. The
+/// share is at least one step.
+[[nodiscard]] constexpr int32_t TurnSearchShare(size_t searchingCreatures) noexcept
+{
+	const auto count = static_cast<int32_t>(std::max<size_t>(searchingCreatures, 1));
+	return std::max(k_SharedSearchSteps / count, 1);
+}
+
 /// A creature's walk: what it walks round, the searches for its route and the route it follows.
 ///
 /// Standing, a new destination starts a search from where it stands. Walking, a new destination starts searches from
@@ -148,8 +163,10 @@ public:
 	template <typename Self, typename Visitor>
 	static void VisitSaved(Self& self, Visitor&& visit)
 	{
+		// The heading and the circles that the obstacles leave out come last, so that a save without them still gives
+		// the values before them
 		visit(self._obstacles, self._state, self._route, self._position, self._routeEnd, self._destination, self._pending,
-		      self._searches, self._chosen, self._met);
+		      self._searches, self._chosen, self._met, self._heading, Obstacles::LeftOutAround(self._obstacles));
 	}
 };
 } // namespace openblack::creature_route

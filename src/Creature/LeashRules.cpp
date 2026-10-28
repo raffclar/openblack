@@ -112,6 +112,20 @@ bool creature_leash::TakingOffEndsDominantDesire(LeashType chosen)
 	return chosen != LeashType::Rope;
 }
 
+std::optional<bool> creature_leash::PostPickedFor(LeashType post, LeashType worn)
+{
+	if (!IndexOf(worn).has_value())
+	{
+		return std::nullopt;
+	}
+	return post == worn;
+}
+
+bool creature_leash::PlayerCanChangeType(bool niceSpellOn, bool nastySpellOn)
+{
+	return !niceSpellOn && !nastySpellOn;
+}
+
 bool creature_leash::ImpressesTown(const TiedTown& town)
 {
 	if (town.leash == LeashType::Evil || town.impressing)

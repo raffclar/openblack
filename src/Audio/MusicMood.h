@@ -101,6 +101,10 @@ struct Tint
 /// work (no player, or the feature is off), else the track that plays (see TrackId), 0 when no track plays
 using Listen = std::function<std::optional<uint32_t>()>;
 
+/// The music moods work only in a game alone. In a network game the controller hears no music player, so the current
+/// track ends and no creature reacts to the music of one computer.
+[[nodiscard]] Listen ForGame(bool networkGame, Listen player);
+
 /// The music mood controller
 class Controller
 {

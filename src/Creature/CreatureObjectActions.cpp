@@ -95,6 +95,11 @@ bool creature_object_actions::ShowsHoldPose(std::optional<Kind> playing)
 	return true;
 }
 
+bool creature_object_actions::PosesBody(bool playing, Status status)
+{
+	return playing && (status == Status::Running || status == Status::Contact);
+}
+
 Hands creature_object_actions::HandsFor(Kind kind)
 {
 	switch (kind)
@@ -131,6 +136,11 @@ creature_object_actions::ApproachStep creature_object_actions::NextApproachStep(
 		return ApproachStep::WalkNear;
 	}
 	return flatDistance < straightReach || inRange ? ApproachStep::Begin : ApproachStep::WalkInReach;
+}
+
+creature_object_actions::MovingApproachStep creature_object_actions::NextMovingApproachStep(bool turnsToReach)
+{
+	return turnsToReach ? MovingApproachStep::WaitForTurn : MovingApproachStep::AimAgain;
 }
 
 float creature_object_actions::NearWalkDistance(float creatureRadius, float thingRadius)
@@ -186,6 +196,20 @@ glm::vec3 creature_object_actions::KickVelocity(glm::vec2 forward, glm::vec2 lea
 bool creature_object_actions::ThrowOver(bool animationOver, bool waitsForLanding, bool thrownFlying)
 {
 	return animationOver && !(waitsForLanding && thrownFlying);
+}
+
+float creature_object_actions::WithdrawStart(float timeBeforeMs, float stepMs)
+{
+	return std::max(timeBeforeMs - stepMs, 0.0f);
+}
+
+std::optional<float> creature_object_actions::WithdrawStep(float timeMs, float stepMs)
+{
+	if (stepMs > timeMs)
+	{
+		return std::nullopt;
+	}
+	return timeMs - stepMs;
 }
 
 bool creature_object_actions::BringsBackUp(bool indestructible, bool heldDuringCutscene)

@@ -29,6 +29,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -38,6 +39,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/VillagerDroppedLog.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -79,13 +81,19 @@ GameRandomInterface* GamePhysicsHooksWorld::Random()
 	return Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
 }
 
-std::optional<PlayerNames> GamePhysicsHooksWorld::LocalPlayer() const
+bool GamePhysicsHooksWorld::PersonPlays(PlayerNames player) const
+{
+	return Locator::playerSystem::has_value() && player != PlayerNames::NEUTRAL &&
+	       Locator::playerSystem::value().IsHumanPlayer(player);
+}
+
+std::optional<PlayerNames> GamePhysicsHooksWorld::OwnPlayer() const
 {
 	if (!Locator::playerSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::playerSystem::value().GetLocalPlayer();
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
 float GamePhysicsHooksWorld::LifeOf(entt::entity object) const
@@ -237,6 +245,30 @@ void GamePhysicsHooksWorld::StrikeVortex(entt::entity vortex, entt::entity hitte
 	if (Locator::vortexSystem::has_value())
 	{
 		Locator::vortexSystem::value().StruckBy(vortex, hitter, flight);
+	}
+}
+
+void GamePhysicsHooksWorld::ScaffoldLetGo(entt::entity scaffold, bool forced)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().LetGoByHand(scaffold, forced);
+	}
+}
+
+void GamePhysicsHooksWorld::ScaffoldNotPutDown(entt::entity scaffold)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().NotPutDownByHand(scaffold);
+	}
+}
+
+void GamePhysicsHooksWorld::ScaffoldAtRest(entt::entity scaffold, bool fromHand, bool insert)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().CameToRest(scaffold, fromHand, insert);
 	}
 }
 

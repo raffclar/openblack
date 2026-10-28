@@ -104,7 +104,7 @@ protected:
 
 TEST_F(CreatureModeHandBack, WhenTheCreatureGoesThePlayersCameraFliesBack)
 {
-	ASSERT_TRUE(_mode.Enter(_creature));
+	ASSERT_TRUE(_mode.Enter(_creature, creature_follow::StartDistance::KeepWhenClose));
 	RunFrames(300);
 	const auto& camera = Locator::camera::value();
 	ASSERT_LT(glm::distance(glm::vec2(camera.GetFocus().x, camera.GetFocus().z), glm::vec2(k_CreatureAt.x, k_CreatureAt.z)),
@@ -118,7 +118,7 @@ TEST_F(CreatureModeHandBack, WhenTheCreatureGoesThePlayersCameraFliesBack)
 
 TEST_F(CreatureModeHandBack, AGripOfTheLandStartsThePlayersCameraWhereItIs)
 {
-	ASSERT_TRUE(_mode.Enter(_creature));
+	ASSERT_TRUE(_mode.Enter(_creature, creature_follow::StartDistance::KeepWhenClose));
 	RunFrames(300);
 	const auto& camera = Locator::camera::value();
 	// The button of the double click is let go, then a fresh grip gives the camera back where it is

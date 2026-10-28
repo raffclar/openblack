@@ -28,6 +28,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
@@ -324,6 +325,14 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 	if (registry.AllOf<OneOffSpellSeed>(entity))
 	{
 		return MobileObjectFacts(MobileObjectInfo::OneOffSpellSeed);
+	}
+	if (registry.AllOf<Scaffold>(entity))
+	{
+		// A scaffold is of its own material. It can fly, except when it stands in its place of a workshop's yard.
+		return {.body = BodyKind::Model,
+		        .row = MaterialRow::MovableScaffold,
+		        .canBecomePhysicsObject = !inputs.scaffoldInYard,
+		        .interacts = true};
 	}
 	if (const auto* still = registry.TryGet<const MobileStatic>(entity))
 	{

@@ -96,6 +96,16 @@ TEST(DeveloperTools, TheFilterKeepsThePlayerAndWindowOptions)
 	EXPECT_TRUE(filtered.ignored.empty());
 }
 
+TEST(DeveloperTools, TheFilterKeepsThePingDisplayOfThePlayer)
+{
+	// The ping display is an option of the player (deviation 143), so a build without the tools keeps it
+	const std::vector<std::string_view> arguments {"openblack", "--show-ping"};
+	const auto filtered = FilterDeveloperOptions(arguments, k_DeveloperOptions);
+	EXPECT_EQ(filtered.kept.size(), arguments.size());
+	EXPECT_TRUE(filtered.ignored.empty());
+	EXPECT_FALSE(IsDeveloperOption("show-ping", k_DeveloperOptions));
+}
+
 TEST(DeveloperTools, TheFilterRemovesAShortDeveloperOptionAndItsValue)
 {
 	const std::vector<std::string_view> arguments {"openblack", "-s", "Land2.txt", "-u", "2"};
@@ -194,4 +204,35 @@ TEST(DeveloperTools, TheQuestionOfAPlayerHasOnlyTheAnswersOfTheOriginalGame)
 	}
 	EXPECT_TRUE(IsShown(Choice::KeepOldCreature, true, false));
 	EXPECT_FALSE(IsShown(Choice::KeepOldCreature, false, true));
+}
+
+TEST(DeveloperTools, ABuildForPlayersRefusesTheSoakToolsAndADeveloperBuildAllowsThem)
+{
+	const SoakTools none;
+	const SoakTools computers {.allComputerGods = true};
+	const SoakTools seeded {.allComputerGods = false, .aiSeed = 0u};
+	EXPECT_FALSE(none.Any());
+	EXPECT_TRUE(computers.Any());
+	EXPECT_TRUE(seeded.Any());
+	EXPECT_FALSE(SoakRefusalOf(false, none).has_value());
+	EXPECT_TRUE(SoakRefusalOf(false, computers).has_value());
+	EXPECT_TRUE(SoakRefusalOf(false, seeded).has_value());
+	EXPECT_FALSE(SoakRefusalOf(true, computers).has_value());
+	EXPECT_FALSE(SoakRefusalOf(true, seeded).has_value());
+}
+
+TEST(DeveloperTools, ABuildForPlayersRefusesTheScenarioOfAGameServer)
+{
+	EXPECT_TRUE(ScenarioRefusalOf(false).has_value());
+	EXPECT_FALSE(ScenarioRefusalOf(true).has_value());
+}
+
+TEST(DeveloperTools, TheSoakOptionsOfTheGameAndTheServerAreDeveloperOptions)
+{
+	EXPECT_TRUE(IsDeveloperOption("sim-all-computer-gods", k_DeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("sim-ai-seed", k_DeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("all-computer-gods", k_ServerDeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("ai-seed", k_ServerDeveloperOptions));
+	const std::vector<std::string_view> arguments {"openblack-server", "--all-computer-gods", "--ai-seed", "5", "-g", "path"};
+	EXPECT_EQ(Kept(arguments, k_ServerDeveloperOptions), (std::vector<std::string> {"openblack-server", "-g", "path"}));
 }
