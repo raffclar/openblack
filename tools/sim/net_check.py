@@ -944,7 +944,11 @@ def desktop_leash_step(leash, done, pid, log):
         if not lines_with(log, [f"Network game: {turns} turns compared"]):
             return False
         time.sleep(before)
-        pressed = inspector_call(pid, "input.key", {"params": {"key": key}})
+        # A tap of the inspector (down for one frame) does not show to the actions of the controls: the key stays down
+        # for half a second, as a player presses it
+        pressed = inspector_call(pid, "input.key", {"params": {"key": key, "how": "press"}})
+        time.sleep(0.5)
+        inspector_call(pid, "input.key", {"params": {"key": key, "how": "release"}})
         time.sleep(1.0)
         done.append({"turns": turns, "key": key, "pressed": pressed, "leash": leash_state(pid)})
         print(f"leash: client with pid {pid} pressed {key} after {turns} turns: {json.dumps(done[-1])[:400]}")
@@ -1148,7 +1152,7 @@ def web_chat_steps(chats, seconds, width=WEB_WIDTH, leashes=()):
         if kind == 1:
             key, before = value
             at += before
-            steps.append(dict({"at": at, "do": "key"}, **WEB_KEYS[key]))
+            steps.append(dict({"at": at, "do": "key", "hold": 300}, **WEB_KEYS[key]))
             at += 1.0
             steps.append({"at": at, "do": "shot", "name": f"leash-{turns}-{key.lower()}"})
             at += 0.5
