@@ -482,7 +482,7 @@ void GuidanceSystem::CreatureWonFight(entt::entity creature)
 		return;
 	}
 	// Only when the place where the creature stands is on screen
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(OwnPlayer());
 	if (view.has_value() && ecs::thing_on_screen::PlaceOnScreen(*view, creature))
 	{
 		SayRemark(guidance::Kind::GeneralGood);
