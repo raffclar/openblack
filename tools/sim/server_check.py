@@ -144,6 +144,20 @@ def compare_parts(server, game, turns, ignored):
     return different, parts
 
 
+def turns_gone_back(path):
+    """The places in a commands file where the turn goes back, as [turn before, turn after]: the game loaded a saved world
+    there. The server plays on with no load, so the turns after it cannot be compared."""
+    if not os.path.exists(path):
+        return []
+    turns = []
+    with open(path, encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                turns.append(int(json.loads(line).get("turn", 0)))
+    return [[before, after] for before, after in zip(turns, turns[1:]) if after <= before]
+
+
 def count_lines(path):
     """The number of lines of a file, 0 when there is no file"""
     if not os.path.exists(path):
@@ -331,7 +345,10 @@ def main():
         "same_until": (different[0] - 1) if different else (compared[-1] if compared else 0),
         "same": not different and len(compared) >= compared_turns,
         "ended_by_frames_at_turn": ended_by_frames_at_turn,
+        "game_loads": turns_gone_back(commands) if relay else [],
     }
+    if summary["game_loads"]:
+        print(f"the game loaded a saved world (turn before and after): {summary['game_loads']}; the server does not")
     ignored = {name for name in options.ignore_parts.split(",") if name}
     if ignored and (options.hash_parts or options.hash_fields):
         others, parts = compare_parts(synced_records(os.path.join(server_dir, "record.jsonl")), synced_records(record),
