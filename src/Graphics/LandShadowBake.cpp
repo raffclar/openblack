@@ -56,8 +56,6 @@ using MeshComponent = ecs::components::Mesh;
 namespace
 {
 
-constexpr int k_BlockTexels = tree_shadows::k_BlockTexels;
-
 /// A thing casting its shadow into the land, standing in the map's cells
 struct Caster
 {
@@ -180,7 +178,7 @@ glm::mat3 PlacingOf(const Transform& transform)
 
 /// Casts a tree's triangles into a block's texels through their textures' alpha
 void CastLeaves(tree_shadows::Coverage& coverage, const Transform& transform,
-                std::span<const LandShadowBake::LeafTriangle> leaves, glm::vec2 blockCorner)
+                std::span<const LandShadowBake::LeafTriangle> leaves, glm::vec2 blockCorner, int side)
 {
 	const auto placing = PlacingOf(transform);
 	const glm::vec2 foot {transform.position.x, transform.position.z};
@@ -189,19 +187,21 @@ void CastLeaves(tree_shadows::Coverage& coverage, const Transform& transform,
 		std::array<tree_shadows::Corner, 3> corners;
 		for (size_t k = 0; k < 3; ++k)
 		{
-			corners[k] = tree_shadows::Flatten(placing * triangle.positions[k], foot, blockCorner, triangle.uvs[k]);
+			corners[k] = tree_shadows::Flatten(placing * triangle.positions[k], foot, blockCorner, triangle.uvs[k], side);
 		}
-		if (tree_shadows::Reaches(corners))
+		if (tree_shadows::Reaches(corners, side))
 		{
-			tree_shadows::Fill(coverage, corners, *triangle.mask);
+			tree_shadows::Fill(coverage, corners, *triangle.mask, side);
 		}
 	}
 }
 
 /// Casts a solid thing's flattened triangles into a block's samples
 void CastShape(tree_shadows::Coverage& coverage, std::span<const glm::vec2> cast,
-               std::span<const LandShadowBake::ShapeTriangle> shape, bool allBothSides, glm::vec2 blockCorner)
+               std::span<const LandShadowBake::ShapeTriangle> shape, bool allBothSides, glm::vec2 blockCorner, int side)
 {
+	const int rows = 2 * side;
+	const int columns = 4 * side;
 	for (size_t t = 0; t < shape.size(); ++t)
 	{
 		std::array<shape_shadows::Sample, 3> corners;
@@ -211,19 +211,19 @@ void CastShape(tree_shadows::Coverage& coverage, std::span<const glm::vec2> cast
 		float highColumn = 0.0f;
 		for (size_t k = 0; k < 3; ++k)
 		{
-			corners[k] = shape_shadows::SampleOf(cast[t * 3 + k], blockCorner);
+			corners[k] = shape_shadows::SampleOf(cast[t * 3 + k], blockCorner, side);
 			lowRow = k == 0 ? corners[k].row : std::min(lowRow, corners[k].row);
 			highRow = k == 0 ? corners[k].row : std::max(highRow, corners[k].row);
 			lowColumn = k == 0 ? corners[k].column : std::min(lowColumn, corners[k].column);
 			highColumn = k == 0 ? corners[k].column : std::max(highColumn, corners[k].column);
 		}
 		// Nothing of a triangle wholly before or past the block's samples is covered
-		if (highRow < 1.0f || lowRow >= static_cast<float>(shape_shadows::k_Rows) || highColumn < -1.0f ||
-		    lowColumn > static_cast<float>(shape_shadows::k_Columns + 1))
+		if (highRow < 1.0f || lowRow >= static_cast<float>(rows) || highColumn < -1.0f ||
+		    lowColumn > static_cast<float>(columns + 1))
 		{
 			continue;
 		}
-		shape_shadows::Fill(coverage, corners, allBothSides || shape[t].bothSides);
+		shape_shadows::Fill(coverage, corners, allBothSides || shape[t].bothSides, side);
 	}
 }
 
@@ -419,12 +419,14 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	// A texel for every texel of the land blocks' textures, over the whole island
 	const auto extent = island.GetExtent();
 	const auto blocksAcross = glm::round((extent.maximum - extent.minimum) / tree_shadows::k_BlockSize);
-	const auto texels = glm::u16vec2(blocksAcross * static_cast<float>(k_BlockTexels));
-	if (_texture == nullptr || texels != _texels || extent.minimum != _extentMin || rowsFromFarEnd != _rowsFromFarEnd ||
-	    casters != _casters)
+	const auto side = island.GetBlockTextureSide();
+	const auto texels = glm::u16vec2(blocksAcross * static_cast<float>(side));
+	if (_texture == nullptr || texels != _texels || side != _side || extent.minimum != _extentMin ||
+	    rowsFromFarEnd != _rowsFromFarEnd || casters != _casters)
 	{
 		Reset();
 		_texels = texels;
+		_side = side;
 		_extentMin = extent.minimum;
 		_rowsFromFarEnd = rowsFromFarEnd;
 		_casters = casters;
@@ -581,6 +583,7 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 	// that it reads, so that the game can change its things while the bake runs.
 	BakeJob job;
 	job.rowsFromFarEnd = rowsFromFarEnd;
+	job.side = _side;
 	job.blocks.reserve(toBake.size());
 	std::ranges::transform(toBake, std::back_inserter(job.blocks), [&blocks](size_t i) {
 		return BakeBlock {.position = blocks[i].GetBlockPosition(), .corner = blocks[i].GetMapPosition()};
@@ -704,14 +707,15 @@ void LandShadowBake::Apply(const std::vector<BlockShades>& results)
 {
 	for (const auto& result : results)
 	{
-		const auto origin = glm::ivec2(glm::round((result.corner - _extentMin) / tree_shadows::k_BlockSize)) * k_BlockTexels;
-		if (origin.x < 0 || origin.y < 0 || origin.x + k_BlockTexels > _texels.x || origin.y + k_BlockTexels > _texels.y)
+		const auto origin = glm::ivec2(glm::round((result.corner - _extentMin) / tree_shadows::k_BlockSize)) * _side;
+		if (origin.x < 0 || origin.y < 0 || origin.x + _side > _texels.x || origin.y + _side > _texels.y ||
+		    result.shades.size() != static_cast<size_t>(_side) * static_cast<size_t>(_side))
 		{
 			continue;
 		}
-		const auto originRow = _rowsFromFarEnd ? _texels.y - k_BlockTexels - origin.y : origin.y;
-		_texture->UpdateLayerRegion(0, glm::u16vec2(origin.x, originRow), glm::u16vec2(k_BlockTexels), result.shades.data(),
-		                            static_cast<uint32_t>(result.shades.size()));
+		const auto originRow = _rowsFromFarEnd ? _texels.y - _side - origin.y : origin.y;
+		_texture->UpdateLayerRegion(0, glm::u16vec2(origin.x, originRow), glm::u16vec2(static_cast<uint16_t>(_side)),
+		                            result.shades.data(), static_cast<uint32_t>(result.shades.size()));
 	}
 }
 
@@ -736,25 +740,29 @@ std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job
 				}
 				if (caster.shadow == LandShadow::Leaves)
 				{
-					CastLeaves(*coverage, caster.transform, caster.leaves, block.corner);
+					CastLeaves(*coverage, caster.transform, caster.leaves, block.corner, job.side);
 				}
 				else if (caster.cast && !caster.cast->empty() && caster.castHigh.x >= block.corner.x &&
 				         caster.castLow.x <= block.corner.x + tree_shadows::k_BlockSize &&
 				         caster.castHigh.y >= block.corner.y && caster.castLow.y <= block.corner.y + tree_shadows::k_BlockSize)
 				{
-					CastShape(*coverage, *caster.cast, caster.shape, caster.shadow == LandShadow::ShapeBothSides, block.corner);
+					CastShape(*coverage, *caster.cast, caster.shape, caster.shadow == LandShadow::ShapeBothSides, block.corner,
+					          job.side);
 				}
 			}
 			// The block's texels into the island's texture: x across it and z along its rows
 			auto& shades = results[i].shades;
-			shades.resize(static_cast<size_t>(k_BlockTexels) * k_BlockTexels);
-			for (int x = 0; x < k_BlockTexels; ++x)
+			const int side = job.side;
+			const bool lowResolution = side < tree_shadows::k_BlockTexels;
+			shades.resize(static_cast<size_t>(side) * static_cast<size_t>(side));
+			for (int x = 0; x < side; ++x)
 			{
-				for (int z = 0; z < k_BlockTexels; ++z)
+				for (int z = 0; z < side; ++z)
 				{
-					const auto covered = (*coverage)[static_cast<size_t>(x * k_BlockTexels + z)];
-					const int row = job.rowsFromFarEnd ? k_BlockTexels - 1 - z : z;
-					shades[static_cast<size_t>(row * k_BlockTexels + x)] = covered != 0 ? tree_shadows::Shade(covered) : 255;
+					const auto covered = (*coverage)[static_cast<size_t>(x * side + z)];
+					const int row = job.rowsFromFarEnd ? side - 1 - z : z;
+					shades[static_cast<size_t>(row * side + x)] =
+					    covered != 0 ? tree_shadows::Shade(covered, lowResolution) : 255;
 				}
 			}
 			results[i].corner = block.corner;

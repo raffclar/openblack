@@ -78,7 +78,7 @@ TEST(ComputerSettings, EveryValueOfAFileIsRead)
 		"detail_level": 6, "max_detail_level": 7, "effects_volume": 0.25, "music_volume": 0,
 		"width": 800, "height": 600, "window_mode": "fullscreen", "vsync": true,
 		"custom_detail": {"model_detail": 0.3, "clouds": false, "water_tiling": 0.5, "rain_splashes": 3,
-		                  "fog": false, "low_res_textures": true}
+		                  "fog": false, "low_res_textures": true, "light_boost": 0.5}
 	})");
 	EXPECT_TRUE(problems.empty());
 	EXPECT_EQ(settings.detailLevel, 6);
@@ -95,7 +95,19 @@ TEST(ComputerSettings, EveryValueOfAFileIsRead)
 	EXPECT_EQ(settings.customDetail.rainSplashes, 3);
 	EXPECT_EQ(settings.customDetail.fog, false);
 	EXPECT_EQ(settings.customDetail.lowResTextures, true);
+	EXPECT_EQ(settings.customDetail.lightBoost, 0.5f);
 	EXPECT_FALSE(settings.customDetail.smallBump.has_value());
+}
+
+TEST(ComputerSettings, ALightBoostThatWouldDivideByZeroIsRefused)
+{
+	EXPECT_EQ(Parse(R"({"custom_detail": {"light_boost": 1.53}})").settings.customDetail.lightBoost, 1.53f);
+	for (const auto* text : {R"({"custom_detail": {"light_boost": 1.54}})", R"({"custom_detail": {"light_boost": "high"}})"})
+	{
+		const auto [settings, problems] = Parse(text);
+		EXPECT_EQ(problems.size(), 1u) << text;
+		EXPECT_FALSE(settings.customDetail.lightBoost.has_value()) << text;
+	}
 }
 
 TEST(ComputerSettings, AnEmptyFileGivesTheDefaults)
@@ -199,7 +211,8 @@ TEST(ComputerSettings, AWriteKeepsTheOtherMembersOfTheFile)
 
 TEST(ComputerSettings, OnlyTheCustomLevelTakesTheCustomValues)
 {
-	const CustomDetail custom {.modelDetail = 0.2f, .clouds = false, .rainSplashes = 1, .lowResTextures = true};
+	const CustomDetail custom {
+	    .modelDetail = 0.2f, .clouds = false, .rainSplashes = 1, .lowResTextures = true, .lightBoost = 0.5f};
 	for (uint8_t level = 0; level < graphics::detail_level::k_Count; ++level)
 	{
 		const auto settings = graphics::detail_level::WithCustom(level, custom);
@@ -210,12 +223,14 @@ TEST(ComputerSettings, OnlyTheCustomLevelTakesTheCustomValues)
 			EXPECT_EQ(settings.clouds, table.clouds);
 			EXPECT_EQ(settings.rainSplashes, table.rainSplashes);
 			EXPECT_EQ(settings.lowResTextures, table.lowResTextures);
+			EXPECT_EQ(settings.lightBoost, 0.0f);
 			continue;
 		}
 		EXPECT_EQ(settings.modelDetail, 0.2f);
 		EXPECT_FALSE(settings.clouds);
 		EXPECT_EQ(settings.rainSplashes, 1);
 		EXPECT_TRUE(settings.lowResTextures);
+		EXPECT_EQ(settings.lightBoost, 0.5f);
 		// What the file does not give is the level's table
 		EXPECT_EQ(settings.fog, table.fog);
 		EXPECT_EQ(settings.waterTiling, table.waterTiling);

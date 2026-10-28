@@ -40,6 +40,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Camera/StartCamera.h"
 #include "Common/LoadTimer.h"
 #include "Common/MachineClock.h"
 #include "Common/StringUtils.h"
@@ -52,6 +53,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureExplorationLand.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/RealWeatherLand.h"
@@ -207,6 +209,8 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	}
 
 	PrepareNewLand(change);
+	// The script of the land gives the start place of the camera again, if it gives one
+	_startCameraPlace.reset();
 	timer.Step("reset");
 	View().ShowLoadingFrame();
 
@@ -217,6 +221,7 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	_landPath = path;
 
 	lhscriptx::Script script;
+	_runsNetworkMapScript = _humansFromSession;
 	try
 	{
 		// The tips screen is drawn again as the map's commands are carried out, when it is due
@@ -227,10 +232,11 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 		// A script that can't be read leaves the land as far as it got, rather than ending the game
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", path.generic_string(), e.what());
 	}
+	_runsNetworkMapScript = false;
 	_mapLandscape.clear();
 	// Every land of a network game fills its slots with no human after its script. Without a network session, only a
 	// land made for network play does.
-	if (_humansFromSession || online_map_land::IsOnlineMap(path.generic_string()))
+	if (_humansFromSession || _allComputerGods || online_map_land::IsOnlineMap(path.generic_string()))
 	{
 		FillSlotsOfNetworkLand(computer_player::k_SlotGods);
 	}
@@ -281,6 +287,12 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	}
 	// The square of the player of this computer in the sheet of the players' symbols takes the profile's symbol
 	View().MakeSymbolSheet();
+	// A game that starts here can start with the camera at the player's temple
+	if (start_camera::StartsAtTemple(
+	        {.change = change, .networkGame = Locator::time::value().IsNetworkGame(), .scriptPlace = _startCameraPlace}))
+	{
+		View().StartCameraAtTemple();
+	}
 	View().ShowLoadingFrame();
 	StartNewLand(change);
 	timer.Step("start");
@@ -471,6 +483,11 @@ bool LandSystem::LoadGodsRingMap()
 	Locator::camera::value()
 	    .SetOrigin({eye.x, land.GetHeightAt(eye) + gods_ring_map::k_StartCameraHeight, eye.y})
 	    .SetFocus({focus.x, land.GetHeightAt(focus), focus.y});
+	// A network game on the map starts with the camera at the player's temple, as on every land of a network game
+	if (Locator::time::value().IsNetworkGame())
+	{
+		View().StartCameraAtTemple();
+	}
 	View().EndLoadingScreen();
 	StartNewLand(land_change::Kind::Testbed);
 	return true;
@@ -483,6 +500,12 @@ void LandSystem::FillSlotsOfNetworkLand(std::span<const PlayerNames> gods)
 		return;
 	}
 	auto& minds = Locator::computerPlayerSystem::value();
+	if (_allComputerGods)
+	{
+		// The AI soak: no human plays, so every god with a citadel gets a computer god as the land loads
+		minds.FillEmptySlots(gods, {});
+		return;
+	}
 	if (_humansFromSession)
 	{
 		minds.WaitForHumans();
@@ -547,6 +570,11 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// that go with them are forgotten.
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Reset();
+	// The things that only the frames make go with the things of the land that they go with
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().Reset();
+	}
 	Locator::playerSystem::value().RegisterPlayers();
 	const bool restored = restore();
 	timer.Step("saved world");
@@ -834,8 +862,12 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	// The turns go back to 0 as the land clears, before the script of the next land starts. Thus the buildings that the
 	// script makes are not made in play, and they get no path from their storage pit, as on the first land of a game.
 	Locator::time::value().RestartTurns();
-	// Reset everything. Deletes all entities and their components
+	// Reset everything. Deletes all entities and their components, and the things that only the frames make
 	Locator::entitiesRegistry::value().Reset();
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().Reset();
+	}
 	// The new land makes the draw list again on its first frame only. Thus reset the draw list after the entities go:
 	// a thing that the hand held asks for two frames when it goes.
 	if (Locator::objectDrawListSystem::has_value())
@@ -859,7 +891,12 @@ void LandSystem::StartPlayerAtProfileAlignment()
 	{
 		return;
 	}
-	SetPlayerAlignmentFromProfile();
+	// A network game does not use the profile of this computer, so that each computer starts the same world. Each god
+	// of a network game starts at the alignment that its player sent with the start, at the first turn.
+	if (profile_alignment::StartsFromOwnProfile(Locator::time::value().IsNetworkGame()))
+	{
+		SetPlayerAlignmentFromProfile();
+	}
 	// The players' statistics note the alignments they start the game at, and the towns on the land
 	player_statistics::GameStarts(Locator::entitiesRegistry::value());
 }
@@ -879,7 +916,7 @@ void LandSystem::KeepAlignmentInProfile()
 {
 	// The player's alignment is kept with their profile every so often as they play, never the testbed's
 	if (_landPath.empty() || _landPath == k_TestbedLandPath || !Locator::playerProfileSystem::has_value() ||
-	    !Locator::playerSystem::has_value())
+	    !Locator::playerSystem::has_value() || !profile_alignment::KeptInOwnProfile(Locator::time::value().IsNetworkGame()))
 	{
 		return;
 	}
@@ -1095,12 +1132,20 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 
 	// The game pauses the world while the player is in the temple. The temple's own turns, by real time whatever the
 	// game's speed, run the temple's scripts and its help scripts, keep the audio going and have the advisors follow
-	// what they point at.
-	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	// what they point at. A network game does not pause: the world's turns go on while the player is in the temple.
+	if (!clock.IsNetworkGame() && Locator::temple::has_value() && Locator::temple::value().Active())
 	{
 		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
 		{
+			// The scripts' clock moves on by the temple's turn, and the dialogue takes the player's clicks
+			if (Locator::helpTextSystem::has_value())
+			{
+				Locator::helpTextSystem::value().ProcessTurn(temple_help::k_TurnMilliseconds);
+			}
 			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
+			// The bars that the temple's scripts wait for slide by the real time of the temple's turn, as the game's draw
+			// slides them by real time in the temple
+			Locator::cinematicDirectorSystem::value().ProcessTempleTurn();
 			view.PlayTempleAudioTurn();
 			Locator::advisorSystem::value().ProcessTurn();
 			// The help's banter check runs in the temple too. The help's clock stands still there, so the banter starts
@@ -1125,7 +1170,6 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	// turns catches up, up to 10 turns a frame: when the next turn is there too, the clock of this computer follows the
 	// server's and the turn is due.
 	const auto& commands = Locator::playerCommandSystem::value();
-	bool played = false;
 	while (commands.TurnReady(clock.GetTurn()))
 	{
 		if (commands.IsBehind(clock.GetTurn()))
@@ -1136,14 +1180,12 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		{
 			return;
 		}
-		// A second turn in the frame comes after the frame steps of the turn before it
-		if (played)
-		{
-			view.CatchUpFrame();
-		}
-		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn)
+		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn). A second
+		// turn in the frame follows the turn before it at once: the frame steps only draw, so none come between them.
+		// The tools that act by the turns act first, so that each computer of a network game does them before the same
+		// turn.
+		view.BeforeTurn();
 		simulation::PlayTurn(view);
-		played = true;
 
 		_lastGameLoopTime = currentTime;
 		_turnDeltaTime = delta;

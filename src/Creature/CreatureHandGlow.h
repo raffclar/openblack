@@ -46,12 +46,18 @@ struct Glow
 {
 	float power {1.0f};
 	float scale {1.0f};
+};
+using Glows = std::array<std::optional<Glow>, k_PlaceCount>;
+
+/// How a glow moves as the frames draw it. A new glow starts with no turn and no slide.
+struct Motion
+{
 	/// How far the circling glow has turned, in radians
 	float turn {0.0f};
 	/// How far the texture has slid across and up, 0 to 1
 	glm::vec2 slide {0.0f};
 };
-using Glows = std::array<std::optional<Glow>, k_PlaceCount>;
+using Motions = std::array<Motion, k_PlaceCount>;
 
 /// The shell reaches out this far for each unit of power, in parts of the model's half diagonal
 constexpr float k_ZoomPerPower = 2.0f;
@@ -134,9 +140,9 @@ struct CreedEvent
 /// How far the shell reaches out, in parts of the model's half diagonal
 [[nodiscard]] float Zoom(const Glow& glow);
 /// Slides the texture on by the milliseconds of a frame
-void Slide(Glow& glow, int32_t frameMs);
+void Slide(Motion& motion, int32_t frameMs);
 /// Turns the circling glow on by the milliseconds of the game's time of a frame
-void Turn(Glow& glow, int32_t gameMs);
+void Turn(Motion& motion, int32_t gameMs);
 
 /// The bones whose middle is where a hand glow is: the bones at the ends of the branches that start at the hand and at
 /// each bone after it under the same parent, in the order that the skeleton is walked

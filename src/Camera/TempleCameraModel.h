@@ -99,6 +99,9 @@ public:
 	/// How much the main room leans this step while the mouse is at the screen's edge or over the pool: the ramp eases
 	/// the speed in
 	[[nodiscard]] static float EdgeLeanStep(float dt, float ramp, float speed);
+	/// How much the main room leans this step while the player drags the floor or a wall: by the mouse's movement down
+	/// the screen in the step, less towards the screen's sides (the cursor's place across, -1 to 1)
+	[[nodiscard]] static float DragLeanStep(float mouseDown, float dt, float across);
 	/// A pose about the main room's centre turned to face one of its doors
 	[[nodiscard]] static Pose TurnToDoor(const Pose& pose, uint32_t door);
 	/// A pose about the main room's centre turned to face one of its doors, as a room other than the main room turns its

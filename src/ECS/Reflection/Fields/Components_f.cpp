@@ -41,10 +41,6 @@ void RegisterFields_Components_f(entt::meta_ctx& context);
 void openblack::ecs::reflection::RegisterFields_Components_f(entt::meta_ctx& context)
 {
 	Reflect<components::DropsRoots> {context};
-	Reflect<components::FallingRoots>(context)
-	    .Field<&components::FallingRoots::seconds>("seconds")
-	    .Field<&components::FallingRoots::startHeight>("startHeight")
-	    .Field<&components::FallingRoots::restHeight>("restHeight");
 	Reflect<components::ShownRoots>(context).Field<&components::ShownRoots::place>("place");
 	Reflect<components::Feature>(context).Field<&components::Feature::type>("type");
 	Reflect<components::Field>(context)

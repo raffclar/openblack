@@ -206,11 +206,10 @@ void CreatureMindSystem::EndRunAway(entt::entity creature, CreatureMindState& mi
 			from = belief->place;
 		}
 	}
-	else if (Locator::handSystem::has_value() && Locator::playerSystem::has_value() &&
-	         body->owner == Locator::playerSystem::value().GetLocalPlayer())
+	else if (Locator::handSystem::has_value())
 	{
 		std::optional<glm::vec3> nearest;
-		for (const auto& hand : Locator::handSystem::value().GetPlayerHandPositions())
+		for (const auto& hand : Locator::handSystem::value().GetHandPositionsOf(body->owner))
 		{
 			if (hand.has_value() &&
 			    (!nearest.has_value() || glm::distance(*hand, at->position) < glm::distance(*nearest, at->position)))

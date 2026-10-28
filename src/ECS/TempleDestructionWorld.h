@@ -54,6 +54,8 @@ public:
 	[[nodiscard]] virtual uint32_t Turn() const = 0;
 	/// The player at this machine, none when there are no players
 	[[nodiscard]] virtual std::optional<PlayerNames> LocalPlayer() const = 0;
+	/// The game is a network game
+	[[nodiscard]] virtual bool NetworkGame() const = 0;
 
 	/// A sound looping at a place until stopped; none when it couldn't be played
 	virtual entt::entity StartLoop(entt::id_type sound, glm::vec3 position, entt::entity owner) = 0;

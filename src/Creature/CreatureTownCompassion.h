@@ -85,6 +85,15 @@ void MoveOnWhilePlanning(State& state, std::span<const uint32_t> desires, std::s
 void FinishedHelping(State& state, std::span<const uint32_t> desires, std::span<const float, k_TownDesireCount> felt,
                      uint32_t turn, const std::function<uint32_t(uint32_t)>& random);
 
+/// The leash is tied to a town's desire flag: the creature helps with the desire of the flag and does not choose freely.
+/// When that desire has no actions, it helps with no desire and chooses freely. The place in the list and the remembered
+/// desire do not change.
+void TiedToFlag(State& state, uint32_t desire, const DesireActions& actions);
+
+/// The leash key unties the leash from a town's desire flag: the creature helps with no desire and chooses freely again.
+/// Other ways to untie the leash or take it off do not change the desire.
+void UntiedFromFlag(State& state);
+
 /// Whether hurt people make it think of healing first: some of the town's people are hurt, no town desire is shown to it
 /// on the leash, it has seen the healing miracle more than 60 hundredths of the times it needs to learn it, and a coin's
 /// toss comes up heads

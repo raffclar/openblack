@@ -27,6 +27,7 @@ public:
 	[[nodiscard]] uint32_t MillisecondsPerTurn() const override;
 	[[nodiscard]] uint32_t Turn() const override;
 	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override;
+	[[nodiscard]] bool NetworkGame() const override;
 	entt::entity StartLoop(entt::id_type sound, glm::vec3 position, entt::entity owner) override;
 	void PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner, audio::Follows follows) override;
 	void StopSound(entt::entity emitter) override;

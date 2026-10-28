@@ -55,11 +55,16 @@ public:
 
 	/// Once a game turn: routes are planned and the creatures move
 	virtual void ProcessTurn() = 0;
+	/// At the start of the turn of the living: the creatures whose route searches run share the search steps of the
+	/// turn
+	virtual void ShareSearchSteps() {}
 	/// In the creature's own turn, after its mind: it plans its route and walks, runs and turns
 	virtual void CreatureTurn(entt::entity /*creature*/) {}
-	/// Once a frame: the creatures are placed and their legs posed between the last two turns, by how far through the
-	/// turn the frame is, 0 to 1
+	/// Once a frame: the frame draws each walking creature and the legs between the last two turns, by how far through
+	/// the turn the frame is, 0 to 1. It changes only the drawn place (CreatureAnimation::drawnPlace), not the world.
 	virtual void Update(float turnFraction) = 0;
+	/// At the start of a game turn: each walking creature is placed and its legs posed where its last turn took it
+	virtual void ShowTurnEnds() {}
 	/// A creature is placed and its legs posed where they are at the end of this turn, for the pose of the turn
 	virtual void ShowTurnEnd(entt::entity creature) = 0;
 
