@@ -42,9 +42,9 @@ namespace
 /// Where a strand is rooted this frame and which way it grows out, or none where its triangle has no area. The root
 /// is sunk along the triangle's normal as it comes, unnormalised.
 std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand, const creature_morph::Morph& morph,
-                                          const std::vector<glm::mat4>& bones, const glm::mat4& model)
+                                          creature::PosedBones& posed)
 {
-	const auto triangle = creature::PosedTriangle(strand.vertices, strand.bones, morph, bones, model,
+	const auto triangle = creature::PosedTriangle(strand.vertices, strand.bones, morph, posed,
 	                                              strand.turned ? creature::k_TurnedHairOrder : creature::k_SkinPointOrder);
 	const auto point = creature_eyes::PointOnTriangle(triangle[0], triangle[1], triangle[2], strand.u, strand.v);
 	if (glm::length(point.normal) <= 0.0f)
@@ -58,7 +58,7 @@ std::optional<creature_hair::Root> RootOf(const CreatureRig::HairStrand& strand,
 		std::array<glm::mat3, 3> frames {};
 		for (size_t i = 0; i < frames.size(); ++i)
 		{
-			frames.at(i) = glm::mat3(creature::PosedBone(strand.bones.at(i), bones, model));
+			frames.at(i) = glm::mat3(posed.At(strand.bones.at(i)));
 		}
 		// Each angle moves with the alignment the body is drawn with
 		const auto angle = [&strand, &morph](glm::length_t axis) {
@@ -85,7 +85,11 @@ void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType specie
 	// The hair takes the look of the alignment the body is drawn with
 	const auto alignment = morph.evilGood;
 	const auto scale = creature_hair::HairScale(size);
-	const auto model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	// The hair grows from the body where the frame draws it
+	const auto drawn = DrawnTransform(transform, &animation);
+	// The strands of the body share its bones, so each bone is placed in the world one time
+	creature::PosedBones posed(animation.boneMatrices,
+	                           creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale));
 	StepHair(
 	    hair, rig.hairGroups.size(),
 	    [&](size_t g) {
@@ -97,8 +101,7 @@ void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType specie
 		                           .colour = look.colour,
 		                           .textured = source.textured};
 	    },
-	    [&](size_t g, size_t s) { return RootOf(rig.hairGroups[g].strands[s], morph, animation.boneMatrices, model); },
-	    seconds);
+	    [&](size_t g, size_t s) { return RootOf(rig.hairGroups[g].strands[s], morph, posed); }, seconds);
 }
 } // namespace
 

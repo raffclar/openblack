@@ -39,7 +39,6 @@
 #include <spdlog/spdlog.h>
 
 #include "Camera/Camera.h"
-#include "DescriptorSetTally.h"
 #include "EmbeddedShaders.h"
 #include "GraphicsHandleBgfx.h"
 #include "SamplerDefaults.h"
@@ -410,7 +409,6 @@ void ShaderManager::LoadShaders()
 	_samplerDefaults = std::make_unique<SamplerDefaults>();
 	if (bgfx::getRendererType() == bgfx::RendererType::Vulkan)
 	{
-		_descriptorSets = std::make_unique<DescriptorSetTally>();
 		_drawWindow = std::make_unique<DrawWindow>();
 	}
 	std::map<std::string_view, ShaderProgram*> made;
@@ -422,7 +420,7 @@ void ShaderManager::LoadShaders()
 		auto fs = bgfx::createEmbeddedShader(k_EmbeddedShaders.data(), type, shader.fragmentShaderName.data());
 		assert(bgfx::isValid(fs));
 		auto* program = new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs), SamplersOf(shader), *_samplerDefaults,
-		                                  _descriptorSets.get(), _drawWindow.get());
+		                                  _drawWindow.get());
 		made[shader.name] = program;
 		_shaderPrograms[shader.name.data()] = program;
 	}
@@ -459,20 +457,11 @@ void ShaderManager::DiscardBindings() const
 {
 	bgfx::discard(BGFX_DISCARD_BINDINGS);
 	_samplerDefaults->Discarded(BGFX_DISCARD_BINDINGS);
-	if (_descriptorSets)
-	{
-		_descriptorSets->DiscardBindings();
-	}
 }
 
-std::optional<FrameDescriptorSets> ShaderManager::FrameEnded() const
+void ShaderManager::FrameEnded() const
 {
 	_samplerDefaults->FrameEnded();
-	if (!_descriptorSets)
-	{
-		return std::nullopt;
-	}
-	return _descriptorSets->EndFrame();
 }
 
 bool ShaderManager::OpenDrawWindow(uint32_t first, uint32_t count, std::span<const uint16_t> views) const
@@ -508,10 +497,6 @@ void ShaderManager::SetViewOrder(uint16_t viewId, ViewOrder order) const
 	    bgfx::ViewMode::DepthDescending,
 	};
 	bgfx::setViewMode(static_cast<bgfx::ViewId>(viewId), k_Modes.at(static_cast<size_t>(order)));
-	if (_descriptorSets)
-	{
-		_descriptorSets->SetViewOrder(viewId, order);
-	}
 }
 
 void ShaderManager::SetCamera(graphics::RenderPass viewId, const Camera& camera)

@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <random>
 #include <set>
@@ -26,6 +27,12 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/WorldArchive.h"
+#include "Enums.h"
+
+namespace openblack::dance
+{
+struct DanceFile;
+}
 
 /// The whole world of a saved game in openblack's own layout (deviation 83): the entities and their components, the
 /// values that the registry keeps beside them, the game clock, the streams of random numbers, the camera, and the
@@ -88,6 +95,11 @@ enum class LoadKind : uint8_t
 	WorldState,
 };
 
+/// The saved state of each system that a save keeps, by the name of the system. With valueEnds, each section also keeps
+/// where each value ends, for tools.
+[[nodiscard]] std::vector<reflection::NamedSection> SavedSystemSections(const entt::meta_ctx& reflection,
+                                                                        bool valueEnds = false);
+
 /// Puts back the entities, their components and the context of the registry. The registry must have no live entity.
 /// Returns nothing when the blocks do not read.
 [[nodiscard]] std::optional<reflection::WorldLoadReport>
@@ -101,6 +113,11 @@ LoadEntities(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, 
 /// holds it refused. The rooms of the temple go, because the temple makes them when the player goes into it. A footpath
 /// that the game still looks for starts its search again.
 void ForgetUnsavedState(entt::registry& registry);
+
+/// A save does not keep the file of a dance. After a load each dance takes its file again from the row of the dances'
+/// table that it dances, so its groups continue to move as before the save.
+void TakeDanceFilesAgain(entt::registry& registry,
+                         const std::function<std::shared_ptr<const dance::DanceFile>(DanceInfo)>& fileOf);
 
 /// After the land starts again: puts back the game clock at the turn, the streams of random numbers, the camera, the
 /// scripts, the table of the objects that they hold and the running state of the systems. Returns whether every block

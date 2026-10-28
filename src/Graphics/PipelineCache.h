@@ -29,9 +29,10 @@ public:
 	/// How the renderer keeps its pipelines
 	enum class Kind : uint8_t
 	{
-		/// One driver cache holds all the pipelines (Vulkan). The renderer starts each new pipeline from all the kept
-		/// ones, and gives back the cache with the new pipeline added. The renderer gives each pipeline a number that is
-		/// different in each run, so this kind does not use the numbers.
+		/// One driver cache holds all the pipelines (Vulkan). The renderer reads all the kept pipelines one time when it
+		/// starts, makes each new pipeline in that cache, and gives back the cache with the new pipelines when it stops.
+		/// The renderer gives each pipeline a number that is different in each run, so this kind does not use the
+		/// numbers.
 		Shared,
 		/// Each pipeline has a cache of its own, kept by its number (Direct3D 12). The number is the same in each run
 		/// for the same pipeline. If a number comes again for a different pipeline, the driver refuses the kept cache

@@ -159,7 +159,8 @@ uint16_t GameRole::Port() const
 	return _parts->sockets.Port();
 }
 
-std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start, uint64_t landChecksum)
+std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start, uint64_t landChecksum,
+                                           uint8_t godSlots)
 {
 	auto& parts = *_parts;
 	if (settings.serverId.empty())
@@ -246,7 +247,7 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		parts.statusAddress = base + "/servers/" + settings.serverId + "/status";
 		parts.room = lobby_status::Room {.hostname = settings.roomName,
 		                                 .land = start.land,
-		                                 .maxGods = static_cast<int32_t>(settings.godsToStart),
+		                                 .maxGods = godSlots,
 		                                 .version = std::string(build_version::Semantic())};
 	}
 
@@ -254,10 +255,11 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	    parts.sockets, std::move(check), SteadyMicroseconds, MakeSecret,
 	    HostSettings {.start = std::move(start),
 	                  .landChecksum = landChecksum,
-	                  .godsToStart = settings.godsToStart,
-	                  .godSlots = 7,
+	                  .minGods = settings.minGods,
+	                  .godSlots = godSlots,
 	                  .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,
-	                  .keptTurns = settings.comeBackSeconds * 10 + 200});
+	                  .keptTurns = settings.comeBackSeconds * 10 + 200,
+	                  .testCommands = settings.testCommands});
 	return std::nullopt;
 }
 

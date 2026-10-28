@@ -34,6 +34,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureh(entt::meta_
 	    .Field<&components::CreatureHandGlows::glows>("glows")
 	    .Field<&components::CreatureHandGlows::slidePace>("slidePace")
 	    .Field<&components::CreatureHandGlows::turnPace>("turnPace")
-	    .Field<&components::CreatureHandGlows::placed>("placed");
+	    .Field<&components::CreatureHandGlows::placed>("placed")
+	    .Field<&components::CreatureHandGlows::motion>("motion");
 	Reflect<components::CreatureHelpMemory>(context).Field<&components::CreatureHelpMemory::memory>("memory");
 }

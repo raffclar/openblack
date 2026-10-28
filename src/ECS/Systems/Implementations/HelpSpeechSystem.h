@@ -28,10 +28,14 @@ public:
 	[[nodiscard]] size_t GetLineCount() const override { return _voices.GetCount(); }
 	void Stop(audio::SpeechVoice voice, audio::SpeechBank bank) override;
 	[[nodiscard]] const audio::HelpSpeechTable& GetTable() const override { return _table; }
+	void AdvanceClock(uint32_t milliseconds) override { _clockMs += milliseconds; }
+	[[nodiscard]] uint32_t GetClockMs() const override { return _clockMs; }
+	void SetClockMs(uint32_t milliseconds) override { _clockMs = milliseconds; }
 
 private:
 	audio::HelpSpeechTable _table;
 	audio::SpeechVoices _voices;
+	uint32_t _clockMs {0};
 };
 
 } // namespace openblack::ecs::systems

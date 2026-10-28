@@ -27,6 +27,7 @@
 #include "Graphics/GraphicsHandle.h"
 #include "Help/StoryHistory.h"
 #include "Input/KeyBindings.h"
+#include "Temple/ScrollPictureLine.h"
 
 namespace openblack
 {
@@ -197,6 +198,8 @@ public:
 	[[nodiscard]] std::vector<Control> GetControls(TempleRoom room) const;
 	/// The text of the scroll the camera is close to, drawn in front of it in the temple
 	void AppendFocusedText(std::vector<OrientedTextVertex>& vertices, const Facts& facts) const;
+	/// The lines of the scroll the camera is close to that hold a gesture's or a control's picture, in the world
+	void AppendFocusedPictures(std::vector<temple::scroll_pictures::WorldPicture>& pictures, const Facts& facts) const;
 
 	/// The text of a scroll, written as its room writes it
 	enum class Content
@@ -253,6 +256,16 @@ private:
 		glm::vec3 min {0.0f};
 		glm::vec3 max {0.0f};
 	};
+	/// Where the text of a scroll goes in the world while the camera is close to it: the frame at the middle of the
+	/// scroll, and the world's length of one texel across and down the texture
+	struct Layout
+	{
+		TextFrame frame;
+		float across;
+		float down;
+	};
+	/// The layout of a scroll, none when its box has no height
+	[[nodiscard]] static std::optional<Layout> FocusedLayout(const Scroll& scroll);
 	/// The camera looks at a scroll, by its place among all the scrolls
 	Focus LookAt(size_t index, const Facts& facts);
 	/// Writes the scroll's texture, its text left off while the camera is close to it

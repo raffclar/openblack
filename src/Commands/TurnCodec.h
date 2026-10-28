@@ -41,7 +41,7 @@ namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 12;
+inline constexpr uint8_t k_Version = 16;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -91,7 +91,15 @@ enum class CommandTag : uint8_t
 	HandCastUnlock = 29,
 	LeashPick = 30,
 	HandShakeOff = 31,
-	TempleLeashOff = 36,
+	GripDust = 32,
+	HelpReport = 33,
+	HelpQuery = 34,
+	CreatureFightCheat = 35,
+	ViewReport = 36,
+	TempleLeashOff = 37,
+	GiveCallOff = 38,
+	CreatureTattoo = 39,
+	LeashLength = 40,
 };
 
 /// The sizes of the parts of the frames, in bytes

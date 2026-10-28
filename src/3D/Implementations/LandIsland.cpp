@@ -20,6 +20,7 @@
 #include <span>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 #include <LNDFile.h>
 #include <bgfx/bgfx.h>
@@ -37,6 +38,7 @@
 #include "3D/MapCoords.h"
 #include "Common/PortableRotations.h"
 #include "Common/WorkerPool.h"
+#include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
@@ -244,22 +246,34 @@ void LandIsland::Build(const LandData& data)
 
 	// Paint each block's texture from the countries, the materials, the noise and the bump map. The texture is made
 	// empty and its layers filled after, so a block can be painted again when the land under it changes height.
+	// The lowest detail levels paint the textures at the low resolution
+	_textureResolution = Locator::config::has_value() && Locator::config::value().detail.lowResTextures
+	                         ? block_texture::Resolution::Low
+	                         : block_texture::Resolution::Full;
 	const auto sources = TextureSources();
+	const auto side = static_cast<uint16_t>(block_texture::SideOf(_textureResolution));
 	_blockTextures = std::make_unique<Texture2D>("LandIslandBlockTextures");
-	_blockTextures->Create(block_texture::k_Side, block_texture::k_Side, static_cast<uint16_t>(_landBlocks.size()),
-	                       TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Linear, nullptr);
-	// Threads that live as long as the build paint the blocks
+	_blockTextures->Create(side, side, static_cast<uint16_t>(_landBlocks.size()), TextureFormat::RGBA8, Wrapping::ClampEdge,
+	                       Filter::Linear, nullptr);
+	// Threads that live as long as the build paint the blocks, each straight into the memory that bgfx then takes
+	std::vector<const bgfx::Memory*> painted(_landBlocks.size());
+	const auto blockBytes = static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution));
+	std::ranges::generate(painted, [blockBytes] { return bgfx::alloc(blockBytes); });
 	WorkerPool painters(WorkerPool::DefaultThreadCount());
 	block_texture::BuildBlocks(
 	    _landBlocks.size(),
 	    [this](size_t block) { return std::span<const lnd::LNDCell>(_landBlocks[block].GetLndBlock()->cells); }, sources,
-	    painters,
-	    [this](size_t block, std::span<const uint8_t> rgba) {
-		    _blockTextures->UpdateLayer(static_cast<uint16_t>(block), rgba.data(), static_cast<uint32_t>(rgba.size()));
-	    });
+	    painters, [&painted](size_t block) { return std::span<uint8_t>(painted[block]->data, painted[block]->size); });
+	for (size_t block = 0; block < painted.size(); ++block)
+	{
+		_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), painted[block]);
+	}
 	// The footprints are painted into the blocks after
-	_repaintedBlocks.resize(_landBlocks.size());
-	std::iota(_repaintedBlocks.begin(), _repaintedBlocks.end(), size_t {0});
+	_repaintedBlocks.clear();
+	for (size_t i = 0; i < _landBlocks.size(); ++i)
+	{
+		_repaintedBlocks.push_back({.block = i, .cells = std::nullopt});
+	}
 
 	// The coarse texture pages the landscape file keeps, a layer each, and where each block's square of them is. A block
 	// naming a page the file doesn't have takes the first.
@@ -464,7 +478,7 @@ void LandIsland::CommitAltitudeChanges()
 		return;
 	}
 	const auto sources = TextureSources();
-	std::vector<uint8_t> texels;
+	std::vector<uint8_t> rgba;
 	for (size_t i = 0; i < _landBlocks.size(); ++i)
 	{
 		auto& changed = _changedCells[i];
@@ -478,17 +492,27 @@ void LandIsland::CommitAltitudeChanges()
 		// The ground's materials follow the height, so the changed cells are painted again. A block's texture has a
 		// row for each texel along x, so x is the texture's height and z its width.
 		const auto cellCount = changed.maximum - changed.minimum + 1;
-		texels.resize(static_cast<size_t>(cellCount.x * cellCount.y) * block_texture::k_TexelsPerCell *
-		              block_texture::k_TexelsPerCell * 4);
-		block_texture::PaintCells(_landBlocks[i].GetLndBlock()->cells, sources, changed.minimum, cellCount, texels);
+		const auto perCell = block_texture::TexelsPerCellOf(_textureResolution);
+		std::vector<uint16_t> texels(static_cast<size_t>(cellCount.x * cellCount.y) * perCell * perCell);
+		block_texture::PaintCellTexels(_landBlocks[i].GetLndBlock()->cells, sources, changed.minimum, cellCount, texels);
+		rgba.resize(texels.size() * 4);
+		block_texture::ToRgba(texels, rgba);
 		_blockTextures->UpdateLayerRegion(
-		    static_cast<uint16_t>(i),
-		    glm::u16vec2(changed.minimum.y * block_texture::k_TexelsPerCell,
-		                 changed.minimum.x * block_texture::k_TexelsPerCell),
-		    glm::u16vec2(cellCount.y * block_texture::k_TexelsPerCell, cellCount.x * block_texture::k_TexelsPerCell),
-		    texels.data(), static_cast<uint32_t>(texels.size()));
-		// The game paints the whole block again, with its footprints, when the land under it changes height
-		_repaintedBlocks.push_back(i);
+		    static_cast<uint16_t>(i), glm::u16vec2(changed.minimum.y * perCell, changed.minimum.x * perCell),
+		    glm::u16vec2(cellCount.y * perCell, cellCount.x * perCell), rgba.data(), static_cast<uint32_t>(rgba.size()));
+		// The game paints the whole block again, with its footprints, when the land under it changes height. At the full
+		// resolution the painted cells go with the block, so that its texture without footprints is not painted again in
+		// full. The low resolution has no such cells: the footprints paint the whole block again.
+		if (_textureResolution == block_texture::Resolution::Full)
+		{
+			_repaintedBlocks.push_back(
+			    {.block = i,
+			     .cells = RepaintedBlock::Cells {.first = changed.minimum, .count = cellCount, .texels = std::move(texels)}});
+		}
+		else
+		{
+			_repaintedBlocks.push_back({.block = i, .cells = std::nullopt});
+		}
 		changed = {};
 	}
 	// The height map's changed corners, a texel each, two bytes a texel: its altitude and its cell's split
@@ -625,6 +649,7 @@ block_texture::Sources LandIsland::TextureSources() const
 	    .materials = _materialTexels,
 	    .noise = _noiseMap,
 	    .bump = _bump,
+	    .resolution = _textureResolution,
 	};
 }
 
@@ -643,12 +668,12 @@ void LandIsland::SetBlockTexels(size_t block, std::span<const uint16_t> texels)
 	{
 		return;
 	}
-	std::vector<uint8_t> rgba(block_texture::k_BlockBytes);
+	std::vector<uint8_t> rgba(block_texture::BlockBytesOf(_textureResolution));
 	block_texture::ToRgba(texels, rgba);
 	_blockTextures->UpdateLayer(static_cast<uint16_t>(block), rgba.data(), static_cast<uint32_t>(rgba.size()));
 }
 
-std::vector<size_t> LandIsland::TakeRepaintedBlocks()
+std::vector<LandIslandInterface::RepaintedBlock> LandIsland::TakeRepaintedBlocks()
 {
 	return std::exchange(_repaintedBlocks, {});
 }

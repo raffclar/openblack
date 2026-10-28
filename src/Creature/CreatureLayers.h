@@ -107,6 +107,10 @@ constexpr size_t k_Kiss = 212;
 [[nodiscard]] float PlaybackRate(float size);
 /// How fast the body plays its animations: at the rate of its size, or at the usual speed when a script sets real time
 [[nodiscard]] float BodyRate(float size, bool realTime);
+/// How many milliseconds the body's animations move on in a game turn of some whole milliseconds. The turn's
+/// milliseconds are multiplied by the rate of the size, and the result is cut to whole milliseconds. When a script
+/// sets real time, the animations move on by the turn's milliseconds.
+[[nodiscard]] int32_t TurnStepMs(int32_t turnMs, float size, bool realTime);
 
 /// What the body plays
 struct BodyAction

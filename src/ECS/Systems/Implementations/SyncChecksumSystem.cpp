@@ -87,14 +87,6 @@ void SyncChecksumSystem::ProcessTurn()
 		seed = random.GetSeeds().synced;
 		draws = random.GetSyncedDraws();
 	}
-	// A component with no registration is left out of the checksum, so a change in it is never seen: tell of each name once
-	if (const auto fresh = _reported.Fresh(hash.unregistered); !fresh.empty())
-	{
-		if (const auto logger = spdlog::get("game"); logger != nullptr)
-		{
-			logger->error("{}", synced_state::UnregisteredLine(fresh));
-		}
-	}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The rows go to the dump before the listener compares the checksum, so that a part at this turn finds them. The
 	// checksum also mixes the synced seed and the count of the synced draws, so the rows keep them too.
@@ -105,6 +97,14 @@ void SyncChecksumSystem::ProcessTurn()
 		_rowDump->Keep(turn, std::move(keptRows));
 	}
 #endif
+	// A component with no registration is left out of the checksum, so a change in it is never seen: tell of each name once
+	if (const auto fresh = _reported.Fresh(hash.unregistered); !fresh.empty())
+	{
+		if (const auto logger = spdlog::get("game"); logger != nullptr)
+		{
+			logger->error("{}", synced_state::UnregisteredLine(fresh));
+		}
+	}
 	_last = TurnChecksum {.turn = turn,
 	                      .checksum = synced_state::Checksum(hash.hash, seed, draws),
 	                      .parts = {},

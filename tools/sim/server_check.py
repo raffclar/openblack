@@ -17,7 +17,10 @@ same turns, and each turn's checksum must be the same.
 The hand of the game stays still, unless --input gives the game recorded input (--sim-input, from the first frame of
 the land): then the hand moves, takes, drops, throws and casts, and the server sees only the commands.
 The input can also be an object with the list as "events" and a "camera" as camera.set takes it: the game puts its camera
-there before the first frame of the land (tools/sim/hand_inputs/twogods.json).
+there before the first frame of the land, in place of the start view and its flight (tools/sim/hand_inputs/twogods.json).
+The object can also have an "expect", the least count of each deed of the hand ({"scoops": 1, "throws": 1}). The summary
+gives the deeds of the hand of each player that the server did ("Hand deed" lines of the logs: takes, scoops, throws,
+puts_down, pours, uses), and a run whose hand did fewer than its input expects is not the same.
 
 Both play as the profile of a tool's run, in their own working folders. Both programs start with no console window of their
 own. The game starts with --background. The script stops only the
@@ -166,6 +169,9 @@ def main():
     parser.add_argument("--scenario", help="a testbed scenario that the server and the game both play from the first "
                                            "frame, so that the recorded input gets to what it sets up")
     parser.add_argument("--opening", default="cow")
+    parser.add_argument("--all-computer-gods", action="store_true",
+                        help="the AI soak: the server and the game both give a computer god to every god with a citadel")
+    parser.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods, on both")
     parser.add_argument("--frame-ms", type=float, default=100.0)
     parser.add_argument("--config", default="Debug")
     parser.add_argument("--bin", help="the folder of openblack.exe and openblack-server.exe")
@@ -224,11 +230,15 @@ def main():
     local = wsl_path if options.wsl_server else (lambda path: path)
     server_command = [server_exe, "-g", options.game_path] + server_where + [
                       "--seed", str(options.seed), "-n", str(options.turns), "--frame-ms", str(options.frame_ms),
-                      "-l", local(server_log)]
+                      "-l", local(server_log), "--log-checksums"]
     if options.wsl_server:
         server_command = ["wsl", "-d", options.wsl_distro, "--", options.wsl_server, "-g",
                           local(options.game_path)] + server_command[3:]
     server_command += options.server_args.split()
+    if options.all_computer_gods:
+        server_command.append("--all-computer-gods")
+    if options.ai_seed is not None:
+        server_command += ["--ai-seed", str(options.ai_seed)]
     if options.server_fast:
         server_command.append("--fast")
     if options.hash_parts or options.hash_fields:
@@ -246,6 +256,10 @@ def main():
                     "--sim-until-turn", str(options.turns + 1), "--sim-record", record,
                     "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
                     "-l", game_log, "--sim-network-game"] + where
+    if options.all_computer_gods:
+        game_command.append("--sim-all-computer-gods")
+    if options.ai_seed is not None:
+        game_command += ["--sim-ai-seed", str(options.ai_seed)]
     if events is None:
         game_command.append("--sim-still-hand")
     else:
@@ -310,6 +324,28 @@ def main():
         summary["different_without_ignored"] = others[:20]
         summary["parts_without_ignored"] = dict(sorted(parts.items(), key=lambda item: item[1])[:20])
         summary["same_without_ignored"] = not others and len(compared) >= options.turns
+    # What the turns did with the hand: the game and the server do the same commands, so each must count the same deeds.
+    # An input that expects deeds of its hand (its "expect") fails the run when the hand did fewer: the checksums are
+    # then the same only because the hand did nothing.
+    # Only the deeds up to the last turn that the checksums were compared at are counted: the game can play on a few turns
+    # after the last one that the record keeps, and a deed in those turns is not a difference (the 32 god map shows it).
+    last_compared = compared[-1] if compared else None
+    game_deeds, server_deeds, deeds_same = sim_report.hand_deeds_of_both(game_log, server_log, last_compared)
+    missing = sim_report.missing_deeds(game_deeds.get(0, {}), sim_report.expected_deeds(options.input))
+    summary["hand_deeds"] = {str(player): counts for player, counts in sorted(server_deeds.items())}
+    summary["hand_deeds_same"] = deeds_same
+    summary["missing_deeds"] = missing
+    # A land with no temple for the player's god (Land 1) decides the network game at its first turn: the
+    # god is out, its creature goes, and the end box takes the mouse, so a recorded input does nothing there
+    with open(game_log, encoding="utf-8", errors="replace") as file:
+        decided = [re.search(r"Turn (\d+):", line) for line in file if "and the game is decided" in line]
+    summary["decided_at_turn"] = int(decided[0].group(1)) if decided and decided[0] else None
+    if events is not None and summary["decided_at_turn"] is not None:
+        print(f"the game was decided at turn {summary['decided_at_turn']}: the end box takes the input of the hand")
+    if missing or not deeds_same:
+        summary["same"] = False
+        print(f"the hand did not do what its input expects: {missing}" if missing
+              else f"the game and the server count other deeds of the hand: game {game_deeds}, server {server_deeds}")
     # A component with no registration is left out of the checksum: a change in it would never show here
     unregistered = sim_report.unregistered_in_files(server_log, game_log, record,
                                                     os.path.join(server_dir, "record.jsonl"))

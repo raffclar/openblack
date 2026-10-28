@@ -17,6 +17,7 @@
 #include <optional>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -225,6 +226,9 @@ struct RenderContext
 	{
 		entt::entity entity;
 		glm::mat4 model;
+		/// The model that the cursor finds, when it is not the model of `entity`: a gate stone of the drawn registry
+		/// stands for its plinth
+		std::optional<entt::id_type> mesh;
 	};
 	std::vector<DrawnObject> drawnObjects;
 	/// The animals drawn this frame, with the model that each one is drawn as and its matrix: each casts blobs from its
@@ -274,6 +278,8 @@ struct RenderContext
 	std::vector<glm::mat4> streamSegments;
 	/// The hand is scaled by a negative factor to mirror it, which turns its faces round
 	bool handMirrored {false};
+	/// The hand that the draw lists draw. When another hand becomes the drawn hand, the lists change.
+	entt::entity drawnHand {entt::null};
 
 	/// Not an actual vertex buffer, but a dynamic general purpose buffer which
 	/// stores uniform data as a GPU-side copy of \ref _instanceUniforms and

@@ -21,9 +21,11 @@
 
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "ECS/ProfileAlignment.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -178,6 +180,14 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		    return fileSystem.ReadAll(*path);
 	    },
 	    .readCreature = std::move(readCreature),
+	    .readAlignment =
+	        []() {
+		        // The god starts the game at the alignment that the player's profile kept from earlier games
+		        const auto profile = Locator::playerProfileSystem::has_value()
+		                                 ? Locator::playerProfileSystem::value().GetCurrentProfile()
+		                                 : std::nullopt;
+		        return profile_alignment::Sent(profile.has_value() ? profile->alignment : 0.0);
+	        },
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	    .parts =
 	        [](uint32_t turn) {
@@ -252,6 +262,39 @@ void NetworkGameSystem::Leave()
 	}
 }
 
+void NetworkGameSystem::EndNetworkGame()
+{
+	if (!_session)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game of this computer ends");
+	Detach();
+	_started = false;
+	_awaitingLand = false;
+	_fromCommandLine = false;
+	_joinReplyRead = false;
+	_stopped = false;
+	_pendingStart.reset();
+	_resumeTurn.reset();
+	// The clock is the clock of a game alone again, and it no longer waits for the turns of a server
+	auto& clock = Locator::time::value();
+	clock.SetNetworkGame(false);
+	clock.SetPaused(false);
+	if (Locator::syncChecksumSystem::has_value())
+	{
+		Locator::syncChecksumSystem::value().SetEnabled(false);
+	}
+}
+
+void NetworkGameSystem::StopGame()
+{
+	if (_session)
+	{
+		_session->StopGame();
+	}
+}
+
 void NetworkGameSystem::PlayAlone()
 {
 	if (InGame())
@@ -306,10 +349,13 @@ void NetworkGameSystem::Update()
 		_resumeTurn.reset();
 	}
 
-	// After a resync the server's world comes: this computer's world loads it and goes on from its turn
-	if (auto world = _session->TakeWorld(); world.has_value())
+	// After the last turn of a decided game, the clock of this computer stops. The world stands still, and the frames
+	// take no game time, as in a pause.
+	if (const auto last = _session->StoppedAfter(); last.has_value() && !_stopped && Locator::time::value().GetTurn() > *last)
 	{
-		LoadWorld(*world);
+		_stopped = true;
+		Locator::time::value().SetPaused(true);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the game stopped after turn {}: the clock stops", *last);
 	}
 
 	// A join from the command line: the server's reply to the join gives the land, the seed and the start of its world,
@@ -367,6 +413,15 @@ void NetworkGameSystem::Update()
 			{
 				Locator::time::value().SetPaused(false);
 			}
+		}
+	}
+	// After a resync, or after a join to a game that turns, the server's world comes. This computer's world loads it
+	// after the land of the start, and continues from the turn of the world.
+	if (_started && !_awaitingLand && !_pendingStart.has_value())
+	{
+		if (auto world = _session->TakeWorld(); world.has_value())
+		{
+			LoadWorld(*world);
 		}
 	}
 	if (_session->GetState() == online::NetworkSession::State::Ended && !_endLogged)

@@ -16,6 +16,7 @@
 #include <string>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureObjectActions.h"
@@ -66,8 +67,10 @@ struct CreatureObjectAction
 	/// Pointing: the creature turned to face the point first, which changes how it chooses its arm
 	bool pointTurned {false};
 
-	/// Where the hand gets to in the reaching animations, and how far the creature can reach, measured as it starts
+	/// Where the hand gets to in the reaching animations in the model's own size, measured as it starts. Each use
+	/// multiplies them by the scale that the creature has then.
 	std::optional<creature_reach::Points> reach;
+	/// How far the creature can reach at its scale of the last step
 	float maxReach {0.0f};
 	/// How many times it has walked or turned to get in reach
 	uint32_t attempts {0};
@@ -77,6 +80,9 @@ struct CreatureObjectAction
 	creature_object_actions::ApproachStall stall;
 	/// Whether it turned to get the thing in reach, and reaches when the turn ends
 	bool turnedToReach {false};
+	/// Whether the thing got out of reach before the hold or the blow. Then the time of the reach decreases each turn.
+	/// At the start of the reach, the action fails. Until then, the body and the mind wait.
+	bool withdraws {false};
 	/// Whether it waited one turn after its walk stopped because it was shut in, for the mind to clear the way
 	bool waitedForWay {false};
 	/// Throwing: how long the throw is to take to get there
@@ -173,6 +179,14 @@ struct TossHandVelocity
 struct HeldByCreature
 {
 	entt::entity creature {entt::null};
+	/// Where the frame draws the thing in the creature's hand as the frame draws the body. Only the draw reads it.
+	struct Drawn
+	{
+		glm::vec3 position;
+		glm::mat3 rotation;
+	};
+	/// Empty: the thing is drawn where its Transform puts it
+	std::optional<Drawn> drawn;
 };
 
 } // namespace openblack::ecs::components

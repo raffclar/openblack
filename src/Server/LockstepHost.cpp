@@ -10,6 +10,8 @@
 #include "LockstepHost.h"
 
 #include <algorithm>
+#include <limits>
+#include <ranges>
 #include <utility>
 
 #include <fmt/format.h>
@@ -36,6 +38,23 @@ void Log(spdlog::level::level_enum level, std::string_view text)
 }
 
 } // namespace
+
+uint8_t GodSlotsOfLand(std::span<const bool> slotHasCitadel) noexcept
+{
+	const auto reversed = slotHasCitadel | std::views::reverse;
+	const auto last = std::ranges::find(reversed, true);
+	if (last == reversed.end())
+	{
+		return k_DefaultGodSlots;
+	}
+	const auto slots = static_cast<size_t>(std::ranges::distance(last, reversed.end()));
+	return static_cast<uint8_t>(std::min<size_t>(slots, std::numeric_limits<uint8_t>::max()));
+}
+
+bool RoomStarts(size_t godsInRoom, size_t readyGods, uint32_t minGods) noexcept
+{
+	return godsInRoom > 0 && readyGods == godsInRoom && readyGods >= minGods;
+}
 
 LockstepHost::LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
                            HostSettings settings)
@@ -148,6 +167,13 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 		_sockets.Close(connection, server_close::k_Normal);
 		_peers.erase(connection);
 	}
+	else if (std::holds_alternative<game_socket::StopRequest>(*frame))
+	{
+		if (peer.joined)
+		{
+			StopTurns();
+		}
+	}
 	else if (const auto* reply = std::get_if<game_socket::StartReply>(&*frame))
 	{
 		StartReply(connection, peer, *reply);
@@ -178,11 +204,15 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		return;
 	}
 	const auto& claims = *result.claims;
-	// A god or an observer who joins after the start needs the live state of the world (plan step 9). The room also
-	// takes nobody new during the start.
-	if (_started || Starting())
+	// The room takes nobody new during the start
+	if (Starting())
 	{
 		Refuse(connection, "started");
+		return;
+	}
+	if (_started)
+	{
+		JoinRunning(connection, peer, claims);
 		return;
 	}
 	game_socket::Joined joined {
@@ -256,18 +286,12 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	peer.role = game_socket::Role::God;
 	peer.seat = seat;
 	// A client whose world parted gets the server's world at the start of the next turn, and then the turns from there
-	if (const auto state = world ? _worldState() : std::vector<uint8_t> {}; !state.empty())
+	if (world && SendWorld(connection))
 	{
-		const auto parts = turn_codec::SplitWorld(_turnsDone, state);
-		SendTo(connection, game_socket::Resumed {.turn = _turnsDone, .world = true});
-		for (const auto& part : parts)
-		{
-			_sockets.SendBinary(connection, turn_codec::Encode(part));
-		}
 		// The checksums that the client sent for the turns of its parted world are no longer of use
 		std::erase_if(_early, [seat](const auto& early) { return early.first.first == seat; });
-		Log(spdlog::level::info, fmt::format("The player of slot {} is back from turn {} with the world of turn {} ({} bytes)",
-		                                     seat, resume.turn, _turnsDone, state.size()));
+		Log(spdlog::level::info,
+		    fmt::format("The player of slot {} is back from turn {} with the world of turn {}", seat, resume.turn, _turnsDone));
 		if (wasAway)
 		{
 			Broadcast(game_socket::PlayerState {.slot = seat, .state = game_socket::PlayerState::State::Back});
@@ -286,10 +310,90 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	}
 	Log(spdlog::level::info,
 	    fmt::format("The player of slot {} is back from turn {}; the server is at turn {}", seat, resume.turn, _turnsDone));
+	if (_stoppedAfter.has_value())
+	{
+		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
+	}
 	if (wasAway)
 	{
 		Broadcast(game_socket::PlayerState {.slot = seat, .state = game_socket::PlayerState::State::Back});
 	}
+}
+
+bool LockstepHost::SendWorld(ConnectionId connection)
+{
+	const auto state = _worldState ? _worldState() : std::vector<uint8_t> {};
+	if (state.empty())
+	{
+		return false;
+	}
+	SendTo(connection, game_socket::Resumed {.turn = _turnsDone, .world = true});
+	for (const auto& part : turn_codec::SplitWorld(_turnsDone, state))
+	{
+		_sockets.SendBinary(connection, turn_codec::Encode(part));
+	}
+	Log(spdlog::level::info,
+	    fmt::format("The server sends its world of turn {} ({} bytes) to connection {}", _turnsDone, state.size(), connection));
+	return true;
+}
+
+void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims)
+{
+	// A player who joins the game that turns needs the server's world. The testbed scenario of the tools keeps its state
+	// out of the world and plays from the first turn, so nobody can join its game as it turns.
+	if (!_worldState || _settings.start.scenario.has_value())
+	{
+		Refuse(connection, "started");
+		return;
+	}
+	// The player of a god that waits, or whose old socket is not closed yet, comes back into the god (MP-Q6). The ticket
+	// of the lobby shows the account, so a new process of the player needs no secret of the old session.
+	const auto own = std::ranges::find_if(_seats, [&claims](const Seat& seat) {
+		return claims.role == game_socket::Role::God && !seat.account.empty() && seat.account == claims.subject &&
+		       (seat.state == SeatState::Taken || seat.state == SeatState::Away);
+	});
+	auto start = _settings.start;
+	start.turn = _turnsDone;
+	game_socket::Joined joined {
+	    .role = game_socket::Role::Observer, .slot = std::nullopt, .session = {}, .name = claims.name, .start = start};
+	if (own != _seats.end())
+	{
+		const auto seat = static_cast<uint8_t>(own - _seats.begin());
+		if (own->connection.has_value() && *own->connection != connection)
+		{
+			// The new socket of the player replaces the old one
+			_sockets.Close(*own->connection, server_close::k_GoingAway);
+			_peers.erase(*own->connection);
+		}
+		const bool wasAway = own->state == SeatState::Away;
+		own->state = SeatState::Taken;
+		own->connection = connection;
+		// A new secret, so that the old process of the player cannot take the god back
+		own->session = _makeSecret ? _makeSecret() : std::string();
+		++own->resumes;
+		std::erase_if(_early, [seat](const auto& early) { return early.first.first == seat; });
+		peer.role = game_socket::Role::God;
+		peer.seat = seat;
+		joined.role = game_socket::Role::God;
+		joined.slot = seat;
+		joined.session = own->session;
+		Log(spdlog::level::info,
+		    fmt::format("{} comes back into the god of slot {} at turn {}", claims.name, seat, _turnsDone));
+		if (wasAway)
+		{
+			Broadcast(game_socket::PlayerState {.slot = seat, .state = game_socket::PlayerState::State::Back});
+		}
+	}
+	else
+	{
+		// Any other player who joins after the start is an observer (MP-Q12)
+		peer.role = game_socket::Role::Observer;
+		Log(spdlog::level::info, fmt::format("{} joins the game at turn {} as an observer", claims.name, _turnsDone));
+	}
+	peer.joined = true;
+	SendTo(connection, joined);
+	SendTo(connection, start);
+	SendWorld(connection);
 }
 
 void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> bytes)
@@ -315,9 +419,11 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 			return;
 		}
 		const auto before = block->actions.size();
-		std::erase_if(block->actions, [](const auto& action) {
+		// A command of the test tools goes in only when the server's test commands are on
+		std::erase_if(block->actions, [this](const auto& action) {
 			return std::holds_alternative<player_commands::PlayerLeft>(action) ||
-			       std::holds_alternative<player_commands::PlayerJoined>(action);
+			       std::holds_alternative<player_commands::PlayerJoined>(action) ||
+			       (!_settings.testCommands && std::holds_alternative<player_commands::CreatureFightCheat>(action));
 		});
 		if (block->actions.size() != before)
 		{
@@ -402,11 +508,28 @@ void LockstepHost::CloseSeat(uint8_t seat)
 void LockstepHost::Update()
 {
 	const auto now = _clock();
+	if (AllComputerGods())
+	{
+		// A room with no human god starts at once. The observers join the running game and get its world.
+		if (!_started)
+		{
+			StartGame();
+		}
+		const auto observers = Observers();
+		_observerSeen = _observerSeen || observers > 0;
+		if (!_observersJoined && observers >= _settings.minGods)
+		{
+			_observersJoined = true;
+			Log(spdlog::level::info, fmt::format("{} observers joined: the world of computer gods turns", observers));
+		}
+		return;
+	}
 	if (!_started)
 	{
+		const auto inRoom = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 		const auto ready =
 		    std::ranges::count_if(_seats, [](const Seat& seat) { return seat.state == SeatState::Taken && seat.ready; });
-		if (!Starting() && ready > 0 && static_cast<uint32_t>(ready) >= _settings.godsToStart)
+		if (!Starting() && RoomStarts(static_cast<size_t>(inRoom), static_cast<size_t>(ready), _settings.minGods))
 		{
 			QueryLands();
 		}
@@ -492,6 +615,7 @@ void LockstepHost::TransferCreatures()
 	_startStep = StartStep::Transfer;
 	_awaited = GodConnections();
 	_startCreatures.clear();
+	_startAlignments.clear();
 	Log(spdlog::level::info, "Every god has the land: the gods send their creatures");
 	Broadcast(game_socket::StartTransfer {});
 }
@@ -503,11 +627,13 @@ void LockstepHost::StartCreature(ConnectionId connection, const Peer& peer, cons
 		return;
 	}
 	_awaited.erase(connection);
-	// Each player gets the creature file of each god at once. The server keeps the file in memory for its own world.
-	Log(spdlog::level::info,
-	    fmt::format("The god of slot {} sends a creature file of {} bytes", *peer.seat, creature.file.size()));
+	// Each player gets the creature file and the alignment of each god at once. The server keeps them in memory for its own
+	// world.
+	Log(spdlog::level::info, fmt::format("The god of slot {} sends a creature file of {} bytes and the alignment {}",
+	                                     *peer.seat, creature.file.size(), creature.alignment));
 	_startCreatures[*peer.seat] = creature.file;
-	Broadcast(game_socket::StartCreature {.slot = *peer.seat, .file = creature.file});
+	_startAlignments[*peer.seat] = creature.alignment;
+	Broadcast(game_socket::StartCreature {.slot = *peer.seat, .file = creature.file, .alignment = creature.alignment});
 	if (_awaited.empty())
 	{
 		StartGame();
@@ -521,6 +647,12 @@ void LockstepHost::StartGame()
 	_started = true;
 	auto start = _settings.start;
 	start.turn = _turnsDone;
+	// Every computer names the god of a slot by the name of its player
+	start.names.clear();
+	for (const auto& seat : _seats)
+	{
+		start.names.push_back(seat.state == SeatState::Taken ? seat.name : std::string());
+	}
 	const auto gods = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 	Log(spdlog::level::info, fmt::format("The network game starts with {} gods", gods));
 	// The first turn names the humans of the game on every computer: each gets its player and its hands, and the slots
@@ -540,6 +672,7 @@ void LockstepHost::StopStart(const game_socket::Frame& why)
 	_startStep = StartStep::None;
 	_awaited.clear();
 	_startCreatures.clear();
+	_startAlignments.clear();
 	Broadcast(why);
 }
 
@@ -551,6 +684,12 @@ std::span<const uint8_t> LockstepHost::StartCreatureFile(PlayerNames god) const
 	return file != _startCreatures.end() ? std::span<const uint8_t>(file->second) : std::span<const uint8_t> {};
 }
 
+std::optional<float> LockstepHost::StartAlignment(PlayerNames god) const
+{
+	const auto alignment = _startAlignments.find(static_cast<uint8_t>(god));
+	return alignment != _startAlignments.end() ? std::optional<float>(alignment->second) : std::nullopt;
+}
+
 bool LockstepHost::AnyGodConnected() const
 {
 	return std::ranges::any_of(_seats, [](const Seat& seat) { return seat.state == SeatState::Taken; });
@@ -558,20 +697,43 @@ bool LockstepHost::AnyGodConnected() const
 
 bool LockstepHost::Paused() const
 {
-	return _started && !AnyGodConnected();
+	return _started && !AllComputerGods() && !AnyGodConnected();
+}
+
+void LockstepHost::StopTurns()
+{
+	// The first request stops the turns. The turns closed before it are the last turns of the game.
+	if (!_started || _stoppedAfter.has_value() || _turnsDone == 0)
+	{
+		return;
+	}
+	_stoppedAfter = _turnsDone - 1;
+	Log(spdlog::level::info, fmt::format("The game is decided: the turns of the game stop after turn {}", *_stoppedAfter));
+	Broadcast(game_socket::GameStop {.turn = *_stoppedAfter});
 }
 
 bool LockstepHost::GameOver() const
 {
-	return _started && _leaving.empty() && std::ranges::none_of(_seats, [](const Seat& seat) {
+	if (AllComputerGods())
+	{
+		// A room with no human god is over when the observers that joined all left
+		return _started && _observerSeen && Observers() == 0;
+	}
+	// After the turns stop, the defeat of a god that left comes at no turn
+	return _started && (_leaving.empty() || _stoppedAfter.has_value()) && std::ranges::none_of(_seats, [](const Seat& seat) {
 		       return seat.state == SeatState::Taken || seat.state == SeatState::Away;
 	       });
 }
 
 bool LockstepHost::HasTurn(uint32_t /*turn*/) const
 {
-	// The defeat of a god that left still comes at a turn, so a world with a god leaving turns once more
-	return _started && (AnyGodConnected() || !_leaving.empty());
+	// The defeat of a god that left still comes at a turn, so a world with a god leaving turns once more. No turn comes
+	// after the turns of the game stop.
+	if (AllComputerGods())
+	{
+		return _started && _observersJoined && !_stoppedAfter.has_value();
+	}
+	return _started && !_stoppedAfter.has_value() && (AnyGodConnected() || !_leaving.empty());
 }
 
 std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)

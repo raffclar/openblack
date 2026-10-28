@@ -24,6 +24,24 @@ float reward::FallYaw(float seconds)
 	return k_FallTurnsPerSecond * seconds;
 }
 
+FallTurn reward::StepFall(float seconds)
+{
+	const float height = FallHeight(seconds);
+	return {
+	    .height = height, .yaw = FallYaw(seconds), .seconds = seconds + (k_TurnMilliseconds * 0.001f), .lands = height <= 0.0f};
+}
+
+float reward::DrawnFallClock(float seconds, float turnFraction)
+{
+	const float turnSeconds = k_TurnMilliseconds * 0.001f;
+	return std::max(seconds - turnSeconds + (turnFraction * turnSeconds), 0.0f);
+}
+
+float reward::DrawnFallHeight(float clock)
+{
+	return std::max(FallHeight(clock), 0.0f);
+}
+
 std::array<DustSprite, k_DustSprites> reward::MakeDust(const std::function<float(float, float)>& random)
 {
 	std::array<DustSprite, k_DustSprites> dust {};

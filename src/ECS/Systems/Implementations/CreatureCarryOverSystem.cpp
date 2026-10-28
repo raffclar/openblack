@@ -35,6 +35,7 @@
 #include "ECS/SaveFileWriter.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -53,9 +54,16 @@ constexpr float k_TurnMilliseconds = std::chrono::duration<float, std::milli>(Ti
 /// A creature made from its file faces as one a land's set-up makes from a file does
 constexpr float k_ArrivalYawDegrees = 180.0f;
 
-PlayerNames LocalPlayer()
+/// The first player, who gets the creature that came from the last land. Only a game alone goes from land to land.
+PlayerNames FirstPlayer()
 {
 	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+}
+
+/// The player of this computer, whose profile files keep the creature
+PlayerNames OwnPlayer()
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
 bool NetworkGame()
@@ -66,7 +74,7 @@ bool NetworkGame()
 /// The player's creature: the first they got, the one they lead on the leash
 std::optional<entt::entity> PlayersCreature()
 {
-	return Locator::leashSystem::has_value() ? Locator::leashSystem::value().PlayersCreature(LocalPlayer()) : std::nullopt;
+	return Locator::leashSystem::has_value() ? Locator::leashSystem::value().PlayersCreature(OwnPlayer()) : std::nullopt;
 }
 } // namespace
 
@@ -140,7 +148,7 @@ void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
 	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
 	if (body == nullptr || !Locator::creatureMindSystem::has_value() ||
 	    !creature_carry_over::WritesToPlayersFiles(
-	        {.networkGame = NetworkGame(), .localPlayers = body->owner == LocalPlayer(), .broughtHere = _brought == creature}))
+	        {.networkGame = NetworkGame(), .localPlayers = body->owner == OwnPlayer(), .broughtHere = _brought == creature}))
 	{
 		return;
 	}
@@ -271,7 +279,7 @@ std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::ve
 	start.fatness = body->fatness;
 	start.strength = body->strength;
 	const auto creature =
-	    archetypes::CreatureArchetype::Create(position, LocalPlayer(), species, 0, glm::radians(k_ArrivalYawDegrees),
+	    archetypes::CreatureArchetype::Create(position, FirstPlayer(), species, 0, glm::radians(k_ArrivalYawDegrees),
 	                                          body->size.value_or(archetypes::CreatureArchetype::StartScale(species)), start);
 	auto& registry = Locator::entitiesRegistry::value();
 	// It keeps the exact map position where it arrives
@@ -335,7 +343,7 @@ void CreatureCarryOverSystem::SaveAsItLives(entt::entity entity)
 	else
 	{
 		if (!registry.Valid(entity) || !registry.AllOf<Creature, CreatureNeeds>(entity) ||
-		    registry.Get<const Creature>(entity).owner != LocalPlayer())
+		    registry.Get<const Creature>(entity).owner != OwnPlayer())
 		{
 			return;
 		}

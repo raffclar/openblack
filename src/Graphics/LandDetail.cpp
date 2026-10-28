@@ -339,18 +339,17 @@ uint8_t CrossFadeAlpha(float offset, float band)
 	return 255;
 }
 
-uint16_t CoarseSourceTexel(uint8_t coarseTexel)
+uint16_t CoarseSourceTexel(uint8_t coarseTexel, const CoarseSampling& sampling)
 {
-	// 62 samples across 256 texels, a step of 1.0323 in 65536ths, each on a texel a multiple of four
-	constexpr uint32_t k_Step = 0x10842;
-	const uint32_t sample = std::clamp<uint32_t>(coarseTexel, 1, 62) - 1;
-	return static_cast<uint16_t>(((sample * k_Step) >> 16) * 4);
+	// The samples step evenly in 65536ths across the block's texture, each on a texel a multiple of four
+	const uint32_t sample = std::clamp<uint32_t>(coarseTexel, 1, sampling.samples) - 1;
+	return static_cast<uint16_t>(((sample * sampling.step) >> 16) * 4);
 }
 
-float CoarseTexelPosition(float fraction)
+float CoarseTexelPosition(float fraction, const CoarseSampling& sampling)
 {
-	// A texel in from the coarse texture's edge, then 62 texels across the block
-	return 256.0f / 255.0f + fraction * 62.0f;
+	// The page's 255th part in from the coarse texture's edge, then across the block
+	return static_cast<float>(sampling.blockTexels) / 255.0f + fraction * sampling.drawnTexels;
 }
 
 } // namespace openblack::graphics::land_detail

@@ -129,7 +129,6 @@ using RowVisitor = std::function<void(std::string_view component, entt::entity e
 /// The names of the components that have an entity but no registration, in order. A save and the hash of the world leave
 /// these out, so the game must have none.
 [[nodiscard]] std::vector<std::string> UnregisteredStorages(const entt::registry& registry, const entt::meta_ctx& context);
-
 /// Tools: the bytes that a hash took of each field of each row, to find the field that parts two computers. A build
 /// without the developer tools does not fill it.
 struct WorldRows
@@ -197,6 +196,8 @@ struct NamedSection
 {
 	std::string name;
 	std::vector<uint8_t> bytes;
+	/// For tools: where each value that the system saved ends, when the save kept them
+	std::vector<size_t> valueEnds;
 
 	bool operator==(const NamedSection&) const = default;
 };

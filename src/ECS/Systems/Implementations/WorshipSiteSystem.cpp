@@ -46,6 +46,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -378,8 +379,7 @@ void WorshipSiteSystem::RemakeModelsAfterLoad()
 void WorshipSiteSystem::ProcessChants()
 {
 	auto& registry = _world->Entities();
-	const auto here =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto here = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	// Every player in turn, the neutral player last, each site of their temple by its place round it
 	for (size_t player = 0; player < static_cast<size_t>(PlayerNames::_COUNT); ++player)
 	{
