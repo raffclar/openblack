@@ -253,4 +253,33 @@ void testbed_scenarios::AddCreatureActionScenarios(std::vector<Scenario>& all)
 	    .objects = {villager},
 	    .commands = {Do("MakeBreederDisciple", 1.0f)},
 	});
+	all.push_back({
+	    .id = "actions.eat_from_food_pile",
+	    .name = "Eats from a pile of food",
+	    .facet = Facet::Needs,
+	    .description = "A grown tiger is told to eat from a pile of food that the food miracle made, 30 metres in front "
+	                   "of it.",
+	    .expected = "It walks to the pile, turns to face it, takes a handful of food from it and eats the handful.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = Near(),
+	    .creatures = {Actor()},
+	    .objects = {{.type = MobileObjectInfo::MagicFood, .offset = {0.0f, -30.0f}}},
+	    .commands = {Do("EatFromFoodPile", 1.0f)},
+	});
+	all.push_back({
+	    .id = "actions.give_magic_food_to_store",
+	    .name = "Gives a pile of miracle food to the store",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with an empty storage pit 60 metres in front of it and a pile of food that the "
+	                   "food miracle made to one side. It is told to give the food to the store.",
+	    .expected = "It takes a handful from the pile, goes to where it can throw into the store and throws the food "
+	                "in. The store gets the food.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -80.0f}, {60.0f, 20.0f}}},
+	    .creatures = {Actor()},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, -60.0f}, .storedFood = 0, .storedWood = 0},
+	                {.type = MobileObjectInfo::MagicFood, .offset = {40.0f, -20.0f}}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "GiveMagicFoodToStoragePit", .with = 1}},
+	});
 }
