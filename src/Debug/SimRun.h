@@ -160,6 +160,12 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 /// Whether the run is at its end at this turn
 [[nodiscard]] bool Finished(const Settings& settings, uint32_t turn);
 
+/// Whether the game skips a frame of a run that a tool steps through the inspector. While the tool holds the run, the
+/// game is paused and the frame only gives the answers to the tool. The wall clock sets the number of these frames.
+/// Thus they must not move the clock, the camera or the hand, because the turns get the camera and the hand from the
+/// reports. A frame with work that the tool waits for still plays, for example a scenario to lay out or a picture.
+[[nodiscard]] bool SkipsHeldFrame(bool steppedByTool, bool paused, bool workWaits);
+
 /// The loss of a temple from the text "player:turn", such as "1:300". None for another text or a player past the seventh.
 [[nodiscard]] std::optional<TempleLoss> ParseTempleLoss(std::string_view text);
 

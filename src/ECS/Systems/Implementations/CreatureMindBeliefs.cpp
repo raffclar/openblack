@@ -51,9 +51,11 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureCasting.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -65,6 +67,8 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/LandForest.h"
+#include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
@@ -72,12 +76,15 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -415,6 +422,14 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	if (registry.AllOf<ecs::components::Spell>(thing))
 	{
 		return kinds::k_Spell;
+	}
+	// These things have no kind of their own, so they keep the kind that the game gives by default: the other kind. They
+	// are the scrolls and signs of the scripts, the shields, the lanterns, the fireflies, the fireballs and the leash posts.
+	// The way into a temple, the flags of a town and the buildings that a town plans are of this kind too.
+	if (registry.AnyOf<ScriptHighlight, MagicShield, StreetLantern, Firefly, MagicFireBall, LeashPost, TempleEntrance,
+	                   TownDesireFlag, PlannedAbode, PlannedTemple>(thing))
+	{
+		return kinds::k_Other;
 	}
 	return std::nullopt;
 }

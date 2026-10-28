@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 
 #include "3D/MapCoords.h"
+#include "Creature/CreatureKiss.h"
 
 using namespace openblack;
 using namespace openblack::creature_layers;
@@ -155,6 +156,11 @@ size_t creature_layers::CurrentAnimation(const BodyAction& body)
 	}
 }
 
+size_t creature_layers::TimingAnimation(const BodyAction& body)
+{
+	return body.kind == BodyAction::Kind::Once && body.kiss ? creature_kiss::k_HighKiss : CurrentAnimation(body);
+}
+
 std::optional<BodyAction> creature_layers::PlayOnce(const BodyAction& body, size_t animation, bool mirrored)
 {
 	if (IsPlaying(body))
@@ -269,14 +275,22 @@ BodyAction creature_layers::Hurry(BodyAction body)
 }
 
 bool creature_layers::ReachesActionMoment(const BodyAction& body, float milliseconds, std::optional<uint32_t> duration,
-                                          uint32_t kissMs)
+                                          uint32_t kissMs, std::optional<float> realMilliseconds)
 {
 	if (body.kind != BodyAction::Kind::Once || body.timedByPlayer)
 	{
 		return false;
 	}
+	if (body.kiss)
+	{
+		// The kiss moves on by the milliseconds of the turn. In the step that ends the kiss, the kiss gets to no moment.
+		const auto step = realMilliseconds.value_or(milliseconds);
+		const auto moment = static_cast<float>(kissMs);
+		return body.timeMs + step < static_cast<float>(duration.value_or(0)) && body.timeMs <= moment &&
+		       body.timeMs + step > moment;
+	}
 	milliseconds = HurriedStep(milliseconds, body.hurried);
-	const auto moment = static_cast<float>(body.kiss ? kissMs : duration.value_or(0) / 2);
+	const auto moment = static_cast<float>(duration.value_or(0) / 2);
 	return body.timeMs <= moment && body.timeMs + milliseconds > moment;
 }
 
@@ -292,7 +306,8 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 	{
 		return body;
 	}
-	if (body.realTime)
+	// A kiss moves on by the milliseconds of the turn, whatever the size of the creature
+	if (body.realTime || body.kiss)
 	{
 		milliseconds = realMilliseconds.value_or(milliseconds);
 	}

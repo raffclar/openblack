@@ -117,6 +117,9 @@ std::vector<Action> EachCommand()
 	    LeashLength {.length = 12.5f},
 	    ChatSpeech {.recipients = {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_FOUR}, .text = u"Hello"},
 	    ChatTaunt {.recipients = {PlayerNames::PLAYER_ONE}, .taunt = 30},
+	    QuickSave {},
+	    QuickLoad {},
+	    MusicMood {.creature = Entity(29), .track = 0x89ABCDEF, .mood = -0.75f},
 	};
 }
 
@@ -140,7 +143,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 42)
+	switch (bits(random) % 45)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -309,6 +312,12 @@ Action RandomAction(std::mt19937& random)
 	}
 	case 40:
 		return ChatTaunt {.recipients = {static_cast<PlayerNames>(bits(random) % 32)}, .taunt = bits(random)};
+	case 41:
+		return QuickSave {};
+	case 42:
+		return QuickLoad {};
+	case 43:
+		return MusicMood {.creature = entity(), .track = bits(random), .mood = number()};
 	default:
 		return PlayerLeft {};
 	}
@@ -370,8 +379,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5, 9, 5, 53, 5, 10, 18, 5, 49, 17, 5,  5,  5, 9,  12, 1, 18, 11, 5,  21,
-	                                 15, 3, 5, 1, 2,  1, 61, 5,  2, 1,  13, 10, 18, 1, 50, 1,  5, 51, 5,  16, 7};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 10, 18, 5,  49, 17, 5, 5,  5, 9, 12, 1, 18, 11, 5, 21, 15, 3,
+	                                 5, 1, 2, 1, 61, 5, 2,  1,  13, 10, 18, 1, 50, 1, 5, 51, 5, 16, 7,  1, 1,  13};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -889,6 +898,46 @@ TEST(TurnCodec, ALineOfTheChatHasItsPlayersThenItsCharacters)
 	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
 	ASSERT_EQ(actions.size(), 1);
 	EXPECT_EQ(std::get<ChatSpeech>(actions[0]), std::get<ChatSpeech>(block.actions[0]));
+}
+
+TEST(TurnCodec, TheKeysOfTheQuickSaveAndLoadHaveOnlyTheirTags)
+{
+	const CommandBlock block {.sequence = 0, .turn = 0, .actions = {QuickSave {}, QuickLoad {}}};
+	const std::vector<uint8_t> expected {k_Version, 1, 0, 0, 0, 0, 0, 0, 2, 43, 44};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
+	ASSERT_EQ(actions.size(), 2);
+	EXPECT_TRUE(std::holds_alternative<QuickSave>(actions[0]));
+	EXPECT_TRUE(std::holds_alternative<QuickLoad>(actions[1]));
+}
+
+TEST(TurnCodec, AChangeOfTheMusicHasTheCreatureTheTrackAndTheMood)
+{
+	const CommandBlock block {
+	    .sequence = 0,
+	    .turn = 0,
+	    .actions = {MusicMood {.creature = Entity(0x01020304), .track = 0x0A0B0C0D, .mood = 1.0f}},
+	};
+	const std::vector<uint8_t> expected {
+	    k_Version, 1,    0,    0,    0, 0, 0, 0, 1, // frame, sequence, turn, count
+	    45,                                         // tag MusicMood
+	    4,         3,    2,    1,                   // creature
+	    0x0D,      0x0C, 0x0B, 0x0A,                // track
+	    0,         0,    0x80, 0x3F,                // mood 1.0
+	};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& mood = std::get<MusicMood>(std::get<CommandBlock>(*decoded.frame).actions[0]);
+	EXPECT_EQ(mood.creature, Entity(0x01020304));
+	EXPECT_EQ(mood.track, 0x0A0B0C0Du);
+	EXPECT_EQ(mood.mood, 1.0f);
+	// A change of the music that stops before its mood is not a whole command
+	auto truncated = expected;
+	truncated.pop_back();
+	EXPECT_EQ(Decode(truncated).error, DecodeError::Truncated);
 }
 
 TEST(TurnCodec, ATauntHasItsNumberAfterItsPlayers)

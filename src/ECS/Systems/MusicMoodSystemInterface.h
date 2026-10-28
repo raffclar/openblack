@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "Audio/MusicMood.h"
+#include "Commands/PlayerCommands.h"
 
 namespace openblack::ecs::systems
 {
@@ -40,6 +41,8 @@ public:
 	[[nodiscard]] virtual std::vector<music_mood::Record> WriteRecords() = 0;
 	/// All the track records, the newest first
 	[[nodiscard]] virtual std::vector<music_mood::Record> GetRecords() const = 0;
+	/// The command of a change of the music, at its turn: when a track started, the creature reacts to the music
+	virtual void DoMusicMood(const player_commands::MusicMood& command) = 0;
 };
 
 } // namespace openblack::ecs::systems

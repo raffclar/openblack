@@ -95,6 +95,7 @@
 #endif
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
+#include "Common/GameLanguage.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/MainThreadQueue.h"
@@ -1748,9 +1749,8 @@ void Game::UpdateLearningMarks(float milliseconds)
 	}
 	// The bulbs and glows are drawn with the world's effects
 	std::vector<particles::draw::LearningMark> marks;
-	const auto bulb = resources::HashIdentifier(MeshId::ObjectLightBulb);
 	registry.Each<const ecs::components::LearningMarker>(
-	    [&marks, bulb](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
+	    [&marks](entt::entity /*unused*/, const ecs::components::LearningMarker& marker) {
 		    const auto look = ecs::learning_marker::LookOf(marker);
 		    marks.push_back({.glow = look.glow,
 		                     .glowHalfSize = look.glowHalfSize,
@@ -1758,7 +1758,7 @@ void Game::UpdateLearningMarks(float milliseconds)
 		                     .bulb = look.bulb,
 		                     .bulbScale = look.bulbScale,
 		                     .bulbColour = look.bulbColour,
-		                     .bulbMesh = bulb});
+		                     .bulbMesh = resources::HashIdentifier(MeshId::ObjectLightBulb)});
 	    });
 	Locator::particleSystem::value().SetLearningMarks(std::move(marks));
 }
@@ -2784,8 +2784,8 @@ void Game::StartFrame(FrameState& frame)
 		Locator::time::value().Update();
 	}
 	// The debug inspector answers what was asked since the last frame, and holds or releases the game for stepping,
-	// before the frame's input and turn
-	if (Locator::inspector::has_value())
+	// before the frame's input and turn. When it answered before this frame, it does not answer again.
+	if (Locator::inspector::has_value() && !std::exchange(_inspectorServedEarly, false))
 	{
 		Locator::inspector::value().Service();
 	}
@@ -3220,7 +3220,9 @@ bool Game::StartTurnsBesideDraw()
 	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
 	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
 	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
-	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || _closeAsked)
+	// A quick load waits for the end of this frame, and the next turns play in the world that it loads
+	const bool loadAsked = Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().LoadAsked();
+	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || loadAsked || _closeAsked)
 	{
 		return false;
 	}
@@ -3350,7 +3352,9 @@ void Game::UpdateSingAlong(bool inTemple)
 	if (Locator::scriptMusicSystem::has_value())
 	{
 		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
-		if (help::sing_along::IsSungVerse(static_cast<int32_t>(script.GetType())))
+		// Some languages show no glow under the words of a sung verse
+		const bool shown = game_language::ShowsSingAlong(Locator::config::value().language);
+		if (shown && help::sing_along::IsSungVerse(static_cast<int32_t>(script.GetType())))
 		{
 			word = script.GetLyrics().word;
 		}
@@ -4183,6 +4187,34 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	}
 }
 
+namespace
+{
+
+/// The language of the install from Country.txt in the game folder, or UK English when the game can not read the file
+GameLanguage ReadGameLanguage(filesystem::FileSystemInterface& fileSystem)
+{
+	std::optional<std::vector<uint8_t>> contents;
+	if (const auto path =
+	        filesystem::FileSystemInterface::FindIgnoringCase(fileSystem.GetGamePath(), game_language::k_CountryFile);
+	    path.has_value())
+	{
+		try
+		{
+			contents = fileSystem.ReadAll(*path);
+		}
+		catch (const std::exception& error)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read {}: {}", game_language::k_CountryFile, error.what());
+		}
+	}
+	const auto language = contents.has_value() ? game_language::FromCountryFile(std::span<const uint8_t>(*contents))
+	                                           : game_language::FromCountryFile(std::nullopt);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The language of the install is \"{}\"", game_language::Code(language));
+	return language;
+}
+
+} // namespace
+
 bool Game::Initialize() noexcept
 {
 	auto& config = Locator::config::value();
@@ -4305,6 +4337,7 @@ bool Game::Initialize() noexcept
 	fileSystem.SetGamePath(_gamePath);
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "The GamePath is \"{}\".", fileSystem.GetGamePath().generic_string());
+	Locator::config::value().language = ReadGameLanguage(fileSystem);
 
 	if (std::filesystem::path(_startMap).is_absolute())
 	{
@@ -4949,8 +4982,41 @@ void Game::BeforeFirstFrame(bool continued)
 	}
 }
 
+bool Game::ServeHeldRun()
+{
+	if (!Locator::inspector::has_value() || !Locator::time::has_value())
+	{
+		return false;
+	}
+	const bool steppedByTool = _simulation.has_value() && _simulation->startPaused;
+	const bool workWaits = _scenarioRequest.has_value() || _requestScreenshot.has_value();
+	if (!sim_run::SkipsHeldFrame(steppedByTool, Locator::time::value().IsPaused(), workWaits))
+	{
+		return false;
+	}
+	Locator::inspector::value().Service();
+	// The window stays responsive. The events wait in the queue for the next frame that plays.
+	SDL_PumpEvents();
+	if (!Locator::time::value().IsPaused())
+	{
+		// The tool released the game: this frame plays, and it does not ask the inspector again
+		_inspectorServedEarly = true;
+		return false;
+	}
+#if !defined(__EMSCRIPTEN__)
+	// The tool holds the game: the loop waits a short time, so that it does not use all of the processor
+	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+#endif
+	return true;
+}
+
 bool Game::RunFrame() noexcept
 {
+	// A run that a tool steps plays no frame while the tool holds it. The wall clock sets the number of these frames.
+	if (ServeHeldRun())
+	{
+		return true;
+	}
 	// The work of the frame starts here. In a web browser, the wait for the display frame is before this point.
 	const auto workStart = std::chrono::steady_clock::now();
 	const auto turnBefore = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
@@ -5073,6 +5139,12 @@ bool Game::RunFrame() noexcept
 			Locator::creatureWebPageSystem::value().CollectPictures(
 			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+		}
+		// A quick load that a command of the turns asked for loads after the draw of the frame, as the game does. The load
+		// forgets the commands of the old world.
+		if (Locator::saveGameSystem::has_value())
+		{
+			std::ignore = Locator::saveGameSystem::value().LoadAskedSlot();
 		}
 		// The turns beside the draw had the camera of the game back before they started
 		if (!turnsBeside)

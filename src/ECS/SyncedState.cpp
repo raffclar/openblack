@@ -240,7 +240,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Temple", .field = "destructionBeamSource", .marker = ""},
     {.component = "Temple", .field = "destructionLoops", .marker = ""},
     {.component = "ScriptHighlight", .field = "centre", .marker = ""},
-    {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
+    {.component = "ScriptHighlight", .field = "hidden", .marker = ""},
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},
     {.component = "ScriptHighlight", .field = "yAngle", .marker = ""},
     {.component = "ScriptHighlight", .field = "sparks", .marker = ""},

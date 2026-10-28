@@ -1814,24 +1814,48 @@ void SaveGameSystem::EndTurn()
 	}
 }
 
-bool SaveGameSystem::QuickSave()
+bool SaveGameSystem::PressQuickSave()
 {
+	// The key checks the rules and keeps its turn. The save comes at the turn of the command.
 	const auto turn = TurnNow();
 	if (!gamesave::QuickTurnAllowed(turn, _lastQuickSaveTurn, GameOver(), ScriptCutScene(), NetworkGame()))
 	{
 		return false;
 	}
 	_lastQuickSaveTurn = turn;
-	return InstantSave(gamesave::k_QuickSaveSlot);
+	return true;
 }
 
-bool SaveGameSystem::QuickLoad()
+bool SaveGameSystem::PressQuickLoad()
 {
-	if (!gamesave::QuickTurnAllowed(TurnNow(), _lastLoadTurn, GameOver(), ScriptCutScene(), NetworkGame()))
+	return gamesave::QuickTurnAllowed(TurnNow(), _lastLoadTurn, GameOver(), ScriptCutScene(), NetworkGame());
+}
+
+bool SaveGameSystem::DoQuickSave()
+{
+	// A network game never sends the command. The game of another computer does not write the files of this computer.
+	if (NetworkGame())
 	{
 		return false;
 	}
-	return Load(gamesave::k_QuickSaveSlot);
+	return InstantSave(gamesave::k_QuickSaveSlot);
+}
+
+void SaveGameSystem::DoQuickLoad()
+{
+	if (NetworkGame())
+	{
+		return;
+	}
+	// The rest of the turn and the draw of the frame use the world that the player has now. The game loads the slot
+	// at the end of the frame.
+	_askedLoad = gamesave::k_QuickSaveSlot;
+}
+
+bool SaveGameSystem::LoadAskedSlot()
+{
+	const auto slot = std::exchange(_askedLoad, std::nullopt);
+	return slot.has_value() && Load(*slot);
 }
 
 void SaveGameSystem::NewLand()

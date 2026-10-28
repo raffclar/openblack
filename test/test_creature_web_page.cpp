@@ -400,3 +400,30 @@ TEST(CreatureWebPage, TheBodyGetsToTheMomentOfItsAction)
 	const creature_layers::BodyAction stand {};
 	EXPECT_FALSE(creature_layers::ReachesActionMoment(stand, 1000.0f, 1001, 0));
 }
+
+TEST(CreatureWebPage, TheKissMovesOnByTheMillisecondsOfTheTurn)
+{
+	creature_layers::BodyAction kiss {
+	    .kind = creature_layers::BodyAction::Kind::Once, .animations = {creature_kiss::k_LowKiss, 0, 0}, .kiss = true};
+	// The high kiss times the kiss, also when the body plays the low kiss alone
+	EXPECT_EQ(creature_layers::TimingAnimation(kiss), creature_kiss::k_HighKiss);
+	const creature_layers::BodyAction kissClip {.kind = creature_layers::BodyAction::Kind::Once,
+	                                            .animations = {creature_kiss::k_LowKiss, 0, 0}};
+	EXPECT_EQ(creature_layers::TimingAnimation(kissClip), creature_kiss::k_LowKiss);
+	const creature_layers::BodyAction stand {};
+	EXPECT_EQ(creature_layers::TimingAnimation(stand), creature_layers::animations::k_Stand);
+
+	// The kiss moves on by the milliseconds of the turn, not by the step of the playback at the rate of the size
+	kiss.timeMs = 790.0f;
+	EXPECT_FALSE(creature_layers::ReachesActionMoment(kiss, 5.0f, 1733, 800));
+	EXPECT_TRUE(creature_layers::ReachesActionMoment(kiss, 5.0f, 1733, 800, 15.0f));
+	EXPECT_FLOAT_EQ(creature_layers::AdvanceBody(kiss, 5.0f, 1733, 15.0f).timeMs, 805.0f);
+	EXPECT_FLOAT_EQ(creature_layers::AdvanceBody(kissClip, 5.0f, 1733, 15.0f).timeMs, 5.0f);
+
+	// The step that gets to the length of the kiss ends it, and the kiss gets to no moment in that step
+	kiss.timeMs = 795.0f;
+	EXPECT_FALSE(creature_layers::ReachesActionMoment(kiss, 10.0f, 805, 800, 10.0f));
+	EXPECT_TRUE(creature_layers::ReachesActionMoment(kiss, 10.0f, 806, 800, 10.0f));
+	EXPECT_EQ(creature_layers::AdvanceBody(kiss, 10.0f, 805, 10.0f).kind, creature_layers::BodyAction::Kind::Stand);
+	EXPECT_EQ(creature_layers::AdvanceBody(kiss, 10.0f, 806, 10.0f).kind, creature_layers::BodyAction::Kind::Once);
+}
