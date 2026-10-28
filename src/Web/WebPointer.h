@@ -27,7 +27,8 @@ namespace openblack::web
 [[nodiscard]] bool PointerLocked() noexcept;
 
 /// The place in the window of the click that took the pointer lock, when the page knows it. The page cannot tell the
-/// place of the pointer to the game before the pointer moves over the game, thus the click gives it.
+/// place of the pointer to the game before the pointer moves over the game, thus the click gives it. The place is in
+/// CSS pixels, the units of the window's mouse events.
 [[nodiscard]] std::optional<glm::ivec2> PointerLockClick() noexcept;
 
 /// Tell the page that the game window listens to the pointer lock. Before this call, a click does not lock the pointer.

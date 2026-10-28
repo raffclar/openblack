@@ -44,6 +44,7 @@ public:
 	[[nodiscard]] NativeHandles GetNativeHandles() const final;
 	[[nodiscard]] uint32_t GetID() const final;
 	[[nodiscard]] glm::ivec2 GetSize() const final;
+	[[nodiscard]] glm::vec2 GetPixelScale() const final;
 	[[nodiscard]] float GetAspectRatio() const final;
 	[[nodiscard]] bool IsMinimised() const final;
 	[[nodiscard]] bool IsWindowed() const final;
@@ -51,8 +52,9 @@ public:
 	WindowingInterface& SetDisplayMode(DisplayMode mode) final { return SetFullscreen(mode != DisplayMode::Windowed); }
 
 private:
-	/// Moves a window hanging off the desktop or under the taskbar back onto it, making it smaller if it must
-	void KeepInsideDesktop();
+	/// Moves a window hanging off the desktop or under the taskbar back onto it, making it smaller if it must.
+	/// The size to keep is the one that was asked for at the opening
+	void KeepInsideDesktop(glm::ivec2 asked);
 	[[nodiscard]] bool IsOpen() const;
 	[[nodiscard]] float GetBrightness() const;
 	Sdl2WindowingSystem& SetBrightness(float bright);

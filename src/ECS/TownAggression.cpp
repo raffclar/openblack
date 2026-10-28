@@ -34,7 +34,7 @@ float Recover(float multiplier)
 } // namespace
 
 void town_aggression::Attacked(Record& record, PlayerNames aggressor, bool aggressorIsOwner, float amount,
-                               float firstTimeAddition, uint32_t turn)
+                               float firstTimeAddition, uint32_t turn, const Harm& harm)
 {
 	const auto index = static_cast<size_t>(aggressor);
 	if (index >= record.aggression.size())
@@ -51,7 +51,14 @@ void town_aggression::Attacked(Record& record, PlayerNames aggressor, bool aggre
 	record.lastAggressor = aggressor;
 	record.lastTurn = turn;
 	record.lastTurns.at(index) = turn;
+	record.lastHarms.at(index) = harm;
 	record.aggression.at(index) += amount;
+}
+
+void town_aggression::Attacked(Record& record, PlayerNames aggressor, bool aggressorIsOwner, float amount,
+                               float firstTimeAddition, uint32_t turn)
+{
+	Attacked(record, aggressor, aggressorIsOwner, amount, firstTimeAddition, turn, Harm {});
 }
 
 void town_aggression::ProcessTurn(Record& record, PlayerNames owner)

@@ -14,9 +14,10 @@
 namespace openblack::ecs::other_player_sparkles
 {
 
-/// Once a game turn, on a computer that draws the world: one sparkle at the reported camera of each other player that
-/// plays, and at the camera of each computer god whose mind plays, in the pool of that player. None while this computer's
-/// camera is inside the temple, or while its hand directs a fight. The sparkles take the local random numbers.
+/// Once a game turn, on a computer that draws the world: one sparkle at the reported camera of each other human player
+/// that is in the game, and at the camera of each computer god whose mind plays, in the pool of that player
+/// (player_sparkles::PlaceOf). None while this computer's camera is inside the temple, or while its hand directs a
+/// fight. The sparkles take the local random numbers.
 void AddAtCameras();
 
 } // namespace openblack::ecs::other_player_sparkles

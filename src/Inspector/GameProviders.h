@@ -14,6 +14,13 @@
 
 #include <entt/meta/context.hpp>
 
+#include "InspectorJson.h"
+
+namespace openblack::ecs::systems
+{
+class HandSystemInterface;
+} // namespace openblack::ecs::systems
+
 namespace openblack::inspector
 {
 class GameProvider;
@@ -39,5 +46,9 @@ struct LocatorCoverage
 /// when they are added). Answers the run control's provider, which is told of each frame.
 GameProvider* AddGameProviders(Inspector& inspector, const entt::meta_ctx& reflection, RunTargetInterface& runTarget,
                                WorldEditInterface& worldEdit, const GameControls& controls);
+
+/// This computer's hands, which it moves and draws: their player, their entities and where the world has them. On a
+/// computer whose god is not the first player, these are the hands of its own god.
+[[nodiscard]] Json OwnHandsJson(const ecs::systems::HandSystemInterface& hands);
 
 } // namespace openblack::inspector

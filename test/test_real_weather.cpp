@@ -10,8 +10,13 @@
 #include <cstdint>
 #include <cstring>
 
+#include <array>
 #include <chrono>
 #include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -136,6 +141,7 @@ public:
 		weather = std::move(callback);
 	}
 	void UploadCreature(lobby_api::CreatureUpload, LobbyCallback<lobby_api::CreatureUploadReply>) override {}
+	void SendSkirmishPing(LobbyCallback<LobbyDone>) override {}
 	uint32_t AddEventListener(LobbyEventListener) override { return 0; }
 	void RemoveEventListener(uint32_t) override {}
 
@@ -145,6 +151,14 @@ public:
 		auto callback = std::move(weather);
 		weather = nullptr;
 		callback(LobbyResult<lobby_api::RealWeather> {.value = std::move(value), .error = {}});
+	}
+
+	void Fail(LobbyErrorKind kind)
+	{
+		ASSERT_TRUE(weather);
+		auto callback = std::move(weather);
+		weather = nullptr;
+		callback(LobbyResult<lobby_api::RealWeather> {.value = std::nullopt, .error = {.kind = kind}});
 	}
 
 	bool configured {true};
@@ -507,4 +521,216 @@ TEST(RealWeatherSystem, AnAnswerAfterTenSecondsLeavesTheLandsOwnWeather)
 	EXPECT_FALSE(system.IsApplied());
 	EXPECT_FALSE(system.GetWeather().has_value());
 	EXPECT_EQ(land.background.temperature, 3);
+}
+
+TEST(RealWeatherRules, CountriesReadAsTheGameReadsThem)
+{
+	const auto countries = real_weather::ParseCountries("ad=Andorra\r\ngb=Great Britain\nxyz=Long\nnone\n\nde=Germany\r\n"
+	                                                    "de=Deutschland\x1A"
+	                                                    "at=Austria\n");
+	ASSERT_EQ(countries.size(), 7);
+	EXPECT_EQ(countries[0].code, "ad");
+	EXPECT_EQ(countries[0].name, "Andorra");
+	EXPECT_EQ(countries[1].name, "Great Britain");
+	// A code of three or more letters keeps its first three letters, followed by the name
+	EXPECT_EQ(countries[2].code, "xyzLong");
+	EXPECT_EQ(countries[2].name, "Long");
+	EXPECT_EQ(countries[3].code, "non");
+	EXPECT_EQ(countries[3].name, "");
+	EXPECT_EQ(countries[4].code, "");
+
+	EXPECT_EQ(real_weather::CountryName(countries, "gb"), "Great Britain");
+	// The game uses the last line of a code, and a byte 26 stops the file
+	EXPECT_EQ(real_weather::CountryName(countries, "de"), "Deutschland");
+	EXPECT_EQ(real_weather::CountryName(countries, "at"), "(null)");
+	// The code must be equal letter for letter
+	EXPECT_EQ(real_weather::CountryName(countries, "GB"), "(null)");
+	EXPECT_EQ(real_weather::CountryName(countries, "xyz"), "(null)");
+}
+
+TEST(RealWeatherRules, ALongLineOfTheCountriesIsReadInParts)
+{
+	const auto text = "aa=" + std::string(real_weather::k_CountryLineBytes - 3, 'x') + "bb=Second\n";
+	const auto countries = real_weather::ParseCountries(text);
+	ASSERT_EQ(countries.size(), 2);
+	EXPECT_EQ(countries[0].name.size(), real_weather::k_CountryLineBytes - 3);
+	EXPECT_EQ(countries[1].code, "bb");
+	EXPECT_EQ(countries[1].name, "Second");
+}
+
+TEST(RealWeatherRules, TheDaysFileKeepsEachDay)
+{
+	const std::array days {real_weather::KeptDay {.country = "gb",
+	                                              .area = "Surrey",
+	                                              .city = "Guildford",
+	                                              .day = 24,
+	                                              .month = 10,
+	                                              .year = 2026,
+	                                              .temperature = -3,
+	                                              .visibility = 60,
+	                                              .type = 7,
+	                                              .unusedFirst = 1,
+	                                              .unusedSecond = 2,
+	                                              .unusedThird = 3}};
+	const auto bytes = real_weather::DaysFile(days);
+	ASSERT_EQ(bytes.size(), real_weather::k_DaysHeaderBytes + real_weather::k_DayBytes);
+	EXPECT_EQ(std::string_view(reinterpret_cast<const char*>(bytes.data()), 4), "LHWD");
+	const auto read = [&bytes]<typename T>(size_t offset, T) {
+		T value {};
+		std::memcpy(&value, bytes.data() + offset, sizeof(value));
+		return value;
+	};
+	EXPECT_EQ(read(4, uint32_t {}), 1);
+	constexpr size_t k_Day = real_weather::k_DaysHeaderBytes;
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes.data() + k_Day)), "gb");
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes.data() + k_Day + 0x03)), "Surrey");
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes.data() + k_Day + 0x99)), "Guildford");
+	EXPECT_EQ(read(k_Day + 0x130, int16_t {}), -3);
+	EXPECT_EQ(read(k_Day + 0x132, int16_t {}), 1);
+	EXPECT_EQ(read(k_Day + 0x134, int16_t {}), 60);
+	EXPECT_EQ(read(k_Day + 0x136, int16_t {}), 3);
+	EXPECT_EQ(read(k_Day + 0x138, uint8_t {}), 2);
+	EXPECT_EQ(read(k_Day + 0x139, uint8_t {}), 24);
+	EXPECT_EQ(read(k_Day + 0x13A, uint8_t {}), 10);
+	EXPECT_EQ(read(k_Day + 0x13C, int16_t {}), 2026);
+	EXPECT_EQ(read(k_Day + 0x140, int32_t {}), 7);
+}
+
+TEST(RealWeatherRules, ATextTooLongForTheDaysFileIsCut)
+{
+	const std::string city(200, 'c');
+	const std::array days {real_weather::KeptDay {.country = "gbr", .area = "", .city = city}};
+	const auto bytes = real_weather::DaysFile(days);
+	constexpr size_t k_Day = real_weather::k_DaysHeaderBytes;
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes.data() + k_Day)), "gb");
+	EXPECT_EQ(std::string(reinterpret_cast<const char*>(bytes.data() + k_Day + 0x99)).size(), 149);
+	EXPECT_EQ(bytes.at(k_Day + 0x99 + 149), 0);
+}
+
+namespace
+{
+
+/// A system with a preset, a list of countries and a fake file of days
+RealWeatherSystem MakeSystemWithFiles(FakeLobby& lobby, std::vector<std::vector<uint8_t>>& written, FakeClock* clock = nullptr)
+{
+	auto presets = FileOf({PresetBytes(2, true).Change(k_Rain, 0, 40.0f)});
+	const std::string countries = "gb=Great Britain\r\nno=Norway\r\n";
+	return RealWeatherSystem(
+	    true, lobby, [presets]() { return std::optional(presets); }, []() { return k_Today; },
+	    [clock]() { return clock != nullptr ? clock->now : std::chrono::steady_clock::time_point {}; },
+	    [countries]() { return std::optional(std::vector<uint8_t>(countries.begin(), countries.end())); },
+	    [&written](std::span<const uint8_t> bytes) { written.emplace_back(bytes.begin(), bytes.end()); });
+}
+
+} // namespace
+
+TEST(RealWeatherSystem, ThePlaceNamesTheCountryInFull)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	std::vector<std::vector<uint8_t>> written;
+	auto system = MakeSystemWithFiles(lobby, written);
+	EXPECT_FALSE(system.GetPlace().has_value());
+	system.StartGame(land);
+	lobby.Answer(Weather(2));
+	EXPECT_EQ(system.GetPlace(), "Guildford (Surrey,Great Britain)");
+
+	system.StartGame(land);
+	auto weather = Weather(2);
+	weather.area = "";
+	weather.country = "zz";
+	lobby.Answer(weather);
+	// A code that is not in the list shows as "(null)"
+	EXPECT_EQ(system.GetPlace(), "Guildford ((null))");
+}
+
+TEST(RealWeatherSystem, TheWeatherThatCameIsKeptInTheDaysFile)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	std::vector<std::vector<uint8_t>> written;
+	auto system = MakeSystemWithFiles(lobby, written);
+	system.StartGame(land);
+	EXPECT_TRUE(written.empty());
+	lobby.Answer(Weather(2, 11, 60));
+	ASSERT_EQ(written.size(), 1);
+	const auto kept = Weather(2, 11, 60);
+	const std::array days {real_weather::KeptDay {.country = kept.country,
+	                                              .area = kept.area,
+	                                              .city = kept.city,
+	                                              .day = k_Today.day,
+	                                              .month = k_Today.month,
+	                                              .year = k_Today.year,
+	                                              .temperature = 11,
+	                                              .visibility = 60,
+	                                              .type = 2}};
+	EXPECT_EQ(written.front(), real_weather::DaysFile(days));
+}
+
+TEST(RealWeatherSystem, WithNoConnectionTheLandKeepsItsOwnWeather)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	land.background = {.temperature = 3, .rain = 1};
+	const auto before = land.background;
+	std::vector<std::vector<uint8_t>> written;
+	auto system = MakeSystemWithFiles(lobby, written);
+	system.StartGame(land);
+	lobby.Fail(LobbyErrorKind::Network);
+	system.ProcessTurn(land);
+	system.ProcessTurn(land);
+	EXPECT_FALSE(system.IsApplied());
+	EXPECT_FALSE(system.GetWeather().has_value());
+	EXPECT_FALSE(system.GetPlace().has_value());
+	EXPECT_FALSE(land.storm.has_value());
+	EXPECT_EQ(land.background.temperature, before.temperature);
+	EXPECT_EQ(land.background.rain, before.rain);
+	// The system writes no days file without an answer
+	EXPECT_TRUE(written.empty());
+}
+
+TEST(RealWeatherSystem, ALateAnswerWritesNoDaysFile)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	FakeClock clock;
+	std::vector<std::vector<uint8_t>> written;
+	auto system = MakeSystemWithFiles(lobby, written, &clock);
+	system.StartGame(land);
+	clock.now += RealWeatherSystemInterface::k_AnswerTimeout + std::chrono::milliseconds(1);
+	lobby.Answer(Weather(2));
+	EXPECT_TRUE(written.empty());
+}
+
+TEST(RealWeatherSystem, TheMessageNamesThePlaceAndShowsThePictureOneTime)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	auto presets = FileOf({PresetBytes(2, true).Change(k_Rain, 0, 40.0f)});
+	const std::string countries = "gb=Great Britain\r\n";
+	std::vector<std::pair<std::string, uint8_t>> told;
+	RealWeatherSystem system(
+	    true, lobby, [presets]() { return std::optional(presets); }, []() { return k_Today; },
+	    []() { return std::chrono::steady_clock::time_point {}; },
+	    [countries]() { return std::optional(std::vector<uint8_t>(countries.begin(), countries.end())); }, {},
+	    [&told](std::string_view place, uint8_t picture) { told.emplace_back(std::string(place), picture); });
+	system.StartGame(land);
+	system.ProcessTurn(land);
+	EXPECT_TRUE(told.empty());
+
+	lobby.Answer(Weather(2));
+	system.ProcessTurn(land);
+	ASSERT_EQ(told.size(), 1U);
+	EXPECT_EQ(told.front().first, "Guildford (Surrey,Great Britain)");
+	// Type 2 shows the fifth picture
+	EXPECT_EQ(told.front().second, 4);
+
+	// Turning the real weather off and on again changes the land again, with a new message
+	system.ProcessTurn(land);
+	system.Request(false);
+	system.ProcessTurn(land);
+	EXPECT_EQ(told.size(), 1U);
+	system.Request(true);
+	system.ProcessTurn(land);
+	EXPECT_EQ(told.size(), 2U);
 }

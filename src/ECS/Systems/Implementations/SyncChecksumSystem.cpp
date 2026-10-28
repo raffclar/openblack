@@ -25,8 +25,10 @@
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/SyncedState.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
+#include "Simulation/ChecksumLog.h"
 
 using namespace openblack::ecs::systems;
 
@@ -78,6 +80,12 @@ void SyncChecksumSystem::ProcessTurn()
 #endif
 	const auto hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
 	                                       synced_state::PresentationParts(), _keepParts && _byField, visit, _pool.get(), rows);
+	// The music that the scripts start is synced too: its piece, its lyrics and its clock
+	auto stateHash = hash.hash;
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		stateHash = synced_state::MixValues(stateHash, Locator::scriptMusicSystem::value().GetMusic().SyncedValues());
+	}
 	uint32_t seed = 0;
 	uint64_t draws = 0;
 	if (Locator::gameRandom::has_value())
@@ -105,7 +113,7 @@ void SyncChecksumSystem::ProcessTurn()
 		}
 	}
 	_last = TurnChecksum {.turn = turn,
-	                      .checksum = synced_state::Checksum(hash.hash, seed, draws),
+	                      .checksum = synced_state::Checksum(stateHash, seed, draws),
 	                      .parts = {},
 	                      .dump = std::move(dump),
 	                      .unregistered = hash.unregistered};
@@ -123,11 +131,22 @@ void SyncChecksumSystem::ProcessTurn()
 bool SyncChecksumSystem::StartRowDump(const std::filesystem::path& path, row_dump::Settings settings)
 {
 	_rowDump.reset();
-	_rowFile = std::make_unique<std::ofstream>(path, std::ios::binary | std::ios::trunc);
-	if (!_rowFile->is_open())
+	_rowFile.reset();
+	_rowLines.reset();
+	// The path "-" writes the rows to the standard output, as the web build has no file that a tool can read
+	if (path == checksum_log::k_StandardOutput)
 	{
-		_rowFile.reset();
-		return false;
+		_rowLines = std::make_unique<row_dump::TaggedLines>(checksum_log::k_OutputTag);
+		_rowFile = std::make_unique<std::ostream>(_rowLines.get());
+	}
+	else
+	{
+		auto file = std::make_unique<std::ofstream>(path, std::ios::binary | std::ios::trunc);
+		if (!file->is_open())
+		{
+			return false;
+		}
+		_rowFile = std::move(file);
 	}
 	_rowDump = std::make_unique<row_dump::RowDump>(*_rowFile, settings);
 	return true;

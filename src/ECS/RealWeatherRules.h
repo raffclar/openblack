@@ -124,4 +124,60 @@ struct Applied
 /// area that is empty or "(null)" counts as no area.
 [[nodiscard]] std::string PlaceText(std::string_view city, std::string_view area, std::string_view country);
 
+/// The longest line that the game reads from Scripts/country.lhw at one time. The rest of a longer line is read as the
+/// next line.
+constexpr size_t k_CountryLineBytes = 2047;
+/// The text that the message shows for a country code that is not in the list
+constexpr std::string_view k_NoCountryName = "(null)";
+
+/// One line of Scripts/country.lhw: "code=Name"
+struct Country
+{
+	/// The text that a code of the weather must be equal to
+	std::string code;
+	std::string name;
+};
+
+/// The countries of Scripts/country.lhw, in the order of the file. The game reads the file as text: it ignores a
+/// carriage return before a line feed, and a byte 26 stops the file. Each line gives one country, also an empty line:
+/// - The code is the text before the first "=" or the end of the line, and the name is the text after the "=".
+/// - The game keeps the code and the name in one buffer, with the name three bytes after the start. Thus a code of three
+///   or more letters keeps only its first three letters, followed by the name.
+[[nodiscard]] std::vector<Country> ParseCountries(std::string_view text);
+
+/// The name of a country by its code, as the message shows it. The code must be equal to the code of the line, letter
+/// for letter. When two lines have the same code, the game uses the last line. A code that is not in the list gives
+/// k_NoCountryName.
+[[nodiscard]] std::string_view CountryName(std::span<const Country> countries, std::string_view code);
+
+/// The size of the header and of one day in the file weather.dat
+constexpr size_t k_DaysHeaderBytes = 8;
+constexpr size_t k_DayBytes = 0x144;
+/// The space for the country, the area and the city in one day of weather.dat, with the zero at the end
+constexpr size_t k_DayCountryBytes = 3;
+constexpr size_t k_DayPlaceBytes = 150;
+
+/// One day of weather that the game got, as the file weather.dat keeps it
+struct KeptDay
+{
+	std::string_view country;
+	std::string_view area;
+	std::string_view city;
+	int32_t day {0};
+	int32_t month {0};
+	int32_t year {0};
+	int32_t temperature {0};
+	int32_t visibility {0};
+	int32_t type {k_NoType};
+	/// The three numbers of a day that the game keeps but does not use
+	int32_t unusedFirst {0};
+	int32_t unusedSecond {0};
+	int32_t unusedThird {0};
+};
+
+/// The bytes of weather.dat, which the game writes in the player's folder each time it gets the weather: "LHWD", the
+/// number of days, then each day. A day keeps the country, the area and the city as text with a zero at the end, then
+/// the numbers in the width that the game keeps them in. This function cuts a text that is too long for its space.
+[[nodiscard]] std::vector<uint8_t> DaysFile(std::span<const KeptDay> days);
+
 } // namespace openblack::ecs::real_weather

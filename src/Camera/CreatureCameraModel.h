@@ -22,7 +22,8 @@ class CreatureCameraModel final: public CameraModel
 {
 public:
 	/// Starts on a creature, by its middle and height, from where the camera is
-	CreatureCameraModel(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height);
+	CreatureCameraModel(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height,
+	                    creature_follow::StartDistance start = creature_follow::StartDistance::KeepWhenClose);
 
 	/// Where the creature now is, and how tall it is
 	void SetTarget(glm::vec3 position, float height);

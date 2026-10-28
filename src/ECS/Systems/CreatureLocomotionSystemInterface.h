@@ -55,6 +55,9 @@ public:
 
 	/// Once a game turn: routes are planned and the creatures move
 	virtual void ProcessTurn() = 0;
+	/// At the start of the turn of the living: the creatures whose route searches run share the search steps of the
+	/// turn
+	virtual void ShareSearchSteps() {}
 	/// In the creature's own turn, after its mind: it plans its route and walks, runs and turns
 	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Once a frame: the frame draws each walking creature and the legs between the last two turns, by how far through
@@ -95,6 +98,8 @@ public:
 	virtual void StopAtOnce(entt::entity creature) = 0;
 	/// Sets the speed that it keeps back to its walk speed, as when it stops what it does
 	virtual void ResetPace(entt::entity creature) = 0;
+	/// Sets the part of its top speed that it keeps for its next walks, from 0 to 1, as its god does before a journey
+	virtual void SetKeptFraction(entt::entity /*creature*/, float /*fraction*/) {}
 	/// Puts it at a point at once, as something other than its walking moves it, such as a step towards a catch
 	virtual void Place(entt::entity creature, glm::vec3 position) = 0;
 	/// Puts it at a point at once, as a script does. Its walk, turn, body action, face and head look stop, and it stands

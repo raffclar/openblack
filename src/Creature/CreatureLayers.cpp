@@ -17,6 +17,8 @@
 #include <glm/geometric.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/MapCoords.h"
+
 using namespace openblack;
 using namespace openblack::creature_layers;
 
@@ -116,6 +118,16 @@ float creature_layers::PlaybackRate(float size)
 float creature_layers::BodyRate(float size, bool realTime)
 {
 	return realTime ? 1.0f : PlaybackRate(size);
+}
+
+int32_t creature_layers::TurnStepMs(int32_t turnMs, float size, bool realTime)
+{
+	if (realTime)
+	{
+		return turnMs;
+	}
+	// The rate is found first, then it multiplies the milliseconds
+	return map_coords::FtoL(PlaybackRate(size) * static_cast<float>(turnMs));
 }
 
 bool creature_layers::IsPlaying(const BodyAction& body)

@@ -9,6 +9,7 @@
 
 #include <array>
 #include <map>
+#include <span>
 #include <tuple>
 #include <vector>
 
@@ -123,6 +124,35 @@ TEST(GameEnd, NothingEndsAStoryGame)
 	EXPECT_FALSE(world.gods[k_Two].standing.out);
 }
 
+TEST(GameEnd, AToolRunOnTheTestbedNeedsNoTemple)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	Facts facts = k_Network;
+	facts.templesNeeded = false;
+	EXPECT_TRUE(ProcessTurn(world, facts, state).empty());
+	EXPECT_FALSE(state.decided);
+	EXPECT_FALSE(world.gods[k_One].standing.out);
+	EXPECT_FALSE(world.gods[k_Two].standing.out);
+	EXPECT_TRUE(world.gods[k_One].creature);
+}
+
+TEST(GameEnd, AGodThatLeftIsOutEvenWhenNoTempleIsNeeded)
+{
+	auto world = TwoHumans();
+	world.gods[k_Two].standing.out = true;
+	world.gods[k_Two].standing.reason = OutReason::Left;
+	State state;
+	Facts facts = k_Network;
+	facts.templesNeeded = false;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
+	EXPECT_EQ(events[0].god, k_Two);
+}
+
 TEST(GameEnd, TheLastGodWithATempleDecidesTheGame)
 {
 	auto world = TwoHumans();
@@ -182,6 +212,37 @@ TEST(GameEnd, PlayersFiveToSevenNeverLoseByTheTempleRule)
 	EXPECT_TRUE(ProcessTurn(world, k_Network, state).empty());
 	EXPECT_FALSE(world.gods[k_Five].standing.out);
 	EXPECT_TRUE(world.gods[k_Five].creature);
+}
+
+TEST(GameEnd, TheTempleRuleRunsAtTheFirstTurnWithNoWaitForATemple)
+{
+	// A god that never had a temple is out at the first turn of a network game
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	const auto events = ProcessTurn(world, {.networkGame = true, .skirmish = false, .turn = 1}, state);
+	ASSERT_EQ(events.size(), 2u);
+	EXPECT_TRUE(state.decided);
+}
+
+TEST(GameEnd, ATestRunWithNoTempleRuleKeepsGodsWithNoTempleIn)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	const Facts noTempleRule {.networkGame = true, .skirmish = false, .turn = 1, .templesNeeded = false};
+	EXPECT_TRUE(ProcessTurn(world, noTempleRule, state).empty());
+	EXPECT_FALSE(state.decided);
+	EXPECT_FALSE(world.gods[k_One].standing.out);
+	EXPECT_TRUE(world.gods[k_Two].creature);
+	// A god that left is still counted out
+	world.gods[k_Two].standing.out = true;
+	world.gods[k_Two].standing.reason = OutReason::Left;
+	const auto events = ProcessTurn(world, noTempleRule, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
 }
 
 TEST(GameEnd, AGodThatLeftIsCountedWithItsReason)
@@ -319,4 +380,38 @@ TEST(GameEnd, AFullScoreHistoryDropsItsOldestValue)
 	EXPECT_EQ(standing.scoreHistory[0], 1.0f);
 	EXPECT_EQ(standing.scoreHistory[499], 500.0f);
 	EXPECT_EQ(ShownScores(standing).size(), 499u);
+}
+
+// A skirmish has no conditions, so each tenth turn each god keeps its share of the influence, the computer gods too
+TEST(GameEnd, ASkirmishKeepsTheShareOfTheInfluenceEachTenTurns)
+{
+	FakeWorld world;
+	world.gods[k_One] = {.human = true, .power = 100.0f};
+	world.gods[k_Two] = {.computer = true, .mind = true, .power = 300.0f};
+	State state;
+	std::ignore = ProcessTurn(world, {.networkGame = false, .skirmish = true, .turn = 20}, state);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistoryIndex, 1);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistory[1], 0.25f);
+	EXPECT_EQ(world.gods[k_Two].standing.scoreHistory[1], 0.75f);
+	std::ignore = ProcessTurn(world, {.networkGame = false, .skirmish = true, .turn = 25}, state);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistoryIndex, 1);
+}
+
+// The lobby hears one time for each event that decides the game: a win by the conditions, or the last god out
+TEST(GameEnd, OnlyTheEventsThatDecideTheGameCount)
+{
+	const std::array events {
+	    Event {.kind = Event::Kind::GodOut, .god = k_Three},
+	    Event {.kind = Event::Kind::GodOutAndDecided, .god = k_Two},
+	    Event {.kind = Event::Kind::Won, .god = k_One},
+	};
+	EXPECT_EQ(DecidingEvents(events), 2u);
+	EXPECT_EQ(DecidingEvents(std::span(events).first(1)), 0u);
+	EXPECT_EQ(DecidingEvents({}), 0u);
+	// A skirmish that the last god out decides counts one time
+	auto world = TwoHumans();
+	world.gods[k_Two].temple = false;
+	State state;
+	EXPECT_EQ(DecidingEvents(ProcessTurn(world, k_Skirmish, state)), 1u);
+	EXPECT_EQ(DecidingEvents(ProcessTurn(world, k_Skirmish, state)), 0u);
 }

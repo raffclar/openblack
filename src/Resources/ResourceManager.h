@@ -12,6 +12,7 @@
 #include <cstddef>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <exception>
@@ -47,7 +48,17 @@ template <typename T>
 	}
 	else
 	{
-		return entt::hashed_string(fmt::format("{}", static_cast<uint32_t>(identifier)).c_str());
+		// The hash of the number written in decimal digits. The draws ask for it every frame for many things, so the
+		// digits are written here without a string.
+		auto value = static_cast<uint32_t>(identifier);
+		std::array<char, 10> digits {};
+		size_t first = digits.size();
+		do
+		{
+			digits.at(--first) = static_cast<char>('0' + (value % 10U));
+			value /= 10U;
+		} while (value != 0U);
+		return entt::hashed_string::value(digits.data() + first, digits.size() - first);
 	}
 }
 

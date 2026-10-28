@@ -11,6 +11,7 @@
 
 #include <array>
 #include <optional>
+#include <tuple>
 
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/vec3.hpp>
@@ -28,6 +29,7 @@
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/LivingBirth.h"
 #include "ECS/Registry.h"
 #include "ECS/SpecialVillagers.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -55,10 +57,12 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 
 	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	auto& random = Locator::gameRandom::value();
-	// Two in ten villagers made are tried as named villagers first: a name of their sex not yet given on this land
+	// Two in ten villagers made are tried as named villagers first: a name of their sex not yet given on this land.
+	// A network game makes no named villagers.
 	std::optional<uint8_t> name;
 	const auto& names = Locator::infoConstants::value().specialVillager;
-	if (special_villager::TriesNamed(random.GameRand(special_villager::k_Draw)))
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	if (special_villager::TriesNamed(random.GameRand(special_villager::k_Draw), networkGame))
 	{
 		std::array<special_villager::Row, special_villager::k_NameCount> rows {};
 		for (size_t i = 0; i < rows.size(); ++i)
@@ -68,6 +72,8 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 		const auto start = random.GameRand(static_cast<uint32_t>(rows.size()));
 		name = special_villager::PickName(rows, registry.Context().namedVillagersUsed, info.sex, start);
 	}
+	// The first number of each living thing that the game makes, before the numbers of the villager
+	std::ignore = random.GameRand(living_birth::AgeDrawRange(info.startAge));
 	const villager_age::NewbornKind kind {.grownUp = info.grownUpAge,
 	                                      .hungryForFood = info.hungryForFood,
 	                                      .processChecksEvery = info.processChecksEvery,

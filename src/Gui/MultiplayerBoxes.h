@@ -9,17 +9,25 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/vec2.hpp>
 
 #include "Common/Zoomer.h"
 #include "Dialog.h"
+#include "LandThumbnail.h"
 #include "MultiplayerFrontEnd.h"
+
+namespace openblack::graphics
+{
+class Texture2D;
+}
 
 namespace openblack::gui
 {
@@ -54,6 +62,9 @@ public:
 	static constexpr DialogRect k_MessageBox {.min = {150, 200}, .max = {650, 400}};
 	static constexpr DialogRect k_MessageText {.min = {200, 220}, .max = {600, 350}};
 
+	/// The thumbnail of a land by the name of its file in localmaps.txt, such as "mpm_2p_1"; null when there is none
+	using ThumbnailSource = std::function<std::shared_ptr<const land_thumbnail::LandThumbnail>(const std::string& file)>;
+
 	MultiplayerBoxes(const TextDatabase& texts, const GameFont& font);
 	MultiplayerBoxes(const MultiplayerBoxes&) = delete;
 	MultiplayerBoxes& operator=(const MultiplayerBoxes&) = delete;
@@ -82,6 +93,10 @@ public:
 	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
 	/// The places of all the visible controls of the box, for tools
 	[[nodiscard]] std::vector<DialogRect> GetVisibleRects() const;
+	/// The places of the pictures that the game room shows: the land's thumbnail and the clan's logo
+	[[nodiscard]] std::vector<DialogRect> GetPictureRects() const;
+	/// Where the thumbnails of the lands come from. Without a source the Landscape tab shows no thumbnail.
+	void SetThumbnailSource(ThumbnailSource source) { _thumbnailSource = std::move(source); }
 	/// The box shows the text of a message, for tools; empty when there is none
 	[[nodiscard]] std::u16string_view GetMessageText() const;
 
@@ -106,6 +121,8 @@ private:
 	void SyncGameList();
 	void SyncRoom();
 	void ShowMessage(multiplayer::Message message);
+	void SyncPictures(bool landShown, bool clanShown);
+	void DrawPictures(const DialogPainter& painter) const;
 	void SendChat();
 	void Join();
 	[[nodiscard]] Dialog* Active() const { return _dialog.get(); }
@@ -158,11 +175,25 @@ private:
 	List* _playerInfo {nullptr};
 	List* _conditions {nullptr};
 	StaticText* _selectMap {nullptr};
-	StaticText* _conditionValue {nullptr};
+	StaticText* _timeLabel {nullptr};
 	StaticText* _timeLimit {nullptr};
+	Button* _viewChat {nullptr};
 	CheckBox* _ready {nullptr};
 	size_t _chatLines {0};
 	std::optional<size_t> _shownTab;
+
+	// The pictures of the game room
+	ThumbnailSource _thumbnailSource;
+	/// The land whose thumbnail the room has, and its thumbnail
+	std::optional<size_t> _thumbnailLand;
+	std::shared_ptr<const land_thumbnail::LandThumbnail> _thumbnail;
+	bool _thumbnailShown {false};
+	/// The texels of the clan's logo; empty when the clan has no logo
+	land_thumbnail::Texels _logoSheet;
+	bool _logoShown {false};
+	/// The texture of the logo, made again in the next draw when the logo changes
+	mutable std::unique_ptr<graphics::Texture2D> _logoTexture;
+	mutable bool _logoChanged {false};
 };
 
 } // namespace openblack::gui
