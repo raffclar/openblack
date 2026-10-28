@@ -45,12 +45,12 @@ struct AnimatedStaticPose
 	bool inDrawList {false};
 	bool onScreen {false};
 	std::vector<glm::mat4> bones;
-	/// The models of the gate stones drawn on a plinth this frame
+	/// The models of the gate stones drawn on a plinth this frame, things of the drawn registry
 	std::vector<entt::entity> stones;
 };
 
 /// A gate stone drawn on a plinth: one of the models of the stones laid in it, placed each frame, found by the cursor as
-/// the plinth itself while it stands closed
+/// the plinth itself while it stands closed. It is a thing of the drawn registry, and `plinth` is a thing of the land.
 struct PlinthStone
 {
 	entt::entity plinth {entt::null};

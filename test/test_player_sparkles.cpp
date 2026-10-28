@@ -9,6 +9,9 @@
 
 #include <cstdint>
 
+#include <optional>
+
+#include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/PlayerColour.h"
@@ -91,4 +94,38 @@ TEST(PlayerColour, SomeLandsGiveTheSecondAndThirdPlayersOtherColours)
 	// A network land keeps each player's own colour
 	EXPECT_EQ(player_colour::OnLand(PlayerNames::PLAYER_TWO, 0), 0xFF47FF54u);
 	EXPECT_EQ(player_colour::OnLand(PlayerNames::PLAYER_THREE, 0), 0xFFE347FFu);
+}
+
+TEST(PlayerSparkles, AComputerGodShowsASparkleAtTheCameraOfItsMindOnlyWhileItsMindPlays)
+{
+	const glm::vec3 mind {10.0f, 20.0f, 30.0f};
+	const glm::vec3 reported {1.0f, 2.0f, 3.0f};
+	player_sparkles::Watched god {
+	    .kind = player_kind::Kind::Computer, .mindOn = true, .mindCamera = mind, .reportedCamera = reported};
+	EXPECT_EQ(player_sparkles::PlaceOf(god), mind);
+	// A stopped mind shows no sparkle, also with hands and a reported camera
+	god.mindOn = false;
+	EXPECT_FALSE(player_sparkles::PlaceOf(god).has_value());
+}
+
+TEST(PlayerSparkles, AHumanShowsASparkleAtItsReportedCameraWhileInTheGame)
+{
+	const glm::vec3 reported {1.0f, 2.0f, 3.0f};
+	player_sparkles::Watched person {.kind = player_kind::Kind::Human, .reportedCamera = reported};
+	EXPECT_EQ(player_sparkles::PlaceOf(person), reported);
+	// A mind that a script switched on for a human player does not move the sparkle
+	person.mindOn = true;
+	EXPECT_EQ(player_sparkles::PlaceOf(person), reported);
+	person.left = true;
+	EXPECT_FALSE(player_sparkles::PlaceOf(person).has_value());
+	// No sparkle before the first report
+	EXPECT_FALSE(player_sparkles::PlaceOf({.kind = player_kind::Kind::Human}).has_value());
+}
+
+TEST(PlayerSparkles, APlayerThatNobodyPlaysShowsNoSparkle)
+{
+	EXPECT_FALSE(
+	    player_sparkles::PlaceOf(
+	        {.kind = player_kind::Kind::None, .mindOn = true, .mindCamera = glm::vec3(1.0f), .reportedCamera = glm::vec3(2.0f)})
+	        .has_value());
 }

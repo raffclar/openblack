@@ -939,3 +939,188 @@ TEST_F(ParticleEffectTest, AGustyWindPushesAnAtomAcrossTheGroundOnly)
 	ASSERT_EQ(atoms.size(), 1u);
 	EXPECT_EQ(atoms[0].position, glm::vec3(3.0f, 10.0f, 7.0f));
 }
+
+namespace
+{
+/// The game's generator on seeds of its own, which keeps each synced draw in order
+class RecordingRandom final: public GameRandomInterface
+{
+public:
+	uint32_t SyncedRand(uint32_t n, DrawSite /*site*/) override
+	{
+		const uint32_t drawn = n == 0 ? 0 : game_random::LHRand(n, _seeds.synced);
+		draws.push_back(drawn);
+		return drawn;
+	}
+	float SyncedFloatRand(float x, DrawSite /*site*/) override { return game_random::FloatRand(x, _seeds.synced); }
+	uint32_t LocalRand(int32_t n) override { return n == 0 ? 0 : game_random::LHRand(static_cast<uint32_t>(n), _seeds.local); }
+	float LocalFloatRand(float x) override { return game_random::FloatRand(x, _seeds.local); }
+	int32_t CrtRand() override { return game_random::CrtRand(_crt); }
+	void CrtSrand(uint32_t seed) override { _crt = seed; }
+	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return _seeds; }
+	void SetSeeds(GameRandomSeeds seeds) override { _seeds = seeds; }
+	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return _stream; }
+	void SetParticleStream(ParticleRandomStream stream) override { _stream = stream; }
+
+	std::vector<uint32_t> draws;
+
+private:
+	GameRandomSeeds _seeds;
+	ParticleRandomStream _stream {ParticleRandomStream::None};
+	uint32_t _crt {1};
+};
+
+/// A particle's float of a draw u up to x, as the effects compute it: (u * k) * x
+float ParticleFloatOf(uint32_t u, float x)
+{
+	float r = static_cast<float>(u);
+	r = r * game_random::k_FloatRandScale;
+	return r * x;
+}
+} // namespace
+
+TEST(WillowWisp, ItDrawsThePointInTheBallBeforeTheSpeed)
+{
+	// One wisp a step, still, with its random velocity added to its place
+	const std::string text =
+	    Header() + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
+	    Object("UR_WillowWisp", "Wisp0",
+	           "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Sprite0\nPROPERTY MaxAtoms INTEGER 20\n"
+	           "PROPERTY DieAge FLOAT 1\nPROPERTY Speed FLOAT 0\nPROPERTY RandomSpeed FLOAT 3\n"
+	           "PROPERTY AddCastVelToInitPos BOOL 1\n");
+	auto file = psys::ParticleFile::Parse(text);
+	ASSERT_TRUE(file.has_value());
+	const ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld world;
+	RecordingRandom random;
+	maths::ValueNoise noise;
+	const glm::vec3 origin {10.0f, 2.0f, 20.0f};
+	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)), EffectServices {classes, world, random, noise},
+	              origin, 1.0f, true);
+	effect.Step(k_Step);
+	std::vector<Effect::DrawAtom> atoms;
+	effect.Collect(1.0f, atoms);
+	ASSERT_EQ(atoms.size(), 1u);
+	// The step ends with the wisp's draws: the three of the point that the ball takes, then the speed
+	ASSERT_GE(random.draws.size(), 4u);
+	const auto last = random.draws.end();
+	glm::vec3 ball {ParticleFloatOf(*(last - 4), 2.0f) - 1.0f, ParticleFloatOf(*(last - 3), 2.0f) - 1.0f,
+	                ParticleFloatOf(*(last - 2), 2.0f) - 1.0f};
+	const float speed = ParticleFloatOf(*(last - 1), 3.0f);
+	ASSERT_LE((ball.z * ball.z + ball.y * ball.y) + ball.x * ball.x, 1.0f);
+	ball *= speed;
+	const glm::vec3 expected = origin + ball * k_Step;
+	EXPECT_EQ(atoms[0].position, expected);
+}
+
+namespace
+{
+/// A miracle that this computer casts, or another computer casts
+class CastingSpell final: public SpellSink
+{
+public:
+	explicit CastingSpell(bool mine)
+	    : _mine(mine)
+	{
+	}
+	bool SpellEvent(const SpellEventInfo& /*event*/) override { return true; }
+	[[nodiscard]] int PowerUpLevel() const override { return 0; }
+	[[nodiscard]] bool IsMyInterfaceCasting() const override { return _mine; }
+	[[nodiscard]] bool IsHumanPlayerCasting() const override { return true; }
+
+private:
+	bool _mine;
+};
+
+/// A rain cloud that pours from the hand, and its rain cone that keeps with it, as the water miracle has them
+std::string RainCloudFile()
+{
+	return Header() + Object("ParticleSpriteCreator", "Cloud0", k_Sprite) + Object("ParticleSpriteCreator", "Cone0", k_Sprite) +
+	       Object("UR_HandSprinkle", "Sprinkle0",
+	              "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Cloud0\nPROPERTY NextGroups ARRAY SIZE 1 1\n") +
+	       Object("CreateRuleAnAtom", "Cone0Create", "PROPERTY Group INTEGER 1\nPROPERTY PCreator PERSIS_PNTR Cone0\n") +
+	       Object("UR_FollowParent", "Cone0Follow", "PROPERTY Group INTEGER 1\nPROPERTY UseParentsDrawOffset BOOL 1\n");
+}
+
+/// The cloud steps at a hand high above the land, then a step with the hand moved east
+void PourAndMove(Effect& effect)
+{
+	effect.SetProcessInfo({.handPosition = {0.0f, 100.0f, 0.0f}});
+	for (int i = 0; i < 3; ++i)
+	{
+		effect.Step(k_Step);
+	}
+	effect.SetProcessInfo({.handPosition = {8.0f, 100.0f, 0.0f}});
+	effect.Step(k_Step);
+}
+} // namespace
+
+TEST_F(ParticleEffectTest, TheCloudOfThisComputersCastIsDrawnAtTheLiveHandAboveTheLimit)
+{
+	CastingSpell spell(true);
+	auto effect = Make(RainCloudFile());
+	effect->SetSink(&spell);
+	PourAndMove(*effect);
+	Effect::DrawWalk walk;
+	effect->Walk(0.25f, walk);
+	// The cloud and the cone both show, drawn where the last step put them, not between the last two steps
+	ASSERT_EQ(walk.atoms.size(), 2u);
+	const glm::vec3 live(12.0f, 140.0f, 3.0f);
+	for (const auto& atom : walk.atoms)
+	{
+		EXPECT_FLOAT_EQ(atom.position.x, 8.0f);
+		EXPECT_FLOAT_EQ(atom.position.y, k_MaximumSprinkleHeight);
+		// The cone shares the cloud's offset, whose reference is the stepped point under the limit of height
+		ASSERT_TRUE(atom.handOffset.has_value());
+		EXPECT_EQ(atom.handOffset->reference, glm::vec3(8.0f, k_MaximumSprinkleHeight, 0.0f));
+		EXPECT_FLOAT_EQ(atom.handOffset->weight, 1.0f);
+		// So the caster sees both at the live hand, also above the limit
+		EXPECT_EQ(atom.position + LiveHandShift(*atom.handOffset, live), live);
+	}
+}
+
+TEST_F(ParticleEffectTest, TheCloudOfAnotherComputersCastIsBlendedAtTheSteppedHand)
+{
+	CastingSpell spell(false);
+	auto effect = Make(RainCloudFile());
+	effect->SetSink(&spell);
+	PourAndMove(*effect);
+	Effect::DrawWalk walk;
+	effect->Walk(0.25f, walk);
+	ASSERT_EQ(walk.atoms.size(), 2u);
+	for (const auto& atom : walk.atoms)
+	{
+		EXPECT_FLOAT_EQ(atom.position.x, 2.0f);
+		EXPECT_FALSE(atom.handOffset.has_value());
+	}
+}
+
+TEST(ParticleDrawOffsets, AnAtomHasOneDrawOffset)
+{
+	// A falling grain keeps only its own fading offset
+	Atom grain;
+	grain.drawOffset = glm::vec3(1.0f, 2.0f, 3.0f);
+	FollowLiveHand(grain, glm::vec3(0.0f), 1.0f);
+	EXPECT_FALSE(grain.handOffset.has_value());
+	// The weight stays in 0..1
+	Atom source;
+	FollowLiveHand(source, glm::vec3(4.0f, 5.0f, 6.0f), 2.0f);
+	ASSERT_TRUE(source.handOffset.has_value());
+	EXPECT_FLOAT_EQ(source.handOffset->weight, 1.0f);
+	EXPECT_EQ(LiveHandShift(*source.handOffset, glm::vec3(5.0f, 5.0f, 6.0f)), glm::vec3(1.0f, 0.0f, 0.0f));
+	// A child shares its parent's offset only when it has none and its parent has one, and only once
+	Atom parent;
+	Collection children;
+	children.parent = &parent;
+	Atom child;
+	child.collection = &children;
+	EXPECT_FALSE(ShareParentDrawOffset(child));
+	parent.handOffset = HandOffset {.reference = glm::vec3(1.0f), .weight = 1.0f};
+	EXPECT_TRUE(ShareParentDrawOffset(child));
+	EXPECT_FALSE(ShareParentDrawOffset(child));
+	EXPECT_EQ(&DrawOffsetHolder(child), &parent);
+	EXPECT_TRUE(HasDrawOffset(child));
+	// A shared offset is not replaced by a live hand offset of its own
+	FollowLiveHand(child, glm::vec3(0.0f), 1.0f);
+	EXPECT_FALSE(child.handOffset.has_value());
+}

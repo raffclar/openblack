@@ -23,6 +23,12 @@ using namespace openblack::testbed_scenarios;
 namespace
 {
 
+/// The lines of a land script that switch the computer mind of player two on and then off: the player stays a computer
+/// player with no mind that plays
+constexpr std::string_view k_StoppedComputerGod = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 0)
+)";
+
 struct BoxScenario
 {
 	std::string_view id;
@@ -71,23 +77,27 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The player joins Bob's game and opens the Landscape tab. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an "
 	     "observer, on Bombardment.",
 	     "The lands of the local maps show, with \"(HOST)\" after Bombardment, which the server plays. Land Info shows "
-	     "\"Bombardment action for 2 players...\". The gods' list does not show on this tab."},
+	     "\"Bombardment action for 2 players...\". The thumbnail of Bombardment shows between the two lists, with the "
+	     "marks of its citadels and towns. The gods' list does not show on this tab."},
 	    {"multiplayer.room_clans", "The multiplayer front end: the game room's clans", Stage::RoomClans,
 	     "The player joins Bob's game, opens the Clans tab and picks The Clan. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
 	     "\"Alice's clans:\" lists The Clan and Other Clan. \"Clan The Clan info:\" shows \"Clan Description: Our "
 	     "motto\", \"Clan Leader: Alice\", \"Clan URL: www.example.com\" and \"Credits 12.50\". \"Use This Clan\" "
-	     "shows; a click on it changes it to \"Don't use any Clan.\"."},
+	     "shows; a click on it changes it to \"Don't use any Clan.\". The clan's logo shows faintly behind the clan's "
+	     "information, in its middle."},
 	    {"multiplayer.room_player_details", "The multiplayer front end: the game room's player details",
 	     Stage::RoomPlayerDetails,
 	     "The player joins Bob's game, opens the Player Details tab and picks Bob. Bob's game has Bob and Alice as gods 1 and "
 	     "2, and Eve as an observer, on Bombardment.",
-	     "\"Player Bob information:\" shows, with \"God 1\" under it."},
+	     "\"Player Bob information:\" shows, with no lines under it: the lobby does not give the lines of the player "
+	     "database yet."},
 	    {"multiplayer.conditions", "The multiplayer front end: the winning conditions", Stage::Conditions,
 	     "The player joins Bob's game and clicks Next. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an observer, "
 	     "on Bombardment.",
-	     "The page lists the 15 winning conditions of Bombardment. \"Condition Value:\" and \"Time Limit "
-	     "(Hours:Minutes):\" show, and \"View Chat\" at the right. The Ready box is at the bottom left."},
+	     "The list of the winning conditions is empty, because the game has no conditions. \"Time Limit "
+	     "(Hours:Minutes):\" shows with 0:30, and \"View Chat\" is at the right. \"Condition Value:\" does not show. The "
+	     "Ready box is at the bottom left."},
 	    {"multiplayer.waiting_for_start", "The multiplayer front end: joined and waiting for the start", Stage::WaitingForStart,
 	     "The player joins Bob's game, goes to the conditions and ticks Ready. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
@@ -181,7 +191,7 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	    .expected = "The barrel moves from where it stood to the west and stays in the air 5 m above the land, with no hand "
 	                "about it. High above the barrel, sparkles in the second player's colour come out one after another "
 	                "and fall down slowly. They do not stop while the scenario runs.",
-	    .environment = {.clockRuns = false, .dispenserGrid = false},
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .networkGame = true},
 	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
 	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {20.0f, 0.0f}}},
 	    .commands = {{.kind = Kind::OtherGodHand,
@@ -190,6 +200,68 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .point = {-20.0f, 0.0f},
 	                  .object = 0,
 	                  .radius = 5.0f}},
+	});
+	// Another god's hand holds a miracle seed whose model shows in the hand, and that god's camera stands above it
+	all.push_back({
+	    .id = "multiplayer.other_god_seed",
+	    .name = "Another god's held miracle",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game in which the second player is another god. After a second, the "
+	                   "second player's hand holds a miracle seed, and the second player reports the hand 5 m above the "
+	                   "land to the west and the camera 30 m above that hand. This computer does not draw the hand of the "
+	                   "other god, or the effect of the seed in that hand.",
+	    .expected = "After a short time, the model of the miracle shows 5 m above the land to the west, with no hand about it "
+	                "and no effect round it. High above it, sparkles in the second player's colour come out one after "
+	                "another and fall down slowly.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-20.0f, 0.0f},
+	                  .heldSeed = SpellSeedType::Food,
+	                  .radius = 5.0f}},
+	});
+	// A computer god whose mind stopped keeps its hands and its last camera, but it shows no sparkles
+	all.push_back({
+	    .id = "multiplayer.stopped_god_sparkles",
+	    .name = "No sparkles of a computer god whose mind stopped",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game. The land script switches on the computer mind of the second "
+	                   "player and then switches it off again. After a second, the second player's hand takes the barrel "
+	                   "to the west, and the second player reports the hand 5 m above the land and the camera 30 m above "
+	                   "that hand, as in the scenario of another god's sparkles.",
+	    .expected = "The barrel moves from where it stood to the west and stays in the air 5 m above the land, with no hand "
+	                "about it. No sparkles come out above the barrel while the scenario runs: a computer god shows its "
+	                "sparkles only while its mind plays.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {20.0f, 0.0f}}},
+	    .landScript = k_StoppedComputerGod,
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-20.0f, 0.0f},
+	                  .object = 0,
+	                  .radius = 5.0f}},
+	});
+	// The second god brings its player's creature at the start of a network game
+	all.push_back({
+	    .id = "multiplayer.brought_creature",
+	    .name = "A god brings its player's creature into a network game",
+	    .facet = Facet::Multiplayer,
+	    .description = "A temple of player two stands to the north. After a second, the god of player two brings a creature "
+	                   "as at the start of a network game. The mind file LethysCreature of the game takes the place of the "
+	                   "creature file that the player of that god sends before the start.",
+	    .expected = "A grown ape named Matey comes at the creature home of the temple of player two, at once and with no "
+	                "sparkle. It belongs to player two, it knows every leash, and its mind and body come from the file.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 18.0f, 60.0f}, .look = {-14.0f, 6.0f, 88.0f}},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Kind::BringCreature,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .mindFile = "LethysCreature"}},
 	});
 	// The player's own ping in the top left corner, as --show-ping shows it in a network game (deviation 143)
 	all.push_back({

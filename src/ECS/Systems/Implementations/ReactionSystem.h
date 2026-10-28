@@ -105,8 +105,6 @@ private:
 	uint32_t _joins {0};
 	/// The things' and the miracles' balances of impressiveness
 	std::array<float, 3> _landBalances {1.0f, 1.0f, 1.0f};
-	/// When the villagers' voices of belief were last heard
-	villager_reactions::BeliefVoice _voice;
 };
 
 } // namespace openblack::ecs::systems

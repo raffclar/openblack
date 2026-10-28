@@ -26,12 +26,15 @@ class StaticText;
 
 /// The message that a setup box shows in front of it, with one OK button.
 ///
-/// The message is a white opaque box of 500 by 200 in the middle of the dialog space. Its text is in the top part of the
-/// box, broken to fit. The text starts at the big size and gets smaller while it is 125 or more high, but not smaller
-/// than the small size. The OK button is below the text, at the middle size.
+/// The message is an opaque box of 500 by 200 in the middle of the dialog space. The box is tinted white, so its fill
+/// is the grey of the opaque cell of the front end atlas. Its text is in the top part of the box, broken to fit. The
+/// text starts at the big size and gets smaller while it is 125 or more high, but not smaller than the small size. The
+/// OK button is below the text, at the middle size.
 ///
 /// While the message shows, the box behind it holds: it gets no input, and over half a second it dims to a quarter.
 /// OK, Return or Escape closes the message. Then the box behind is back at once.
+///
+/// The two opacities are whole steps of 1/255, cut down, as the game draws them.
 class SetupMessage
 {
 public:
@@ -58,6 +61,13 @@ public:
 
 	/// The opacity of the box behind the message, from the opacity that the box has of its own
 	[[nodiscard]] float BehindAlpha(float boxAlpha) const;
+	/// The opacity of the message
+	[[nodiscard]] float MessageAlpha() const;
+
+	/// The opacity of a box behind a message in 255ths: (box - message x 0.75) x 255, with no fraction, from 0 to 255
+	[[nodiscard]] static int BehindSteps(float boxAlpha, float messageAlpha) noexcept;
+	/// The opacity of a message in 255ths: its fade x 255, with no fraction, from 0 to 255
+	[[nodiscard]] static int MessageSteps(float messageAlpha) noexcept;
 
 	// Input at points of the dialog space, while the message shows
 	void MouseMove(glm::ivec2 point);

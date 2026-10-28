@@ -206,7 +206,7 @@ public:
 	// The conditions page
 	/// The winning conditions of the server's land, from the template; none before a land is known
 	[[nodiscard]] const std::optional<multiplayer::ConditionTemplate>& GetConditions() const noexcept { return _conditions; }
-	[[nodiscard]] std::optional<uint32_t> GetTimeLimit() const noexcept { return _timeLimit; }
+	[[nodiscard]] uint32_t GetTimeLimit() const noexcept { return _timeLimit; }
 	[[nodiscard]] bool IsReady() const noexcept { return _ready; }
 	/// The Ready box: the player is ready for the start, which the server makes
 	void SetReady(bool ready);
@@ -276,7 +276,8 @@ private:
 	std::optional<size_t> _shownSeat;
 
 	std::optional<multiplayer::ConditionTemplate> _conditions;
-	std::optional<uint32_t> _timeLimit;
+	/// The game server sends no time limit, so the game's default stays
+	uint32_t _timeLimit {multiplayer::k_DefaultTimeLimitMinutes};
 	bool _ready {false};
 };
 

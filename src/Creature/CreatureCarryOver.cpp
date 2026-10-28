@@ -72,3 +72,8 @@ bool creature_carry_over::SavesAsItLives(uint32_t turnsBefore, uint32_t turnsNow
 {
 	return turnsNow > turnsBefore && turnsNow / k_SaveEveryTurns > turnsBefore / k_SaveEveryTurns;
 }
+
+bool creature_carry_over::WritesToPlayersFiles(const WriteFacts& facts)
+{
+	return facts.networkGame ? facts.broughtHere : facts.localPlayers;
+}

@@ -16,6 +16,7 @@
 #include "3D/HandMorph.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "Hand/HandGrabRules.h"
+#include "Hand/ThrowLead.h"
 
 namespace openblack::ecs::reflection
 {
@@ -33,6 +34,11 @@ void openblack::ecs::reflection::RegisterFields_Values_h(entt::meta_ctx& context
 	    .Field<&openblack::hand_grab::Tug::base>("base")
 	    .Field<&openblack::hand_grab::Tug::spin>("spin")
 	    .Field<&openblack::hand_grab::Tug::pullVelocity>("pullVelocity");
+	Reflect<openblack::hand_grab::throw_lead::Flight>(context, ValueOnly {})
+	    .Field<&openblack::hand_grab::throw_lead::Flight::places>("places")
+	    .Field<&openblack::hand_grab::throw_lead::Flight::scale>("scale")
+	    .Field<&openblack::hand_grab::throw_lead::Flight::centreOfMass>("centreOfMass")
+	    .Field<&openblack::hand_grab::throw_lead::Flight::sentTurn>("sentTurn");
 	Reflect<openblack::hand_morph::State>(context, ValueOnly {})
 	    .Field<&openblack::hand_morph::State::target>("target")
 	    .Field<&openblack::hand_morph::State::drawn>("drawn")

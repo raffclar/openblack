@@ -11,6 +11,7 @@
 
 #include "GameEndSystem.h"
 
+#include <algorithm>
 #include <array>
 
 #include <spdlog/spdlog.h>
@@ -26,7 +27,9 @@
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
@@ -106,6 +109,11 @@ public:
 		return x87::Div(influence.InfluencePower(player), total);
 	}
 
+	[[nodiscard]] float InfluencePower(PlayerNames player) const override
+	{
+		return Locator::influenceSystem::value().InfluencePower(player);
+	}
+
 	void RemoveCreature(PlayerNames player) override
 	{
 		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(player); creature.has_value())
@@ -162,6 +170,8 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 	    .turn = turn,
 	    .timeLimitTurn = std::nullopt,
 	    .conditionCount = 0,
+	    .templesNeeded = !(networkGame && Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed()) &&
+	                     !(Locator::simulation::has_value() && Locator::simulation::value().GetSettings().godsNeedNoTemple),
 	};
 	if ((!facts.networkGame && !facts.skirmish) || context.gameEnd.decided)
 	{
@@ -179,6 +189,7 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 		    }
 	    });
 	_events = game_end::ProcessTurn(world, facts, context.gameEnd);
+	_eventsToShow.insert(_eventsToShow.end(), _events.begin(), _events.end());
 	if (const auto logger = spdlog::get("game"))
 	{
 		for (const auto& event : _events)
@@ -194,6 +205,44 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 bool GameEndSystem::IsDecided() const
 {
 	return Locator::entitiesRegistry::value().Context().gameEnd.decided;
+}
+
+std::optional<PlayerNames> GameEndSystem::LastGodIn() const
+{
+	// The view reads the standings and adds none: a god with no standing yet is still in
+	const GameEndWorld world;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto gods = world.ActiveGods();
+	std::vector<PlayerNames> in;
+	registry.Each<const components::Player>([&gods, &registry, &in](entt::entity entity, const components::Player& player) {
+		const auto* standing = registry.TryGet<const GameStanding>(entity);
+		if (game_end::CanLose(player.name) && std::ranges::find(gods, player.name) != gods.end() &&
+		    (standing == nullptr || !standing->out))
+		{
+			in.push_back(player.name);
+		}
+	});
+	return in.size() == 1 ? std::optional(in.front()) : std::nullopt;
+}
+
+std::vector<GameEndSystemInterface::GodStanding> GameEndSystem::Standings() const
+{
+	// The view reads the standings and adds none
+	const GameEndWorld world;
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<GodStanding> standings;
+	for (const auto god : world.ActiveGods())
+	{
+		standings.push_back({.god = god, .standing = {}});
+	}
+	registry.Each<const components::Player>([&registry, &standings](entt::entity entity, const components::Player& player) {
+		const auto found = std::ranges::find(standings, player.name, &GodStanding::god);
+		if (const auto* standing = registry.TryGet<const GameStanding>(entity); standing != nullptr && found != standings.end())
+		{
+			found->standing = *standing;
+		}
+	});
+	return standings;
 }
 
 } // namespace openblack::ecs::systems

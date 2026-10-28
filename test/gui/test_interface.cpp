@@ -791,7 +791,7 @@ TEST(SymbolPicture, RingComesUpAndGoes)
 	EXPECT_LT(picture.GetRingOpening(), 1.0f);
 	picture.Update(0.3f);
 	EXPECT_FLOAT_EQ(picture.GetRingOpening(), 1.0f);
-	picture.Release();
+	picture.CloseRing();
 	EXPECT_FALSE(picture.IsRingOpen());
 	picture.Update(0.5f);
 	EXPECT_GT(picture.GetRingOpening(), 0.0f);

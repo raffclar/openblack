@@ -28,6 +28,7 @@
 #include "Creature/CreatureTattoo.h"
 #include "CustomMusicControls.h"
 #include "DialogPainter.h"
+#include "EndGameBox.h"
 #include "GameFont.h"
 #include "GameMenu.h"
 #include "Hand/HandTricons.h"
@@ -135,13 +136,16 @@ public:
 	/// The custom music controls' point on the window
 	[[nodiscard]] glm::ivec2 FromMusicControls(glm::ivec2 layout, glm::u16vec2 resolution);
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
-	[[nodiscard]] bool IsDialogOpen() const noexcept { return _menu->IsOpen() || _skipBox->IsActive(); }
+	[[nodiscard]] bool IsDialogOpen() const noexcept
+	{
+		return _menu->IsOpen() || _skipBox->IsActive() || _endGameBox->IsOpen();
+	}
 	/// Whether the active box has a background: the menu and its questions, the start-of-game question, the new
 	/// player's box, the save game room's boxes, or the tattoo editor in its own frame
 	[[nodiscard]] bool IsBoxWithBackgroundActive() const noexcept
 	{
 		return _menu->IsOpen() || _skipBox->IsActive() || _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() ||
-		       _multiplayerBoxes->IsActive() || (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+		       _endGameBox->IsOpen() || _multiplayerBoxes->IsActive() || (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 	}
 	/// The boxes of the multiplayer front end over the temple's future room
 	[[nodiscard]] MultiplayerBoxes& GetMultiplayerBoxes() noexcept { return *_multiplayerBoxes; }
@@ -163,6 +167,15 @@ public:
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
 	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
 	void ShowSaveProblem();
+	/// The end box of a skirmish or a network game opens. It closes the game's menu and a message with an OK.
+	void OpenEndGameBox(EndGameBox::Contents contents);
+	/// The end box of a skirmish or a network game
+	[[nodiscard]] EndGameBox& GetEndGameBox() noexcept { return *_endGameBox; }
+	[[nodiscard]] const EndGameBox& GetEndGameBox() const noexcept { return *_endGameBox; }
+	/// Another god is out of the game: the box tells the player "<name> is out of the game." with an OK
+	void ShowGodOut(std::u16string_view name);
+	/// The end box takes the mouse while it is open; true when it took the event
+	bool ProcessEndGameBoxEvent(const SDL_Event& event);
 	/// A network game resynchronises this computer's world with the server's: the words "Resynchronising..." show at the
 	/// top of the screen while it does
 	void ShowResync(bool shown) noexcept { _resyncShown = shown; }
@@ -377,6 +390,8 @@ private:
 	void DrawVillagerLabels(glm::u16vec2 resolution);
 	/// The tip bubble over the "did you know" sign tapped last, with the pointer over it keeping it up
 	void DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse);
+	/// The pictures of gestures and controls on the temple's scroll that the camera is close to
+	void DrawTempleScrollPictures(glm::u16vec2 resolution);
 	/// A run of the bubble's words' width as the bubble measures it
 	[[nodiscard]] float BubbleTextWidth(std::u16string_view text, float size) const;
 	/// A line of the bubble's words in a colour, fading from its top to its bottom
@@ -445,6 +460,7 @@ private:
 	bool _tattooEditorAsNetworkGame {false};
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
 	std::unique_ptr<SaveGameBoxes> _saveGameBoxes;
+	std::unique_ptr<EndGameBox> _endGameBox;
 	bool _resyncShown {false};
 	/// The out-of-sync box is up and waits for its answer
 	bool _outOfSyncAsked {false};

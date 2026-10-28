@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <span>
@@ -31,6 +32,7 @@ struct CarriedObject;
 
 namespace openblack::ecs::systems
 {
+class ObjectDrawListSystemInterface;
 
 /// The swirling vortices between the lands. Scripts open one where a land is left (it fades in), where the next land
 /// is arrived at and at the volcano's crater (those start open), and later fade them out. While a land vortex opens it
@@ -76,10 +78,18 @@ public:
 	/// At the end of each game turn the vortices whose fade is over open fully or go, and the land vortices level the
 	/// ground further as they open
 	virtual void ProcessTurn() = 0;
-	/// Once a frame, by the frame's game time (none while paused): each open vortex's swirl, kept just under the ground,
-	/// and its effect over the land step with its openness, its glow takes its brightness, and its marks on the ground
-	/// follow its openness
-	virtual void UpdateFrame(float gameSeconds) = 0;
+	/// Once a frame, after a frame of this real and game time (no game time while paused): each open vortex's swirl,
+	/// kept just under the ground, steps with its openness, and its marks on the ground follow its openness. Every vortex
+	/// does this, drawn or not. The swirl steps no more often than 60 times a second, each step by all the game time
+	/// since the last, and only in a frame that draws the land.
+	virtual void UpdateFrame(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+	                         bool landDrawn) = 0;
+	/// Once a frame, after the land's draw list is made: each open vortex that the list draws steps its effect over the
+	/// land with its openness, and its glow takes its brightness. A vortex that the list does not draw shows neither.
+	/// The effect steps no more often than 60 times a second, each step by all the game time since the last, and only in
+	/// a frame that draws the land.
+	virtual void UpdateDrawnFrame(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+	                              std::chrono::milliseconds frameGameTime, bool landDrawn) = 0;
 	/// A vortex's particle starts drawing in a thing the vortex handed it: it leaves the land and its own doings and,
 	/// unless it can't be destroyed, its town or its young, and is written to the crossing file for the next land. None
 	/// when it can't be carried.

@@ -79,7 +79,9 @@ public:
 		{
 			Locator::creatureHandSystem::value().Release();
 		}
-		if (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld() == creature)
+		// The turn asks about the first player's hand, which ForceDrop empties
+		if (Locator::handGrabSystem::has_value() &&
+		    Locator::handGrabSystem::value().GetHeldOf(PlayerNames::PLAYER_ONE) == creature)
 		{
 			Locator::handGrabSystem::value().ForceDrop();
 		}

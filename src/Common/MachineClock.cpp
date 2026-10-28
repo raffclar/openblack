@@ -35,3 +35,20 @@ int64_t machine_clock::UnixTime()
 	using namespace std::chrono;
 	return duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
 }
+
+std::tm machine_clock::LocalTimeOf(int64_t unixTime)
+{
+	const auto time = static_cast<std::time_t>(unixTime);
+	std::tm local {};
+#if defined(_WIN32)
+	localtime_s(&local, &time);
+#else
+	localtime_r(&time, &local);
+#endif
+	return local;
+}
+
+std::tm machine_clock::LocalTime()
+{
+	return LocalTimeOf(UnixTime());
+}
