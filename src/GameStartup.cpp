@@ -364,6 +364,73 @@ bool Game::AskForNewPlayer()
 	return !_quitRequested;
 }
 
+std::optional<std::filesystem::path> Game::AskForSkirmishLand()
+{
+	if (!_interface || !Locator::windowing::has_value() || Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The -SKIRMISH switch: there is no window for the skirmish box");
+		return std::nullopt;
+	}
+	// Tools wait while the player chooses
+	const ecs::systems::InspectorLoading asking("skirmish box");
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -SKIRMISH switch: the skirmish box asks for the land");
+	_skirmishLands = ReadSkirmishLands();
+	std::vector<std::u16string> names;
+	names.reserve(_skirmishLands.size());
+	for (const auto& land : _skirmishLands)
+	{
+		names.push_back(land.titleText.has_value() ? std::u16string(_interface->GetTexts().Get(*land.titleText)) : land.stem);
+	}
+	_interface->ShowSkirmishBox(std::move(names));
+	gui::menu_backdrop::Fade fade;
+	auto last = Milliseconds();
+	std::optional<std::filesystem::path> picked;
+	// A run with a number of frames (-n) stops after that number of frames, also in the box
+	const auto frameLimit = Locator::config::value().numFramesToSimulate;
+	uint32_t boxFrames = 0;
+	while (!gui::menu_backdrop::FadeOver(fade) && !_quitRequested)
+	{
+		if (frameLimit > 0 && ++boxFrames > frameLimit)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -SKIRMISH switch: the run stops in the skirmish box after {} frames",
+			                   frameLimit);
+			RequestQuit();
+			break;
+		}
+		const auto now = Milliseconds();
+		const auto frame = static_cast<int>(now - last);
+		last = now;
+		auto& box = _interface->GetSkirmishBox();
+		const auto resolution = static_cast<glm::u16vec2>(Locator::windowing::value().GetSize());
+		SDL_Event event;
+		while (SDL_PollEvent(&event) != 0)
+		{
+			// On the web the mouse events get the place of the pointer of the game
+			input::PointWindowEvent(event);
+			if (event.type == SDL_QUIT)
+			{
+				RequestQuit();
+			}
+			else
+			{
+				_interface->ProcessSkirmishBoxEvent(event, resolution);
+			}
+		}
+		if (const auto answer = box.TakeAnswer();
+		    answer.choice == gui::SkirmishBox::Choice::Start && answer.land.has_value() && *answer.land < _skirmishLands.size())
+		{
+			picked = Locator::filesystem::value().GetPath<filesystem::Path::Playgrounds>() /
+			         _skirmishLands.at(*answer.land).fileName;
+		}
+		gui::menu_backdrop::StepFade(fade, !box.IsActive(), frame);
+		const auto mouse = input::WindowPointer();
+		PresentStartupFrame([this, mouse, frame, &fade](glm::u16vec2 size) {
+			_interface->DrawNewPlayerScreen(size, mouse, machine_clock::Ticks(), static_cast<float>(frame), fade.alpha);
+		});
+	}
+	return _quitRequested ? std::nullopt : picked;
+}
+
 void Game::PresentStartupFrame(const std::function<void(glm::u16vec2 resolution)>& draw)
 {
 	auto& renderer = Locator::rendererInterface::value();

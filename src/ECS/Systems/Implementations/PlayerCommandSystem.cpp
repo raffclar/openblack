@@ -495,6 +495,21 @@ void PlayerCommandSystem::RunSent(uint32_t turn)
 	}
 	StartGodsAtSentAlignments(joined);
 	BringCreatures(joined);
+	// The creature of a skirmish comes after the commands of the turn, before the computer gods start
+	if (std::exchange(_playersCreatureDue, false) && _source == nullptr)
+	{
+		BringPlayersCreature();
+	}
+}
+
+void PlayerCommandSystem::BringPlayersCreature()
+{
+	if (!openblack::Locator::creatureCarryOverSystem::has_value())
+	{
+		return;
+	}
+	auto& carryOver = openblack::Locator::creatureCarryOverSystem::value();
+	openblack::ecs::creature_from_file::BringKept(_sender, carryOver.KeptOrRead());
 }
 
 void PlayerCommandSystem::StartGodsAtSentAlignments(std::span<const PlayerNames> joined)

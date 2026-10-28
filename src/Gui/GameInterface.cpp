@@ -426,6 +426,8 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _storyHistoryBox(std::make_unique<StoryHistoryBox>(_texts, _font))
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
+    , _skirmishBox(std::make_unique<SkirmishBox>(_texts, _font))
+    , _landInfoBox(std::make_unique<LandInfoBox>(_texts, _font))
     , _saveGameBoxes(std::make_unique<SaveGameBoxes>(_texts, _font))
     , _endGameBox(std::make_unique<EndGameBox>(_texts, _font))
     , _multiplayerBoxes(std::make_unique<MultiplayerBoxes>(_texts, _font))
@@ -473,6 +475,106 @@ void GameInterface::ShowNewPlayerBoxOverGame(bool canCancel, NewPlayerBox::Check
 {
 	_boxOverGameFade = menu_backdrop::Fade {};
 	ShowNewPlayerBox(canCancel, std::move(checkName));
+}
+
+void GameInterface::ShowSkirmishBox(std::vector<std::u16string> lands)
+{
+	_skirmishBox->Show(std::move(lands));
+	// The control under the pointer lights up at once
+	const auto mouse = input::WindowPointer();
+	_skirmishBox->MouseMove(_painter.ToDialog(mouse));
+}
+
+void GameInterface::ShowSkirmishBoxOverGame(std::vector<std::u16string> lands)
+{
+	_boxOverGameFade = menu_backdrop::Fade {};
+	ShowSkirmishBox(std::move(lands));
+}
+
+bool GameInterface::ProcessSkirmishBoxEvent(const SDL_Event& event, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_skirmishBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_skirmishBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button == SDL_BUTTON_LEFT &&
+		    _skirmishBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_MOUSEWHEEL:
+	{
+		const auto mouse = input::WindowPointer();
+		_skirmishBox->Wheel(_painter.ToDialog(mouse), event.wheel.y);
+		return true;
+	}
+	case SDL_KEYDOWN:
+		_skirmishBox->KeyDown(event.key.keysym.sym, (event.key.keysym.mod & KMOD_SHIFT) != 0);
+		return true;
+	case SDL_TEXTINPUT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void GameInterface::ApplyLandMessage(std::u16string text, bool starts)
+{
+	if (starts)
+	{
+		// The box shows with the title and an empty list. The land loads with the menu closed.
+		_landInfoBox->Show(std::move(text));
+		const auto mouse = input::WindowPointer();
+		_landInfoBox->MouseMove(_painter.ToDialog(mouse));
+		return;
+	}
+	_landInfoBox->AddLine(std::move(text));
+}
+
+bool GameInterface::ProcessLandInfoBoxEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_landInfoBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_landInfoBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button == SDL_BUTTON_LEFT &&
+		    _landInfoBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_MOUSEWHEEL:
+	{
+		const auto mouse = input::WindowPointer();
+		_landInfoBox->Wheel(_painter.ToDialog(mouse), event.wheel.y);
+		return true;
+	}
+	case SDL_KEYDOWN:
+		_landInfoBox->KeyDown(event.key.keysym.sym, static_cast<uint16_t>(event.key.keysym.mod));
+		return true;
+	case SDL_TEXTINPUT:
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution)
@@ -645,8 +747,10 @@ void GameInterface::DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mous
 	_pointerCanvas.Begin(resolution);
 	_painter.Begin(resolution);
 	_newPlayerBox->Update(frameMilliseconds / 1000.0f);
+	_skirmishBox->Update(frameMilliseconds / 1000.0f);
 	DrawMenuBackdrop(resolution, frameMilliseconds);
 	_newPlayerBox->Draw(_painter);
+	_skirmishBox->Draw(_painter);
 	_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
 	// The screen fades from and to black over it all, the pointer too
 	if (black > 0)
@@ -1271,6 +1375,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	{
 		return ProcessNewPlayerBoxEvent(event, resolution);
 	}
+	if (_skirmishBox->IsActive())
+	{
+		return ProcessSkirmishBoxEvent(event, resolution);
+	}
 	if (_boxOverGameFade.has_value())
 	{
 		return true;
@@ -1278,6 +1386,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	if (_endGameBox->IsOpen())
 	{
 		return ProcessEndGameBoxEvent(event);
+	}
+	if (_landInfoBox->IsActive())
+	{
+		return ProcessLandInfoBoxEvent(event);
 	}
 	if (_saveGameBoxes->IsActive())
 	{
@@ -1456,6 +1568,8 @@ void GameInterface::Update(float deltaSeconds)
 	_skipBox->Update(deltaSeconds);
 	_storyHistoryBox->Update(deltaSeconds);
 	_newPlayerBox->Update(deltaSeconds);
+	_skirmishBox->Update(deltaSeconds);
+	_landInfoBox->Update(deltaSeconds);
 	_saveGameBoxes->Update(deltaSeconds);
 	_endGameBox->Update(deltaSeconds);
 	// The answer to the out-of-sync box: Yes plays on, No leaves the game
@@ -1528,8 +1642,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
-	                      _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() || _multiplayerBoxes->IsActive() ||
-	                      _endGameBox->IsOpen();
+	                      _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
+	                      _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
 	UpdateChat(menuOpen || _boxOverGameFade.has_value(), resolution);
 	// The custom music controls go while the chat is open
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value() || (_chatControls->IsActive() && _chatControls->IsOpen()));
@@ -1583,11 +1697,13 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	_lastBackdropTicks = _boxOverGameFade.has_value() ? std::optional(milliseconds) : std::nullopt;
 	if (_boxOverGameFade.has_value())
 	{
-		menu_backdrop::StepFade(*_boxOverGameFade, !_newPlayerBox->IsActive(), static_cast<int>(backdropMilliseconds));
+		menu_backdrop::StepFade(*_boxOverGameFade, !_newPlayerBox->IsActive() && !_skirmishBox->IsActive(),
+		                        static_cast<int>(backdropMilliseconds));
 		_canvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f),
 		                 glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), nullptr);
 		DrawMenuBackdrop(resolution, backdropMilliseconds);
 		_newPlayerBox->Draw(_painter);
+		_skirmishBox->Draw(_painter);
 		_painter.DrawPointer(_pointerCanvas, mouse, milliseconds);
 		if (const auto black = _boxOverGameFade->alpha; black > 0)
 		{
@@ -1622,6 +1738,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_saveGameBoxes->Draw(_painter);
 		_multiplayerBoxes->Draw(_painter);
 		_endGameBox->Draw(_painter);
+		_landInfoBox->Draw(_painter);
 		if (_menu->IsVisible())
 		{
 			_menu->Draw(_painter);

@@ -35,6 +35,7 @@
 #include "Hand/HandTricons.h"
 #include "Help/SingAlong.h"
 #include "IncomingMessageStrip.h"
+#include "LandInfoBox.h"
 #include "LogoEffect.h"
 #include "MenuBackdrop.h"
 #include "MultiplayerBoxes.h"
@@ -42,6 +43,7 @@
 #include "SaveGameBoxes.h"
 #include "ScreenFade.h"
 #include "SkipBox.h"
+#include "SkirmishBox.h"
 #include "StoryHistoryBox.h"
 #include "TattooEditorDialog.h"
 #include "TextDatabase.h"
@@ -156,14 +158,15 @@ public:
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept
 	{
-		return _menu->IsOpen() || _skipBox->IsActive() || _endGameBox->IsOpen();
+		return _menu->IsOpen() || _skipBox->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
 	}
 	/// Whether the active box has a background: the menu and its questions, the start-of-game question, the new
 	/// player's box, the save game room's boxes, or the tattoo editor in its own frame
 	[[nodiscard]] bool IsBoxWithBackgroundActive() const noexcept
 	{
 		return _menu->IsOpen() || _skipBox->IsActive() || _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() ||
-		       _endGameBox->IsOpen() || _multiplayerBoxes->IsActive() || (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+		       _endGameBox->IsOpen() || _multiplayerBoxes->IsActive() || _landInfoBox->IsActive() ||
+		       (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 	}
 	/// The boxes of the multiplayer front end over the temple's future room
 	[[nodiscard]] MultiplayerBoxes& GetMultiplayerBoxes() noexcept { return *_multiplayerBoxes; }
@@ -181,10 +184,29 @@ public:
 	void ShowNewPlayerBoxOverGame(bool canCancel, NewPlayerBox::CheckName checkName);
 	bool ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec2 resolution);
 	[[nodiscard]] NewPlayerBox& GetNewPlayerBox() noexcept { return *_newPlayerBox; }
+	/// The box in which the player chooses the land of a skirmish, over the swirls of the front end's backdrop. The box shows
+	/// the names of the lands in the order of the list.
+	void ShowSkirmishBox(std::vector<std::u16string> lands);
+	/// The skirmish box after Start Skirmish Game: the screen goes to the front end's backdrop over the game that ended
+	void ShowSkirmishBoxOverGame(std::vector<std::u16string> lands);
+	/// The skirmish box takes the mouse and the keyboard; true when it took the event
+	bool ProcessSkirmishBoxEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	[[nodiscard]] SkirmishBox& GetSkirmishBox() noexcept { return *_skirmishBox; }
+	[[nodiscard]] const SkirmishBox& GetSkirmishBox() const noexcept { return *_skirmishBox; }
+	/// The front end's backdrop covers the game for a box over it: while the box is up, and while the screen fades to
+	/// black after it
+	[[nodiscard]] bool ShowsBoxOverGame() const noexcept { return _boxOverGameFade.has_value(); }
 	/// The save game room's question and name box, over the temple
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
 	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
 	void ShowSaveProblem();
+	/// The script of the land gives a command for the land information box: a title that shows the box with an empty
+	/// list, or a line at the end of its list
+	void ApplyLandMessage(std::u16string text, bool starts);
+	/// The land information box takes the mouse and the keyboard while it shows; true when it took the event
+	bool ProcessLandInfoBoxEvent(const SDL_Event& event);
+	[[nodiscard]] LandInfoBox& GetLandInfoBox() noexcept { return *_landInfoBox; }
+	[[nodiscard]] const LandInfoBox& GetLandInfoBox() const noexcept { return *_landInfoBox; }
 	/// The end box of a skirmish or a network game opens. It closes the game's menu and a message with an OK.
 	void OpenEndGameBox(EndGameBox::Contents contents);
 	/// The end box of a skirmish or a network game
@@ -206,8 +228,8 @@ public:
 	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
 	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.
 	void SetToolTipName(std::u16string name) { _toolTipName = std::move(name); }
-	/// The new player's screen: the backdrop, swirling on by the frame's milliseconds, the box and the pointer, under
-	/// black of an alpha
+	/// The screen of the front end: the backdrop that swirls by the milliseconds of the frame, the new player's box or the
+	/// skirmish box, and the pointer, under black of an alpha
 	void DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, float frameMilliseconds,
 	                         uint8_t black);
 	/// What the logo effect draws over its sky and its dots in a frame
@@ -490,6 +512,8 @@ private:
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
 	bool _tattooEditorAsNetworkGame {false};
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
+	std::unique_ptr<SkirmishBox> _skirmishBox;
+	std::unique_ptr<LandInfoBox> _landInfoBox;
 	std::unique_ptr<SaveGameBoxes> _saveGameBoxes;
 	std::unique_ptr<EndGameBox> _endGameBox;
 	bool _resyncShown {false};

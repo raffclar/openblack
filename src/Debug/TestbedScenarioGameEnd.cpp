@@ -165,4 +165,21 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .landScript = k_TwoComputerGods,
 	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 3}},
 	});
+	all.push_back({
+	    .id = "game_end.skirmish_ping",
+	    .name = "The message to the lobby when a skirmish is decided",
+	    .facet = Facet::Multiplayer,
+	    .description = "A skirmish of two gods: the player and the computer god of player two, each with a temple. One "
+	                   "second in, the temple of player two starts its destruction. Start the game with the address of a "
+	                   "lobby (--lobby) and a session that the store of the profile keeps.",
+	    .expected = "When the temple of player two goes, the game is decided and the end box shows as in game_end.won. "
+	                "The game sends one message to the lobby, which keeps one row for the account of the player. The log "
+	                "says \"The lobby got the message of the decided skirmish\". With no session, no lobby or no "
+	                "network, the game sends nothing and shows nothing more.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .skirmish = true},
+	    .framing = k_Overview,
+	    .temples = {{.offset = k_OwnTemple}, {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO}},
+	    .landScript = k_TwoComputerGods,
+	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 1.0f, .value = 1}},
+	});
 }

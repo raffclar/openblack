@@ -86,6 +86,8 @@ public:
 		None,
 		Continue,
 		StartSkirmish,
+		/// The player said yes to the question of Leave Skirmish Game, in a skirmish
+		LeaveSkirmish,
 		JoinOnline,
 		/// Exit Online Game, in a network game: the game asks the question to leave, or leaves at once when the god of
 		/// the player is out
@@ -160,6 +162,10 @@ public:
 	/// options asks to leave the game.
 	void SetNetworkGame(bool networkGame);
 	[[nodiscard]] bool IsNetworkGame() const noexcept { return _networkGame; }
+	/// In a skirmish, the second button of the main menu is Leave Skirmish Game. Join Online Game does not show, and the
+	/// buttons are 100 apart.
+	void SetSkirmish(bool skirmish);
+	[[nodiscard]] bool IsSkirmish() const noexcept { return _skirmish; }
 
 	void Update(float deltaSeconds);
 
@@ -260,6 +266,10 @@ public:
 	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
 
 private:
+	/// Places the main menu's buttons that show from the top, each a step lower. In a skirmish or a network game they
+	/// are bigger and further apart.
+	void LayOutMainButtons();
+
 	struct Question
 	{
 		std::u16string text;
@@ -347,6 +357,8 @@ private:
 	/// HELP_TEXT_DIALOG_QUIT_QUESTION, asked by the first page, and HELP_TEXT_DIALOG_AREYOUSUREQUIT by the options
 	std::u16string _quitQuestion;
 	std::u16string _quitGameQuestion;
+	/// HELP_TEXT_DIALOG_ADDITION_167, asked by Leave Skirmish Game in a skirmish
+	std::u16string _leaveSkirmishQuestion;
 	/// HELP_TEXT_DIALOG_VIDEOCHANGE, told as the player leaves the Options page after a change of the detail
 	std::u16string _videoChange;
 	std::array<std::u16string, 7> _detailLabels;
@@ -363,11 +375,13 @@ private:
 	/// The box of the winning conditions, its own page's dialog
 	std::unique_ptr<ConditionsBox> _conditions;
 	ConditionsSource _conditionsSource;
-	/// The buttons of the main menu, and the labels of the third in a game alone and in a network game
+	/// The buttons of the main menu, the label of the third in a network game and the label of the second in a skirmish
 	std::array<Button*, k_ButtonCount> _mainButtons {};
 	std::u16string _exitOnlineLabel;
+	std::u16string _leaveSkirmishLabel;
 	std::u16string _multiplayerTab;
 	bool _networkGame {false};
+	bool _skirmish {false};
 	/// The options' first tab, outside the temple and inside it
 	std::u16string _mainMenuTab;
 	std::u16string _worldRoomTab;

@@ -516,7 +516,7 @@ std::optional<creature_plan_actions::CastInfo> CreatureMindSystem::CastInfoFor(e
 	}
 	const auto& info = Locator::infoConstants::value();
 	const auto type = static_cast<MagicType>(*magic);
-	// The miracle's own gesture, power-ups too: none in the game's tables
+	// The gesture of the miracle: a power-up has the gesture that powers up its seed, a plain miracle has none
 	const auto gesture = magic::GetMagicInfo(info, type).gestureType;
 	creature_plan_actions::CastInfo cast {
 	    .magicType = *magic,

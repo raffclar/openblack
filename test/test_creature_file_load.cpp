@@ -93,6 +93,26 @@ TEST(CreatureFileLoad, AGodWithNoCreatureFilePlaysWithNoCreature)
 	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::NoFile);
 }
 
+TEST(CreatureFileLoad, AGodWithACreatureBringsNoSecondCreature)
+{
+	// A saved skirmish keeps the creature of the god, and the load brings the profile's creature again
+	auto request = GoodBrought();
+	request.hasCreature = true;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::HasCreature);
+	// The game reads the file and the species before it examines the creature of the god
+	request.species.reset();
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::UnknownSpecies);
+	request = GoodBrought();
+	request.hasCreature = true;
+	request.readable = false;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::NoFile);
+	// The test of the creature comes before the test of the place
+	request = GoodBrought();
+	request.hasCreature = true;
+	request.onMap = false;
+	EXPECT_EQ(creature_file_load::WhyNotBrought(request), Refusal::HasCreature);
+}
+
 TEST(CreatureFileLoad, AnUnknownSpeciesComesBeforeAPlaceOffTheMap)
 {
 	auto request = GoodBrought();

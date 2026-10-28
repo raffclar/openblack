@@ -14,6 +14,7 @@
 
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 
 namespace openblack
 {
@@ -53,6 +54,8 @@ std::unique_ptr<const InfoConstants> InfoFile::LoadFromFile(const std::filesyste
 	}
 	// Each species' balance row overrides its creature row
 	ApplyCreatureBalance(*infos);
+	// Each magic record takes its seed, its gesture and its power-up from the seeds
+	magic::FillMagicRecordsFromSeeds(*infos);
 
 	return infos;
 }
