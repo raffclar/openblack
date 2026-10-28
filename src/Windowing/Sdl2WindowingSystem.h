@@ -52,8 +52,9 @@ public:
 	WindowingInterface& SetDisplayMode(DisplayMode mode) final { return SetFullscreen(mode != DisplayMode::Windowed); }
 
 private:
-	/// Moves a window hanging off the desktop or under the taskbar back onto it, making it smaller if it must
-	void KeepInsideDesktop();
+	/// Moves a window hanging off the desktop or under the taskbar back onto it, making it smaller if it must.
+	/// The size to keep is the one that was asked for at the opening
+	void KeepInsideDesktop(glm::ivec2 asked);
 	[[nodiscard]] bool IsOpen() const;
 	[[nodiscard]] float GetBrightness() const;
 	Sdl2WindowingSystem& SetBrightness(float bright);
