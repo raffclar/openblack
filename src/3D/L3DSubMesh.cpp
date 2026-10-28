@@ -413,8 +413,12 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	{
 		for (const auto& vertex : primitive.vertices)
 		{
-			vertices[firstVertex + (&vertex - primitive.vertices.data())] = {
-			    .pos = vertex.position, .uv = vertex.uv, .norm = vertex.normal, .index = glm::i16vec4(-1, -1, 0, 0)};
+			// The third index is 1 on a corner of a back face, which the snow reads by its front corner
+			vertices[firstVertex + (&vertex - primitive.vertices.data())] = {.pos = vertex.position,
+			                                                                 .uv = vertex.uv,
+			                                                                 .norm = vertex.normal,
+			                                                                 .index =
+			                                                                     glm::i16vec4(-1, -1, vertex.back ? 1 : 0, 0)};
 			_boundingBox.maxima = glm::max(_boundingBox.maxima, vertex.position);
 			_boundingBox.minima = glm::min(_boundingBox.minima, vertex.position);
 		}
@@ -443,6 +447,7 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	auto* vertexBuffer = new VertexBuffer(_l3dMesh.GetDebugName(), verticesMem, decl);
 	auto* indexBuffer = new IndexBuffer(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer, indexBuffer);
+	_made = true;
 	return true;
 }
 

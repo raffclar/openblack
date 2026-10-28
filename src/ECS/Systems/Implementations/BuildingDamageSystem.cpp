@@ -176,8 +176,8 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 			continue;
 		}
 		building_world::DrawnPart made {.material = primitive.material};
-		const auto add = [&made](glm::vec3 position, glm::vec2 uv, glm::vec3 normal) {
-			made.vertices.push_back({.position = position, .uv = uv, .normal = normal});
+		const auto add = [&made](glm::vec3 position, glm::vec2 uv, glm::vec3 normal, bool back = false) {
+			made.vertices.push_back({.position = position, .uv = uv, .normal = normal, .back = back});
 			return static_cast<uint16_t>(made.vertices.size() - 1);
 		};
 		for (const auto& triangle : primitive.triangles)
@@ -206,7 +206,7 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 			}
 			for (size_t i = 0; i < 3; ++i)
 			{
-				b.at(i) = add(back.at(i), c.at(i).uv, backNormal);
+				b.at(i) = add(back.at(i), c.at(i).uv, backNormal, true);
 			}
 			made.indices.insert(made.indices.end(), {f[0], f[1], f[2], b[0], b[2], b[1]});
 			// A wall joins the front and back faces along each side nothing joins on to
@@ -219,8 +219,8 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 				const auto next = (side + 1) % 3;
 				const auto fa = add(front.at(side), c.at(side).uv, frontNormal);
 				const auto fb = add(front.at(next), c.at(next).uv, frontNormal);
-				const auto ba = add(back.at(side), c.at(side).uv, backNormal);
-				const auto bb = add(back.at(next), c.at(next).uv, backNormal);
+				const auto ba = add(back.at(side), c.at(side).uv, backNormal, true);
+				const auto bb = add(back.at(next), c.at(next).uv, backNormal, true);
 				made.indices.insert(made.indices.end(), {fa, ba, fb, fb, ba, bb});
 			}
 		}
