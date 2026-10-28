@@ -188,6 +188,8 @@ run_mac() {
 	local host=${OB_MAC_HOST:-gavxn@192.168.1.64}
 	local ssh_opts=(-i "$key" -o "UserKnownHostsFile=$known" -o IdentitiesOnly=yes -o BatchMode=yes -o ServerAliveInterval=30)
 	export OB_SRC="$TREE"
+	# The server_check games of the PC (--pc-bin) play no sound either
+	export ALSOFT_CONF=${ALSOFT_CONF:-E:/openblack/tools/audio/alsoft_silent.ini}
 	bash "$tool" sync "$COMMIT" --name "$NAME" || { echo "desync_soak: the sync to the Mac failed"; exit 2; }
 	bash "$tool" build --name "$NAME" openblack openblack-server || { echo "desync_soak: the Mac build failed"; exit 2; }
 	local remote_out='$HOME/projects/openblack/sim-runs/desync-soak/'"$NAME"
