@@ -257,6 +257,9 @@ public:
 	[[nodiscard]] bool IsTurnDue() override { return false; }
 	void StartTurn() override {}
 	void UpdateFrame() override {}
+	void StepInput(std::chrono::microseconds /*stepTime*/) override {}
+	[[nodiscard]] const input_steps::Steps& GetInputSteps() const override { return inputSteps; }
+	void PinDate(std::optional<int64_t> /*pinnedDate*/) override {}
 	[[nodiscard]] uint32_t GetTurn() const override { return 0; }
 	[[nodiscard]] float GetTurnFraction() const override { return 0.0f; }
 	[[nodiscard]] std::chrono::milliseconds GetFrameGameTime() const override { return {}; }
@@ -276,6 +279,7 @@ public:
 	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return std::nullopt; }
 
 	bool networkGame {false};
+	input_steps::Steps inputSteps {};
 };
 
 class CreatureFightSystemTest: public ::testing::Test
