@@ -136,5 +136,122 @@ class ServePage(unittest.TestCase):
         self.assertEqual(head, b"GET /game/x HTTP/1.1\r\nHost: 127.0.0.1:5000\r\nUpgrade: websocket\r\n\r\n")
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class LeashCheck(unittest.TestCase):
+    SERVER = [
+        "[game] [info] Leash command: player 1 presses the leash key at turn 301: creature 51 wears leash 2 of player 1, "
+        "held in the hand",
+        "[game] [info] Leash command: player 1 goes into the temple at turn 702: creature 51 wears no leash",
+        "[game] [info] Leash command: player 0 presses the leash key at turn 400: creature 9 wears leash 2 of player 0, "
+        "held in the hand",
+    ]
+
+    def test_a_check_gives_the_client_the_slot_and_the_way_off(self):
+        self.assertEqual(net_check.parse_leash(["2:300:400", "web:500:100:key"], 2), [
+            {"client": 1, "slot": 1, "turn": 300, "hold": 400, "off": "temple"},
+            {"client": "web", "slot": 2, "turn": 500, "hold": 100, "off": "key"},
+        ])
+
+    def test_the_turns_are_multiples_of_100(self):
+        with self.assertRaises(ValueError):
+            net_check.parse_leash(["1:250:100"], 2)
+        with self.assertRaises(ValueError):
+            net_check.parse_leash(["3:300:100"], 2)
+        with self.assertRaises(ValueError):
+            net_check.parse_leash(["1:300:100:shake"], 2)
+
+    def test_the_temple_takes_the_leash_off_and_escape_comes_out(self):
+        leash = {"client": 0, "slot": 0, "turn": 300, "hold": 400, "off": "temple"}
+        self.assertEqual([(turns, key) for turns, key, _ in net_check.leash_key_presses(leash)],
+                         [(300, "L"), (700, "F4"), (700, "Escape")])
+        leash["off"] = "key"
+        self.assertEqual([(turns, key) for turns, key, _ in net_check.leash_key_presses(leash)], [(300, "L"), (700, "L")])
+
+    def test_the_web_steps_put_the_keys_between_the_lines_by_their_turns(self):
+        leash = {"client": "web", "slot": 2, "turn": 300, "hold": 400, "off": "temple"}
+        steps = net_check.web_chat_steps([(500, "hi")], 60, leashes=[leash])
+        waits = [step["text"] for step in steps if step["do"] == "wait-log"]
+        self.assertEqual(waits, ["Network game: 300 turns compared", "Network game: 500 turns compared",
+                                 "Network game: 700 turns compared"])
+        keys = [step["code"] for step in steps if step["do"] == "key" and step.get("code") in ("KeyL", "F4", "Escape")]
+        self.assertEqual(keys, ["KeyL", "F4", "Escape"])
+        times = [step["at"] for step in steps]
+        self.assertEqual(times, sorted(times))
+
+    def test_the_plan_of_the_web_god_has_only_its_own_leash_keys(self):
+        options = argparse.Namespace(frame_ms=20.0, web_chat=[], leash=["1:300:100", "web:400:100:key"], clients=1)
+        plan = net_check.web_join_plan(options, "wss://127.0.0.1:5000/game/x", "t", 600)
+        keys = [step["code"] for step in plan["actions"] if step["do"] == "key"]
+        self.assertEqual(keys, ["KeyL", "KeyL"])
+
+    def write(self, folder, name, lines):
+        path = os.path.join(folder, name)
+        with open(path, "w", encoding="utf-8") as file:
+            file.write("\n".join(lines) + "\n")
+        return path
+
+    def test_each_client_must_tell_the_commands_of_the_server(self):
+        leash = {"client": 1, "slot": 1, "turn": 300, "hold": 400, "off": "temple"}
+        with tempfile.TemporaryDirectory() as folder:
+            server = self.write(folder, "server.log", self.SERVER)
+            same = self.write(folder, "same.log", self.SERVER)
+            other = self.write(folder, "other.log", self.SERVER[:1] + [
+                "[game] [info] Leash command: player 1 goes into the temple at turn 702: creature 51 wears leash 2 of "
+                "player 1, held in the hand"])
+            result = net_check.leash_result(leash, server, [("1", same, 0, None), ("web", other, 0, None)])
+        self.assertTrue(result["on"])
+        self.assertTrue(result["off"])
+        self.assertEqual(result["held_turns"], 401)
+        self.assertEqual(result["clients"], {"1": True, "web": False})
+        self.assertFalse(result["same"])
+
+    def test_a_leash_that_never_comes_off_fails(self):
+        leash = {"client": 1, "slot": 1, "turn": 300, "hold": 400, "off": "temple"}
+        with tempfile.TemporaryDirectory() as folder:
+            server = self.write(folder, "server.log", self.SERVER[:1])
+            result = net_check.leash_result(leash, server, [])
+        self.assertTrue(result["on"])
+        self.assertFalse(result["off"])
+        self.assertFalse(result["same"])
+
+    def test_a_command_after_the_last_turn_of_a_client_is_not_a_difference(self):
+        leash = {"client": 1, "slot": 1, "turn": 300, "hold": 400, "off": "temple"}
+        with tempfile.TemporaryDirectory() as folder:
+            server = self.write(folder, "server.log", self.SERVER)
+            early = self.write(folder, "early.log", self.SERVER[:1])
+            result = net_check.leash_result(leash, server, [("2", early, 0, 650)])
+        self.assertTrue(result["same"])
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class LeashCheckOfTheWebGod(unittest.TestCase):
+    def test_a_land_with_a_game_message_shows_the_information_box(self):
+        with tempfile.TemporaryDirectory() as folder:
+            os.makedirs(os.path.join(folder, "Scripts", "Playgrounds"))
+            with open(os.path.join(folder, "Scripts", "Playgrounds", "Two.txt"), "w", encoding="latin-1") as file:
+                file.write('VERSION(2.3)\nSTART_GAME_MESSAGE("Two Gods", 2)\n')
+            with open(os.path.join(folder, "Scripts", "Playgrounds", "One.txt"), "w", encoding="latin-1") as file:
+                file.write('VERSION(2.3)\n')
+            self.assertTrue(net_check.land_shows_info_box(folder, "Playgrounds/Two.txt"))
+            self.assertFalse(net_check.land_shows_info_box(folder, "Playgrounds/One.txt"))
+            self.assertFalse(net_check.land_shows_info_box(folder, "Online Maps/mpm_3p_1.map"))
+            self.assertFalse(net_check.land_shows_info_box(folder, "Playgrounds/Missing.txt"))
+
+    def test_a_game_decided_after_the_last_turn_of_the_run_needs_no_stop_on_the_clients(self):
+        self.assertTrue(net_check.decided_after_the_run(1202, 1200))
+        self.assertFalse(net_check.decided_after_the_run(900, 1200))
+        self.assertFalse(net_check.decided_after_the_run(None, 1200))
+
+    def test_the_escape_key_closes_the_box_before_the_first_leash_key(self):
+        leash = {"client": "web", "slot": 1, "turn": 300, "hold": 100, "off": "key"}
+        self.assertEqual([key for _, key, _ in net_check.web_leash_presses(leash, True)], ["Escape", "L", "L"])
+        self.assertEqual([key for _, key, _ in net_check.web_leash_presses(leash, False)], ["L", "L"])
+
+    def test_the_web_god_sends_its_creature_from_the_game_folder_of_the_page(self):
+        options = argparse.Namespace(frame_ms=20.0, web_chat=[], web_creature="Scripts\\CreatureMind\\C1.erc")
+        arguments = net_check.web_join_plan(options, "wss://127.0.0.1:5000/game/x", "t", 600)["arguments"]
+        self.assertEqual(arguments[arguments.index("--join-creature") + 1], "/game/Scripts/CreatureMind/C1.erc")
+
+
 if __name__ == "__main__":
     unittest.main()
