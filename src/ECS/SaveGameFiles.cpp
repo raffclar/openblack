@@ -109,3 +109,18 @@ ecs::save_files::SlotWriteResult ecs::save_files::WriteSlot(filesystem::FileSyst
 	result.world = group.empty() ? SaveWrite::Failed : WriteThroughTemporaries(files, group);
 	return result;
 }
+
+std::u16string ecs::save_files::SaveDateLabel(std::optional<std::u16string_view> time, std::optional<std::u16string_view> date)
+{
+	// The counts that make the label too long
+	constexpr size_t k_TooLong = 62;
+	const auto counted = [](const std::optional<std::u16string_view>& part) { return part.has_value() ? part->size() + 1 : 0; };
+	if (counted(time) + counted(date) >= k_TooLong)
+	{
+		return {};
+	}
+	std::u16string label(time.value_or(std::u16string_view {}));
+	label += u' ';
+	label += date.value_or(std::u16string_view {});
+	return label;
+}

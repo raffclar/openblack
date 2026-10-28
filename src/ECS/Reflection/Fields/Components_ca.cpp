@@ -32,6 +32,8 @@ void openblack::ecs::reflection::RegisterFields_Components_ca(entt::meta_ctx& co
 	    .Field<&components::CameraBookmark::point>("point")
 	    .Field<&components::CameraBookmark::thing>("thing")
 	    .Field<&components::CameraBookmark::cameraOffset>("cameraOffset");
-	Reflect<components::CarriedByTornado>(context).Field<&components::CarriedByTornado::carried>("carried");
+	Reflect<components::CarriedByTornado>(context)
+	    .Field<&components::CarriedByTornado::carried>("carried")
+	    .Field<&components::CarriedByTornado::drawn>("drawn");
 	Reflect<components::CaughtByTornado> {context};
 }

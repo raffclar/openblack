@@ -76,7 +76,11 @@ void Pose(const graphics::L3DMesh& model, const L3DAnim& clip, const animals::Cl
 
 void SharkSystem::ProcessTurn()
 {
-	Locator::entitiesRegistry::value().Each<Shark>([](Shark& shark) { shark.turnStart = shark.position; });
+	// The turn sees each shark at its place. Only the frames draw it on the way there.
+	Locator::entitiesRegistry::value().Each<Shark, Transform>([](Shark& shark, Transform& transform) {
+		shark.turnStart = shark.position;
+		transform.position = shark.position;
+	});
 }
 
 void SharkSystem::Update(std::chrono::duration<float, std::milli> gameTime, float turnFraction)
@@ -93,52 +97,54 @@ void SharkSystem::Update(std::chrono::duration<float, std::milli> gameTime, floa
 	// The frame's whole milliseconds of game time
 	const auto frameMilliseconds = static_cast<int32_t>(gameTime.count());
 	const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(k_SwimClip));
-	registry.Each<Shark, Transform, const Mesh, AnimalPose>([&](entt::entity entity, Shark& shark, Transform& transform,
-	                                                            const Mesh& mesh, AnimalPose& pose) {
-		// Its fins show only while a script walks it
-		const auto look = ecs::shark_rules::LookOf(registry.AllOf<WalkPath>(entity));
-		pose.aboveCutShown = look.aboveSea;
-		pose.underSea = look.underSea;
+	// The frame writes only the drawn place, the facing, the clip and the pose. The turns go by the Transform.
+	registry.Each<Shark, const Transform, const Mesh, AnimalPose>(
+	    [&](entt::entity entity, Shark& shark, const Transform& transform, const Mesh& mesh, AnimalPose& pose) {
+		    // Its fins show only while a script walks it
+		    const auto look = ecs::shark_rules::LookOf(registry.AllOf<WalkPath>(entity));
+		    pose.aboveCutShown = look.aboveSea;
+		    pose.underSea = look.underSea;
 
-		// It swims on through its clip
-		std::optional<animals::ClipTiming> timing;
-		if (animations.Contains(clipId))
-		{
-			const auto clip = animations.Handle(clipId);
-			timing = animals::ClipTiming {
-			    .playTime = clip->GetPlayTime(), .frameCount = clip->GetFrames().size(), .looping = clip->IsLooping()};
-			shark.clipPlace = animals::AdvanceClip(*timing, shark.clipPlace, frameMilliseconds);
-		}
+		    // It swims on through its clip
+		    std::optional<animals::ClipTiming> timing;
+		    if (animations.Contains(clipId))
+		    {
+			    const auto clip = animations.Handle(clipId);
+			    timing = animals::ClipTiming {
+			        .playTime = clip->GetPlayTime(), .frameCount = clip->GetFrames().size(), .looping = clip->IsLooping()};
+			    shark.clipPlace = animals::AdvanceClip(*timing, shark.clipPlace, frameMilliseconds);
+		    }
 
-		// Drawn between the start of its turn and where it is, facing the way it moved
-		shark.heading = ecs::shark_rules::Heading(shark.turnStart, shark.position, shark.heading);
-		const auto startHeight = land.GetHeightAt(glm::vec2(shark.turnStart.x, shark.turnStart.z));
-		const auto endHeight = land.GetHeightAt(glm::vec2(shark.position.x, shark.position.z));
-		transform.position = ecs::shark_rules::Drawn(shark.turnStart, startHeight, shark.position, endHeight, turnFraction);
-		transform.rotation = ecs::shark_rules::Facing(shark.heading);
+		    // Drawn between the start of its turn and where it is, facing the way it moved
+		    shark.heading = ecs::shark_rules::Heading(shark.turnStart, shark.position, shark.heading);
+		    const auto startHeight = land.GetHeightAt(glm::vec2(shark.turnStart.x, shark.turnStart.z));
+		    const auto endHeight = land.GetHeightAt(glm::vec2(shark.position.x, shark.position.z));
+		    shark.drawn = Shark::DrawnPlace {
+		        .position = ecs::shark_rules::Drawn(shark.turnStart, startHeight, shark.position, endHeight, turnFraction),
+		        .rotation = ecs::shark_rules::Facing(shark.heading)};
 
-		if (!timing.has_value() || !meshes.Contains(mesh.id))
-		{
-			return;
-		}
-		const auto model = meshes.Handle(mesh.id);
-		Pose(*model, *animations.Handle(clipId), *timing, shark.clipPlace, pose.bones);
+		    if (!timing.has_value() || !meshes.Contains(mesh.id))
+		    {
+			    return;
+		    }
+		    const auto model = meshes.Handle(mesh.id);
+		    Pose(*model, *animations.Handle(clipId), *timing, shark.clipPlace, pose.bones);
 
-		// The wake comes from the point fixed to its bones, where it is drawn this frame
-		const auto& bonePoint = model->GetFirstBonePoint();
-		if (!bonePoint.has_value() || bonePoint->bone >= pose.bones.size())
-		{
-			return;
-		}
-		const auto placed =
-		    glm::scale(glm::translate(glm::mat4(1.0f), transform.position) * glm::mat4(transform.rotation), transform.scale);
-		const auto world = placed * pose.bones[bonePoint->bone] * glm::vec4(bonePoint->point, 1.0f);
-		if (const auto ring = ecs::shark_rules::WakeRing(_wakeTimer, glm::vec3(world), shark.heading, frameMilliseconds);
-		    ring.has_value() && Locator::waterRingSystem::has_value())
-		{
-			// A ring that doesn't fit among the many already on the water isn't made
-			static_cast<void>(Locator::waterRingSystem::value().Add(*ring));
-		}
-	});
+		    // The wake comes from the point fixed to its bones, where it is drawn this frame
+		    const auto& bonePoint = model->GetFirstBonePoint();
+		    if (!bonePoint.has_value() || bonePoint->bone >= pose.bones.size())
+		    {
+			    return;
+		    }
+		    const auto placed = glm::scale(
+		        glm::translate(glm::mat4(1.0f), shark.drawn->position) * glm::mat4(shark.drawn->rotation), transform.scale);
+		    const auto world = placed * pose.bones[bonePoint->bone] * glm::vec4(bonePoint->point, 1.0f);
+		    if (const auto ring = ecs::shark_rules::WakeRing(_wakeTimer, glm::vec3(world), shark.heading, frameMilliseconds);
+		        ring.has_value() && Locator::waterRingSystem::has_value())
+		    {
+			    // A ring that doesn't fit among the many already on the water isn't made
+			    static_cast<void>(Locator::waterRingSystem::value().Add(*ring));
+		    }
+	    });
 	registry.SetDirty();
 }

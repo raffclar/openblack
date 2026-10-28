@@ -230,6 +230,38 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// The hand puts the rock on the hut's path and takes it away again, twice, each change shown in a few seconds
+		const auto drop = k_ShoreFarm + glm::vec2(-7.5f, -43.0f);
+		auto objects = ShoreFarmWithFootpaths();
+		objects.push_back(
+		    {.type = MobileStaticInfo::RockChalk, .offset = k_ShoreFarm + glm::vec2(-50.0f, -30.0f), .scale = 2.5f});
+		all.push_back({
+		    .id = "footpaths.rock_put_and_taken",
+		    .name = "A rock put on a footpath and taken away, twice",
+		    .facet = Facet::Movement,
+		    .description = "The lake-shore farm, hut and storage pit with their two footpaths (drawn with the Footpaths debug "
+		                   "lines), and the fisherman by the hut. After 4 seconds the hand takes a rock from beside the "
+		                   "town and 2 seconds later puts it on the hut's path, half way between two nodes. 8 seconds "
+		                   "later the hand takes the rock, 2 seconds later puts it down again, and 8 seconds later takes "
+		                   "it away.",
+		    .expected = "Each time the rock comes to rest on the path, the hut's path bends round it in the same turn: the "
+		                "line goes round the rock, by a route that the creatures' planner finds or by nodes a tenth of a "
+		                "half turn apart on a circle about it. Each time the hand takes the rock, the marker at the rock's "
+		                "place goes and the line stops going round it, in the same turn. The fisherman on the path walks "
+		                "with the path.",
+		    .environment = {.dispenserGrid = false, .drawFootpaths = true, .cursor = glm::vec2(0.5f, 0.5f)},
+		    .framing = {.shot = Shot::Placed, .eye = {drop.x, 22.0f, drop.y - 24.0f}, .look = {drop.x, 0.0f, drop.y}},
+		    .objects = objects,
+		    .footpaths = ShoreFootpaths(),
+		    .commands = {{.kind = Kind::HandTake, .delaySeconds = 4.0f, .object = 4},
+		                 {.kind = Kind::HandRelease, .delaySeconds = 2.0f},
+		                 {.kind = Kind::HandTake, .delaySeconds = 8.0f, .object = 4},
+		                 {.kind = Kind::HandRelease, .delaySeconds = 2.0f},
+		                 {.kind = Kind::HandTake, .delaySeconds = 8.0f, .object = 4}},
+		});
+	}
+
 	all.push_back({
 	    .id = "villagers.script_footpaths",
 	    .name = "Footpaths made by the land's script",

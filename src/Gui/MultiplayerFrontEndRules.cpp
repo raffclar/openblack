@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include "Online/OnlineMapLand.h"
+
 namespace openblack::gui::multiplayer
 {
 namespace
@@ -441,9 +443,13 @@ std::vector<LocalMap> ParseLocalMaps(std::string_view text)
 
 std::optional<size_t> FindLand(std::span<const LocalMap> maps, std::string_view land)
 {
+	// The server sends the path of a network land, such as "Online Maps/mpm_2p_1.map". The list of the lands has the
+	// file name with no folder and no extension, in any case.
+	const auto mapFile = online_map_land::MapName(land);
 	for (size_t i = 0; i < maps.size(); ++i)
 	{
-		if (maps[i].file == land || maps[i].name == Widen(land))
+		if (maps[i].file == land || maps[i].name == Widen(land) ||
+		    (!mapFile.empty() && online_map_land::MapName(maps[i].file + std::string(online_map_land::k_Extension)) == mapFile))
 		{
 			return i;
 		}

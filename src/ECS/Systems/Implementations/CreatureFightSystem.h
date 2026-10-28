@@ -82,6 +82,7 @@ public:
 	void DoCharge(PlayerNames player, float heldMs) override;
 	[[nodiscard]] bool IsPressed() const override { return _pressed.has_value(); }
 	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const override;
+	void DoFightCheat(PlayerNames player) override;
 	bool GestureSpecialMove() override;
 	bool GestureSpell(MagicType type) override;
 	void DrawMarks(float realMs, const glm::vec3& eye) override;
@@ -155,6 +156,9 @@ private:
 	/// One creature beat the other, by a blow or otherwise: the loser faints, and the winner is made to have a poo on
 	/// the loser or to show off
 	void Win(entt::entity winner, entt::entity loser, bool byBlow);
+	/// The opponent of a creature has no life left: the creature wins and leaves the duel. The loser does not faint,
+	/// and nobody forces a plan on the winner.
+	void WinByOpponentsLife(entt::entity winner, entt::entity loser);
 	/// The fight ends for a creature: its life pays for it and it learns from it
 	/// The creature's fight is over: won or lost, or called off with neither (when its mind isn't told it fought)
 	void EndFightFor(entt::entity creature, std::optional<bool> won);

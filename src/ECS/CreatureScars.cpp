@@ -91,6 +91,19 @@ void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 
 	}
 }
 
+std::vector<glm::mat4> creature_scars::TurnBones(const Registry& registry, entt::entity creature,
+                                                 const graphics::L3DMesh& model, const glm::mat4& placement)
+{
+	const auto drawn = posed_model::BonesOf(registry, creature, model);
+	std::vector<glm::mat4> bones(drawn.begin(), drawn.end());
+	if (const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	    animation != nullptr && !animation->newerTurnPose.empty() && animation->newerTurnPose.size() == bones.size())
+	{
+		creature_turn_pose::ToMesh(animation->newerTurnPose, placement, bones);
+	}
+	return bones;
+}
+
 std::optional<openblack::creature_marks::Mark> creature_scars::WoundAlong(entt::entity creature, glm::vec3 from,
                                                                           glm::vec3 direction, uint8_t kind, uint8_t column)
 {
@@ -111,13 +124,7 @@ std::optional<openblack::creature_marks::Mark> creature_scars::WoundAlong(entt::
 	// The unit direction adds the squares from z to x. A direction of no length stays as it is.
 	const auto unit = direction == glm::vec3(0.0f) ? direction : x87::Scaled<x87::SumOrder::Zyx>(direction);
 	const auto& model = *meshes.Handle(mesh->id);
-	const auto drawn = posed_model::BonesOf(registry, creature, model);
-	std::vector<glm::mat4> bones(drawn.begin(), drawn.end());
-	if (const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	    animation != nullptr && !animation->newerTurnPose.empty() && animation->newerTurnPose.size() == bones.size())
-	{
-		creature_turn_pose::ToMesh(animation->newerTurnPose, placement, bones);
-	}
+	const auto bones = TurnBones(registry, creature, model, placement);
 	const auto hit = posed_model::NearestSkinHit(registry, creature, model, placement, bones, from, unit);
 	if (!hit.has_value())
 	{

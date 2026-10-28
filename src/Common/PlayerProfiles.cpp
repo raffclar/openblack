@@ -457,6 +457,11 @@ Store StoreFor(const RunOptions& options)
 	    .folder = options.userFolder, .creatureMinds = *options.userFolder / "Scripts" / "CreatureMind", .developer = false};
 }
 
+Store ServerStore()
+{
+	return {.folder = std::nullopt, .creatureMinds = std::nullopt, .developer = true};
+}
+
 std::optional<std::filesystem::path> SettingsFileFor(const RunOptions& options, std::optional<std::filesystem::path> playerFile)
 {
 	if (options.profileFolder.has_value())

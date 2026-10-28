@@ -27,6 +27,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "Locator.h"
 
 #define LOCATOR_IMPLEMENTATIONS
@@ -89,11 +90,104 @@ class FakeMinds final: public ecs::systems::ComputerPlayerSystemInterface
 public:
 	void SwitchOn(PlayerNames /*player*/, bool /*on*/) override {}
 	void SetCreatureLike(PlayerNames /*player*/, PlayerNames /*like*/) override {}
+	void SetActive(PlayerNames /*player*/, bool /*on*/) override {}
+	void SetPaused(PlayerNames /*player*/, bool /*paused*/) override {}
+	void SetPersonality(PlayerNames /*player*/, std::string_view /*name*/, float /*weight*/) override {}
+	void SetSuppression(PlayerNames /*player*/, std::string_view /*name*/, float /*suppression*/) override {}
+	[[nodiscard]] bool Ready(PlayerNames /*player*/) override { return true; }
+	bool ForceAction(PlayerNames /*player*/, std::string_view /*name*/, entt::entity /*first*/,
+	                 entt::entity /*second*/) override
+	{
+		return false;
+	}
+	void QueueAction(PlayerNames /*player*/, std::string_view /*name*/, entt::entity /*first*/,
+	                 entt::entity /*second*/) override
+	{
+	}
+	void ClearActions(PlayerNames /*player*/) override {}
+	void SetSpeed(PlayerNames /*player*/, float /*speed*/) override {}
+	void MoveHand(PlayerNames /*player*/, glm::vec3 /*place*/, float /*speed*/, bool /*fixedHeight*/) override {}
+	void SetHand(PlayerNames /*player*/, glm::vec3 /*place*/, bool /*fixedHeight*/) override {}
+	[[nodiscard]] std::optional<glm::vec3> HandPosition(PlayerNames /*player*/) override { return std::nullopt; }
 	void ProcessTurn() override {}
 	void FillEmptySlots(std::span<const PlayerNames> /*gods*/, std::span<const PlayerNames> /*humans*/) override {}
 	void WaitForHumans() override {}
 	void HumansJoined(std::span<const PlayerNames> humans) override { joins.emplace_back(humans.begin(), humans.end()); }
+	void SetAiSeed(std::optional<uint32_t> /*seed*/) override {}
 	std::vector<std::vector<PlayerNames>> joins;
+};
+
+/// The leashes of the test: it keeps the players that went into their temple
+class FakeLeash final: public ecs::systems::LeashSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Update(float /*seconds*/) override {}
+	void ShowPosts(bool /*handShown*/) override {}
+	bool PressAction(PlayerNames /*player*/, const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/,
+	                 glm::vec2 /*cursor*/, uint32_t /*milliseconds*/) override
+	{
+		return false;
+	}
+	bool TapThing(PlayerNames /*player*/, entt::entity /*object*/) override { return false; }
+	[[nodiscard]] bool TakesTap(PlayerNames /*player*/, entt::entity /*object*/) const override { return false; }
+	[[nodiscard]] std::optional<float> RopeUnderCursor(PlayerNames /*player*/, const RopeFrame& /*frame*/) override
+	{
+		return std::nullopt;
+	}
+	void SetRopeHovered(PlayerNames /*player*/, bool /*hovered*/) override {}
+	[[nodiscard]] leash_snap::Hand RopeHand(PlayerNames /*player*/) const override { return leash_snap::Hand::Away; }
+	bool PressRope(PlayerNames /*player*/) override { return false; }
+	void LetGoOfRope(PlayerNames /*player*/, std::optional<glm::vec3> /*place*/) override {}
+	void HandleInput(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, bool /*actionTaken*/) override {}
+	[[nodiscard]] bool Knows(entt::entity /*creature*/, LeashType /*type*/) const override { return false; }
+	void SetKnown(entt::entity /*creature*/, LeashType /*type*/, bool /*known*/) override {}
+	[[nodiscard]] bool IsLeashable(entt::entity /*creature*/) const override { return false; }
+	bool SetLeashable(entt::entity /*creature*/, bool /*leashable*/) override { return false; }
+	void SetOwner(entt::entity /*creature*/, PlayerNames /*owner*/) override {}
+	void ClaimOnArrival(entt::entity /*creature*/) override {}
+	[[nodiscard]] creature_leash::Refusal WhyNot(PlayerNames /*player*/, entt::entity /*creature*/,
+	                                             LeashType /*type*/) const override
+	{
+		return {};
+	}
+	[[nodiscard]] std::optional<Refused> LastRefusal() const override { return std::nullopt; }
+	bool PutOn(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	void TakeOff(entt::entity /*creature*/) override {}
+	bool Toggle(entt::entity /*creature*/) override { return false; }
+	bool ChangeType(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	bool TieTo(entt::entity /*creature*/, entt::entity /*object*/) override { return false; }
+	void UntieToHand(entt::entity /*creature*/) override {}
+	void SetWorks(entt::entity /*creature*/, bool /*works*/) override {}
+	void SetDrawn(bool /*drawn*/) override {}
+	void ConfineToHome(entt::entity /*creature*/, float /*radius*/) override {}
+	void ClearConfinement(entt::entity /*creature*/) override {}
+	[[nodiscard]] bool FreeOfHome(entt::entity /*creature*/) const override { return true; }
+	[[nodiscard]] bool IsLeashed(entt::entity /*creature*/) const override { return false; }
+	[[nodiscard]] std::optional<entt::entity> TiedTo(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<glm::vec3> HolderPoint(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] LeashType TypeOf(entt::entity /*creature*/) const override { return {}; }
+	[[nodiscard]] std::optional<entt::entity> PlayersCreature(PlayerNames /*player*/) const override { return std::nullopt; }
+	bool PressKey(PlayerNames /*player*/, creature_leash::LeashKey /*key*/) override { return false; }
+	bool TapCreature(PlayerNames /*player*/, entt::entity /*creature*/) override { return false; }
+	bool Shake(PlayerNames /*player*/) override { return false; }
+	void PlacePosts(PlayerNames /*owner*/, const std::array<glm::vec3, 3>& /*points*/) override {}
+	bool OrderAt(PlayerNames /*player*/, const glm::vec3& /*place*/) override { return false; }
+	bool OrderOn(PlayerNames /*player*/, entt::entity /*object*/) override { return false; }
+	[[nodiscard]] std::optional<glm::vec3> OrderTarget(entt::entity /*creature*/) const override { return std::nullopt; }
+	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames /*player*/,
+	                                              std::optional<entt::entity> /*hovered*/) const override
+	{
+		return std::nullopt;
+	}
+	bool TapPost(entt::entity /*post*/) override { return false; }
+	bool TakeOffAtTemple(PlayerNames player) override
+	{
+		templeLeashOff.push_back(player);
+		return true;
+	}
+
+	std::vector<PlayerNames> templeLeashOff;
 };
 
 class NetworkCommands: public ::testing::Test
@@ -229,4 +323,20 @@ TEST_F(NetworkCommands, TheHumansOfTheFirstTurnJoinTogetherAfterTheCommandsOfThe
 	EXPECT_EQ(minds.joins[0], (std::vector {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO}));
 	_commands.SetSource(nullptr);
 	Locator::computerPlayerSystem::reset();
+}
+
+TEST_F(NetworkCommands, TheLeashOffOfTheTempleGoesToTheLeashOfTheSenderAtTheTurn)
+{
+	auto& leashes = static_cast<FakeLeash&>(Locator::leashSystem::emplace<FakeLeash>());
+	_commands.SetSource(&_source);
+	// The computer sends the command to the server and does nothing with it before the turn
+	_commands.Submit(TempleLeashOff {});
+	ASSERT_EQ(_source.sent.size(), 1u);
+	EXPECT_TRUE(std::holds_alternative<TempleLeashOff>(_source.sent[0]));
+	EXPECT_TRUE(leashes.templeLeashOff.empty());
+	_source.turns[3] = {{.player = PlayerNames::PLAYER_TWO, .action = TempleLeashOff {}}};
+	_commands.RunSent(3);
+	EXPECT_EQ(leashes.templeLeashOff, (std::vector {PlayerNames::PLAYER_TWO}));
+	_commands.SetSource(nullptr);
+	Locator::leashSystem::reset();
 }

@@ -241,10 +241,20 @@ public:
 	[[nodiscard]] virtual std::vector<PlayerNames> OtherHandPlayers() const { return {}; }
 	/// Whether a hand is the hand of another player of a network game, which this computer does not move or draw
 	[[nodiscard]] virtual bool IsOtherPlayersHand([[maybe_unused]] entt::entity hand) const { return false; }
+	/// The player of a hand that a god of a network game has, none for a hand of the first player
+	[[nodiscard]] virtual std::optional<PlayerNames> PlayerOfHand([[maybe_unused]] entt::entity hand) const
+	{
+		return std::nullopt;
+	}
 	/// A point as the game keeps a place on the map: the ground under it, the height above the ground and the place on
 	/// the map's grid of fixed points
 	[[nodiscard]] virtual glm::vec3 AsMapPlace(glm::vec3 point) const { return point; }
 	virtual void SetPose(entt::entity object, const Pose& pose) = 0;
+	/// The pose that the frames draw a thing in while the hand pulls at it. The world keeps the thing as it stood.
+	virtual void DrawPulledPose(entt::entity object, const Pose& pose) { SetPose(object, pose); }
+	/// The frames draw the thing at its own place again: at the take, at the start of a new pull, and at the let go in a
+	/// network game
+	virtual void ForgetPulledPose([[maybe_unused]] entt::entity object) {}
 	/// A thing's axes at its own size, as they are once it stops being stretched
 	[[nodiscard]] virtual glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const = 0;
 

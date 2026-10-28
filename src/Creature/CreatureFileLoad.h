@@ -42,6 +42,8 @@ enum class Refusal : uint8_t
 	OffMap,
 	/// The species number is not a row of the creature table
 	UnknownSpecies,
+	/// The god has no citadel, so it brings no creature into the network game
+	NoCitadel,
 };
 
 /// What the script asks for, as the game finds it
@@ -55,5 +57,24 @@ struct Request
 
 /// Why the game makes no creature for the request, or Refusal::None when it makes one. The checks occur in this sequence.
 [[nodiscard]] Refusal WhyNot(const Request& request);
+
+/// What the game finds for a god that starts a network game. Before the start, the player of the god sent a creature
+/// file to all the players. The god brings the creature of that file into the game, at the creature home of its citadel.
+struct BroughtRequest
+{
+	bool citadel {false};
+	/// The player sent a file that is not empty. A player with no creature sends an empty file.
+	bool file {false};
+	/// The game can read the mind in the file
+	bool readable {false};
+	/// The home of the citadel is on the map
+	bool onMap {false};
+	/// The species of the file
+	std::optional<CreatureType> species;
+};
+
+/// Why the god brings no creature, or Refusal::None when it brings one. The checks occur in this sequence. A god with
+/// no creature file plays the game with no creature: the game gives it no other creature.
+[[nodiscard]] Refusal WhyNotBrought(const BroughtRequest& request);
 
 } // namespace openblack::creature_file_load

@@ -115,6 +115,24 @@ void creature_town_compassion::FinishedHelping(State& state, std::span<const uin
 	MoveOn(state, desires, felt);
 }
 
+void creature_town_compassion::TiedToFlag(State& state, uint32_t desire, const DesireActions& actions)
+{
+	if (desire >= k_TownDesireCount || actions.at(desire).empty())
+	{
+		state.desire.reset();
+		state.choosesFreely = true;
+		return;
+	}
+	state.desire = desire;
+	state.choosesFreely = false;
+}
+
+void creature_town_compassion::UntiedFromFlag(State& state)
+{
+	state.desire.reset();
+	state.choosesFreely = true;
+}
+
 bool creature_town_compassion::HealFirst(uint32_t hurt, bool leashedToTownDesire, float sightings, float sightingsNeeded,
                                          const std::function<uint32_t(uint32_t)>& random)
 {

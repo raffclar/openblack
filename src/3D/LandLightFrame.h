@@ -36,6 +36,9 @@ struct LandLightInputs
 /// The land light's inputs of this frame, from the sky, the players' alignment and the weather at the camera
 [[nodiscard]] LandLightInputs FrameLandLightInputs();
 
+/// What the ramps of the land's light divide by this frame, which follows the detail level's light boost
+[[nodiscard]] uint32_t FrameRampDivisor();
+
 /// The land's light of this frame at a level of luminosity, 0xRRGGBB: what things made now and coloured by the light,
 /// such as a splash on the water, keep. White without the light's palette.
 [[nodiscard]] uint32_t FrameLandLight(uint8_t level);

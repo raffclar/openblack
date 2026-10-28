@@ -19,6 +19,7 @@
 #include <glm/common.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/BlockTexture.h"
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
@@ -27,6 +28,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Stream.h"
+#include "ECS/EntityStorage.h"
 #include "ECS/LandFootprintRules.h"
 #include "ECS/Map.h"
 #include "ECS/PlacedTurn.h"
@@ -75,10 +77,10 @@ namespace land_footprints = ecs::land_footprints;
 }
 
 void Paint(std::span<uint16_t> texels, glm::ivec2 block, const L3DMesh::Footprint& footprint,
-           const footprint_paint::Placement& placement, footprint_paint::Mix mix)
+           const footprint_paint::Placement& placement, footprint_paint::Mix mix, int side)
 {
 	const footprint_paint::Picture picture {.width = footprint.width, .height = footprint.height, .texels = footprint.texels};
-	footprint_paint::PaintFootprint(texels, block, picture, footprint.triangles, placement, mix);
+	footprint_paint::PaintFootprint(texels, block, picture, footprint.triangles, placement, mix, side);
 }
 } // namespace
 
@@ -169,6 +171,12 @@ void LandFootprints::FindChangedThings()
 	registry.Each<const MapCellResident, const MeshComponent, const Transform>(
 	    [&](entt::entity entity, const MapCellResident& resident, const MeshComponent& mesh, const Transform& transform) {
 		    const auto* footprint = FootprintOf(mesh.id);
+		    // The registry can give the number of a removed thing to a new thing. The removed thing is not on the map now,
+		    // so its blocks must get their footprints again.
+		    if (const auto older = ecs::entity_storage::TakeOlder(_known, entity))
+		    {
+			    MarkBlocks(older->lowBlock, older->highBlock);
+		    }
 		    if (_known.contains(entity))
 		    {
 			    auto& known = _known.get(entity);
@@ -308,6 +316,7 @@ void LandFootprints::PaintBlock(size_t block)
 	const auto& landBlock = island.GetBlocks().at(block);
 	const auto position = landBlock.GetBlockPosition();
 	const auto corner = landBlock.GetMapPosition();
+	const auto side = island.GetBlockTextureSide();
 
 	const auto things = land_footprints::ThingsOverBlock(
 	    position, [&map](glm::ivec2 cell) { return map.GetFiledFixedInGridCell(ecs::MapInterface::CellId(cell)); },
@@ -339,7 +348,7 @@ void LandFootprints::PaintBlock(size_t block)
 	auto& own = _ownTexels[block];
 	if (own.empty())
 	{
-		own.resize(static_cast<size_t>(footprint_paint::k_BlockTexels) * footprint_paint::k_BlockTexels);
+		own.resize(static_cast<size_t>(side) * static_cast<size_t>(side));
 		island.PaintBlockTexels(block, own);
 	}
 	_texels = own;
@@ -351,12 +360,12 @@ void LandFootprints::PaintBlock(size_t block)
 		const auto placement = known != nullptr && SameTransform(known->transform, transform)
 		                           ? known->placement
 		                           : PlacementFor(registry, entity, transform);
-		Paint(_texels, position, *footprint, placement, footprint_paint::Mix::Colour);
+		Paint(_texels, position, *footprint, placement, footprint_paint::Mix::Colour, side);
 	}
 	for (const auto* print : loose)
 	{
 		Paint(_texels, position, *print->footprint, print->placement,
-		      print->channel ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour);
+		      print->channel ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour, side);
 	}
 	island.SetBlockTexels(block, _texels);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"),
@@ -384,9 +393,18 @@ void LandFootprints::Update()
 	{
 		Reset(blockCount);
 	}
-	for (const auto block : repainted)
+	for (const auto& [block, cells] : repainted)
 	{
-		_ownTexels.erase(block);
+		// The block's own texture that is kept takes the cells painted again. It is then as a new paint of the whole block,
+		// because each texel comes only from its own cell.
+		if (const auto own = _ownTexels.find(block); own != _ownTexels.end() && !own->second.empty() && cells.has_value())
+		{
+			block_texture::PutCellTexels(cells->texels, cells->first, cells->count, own->second);
+		}
+		else
+		{
+			_ownTexels.erase(block);
+		}
 		_dirty.insert(block);
 	}
 	FindChangedThings();

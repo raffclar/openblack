@@ -49,6 +49,9 @@ void LeaveTown(entt::entity villager);
 
 /// Whether a villager is worshipping or on its way to
 [[nodiscard]] bool IsAtOrOnTheWayToWorshipSite(entt::entity villager);
+/// Whether a villager is free to go to worship: free for a new task, not already at or on its way to worship, and a
+/// disciple only when disciples are asked for too
+[[nodiscard]] bool IsAvailableForWorshipSite(entt::entity villager, bool disciplesToo);
 /// A villager's town's worship site, none without a town or a site
 [[nodiscard]] entt::entity WorshipSiteOf(entt::entity villager);
 
