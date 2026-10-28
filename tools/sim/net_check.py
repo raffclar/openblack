@@ -630,8 +630,17 @@ def give_to_creature(pid, log):
     if not isinstance(at, list):
         done["why"] = "the creature has no place"
         return done
-    villagers = items_of(inspector_call(pid, "objects.find", {"params": {"kind": "Villager"}, "near": [at[0], at[2]],
-                                                              "radius": 400, "limit": 12}))
+    # The hand takes only within the influence of its god: the people of the god's own towns come first, then the
+    # people near the creature
+    places = [town["position"] for town in items_of(inspector_call(pid, "town.list", {}))
+              if town.get("owner") == player and isinstance(town.get("position"), list)]
+    villagers = []
+    for place, radius in [(town, 80) for town in places] + [(at, 400)]:
+        for villager in items_of(inspector_call(pid, "objects.find", {"params": {"kind": "Villager"},
+                                                                      "near": [place[0], place[2]], "radius": radius,
+                                                                      "limit": 12})):
+            if all(villager["id"] != known["id"] for known in villagers):
+                villagers.append(villager)
     done["villagers_near"] = len(villagers)
     def press_on_walker(entity):
         """The villager walks: the pointer goes to its place now and the press follows at once, when the interface
@@ -649,7 +658,9 @@ def give_to_creature(pid, log):
                 grab = pick.get("grab") or {}
                 if not grab.get("takes"):
                     # The hand would not take it here: the reason goes to the summary
-                    done.setdefault("why_not", []).append(grab.get("why_not"))
+                    reasons = done.setdefault("why_not", [])
+                    if grab.get("why_not") not in reasons:
+                        reasons.append(grab.get("why_not"))
                     return False
                 inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
                 time.sleep(1.0)
