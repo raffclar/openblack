@@ -2399,6 +2399,9 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		// A catch takes up the body until it is over, but the plan to catch is carried out as soon as the catch starts
 		const bool catching =
 		    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().IsCatching(entity);
+		// A let-go that continues after its plan stopped also keeps the body busy: the new plan waits until it ends
+		const bool playsOn = Locator::creatureObjectActionSystem::has_value() &&
+		                     Locator::creatureObjectActionSystem::value().PlaysOnAlone(entity);
 		const bool catchStep = mind.idle.stepStarted && mind.idle.step < mind.idle.agenda.size() &&
 		                       mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Object &&
 		                       mind.idle.agenda[mind.idle.step].order.kind == creature_mind::ObjectOrder::Kind::Catch;
@@ -2412,7 +2415,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		const auto [cameraFocus, cameraFocusAhead] = CameraFocusOf(registry, entity, mind.idle);
 		const creature_mind::Senses senses {
 		    .seconds = k_TurnSeconds,
-		    .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || catching,
+		    .bodyBusy = creature_layers::IsPlaying(animation.body) || moving || playsOn,
 		    .bodyLooping = creature_layers::IsLooping(animation.body),
 		    .clipMissing = ClipMissing(entity, animation, mind.idle, communication.animation),
 		    .realTime = animation.realTime,
@@ -2933,10 +2936,10 @@ void CreatureMindSystem::StartPlanAgain(entt::entity creature, CreatureMindState
 	// The context of the plan stays as it was for the player's feedback
 	const bool contextRunning =
 	    mind.learnt.has_value() && !mind.learnt->contexts.empty() && mind.learnt->contexts.back().running;
-	// A catch is the body's own and carries on
+	// A catch or a let-go is the body's own and carries on
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
@@ -3641,10 +3644,10 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	// A forced plan first stops the reaction that the creature has
 	EndReaction(creature);
 	// The current action stops as a failure. This occurs also when the creature finds no new plan.
-	// A catch is the body's own and carries on
+	// A catch or a let-go is the body's own and carries on
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}

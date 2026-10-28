@@ -1813,7 +1813,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 		if (Locator::creatureObjectActionSystem::has_value() &&
 		    Locator::creatureObjectActionSystem::value().GetState(creature) ==
 		        CreatureObjectActionSystemInterface::State::Busy &&
-		    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+		    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 		{
 			Locator::creatureObjectActionSystem::value().Cancel(creature);
 		}
@@ -1863,10 +1863,11 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	{
 		Locator::creatureFightSystem::value().CallOff(creature);
 	}
-	// Whatever its hands were doing is given up for the plan, but for a catch, which its body carries on with by itself
+	// Whatever its hands were doing is given up for the plan, but for a catch or a let-go, which its body carries on with
+	// by itself
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
@@ -5282,7 +5283,7 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 			if (Locator::creatureObjectActionSystem::has_value() &&
 			    Locator::creatureObjectActionSystem::value().GetState(entity) ==
 			        CreatureObjectActionSystemInterface::State::Busy &&
-			    !Locator::creatureObjectActionSystem::value().IsCatching(entity))
+			    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(entity))
 			{
 				Locator::creatureObjectActionSystem::value().Cancel(entity);
 			}

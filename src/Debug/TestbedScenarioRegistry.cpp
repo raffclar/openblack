@@ -5350,6 +5350,25 @@ void AddObjects(std::vector<Scenario>& all)
 	                 Go(Kind::ThrowAt, 0, {-40.0f, -10.0f}, 1.5f)},
 	});
 
+	// A leash order stops the plan while the tiger puts the villager down. The put-down continues, at two times the
+	// speed, and lets her go at its moment.
+	all.push_back({
+	    .id = "creature.put_down_through_an_order",
+	    .name = "A put-down that continues through a leash order",
+	    .facet = Facet::Objects,
+	    .description = "A tiger on the learning leash picks up the villager in front of it and starts to put her down. "
+	                   "A fifth of a second later, the player tells it with the leash to go to a point to the north.",
+	    .expected = "The order hurries the put-down but does not cut it: the tiger lets her go at the moment of the "
+	                "put-down, with no speed, and she stands on the land. Only then does the tiger walk to the point. It "
+	                "does not carry her there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::PutDown, 0, 1.5f, true),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, 40.0f}, 0.2f, false)},
+	});
+
 	auto hungryAtTheGive = hungryThinking;
 	hungryAtTheGive.pauseMind = true;
 	hungryAtTheGive.thinksAfterSeconds = k_ThinksBeforeTheGive;

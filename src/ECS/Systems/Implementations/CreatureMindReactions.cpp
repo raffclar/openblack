@@ -421,10 +421,10 @@ bool CreatureMindSystem::ForceDesireAbout(entt::entity creature, CreatureMindSta
 		return false;
 	}
 	// The current action stops as a failure. This occurs also when the creature finds no new plan.
-	// A catch is the body's own and carries on
+	// A catch or a let-go is the body's own and carries on
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().IsCatching(creature))
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
