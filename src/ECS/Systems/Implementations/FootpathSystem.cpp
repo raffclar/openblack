@@ -256,8 +256,12 @@ public:
 	void KeepGathered(bool keep) override
 	{
 		_gathered->keep = keep;
-		std::ranges::fill(_gathered->blocks, std::nullopt);
-		_gathered->circles.clear();
+		if (_gathered->kept)
+		{
+			std::ranges::fill(_gathered->blocks, std::nullopt);
+			_gathered->circles.clear();
+			_gathered->kept = false;
+		}
 	}
 
 private:
@@ -265,6 +269,8 @@ private:
 	struct Gathered
 	{
 		bool keep {false};
+		/// Some blocks or circles are kept
+		bool kept {false};
 		/// The circles of each thing to go round
 		std::unordered_map<entt::entity, std::vector<route::Circle>> circles;
 		std::vector<std::optional<route::BlockGathering>> blocks = std::vector<std::optional<route::BlockGathering>>(
@@ -331,6 +337,7 @@ private:
 			if (gathered->keep)
 			{
 				gathered->blocks[index] = std::move(gathering);
+				gathered->kept = true;
 			}
 		};
 	}
@@ -364,6 +371,7 @@ private:
 			if (found == gathered.circles.end())
 			{
 				found = gathered.circles.emplace(entity, CirclesToGoRound(registry, entity)).first;
+				gathered.kept = true;
 			}
 			if (!found->second.empty())
 			{
@@ -881,6 +889,20 @@ void FootpathSystem::CatchUpWithMap()
 void FootpathSystem::ProcessTurn()
 {
 	auto& registry = _world->Entities();
+	// The plans share what they gather in the turn. The turn changes only the paths, the links of the paths and the
+	// finders, which are not in the map's cells and are not gone round, so what each block holds stays the same.
+	struct KeepGathered
+	{
+		WorldInterface& world;
+		explicit KeepGathered(WorldInterface& keeper)
+		    : world(keeper)
+		{
+			world.KeepGathered(true);
+		}
+		KeepGathered(const KeepGathered&) = delete;
+		KeepGathered& operator=(const KeepGathered&) = delete;
+		~KeepGathered() { world.KeepGathered(false); }
+	} const keepGathered(*_world);
 	// A search that a load brought back continues. After the load of a saved game, the search starts again from its two
 	// ends, as the game does when it loads a path that it still looks for.
 	for (auto&& [entity, finder] : registry.Underlying().view<FootpathFinder>().each())
@@ -899,20 +921,6 @@ void FootpathSystem::ProcessTurn()
 		}
 	}
 	ProcessObstacleChanges();
-	// The plans share what they gather while they step. The loop changes only the paths, the links of the paths and the
-	// finders, which are not in the map's cells and are not gone round, so what each block holds stays the same.
-	struct KeepGathered
-	{
-		WorldInterface& world;
-		explicit KeepGathered(WorldInterface& keeper)
-		    : world(keeper)
-		{
-			world.KeepGathered(true);
-		}
-		KeepGathered(const KeepGathered&) = delete;
-		KeepGathered& operator=(const KeepGathered&) = delete;
-		~KeepGathered() { world.KeepGathered(false); }
-	} const keepGathered(*_world);
 	// The finders in the order of the game's list, the newest first
 	for (const auto entity : ecs::list_order::Walk<FootpathFinder>(registry))
 	{
