@@ -1133,7 +1133,9 @@ void TempleInterior::UpdateCaveTrophies(float gameSeconds)
 			if (place.holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect)
 			{
 				particles->SetInTemple(place.holderEffect);
-				particles->SetPlayer(place.holderEffect, static_cast<int>(PlayerNames::PLAYER_ONE));
+				particles->SetPlayer(place.holderEffect, static_cast<int>(Locator::handSystem::has_value()
+				                                                              ? Locator::handSystem::value().GetOwnPlayer()
+				                                                              : PlayerNames::PLAYER_ONE));
 			}
 		}
 		_caveSeedPlaces.at(i) = place;
