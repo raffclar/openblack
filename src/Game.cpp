@@ -2883,7 +2883,8 @@ void Game::UpdateCamera()
 	{
 		camera.SetOrigin(chase->origin).SetFocus(chase->focus);
 	}
-	FitNearClip();
+	// The near plane follows the height of the eye that the game drew last, with its lift above the land and its shake
+	FitNearClip(camera.GetOrigin(Camera::Interpolation::Drawn));
 }
 
 void Game::UpdateTemple(std::chrono::microseconds deltaTime)
@@ -6177,7 +6178,7 @@ void Game::FollowWindowSize()
 	}
 }
 
-void Game::FitNearClip()
+void Game::FitNearClip(const glm::vec3& eye)
 {
 	// Outside a camera with a lens of its own, the near plane follows the camera's height over the land, but for close
 	// shots: a script's, and a miracle's camera path
@@ -6186,14 +6187,37 @@ void Game::FitNearClip()
 	{
 		return;
 	}
-	const auto origin = camera.GetOrigin();
-	const float height = origin.y - Locator::terrainSystem::value().GetHeightAt(glm::vec2(origin.x, origin.z));
+	const float height = eye.y - Locator::terrainSystem::value().GetHeightAt(glm::vec2(eye.x, eye.z));
 	const float nearClip = near_clipping::NearPlane(height, Locator::cinematicDirectorSystem::value().IsCloseClipping() ||
 	                                                            Locator::cameraPathSystem::value().HoldsCamera());
 	if (nearClip != camera.GetNearClip())
 	{
 		camera.SetNearClip(nearClip);
 	}
+}
+
+void Game::FitInspectorNearClip(bool shown, const glm::vec3& eyeBefore, const glm::vec3& focusBefore)
+{
+	auto& camera = Locator::camera::value();
+	if (!shown)
+	{
+		// The game's camera gets back the near plane that it had before the inspector showed a different view
+		if (const auto nearClip = std::exchange(_nearClipUnderInspector, std::nullopt); nearClip.has_value())
+		{
+			camera.SetNearClip(*nearClip);
+		}
+		return;
+	}
+	if (camera.GetOrigin() == eyeBefore && camera.GetFocus() == focusBefore)
+	{
+		return;
+	}
+	// A different view gets the near plane for the height of its own eye
+	if (!_nearClipUnderInspector.has_value())
+	{
+		_nearClipUnderInspector = camera.GetNearClip();
+	}
+	FitNearClip(camera.GetOrigin());
 }
 
 void Game::ShowInspectorCamera(bool shown)
@@ -6203,6 +6227,9 @@ void Game::ShowInspectorCamera(bool shown)
 		return;
 	}
 	auto& inspector = Locator::inspector::value();
+	const auto& camera = Locator::camera::value();
+	const auto eyeBefore = camera.GetOrigin();
+	const auto focusBefore = camera.GetFocus();
 	if (shown)
 	{
 		inspector.PlaceCamera();
@@ -6211,7 +6238,7 @@ void Game::ShowInspectorCamera(bool shown)
 	{
 		inspector.GiveCameraBack();
 	}
-	FitNearClip();
+	FitInspectorNearClip(shown, eyeBefore, focusBefore);
 }
 
 void Game::ShowInspectorOverride(bool shown)
@@ -6221,6 +6248,9 @@ void Game::ShowInspectorOverride(bool shown)
 		return;
 	}
 	auto& inspector = Locator::inspector::value();
+	const auto& camera = Locator::camera::value();
+	const auto eyeBefore = camera.GetOrigin();
+	const auto focusBefore = camera.GetFocus();
 	if (shown)
 	{
 		inspector.ShowOverrideToPointer();
@@ -6229,7 +6259,7 @@ void Game::ShowInspectorOverride(bool shown)
 	{
 		inspector.GiveCameraBack();
 	}
-	FitNearClip();
+	FitInspectorNearClip(shown, eyeBefore, focusBefore);
 }
 
 void Game::RequestScreenshot(const std::filesystem::path& path, bool hideDebugGui) noexcept

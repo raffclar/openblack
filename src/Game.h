@@ -890,8 +890,11 @@ private:
 	/// The view of the player's world camera for the help, none when the world camera does not show the world. The
 	/// camera that watches a creature fight is part of the world camera.
 	[[nodiscard]] static std::optional<help::profile::WorldCameraView> HelpWorldCameraView();
-	/// The near plane for the camera where it is now
-	void FitNearClip();
+	/// The near plane for the camera at the height of `eye` above the land
+	void FitNearClip(const glm::vec3& eye);
+	/// The near plane for a view that the inspector shows, from the eye of that view. When the inspector gives the camera
+	/// back, the camera gets its near plane back.
+	void FitInspectorNearClip(bool shown, const glm::vec3& eyeBefore, const glm::vec3& focusBefore);
 	/// Shows the camera where the inspector wants the frame drawn from (an override, a picture's), or gives the camera
 	/// back its own place: the game's own frame (the hand, picking, the sound) goes by its own camera, only the drawing
 	/// by the shown one
@@ -923,6 +926,8 @@ private:
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
 	/// The requested screenshot leaves the debug windows out
 	bool _screenshotHidesDebugGui {false};
+	/// The near plane of the game's camera while the inspector shows a different view
+	std::optional<float> _nearClipUnderInspector;
 	/// A frame drawn without the debug windows though no picture is taken of it
 	std::optional<uint32_t> _debugGuiHiddenFrame;
 	std::unique_ptr<audio::AtmosAudio> _atmosAudio;
