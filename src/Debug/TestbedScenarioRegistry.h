@@ -1323,6 +1323,8 @@ void AddCreatureDanceScenarios(std::vector<Scenario>& all);
 void AddCreatureLearningScenarios(std::vector<Scenario>& all);
 /// Creatures going to the places of their map of the land: a hill and its ridge, and the beach
 void AddCreatureExplorationScenarios(std::vector<Scenario>& all);
+/// Creature actions that Land 1 can start and that no other scenario stages, each told by a script
+void AddCreatureActionScenarios(std::vector<Scenario>& all);
 /// The network map for 32 gods, with a citadel and a village in each slot
 void AddGodsRingMapScenarios(std::vector<Scenario>& all);
 

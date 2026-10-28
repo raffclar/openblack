@@ -10790,6 +10790,7 @@ std::vector<Scenario> Build()
 	AddWorldSoundScenarios(all);
 	AddTownMiracleScenarios(all);
 	AddCreatureExplorationScenarios(all);
+	AddCreatureActionScenarios(all);
 	AddScriptTaskRelease(all);
 	AddLandOneScriptStubScenarios(all);
 	AddVillagerSizeAndReachScenarios(all);
