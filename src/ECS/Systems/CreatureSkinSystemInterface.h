@@ -18,6 +18,12 @@
 
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureTattoo.h"
+#include "Enums.h"
+
+namespace openblack::player_commands
+{
+struct CreatureTattoo;
+} // namespace openblack::player_commands
 
 namespace openblack::ecs::systems
 {
@@ -48,6 +54,8 @@ public:
 	/// Makes the masks of the creature's player again from the creature's tattoos (see creature_tattoo::RemakeMasks).
 	/// The skins do not change until something paints them again.
 	virtual void RemakeTattooMasks(entt::entity creature, creature_tattoo::Sheet sheet) = 0;
+	/// At the turn: the tattoo editor of the player changed the tattoos of a creature (player_commands::CreatureTattoo)
+	virtual void DoTattoo(PlayerNames /*player*/, const player_commands::CreatureTattoo& /*tattoo*/) {}
 	/// Paints the creature's tattoos again, as they are now, with the masks of its player
 	virtual void PaintTattoos(entt::entity creature) = 0;
 	/// Puts tattoos on a creature as the end of a drag in the tattoo editor does. The creature gets the slots and the

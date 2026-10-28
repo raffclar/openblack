@@ -71,6 +71,7 @@
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple/ChallengeRoomRules.h"
+#include "Temple/ScrollPictures.h"
 
 using namespace openblack::gui;
 using openblack::Locator;
@@ -84,6 +85,8 @@ constexpr std::array k_TextScripts = {"InfoScript2.txt", "InfoScriptPatch2.txt",
 constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED";
 /// "Warning. The game may not be synchronised on your machine. Continue?" The game's text has this name.
 constexpr std::string_view k_OutOfSyncText = "HELP_TEXT_SINGING_STONE_CURSE_03";
+// "%s is out of the game."
+constexpr std::string_view k_GodOutText = "HELP_TEXT_WIN_GAME_03";
 /// The words of a resynchronisation (user decision MI-4). The game has no text for them.
 constexpr std::u16string_view k_ResyncText = u"Resynchronising...";
 /// The words stand in the middle of the top of the dialog space, in the dialogs' middle text size
@@ -381,6 +384,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
     , _saveGameBoxes(std::make_unique<SaveGameBoxes>(_texts, _font))
+    , _endGameBox(std::make_unique<EndGameBox>(_texts, _font))
     , _multiplayerBoxes(std::make_unique<MultiplayerBoxes>(_texts, _font))
     , _musicControls(std::make_unique<CustomMusicControls>(_font, _atmos.get()))
     , _toolTips(ReadToolTipsInfo())
@@ -454,6 +458,48 @@ bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec
 void GameInterface::ShowSaveProblem()
 {
 	_saveGameBoxes->Tell(std::u16string(_texts.Get(k_SaveProblemText)));
+}
+
+void GameInterface::OpenEndGameBox(EndGameBox::Contents contents)
+{
+	// The end box closes the other boxes of the game
+	_menu->Close();
+	_saveGameBoxes->WithdrawMessage();
+	_endGameBox->Open(std::move(contents));
+}
+
+void GameInterface::ShowGodOut(std::u16string_view name)
+{
+	const std::array words {name};
+	_saveGameBoxes->Tell(end_game_box::Format(_texts.Get(k_GodOutText), words));
+}
+
+bool GameInterface::ProcessEndGameBoxEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_endGameBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_endGameBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button == SDL_BUTTON_LEFT && _endGameBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_KEYDOWN:
+	case SDL_TEXTINPUT:
+		// The end box takes the keys, and Escape does not close it
+		return true;
+	default:
+		return false;
+	}
 }
 
 void GameInterface::AskOutOfSync()
@@ -873,6 +919,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	{
 		return true;
 	}
+	if (_endGameBox->IsOpen())
+	{
+		return ProcessEndGameBoxEvent(event);
+	}
 	if (_saveGameBoxes->IsActive())
 	{
 		return ProcessSaveGameBoxesEvent(event);
@@ -1043,6 +1093,7 @@ void GameInterface::Update(float deltaSeconds)
 	_storyHistoryBox->Update(deltaSeconds);
 	_newPlayerBox->Update(deltaSeconds);
 	_saveGameBoxes->Update(deltaSeconds);
+	_endGameBox->Update(deltaSeconds);
 	// The answer to the out-of-sync box: Yes plays on, No leaves the game
 	if (_outOfSyncAsked && !_saveGameBoxes->IsActive())
 	{
@@ -1106,10 +1157,12 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// and the fades
 	DrawVillagerLabels(resolution);
 	DrawTipBubble(resolution, mouse);
+	DrawTempleScrollPictures(resolution);
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
-	                      _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() || _multiplayerBoxes->IsActive();
+	                      _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() || _multiplayerBoxes->IsActive() ||
+	                      _endGameBox->IsOpen();
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value());
 	// A cut scene leaves some of the interface off the screen
 	const auto& cinema = Locator::cinematicDirectorSystem::value();
@@ -1191,6 +1244,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		}
 		_saveGameBoxes->Draw(_painter);
 		_multiplayerBoxes->Draw(_painter);
+		_endGameBox->Draw(_painter);
 		if (_menu->IsVisible())
 		{
 			_menu->Draw(_painter);
@@ -1204,8 +1258,10 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// A video on a screen wider than its picture has black bars at its sides, which go with the cinema bars
 	const auto sides = static_cast<float>(DrawVideo(resolution));
 	// The scripts' fade covers the picture between the cinema bars, which are black
+	// The multiplayer front end can open over a cut scene from the browser page. Its room shows with no cinema bars.
 	const auto& director = Locator::cinematicDirectorSystem::value();
-	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, director.GetWideScreenFraction()));
+	const auto barFraction = _multiplayerBoxes->IsActive() ? 0.0f : director.GetWideScreenFraction();
+	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, barFraction));
 	const auto screen = glm::vec2(resolution);
 	const auto drawBars = [&screen, bars, sides](Canvas& canvas) {
 		const auto black = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -1608,6 +1664,69 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 		DrawBubbleLine(canvas, line, glm::vec3(1.0f));
 	}
 	afterDrawing();
+}
+
+void GameInterface::DrawTempleScrollPictures(glm::u16vec2 resolution)
+{
+	namespace pictures = temple::scroll_pictures;
+	if (!Locator::temple::has_value() || !Locator::camera::has_value() || !Locator::temple::value().Active())
+	{
+		return;
+	}
+	const auto& lines = Locator::temple::value().GetScrollPictures();
+	if (lines.empty())
+	{
+		return;
+	}
+	const auto& camera = Locator::camera::value();
+	const auto viewProjection = camera.GetViewProjectionMatrix();
+	const float nearClip = camera.GetNearClip();
+	const auto screen = glm::vec2(resolution);
+	const pictures::ProjectFn project = [&viewProjection, nearClip, screen](glm::vec3 point) {
+		using Seen = pictures::ScreenPoint::Seen;
+		const auto clip = viewProjection * glm::vec4(point, 1.0f);
+		pictures::ScreenPoint out {.depth = clip.w};
+		if (clip.w < nearClip)
+		{
+			return out;
+		}
+		out.pixel = {((clip.x / clip.w) + 1.0f) * screen.x * 0.5f, (1.0f - (clip.y / clip.w)) * screen.y * 0.5f};
+		const bool inside = out.pixel.x >= 0.0f && out.pixel.y >= 0.0f && out.pixel.x < screen.x && out.pixel.y < screen.y;
+		out.seen = inside ? Seen::OnScreen : Seen::OffScreen;
+		return out;
+	};
+	std::span<const input::KeyBinding> bindings;
+	if (Locator::gameActionSystem::has_value())
+	{
+		bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	}
+	const auto keyName = ControlKeyName();
+	const help::tip_bubble::ControlShownFn controlShown = [bindings, &keyName](int action) {
+		return help::control_icons::PictureFor(action, bindings, keyName).has_value();
+	};
+	const float pixelScale = ReferenceScale(resolution.x, resolution.y);
+	pictures::Pictures shown;
+	for (const auto& line : lines)
+	{
+		pictures::Place(shown, line, project, controlShown, pixelScale);
+	}
+	// A gesture's picture is flat on the screen, but the world in front of it hides it
+	auto& canvas = _worldLabelsCanvas;
+	const auto view = PrepareWorldTextCanvas(canvas);
+	for (const auto& [icon, depth] : shown.gestures)
+	{
+		const auto sheet = static_cast<size_t>(icon.sheet);
+		if (sheet < _gestureSheets.size() && _gestureSheets.at(sheet) != nullptr)
+		{
+			canvas.SetDepth(world_text::BufferDepth(view.projection, depth));
+			canvas.DrawQuad(icon.min, icon.max, icon.uvMin, icon.uvMax, icon.colour, _gestureSheets.at(sheet).get());
+		}
+	}
+	// A control's picture goes over all of the world
+	for (const auto& control : shown.controls)
+	{
+		DrawBubbleControl(control, bindings, pixelScale);
+	}
 }
 
 void GameInterface::DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,

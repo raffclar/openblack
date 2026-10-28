@@ -30,9 +30,9 @@ std::optional<uint32_t> creature_clear_way::ClearingAction(const Obstacle& obsta
 	{
 		return actions.kick;
 	}
-	const auto anger = static_cast<uint32_t>(creature_desires::Desire::Anger);
+	constexpr auto anger = static_cast<uint32_t>(creature_desires::Desire::Anger);
 	const auto miracle =
-	    std::ranges::find_if(miracles, [anger](const Miracle& m) { return m.known && m.action != 0 && m.desire == anger; });
+	    std::ranges::find_if(miracles, [](const Miracle& m) { return m.known && m.action != 0 && m.desire == anger; });
 	if (miracle == miracles.end())
 	{
 		return std::nullopt;

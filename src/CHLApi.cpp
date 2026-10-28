@@ -26,6 +26,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -63,6 +64,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "Common/PortableRotations.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
@@ -171,6 +173,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -192,6 +195,7 @@
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -362,10 +366,24 @@ uint32_t WideScreenOwner()
 	return Locator::cinematicDirectorSystem::value().GetWideScreenOwner();
 }
 
+/// A script gives the camera an order: the turns count it, so that a view report from before the order does not tell
+/// that the camera has arrived
+void CountCameraOrder()
+{
+	++Locator::entitiesRegistry::value().Context().scriptCameraOrders;
+}
+
+/// The script's camera, for a command that gives it an order
+ScriptCameraModel* OrderedScriptCamera()
+{
+	CountCameraOrder();
+	return Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+}
+
 /// The script's camera the camera commands move: with a warning when the script has none
 ScriptCameraModel* ScriptCamera()
 {
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("We are in the wrong camera mode! - exception happened?");
@@ -488,14 +506,15 @@ help::spirits::AdvisorSpiritController* ScriptAdvisors()
 }
 
 /// The advisor a script's spirit means, 1 the good one or 2 the evil one, by the local player's alignment for those
-/// that go by it
+/// that go by it. A random spirit comes from the random numbers of the help, which no frame draws.
 int32_t ScriptHelpSpirit(int32_t scriptSpirit)
 {
 	const auto alignment = Locator::alignmentSystem::has_value()
 	                           ? Locator::alignmentSystem::value().GetPlayerAlignment(ScriptPlayerName(0))
 	                           : 0.0f;
-	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment),
-	                                          []() { return Locator::gameRandom::value().LocalRand(100); });
+	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment), []() {
+		return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpRand(100) : 0u;
+	});
 }
 
 /// The last of the advisors' animations a script can play
@@ -619,7 +638,7 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	const auto seedType = static_cast<SpellSeedType>(subtype);
 	// The hand takes the miracle only when it is ready for an object
 	const bool holdsSomething =
-	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value()) ||
+	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldOf(player).has_value()) ||
 	    Locator::magicSystem::value().IsHandBusyOf(player);
 	const bool holdsCreature =
 	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature(player).has_value();
@@ -637,7 +656,7 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	registry.Get<ecs::components::SpellSeed>(seed).fromGlobe = true;
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType),
 	                                                      magic::k_BasePowerUpLevel);
-	if (const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+	if (const auto playerEntity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
 	    registry.Valid(playerEntity) && static_cast<size_t>(type) < ecs::components::Player::k_MagicTypeCount)
 	{
 		if (auto* component = registry.TryGet<ecs::components::Player>(playerEntity))
@@ -943,6 +962,7 @@ void CHLApi::TaskStopped(uint32_t task)
 	const auto released = Locator::scriptControlSystem::value().TaskStopped(Locator::camera::value(), task);
 	if (released.camera)
 	{
+		CountCameraOrder();
 		ApplySwitchChanges(script::switches::CameraReleased());
 	}
 	if (released.gameSpeed)
@@ -1129,7 +1149,9 @@ void NotImplemented(std::optional<int32_t> detail = std::nullopt)
 
 } // namespace
 
-/// What the player at this computer last clicked, kept on their hand; none without a hand
+/// What the player last clicked, kept on their hand; none without a hand. A game on one computer has the click of its
+/// own player, the first player. In a network game the turn writes the clicks, and the scripts read the clicks of the
+/// first player on every computer.
 ecs::components::HandClicked* LocalHandClicked()
 {
 	if (!Locator::handSystem::has_value())
@@ -1163,6 +1185,7 @@ void RemakeDrawList()
 /// has this position and focus, nothing changes. The land's draw list is made again on the next frame.
 void PlaceCamera(const glm::vec3& origin, const glm::vec3& focus)
 {
+	CountCameraOrder();
 	Locator::camera::value().Place(origin, focus);
 	RemakeDrawList();
 }
@@ -1173,7 +1196,7 @@ void SetCameraPosition() // 001 SET_CAMERA_POSITION
 {
 	const auto position = PopVec();
 	// Without the script's camera the position is quietly dropped
-	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
+	if (auto* camera = OrderedScriptCamera(); camera != nullptr)
 	{
 		camera->SetOrigin(position);
 		RemakeDrawList();
@@ -1210,38 +1233,25 @@ void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 	}
 }
 
-/// In a network game the scripts read the camera and the hand of the player from the last report of a turn, so that
-/// every computer gets the same answer; before the first report they read the middle of the world's axes. Alone, the
-/// scripts read the camera and the hand of this computer.
-bool ScriptsReadReports()
+/// The scripts read the camera, the hand and the view of the player from the last reports that a turn did, in a game
+/// alone too, so that every computer and every frame rate gets the same answer. Before the first report they read the
+/// middle of the world's axes.
+std::optional<HandSystemInterface::ReportedView> ScriptView()
 {
-	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportedView(PlayerNames::PLAYER_ONE)
+	                                        : std::nullopt;
 }
 
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
 {
-	if (ScriptsReadReports())
-	{
-		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-		PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
-		return;
-	}
-	auto& camera = Locator::camera::value();
-	const auto position = camera.GetOrigin();
-	PushVec(position);
+	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
 }
 
 void GetCameraFocus() // 006 GET_CAMERA_FOCUS
 {
-	if (ScriptsReadReports())
-	{
-		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
-		PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
-		return;
-	}
-	auto& camera = Locator::camera::value();
-	const auto focus = camera.GetFocus();
-	PushVec(focus);
+	const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+	PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
 }
 
 void SpiritEject() // 007 SPIRIT_EJECT
@@ -1302,14 +1312,14 @@ void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW
 	{
 		ObjectNoLongerValid();
 	}
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(PlayerNames::PLAYER_ONE);
 	Pushb(valid && !PlayerInsideTemple() && view.has_value() && ecs::thing_on_screen::OnScreen(*view, object));
 }
 
 void PosFieldOfView() // 012 POS_FIELD_OF_VIEW
 {
 	const auto position = PopVec();
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(PlayerNames::PLAYER_ONE);
 	Pushb(!PlayerInsideTemple() && view.has_value() && screen_pick::PointOnScreen(*view, position));
 }
 
@@ -1653,6 +1663,7 @@ static float LivingAngleOf(entt::entity object, const Transform& transform)
 static void TurnLivingThing(entt::entity object, Transform& transform, float angle)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	const bool turned = angle != LivingAngleOf(object, transform);
 	const auto heading = script::property_rules::LivingAngleToCreatureHeading(angle);
 	if (auto* walk = registry.TryGet<ecs::components::WallHug>(object); walk != nullptr)
 	{
@@ -1673,6 +1684,24 @@ static void TurnLivingThing(entt::entity object, Transform& transform, float ang
 	}
 	transform.rotation = glm::mat3(portable_math::EulerAngleY(heading.Yaw()));
 	registry.SetDirty();
+	// A thing that turns comes out of the map's cells and goes in again, at the front of the list of its cell
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
+}
+
+/// Turns a thing that is not living to the given angles and keeps them. A thing in the map's cells comes out of them and
+/// goes in again: always for a turn of a lean, and for a turn about the upright only when the angle about y changes.
+static void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool turned = lean || angles.y != ecs::placed_turn::AnglesOf(registry, object).y;
+	ecs::placed_turn::SetAngles(registry, object, angles);
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
 }
 
 /// Whether a thing may lean, so that its angles across and forward are its own; the others always stand upright
@@ -2129,7 +2158,7 @@ void SetProperty() // 022 SET_PROPERTY
 		(prop == script::ObjectPropertyType::Angle    ? angles.y
 		 : prop == script::ObjectPropertyType::XAngle ? angles.x
 		                                              : angles.z) = radians;
-		ecs::placed_turn::SetAngles(registry, object, angles);
+		TurnPlacedThing(object, angles, prop != script::ObjectPropertyType::Angle);
 		return;
 	}
 	case script::ObjectPropertyType::Strength:
@@ -2234,11 +2263,17 @@ void SetProperty() // 022 SET_PROPERTY
 			}
 			return;
 		}
-		// The thing is drawn at this size, the same along every axis
+		// The thing is drawn at this size, the same along every axis. A thing in the map's cells that changes its size
+		// comes out of them and goes in again.
 		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
 		{
+			const bool resized = transform->scale.x != value;
 			transform->scale = glm::vec3(value);
 			registry.SetDirty();
+			if (resized)
+			{
+				ecs::thing_map_place::Reinsert(object);
+			}
 		}
 		return;
 	case script::ObjectPropertyType::Age:
@@ -2377,6 +2412,10 @@ void SetPosition() // 024 SET_POSITION
 			// Its walk takes up the new place, and one under the script's control stops there and waits for it
 			ecs::walker_placement::Place(registry, object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
+			if (Locator::entitiesMap::has_value())
+			{
+				Locator::entitiesMap::value().Moved(object);
+			}
 			if (registry.AllOf<ecs::components::ScriptControlled>(object))
 			{
 				ecs::walker_placement::Stop(registry, object);
@@ -2390,6 +2429,10 @@ void SetPosition() // 024 SET_POSITION
 		{
 			Locator::creatureLocomotionSystem::value().PlaceWithoutWalking(object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
+			if (Locator::entitiesMap::has_value())
+			{
+				Locator::entitiesMap::value().Moved(object);
+			}
 			return;
 		}
 		ecs::thing_map_place::Put(registry, object, place, position.y);
@@ -2554,7 +2597,7 @@ static entt::entity FindForScript(int32_t type, uint32_t subtype, const glm::vec
 		// Not finding a thing is no mistake: scripts that wait for one to come (the singing stones put in their places)
 		// ask again and again. Only the closest tracing says which script asks and for what
 		const auto& tasks = Locator::vm::value().GetTasks();
-		const auto task = tasks.find(CurrentTask());
+		[[maybe_unused]] const auto task = tasks.find(CurrentTask());
 		SPDLOG_LOGGER_TRACE(spdlog::get("scripting"), "Thing not found: type {} subtype {} at ({}, {}) radius {} for {}", type,
 		                    subtype, position.x, position.z, radius.value_or(0.0f),
 		                    task != tasks.end() ? task->second.name : std::string("no script"));
@@ -2647,6 +2690,7 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 	{
 		Locator::creatureModeSystem::value().Leave();
 	}
+	CountCameraOrder();
 	const bool taken = Locator::scriptControlSystem::value().StartCameraControl(
 	    Locator::camera::value(), {.task = task, .templeScript = templeScript, .insideTemple = insideTemple},
 	    [](float x, float z) { return Locator::terrainSystem::value().GetHeightAt(glm::vec2(x, z)); });
@@ -2659,6 +2703,7 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 
 void EndCameraControl() // 031 END_CAMERA_CONTROL
 {
+	CountCameraOrder();
 	if (Locator::scriptControlSystem::value().EndCameraControl(Locator::camera::value(), CurrentTask()))
 	{
 		ApplySwitchChanges(script::switches::CameraReleased());
@@ -2772,7 +2817,7 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 		const auto& registry = Locator::entitiesRegistry::value();
 		const auto& transform = registry.Get<const Transform>(object);
 		const bool inMap =
-		    registry.AllOf<ecs::components::MapCellResident>(object) &&
+		    ecs::InMapCells(registry, object) &&
 		    !registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics, ecs::components::CarriedByTornado>(object);
 		if (inMap && Locator::creatureMindSystem::has_value())
 		{
@@ -2830,7 +2875,7 @@ static void FacePoint(entt::entity object, glm::vec3 point)
 	}
 	auto angles = ecs::placed_turn::AnglesOf(registry, object);
 	angles.y = angle;
-	ecs::placed_turn::SetAngles(registry, object, angles);
+	TurnPlacedThing(object, angles, false);
 }
 
 void SetFocus() // 034 SET_FOCUS
@@ -2864,18 +2909,10 @@ void HasCameraArrived() // 035 HAS_CAMERA_ARRIVED
 	{
 		ScriptMessage("Script camera in citadel");
 	}
-	auto& camera = Locator::camera::value();
-	if (const auto* script = Locator::scriptControlSystem::value().GetScriptCamera(camera); script != nullptr)
-	{
-		Pushb(script->Arrived());
-		return;
-	}
-	// The player's camera has arrived once where it is and what it looks at are where it is going
-	const auto distanceSquared = [](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a - b, a - b); };
-	Pushb(distanceSquared(camera.GetOrigin(Camera::Interpolation::Target), camera.GetOrigin()) <
-	          script_camera::k_ArrivedDistanceSquared &&
-	      distanceSquared(camera.GetFocus(Camera::Interpolation::Target), camera.GetFocus()) <
-	          script_camera::k_ArrivedDistanceSquared);
+	// The view report of the player tells whether the camera has arrived
+	const auto view = ScriptView();
+	Pushb(view.has_value() && script_camera::ArrivedByReport(view->cameraArrived, view->cameraOrders,
+	                                                         Locator::entitiesRegistry::value().Context().scriptCameraOrders));
 }
 
 /// A villager's town: it leaves its old town's homeless, then joins the new town
@@ -3324,16 +3361,8 @@ void GetHandPosition() // 042 GET_HAND_POSITION
 	{
 		ScriptMessage("Hand in citadel");
 	}
-	if (ScriptsReadReports())
-	{
-		const auto reported = Locator::handSystem::value().GetPlayerHandPositions()[0];
-		PushVec(reported.value_or(glm::vec3(0.0f)));
-		return;
-	}
-	const auto handEntity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	auto& handTransform = Locator::entitiesRegistry::value().Get<Transform>(handEntity);
-
-	PushVec(handTransform.position);
+	const auto reported = Locator::handSystem::value().GetPlayerHandPositions()[0];
+	PushVec(reported.value_or(glm::vec3(0.0f)));
 }
 
 /// The loaded sound group of a bank's file, whatever the case of the file's name on disk
@@ -3786,7 +3815,7 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 	// The totals of the alignment changes count the change before the alignment takes it
 	if (Locator::playerSystem::has_value())
 	{
-		const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+		const auto playerEntity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
 		if (registry.Valid(playerEntity))
 		{
 			auto* history = registry.TryGet<ecs::components::AlignmentHistory>(playerEntity);
@@ -3905,7 +3934,7 @@ void GetInfluence() // 062 GET_INFLUENCE
 	// A player who isn't in the game has no influence anywhere
 	std::optional<float> influence;
 	if (player < PlayerNames::_COUNT && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
-	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().GetPlayer(player)))
+	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().FindPlayer(player).value_or(entt::null)))
 	{
 		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
 	}
@@ -3927,7 +3956,8 @@ void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
 	if (Locator::playerSystem::has_value())
 	{
 		script::interface_levels::Apply(Locator::entitiesRegistry::value(),
-		                                Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE), level);
+		                                Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
+		                                level);
 	}
 }
 
@@ -4003,7 +4033,7 @@ void CallInNear() // 067 CALL_IN_NEAR
 	auto& registry = Locator::entitiesRegistry::value();
 	// Not finding one is no mistake: the Pied Piper asks every few seconds for a child near him. Only the closest tracing
 	// tells of it
-	const auto notFound = [type, subtype]() {
+	const auto notFound = [=]() {
 		SPDLOG_LOGGER_TRACE(spdlog::get("scripting"), "Cannot find in Near. {}.{}", type, subtype);
 		Pusho(0);
 	};
@@ -4591,7 +4621,7 @@ std::optional<std::pair<entt::entity, entt::entity>> PopDualThings()
 void StartDualCamera() // 093 START_DUAL_CAMERA
 {
 	const auto things = PopDualThings();
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (things.has_value() && camera != nullptr)
 	{
 		// The camera keeps both things in view, from the side of the line between them, until the script lets it go
@@ -4602,7 +4632,7 @@ void StartDualCamera() // 093 START_DUAL_CAMERA
 void UpdateDualCamera() // 094 UPDATE_DUAL_CAMERA
 {
 	const auto things = PopDualThings();
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (things.has_value() && camera != nullptr)
 	{
 		camera->UpdateDualView(DualSubjectOf(things->first), DualSubjectOf(things->second));
@@ -4612,7 +4642,7 @@ void UpdateDualCamera() // 094 UPDATE_DUAL_CAMERA
 void ReleaseDualCamera() // 095 RELEASE_DUAL_CAMERA
 {
 	// The script's own camera takes over again, from wherever the two-thing camera left it
-	if (auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value()); camera != nullptr)
+	if (auto* camera = OrderedScriptCamera(); camera != nullptr)
 	{
 		camera->ReleaseDualView();
 	}
@@ -4784,7 +4814,7 @@ std::optional<script_camera::View> FaceViewOf(entt::entity object, float distanc
 /// under a two-thing camera
 ScriptCameraModel* ScriptCameraToFace()
 {
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed!");
@@ -4933,17 +4963,15 @@ void GetGameTime() // 113 GET_GAME_TIME
 	Pushf(Locator::skySystem::value().GetClock().GetScriptTime());
 }
 
-/// The local time of the player's computer now
+/// The local time of the player's computer now. In a game for more than one player, the game tells the script that
+/// this is not safe there, and then gives the value.
 static std::tm RealLocalTime()
 {
-	const auto now = std::time(nullptr);
-	std::tm local {};
-#if defined(_WIN32)
-	localtime_s(&local, &now);
-#else
-	localtime_r(&now, &local);
-#endif
-	return local;
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+	{
+		ScriptMessage(script::real_time::k_NotMultiplayerFriendly);
+	}
+	return machine_clock::LocalTime();
 }
 
 void GetRealTime() // 114 GET_REAL_TIME
@@ -4975,7 +5003,7 @@ void GetRealYear() // 118 GET_REAL_YEAR
 void RunCameraPath() // 119 RUN_CAMERA_PATH
 {
 	const auto track = Pop().intVal;
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed! - Exception happened?");
@@ -5465,7 +5493,8 @@ void MoveMusic() // 149 MOVE_MUSIC
 void GetInclusionDistance() // 150 GET_INCLUSION_DISTANCE
 {
 	// The world camera's distance to the fence from its last fence test
-	Pushf(Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f);
+	const auto view = ScriptView();
+	Pushf(view.has_value() ? view->inclusionDistance : 0.0f);
 }
 
 void GetLandHeight() // 151 GET_LAND_HEIGHT
@@ -5868,7 +5897,7 @@ void CameraProperties() // 180 CAMERA_PROPERTIES
 	const auto angle = Popf() * k_DegreesToRadians;
 	const auto glideScale = Popf();
 	const auto distance = Popf();
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed! - Exception happened?");
@@ -5937,12 +5966,17 @@ void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 	{
 		return;
 	}
+	// The leash goes back to the hand and on again, so its leash becomes the picked leash at the temple again
 	auto& leashes = Locator::leashSystem::value();
 	if (leashes.TiedTo(creature).has_value())
 	{
 		leashes.UntieToHand(creature);
 	}
-	else if (!leashes.IsLeashed(creature))
+	if (leashes.IsLeashed(creature))
+	{
+		leashes.PutOn(creature, leashes.TypeOf(creature));
+	}
+	else
 	{
 		leashes.Toggle(creature);
 	}
@@ -6195,12 +6229,13 @@ void GetSlowestSpeed() // 198 GET_SLOWEST_SPEED
 
 void GetObjectHeld199() // 199 GET_OBJECT_HELD
 {
-	// What the player's hand holds, if anything: a thing it took hold of, else the miracle in it
+	// What the hand of this computer holds, if anything: a thing it took hold of, else the miracle in it. In a network
+	// game each computer reads the hand of its own god, thus a script that acts on the answer can part the game
+	// (vanilla-bugs row 497).
 	auto held = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetHeld() : std::nullopt;
 	if (!held.has_value() && Locator::magicSystem::has_value())
 	{
-		held = Locator::magicSystem::value().GetHeldSeedOf(
-		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE);
+		held = Locator::magicSystem::value().GetHeldSeed();
 	}
 	if (!held.has_value() || !Locator::entitiesRegistry::value().Valid(*held))
 	{
@@ -7082,7 +7117,7 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 	{
 		const auto name = static_cast<PlayerNames>(p);
 		if (name == PlayerNames::NEUTRAL ||
-		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPlayer(name) != entt::null))
+		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().FindPlayer(name).has_value()))
 		{
 			inGame.push_back(name);
 		}
@@ -7118,7 +7153,7 @@ void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
 	if (!registry.Valid(entity))
 	{
 		return;
@@ -7480,7 +7515,7 @@ void GetObjectLeashType() // 275 GET_OBJECT_LEASH_TYPE
 /// The thing a following command is given, and the script's camera, each complained of when missing
 std::pair<entt::entity, ScriptCameraModel*> FollowCommand(entt::entity thing)
 {
-	auto* camera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+	auto* camera = OrderedScriptCamera();
 	if (camera == nullptr)
 	{
 		ScriptMessage("Script camera has been removed! - Exception happened?");
@@ -7576,9 +7611,13 @@ void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT
 
 void StoreCameraDetails() // 283 STORE_CAMERA_DETAILS
 {
-	// The script keeps where the camera is and where it looks, whatever has the camera
-	const auto& camera = Locator::camera::value();
-	Locator::scriptControlSystem::value().StoreCameraDetails({.origin = camera.GetOrigin(), .focus = camera.GetFocus()});
+	// The script keeps where the camera is and where it looks as the frame draws it, whatever has the camera. It reads
+	// the camera from the last view report, as the other camera reads of the scripts do.
+	const auto view = ScriptView();
+	Locator::scriptControlSystem::value().StoreCameraDetails({
+	    .origin = view.has_value() ? view->eye : glm::vec3(0.0f),
+	    .focus = view.has_value() ? view->focus : glm::vec3(0.0f),
+	});
 }
 
 void RestoreCameraDetails() // 284 RESTORE_CAMERA_DETAILS
@@ -7954,39 +7993,47 @@ void CreatureForceFriends() // 309 CREATURE_FORCE_FRIENDS
 
 void MoveComputerPlayerPosition() // 310 MOVE_COMPUTER_PLAYER_POSITION
 {
-	// const auto withFixedHeight = static_cast<bool>(Pop().intVal);
-	// const auto speed = Popf();
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withFixedHeight = Pop().intVal != 0;
+	const auto speed = Popf();
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().MoveHand(player, position, speed, withFixedHeight);
+	}
 }
 
 void EnableDisableComputerPlayer311() // 311 ENABLE_DISABLE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto enable = Pop().intVal != 0;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetActive(player, enable);
+	}
 }
 
 void GetComputerPlayerPosition() // 312 GET_COMPUTER_PLAYER_POSITION
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// A player with no computer mind gives the origin
+	std::optional<glm::vec3> position;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		position = Locator::computerPlayerSystem::value().HandPosition(player);
+	}
+	PushVec(position.value_or(glm::vec3(0.0f)));
 }
 
 void SetComputerPlayerPosition() // 313 SET_COMPUTER_PLAYER_POSITION
 {
-	// const auto withFixedHeight = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withFixedHeight = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetHand(player, position, withFixedHeight);
+	}
 }
 
 void GetStoredCameraPosition() // 314 GET_STORED_CAMERA_POSITION
@@ -8401,8 +8448,10 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 	const bool heldCreature = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(object);
 	const bool grippedTotem =
 	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 	const bool scooped =
-	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn() == std::optional(object);
+	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOnOf(player) == std::optional(object);
 	Pushb(heldCreature || grippedTotem || scooped);
 }
 
@@ -8427,18 +8476,18 @@ void SetCreatureName() // 343 SET_CREATURE_NAME
 
 void ComputerPlayerReady() // 344 COMPUTER_PLAYER_READY
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	Pushb(Locator::computerPlayerSystem::has_value() && Locator::computerPlayerSystem::value().Ready(player));
 }
 
 void EnableDisableComputerPlayer345() // 345 ENABLE_DISABLE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// const auto pause = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto pause = Pop().intVal != 0;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPaused(player, pause);
+	}
 }
 
 void ClearActorMind() // 346 CLEAR_ACTOR_MIND
@@ -8695,40 +8744,48 @@ void SetScaffoldProperties() // 363 SET_SCAFFOLD_PROPERTIES
 
 void SetComputerPlayerPersonality() // 364 SET_COMPUTER_PLAYER_PERSONALITY
 {
-	// const auto probability = Popf();
-	// const auto aspect = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto weight = Popf();
+	const auto aspect = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPersonality(player, aspect, weight);
+	}
 }
 
 void SetComputerPlayerSuppression() // 365 SET_COMPUTER_PLAYER_SUPPRESSION
 {
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto suppression = Popf();
+	const auto aspect = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetSuppression(player, aspect, suppression);
+	}
 }
 
 void ForceComputerPlayerAction() // 366 FORCE_COMPUTER_PLAYER_ACTION
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// const auto action = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto action = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		std::ignore = Locator::computerPlayerSystem::value().ForceAction(player, action, first, second);
+	}
 }
 
 void QueueComputerPlayerAction() // 367 QUEUE_COMPUTER_PLAYER_ACTION
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// const auto action = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto action = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().QueueAction(player, action, first, second);
+	}
 }
 
 void GetTownWithId() // 368 GET_TOWN_WITH_ID
@@ -8774,17 +8831,22 @@ void SetDisciple() // 369 SET_DISCIPLE
 
 void ReleaseComputerPlayer() // 370 RELEASE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The mind continues and releases the hand
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPaused(player, false);
+	}
 }
 
 void SetComputerPlayerSpeed() // 371 SET_COMPUTER_PLAYER_SPEED
 {
-	// const auto speed = Popf();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto speed = Popf();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetSpeed(player, speed);
+	}
 }
 
 void SetFocusFollowComputerPlayer() // 372 SET_FOCUS_FOLLOW_COMPUTER_PLAYER
@@ -9087,7 +9149,7 @@ ecs::components::Player* ScriptPlayer(float number)
 	{
 		return nullptr;
 	}
-	const auto entity = Locator::playerSystem::value().GetPlayer(name);
+	const auto entity = Locator::playerSystem::value().FindPlayer(name).value_or(entt::null);
 	auto& registry = Locator::entitiesRegistry::value();
 	return registry.Valid(entity) ? registry.TryGet<ecs::components::Player>(entity) : nullptr;
 }
@@ -9213,13 +9275,11 @@ void GetHandState() // 413 GET_HAND_STATE
 	facts.interfaceActive =
 	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	facts.inTemple = PlayerInsideTemple();
-	if (Locator::camera::has_value())
+	// The grip of the land and the other button come from the view report of the player
+	if (const auto view = ScriptView(); view.has_value())
 	{
-		facts.gripsLand = Locator::camera::value().GetModel().GetHandCues().dragging;
-	}
-	if (Locator::gameActionSystem::has_value())
-	{
-		facts.otherButton = Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK);
+		facts.gripsLand = view->gripsLand;
+		facts.otherButton = view->otherButton;
 	}
 	if (Locator::cameraHelpSystem::has_value())
 	{
@@ -9680,9 +9740,11 @@ void GetSpellIconInTemple() // 453 GET_SPELL_ICON_IN_TEMPLE
 
 void GameClearComputerPlayerActions() // 454 GAME_CLEAR_COMPUTER_PLAYER_ACTIONS
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().ClearActions(player);
+	}
 }
 
 void GetFirstInContainer() // 455 GET_FIRST_IN_CONTAINER

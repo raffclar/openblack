@@ -27,8 +27,14 @@ part of the synced world, and the report names the parts that differ first.
 
     python tools/sim/cross_check.py --turns 1000
     python tools/sim/cross_check.py --turns 1000 --testbed
+    python tools/sim/cross_check.py --turns 1500 --gods-ring-map --parts
     python tools/sim/cross_check.py --turns 1000 --input tools/sim/hand_inputs/land1.json --parts
     python tools/sim/cross_check.py --turns 300 --web-only --commands E:/runs/x/commands.jsonl
+    python tools/sim/cross_check.py --turns 430 --gods-ring-map --trace-draws
+
+With --trace-draws the desktop and the web runs write a draw trace (each synced random draw with its turn and the place
+of its call; the web build writes it to its standard output), and the summary shows the first draw where the web run is
+not the same as the desktop run (draw_trace.py).
 
 Each program starts with no console window of its own, and the desktop game with --background. The script stops only
 the processes that it started, by their own process ids. Each Chrome run has its own profile folder in the output
@@ -46,6 +52,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+import draw_trace  # noqa: E402
 import sim_report  # noqa: E402
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
@@ -130,6 +137,8 @@ def where_arguments(options):
         return ["--scenario", options.scenario, "--scenario-hide-window"]
     if options.testbed:
         return ["--testbed"]
+    if options.gods_ring_map:
+        return ["--gods-ring-map"]
     return ["-s", options.land, "--skip-opening", options.opening]
 
 
@@ -183,6 +192,8 @@ def play_desktop(options, out, commands):
     command = [options.desktop_exe, "-g", options.game_path] + common_arguments(options) + [
         "--sim-still-hand", "--sim-play-commands", commands, "--sim-checksums", checksums, "-n", "4000000000",
         "--background", "-l", os.path.join(folder, "game.log")]
+    if options.trace_draws:
+        command += ["--sim-trace-draws", os.path.join(folder, "draws.tsv")]
     code = run(command, folder)
     if code != 0:
         raise RuntimeError(f"the desktop run ended with exit code {code}; see {folder}")
@@ -207,6 +218,8 @@ def play_web(options, out, commands):
         time.sleep(1.0)
         arguments = common_arguments(options) + ["--sim-still-hand", "--sim-play-commands",
                                                  f"{WEB_TOOL_FILES}/{name}", "--sim-checksums", "-"]
+        if options.trace_draws:
+            arguments += ["--sim-trace-draws", "-"]
         if options.renderer:
             arguments += ["--backend-type", options.renderer]
         query = "autoplay&tool-file=" + name + "&args=" + "%20".join(arguments)
@@ -224,7 +237,26 @@ def play_web(options, out, commands):
         server.wait()
         if os.path.exists(served):
             os.remove(served)
+    if options.trace_draws:
+        split_draws(checksums, os.path.join(folder, "draws.tsv"))
     return checksums
+
+
+# The first words of the lines of a draw trace (see draw_trace.py)
+DRAW_TRACE_WORDS = ("draw\t", "set\t", "stop\t", "restart")
+
+
+def split_draws(checksums, draws):
+    """Moves the draw trace lines that the web run gave with its checksum lines into a file of their own"""
+    kept = []
+    with open(checksums, encoding="utf-8") as source, open(draws, "w", encoding="utf-8") as trace:
+        for line in source:
+            if line.startswith(DRAW_TRACE_WORDS):
+                trace.write(line)
+            else:
+                kept.append(line)
+    with open(checksums, "w", encoding="utf-8") as file:
+        file.writelines(kept)
 
 
 def main(argv=None):
@@ -234,11 +266,14 @@ def main(argv=None):
     parser.add_argument("--land", default="Land1.txt")
     parser.add_argument("--opening", default="cow")
     parser.add_argument("--testbed", action="store_true", help="the creature testbed instead of a land")
+    parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods instead of a land")
     parser.add_argument("--scenario", help="a testbed scenario by its id")
     parser.add_argument("--frame-ms", type=float, default=20.0)
     parser.add_argument("--input", help="recorded input for the hand of the record run (tools/sim/hand_inputs)")
     parser.add_argument("--parts", action="store_true", help="keep the hash of each part of the synced world")
     parser.add_argument("--fields", action="store_true", help="as --parts, and the hash of each field (large lines)")
+    parser.add_argument("--trace-draws", action="store_true",
+                        help="the desktop and the web runs write a draw trace; the summary shows the first different draw")
     parser.add_argument("--dump", help="TURN:Component,Component: each field of each row of those components at the turn")
     parser.add_argument("--config", default="RelWithDebInfo", help="the desktop build's config")
     parser.add_argument("--desktop-exe", help="openblack.exe of the desktop build")
@@ -280,6 +315,12 @@ def main(argv=None):
     summary["lines"] = {key: len(value) for key, value in turns.items()}
     if "desktop" in turns and "web" in turns:
         summary["desktop_web"] = compare(turns["desktop"], turns["web"], options.turns)
+        if options.trace_draws:
+            traces = [os.path.join(out, side, "draws.tsv") for side in ("desktop", "web")]
+            if all(os.path.exists(path) for path in traces):
+                result = draw_trace.compare(*traces)
+                summary["draws"] = result
+                print("\n".join(draw_trace.summary_lines(result, "desktop", "web")))
     if "record" in turns and "desktop" in turns:
         summary["record_desktop"] = compare(turns["record"], turns["desktop"], options.turns)
     summary["seconds"] = round(time.monotonic() - started, 1)

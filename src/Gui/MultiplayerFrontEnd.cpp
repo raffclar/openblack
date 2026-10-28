@@ -562,8 +562,10 @@ void MultiplayerFrontEnd::RequestTicket(const lobby_api::ServerEntry& server, ga
 		    }
 		    if (!result.Ok())
 		    {
-			    // The gods fill the room: the player joins it as an observer
-			    if (role == game_socket::Role::God && result.error.code == lobby_api::problems::k_ServerFull)
+			    // The gods fill the room, or the game started and the account has no god in it: the player joins as an
+			    // observer (MP-Q12)
+			    if (role == game_socket::Role::God && (result.error.code == lobby_api::problems::k_ServerFull ||
+			                                           result.error.code == lobby_api::problems::k_GameStarted))
 			    {
 				    RequestTicket(server, game_socket::Role::Observer, std::move(password));
 				    return;

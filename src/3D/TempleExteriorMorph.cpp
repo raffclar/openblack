@@ -32,6 +32,11 @@ bool NeedsBlend(std::optional<glm::vec2> blendedFor, glm::vec2 look, bool meshLo
 	return !meshLoaded || blendedFor != look;
 }
 
+bool BlendsAfterLoad(std::optional<glm::vec2> blendedFor)
+{
+	return blendedFor.has_value();
+}
+
 float Step(float current, float target)
 {
 	if (std::abs(current - target) <= k_Near)

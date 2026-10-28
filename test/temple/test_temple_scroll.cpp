@@ -409,3 +409,22 @@ TEST(TempleScrolls, TheLibrarysHelpScrollsListTheTipsRead)
 	ASSERT_TRUE(creature.has_value());
 	EXPECT_EQ(*creature, u"Creature<N><N><N>Tip<N><N><N><E>");
 }
+
+TEST(TempleScrollTexture, APictureLineGivesItsCodeAndThePlaceOfTheWordsBefore)
+{
+	const auto font = LoadFont();
+	const std::u16string gesture {TempleScrollText::k_Gesture, static_cast<char16_t>(TempleScrollText::k_Hidden + 3)};
+	std::vector<TempleScrollTexture::PictureLine> pictures;
+	int drawn = 0;
+	// The scroll passes over the line of words, but the picture after it starts where those words start. Only the
+	// blank line after the picture is a line of words.
+	TempleScrollTexture::LayOut(
+	    u"A<N>" + gesture + u"<N><N><E>", 10, font, [&drawn](std::u16string_view, float, float) { ++drawn; },
+	    [&pictures](const TempleScrollTexture::PictureLine& line) { pictures.push_back(line); });
+	EXPECT_EQ(drawn, 1);
+	ASSERT_EQ(pictures.size(), 1);
+	EXPECT_EQ(pictures[0].marker, TempleScrollText::k_Gesture);
+	EXPECT_EQ(pictures[0].number, 3);
+	EXPECT_FLOAT_EQ(pictures[0].lastX, (256.0f - (font.GetWidth(u"A", 10.0f) * TempleScrollTexture::k_Stretch)) * 0.5f);
+	EXPECT_FLOAT_EQ(pictures[0].y, 0.0f);
+}

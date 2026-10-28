@@ -55,7 +55,6 @@ private:
 	camera_zones::Zones _zones;
 	std::string _fileName;
 	std::shared_ptr<particles::LightSheet> _forceField;
-	bool _forceFieldShown {false};
 	uint32_t _fenceHits {0};
 	float _inclusionDistance {0.0f};
 };

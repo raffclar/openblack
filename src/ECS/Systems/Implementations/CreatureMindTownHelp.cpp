@@ -17,6 +17,7 @@
 #include "Creature/CreatureTownHelp.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/Creature.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
@@ -33,6 +34,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorshipSites.h"
@@ -80,17 +82,26 @@ entt::entity TownOfTotem(const ecs::Registry& registry, entt::entity totem)
 }
 
 /// Whether a creature may move a totem: the same rule as the hand that takes it. The totem is of a town of the player
-/// who watches, and it works. The heart of that player's temple and the town's worship site stand built. With one player
-/// at this machine, the player who watches is that player.
-bool MayMoveTotem(const ecs::Registry& registry, entt::entity totem)
+/// who watches the creature, and it works. The heart of that player's temple and the town's worship site stand built.
+/// The player who watches is the creature's own player (see creature_town_help::WatchingPlayer).
+bool MayMoveTotem(const ecs::Registry& registry, entt::entity totem, entt::entity self)
 {
 	const auto town = TownOfTotem(registry, totem);
 	const auto* townComponent = town != entt::null ? registry.TryGet<const Town>(town) : nullptr;
-	if (townComponent == nullptr || !Locator::playerSystem::has_value())
+	const auto* creature = registry.Valid(self) ? registry.TryGet<const Creature>(self) : nullptr;
+	if (townComponent == nullptr || creature == nullptr)
 	{
 		return false;
 	}
-	const auto player = Locator::playerSystem::value().GetLocalPlayer();
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto local =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto watcher = creature_town_help::WatchingPlayer(creature->owner, networkGame, local);
+	if (!watcher.has_value())
+	{
+		return false;
+	}
+	const auto player = *watcher;
 	bool heartBuilt = false;
 	registry.Each<const Temple>([&registry, player, &heartBuilt](entt::entity heart, const Temple& standing) {
 		heartBuilt = heartBuilt || (standing.owner == player && Built(registry, heart));
@@ -168,7 +179,7 @@ bool ecs::systems::mind_town_help::Accepts(const ecs::Registry& registry, Target
 		       creature_town_help::FarFromHome(gutils::GetDistanceInMetres(home->position, at->position));
 	}
 	case Target::PlayerTotem:
-		return registry.AllOf<VillageTotem>(thing) && MayMoveTotem(registry, thing);
+		return registry.AllOf<VillageTotem>(thing) && MayMoveTotem(registry, thing, self);
 	default:
 		return false;
 	}

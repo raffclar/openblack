@@ -257,6 +257,23 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_effects_frames",
+	    .name = "An open vortex close up, its swirl and stars stepped in the drawn frames",
+	    .facet = Facet::Miracles,
+	    .description = "A way out of a land opens on the flat plane after a second, seen from close above with the camera "
+	                   "still, and stays open. Its swirl and the stars over it step no more often than 60 times a second, "
+	                   "each step by all the game time since the last.",
+	    .expected = "The funnel spins and the stars over the hole turn as they do at 60 frames a second, also at hundreds "
+	                "of frames a second. They do not flicker more at a high frame rate. Their random numbers are only "
+	                "this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x, 45.0f, k_OnThePlane.y - 45.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .vortices = {{.type = VortexType::In, .offset = k_OnThePlane, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "audio.vortex_hum_stops_far_away",
 	    .name = "The hum of a vortex stops far away",
 	    .facet = Facet::Audio,

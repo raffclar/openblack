@@ -46,6 +46,16 @@ namespace openblack::animals
 /// about the way it faces. The models face -z.
 [[nodiscard]] glm::mat3 Orientation(float heading, float bank);
 
+/// Where the frame draws an animal and the heading it draws it with, at a part of the turn (clamped to 0 to 1) between
+/// the places and the headings of its last two turns. The heading turns the short way round.
+struct DrawnBetweenTurns
+{
+	glm::vec3 position;
+	float heading;
+};
+[[nodiscard]] DrawnBetweenTurns DrawnAt(const glm::vec3& previousPosition, const glm::vec3& position, float previousHeading,
+                                        float heading, float turnFraction);
+
 /// A follower's place in its flock's formation, by its place in the flock counted from the leader (1 for the leader,
 /// up to the number of birds for the newest): its row and column of the formation
 struct FormationSlot
@@ -177,9 +187,20 @@ struct AnimalHolders
 	bool creature {false};
 	bool physics {false};
 };
-/// Whether an animal takes its own turn: not while a tornado, the player's hand or the physics moves it. In a creature's
-/// hand it takes its turn only while it dies or lies dead, so that it falls and its body goes there.
-[[nodiscard]] bool TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead);
+/// Whether an animal takes its own turn: not while a tornado or the physics moves it. In the player's hand or in the
+/// hand of a creature it takes its turn as in the land. Its state in the hand does nothing, but its needs grow.
+[[nodiscard]] bool TakesOwnTurn(const AnimalHolders& holders);
+/// The state that an animal goes into when it comes down from the hand or the physics
+enum class LandedAs : uint8_t
+{
+	/// It has life, and it plays its landing
+	Landed,
+	/// It has no life left, and it starts to die where it lands
+	Dying,
+	/// It has no life left, and it was dying before, so its body lies dead at once
+	Dead,
+};
+[[nodiscard]] LandedAs LandsAs(bool alive, bool dying);
 /// A body going leaves a grey puff of smoke this big, half its height out along the way it faces from where it lies
 inline constexpr float k_DeadBodySmokeSize = 1.0f;
 [[nodiscard]] glm::vec3 DeadBodySmokePlace(const glm::vec3& position, float heading, float height);

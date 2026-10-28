@@ -48,6 +48,7 @@
 #include "ECS/DiscipleRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -86,8 +87,7 @@ std::optional<Texts> RowTexts(const Rows& rows, Index index)
 
 bool IsLocalPlayers(std::optional<PlayerNames> player)
 {
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	return player.has_value() && *player == local;
 }
 

@@ -17,7 +17,6 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/DrawImportance.h"
-#include "ECS/Components/GroundMark.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HighDetail.h"
@@ -57,13 +56,7 @@ bool Banded(const Registry& registry, entt::entity entity)
 
 bool BandedNow(const Registry& registry, entt::entity entity)
 {
-	if (registry.AnyOf<InHand, HeldByCreature, HighDetail, SeeThrough>(entity))
-	{
-		return false;
-	}
-	// The roots of a fallen dead tree are drawn whole while they fade by their own alpha
-	const auto* mark = registry.TryGet<const GroundMark>(entity);
-	return mark == nullptr || !mark->alpha.has_value();
+	return !registry.AnyOf<InHand, HeldByCreature, HighDetail, SeeThrough>(entity);
 }
 
 bool Disappears(const Registry& registry, entt::entity entity, bool townCentre)

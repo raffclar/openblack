@@ -59,8 +59,11 @@ public:
 	virtual void Play(int32_t special) = 0;
 	/// All of it goes at once: the light, the hand, the chasing camera
 	virtual void ReleaseAll() = 0;
-	/// Whether the lifting hand's clip has come round, which it never does as it plays once
+	/// Whether the lifting hand's clip has come round, which it never does as it plays once. The turns find it by the time
+	/// of each turn, and the scripts read it.
 	[[nodiscard]] virtual bool HasLiftFinished() const = 0;
+	/// Once a turn, before the scripts: the light and the lifting clip move on by the time of the turn, for the scripts
+	virtual void ProcessTurn(uint32_t milliseconds) = 0;
 
 	/// Each drawn frame, by its game milliseconds: the light falls or fades, the hand's clip plays on and those that
 	/// follow the hand are drawn in its grip

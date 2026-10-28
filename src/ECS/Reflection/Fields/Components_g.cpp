@@ -13,10 +13,10 @@
 #include <span>
 #include <string_view>
 
+#include "ECS/Components/GameStanding.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/GripLandscapeParticle.h"
-#include "ECS/Components/GroundMark.h"
 #include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -30,6 +30,19 @@ void RegisterFields_Components_g(entt::meta_ctx& context);
 
 void openblack::ecs::reflection::RegisterFields_Components_g(entt::meta_ctx& context)
 {
+	Reflect<components::WinCondition>(context)
+	    .Field<&components::WinCondition::current>("current")
+	    .Field<&components::WinCondition::target>("target")
+	    .Field<&components::WinCondition::completed>("completed");
+	Reflect<components::GameStanding>(context)
+	    .Field<&components::GameStanding::conditions>("conditions")
+	    .Field<&components::GameStanding::share>("share")
+	    .Field<&components::GameStanding::out>("out")
+	    .Field<&components::GameStanding::finished>("finished")
+	    .Field<&components::GameStanding::place>("place")
+	    .Field<&components::GameStanding::reason>("reason")
+	    .Field<&components::GameStanding::scoreHistory>("scoreHistory")
+	    .Field<&components::GameStanding::scoreHistoryIndex>("scoreHistoryIndex");
 	Reflect<components::GodHand>(context).Field<&components::GodHand::player>("player");
 	Reflect<components::Graveyard>(context).Field<&components::Graveyard::burials>("burials");
 	Reflect<components::StandInGraves>(context)
@@ -42,9 +55,6 @@ void openblack::ecs::reflection::RegisterFields_Components_g(entt::meta_ctx& con
 	    .Field<&components::GripLandscapeParticle::age>("age")
 	    .Field<&components::GripLandscapeParticle::frame>("frame")
 	    .Field<&components::GripLandscapeParticle::turnsLeft>("turnsLeft");
-	Reflect<components::GroundMark>(context)
-	    .Field<&components::GroundMark::millisecondsLeft>("millisecondsLeft")
-	    .Field<&components::GroundMark::alpha>("alpha");
 	Reflect<components::GroundPrint>(context).Field<&components::GroundPrint::made>("made");
 	Reflect<components::GuidanceHeard>(context)
 	    .Field<&components::GuidanceHeard::lastTurn>("lastTurn")

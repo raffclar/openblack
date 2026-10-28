@@ -32,8 +32,13 @@ public:
 	/// Says a help text's line on a voice, heard everywhere or, given a position, from there. Texts without a line say
 	/// nothing.
 	virtual void Say(uint32_t text, audio::SpeechVoice voice, std::optional<glm::vec3> position) = 0;
-	/// Whether the voice is still saying the help text's line
+	/// Whether the voice is still saying the help text's line, by the length of its sample on the scripts' clock
 	[[nodiscard]] virtual bool IsSaying(uint32_t text, audio::SpeechVoice voice) = 0;
+	/// The clock of the scripts' spoken lines and texts, in milliseconds. Only the turns move it on: by the time of each
+	/// game turn, and in the temple by the time of each turn of the temple's scripts. A save keeps it.
+	virtual void AdvanceClock(uint32_t milliseconds) = 0;
+	[[nodiscard]] virtual uint32_t GetClockMs() const = 0;
+	virtual void SetClockMs(uint32_t milliseconds) = 0;
 	/// How many help texts have a spoken line, 0 until the texts and the speech banks are loaded
 	[[nodiscard]] virtual size_t GetSpokenTextCount() const = 0;
 	/// How many lines the scripts have had said that weren't yet found finished
