@@ -44,12 +44,14 @@
 #include <SaveSlots.h>
 #include <SavedObjects.h>
 #include <VanillaSaveFile.h>
+#include <VanillaWorld.h>
 #include <WorldFile.h>
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/PortableRotations.h"
@@ -1502,7 +1504,33 @@ bool SaveGameSystem::LoadVanilla(uint32_t slot, const std::filesystem::path& slo
 		                   entt::to_integral(entity));
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded {} creatures from the game's file of slot {}", matched.size(), slot);
+	if (!matched.empty())
+	{
+		ImportVanillaSeeds(slot, bytes);
+	}
 	return !matched.empty();
+}
+
+void SaveGameSystem::ImportVanillaSeeds(uint32_t slot, std::span<const uint8_t> bytes)
+{
+	// The game reads its whole world from the file. openblack reads the whole file, but it takes only some parts of
+	// the world from it.
+	const auto read = gamesave::ReadVanillaWorld(bytes);
+	if (!read.world.has_value())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The game's file of slot {} does not read as a whole world at byte {}: {}", slot,
+		                   read.error->at, read.error->reason);
+		return;
+	}
+	const auto data = read.world->GameData();
+	SPDLOG_LOGGER_INFO(Log(), "The game's file of slot {} has {} objects at turn {}", slot, read.world->Records().size(),
+	                   data.has_value() ? data->gameTurn : 0);
+	// The game data of the file has the two seeds of the random draws. After the load, the draws continue from them
+	// as the game's draws do. The creatures are made first, because the creation of a creature can draw.
+	if (data.has_value() && Locator::gameRandom::has_value())
+	{
+		Locator::gameRandom::value().SetSeeds({.synced = data->randomSeed, .local = data->localSeed});
+	}
 }
 
 std::vector<SaveGameSystem::VanillaCheck> SaveGameSystem::CheckVanillaRecords() const

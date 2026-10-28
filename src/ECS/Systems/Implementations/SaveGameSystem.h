@@ -120,6 +120,8 @@ private:
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
+	/// Takes the seeds of the random draws from the game data of a world file of the game
+	void ImportVanillaSeeds(uint32_t slot, std::span<const uint8_t> bytes);
 	/// The world file in the game's layout of a save of a game that came from such a file
 	[[nodiscard]] std::vector<ecs::save_files::SaveFile> VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
 	                                                                  std::span<const gamesave::SavedCreature> saved,
