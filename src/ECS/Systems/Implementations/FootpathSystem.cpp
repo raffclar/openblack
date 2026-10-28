@@ -137,7 +137,7 @@ public:
 		const auto& registry = Registry();
 		auto start = planning::ToPoint(ArrivePlace(from));
 		auto goal = planning::ToPoint(ArrivePlace(to));
-		const auto clearOf = [this, &registry](entt::entity building, glm::vec2 end, glm::vec2 other) {
+		const auto clearOf = [&registry](entt::entity building, glm::vec2 end, glm::vec2 other) {
 			if (!registry.AnyOf<Abode, WorshipSite>(building))
 			{
 				return end;
