@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <string>
@@ -49,6 +50,8 @@ namespace
 constexpr uint32_t k_Sign = static_cast<uint32_t>(HighlightInfo::DidYouKnowSign);
 constexpr uint32_t k_Silver = static_cast<uint32_t>(HighlightInfo::Silver);
 constexpr uint32_t k_Gold = static_cast<uint32_t>(HighlightInfo::Gold);
+/// A frame of the screen's refresh or longer, so that the effects step in each frame
+constexpr std::chrono::milliseconds k_FrameRealTime {20};
 
 /// A land of its own: flat ground at height 2, the shipped table's four rows, every model a box 1 across and 2 tall
 /// about a middle 1 up, and a record of what was asked of the particles, the sounds and the help system
@@ -66,6 +69,7 @@ public:
 	std::vector<std::pair<ParticleType, glm::vec3>> started;
 	std::vector<uint32_t> deleted;
 	std::vector<uint32_t> stepped;
+	std::vector<float> steppedSeconds;
 	std::vector<uint32_t> sounds;
 	std::vector<uint32_t> helpEvents;
 	std::vector<std::string> helpScripts;
@@ -117,7 +121,11 @@ public:
 		return nextEffect++;
 	}
 	void TargetEffect(uint32_t /*effect*/, entt::entity /*target*/) override {}
-	void StepEffect(uint32_t effect, float /*seconds*/) override { stepped.push_back(effect); }
+	void StepEffect(uint32_t effect, float seconds) override
+	{
+		stepped.push_back(effect);
+		steppedSeconds.push_back(seconds);
+	}
 	void MoveEffect(uint32_t /*effect*/, glm::vec3 /*to*/) override {}
 	void DeleteEffect(uint32_t effect) override { deleted.push_back(effect); }
 	void PlaySound(uint32_t sample, entt::entity /*owner*/) override { sounds.push_back(sample); }
@@ -386,7 +394,7 @@ TEST(ScriptHighlights, AScrollStandsAtItsDrawHeightOrOnWhatIsUnderIt)
 	// The turn puts it at that height above the land, and the frames do not move it
 	EXPECT_FLOAT_EQ(world->registry.Get<Transform>(scroll).position.y, 12.0f);
 	world->registry.Get<Transform>(scroll).position.y = 0.0f;
-	system->UpdateFrame(16.0f, 0.0f, {5.0f, 30.0f, 40.0f});
+	system->UpdateFrame(16.0f, 0.0f, {5.0f, 30.0f, 40.0f}, k_FrameRealTime, true);
 	EXPECT_FLOAT_EQ(world->registry.Get<Transform>(scroll).position.y, 0.0f);
 }
 
@@ -396,11 +404,11 @@ TEST(ScriptHighlights, HiddenScrollsAreNotDrawnButSignsAre)
 	const auto scroll = system->Create(k_Gold, {0.0f, 0.0f, 0.0f}, 52);
 	const auto sign = system->Create(k_Sign, {20.0f, 0.0f, 0.0f}, 0);
 	world->scrollsDrawn = false;
-	system->UpdateFrame(16.0f, 0.0f, {0.0f, 20.0f, 30.0f});
+	system->UpdateFrame(16.0f, 0.0f, {0.0f, 20.0f, 30.0f}, k_FrameRealTime, true);
 	EXPECT_TRUE(world->registry.AllOf<ecs::components::HiddenByState>(scroll));
 	EXPECT_FALSE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
 	world->scrollsDrawn = true;
-	system->UpdateFrame(16.0f, 0.0f, {0.0f, 20.0f, 30.0f});
+	system->UpdateFrame(16.0f, 0.0f, {0.0f, 20.0f, 30.0f}, k_FrameRealTime, true);
 	EXPECT_FALSE(world->registry.AllOf<ecs::components::HiddenByState>(scroll));
 }
 
@@ -410,7 +418,7 @@ TEST(ScriptHighlights, AShownScrollSpinsScalesAndGlows)
 	const auto scroll = system->Create(k_Gold, {0.0f, 0.0f, 0.0f}, 52);
 	// The turn makes the entity of its glow
 	system->ProcessTurn();
-	system->UpdateFrame(1000.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	system->UpdateFrame(1000.0f, 0.0f, {0.0f, 2.0f, 20.0f}, k_FrameRealTime, true);
 	const auto& highlight = world->registry.Get<ScriptHighlight>(scroll);
 	EXPECT_NEAR(highlight.yAngle, glm::pi<float>(), 1e-5f);
 	EXPECT_FLOAT_EQ(world->registry.Get<Transform>(scroll).scale.x, 20.0f * 0.0333333351f);
@@ -424,7 +432,7 @@ TEST(ScriptHighlights, AShownScrollSpinsScalesAndGlows)
 	const auto glow = highlight.glow;
 	world->registry.Destroy(scroll);
 	// A frame never removes an entity of the world: the next turn does
-	system->UpdateFrame(16.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	system->UpdateFrame(16.0f, 0.0f, {0.0f, 2.0f, 20.0f}, k_FrameRealTime, true);
 	EXPECT_TRUE(world->registry.Valid(glow));
 	system->ProcessTurn();
 	EXPECT_FALSE(world->registry.Valid(glow));
@@ -437,7 +445,7 @@ TEST(ScriptHighlights, AFrameMakesNoEntityOfTheWorld)
 	auto [world, system] = Make();
 	system->Create(k_Gold, {0.0f, 0.0f, 0.0f}, 52);
 	const auto before = world->registry.Underlying().storage<entt::entity>().free_list();
-	system->UpdateFrame(1000.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	system->UpdateFrame(1000.0f, 0.0f, {0.0f, 2.0f, 20.0f}, k_FrameRealTime, true);
 	EXPECT_EQ(world->registry.Underlying().storage<entt::entity>().free_list(), before);
 	system->ProcessTurn();
 	EXPECT_GT(world->registry.Underlying().storage<entt::entity>().free_list(), before);
@@ -451,17 +459,17 @@ TEST(ScriptHighlights, ASignSpinsAtItsOwnSizeUntilTappedThenFacesTheCamera)
 	const auto sign = system->Create(k_Sign, {0.0f, 0.0f, 0.0f}, 0);
 	system->SetProperties(sign, 4127, 3);
 	const glm::vec3 camera {0.0f, 20.0f, 40.0f};
-	system->UpdateFrame(500.0f, 0.0f, camera);
+	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_NEAR(world->registry.Get<ScriptHighlight>(sign).yAngle, glm::half_pi<float>(), 1e-5f);
-	system->UpdateFrame(500.0f, 0.0f, camera);
+	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_NEAR(world->registry.Get<ScriptHighlight>(sign).yAngle, glm::pi<float>(), 1e-5f);
 	EXPECT_FLOAT_EQ(world->registry.Get<Transform>(sign).scale.x, 1.0f);
 
 	system->Tap(sign, true);
-	system->UpdateFrame(500.0f, 0.0f, camera);
+	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	const float facing = world->registry.Get<ScriptHighlight>(sign).yAngle;
 	EXPECT_NEAR(facing, FacingAngle(camera, {0.0f, 0.0f, 0.0f}), 1e-5f);
-	system->UpdateFrame(500.0f, 0.0f, camera);
+	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_FLOAT_EQ(world->registry.Get<ScriptHighlight>(sign).yAngle, facing);
 }
 
@@ -476,33 +484,58 @@ TEST(ScriptHighlights, ASignSpinsOnlyInTheFramesThatDrawIt)
 
 	// Out of the list: no spin, and it does not show
 	world->inDrawList = false;
-	system->UpdateFrame(500.0f, 0.0f, camera);
+	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_FLOAT_EQ(angle(), 0.0f);
 	EXPECT_TRUE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
 
 	// In the list, in a full frame, but off the screen: it spins in that frame
 	world->inDrawList = true;
 	world->onScreen = false;
-	system->UpdateFrame(500.0f, 0.0f, camera);
+	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_NEAR(angle(), glm::half_pi<float>(), 1e-5f);
 	EXPECT_FALSE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
 
 	// The frames that draw only the things on the screen leave it
 	world->drawFrame = {.rebuilt = false, .drawAll = false};
-	system->UpdateFrame(500.0f, 0.0f, camera);
+	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_NEAR(angle(), glm::half_pi<float>(), 1e-5f);
 	EXPECT_TRUE(world->registry.AllOf<ecs::components::HiddenByState>(sign));
 
 	// On the screen in the next full frame, it spins in each frame after it
 	world->drawFrame = {.rebuilt = false, .drawAll = true};
 	world->onScreen = true;
-	system->UpdateFrame(500.0f, 0.0f, camera);
+	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	world->drawFrame = {.rebuilt = false, .drawAll = false};
-	system->UpdateFrame(500.0f, 0.0f, camera);
+	system->UpdateFrame(500.0f, 0.0f, camera, k_FrameRealTime, true);
 	EXPECT_NEAR(angle(), glm::half_pi<float>() * 3.0f, 1e-5f);
 }
 
 // A started scroll stays selected in the frames that draw only the things on the screen
+// At hundreds of frames a second the effects step no more often than 60 times a second, each step by all the game time
+// since the last, and they do not step in a frame that does not draw the land
+TEST(ScriptHighlights, EffectsStepAtMost60TimesASecond)
+{
+	auto [world, system] = Make();
+	const auto scroll = system->Create(k_Gold, {0.0f, 0.0f, 0.0f}, 52);
+	world->scrollsDrawn = true;
+	const auto glints = world->registry.Get<ScriptHighlight>(scroll).glints;
+	const glm::vec3 camera {0.0f, 2.0f, 20.0f};
+	for (int frame = 0; frame < 8; ++frame)
+	{
+		system->UpdateFrame(5.0f, 0.0f, camera, std::chrono::milliseconds {5}, true);
+	}
+	EXPECT_EQ(world->stepped, (std::vector<uint32_t> {glints, glints}));
+	ASSERT_EQ(world->steppedSeconds.size(), 2u);
+	EXPECT_FLOAT_EQ(world->steppedSeconds[0], 0.02f);
+	EXPECT_FLOAT_EQ(world->steppedSeconds[1], 0.015f);
+	world->stepped.clear();
+	for (int frame = 0; frame < 8; ++frame)
+	{
+		system->UpdateFrame(5.0f, 0.0f, camera, std::chrono::milliseconds {5}, false);
+	}
+	EXPECT_TRUE(world->stepped.empty());
+}
+
 TEST(ScriptHighlights, AStartedScrollStaysSelectedOffTheScreen)
 {
 	auto [world, system] = Make();
@@ -510,7 +543,7 @@ TEST(ScriptHighlights, AStartedScrollStaysSelectedOffTheScreen)
 	system->SetActive(scroll, true);
 	world->scrollsDrawn = true;
 	world->onScreen = false;
-	system->UpdateFrame(16.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	system->UpdateFrame(16.0f, 0.0f, {0.0f, 2.0f, 20.0f}, k_FrameRealTime, true);
 	EXPECT_TRUE(world->registry.Get<ScriptHighlight>(scroll).onScreen);
 }
 
@@ -635,7 +668,7 @@ TEST(ScriptHighlights, OnlyGoldScrollsSendUpSparks)
 	const auto silver = system->Create(static_cast<uint32_t>(HighlightInfo::Silver), {20.0f, 0.0f, 0.0f}, 53);
 	// The turn makes the entities of the sparks
 	system->ProcessTurn();
-	system->UpdateFrame(500.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	system->UpdateFrame(500.0f, 0.0f, {0.0f, 2.0f, 20.0f}, k_FrameRealTime, true);
 	const auto& highlight = world->registry.Get<ScriptHighlight>(gold);
 	ASSERT_TRUE(highlight.sparks.has_value());
 	EXPECT_FALSE(world->registry.Get<ScriptHighlight>(silver).sparks.has_value());
@@ -650,7 +683,7 @@ TEST(ScriptHighlights, OnlyGoldScrollsSendUpSparks)
 	EXPECT_GT(at.y, highlight.centre.y + highlight.radius);
 	// Hidden, the scroll's sparks stop and aren't drawn
 	world->scrollsDrawn = false;
-	system->UpdateFrame(500.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	system->UpdateFrame(500.0f, 0.0f, {0.0f, 2.0f, 20.0f}, k_FrameRealTime, true);
 	EXPECT_EQ(world->registry.TryGet<Sprite>(highlight.sparkSprites.at(0)), nullptr);
 	EXPECT_EQ(highlight.sparks->sparks.at(0).ageMilliseconds, 500);
 	// They go with it, at the next turn

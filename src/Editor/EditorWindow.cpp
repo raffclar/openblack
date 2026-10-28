@@ -160,7 +160,9 @@ glm::vec2 EditorWindow::MouseOnScreen() noexcept
 	}
 	glm::ivec2 mouse {};
 	SDL_GetMouseState(&mouse.x, &mouse.y);
-	return glm::vec2(mouse) / glm::max(glm::vec2(Locator::windowing::value().GetSize()), glm::vec2(1.0f));
+	// SDL gives the mouse in the window's units, which are CSS pixels on the web
+	const auto& windowing = Locator::windowing::value();
+	return glm::vec2(mouse) * windowing.GetPixelScale() / glm::max(glm::vec2(windowing.GetSize()), glm::vec2(1.0f));
 }
 
 std::optional<glm::vec3> EditorWindow::LandAt(glm::vec2 screen) noexcept

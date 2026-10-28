@@ -15,6 +15,7 @@
 #include <initializer_list>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -152,7 +153,7 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 class LockstepTest: public ::testing::Test
 {
 protected:
-	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7)
+	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7, bool testCommands = false)
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
@@ -162,7 +163,39 @@ protected:
 		        .minGods = gods,
 		        .godSlots = slots,
 		        .comeBackMicroseconds = comeBack,
-		        .keptTurns = 3200});
+		        .keptTurns = 3200,
+		        .testCommands = testCommands});
+	}
+
+	/// A room with no human god (tools): the game starts at once, and the world turns when this many observers joined
+	void MakeAllComputerHost(uint32_t observers)
+	{
+		game_socket::Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
+		start.allComputerGods = true;
+		start.aiSeed = 3u;
+		host = std::make_unique<LockstepHost>(
+		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
+		    server::HostSettings {.start = std::move(start),
+		                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+		                          .minGods = observers,
+		                          .godSlots = 7,
+		                          .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+		                          .keptTurns = 3200});
+	}
+
+	/// A room of the tools whose game plays a testbed scenario from the first turn
+	void MakeScenarioHost(uint32_t gods)
+	{
+		game_socket::Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
+		start.scenario = "mind.computer_god_rivals";
+		host = std::make_unique<LockstepHost>(
+		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
+		    server::HostSettings {.start = std::move(start),
+		                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+		                          .minGods = gods,
+		                          .godSlots = 7,
+		                          .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+		                          .keptTurns = 3200});
 	}
 
 	/// One frame of the server and of each computer: 100 ms of time, and a turn when the world turns
@@ -236,6 +269,14 @@ TEST_F(LockstepTest, TwoGodsJoinAndTheGameStartsWhenBothAreReady)
 	ASSERT_TRUE(alice.session.GetStart().has_value());
 	EXPECT_EQ(alice.session.GetStart()->land, "Land1.txt");
 	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	// The start names the gods of the game for the chat
+	const auto& gods = alice.session.GetStart()->gods;
+	ASSERT_EQ(gods.size(), 2);
+	EXPECT_EQ(gods[0].slot, 0);
+	EXPECT_EQ(gods[1].slot, 1);
+	EXPECT_EQ(gods[0].name, alice.session.GetJoined()->name);
+	EXPECT_EQ(gods[1].name, bob.session.GetJoined()->name);
+	EXPECT_NE(gods[0].name, gods[1].name);
 }
 
 TEST_F(LockstepTest, TheCommandsOfBothGodsComeInTheSameTurnsOnEveryComputer)
@@ -321,6 +362,28 @@ TEST_F(LockstepTest, AClientCannotSendTheLeaveOfTheServer)
 	Frames({&alice}, 3);
 	EXPECT_EQ(host->RefusedBlocks(), 2u);
 	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+}
+
+TEST_F(LockstepTest, AServerLeavesOutTheFightCheatWithoutItsTestCommands)
+{
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 6);
+	alice.session.Send(CreatureFightCheat {});
+	Frames({&alice}, 3);
+	EXPECT_EQ(host->RefusedBlocks(), 1u);
+	EXPECT_EQ(host->Seats()[0].commands.count(static_cast<uint8_t>(turn_codec::CommandTag::CreatureFightCheat)), 0u);
+}
+
+TEST_F(LockstepTest, AServerWithItsTestCommandsOnTakesTheFightCheat)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 7, true);
+	Computer bob(network, now, "god:bob");
+	Frames({&bob}, 6);
+	bob.session.Send(CreatureFightCheat {});
+	Frames({&bob}, 3);
+	EXPECT_EQ(host->RefusedBlocks(), 0u);
+	EXPECT_EQ(host->Seats()[0].commands.at(static_cast<uint8_t>(turn_codec::CommandTag::CreatureFightCheat)), 1u);
 }
 
 TEST_F(LockstepTest, AClientThatLosesTheSocketComesBackAndGetsTheTurnsThatItMissed)
@@ -681,6 +744,31 @@ TEST_F(LockstepTest, PlayersWhoJoinAfterTheStartAreObserversWithTheWorldOfTheSer
 	EXPECT_TRUE(host->Seats()[1].commands.empty());
 }
 
+// The state of a testbed scenario is not in the world: every computer plays the scenario from the first turn. An observer
+// in the room before the start gets the scenario with the start, and nobody joins the game as it turns.
+TEST_F(LockstepTest, TheStartGivesTheScenarioAndNobodyJoinsTheRunningGameOfAScenario)
+{
+	MakeScenarioHost(1);
+	GiveWorldState();
+	Computer watcher(network, now, "observer:carol");
+	Computer alice(network, now, "god:alice");
+	Frames({&watcher, &alice}, 30);
+	ASSERT_TRUE(host->Started());
+	for (const auto* computer : {&watcher, &alice})
+	{
+		ASSERT_TRUE(computer->session.GetStart().has_value());
+		EXPECT_EQ(computer->session.GetStart()->scenario, "mind.computer_god_rivals");
+		EXPECT_GT(computer->world.turns, 10u);
+		EXPECT_EQ(computer->session.GetCompares().compared, computer->session.GetCompares().same);
+	}
+
+	Computer late(network, now, "observer:dave");
+	Frames({&watcher, &alice, &late}, 3);
+	EXPECT_EQ(late.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(late.session.RefusedReason(), "started");
+	EXPECT_EQ(late.loads, 0u);
+}
+
 TEST_F(LockstepTest, ThePlayerOfADefeatedGodComesBackAsAnObserver)
 {
 	MakeHost(2, 2 * 1'000'000);
@@ -773,4 +861,139 @@ TEST_F(LockstepTest, AThirdGodIsRefusedFromARoomOfTwoSlotsAndAnObserverIsLetIn)
 	alice.session.SetReady(true);
 	Frames({&alice, &bob, &watcher}, 6);
 	EXPECT_TRUE(host->Started());
+}
+
+TEST_F(LockstepTest, ARoomWithNoHumanGodStartsAtOnceAndTurnsWhenTheObserversJoined)
+{
+	MakeAllComputerHost(2);
+	GiveWorldState();
+	Frames({}, 3);
+	EXPECT_TRUE(host->Started());
+	EXPECT_FALSE(host->Paused());
+	EXPECT_FALSE(host->GameOver());
+	// No observer yet: the world waits
+	EXPECT_FALSE(host->HasTurn(serverWorld.turns));
+	EXPECT_EQ(serverWorld.turns, 0u);
+
+	Computer first(network, now, "observer:one");
+	Frames({&first}, 20);
+	ASSERT_TRUE(first.session.GetJoined().has_value());
+	EXPECT_EQ(first.session.GetJoined()->role, game_socket::Role::Observer);
+	// The start that the observer gets names the tool modes
+	ASSERT_TRUE(first.session.GetJoined()->start.has_value());
+	EXPECT_TRUE(first.session.GetJoined()->start->allComputerGods);
+	EXPECT_EQ(first.session.GetJoined()->start->aiSeed, std::optional<uint32_t>(3u));
+	EXPECT_EQ(serverWorld.turns, 0u);
+
+	Computer second(network, now, "observer:two");
+	Frames({&first, &second}, 40);
+	EXPECT_EQ(host->Observers(), 2u);
+	EXPECT_GT(serverWorld.turns, 0u);
+	for (const auto* observer : {&first, &second})
+	{
+		EXPECT_EQ(observer->world.turns, serverWorld.turns);
+		EXPECT_EQ(observer->world.hash, serverWorld.hash);
+		EXPECT_EQ(observer->session.GetCompares().compared, observer->session.GetCompares().same);
+	}
+	EXPECT_EQ(std::ranges::count(host->Seats(), LockstepHost::SeatState::Taken, &LockstepHost::Seat::state), 0);
+}
+
+TEST_F(LockstepTest, ARoomWithNoHumanGodAndNoObserverToWaitForTurnsAtOnce)
+{
+	MakeAllComputerHost(0);
+	GiveWorldState();
+	Frames({}, 10);
+	EXPECT_GT(serverWorld.turns, 0u);
+	// With no observer seen yet the room is not over
+	EXPECT_FALSE(host->GameOver());
+}
+
+TEST_F(LockstepTest, ARoomWithNoHumanGodIsOverWhenTheObserversThatJoinedAllLeft)
+{
+	MakeAllComputerHost(1);
+	GiveWorldState();
+	auto watcher = std::make_unique<Computer>(network, now, "observer:one");
+	Frames({watcher.get()}, 20);
+	ASSERT_EQ(host->Observers(), 1u);
+	EXPECT_FALSE(host->GameOver());
+	network.Cut(watcher->sockets->Ids().back());
+	watcher.reset();
+	Frames({}, 5);
+	EXPECT_EQ(host->Observers(), 0u);
+	EXPECT_TRUE(host->GameOver());
+TEST_F(LockstepTest, TheRoomRefusesABannedGodBeforeTheStartWithAKick)
+{
+	MakeHost(3);
+	host->SetBans({101});
+	Computer alice(network, now, "god:100");
+	Computer banned(network, now, "god:101");
+	Frames({&alice, &banned}, 3);
+	EXPECT_EQ(banned.session.GetState(), NetworkSession::State::Ended);
+	EXPECT_EQ(banned.session.RefusedReason(), "kicked");
+	EXPECT_EQ(alice.session.GetJoined()->slot, 0);
+	EXPECT_TRUE(std::ranges::none_of(host->Seats(), [](const LockstepHost::Seat& seat) { return seat.account == "101"; }));
+	// The lobby lifted the ban: the account joins again
+	host->SetBans({});
+	Computer again(network, now, "god:101");
+	Frames({&alice, &again}, 3);
+	ASSERT_TRUE(again.session.GetJoined().has_value());
+	EXPECT_EQ(again.session.GetJoined()->slot, 1);
+}
+
+TEST_F(LockstepTest, ABanTakesAGodOutOfTheRoomBeforeTheStart)
+{
+	MakeHost(3);
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	Frames({&alice, &bob}, 3);
+	ASSERT_EQ(bob.session.GetJoined()->slot, 1);
+	host->SetBans({101, 555});
+	Frames({&alice, &bob}, 2);
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Ended);
+	EXPECT_EQ(bob.session.RefusedReason(), "kicked");
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Open);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+}
+
+TEST_F(LockstepTest, ABanDuringTheStartStopsTheStart)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	for (int i = 0; i < 8 && !host->Starting(); ++i)
+	{
+		Frame({&alice, &bob});
+	}
+	ASSERT_TRUE(host->Starting());
+	host->SetBans({101});
+	Frames({&alice, &bob}, 6);
+	EXPECT_FALSE(host->Started());
+	EXPECT_FALSE(host->Starting());
+	EXPECT_EQ(bob.session.RefusedReason(), "kicked");
+	bool stopped = false;
+	while (const auto event = alice.session.TakeStartEvent())
+	{
+		stopped = stopped || *event == online::StartEvent::Stopped;
+	}
+	EXPECT_TRUE(stopped);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
+}
+
+TEST_F(LockstepTest, ABanAfterTheStartChangesNothing)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:100");
+	Computer bob(network, now, "god:101");
+	Frames({&alice, &bob}, 7);
+	ASSERT_TRUE(host->Started());
+	host->SetBans({101});
+	Frames({&alice, &bob}, 50);
+	EXPECT_EQ(host->Bans(), std::set<int64_t> {101});
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
+	EXPECT_GE(bob.world.turns + 3, serverWorld.turns);
+	// The banned god stays in step with the server
+	EXPECT_GT(host->Seats()[1].compares.compared, 40u);
+	EXPECT_EQ(host->Seats()[1].compares.same, host->Seats()[1].compares.compared);
 }

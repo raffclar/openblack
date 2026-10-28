@@ -34,6 +34,8 @@ public:
 	[[nodiscard]] std::vector<music_mood::Record> GetRecords() const override;
 
 private:
+	/// Whether this is a network game, which has no music moods
+	[[nodiscard]] static bool NetworkGame();
 	/// The local player's creature, when it has one
 	[[nodiscard]] static std::optional<entt::entity> LocalCreature();
 	/// What the local player's creature feels now: the player's recent feedback and its fear

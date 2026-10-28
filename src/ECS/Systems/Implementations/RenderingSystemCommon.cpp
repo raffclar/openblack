@@ -18,6 +18,7 @@
 
 #include "3D/L3DMesh.h"
 #include "Camera/Camera.h"
+#include "Common/MainThreadQueue.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
@@ -30,6 +31,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "Fire/FireGraphic.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
@@ -121,13 +123,14 @@ RenderingSystemCommon::~RenderingSystemCommon() = default;
 
 void RenderingSystemCommon::SetDirty()
 {
-	_renderContext.dirty = true;
+	// The changes of the drawn parts mark the draw from any thread. The draw reads the marks only after the turn.
+	_renderContext.dirty.store(true, std::memory_order_relaxed);
 }
 
 void RenderingSystemCommon::SetLayoutDirty()
 {
-	_renderContext.dirty = true;
-	_renderContext.layoutDirty = true;
+	_renderContext.dirty.store(true, std::memory_order_relaxed);
+	_renderContext.layoutDirty.store(true, std::memory_order_relaxed);
 }
 
 void RenderingSystemCommon::UploadRootsPiles()
@@ -188,18 +191,30 @@ void RenderingSystemCommon::UploadRootsPiles()
 
 void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams)
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::PrepareDraw");
 	const auto& registry = Locator::entitiesRegistry::value();
 
 	_renderContext.animatedBoneMatrices.clear();
 	_renderContext.handMirrored = false;
-	registry.Each<const Hand, const Mesh, const Transform>(
-	    [this](const Hand& hand, const Mesh& mesh, const Transform& transform) {
-		    if (!hand.boneMatrices.empty())
-		    {
-			    _renderContext.animatedBoneMatrices.insert_or_assign(mesh.id, hand.boneMatrices);
-			    _renderContext.handMirrored = transform.scale.x * transform.scale.y * transform.scale.z < 0.0f;
-		    }
-	    });
+	// Only the hand of the god of this computer shows. The pose and the mirror of the drawn hand come from that hand.
+	const auto drawnHand =
+	    Locator::handSystem::has_value()
+	        ? Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)]
+	        : entt::null;
+	if (drawnHand != _renderContext.drawnHand)
+	{
+		_renderContext.drawnHand = drawnHand;
+		_renderContext.layoutDirty = true;
+	}
+	if (registry.Valid(drawnHand))
+	{
+		const auto [hand, mesh, transform] = registry.TryGet<const Hand, const Mesh, const Transform>(drawnHand);
+		if (hand != nullptr && mesh != nullptr && transform != nullptr && !hand->boneMatrices.empty())
+		{
+			_renderContext.animatedBoneMatrices.insert_or_assign(mesh->id, hand->boneMatrices);
+			_renderContext.handMirrored = transform->scale.x * transform->scale.y * transform->scale.z < 0.0f;
+		}
+	}
 
 	_renderContext.streamSegments.clear();
 	registry.Each<const StreamSegment, const Transform>(

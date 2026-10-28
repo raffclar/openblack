@@ -45,18 +45,16 @@ std::optional<std::pair<entt::entity, entt::entity>> LeashMarkerArchetype::Creat
 	{
 		return std::nullopt;
 	}
-	const auto sheet = k_SheetId.value();
-	const auto alpha = k_SheetAlphaId.value();
 	const auto make = [&](uint8_t cell) {
 		const auto entity = registry.Create();
 		const glm::vec2 uv {static_cast<float>(cell % 8) / k_CellsPerSide, static_cast<float>(cell / 8) / k_CellsPerSide};
-		registry.Assign<Sprite>(entity, Sprite {.texture = sheet,
+		registry.Assign<Sprite>(entity, Sprite {.texture = k_SheetId.value(),
 		                                        .uvMin = uv,
 		                                        .uvExtent = glm::vec2(1.0f / k_CellsPerSide),
 		                                        .tint = k_Yellow,
 		                                        .additive = false,
 		                                        .facesCamera = true,
-		                                        .alpha = alpha});
+		                                        .alpha = k_SheetAlphaId.value()});
 		// Hidden until it is first placed
 		registry.Assign<Transform>(entity, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(0.0f));
 		registry.Assign<LeashMarker>(entity, creature);

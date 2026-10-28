@@ -14,6 +14,8 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
@@ -86,6 +88,8 @@ class World
 public:
 	virtual ~World() = default;
 
+	/// The first player. A computer god that a land script switches on sizes its creature from the creature of this
+	/// player, on every computer.
 	[[nodiscard]] virtual PlayerNames LocalPlayer() const = 0;
 	/// The first creature of the player that is still the player's
 	[[nodiscard]] virtual std::optional<entt::entity> Creature(PlayerNames player) const = 0;
@@ -97,28 +101,42 @@ public:
 	/// The place of the creature's pen at the temple of the player, on the land
 	[[nodiscard]] virtual std::optional<glm::vec3> Pen(PlayerNames player) const = 0;
 	[[nodiscard]] virtual bool Skirmish() const = 0;
+	/// The game is a network game
+	[[nodiscard]] virtual bool NetworkGame() const { return false; }
 	[[nodiscard]] virtual ecs::components::Player::Miracles Miracles(PlayerNames player) const = 0;
 	virtual void MakeCreature(PlayerNames player, CreatureType species, const glm::vec3& position) = 0;
 	/// The creature learns the miracle as a script teaches it
 	virtual void Teach(entt::entity creature, MagicType miracle) = 0;
 	virtual uint32_t GameRand(uint32_t range) = 0;
 	virtual float GameFloatRand(float most) = 0;
+	/// The weight of the need of the mind with this name, as a land script sets it. Tools only: the AI soak sets the
+	/// weights of its computer gods.
+	virtual void SetPersonality(PlayerNames player, std::string_view need, float weight) = 0;
 };
 
-/// The start of a computer mind on the land, in the order of the game
-void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state);
+/// The start of a computer mind on the land, in the order of the game. With an AI seed (tools only), the mind gets the
+/// personality weights of that seed before anything else. This draws no number from the game's random streams.
+void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state,
+           std::optional<uint32_t> aiSeed = std::nullopt);
 
 /// The number of species that the start of a network game chooses from for the creature of a slot with no player, by
 /// the species number from 0
 constexpr uint32_t k_SlotSpeciesChoices = 11;
-/// The number of help texts that the start of a network game chooses from for the name of that creature
+/// The range of the random value that the start of a network game takes for the name of that creature. The game
+/// always takes the value, but the name does not use it.
 constexpr uint32_t k_SlotNameChoices = 99;
+/// The end of the debug name of a species in the creature table, which the name of the creature does not keep
+inline constexpr std::string_view k_SpeciesNameEnd = " creature";
 /// The stage of development that the creature of a slot with no player grows to at once
 constexpr uint32_t k_SlotCreatureStage = 12;
 
 /// At the start of a network game, the slot of a god is a slot with no player when the god has a citadel, and no human
 /// and no computer mind plays the god
 [[nodiscard]] bool SlotHasNoPlayer(bool human, bool computer, bool citadel);
+
+/// The name of the creature of a slot with no player: the debug name of its species in the creature table, without the
+/// end " creature". A debug name without that end stays as it is.
+[[nodiscard]] std::string SlotCreatureName(std::string_view speciesDebugName);
 
 /// A line of a land script switches a computer mind on or off, but not while the map script of a network game runs
 [[nodiscard]] bool LandScriptSwitchesMind(bool networkMapScript);
@@ -136,15 +154,18 @@ public:
 	virtual void MakePlayer(PlayerNames player) = 0;
 	/// The computer mind of the player switches on, as a land script switches it on
 	virtual void SwitchOn(PlayerNames player) = 0;
-	/// Makes the creature of the player at the creature home of its citadel, names it with the words of the help text
-	/// and grows it to the stage
-	virtual void MakeSlotCreature(PlayerNames player, CreatureType species, uint32_t nameText, uint32_t stage) = 0;
+	/// The debug name of the species in the creature table, for example "Tiger creature"
+	[[nodiscard]] virtual std::string SpeciesDebugName(CreatureType species) const = 0;
+	/// Makes the creature of the player at the creature home of its citadel, gives it the name and grows it to the stage
+	virtual void MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) = 0;
 	virtual uint32_t GameRand(uint32_t range) = 0;
 };
 
-/// At the start of a network game, in the order of the gods: each slot with no player gets a computer god. The game
-/// takes a random help text for the name and a random species, switches the mind of the god on, and makes its creature
-/// fully grown at the creature home of its citadel.
+/// At the start of a network game, in the order of the gods, each slot with no player gets a computer god:
+/// - The game takes a random value for the name. The name does not use the value, but the value keeps the random
+///   sequence the same.
+/// - The game takes a random species. The creature gets the name of its species from the creature table.
+/// - The mind of the god switches on, and the game makes its creature fully grown at the creature home of its citadel.
 void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans);
 
 /// The gods of the slots of a network game, in the order of the players. The neutral player is not a god of a slot.

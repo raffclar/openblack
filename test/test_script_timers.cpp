@@ -24,6 +24,16 @@ TEST(ScriptTimers, ATimerRunsForWholeTurns)
 	EXPECT_EQ(TurnsFor(0.7f), 7);
 }
 
+TEST(ScriptTimers, AZeroTimeLeavesADispenserAsItWas)
+{
+	// The quest rewards give a time of 0 seconds, so the dispenser keeps the turns from its data
+	EXPECT_FALSE(DispenserTurns(0.0f).has_value());
+	EXPECT_FALSE(DispenserTurns(0.05f).has_value());
+	EXPECT_EQ(DispenserTurns(30.0f), 300u);
+	// A time before now wraps to so many turns that the dispenser never makes another bubble
+	EXPECT_EQ(DispenserTurns(-1.0f), static_cast<uint32_t>(-10));
+}
+
 TEST(ScriptTimers, TimeRemainingRunsDownToNothing)
 {
 	const auto timer = Set(100, 2.0f);

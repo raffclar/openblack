@@ -300,7 +300,7 @@ constexpr std::string_view k_FishAction = "FishAndEat";
 /// Walking home and sleeping there, then the sleep's own agenda
 [[nodiscard]] std::vector<creature_mind::Step> SleepAtHome(glm::vec2 home, float height,
                                                            std::vector<creature_mind::Step> sleep);
-/// Taking what it carries to a point and putting it down there, or throwing it at the point from near enough
+/// Taking what it carries to a point and putting it down there at rest, or throwing it at the point from near enough
 [[nodiscard]] std::vector<creature_mind::Step> PutDownAt(glm::vec2 point, float height);
 [[nodiscard]] std::vector<creature_mind::Step> ThrowAt(glm::vec2 point, float height);
 /// Holding something: picking it up if it doesn't hold it already, turning to face the player, playing with it once if

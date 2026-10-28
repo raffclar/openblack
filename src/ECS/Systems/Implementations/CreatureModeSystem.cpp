@@ -100,7 +100,7 @@ bool CreatureModeSystem::StillValid() const
 	return !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 }
 
-bool CreatureModeSystem::Enter(entt::entity creature)
+bool CreatureModeSystem::Enter(entt::entity creature, creature_follow::StartDistance start)
 {
 	if (!Locator::camera::has_value() || !Locator::entitiesRegistry::has_value() || TempleActive())
 	{
@@ -130,7 +130,7 @@ bool CreatureModeSystem::Enter(entt::entity creature)
 	const auto transform = components::DrawnTransform(registry.Get<const components::Transform>(creature),
 	                                                  registry.TryGet<const components::CreatureAnimation>(creature));
 	auto model = std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), transform.position,
-	                                                   creature_mode::CreatureHeight(ShownSize(body)));
+	                                                   creature_mode::CreatureHeight(ShownSize(body)), start);
 	_model = model.get();
 	_returnOrigin = camera.GetModel().GetTargetOrigin();
 	_returnFocus = camera.GetModel().GetTargetFocus();
@@ -164,7 +164,7 @@ void CreatureModeSystem::PressCreatureKey()
 	switch (creature_mode::OnCreatureKey(_creature, yours))
 	{
 	case creature_mode::KeyAction::Enter:
-		Enter(*yours);
+		Enter(*yours, creature_follow::StartDistance::KeepWhenClose);
 		break;
 	case creature_mode::KeyAction::Leave:
 		Leave();
@@ -177,7 +177,7 @@ void CreatureModeSystem::PressCreatureKey()
 bool CreatureModeSystem::Press(const creature_mode::Press& press)
 {
 	const auto creature = _doubleClicks.OnPress(press);
-	return creature.has_value() && Enter(*creature);
+	return creature.has_value() && Enter(*creature, creature_follow::StartDistance::KeepWhenClose);
 }
 
 void CreatureModeSystem::HoldKeys(int across, int along, bool shift, bool ctrl, float seconds)

@@ -21,8 +21,9 @@
 namespace openblack
 {
 
-CreatureCameraModel::CreatureCameraModel(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height)
-    : _view(creature_follow::Start(cameraOrigin, cameraFocus, creature, height))
+CreatureCameraModel::CreatureCameraModel(glm::vec3 cameraOrigin, glm::vec3 cameraFocus, glm::vec3 creature, float height,
+                                         creature_follow::StartDistance start)
+    : _view(creature_follow::Start(cameraOrigin, cameraFocus, creature, height, start))
     , _focus(creature_follow::Focus(creature, height))
 {
 }

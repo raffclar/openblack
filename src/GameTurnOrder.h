@@ -101,7 +101,6 @@ enum class Step : uint8_t
 	ReactionClock,
 	TurnStartPlaces,
 	InfluenceTurnStart,
-	MapCells,
 	Sharks,
 	Storms,
 	Snow,
@@ -168,7 +167,6 @@ enum class Step : uint8_t
 	CreatureHandMoments,
 	/// The turn of the living: each creature, villager and animal in turn, the newest first (see living_turn::Walk)
 	Living,
-	MapCellsAfterLiving,
 	CreatureWebPage,
 	CreatureCarryOver,
 	Fires,
@@ -183,6 +181,10 @@ enum class Step : uint8_t
 	Fireflies,
 	Physics,
 	Vortices,
+	/// The tutorial's hand demonstration plays on for the scripts by the time of the turn
+	HandDemo,
+	/// The opening's light and the clip of the hand that lifts the boy move on for the scripts by the time of the turn
+	IntroLift,
 	/// The scripts' clock of their spoken lines and texts, and the player's clicks on the dialogue
 	ScriptVoices,
 	Scripts,
@@ -210,6 +212,8 @@ enum class Step : uint8_t
 	CreatureAlignment,
 	SoundTags,
 	Ambience,
+	/// The clock of the music that the scripts start: its cues and its end, which the scripts wait on
+	ScriptMusic,
 	Music,
 	Autosave,
 	GameOver,
@@ -256,10 +260,10 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Clock, .stage = Stage::StartTurn},
     // The living's reactions count their times by the same turn count as the game
     {.step = Step::ReactionClock, .stage = Stage::StartTurn},
-    // The places of the turn's start, which the frames draw from, and the map's cells of what moved
+    // The places of the turn's start, which the frames draw from. Each thing goes into its new map cells as it moves,
+    // so the turn has no step for them.
     {.step = Step::TurnStartPlaces, .stage = Stage::StartTurn},
     {.step = Step::InfluenceTurnStart, .stage = Stage::StartTurn},
-    {.step = Step::MapCells, .stage = Stage::StartTurn},
     {.step = Step::Sharks, .stage = Stage::StartTurn},
     {.step = Step::Storms, .stage = Stage::Atmosphere},
     {.step = Step::Snow, .stage = Stage::Atmosphere},
@@ -294,7 +298,6 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // of k_CreaturesTurn in its own turn. Each villager takes the step of its walk in its own turn.
     {.step = Step::CreaturesTurnStart, .stage = Stage::Living},
     {.step = Step::Living, .stage = Stage::Living},
-    {.step = Step::MapCellsAfterLiving, .stage = Stage::Living},
     {.step = Step::Fires, .stage = Stage::Fires},
     {.step = Step::Reactions, .stage = Stage::Reactions},
     {.step = Step::WorshipChants, .stage = Stage::Spells},
@@ -306,6 +309,11 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fireflies, .stage = Stage::Fireflies},
     {.step = Step::Physics, .stage = Stage::Physics},
     {.step = Step::Vortices, .stage = Stage::ParticleEnd},
+    // The scripts see the hand demonstration play by the time of the turn alone. The game plays it in its frames, so
+    // the step has no stage of the game's turn.
+    {.step = Step::HandDemo, .stage = std::nullopt},
+    // The same for the light of the opening and the hand that lifts the boy, which the game also moves in its frames
+    {.step = Step::IntroLift, .stage = std::nullopt},
     // The scripts' clock moves on, and the dialogue takes the player's clicks, just before the scripts look at the world
     {.step = Step::ScriptVoices, .stage = Stage::Scripts},
     {.step = Step::Scripts, .stage = Stage::Scripts},
@@ -333,6 +341,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::MusicMoods, .stage = Stage::MusicMoods},
     {.step = Step::SoundTags, .stage = Stage::EndTurn},
     {.step = Step::Ambience, .stage = Stage::EndTurn},
+    // The world times the scripts' music before the music heard follows it
+    {.step = Step::ScriptMusic, .stage = Stage::EndTurn},
     {.step = Step::Music, .stage = Stage::EndTurn},
     // The autosave comes before the end of the game, so a save that is due in the last turn is written
     {.step = Step::Autosave, .stage = Stage::EndTurn},
