@@ -225,6 +225,12 @@ class Guarding(unittest.TestCase):
         self.assertEqual(ai_soak.game_programs(ai_soak.Game("TwoGods", 1, 1, "all-but-one", 2, 100)), 4)
         self.assertEqual(ai_soak.game_programs(ai_soak.Game("TwoGods", 1, 0, "all-but-one", 0, 100), inject=100), 3)
 
+    def test_the_game_programs_have_their_names_of_each_computer(self):
+        for name in ("openblack", "openblack-server", "openblack-serve", "openblack.exe", "OpenBlack-Server.exe"):
+            self.assertTrue(ai_soak.is_game_program(name), name)
+        for name in ("openblack_tests", "python", "openblack-web"):
+            self.assertFalse(ai_soak.is_game_program(name), name)
+
     def test_the_command_line_changes_the_limits(self):
         options = ai_soak.build_parser().parse_args(["--cpu-limit", "90", "--most-game-programs", "0"])
         limits = ai_soak.limits_of(options)

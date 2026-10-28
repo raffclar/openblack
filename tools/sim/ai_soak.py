@@ -319,8 +319,15 @@ def count_game_programs(psutil):
             name = (process.info.get("name") or "").lower()
         except (psutil.Error, AttributeError):
             continue
-        count += name in GAME_PROGRAMS
+        count += is_game_program(name)
     return count
+
+
+def is_game_program(name):
+    """Whether a process name is a game program. macOS gives at most 15 letters of a name, so "openblack-server" shows as
+    "openblack-serve" there."""
+    name = name.lower()
+    return name in GAME_PROGRAMS or name == "openblack-serve"
 
 
 def game_programs(game, inject=None):
