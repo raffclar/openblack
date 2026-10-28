@@ -38,10 +38,11 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sim_report  # noqa: E402
+import sim_paths  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
-DEFAULT_GAME_PATH = os.environ.get("OB_GAME_PATH", "C:/projects/black")
+DEFAULT_BUILDS = sim_paths.DEFAULT_BUILDS
+DEFAULT_GAME_PATH = sim_paths.DEFAULT_GAME_PATH
 CHECKSUM_LINE = re.compile(r"turn (\d+) checksum ([0-9a-f]{16})")
 # A run that has not finished in this time is stopped
 RUN_LIMIT_SECONDS = 900
@@ -52,7 +53,7 @@ def worktree_root():
 
 
 def default_bin(config):
-    return os.path.join(DEFAULT_BUILDS, os.path.basename(worktree_root()), "bin", config)
+    return sim_paths.default_bin(config)
 
 
 def run(command, cwd, limit=RUN_LIMIT_SECONDS, output=None):

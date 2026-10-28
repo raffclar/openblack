@@ -186,7 +186,8 @@ class Guarding(unittest.TestCase):
             if later:
                 values.update(later.pop(0))
 
-        guard = ai_soak.Guard("out", probes, sleep=sleep, clock=lambda: clock[0], wait_limit=100, poll=10)
+        guard = ai_soak.Guard("out", probes, sleep=sleep, clock=lambda: clock[0], wait_limit=100, poll=10,
+                              limits=ai_soak.PC_LIMITS)
         return guard, waits
 
     def test_a_free_computer_allows_a_game(self):
@@ -207,6 +208,28 @@ class Guarding(unittest.TestCase):
         self.assertEqual((ai_soak.CPU_LIMIT_PERCENT, ai_soak.FREE_MEMORY_GB, ai_soak.FREE_DISK_GB), (75.0, 16.0, 150.0))
         guard, _ = self.guard(74.9, 16.0, 150.0)
         self.assertEqual(guard.blockers(), [])
+
+    def test_the_mac_limits_count_the_game_programs_of_all_lanes(self):
+        values = {"cpu": 10.0, "memory_gb": 8.0, "disk_gb": 100.0, "game_programs": 1}
+        probes = {name: (lambda name=name: values[name]) for name in values}
+        guard = ai_soak.Guard("out", probes, limits=ai_soak.MAC_LIMITS)
+        self.assertEqual(guard.blockers(3), [])
+        blockers = guard.blockers(4)
+        self.assertEqual(len(blockers), 1)
+        self.assertIn("game programs", blockers[0])
+        values["memory_gb"] = 5.0
+        self.assertIn("memory", guard.blockers(3)[0])
+
+    def test_a_game_starts_the_server_its_clients_and_its_observers(self):
+        self.assertEqual(ai_soak.game_programs(ai_soak.Game("TwoGods", 1, 1, "all-computer", 3, 100)), 4)
+        self.assertEqual(ai_soak.game_programs(ai_soak.Game("TwoGods", 1, 1, "all-but-one", 2, 100)), 4)
+        self.assertEqual(ai_soak.game_programs(ai_soak.Game("TwoGods", 1, 0, "all-but-one", 0, 100), inject=100), 3)
+
+    def test_the_command_line_changes_the_limits(self):
+        options = ai_soak.build_parser().parse_args(["--cpu-limit", "90", "--most-game-programs", "0"])
+        limits = ai_soak.limits_of(options)
+        self.assertEqual(limits.cpu_percent, 90.0)
+        self.assertIsNone(limits.most_game_programs)
 
     def test_a_busy_computer_makes_the_runner_wait_until_it_is_free(self):
         guard, waits = self.guard(90.0, 32.0, 500.0, later=[{"cpu": 90.0}, {"cpu": 20.0}])
@@ -304,7 +327,7 @@ class NetCheckHelpers(unittest.TestCase):
         self.assertEqual(net_check.run_limit_seconds(600), net_check.RUN_LIMIT_SECONDS)
         self.assertEqual(net_check.run_limit_seconds(2000), net_check.RUN_LIMIT_SECONDS)
         self.assertGreater(net_check.run_limit_seconds(18000), 3000)
-        self.assertEqual(net_check.MOST_TURNS, 18000)
+        self.assertEqual(net_check.MOST_TURNS, ai_soak.MOST_TURNS)
 
     def test_the_longest_turn_comes_from_the_record(self):
         with tempfile.TemporaryDirectory() as folder:
