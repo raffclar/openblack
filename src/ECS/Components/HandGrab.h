@@ -21,6 +21,7 @@
 #include "Creature/CreatureGiving.h"
 #include "Enums.h"
 #include "Hand/HandGrabRules.h"
+#include "Hand/ThrowLead.h"
 
 namespace openblack::ecs::components
 {
@@ -46,11 +47,17 @@ struct InHand
 
 /// The pose that the frames draw a thing in while a hand pulls at it: leaning, and stretched up towards the hand. Only
 /// the draw reads it. The world keeps the thing as it stood before the pull.
+/// In a game alone, the thing keeps this drawn pose after the hand lets go of it before it comes free. When the world
+/// moves, turns or sizes the thing again, the frames draw it at its own place.
 struct HandPulled
 {
 	glm::vec3 position {0.0f};
 	glm::mat3 rotation {1.0f};
 	glm::vec3 scale {1.0f};
+	/// The place, the turn and the size of the thing in the world when the frame drew this pose
+	glm::vec3 standsAt {0.0f};
+	glm::mat3 standsRotation {1.0f};
+	glm::vec3 standsScale {1.0f};
 };
 
 /// The light of a thing in a hand, as the game keeps it from the last time that it drew the thing in the hand. The sea
@@ -143,6 +150,9 @@ struct HandGrab
 		glm::vec3 from {0.0f};
 	};
 	std::optional<Throw> lastThrow;
+	/// The flight of the throw that this computer sent, which the frames draw the thing along until the turn of the
+	/// command. Only the draw of this computer reads it.
+	std::optional<hand_grab::throw_lead::Flight> predicted;
 	/// Where the hand was last meant to be while holding, before it rose, for the twist of a throw
 	glm::vec3 lastTarget {0.0f};
 
@@ -177,6 +187,8 @@ struct HandGrab
 	entt::entity offeredTo {entt::null};
 	creature_giving::Offer offer;
 	entt::entity givenTo {entt::null};
+	/// The creature that the hand called off the gift to, until the turn does the call off
+	entt::entity callingOff {entt::null};
 	Zoomer offerTurn {0.0f};
 	/// Where the hand was drawn last frame
 	std::optional<glm::vec3> lastHand;

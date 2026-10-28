@@ -63,6 +63,8 @@ public:
 	struct Frame
 	{
 		float seconds {0.0f};
+		/// The steps of the input that the frame takes. The cursor is sampled at these steps.
+		input_steps::Steps steps {input_steps::Steps::One()};
 		/// The cursor, in pixels from the top left
 		glm::vec2 cursor {0.0f};
 		/// Whether the hand is drawing over the world: not over a debug window, in the temple or in a cut scene. The path

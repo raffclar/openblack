@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 
 #include <glm/geometric.hpp>
 
@@ -63,6 +64,51 @@ bool SeesBox(const Frustum& frustum, const glm::mat4& model, glm::vec3 minima, g
 		return std::ranges::all_of(
 		    corners, [&side](const glm::vec3& corner) { return glm::dot(glm::vec3(side), corner) + side.w < -k_BoxMargin; });
 	});
+}
+
+bool SeesSweptBox(const Frustum& frustum, const glm::mat4& model, glm::vec3 minima, glm::vec3 maxima, glm::vec3 sweep) noexcept
+{
+	std::array<glm::vec3, 16> corners {};
+	for (size_t i = 0; i < 8; ++i)
+	{
+		const glm::vec3 corner {(i & 1u) != 0 ? maxima.x : minima.x, (i & 2u) != 0 ? maxima.y : minima.y,
+		                        (i & 4u) != 0 ? maxima.z : minima.z};
+		const auto world = glm::vec3(model * glm::vec4(corner, 1.0f));
+		corners.at(i * 2) = world - sweep;
+		corners.at(i * 2 + 1) = world + sweep;
+	}
+	return std::ranges::none_of(frustum.sides, [&corners](const glm::vec4& side) {
+		return std::ranges::all_of(
+		    corners, [&side](const glm::vec3& corner) { return glm::dot(glm::vec3(side), corner) + side.w < -k_BoxMargin; });
+	});
+}
+
+float QuadRadius(const glm::mat3& turnAndSize) noexcept
+{
+	float farthest = 0.0f;
+	for (const glm::vec2 corner : {glm::vec2(-1.0f, -1.0f), glm::vec2(1.0f, -1.0f), glm::vec2(-1.0f, 1.0f), glm::vec2(1.0f)})
+	{
+		farthest = std::max(farthest, glm::length(turnAndSize * glm::vec3(corner, 0.0f)));
+	}
+	return farthest;
+}
+
+std::optional<glm::vec3> LandRiseSweep(const glm::mat4& model, float highestRise) noexcept
+{
+	// The shader moves a point straight up by the rise when the model stands upright, else along the model's up axis by
+	// the rise divided by the length of its first axis
+	const auto up = glm::vec3(model[1]);
+	if (up.x == 0.0f && up.z == 0.0f)
+	{
+		return glm::vec3(0.0f, highestRise, 0.0f);
+	}
+	const float size = glm::length(glm::vec3(model[0]));
+	// A model of no size has no limit on the move
+	if (size <= 0.0f)
+	{
+		return std::nullopt;
+	}
+	return up * (highestRise / size);
 }
 
 } // namespace openblack::graphics::view_frustum

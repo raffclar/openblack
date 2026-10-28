@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <memory>
 #include <string_view>
 #include <unordered_map>
@@ -18,6 +19,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Common/FramePace.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "Magic/TribalPowerSpin.h"
 
@@ -50,7 +52,8 @@ public:
 	[[nodiscard]] const graphics::Texture2D* GetTextTexture() const override;
 	[[nodiscard]] entt::id_type BubbleMesh() override;
 	[[nodiscard]] entt::id_type BandMesh() override;
-	void UpdateGlobes(float gameSeconds) override;
+	void UpdateGlobes(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+	                  bool landDrawn) override;
 	void PlacePilesOnLand() override;
 
 private:
@@ -66,6 +69,8 @@ private:
 
 	/// The effect playing in each globe
 	std::unordered_map<entt::entity, uint32_t> _holderEffects;
+	/// When the effects in the globes take their next step
+	frame_pace::Pace _holderPace;
 	const gui::GameInterface* _interface {nullptr};
 	/// The tribes' names spinning in the world, and the one ringing this computer's hand among them
 	std::vector<std::unique_ptr<magic::tribal_spin::Runner>> _runners;

@@ -85,6 +85,8 @@ public:
 		std::string localMaps;
 		/// The text of "Online Maps\ConditionTemplate.txt"
 		std::string conditionTemplate;
+		/// The room's player list shows the ping after the player's own name (deviation 143, --show-ping)
+		bool showPing {false};
 	};
 
 	/// How the player answers a message box
@@ -169,6 +171,11 @@ public:
 	[[nodiscard]] bool IsObserver() const noexcept { return _observer; }
 	/// The server started the game: the network game has the session now, and the front end leaves it open
 	[[nodiscard]] bool IsStarted() const;
+	/// The room's player list shows the ping after the player's own name
+	[[nodiscard]] bool ShowsPing() const noexcept { return _settings.showPing; }
+	/// The time of the round trip of this computer's last ping to the room's server, in microseconds. None before the
+	/// server lets the player in, and before its first answer.
+	[[nodiscard]] std::optional<uint64_t> GetRoundTrip() const;
 
 	// The Landscape tab
 	[[nodiscard]] std::span<const multiplayer::LocalMap> GetLocalMaps() const noexcept { return _maps; }
@@ -199,7 +206,7 @@ public:
 	// The conditions page
 	/// The winning conditions of the server's land, from the template; none before a land is known
 	[[nodiscard]] const std::optional<multiplayer::ConditionTemplate>& GetConditions() const noexcept { return _conditions; }
-	[[nodiscard]] std::optional<uint32_t> GetTimeLimit() const noexcept { return _timeLimit; }
+	[[nodiscard]] uint32_t GetTimeLimit() const noexcept { return _timeLimit; }
 	[[nodiscard]] bool IsReady() const noexcept { return _ready; }
 	/// The Ready box: the player is ready for the start, which the server makes
 	void SetReady(bool ready);
@@ -269,7 +276,8 @@ private:
 	std::optional<size_t> _shownSeat;
 
 	std::optional<multiplayer::ConditionTemplate> _conditions;
-	std::optional<uint32_t> _timeLimit;
+	/// The game server sends no time limit, so the game's default stays
+	uint32_t _timeLimit {multiplayer::k_DefaultTimeLimitMinutes};
 	bool _ready {false};
 };
 

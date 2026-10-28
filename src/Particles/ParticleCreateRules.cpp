@@ -449,7 +449,10 @@ private:
 			const float r = randomRadiusMin + effect.Random(randomRadiusMax - randomRadiusMin);
 			position += glm::vec3(openblack::portable_math::Cos(angle) * r, 0.0f, openblack::portable_math::Sin(angle) * r);
 		}
-		glm::vec3 random = effect.RandomInBall() * effect.Random(randomSpeed);
+		// The point in the ball is drawn before the speed. Two statements keep this order, because the operands of a
+		// product have no fixed order of evaluation.
+		glm::vec3 random = effect.RandomInBall();
+		random *= effect.Random(randomSpeed);
 		random *= effect.FloatProvider(adjustRandomVelocity, 1.0f);
 		atom.velocity = base + random;
 		if (addCastVelocity)

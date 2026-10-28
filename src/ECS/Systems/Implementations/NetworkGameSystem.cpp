@@ -21,9 +21,11 @@
 
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "ECS/ProfileAlignment.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -152,6 +154,15 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	}
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Joining the game server at {}", join.url);
+	auto readCreature = _readCreature;
+	if (join.testCreatureFile.has_value())
+	{
+		// A test sends the creature file that it names, in place of the creature of the player's profile
+		readCreature = [path = *join.testCreatureFile]() {
+			auto& fileSystem = Locator::filesystem::value();
+			return fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
+		};
+	}
 	_session->Join(online::NetworkSessionSettings {
 	    .request = {.url = join.url, .headers = {}, .subprotocols = {}},
 	    .ticket = std::move(join.ticket),
@@ -168,7 +179,15 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		    }
 		    return fileSystem.ReadAll(*path);
 	    },
-	    .readCreature = _readCreature,
+	    .readCreature = std::move(readCreature),
+	    .readAlignment =
+	        []() {
+		        // The god starts the game at the alignment that the player's profile kept from earlier games
+		        const auto profile = Locator::playerProfileSystem::has_value()
+		                                 ? Locator::playerProfileSystem::value().GetCurrentProfile()
+		                                 : std::nullopt;
+		        return profile_alignment::Sent(profile.has_value() ? profile->alignment : 0.0);
+	        },
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	    .parts =
 	        [](uint32_t turn) {
@@ -243,6 +262,39 @@ void NetworkGameSystem::Leave()
 	}
 }
 
+void NetworkGameSystem::EndNetworkGame()
+{
+	if (!_session)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game of this computer ends");
+	Detach();
+	_started = false;
+	_awaitingLand = false;
+	_fromCommandLine = false;
+	_joinReplyRead = false;
+	_stopped = false;
+	_pendingStart.reset();
+	_resumeTurn.reset();
+	// The clock is the clock of a game alone again, and it no longer waits for the turns of a server
+	auto& clock = Locator::time::value();
+	clock.SetNetworkGame(false);
+	clock.SetPaused(false);
+	if (Locator::syncChecksumSystem::has_value())
+	{
+		Locator::syncChecksumSystem::value().SetEnabled(false);
+	}
+}
+
+void NetworkGameSystem::StopGame()
+{
+	if (_session)
+	{
+		_session->StopGame();
+	}
+}
+
 void NetworkGameSystem::PlayAlone()
 {
 	if (InGame())
@@ -295,6 +347,15 @@ void NetworkGameSystem::Update()
 		clock.SetPaused(false);
 		clock.ResetTimerToTurn();
 		_resumeTurn.reset();
+	}
+
+	// After the last turn of a decided game, the clock of this computer stops. The world stands still, and the frames
+	// take no game time, as in a pause.
+	if (const auto last = _session->StoppedAfter(); last.has_value() && !_stopped && Locator::time::value().GetTurn() > *last)
+	{
+		_stopped = true;
+		Locator::time::value().SetPaused(true);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the game stopped after turn {}: the clock stops", *last);
 	}
 
 	// A join from the command line: the server's reply to the join gives the land, the seed and the start of its world,
@@ -375,12 +436,17 @@ void NetworkGameSystem::Update()
 
 void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& world)
 {
+	const auto start = std::chrono::steady_clock::now();
 	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadWorldState(world.bytes))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The world state of turn {} from the game server did not load", world.turn);
 		_session->Leave();
 		return;
 	}
+	// The log gives the time of the load, so that the tools can see how long a client stops when it comes back in step
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state of turn {} ({} bytes) loaded in {:.2f} ms", world.turn,
+	                   world.bytes.size(),
+	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 	// The load starts the land again: the world is still the world of a network game, which turns with the server
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(true);

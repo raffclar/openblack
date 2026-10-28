@@ -359,6 +359,28 @@ TEST_F(ReportedHands, ThisComputerMovesTheHandsOfItsOwnGodOnceTheyAreThere)
 	EXPECT_EQ(_hands.GetPlayerHands()[0], _hand);
 }
 
+// Each god has its hands where its own reports put them. This computer has the hands of its own god, which the
+// inspector and the frames read; the first player's hands stay the hands of the turn.
+TEST_F(ReportedHands, EachGodHasItsHandWhereItsReportsPutItAndThisComputerHasItsOwn)
+{
+	EXPECT_FALSE(_hands.GetHandPositionsOf(PlayerNames::PLAYER_TWO)[0].has_value());
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 0.0f, 20.0f}));
+	_hands.Report(PlayerNames::PLAYER_TWO, ReportAt({5.0f, 0.0f, 5.0f}));
+	EXPECT_EQ(_hands.GetHandPositionsOf(PlayerNames::PLAYER_ONE)[0], glm::vec3(20.0f, 0.0f, 20.0f));
+	EXPECT_EQ(_hands.GetHandPositionsOf(PlayerNames::PLAYER_TWO)[0], glm::vec3(5.0f, 0.0f, 5.0f));
+	// A player with no hands has no place for them
+	EXPECT_FALSE(_hands.GetHandPositionsOf(PlayerNames::PLAYER_THREE)[0].has_value());
+
+	// The first computer has the first player's hands
+	EXPECT_EQ(_hands.GetOwnHandPositions()[0], glm::vec3(20.0f, 0.0f, 20.0f));
+	// The computer of the second god has the hands of that god, and the turn still has the first player's
+	_hands.SetOwnPlayer(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_hands.GetOwnHands(), made);
+	EXPECT_EQ(_hands.GetOwnHandPositions()[0], glm::vec3(5.0f, 0.0f, 5.0f));
+	EXPECT_EQ(_hands.GetPlayerHandPositions()[0], glm::vec3(20.0f, 0.0f, 20.0f));
+}
+
 TEST_F(ReportedHands, AComputerWithNoPlayerOfItsOwnHasNoOwnPlayer)
 {
 	// A game on one computer: the first player is its own
@@ -421,6 +443,57 @@ TEST_F(ReportedHands, EachPlayerHasTheCameraOfItsOwnReports)
 	EXPECT_EQ(one->focus, glm::vec3(25.0f, 0.0f, 35.0f));
 	EXPECT_EQ(two->origin, glm::vec3(7.0f, 80.0f, 9.0f));
 	EXPECT_EQ(two->focus, glm::vec3(45.0f, 0.0f, 55.0f));
+}
+
+TEST_F(ReportedHands, TheWorldHasNoViewBeforeTheFirstViewReport)
+{
+	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_ONE).has_value());
+	// The report of the hand and the camera does not give a view
+	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 1.0f, 30.0f}));
+	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_ONE).has_value());
+}
+
+TEST_F(ReportedHands, TheWorldHasTheViewOfTheLastViewReport)
+{
+	const ViewReport first {.eye = {1.0f, 2.0f, 3.0f},
+	                        .focus = {4.0f, 5.0f, 6.0f},
+	                        .lens = 1.2f,
+	                        .nearClip = 2.0f,
+	                        .screenWidth = 1920,
+	                        .screenHeight = 1080,
+	                        .aspect = 1.7777778f,
+	                        .inclusionDistance = 50.0f,
+	                        .cameraOrders = 3,
+	                        .cameraArrived = false,
+	                        .gripsLand = true,
+	                        .otherButton = false};
+	auto second = first;
+	second.screenWidth = 1280;
+	second.screenHeight = 1024;
+	second.aspect = 1.25f;
+	second.inclusionDistance = 0.0f;
+	second.cameraOrders = 4;
+	second.cameraArrived = true;
+	second.gripsLand = false;
+	second.otherButton = true;
+	_hands.ReportView(PlayerNames::PLAYER_ONE, first);
+	_hands.ReportView(PlayerNames::PLAYER_ONE, second);
+	const auto view = _hands.GetReportedView(PlayerNames::PLAYER_ONE);
+	ASSERT_TRUE(view.has_value());
+	EXPECT_EQ(view->eye, second.eye);
+	EXPECT_EQ(view->focus, second.focus);
+	EXPECT_EQ(view->lens, second.lens);
+	EXPECT_EQ(view->nearClip, second.nearClip);
+	EXPECT_EQ(view->screen, glm::ivec2(1280, 1024));
+	EXPECT_EQ(view->aspect, 1.25f);
+	EXPECT_EQ(view->inclusionDistance, 0.0f);
+	EXPECT_EQ(view->cameraOrders, 4u);
+	EXPECT_TRUE(view->cameraArrived);
+	EXPECT_FALSE(view->gripsLand);
+	EXPECT_TRUE(view->otherButton);
+	// A player with no hands has no view
+	_hands.ReportView(PlayerNames::PLAYER_TWO, first);
+	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_TWO).has_value());
 }
 
 // The world holds the creature from the turn of the lock to the turn of its end, whatever the hand of the frames does

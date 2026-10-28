@@ -130,16 +130,19 @@ TestbedScenarios::~TestbedScenarios()
 	if (auto* game = Game::Instance(); game != nullptr && _stagerSet)
 	{
 		game->SetScenarioStager({});
+		game->SetScenarioTurn({});
 	}
 }
 
 void TestbedScenarios::UpdateAlways() noexcept
 {
-	// The game lays out a scenario asked for as its turns step starts. The frame does not change the world.
-	if (auto* game = Game::Instance(); game != nullptr && !_stagerSet)
+	ConnectToGame();
+	// In a network game the scenario steps by the turns, so that every computer gives its commands before the same
+	// turn. The frame only moves the camera.
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
 	{
-		game->SetScenarioStager([this]() { RunRequested(); });
-		_stagerSet = true;
+		_runner.UpdateView();
+		return;
 	}
 	// Scenarios run in the game's time: not while it is paused, faster as the game is, and a fixed step a frame when the
 	// game is stepped, so that their timers keep in line with the game's turns
@@ -159,6 +162,31 @@ void TestbedScenarios::UpdateAlways() noexcept
 		              .count();
 	}
 	_runner.Update(seconds);
+}
+
+void TestbedScenarios::ConnectToGame() noexcept
+{
+	// The game lays out a scenario asked for as its turns step starts. The frame does not change the world.
+	if (auto* game = Game::Instance(); game != nullptr && !_stagerSet)
+	{
+		game->SetScenarioStager([this]() { RunRequested(); });
+		game->SetScenarioTurn([this]() { BeforeTurn(); });
+		_stagerSet = true;
+	}
+}
+
+void TestbedScenarios::UpdateInNetworkGame() noexcept
+{
+	ConnectToGame();
+	_runner.UpdateView();
+}
+
+void TestbedScenarios::BeforeTurn() noexcept
+{
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+	{
+		_runner.BeforeTurn();
+	}
 }
 
 void TestbedScenarios::RunRequested() noexcept
@@ -200,6 +228,9 @@ void TestbedScenarios::RunRequested() noexcept
 	});
 	_focus = 0;
 	_runner.Start(*scenario);
+	// Give the commands and throws that are due at the start before the first turn of the scenario. The server does
+	// this too, thus the two worlds stay the same.
+	_runner.Update(0.0f);
 }
 
 void TestbedScenarios::Draw() noexcept

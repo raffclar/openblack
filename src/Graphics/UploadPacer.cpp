@@ -85,14 +85,26 @@ size_t UploadPacer::GetUploadCount() const
 	return _uploadCount;
 }
 
+size_t UploadPacer::GetWaiting() const
+{
+	const std::scoped_lock lock(_mutex);
+	return _waiting;
+}
+
 void UploadPacer::Take(size_t bytes)
 {
 	std::unique_lock lock(_mutex);
-	_wake.wait(lock, [this, bytes] {
+	const auto mayGo = [this, bytes] {
 		const bool fits =
 		    _uploadCount < _allowance.uploads && bytes <= _allowance.bytes - std::min(_uploaded, _allowance.bytes);
 		return _released || _hurries > 0 || _uploadCount == 0 || fits;
-	});
+	};
+	if (!mayGo())
+	{
+		++_waiting;
+		_wake.wait(lock, mayGo);
+		--_waiting;
+	}
 	_uploaded += bytes;
 	++_uploadCount;
 }

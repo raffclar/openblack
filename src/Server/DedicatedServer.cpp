@@ -36,9 +36,10 @@
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
-#include "Common/UserData.h"
 #include "Debug/TestbedScenarioRunner.h"
 #include "ECS/ChallengePictures.h"
+#include "ECS/Components/Temple.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
@@ -156,6 +157,8 @@ public:
 
 	void PlayViewStep(game_turn::Step /*step*/, glm::vec3 /*cameraPosition*/) override {}
 	[[nodiscard]] int32_t FrameRate() const override { return _frameRate.Rate(); }
+	/// The testbed scenario gives its commands before the turns, as on each client of the network game
+	void BeforeTurn() override;
 
 private:
 	ServerSettings _settings;
@@ -231,9 +234,14 @@ bool ServerWorld::Initialize()
 		_startMap = fileSystem.GetPath<filesystem::Path::Scripts>() / _startMap;
 	}
 
-	// The server plays as the profile of a tool's run, or as its own profile
-	const auto profiles = player_profiles::StoreFor(
-	    {.profileFolder = _settings.profileFolder, .userFolder = user_data::ProfileFolder(), .automated = true});
+	// The server plays as a profile in memory. No file holds it, and the server has no folder for saved games, so the
+	// server never saves a game and never keeps the data of a player.
+	const auto profiles = player_profiles::ServerStore();
+	if (_settings.profileFolder.has_value())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The server keeps no profile: the profile folder {} is not used",
+		                   _settings.profileFolder->generic_string());
+	}
 	if (!InitializeGame(profiles))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
@@ -250,10 +258,11 @@ bool ServerWorld::Initialize()
 		Locator::handSystem::value().ClearOwnPlayer();
 	}
 
-	// Every random number from the seed, the date pinned
-	Locator::rng::value().SetRunSeed(_settings.seed);
-	Locator::time::value().RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Seeded run: seed {}, date pinned", _settings.seed);
+	// Every random number from the seed of the world. Only the seed of a tool pins the date.
+	const auto start = RoomStartFor(_settings);
+	Locator::rng::value().SetRunSeed(start.seed);
+	Locator::time::value().RestartClock(start.pinnedDate);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", RoomStartLine(start));
 	// The server's world is the world of a network game
 	Locator::time::value().SetNetworkGame(true);
 	// Each frame takes a fixed game time from the first, so that the server plays the same turns at any speed
@@ -314,7 +323,12 @@ bool ServerWorld::StartLand()
 		_scenarioRunner = std::make_unique<testbed_scenarios::Runner>();
 	}
 	// The land starts from the state that every client of the network game starts it from
-	simulation::PrepareNetworkLand(_settings.seed);
+	simulation::PrepareNetworkLand(RoomStartFor(_settings).seed);
+	if (const auto refusal = simulation::ApplySoakTools(_settings.soak); refusal.has_value())
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot start: {}", *refusal);
+		return false;
+	}
 	if (_settings.godsRingMap)
 	{
 		if (!land.LoadGodsRingMap())
@@ -328,12 +342,7 @@ bool ServerWorld::StartLand()
 	}
 	else
 	{
-		// A server with no profile plays as the profile that the game makes for a player who gives no name
-		auto& profiles = Locator::playerProfileSystem::value();
-		if (profiles.GetProfileCount() == 0)
-		{
-			profiles.CreateProfile(u"", 0);
-		}
+		// The server plays as the profile in memory, so it makes none
 		if (!land.LoadMap(_startMap, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame))
 		{
 			return false;
@@ -371,6 +380,14 @@ void ServerWorld::StartPlayView()
 	}
 }
 
+void ServerWorld::BeforeTurn()
+{
+	if (_scenarioRunner != nullptr)
+	{
+		_scenarioRunner->BeforeTurn();
+	}
+}
+
 bool ServerWorld::Frame()
 {
 	auto& profiler = Locator::profiler::value();
@@ -404,15 +421,11 @@ bool ServerWorld::Frame()
 	{
 		Locator::handDemoSystem::value().Update();
 	}
-	// The scenario starts in the first frame and gives its commands in the frames before the turns, at the time of the
-	// game's debug windows
-	if (_scenarioRunner != nullptr)
+	// The scenario is laid out in the first frame in which the world turns: after the start of a network game, before its
+	// first turn, as each client lays it out
+	if (_scenario != nullptr && !clock.IsPaused())
 	{
-		if (_scenario != nullptr)
-		{
-			_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
-		}
-		_scenarioRunner->Update(std::chrono::duration<float>(clock.GetFrameGameTime()).count());
+		_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
 	}
 	// The tools check that a world state loads into the same world: the server loads its own world once
 	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&
@@ -483,7 +496,16 @@ bool ServerWorld::Frame()
 	}
 	// The turn of the world when it is due, with no view, and the commands that the players sent
 	land.PlayTurns(*this);
-	Locator::playerCommandSystem::value().SendOpenBlock();
+	// As the game that plays the commands of a file, the server then does no command of its own player
+	switch (OwnCommandsOf(_settings))
+	{
+	case OwnCommands::Send:
+		Locator::playerCommandSystem::value().SendOpenBlock();
+		break;
+	case OwnCommands::Drop:
+		Locator::playerCommandSystem::value().Reset();
+		break;
+	}
 	clock.UpdateFrame();
 	// The real time since the last frame, as the game's draw measures it. The storms' clouds and other frame effects step
 	// by it.
@@ -570,12 +592,32 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	const game_socket::Start start {
 	    .land = scriptLand ? network_land::WireName(landPath) : std::string(),
 	    .testbed = settings.testbed,
-	    .seed = settings.seed,
+	    .seed = RoomStartFor(settings).seed,
 	    .turn = Locator::time::value().GetTurn(),
 	    .opening = scriptLand ? settings.openingName : std::string(),
 	    .godsRingMap = settings.godsRingMap,
+	    .allComputerGods = settings.soak.allComputerGods,
+	    .aiSeed = settings.soak.aiSeed,
+	    .scenario = settings.scenario,
 	};
-	if (const auto error = network->Start(*settings.network, start, landChecksum); error.has_value())
+	// A land of a network game has a god slot for each citadel, as the room of the land has a team for each citadel. The
+	// other lands of the tools and the testbed keep the default slots.
+	uint8_t godSlots = k_DefaultGodSlots;
+	if (scriptLand && online_map_land::IsOnlineMap(settings.land))
+	{
+		std::array<bool, computer_player::k_SlotGods.size()> citadels {};
+		Locator::entitiesRegistry::value().Each<const ecs::components::Temple>([&citadels](const auto& temple) {
+			const auto slot = std::ranges::find(computer_player::k_SlotGods, temple.owner);
+			if (slot != computer_player::k_SlotGods.end())
+			{
+				citadels.at(static_cast<size_t>(slot - computer_player::k_SlotGods.begin())) = true;
+			}
+		});
+		godSlots = GodSlotsOfLand(citadels);
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The room has {} god slots and starts with {} gods at least", godSlots,
+	                   settings.network->minGods);
+	if (const auto error = network->Start(*settings.network, start, landChecksum, godSlots); error.has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The game role cannot start: {}", *error);
 		network.reset();
@@ -604,8 +646,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		return host.HasTurn(Locator::time::value().GetTurn()) ? ServerWorld::NetworkStep::Play : ServerWorld::NetworkStep::Wait;
 	});
 	Locator::syncChecksumSystem::value().SetTurnListener(
-	    [&host, onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
-		    SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
+	    [&host, onTurn,
+	     logChecksums = settings.logChecksums](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
+		    if (logChecksums)
+		    {
+			    SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
+		    }
 		    if (onTurn)
 		    {
 			    onTurn(turn.turn, turn.checksum);
@@ -640,6 +686,11 @@ EngineConfig ServerConfig(const ServerSettings& settings)
 	return config;
 }
 
+OwnCommands OwnCommandsOf(const ServerSettings& settings)
+{
+	return settings.commandsPath.has_value() ? OwnCommands::Drop : OwnCommands::Send;
+}
+
 sim_run::Request SimulationFor(const ServerSettings& settings)
 {
 	sim_run::Request simulation {};
@@ -648,6 +699,8 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 	simulation.settings.paceToWallClock = !settings.fast;
 	simulation.settings.untilTurn = settings.turns;
 	simulation.settings.stillHand = true;
+	simulation.settings.templeLoss = settings.templeLoss;
+	simulation.settings.godsNeedNoTemple = settings.godsNeedNoTemple;
 	simulation.frameTime = sim_run::FrameTimeFromMs(settings.frameMilliseconds);
 	simulation.traceDrawsPath = settings.traceDrawsPath;
 	if (settings.recordPath.has_value())
@@ -657,6 +710,22 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 		simulation.hashParts = settings.recordFields ? sim_run::HashDetail::Fields : sim_run::HashDetail::Components;
 	}
 	return simulation;
+}
+
+RoomStart RoomStartFor(const ServerSettings& settings)
+{
+	if (settings.seed.has_value())
+	{
+		return {.seed = *settings.seed, .pinnedDate = ecs::systems::TimeSystemInterface::k_DeterministicDate};
+	}
+	return {.seed = k_RoomSeed, .pinnedDate = std::nullopt};
+}
+
+std::string RoomStartLine(const RoomStart& start)
+{
+	return start.pinnedDate.has_value()
+	           ? fmt::format("The seed of the world: {} (from a tool), date pinned", start.seed)
+	           : fmt::format("The seed of the world: {}, date from the clock of the computer", start.seed);
 }
 
 std::string ChecksumLine(uint32_t turn, uint64_t checksum)
@@ -711,13 +780,17 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}", settings.rowDumpPath->string());
 	}
 #endif
-	checksums.SetTurnListener([&onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
-		if (onTurn)
-		{
-			onTurn(turn.turn, turn.checksum);
-		}
-	});
+	checksums.SetTurnListener(
+	    [&onTurn, logChecksums = settings.logChecksums](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
+		    if (logChecksums)
+		    {
+			    SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
+		    }
+		    if (onTurn)
+		    {
+			    onTurn(turn.turn, turn.checksum);
+		    }
+	    });
 
 	int exitCode = EXIT_SUCCESS;
 #if defined(OPENBLACK_GAME_ROLE)

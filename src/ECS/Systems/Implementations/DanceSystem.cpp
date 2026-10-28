@@ -153,24 +153,12 @@ bool Available(entt::entity thing)
 entt::entity DanceSystem::Create(DanceInfo type, const glm::vec3& place, entt::entity owner, uint32_t duration,
                                  bool madeByScript, entt::entity town)
 {
-	if (!Locator::infoConstants::has_value())
-	{
-		return entt::null;
-	}
-	const auto& table = Locator::infoConstants::value().dance;
-	const auto row = static_cast<std::size_t>(type);
-	if (type == DanceInfo::None || row >= table.size())
-	{
-		return entt::null;
-	}
-	const auto& info = table.at(row);
-	const std::string_view field(info.fileName.data(), info.fileName.size());
-	const std::string fileName(field.substr(0, field.find('\0')));
-	auto file = LoadDanceFile(fileName);
+	auto file = FileOf(type);
 	if (file == nullptr)
 	{
 		return entt::null;
 	}
+	const auto& info = Locator::infoConstants::value().dance.at(static_cast<std::size_t>(type));
 	const auto dance = dances::Create(Locator::entitiesRegistry::value(),
 	                                  {.type = type,
 	                                   .autostart = info.startsAutomatically != 0,
@@ -184,6 +172,23 @@ entt::entity DanceSystem::Create(DanceInfo type, const glm::vec3& place, entt::e
 		Locator::footpathSystem::value().DanceMade(dance, town);
 	}
 	return dance;
+}
+
+std::shared_ptr<const dance::DanceFile> DanceSystem::FileOf(DanceInfo type)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return nullptr;
+	}
+	const auto& table = Locator::infoConstants::value().dance;
+	const auto row = static_cast<std::size_t>(type);
+	if (type == DanceInfo::None || row >= table.size())
+	{
+		return nullptr;
+	}
+	const auto& info = table.at(row);
+	const std::string_view field(info.fileName.data(), info.fileName.size());
+	return LoadDanceFile(std::string(field.substr(0, field.find('\0'))));
 }
 
 void DanceSystem::Destroy(entt::entity dance)

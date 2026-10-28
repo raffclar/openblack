@@ -53,7 +53,6 @@ TEST(SaveFileWriter, TheGameThreadDoesNotWaitForAJob)
 	std::atomic<bool> release {false};
 	std::atomic<bool> done {false};
 	BackgroundWriter writer;
-	const auto before = std::chrono::steady_clock::now();
 	writer.Queue("slow", [&release, &done]() {
 		while (!release)
 		{
@@ -62,8 +61,7 @@ TEST(SaveFileWriter, TheGameThreadDoesNotWaitForAJob)
 		done = true;
 		return true;
 	});
-	// Queue comes back while the job still waits
-	EXPECT_LT(std::chrono::steady_clock::now() - before, std::chrono::seconds(1));
+	// Queue came back while the job still waits: the job cannot end before it is released
 	EXPECT_EQ(writer.Pending(), 1u);
 	EXPECT_FALSE(done);
 	release = true;

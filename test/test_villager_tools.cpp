@@ -150,6 +150,15 @@ TEST(VillagerTools, AHeldThingFadesByItselfElseWithTheVillager)
 	EXPECT_EQ(HeldAlpha(uint8_t {0}, std::nullopt), uint8_t {0});
 }
 
+TEST(VillagerTools, AVillagerHeldByAHandOrACreatureShowsNothingInItsHand)
+{
+	using villager_held::DrawsHeldThing;
+	using villager_held::Holder;
+	EXPECT_TRUE(DrawsHeldThing(Holder::None));
+	EXPECT_FALSE(DrawsHeldThing(Holder::PlayersHand));
+	EXPECT_FALSE(DrawsHeldThing(Holder::Creature));
+}
+
 TEST(VillagerTools, OnlyShownWoodOverWhatShowsFalls)
 {
 	using villager_held::DropsLog;

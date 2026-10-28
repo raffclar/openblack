@@ -25,10 +25,13 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "Camera/Camera.h"
+#include "Camera/CameraModel.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Game.h"
 #include "Input/GameActionMapInterface.h"
@@ -242,11 +245,7 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 
 InspectorSystem::~InspectorSystem()
 {
-	_stopLoadingHelper = true;
-	if (_loadingHelper.joinable())
-	{
-		_loadingHelper.join();
-	}
+	StopLoadingHelper();
 	WriteRecordedInput();
 }
 
@@ -300,16 +299,14 @@ void InspectorSystem::EndLoading()
 	{
 		return;
 	}
-	_stopLoadingHelper = true;
-	if (_loadingHelper.joinable())
-	{
-		_loadingHelper.join();
-	}
+	StopLoadingHelper();
 	// A scenario asked for meanwhile is loaded next: the game goes on answering as loading until it is laid out
 	RequestQueuedScenario();
 	// The land has started, and none of its frames has run yet
 	_game->Loaded();
-	// A tool's camera stands where the recorded input expects it before the first frame of the land, once a land is there
+	// A tool's camera stands where the recorded input expects it before the first frame of the land, once a land is there.
+	// It takes the place of the start view: the flight of a new game to the player's temple does not start, so the pixels
+	// of the input fall on the same things at any start.
 	if (_cameraOnLoad.has_value() && Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded())
 	{
 		std::string error;
@@ -319,6 +316,10 @@ void InspectorSystem::EndLoading()
 		if (pose.has_value())
 		{
 			error = _controls->camera.Set(*pose);
+		}
+		if (error.empty() && pose.has_value() && Locator::camera::has_value())
+		{
+			Locator::camera::value().GetModel().StopFlight();
 		}
 		if (!error.empty() || !now.has_value())
 		{
@@ -359,7 +360,21 @@ void InspectorSystem::AnswerWhileLoading()
 			return _inspector.HandleWhileLoading(
 			    line, loading, [this](const inspector::Request& request) { return QueueWhileLoading(request); });
 		});
-		std::this_thread::sleep_for(k_Interval);
+		std::unique_lock lock(_stopMutex);
+		_stopSignal.wait_for(lock, k_Interval, [this] { return _stopLoadingHelper.load(); });
+	}
+}
+
+void InspectorSystem::StopLoadingHelper()
+{
+	{
+		const std::scoped_lock lock(_stopMutex);
+		_stopLoadingHelper = true;
+	}
+	_stopSignal.notify_all();
+	if (_loadingHelper.joinable())
+	{
+		_loadingHelper.join();
 	}
 }
 
@@ -466,6 +481,31 @@ void InspectorSystem::Service()
 void InspectorSystem::PlaceCamera()
 {
 	inspector::ShowCameraForDrawing(_controls->camera, *_screenshots);
+	// The game shows the camera two times in each frame. Look for a change of the camera only at the first time.
+	const auto frame = _game->FrameNumber();
+	if (_cutsCheckedAt == frame)
+	{
+		return;
+	}
+	_cutsCheckedAt = frame;
+	std::optional<inspector::CameraPose> shown;
+	if (_controls->camera.Pinned())
+	{
+		if (const auto state = _controls->camera.State(); state.has_value())
+		{
+			shown = inspector::CameraPose {.origin = state->origin, .focus = state->focus};
+		}
+	}
+	// When the view changes to a different camera, ask for a rebuild of the land's draw list, as a script's camera does.
+	// A request from the game also rebuilds the list on this frame, so do not replace it.
+	if (_shownCameraCuts.Next(shown) && Locator::objectDrawListSystem::has_value())
+	{
+		auto& drawList = Locator::objectDrawListSystem::value();
+		if (drawList.GetSummary().rebuildsAsked == 0)
+		{
+			drawList.RequestRebuild(1);
+		}
+	}
 }
 
 void InspectorSystem::GiveCameraBack()

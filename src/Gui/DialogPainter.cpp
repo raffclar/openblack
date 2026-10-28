@@ -47,12 +47,21 @@ constexpr float k_SeeThroughAlpha = 0.8333333f;
 constexpr float k_UnselectedTabAlpha = 0.5f;
 
 // The edge colours of the bevelled boxes' styles
-constexpr std::array<glm::vec3, 4> k_EdgeColours = {{
-    {1.0f, 1.0f, 1.0f},
-    {1.0f, 1.0f, 1.0f},
-    {1.0f, 128.0f / 255.0f, 0.0f},
-    {0.0f, 0.0f, 0.0f},
+constexpr std::array<glm::u8vec3, 4> k_EdgeColours = {{
+    {255, 255, 255},
+    {255, 255, 255},
+    {255, 128, 0},
+    {0, 0, 0},
 }};
+
+// The colour of the edge lines from the edge colour and the tint of the box. The alpha of the line is the alpha of the
+// tint.
+glm::vec4 EdgeLine(glm::u8vec3 edge, glm::vec4 tint)
+{
+	const auto toByte = [](float part) { return static_cast<uint8_t>(std::lround(std::clamp(part, 0.0f, 1.0f) * 255.0f)); };
+	const auto line = DialogPainter::EdgeLineColour(edge, {toByte(tint.r), toByte(tint.g), toByte(tint.b)});
+	return {glm::vec3(line) / 255.0f, tint.a};
+}
 
 // The big buttons' arrows: grey, orange when hovered, and their shadow
 constexpr float k_ArrowU = 0.3125f;
@@ -128,7 +137,7 @@ void DialogPainter::DrawBevelBox(const DialogRect& rect, int style, uint8_t edge
 		{
 			return;
 		}
-		const auto colour = glm::vec4(((style & 0x1F) == 0xD ? k_EdgeColours[2] : k_EdgeColours[0]) * glm::vec3(tint), tint.a);
+		const auto colour = EdgeLine((style & 0x1F) == 0xD ? k_EdgeColours[2] : k_EdgeColours[0], tint);
 		DrawLine({rect.min.x + 2, rect.min.y + 2}, {rect.max.x - 2, rect.min.y + 2}, colour);
 		DrawLine({rect.max.x - 2, rect.max.y - 2}, {rect.min.x + 2, rect.max.y - 2}, colour);
 		DrawLine({rect.min.x + 2, rect.max.y - 2}, {rect.min.x + 2, rect.min.y + 2}, colour);
@@ -140,7 +149,7 @@ void DialogPainter::DrawBevelBox(const DialogRect& rect, int style, uint8_t edge
 	const auto centre = cell + k_Cell * 0.5f;
 	DrawBox(rect, centre, centre, glm::vec3(tint));
 
-	const auto colour = glm::vec4(k_EdgeColours.at(static_cast<size_t>(style & 3)) * glm::vec3(tint), tint.a);
+	const auto colour = EdgeLine(k_EdgeColours.at(static_cast<size_t>(style & 3)), tint);
 	const auto left = rect.min.x + 2;
 	const auto right = rect.max.x - 2;
 	const auto top = rect.min.y + 2;

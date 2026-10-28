@@ -38,7 +38,7 @@ std::atomic<int64_t>& LockClick()
 
 /// The page calls this on its main thread when the pointer lock of the game canvas starts or stops (see
 /// web/page/input.js)
-/// The page gives the place of the click that took the lock, in the pixels of the window, or -1 for x when it does not
+/// The page gives the place of the click that took the lock, in the CSS pixels of the canvas, or -1 for x when it does not
 /// know it.
 extern "C" EMSCRIPTEN_KEEPALIVE void openblack_web_pointer_lock_changed(int locked, int x, int y)
 {

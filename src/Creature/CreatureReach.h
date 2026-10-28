@@ -43,6 +43,10 @@ using Points = std::array<glm::vec3, k_CornerCount>;
 /// The points reflected to the creature's other side, for reaching with the animations mirrored
 [[nodiscard]] Points Mirrored(const Points& points);
 
+/// The points of the model's own size, for a creature drawn at a scale. The reach always uses the scale that the
+/// creature has now, so a creature that grows on its way to a thing reaches as far as its body does.
+[[nodiscard]] Points Scaled(const Points& points, float scale);
+
 /// Whether something at a point in the creature's own space is reached for mirrored: when it is nearer the middle of
 /// the reflected points than of the points themselves. Height is ignored.
 [[nodiscard]] bool ReachesMirrored(const Points& points, const glm::vec3& target);

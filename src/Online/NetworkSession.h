@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -49,6 +50,9 @@ struct NetworkSessionSettings
 	/// Reads the creature file of the player, which goes to the other players before the start. Empty when the player
 	/// has no creature, and with no reader.
 	std::function<std::vector<uint8_t>()> readCreature;
+	/// Reads the alignment of the player's profile, which goes to the other players with the creature file. With no
+	/// reader, the player sends an alignment of 0.
+	std::function<float()> readAlignment;
 	/// Tools: gets each turn at which the world of this computer differs from the server's world
 	std::function<void(uint32_t turn)> parts;
 };
@@ -128,6 +132,10 @@ public:
 	void SetReady(bool ready);
 	/// The player leaves the game. The server defeats the god.
 	void Leave();
+	/// The end box of a decided game opened: the client asks the server to stop the turns of the game, one time
+	void StopGame();
+	/// The last turn of the game, after the server stopped the turns. None before.
+	[[nodiscard]] std::optional<uint32_t> StoppedAfter() const { return _stoppedAfter; }
 	/// Once a frame, after the poll of the sockets: the attempts to come back and the pings
 	void Update();
 
@@ -137,6 +145,10 @@ public:
 	void Send(const player_commands::Action& action) override;
 	[[nodiscard]] bool HasTurn(uint32_t turn) const override;
 	[[nodiscard]] std::vector<player_commands::Command> TakeTurn(uint32_t turn) override;
+	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
+	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
+	/// The god of the slot that the server gave to this computer. None for an observer.
+	[[nodiscard]] std::optional<PlayerNames> OwnGod() const override;
 
 	[[nodiscard]] State GetState() const { return _state; }
 	[[nodiscard]] End GetEnd() const { return _end; }
@@ -208,6 +220,7 @@ private:
 	std::optional<game_socket::Start> _start;
 	std::vector<StartEvent> _startEvents;
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
+	std::map<uint8_t, float> _startAlignments;
 	std::string _refusedReason;
 
 	std::map<uint32_t, turn_codec::TurnBundle> _turns;
@@ -236,6 +249,9 @@ private:
 	std::optional<uint32_t> _worldTurn;
 	std::vector<std::vector<uint8_t>> _worldParts;
 	std::optional<WorldState> _world;
+	/// The client asked the server to stop the turns of the game
+	bool _stopAsked {false};
+	std::optional<uint32_t> _stoppedAfter;
 };
 
 [[nodiscard]] std::string_view StateName(NetworkSession::State state) noexcept;

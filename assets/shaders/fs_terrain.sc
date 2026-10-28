@@ -29,8 +29,16 @@ SAMPLER2D(s13_vortexRing, 13);
 // The coarse texture pages the landscape file keeps, a layer each: the coarse land (detail level 0) draws from them
 SAMPLER2DARRAY(s15_coarsePages, 15);
 
+// How finely the blocks' textures are painted:
+// x: the texels along a side of a block's texture (256, or 128 at the low resolution of the lowest detail levels)
+// y: the step from one coarse sample to the next, in 65536ths of a texel of the block's texture
+// z: the coarse texels a block covers along a side when it is drawn
+// w: x divided by 255, the start of the coarse texture on its page
+uniform vec4 u_landTexels;
 // Texels along a side of a block's texture
-#define BLOCK_TEXELS 256.0f
+#define BLOCK_TEXELS u_landTexels.x
+// Texels along a side of the full texture, of a coarse page, and of the snow's noise
+#define FULL_TEXELS 256.0f
 // Units along a side of a block
 #define BLOCK_UNITS 160.0f
 
@@ -41,22 +49,23 @@ float SnowFixedDepth(vec2 cell)
 	return floor(SnowDepthCell(cell) * 65536.0f);
 }
 
-// A whole number divided by 64, cut towards zero
-float CutBy64(float value)
+// A whole number divided by another, cut towards zero
+float CutBy(float value, float divisor)
 {
-	return SnowWhole(value / 64.0f);
+	return SnowWhole(value / divisor);
 }
 
 // A texel's 4-bit colour levels with the snow painted over them. The game paints the snow into each texel of a block's
 // texture, and then the texture is filtered. blockOrigin is the lowest x and z of the block. blockTexel is the texel
-// along the texture's axes (z, then x).
-vec3 SnowOverTexel(vec3 levels, vec2 blockOrigin, vec2 blockTexel)
+// along the texture's axes (z, then x), of a texture with blockTexels along a side.
+vec3 SnowOverTexel(vec3 levels, vec2 blockOrigin, vec2 blockTexel, float blockTexels)
 {
-	// A side of a block covers four cells of the grid, 64 texels each. Along x first, then along z.
+	// A side of a block covers four cells of the grid, a quarter of its texels each. Along x first, then along z.
+	float cellTexels = blockTexels * 0.25f;
 	vec2 texel = blockTexel.yx;
-	vec2 inCell = floor(texel / 64.0f);
+	vec2 inCell = floor(texel / cellTexels);
 	vec2 cell = floor(blockOrigin / 40.0f + 0.5f) + inCell;
-	vec2 step = texel - inCell * 64.0f;
+	vec2 step = texel - inCell * cellTexels;
 	float low = SnowFixedDepth(cell);
 	float high = SnowFixedDepth(cell + vec2(1.0f, 0.0f));
 	float lowFar = SnowFixedDepth(cell + vec2(0.0f, 1.0f));
@@ -67,11 +76,12 @@ vec3 SnowOverTexel(vec3 levels, vec2 blockOrigin, vec2 blockTexel)
 		return levels;
 	}
 	// Each step adds the same whole part of the difference, cut towards zero
-	float near = low + step.x * CutBy64(high - low);
-	float far = lowFar + step.x * CutBy64(highFar - lowFar);
-	float depth = near + step.y * CutBy64(far - near);
-	// The noise image lies over each block as its texture does
-	float noise = floor(texture2DLod(s12_snowNoise, (blockTexel + 0.5f) / BLOCK_TEXELS, 0.0f).r * 255.0f + 0.5f);
+	float near = low + step.x * CutBy(high - low, cellTexels);
+	float far = lowFar + step.x * CutBy(highFar - lowFar, cellTexels);
+	float depth = near + step.y * CutBy(far - near, cellTexels);
+	// The noise image lies over each block as its texture does. A smaller texture takes every second noise texel.
+	vec2 noiseTexel = blockTexel * (FULL_TEXELS / blockTexels);
+	float noise = floor(texture2DLod(s12_snowNoise, (noiseTexel + 0.5f) / FULL_TEXELS, 0.0f).r * 255.0f + 0.5f);
 	float above = floor(depth / 65536.0f) - noise;
 	if (above < 8.0f)
 	{
@@ -118,7 +128,7 @@ vec4 PaintedTexelOf(float layer, vec2 blockOrigin, vec2 blockTexel, vec2 islandU
 	vec3 levels = floor(land.rgb * 15.0f + 0.5f);
 	if (u_snow.x > 0.5f)
 	{
-		levels = SnowOverTexel(levels, blockOrigin, blockTexel);
+		levels = SnowOverTexel(levels, blockOrigin, blockTexel, BLOCK_TEXELS);
 	}
 	// The shadows are baked into each texel: its 4-bit colour scaled and rounded down. Where a tree's moving shadow
 	// drawn this frame covers the texel, that shadow (as dark as any baked one) stands for both.
@@ -183,12 +193,24 @@ vec4 PaintedLevels(float layer, vec2 blockOrigin, vec2 blockTexel)
 	return floor(texel * 15.0f + 0.5f);
 }
 
-// The texel of the block's texture a texel of its coarse texture (1 to 62) is sampled from, along one side: 62 samples
-// across 256 texels, each on a multiple of four (see land_detail::CoarseSourceTexel)
+// The coarse texels sampled along a side of a block, between the texels shared with its neighbours
+float CoarseSamples()
+{
+	return BLOCK_TEXELS * 0.25f - 2.0f;
+}
+
+// The texel of a texture that a texel of its coarse texture (1 to samples) is sampled from, along one side. The samples
+// step evenly across the texture, each on a multiple of four (see land_detail::CoarseSourceTexel).
+float CoarseSourceOf(float coarseTexel, float samples, float step)
+{
+	float index = clamp(coarseTexel, 1.0f, samples) - 1.0f;
+	return floor(index * step / 65536.0f) * 4.0f;
+}
+
+// The texel of the block's texture that a texel of its coarse texture is sampled from, along one side
 float CoarseSource(float coarseTexel)
 {
-	float index = clamp(coarseTexel, 1.0f, 62.0f) - 1.0f;
-	return floor(index * 67650.0f / 65536.0f) * 4.0f;
+	return CoarseSourceOf(coarseTexel, CoarseSamples(), u_landTexels.y);
 }
 
 // Two blocks' texels shared across their edge, each 4-bit level halved and rounded down
@@ -205,12 +227,13 @@ vec4 CoarseLevels(vec2 coarse)
 	vec2 origin = u_blockPositionAndSize.xy;
 	vec2 source = vec2(CoarseSource(coarse.x), CoarseSource(coarse.y));
 	vec4 levels = PaintedLevels(u_block.x, origin, source);
+	float samples = CoarseSamples();
 	if (coarse.x <= 1.0f && u_blockNeighbours.y >= 0.0f)
 	{
 		levels = SharedLevels(levels, PaintedLevels(u_blockNeighbours.y, origin - vec2(0.0f, BLOCK_UNITS),
-		                                            vec2(CoarseSource(62.0f), source.y)));
+		                                            vec2(CoarseSource(samples), source.y)));
 	}
-	else if (coarse.x >= 62.0f && u_blockNeighbours.z >= 0.0f)
+	else if (coarse.x >= samples && u_blockNeighbours.z >= 0.0f)
 	{
 		levels = SharedLevels(levels, PaintedLevels(u_blockNeighbours.z, origin + vec2(0.0f, BLOCK_UNITS),
 		                                            vec2(CoarseSource(1.0f), source.y)));
@@ -218,9 +241,9 @@ vec4 CoarseLevels(vec2 coarse)
 	if (coarse.y <= 1.0f && u_blockNeighbours.x >= 0.0f)
 	{
 		levels = SharedLevels(levels, PaintedLevels(u_blockNeighbours.x, origin - vec2(BLOCK_UNITS, 0.0f),
-		                                            vec2(source.x, CoarseSource(62.0f))));
+		                                            vec2(source.x, CoarseSource(samples))));
 	}
-	else if (coarse.y >= 62.0f && u_blockNeighbours.w >= 0.0f)
+	else if (coarse.y >= samples && u_blockNeighbours.w >= 0.0f)
 	{
 		levels = SharedLevels(levels, PaintedLevels(u_blockNeighbours.w, origin + vec2(BLOCK_UNITS, 0.0f),
 		                                            vec2(source.x, CoarseSource(1.0f))));
@@ -228,12 +251,12 @@ vec4 CoarseLevels(vec2 coarse)
 	return levels;
 }
 
-// The block's coarse texture, 64 texels square, filtered across its texels. It lies a texel in from its edge, 62
-// texels across the block (see land_detail::CoarseTexelPosition).
+// The block's coarse texture, a quarter of its texture along each side, filtered across its texels. It lies a 255th of
+// its page in from its edge (see land_detail::CoarseTexelPosition).
 vec4 CoarseBlock(vec2 blockUv)
 {
-	vec2 position = 256.0f / 255.0f + blockUv * 62.0f - 0.5f;
-	vec2 first = clamp(floor(position), vec2_splat(0.0f), vec2_splat(62.0f));
+	vec2 position = u_landTexels.w + blockUv * u_landTexels.z - 0.5f;
+	vec2 first = clamp(floor(position), vec2_splat(0.0f), vec2_splat(CoarseSamples()));
 	vec2 blend = clamp(position - first, vec2_splat(0.0f), vec2_splat(1.0f));
 	vec4 low = mix(CoarseLevels(first), CoarseLevels(first + vec2(1.0f, 0.0f)), blend.x);
 	vec4 high = mix(CoarseLevels(first + vec2(0.0f, 1.0f)), CoarseLevels(first + 1.0f), blend.x);
@@ -249,9 +272,9 @@ vec4 PageLevels(vec2 texel)
 	// The snow shows as it does in the texel of the block's own texture that the coarse texel takes its colour from
 	if (u_snow.x > 0.5f)
 	{
-		vec2 coarse = texel - u_coarsePage.yz * 256.0f;
-		vec2 source = vec2(CoarseSource(coarse.x), CoarseSource(coarse.y));
-		levels.rgb = SnowOverTexel(levels.rgb, u_blockPositionAndSize.xy, source);
+		vec2 coarse = texel - u_coarsePage.yz * FULL_TEXELS;
+		vec2 source = vec2(CoarseSourceOf(coarse.x, 62.0f, 67650.0f), CoarseSourceOf(coarse.y, 62.0f, 67650.0f));
+		levels.rgb = SnowOverTexel(levels.rgb, u_blockPositionAndSize.xy, source, FULL_TEXELS);
 	}
 	return levels;
 }

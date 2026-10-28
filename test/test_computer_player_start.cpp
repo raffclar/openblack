@@ -19,6 +19,7 @@
 #include <entt/entity/entity.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/ComputerPlayerPersonality.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/PlayerMiracles.h"
 
@@ -49,6 +50,7 @@ public:
 		return found != pens.end() ? std::optional(found->second) : std::nullopt;
 	}
 	[[nodiscard]] bool Skirmish() const override { return skirmish; }
+	[[nodiscard]] bool NetworkGame() const override { return network; }
 	[[nodiscard]] Player::Miracles Miracles(PlayerNames /*player*/) const override { return miracles; }
 	void MakeCreature(PlayerNames player, CreatureType species, const glm::vec3& position) override
 	{
@@ -69,11 +71,25 @@ public:
 		return share;
 	}
 
+	void SetPersonality(PlayerNames player, std::string_view need, float weight) override
+	{
+		personalities.push_back({player, std::string(need), weight});
+	}
+
+	struct PersonalityCall
+	{
+		PlayerNames player;
+		std::string need;
+		float weight;
+	};
+
+	std::vector<PersonalityCall> personalities;
 	std::map<PlayerNames, entt::entity> creatures;
 	std::map<entt::entity, float> sizes;
 	std::map<PlayerNames, bool> temples;
 	std::map<PlayerNames, glm::vec3> pens;
 	bool skirmish {true};
+	bool network {false};
 	Player::Miracles miracles;
 	std::vector<std::pair<CreatureType, glm::vec3>> made;
 	std::vector<std::pair<entt::entity, MagicType>> taught;
@@ -245,6 +261,18 @@ TEST(ComputerPlayerStart, OutsideASkirmishOrWithNoTempleNoCreatureIsMade)
 	EXPECT_TRUE(noTemple.rangesAsked.empty());
 }
 
+TEST(ComputerPlayerStart, ASkirmishOfANetworkGameMakesNoCreature)
+{
+	FakeWorld world;
+	world.network = true;
+	world.temples = {{PlayerNames::PLAYER_TWO, true}};
+	world.pens = {{PlayerNames::PLAYER_TWO, glm::vec3(0.0f)}};
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind);
+	EXPECT_TRUE(world.made.empty());
+	EXPECT_TRUE(world.rangesAsked.empty());
+}
+
 TEST(ComputerPlayerStart, TheSpeciesNumberZeroIsTheApe)
 {
 	EXPECT_EQ(SpeciesFor(0), CreatureType::GiantApe);
@@ -309,6 +337,12 @@ TEST(ComputerPlayerStart, ASlotHasNoPlayerWhenItsGodHasACitadelAndNoHumanOrCompu
 	EXPECT_FALSE(SlotHasNoPlayer(true, false, true));
 	EXPECT_FALSE(SlotHasNoPlayer(false, true, true));
 	EXPECT_FALSE(SlotHasNoPlayer(false, false, false));
+}
+
+TEST(ComputerPlayerStart, TheMapScriptOfANetworkGameSwitchesNoComputerMind)
+{
+	EXPECT_TRUE(LandScriptSwitchesMind(false));
+	EXPECT_FALSE(LandScriptSwitchesMind(true));
 }
 
 TEST(ComputerPlayerStart, EachSlotWithNoPlayerGetsAComputerGodAndAGrownCreature)
@@ -412,4 +446,46 @@ TEST(ComputerPlayerStart, TheGodsOfTheSlotsAreTheSevenPlayersInOrder)
 	{
 		EXPECT_EQ(static_cast<size_t>(k_SlotGods.at(i)), i);
 	}
+}
+
+TEST(ComputerPlayerStart, WithNoAiSeedTheMindSetsNoPersonalityWeight)
+{
+	FakeWorld world;
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind);
+	EXPECT_TRUE(world.personalities.empty());
+}
+
+TEST(ComputerPlayerStart, WithAnAiSeedTheMindSetsTheWeightOfEachNeedAndDrawsNoGameNumber)
+{
+	FakeWorld world;
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind, 7u);
+	ASSERT_EQ(world.personalities.size(), personality::k_Aspects.size());
+	for (size_t i = 0; i < personality::k_Aspects.size(); ++i)
+	{
+		EXPECT_EQ(world.personalities[i].player, PlayerNames::PLAYER_TWO);
+		EXPECT_EQ(world.personalities[i].need, personality::k_Aspects[i].name);
+	}
+	// The creature of this fake world is not there, so the start draws nothing: the seed adds no draw either
+	EXPECT_TRUE(world.rangesAsked.empty());
+	EXPECT_TRUE(world.mostsAsked.empty());
+}
+
+TEST(ComputerPlayerStart, TheAiSeedAddsNoDrawToAStartThatDrawsNumbers)
+{
+	FakeWorld plain;
+	FakeWorld seeded;
+	for (auto* world : {&plain, &seeded})
+	{
+		world->temples = {{PlayerNames::PLAYER_TWO, true}};
+		world->pens = {{PlayerNames::PLAYER_TWO, glm::vec3(1.0f, 2.0f, 3.0f)}};
+	}
+	auto mindA = SwitchedOnLikeThePerson();
+	auto mindB = SwitchedOnLikeThePerson();
+	Start(plain, PlayerNames::PLAYER_TWO, mindA);
+	Start(seeded, PlayerNames::PLAYER_TWO, mindB, 99u);
+	ASSERT_FALSE(plain.rangesAsked.empty());
+	EXPECT_EQ(plain.rangesAsked, seeded.rangesAsked);
+	EXPECT_EQ(plain.mostsAsked, seeded.mostsAsked);
 }

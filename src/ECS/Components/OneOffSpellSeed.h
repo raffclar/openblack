@@ -61,6 +61,9 @@ struct OneOffSpellSeed
 	/// The turn of the drawn model, with no scale. A throw starts from this turn and the origin of the drawn model, thus
 	/// the world gets the drawn place only through the throw command.
 	std::optional<glm::mat3> drawnTurn;
+	/// A globe that this computer threw shows on the flight of its lead until the turn of the command: its turn with no
+	/// scale and its origin, for the next frame only. None draws the globe at its Transform.
+	std::optional<glm::mat4> flightModel;
 	/// Where its dispenser made it, none for one put down by itself
 	entt::entity dispenser {entt::null};
 };

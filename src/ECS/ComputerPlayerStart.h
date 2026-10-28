@@ -88,6 +88,8 @@ class World
 public:
 	virtual ~World() = default;
 
+	/// The first player. A computer god that a land script switches on sizes its creature from the creature of this
+	/// player, on every computer.
 	[[nodiscard]] virtual PlayerNames LocalPlayer() const = 0;
 	/// The first creature of the player that is still the player's
 	[[nodiscard]] virtual std::optional<entt::entity> Creature(PlayerNames player) const = 0;
@@ -99,16 +101,23 @@ public:
 	/// The place of the creature's pen at the temple of the player, on the land
 	[[nodiscard]] virtual std::optional<glm::vec3> Pen(PlayerNames player) const = 0;
 	[[nodiscard]] virtual bool Skirmish() const = 0;
+	/// The game is a network game
+	[[nodiscard]] virtual bool NetworkGame() const { return false; }
 	[[nodiscard]] virtual ecs::components::Player::Miracles Miracles(PlayerNames player) const = 0;
 	virtual void MakeCreature(PlayerNames player, CreatureType species, const glm::vec3& position) = 0;
 	/// The creature learns the miracle as a script teaches it
 	virtual void Teach(entt::entity creature, MagicType miracle) = 0;
 	virtual uint32_t GameRand(uint32_t range) = 0;
 	virtual float GameFloatRand(float most) = 0;
+	/// The weight of the need of the mind with this name, as a land script sets it. Tools only: the AI soak sets the
+	/// weights of its computer gods.
+	virtual void SetPersonality(PlayerNames player, std::string_view need, float weight) = 0;
 };
 
-/// The start of a computer mind on the land, in the order of the game
-void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state);
+/// The start of a computer mind on the land, in the order of the game. With an AI seed (tools only), the mind gets the
+/// personality weights of that seed before anything else. This draws no number from the game's random streams.
+void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state,
+           std::optional<uint32_t> aiSeed = std::nullopt);
 
 /// The number of species that the start of a network game chooses from for the creature of a slot with no player, by
 /// the species number from 0
@@ -128,6 +137,9 @@ constexpr uint32_t k_SlotCreatureStage = 12;
 /// The name of the creature of a slot with no player: the debug name of its species in the creature table, without the
 /// end " creature". A debug name without that end stays as it is.
 [[nodiscard]] std::string SlotCreatureName(std::string_view speciesDebugName);
+
+/// A line of a land script switches a computer mind on or off, but not while the map script of a network game runs
+[[nodiscard]] bool LandScriptSwitchesMind(bool networkMapScript);
 
 /// What the start of a network game reads and changes in the game when it fills the slots with no player
 class SlotWorld

@@ -75,6 +75,7 @@ namespace
 constexpr std::string_view k_Menu = "menu";
 constexpr std::string_view k_Cave = "cave";
 constexpr std::string_view k_SkipBox = "skip_box";
+constexpr std::string_view k_EndBox = "end_box";
 constexpr std::string_view k_TattooEditor = "tattoo_editor";
 constexpr std::string_view k_MusicPlayer = "music_player";
 constexpr std::string_view k_Multiplayer = "multiplayer";
@@ -132,7 +133,8 @@ bool ScriptHoldsCamera(const Camera& camera)
 
 std::string_view PageName(gui::GameMenu::Page page)
 {
-	constexpr std::array<std::string_view, 6> k_Pages {"main", "options", "players", "advanced", "controls", "statistics"};
+	constexpr std::array<std::string_view, 7> k_Pages {"main",     "options",    "players",   "advanced",
+	                                                   "controls", "statistics", "conditions"};
 	const auto index = static_cast<size_t>(page);
 	return index < k_Pages.size() ? k_Pages.at(index) : "unknown";
 }
@@ -484,6 +486,17 @@ std::vector<WindowInfo> GameGui::Windows() const
 		}
 		windows.push_back(std::move(player));
 
+		// The end box of a skirmish or a network game: its title, and its controls
+		const auto& endBox = game->GetInterface()->GetEndGameBox();
+		WindowInfo end {.name = std::string(k_EndBox), .kind = "game", .open = endBox.IsOpen()};
+		end.page = endBox.ShowsStatistics()   ? "statistics"
+		           : endBox.ShowsConditions() ? "conditions"
+		                                      : gui::ToUtf8(endBox.GetContents().title);
+		for (const auto& control : DialogControls(endBox.GetNamedControls()))
+		{
+			end.buttons.push_back(control.name);
+		}
+		windows.push_back(std::move(end));
 		// The multiplayer front end over the temple's future room: its box, and the controls of the box or its message
 		const auto& boxes = game->GetInterface()->GetMultiplayerBoxes();
 		WindowInfo multiplayer {.name = std::string(k_Multiplayer), .kind = "game", .open = boxes.IsActive()};
@@ -719,6 +732,21 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 		}
 		const auto size = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(800, 600);
 		return Send(ClickAt(interface.FromMusicControls(std::get<glm::ivec2>(found), static_cast<glm::u16vec2>(size))));
+	}
+	if (lower == k_EndBox)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetEndGameBox().IsOpen())
+		{
+			return "the end box isn't open: it opens when a skirmish or a network game ends for this player";
+		}
+		const auto controls = DialogControls(game->GetInterface()->GetEndGameBox().GetNamedControls());
+		const auto found = FindDialogControl(controls, path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the end box: " + *why + "; gui.windows lists them";
+		}
+		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
 	}
 	if (lower == k_Multiplayer)
 	{

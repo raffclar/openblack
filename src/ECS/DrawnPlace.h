@@ -18,14 +18,23 @@ namespace openblack::ecs
 class Registry;
 }
 
+namespace openblack::ecs::components
+{
+struct HandPulled;
+}
+
 /// Where the frame draws a thing that moves between the game turns. The turns go by the thing's Transform; the frames
 /// keep the drawn place in fields that only the draw reads.
 namespace openblack::ecs::drawn_place
 {
 
+/// Whether a thing still stands in the world as it stood when the frame drew its pulled pose. When the world moved,
+/// turned or sized the thing after that, the frames no longer draw the pulled pose.
+[[nodiscard]] bool StandsAsPulled(const components::HandPulled& pulled, const components::Transform& transform);
+
 /// The Transform that the frame draws a thing with: a walking creature, an animal or a shark between its last two turns,
-/// a thing in a creature's hand or in a god's hand where the drawn hand is, a firefly where it drifts, else the thing's
-/// own Transform
+/// a thing in a creature's hand or in a god's hand where the drawn hand is, a reward chest as it falls, a firefly where it
+/// drifts, a town's totem and its icon at their drawn height, else the thing's own Transform
 [[nodiscard]] components::Transform DrawnTransformOf(const Registry& registry, entt::entity entity,
                                                      const components::Transform& transform);
 

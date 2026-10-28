@@ -38,6 +38,7 @@
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -199,7 +200,15 @@ entt::entity GameWorshipSiteWorld::MakeFoodPot(glm::vec3 position, float yAngle)
 	const auto pot = archetypes::PotArchetype::CreateEmpty(position, yAngle, PotInfo::StoragePitFoodPile);
 	if (pot != entt::null)
 	{
-		Locator::entitiesRegistry::value().Get<Transform>(pot).scale = glm::vec3(worship_site::k_FoodPotScale);
+		// The pot takes its size after it is made. If the size changes, the pot comes out of the map's cells and goes
+		// in again.
+		auto& transform = Locator::entitiesRegistry::value().Get<Transform>(pot);
+		const bool resized = transform.scale.x != worship_site::k_FoodPotScale;
+		transform.scale = glm::vec3(worship_site::k_FoodPotScale);
+		if (resized)
+		{
+			ecs::thing_map_place::Reinsert(pot);
+		}
 	}
 	return pot;
 }
