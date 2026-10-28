@@ -2969,6 +2969,26 @@ void AddLight(std::vector<Scenario>& all)
 	                 .walkFinal = VillagerStates::HousewifeReturnHomeWithFood,
 	                 .foodHeld = 150}},
 	});
+
+	all.push_back({
+	    .id = "light.snow_high_detail_villager",
+	    .name = "No snow on a villager in high detail",
+	    .facet = Facet::Light,
+	    .description = "Deep snow lies over the whole island. Two villagers stand in front of the camera. After six "
+	                   "seconds, the cinema bars come in and the villager on the left changes to high detail.",
+	    .expected = "The snow shows on the two villagers in about four seconds. When the villager on the left changes to "
+	                "high detail, it shows no snow. The villager on the right keeps its snow.",
+	    .environment = {.dispenserGrid = false, .snowDepth = 200.0f},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -8.0f}, .look = {0.0f, 1.5f, 6.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-1.5f, 6.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {1.5f, 6.0f}}},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 6.0f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
+	});
 }
 
 void AddMovement(std::vector<Scenario>& all)
