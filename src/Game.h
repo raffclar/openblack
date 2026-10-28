@@ -174,6 +174,8 @@ struct Arguments
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
 	bool frameStatsViews {false};
+	/// With the frame statistics, the file that gets each frame of the run when the game ends; none when empty
+	std::string frameStatsOut;
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
 	/// The https:// origin of the lobby, none for no online services
