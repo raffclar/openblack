@@ -20,6 +20,7 @@
 #include "ECS/Components/AlignmentHistory.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
 
@@ -63,7 +64,8 @@ void AlignmentHistory::Draw() noexcept
 	if (Locator::playerSystem::has_value() && Locator::entitiesRegistry::has_value())
 	{
 		const auto& registry = Locator::entitiesRegistry::value();
-		const auto player = Locator::playerSystem::value().FindPlayer(Locator::playerSystem::value().GetLocalPlayer());
+		const auto player = Locator::playerSystem::value().FindPlayer(
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
 		if (player.has_value() && registry.Valid(*player))
 		{
 			history = registry.TryGet<ecs::components::AlignmentHistory>(*player);

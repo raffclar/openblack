@@ -25,6 +25,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
 #include "Particles/PlayerSparkles.h"
 
@@ -43,18 +44,42 @@ bool Left(const Registry& registry, PlayerNames name)
 	return left;
 }
 
-/// The camera of a computer god whose mind plays, none for another player
-std::optional<glm::vec3> ComputerCamera(const Registry& registry, PlayerNames name)
+/// Who plays the player
+player_kind::Kind KindOf(PlayerNames name)
 {
-	std::optional<glm::vec3> camera;
+	if (!Locator::playerSystem::has_value())
+	{
+		return player_kind::Kind::None;
+	}
+	const auto& players = Locator::playerSystem::value();
+	if (players.IsComputerPlayer(name))
+	{
+		return player_kind::Kind::Computer;
+	}
+	return players.IsHumanPlayer(name) ? player_kind::Kind::Human : player_kind::Kind::None;
+}
+
+/// What the player shows a sparkle from
+player_sparkles::Watched WatchedOf(const Registry& registry, const systems::HandSystemInterface& hands, PlayerNames name)
+{
+	player_sparkles::Watched watched {.kind = KindOf(name)};
 	registry.Each<const components::Player, const components::ComputerPlayer>(
 	    [&](const components::Player& player, const components::ComputerPlayer& computer) {
-		    if (player.name == name && computer.switchedOn && !camera.has_value())
+		    if (player.name == name && computer.switchedOn && !watched.mindOn)
 		    {
-			    camera = computer.hand.camera;
+			    watched.mindOn = true;
+			    watched.mindCamera = computer.hand.camera;
 		    }
 	    });
-	return camera;
+	if (hands.GetHandsOf(name).has_value())
+	{
+		if (const auto camera = hands.GetReportedCamera(name); camera.has_value())
+		{
+			watched.reportedCamera = camera->origin;
+		}
+	}
+	watched.left = Left(registry, name);
+	return watched;
 }
 } // namespace
 
@@ -82,17 +107,10 @@ void AddAtCameras()
 		{
 			continue;
 		}
-		// A computer god shows a sparkle at its camera while its mind plays. Of the other players, only those with
-		// hands of their own play, and a player shows no camera before its first report.
-		auto origin = ComputerCamera(registry, player);
+		const auto origin = player_sparkles::PlaceOf(WatchedOf(registry, hands, player));
 		if (!origin.has_value())
 		{
-			const auto camera = hands.GetReportedCamera(player);
-			if (!hands.GetHandsOf(player).has_value() || !camera.has_value() || Left(registry, player))
-			{
-				continue;
-			}
-			origin = camera->origin;
+			continue;
 		}
 		const auto tint = random.LocalRand(player_sparkles::k_Tints);
 		const auto colour = player_sparkles::Colour(player_colour::OnLand(player, land), tint);

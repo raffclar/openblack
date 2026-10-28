@@ -19,10 +19,19 @@
 // the first harm by a player more; the more often it is attacked the less each attack adds. Each turn the aggression
 // fades a little: what its own player did is its want of mercy, what anyone else did its want of protection, which
 // its desires take up. The last attacker and the turn it attacked are kept, which the villagers sheltering under a
-// shield look at. Pure rules on the town's record, tested without the game.
+// shield look at. The town also keeps how much each player's last attack burnt, crushed and hit, which the computer gods
+// look at to choose a shield. Pure rules on the town's record, tested without the game.
 
 namespace openblack::ecs::town_aggression
 {
+
+/// How much an attack burnt, crushed and hit what it struck: the values of its effect before any defence
+struct Harm
+{
+	float burn {0.0f};
+	float crush {0.0f};
+	float hit {0.0f};
+};
 
 /// What a town keeps of the attacks on it
 struct Record
@@ -39,10 +48,17 @@ struct Record
 	/// This turn's wants, the sums of the aggression
 	float protection {0.0f};
 	float mercy {0.0f};
+	/// The harm of the last attack of each player. Last in the record so that a save of an older build still reads the
+	/// fields before it.
+	std::array<Harm, static_cast<size_t>(PlayerNames::_COUNT)> lastHarms {};
 };
 
 /// The town is attacked by a player with an amount of harm: the first harm a player does adds a bonus; it counts by
-/// the multiplier for the town's own player or for anyone else, which is then worn down by a tenth
+/// the multiplier for the town's own player or for anyone else, which is then worn down by a tenth. The town keeps the
+/// harm of the attack as the last harm of the player.
+void Attacked(Record& record, PlayerNames aggressor, bool aggressorIsOwner, float amount, float firstTimeAddition,
+              uint32_t turn, const Harm& harm);
+/// The same for an attack that did no harm
 void Attacked(Record& record, PlayerNames aggressor, bool aggressorIsOwner, float amount, float firstTimeAddition,
               uint32_t turn);
 

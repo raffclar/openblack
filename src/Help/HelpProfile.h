@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <utility>
 #include <vector>
 
 /// The help system's profile of the player: how often and how lately the player has done each of the things the help
@@ -160,6 +161,23 @@ struct WorldCameraView
 ///   steeply down, also k_CameraNearAndSteep.
 /// - No land shows there and the camera looks up at the sky: k_CameraSeesSky.
 [[nodiscard]] std::vector<uint32_t> CameraViewEvents(const WorldCameraView& view);
+
+/// The help events of the input of this computer's player, which wait for the next report of the help. One bit keeps
+/// each event, thus an event that occurs many times before a report goes once.
+class ReportedEvents
+{
+public:
+	/// The event occurs. Nothing for a number past the last.
+	void Add(uint32_t event);
+	/// The events that occurred since the last take, one bit for each event (bit n is event n). The kept events go.
+	[[nodiscard]] uint64_t Take();
+
+private:
+	uint64_t _events {0};
+};
+
+/// The events of the bits of a report, in the order of their numbers. The bits past the last event give nothing.
+[[nodiscard]] std::vector<uint32_t> EventsOf(uint64_t events);
 
 /// Every event's count and the profile's clock
 class HelpProfile

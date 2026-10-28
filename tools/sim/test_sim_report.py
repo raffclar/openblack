@@ -12,6 +12,7 @@
 import json
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -209,6 +210,40 @@ class HandDeeds(unittest.TestCase):
     def test_counts_each_deed_of_each_player(self):
         self.assertEqual(sim_report.hand_deeds_in_text(self.LINES),
                          {0: {"scoops": 1, "throws": 2}, 1: {"takes": 1}})
+
+    def test_a_deed_after_the_last_common_turn_is_not_counted(self):
+        lines = [
+            "[game] [info] Hand deed: the hand of player 1 takes thing 77 at turn 1990",
+            "[game] [info] Hand deed: the hand of player 1 puts down thing 77 at turn 1995",
+            "[game] [info] Hand deed: the hand of player 1 takes thing 78 at turn 2000",
+            "[game] [info] Hand deed: the hand of player 1 takes thing 79",
+        ]
+        self.assertEqual(sim_report.hand_deeds_in_text(lines, 1999), {1: {"takes": 2, "puts_down": 1}})
+        self.assertEqual(sim_report.hand_deeds_in_text(lines, 2000), {1: {"takes": 3, "puts_down": 1}})
+        self.assertEqual(sim_report.hand_deeds_in_text(lines), {1: {"takes": 3, "puts_down": 1}})
+
+    def test_logs_that_part_only_after_the_last_turn_are_the_same(self):
+        # The game plays on one turn after the last compared turn, and gods 2 to 4 put down at turn 101 there
+        game = [
+            "Hand deed: the hand of player 5 puts down thing 451 at turn 100",
+            "Hand deed: the hand of player 2 puts down thing 259 at turn 101",
+            "Hand deed: the hand of player 12 puts down thing 900 at turn 101",
+        ]
+        server = ["Hand deed: the hand of player 5 puts down thing 451 at turn 100"]
+        with tempfile.TemporaryDirectory() as folder:
+            paths = []
+            for name, lines in (("game.log", game), ("server.log", server)):
+                paths.append(os.path.join(folder, name))
+                with open(paths[-1], "w", encoding="utf-8") as file:
+                    file.write(chr(10).join(lines) + chr(10))
+            first, second, same = sim_report.hand_deeds_of_both(paths[0], paths[1], 100)
+            self.assertTrue(same)
+            self.assertEqual(first, {5: {"puts_down": 1}})
+            self.assertEqual(second, first)
+            # Up to the later turn, the logs do part, also for a slot above 9
+            first, second, same = sim_report.hand_deeds_of_both(paths[0], paths[1], 101)
+            self.assertFalse(same)
+            self.assertEqual(first[12], {"puts_down": 1})
 
     def test_a_missing_file_tells_of_no_deed(self):
         self.assertEqual(sim_report.hand_deeds_in_file(os.path.join(os.path.dirname(__file__), "no-such.log")), {})

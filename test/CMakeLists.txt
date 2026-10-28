@@ -129,6 +129,7 @@ target_link_libraries(test_script_sound_effect PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_interface gui/test_interface.cpp)
 openblack_setup_and_add_test(test_text_wrap gui/test_text_wrap.cpp)
 openblack_setup_and_add_test(test_skip_box gui/test_skip_box.cpp)
+openblack_setup_and_add_test(test_chat_controls gui/test_chat_controls.cpp)
 openblack_setup_and_add_test(test_tool_tips gui/test_tool_tips.cpp)
 openblack_setup_and_add_test(test_screen_fade gui/test_screen_fade.cpp)
 openblack_setup_and_add_test(test_cinematics gui/test_cinematics.cpp)
@@ -821,9 +822,6 @@ openblack_setup_and_add_test(test_villager_tools test_villager_tools.cpp)
 openblack_setup_and_add_test(test_tree_shadows graphics/test_tree_shadows.cpp)
 openblack_setup_and_add_test(test_villager_work test_villager_work.cpp)
 openblack_setup_and_add_test(
-  test_descriptor_set_tally graphics/test_descriptor_set_tally.cpp
-)
-openblack_setup_and_add_test(
   test_graphics_backend_names test_graphics_backend_names.cpp
 )
 openblack_setup_and_add_test(test_villager_breeding test_villager_breeding.cpp)
@@ -831,6 +829,7 @@ openblack_setup_and_add_test(test_worshipper_rules test_worshipper_rules.cpp)
 openblack_setup_and_add_test(test_villager_death test_villager_death.cpp)
 openblack_setup_and_add_test(test_creche_rules test_creche_rules.cpp)
 openblack_setup_and_add_test(test_disciple_work test_disciple_work.cpp)
+openblack_setup_and_add_test(test_disciple_symbol test_disciple_symbol.cpp)
 openblack_setup_and_add_test(test_script_weather test_script_weather.cpp)
 openblack_setup_and_add_test(test_challenge_records test_challenge_records.cpp)
 target_link_libraries(test_challenge_records PRIVATE ScriptLibrary)
@@ -1163,6 +1162,9 @@ openblack_setup_and_add_test(
   test_computer_player_start test_computer_player_start.cpp
 )
 openblack_setup_and_add_test(
+  test_computer_player_personality test_computer_player_personality.cpp
+)
+openblack_setup_and_add_test(
   test_creature_file_load test_creature_file_load.cpp
 )
 openblack_setup_and_add_test(test_draw_window graphics/test_draw_window.cpp)
@@ -1240,6 +1242,9 @@ openblack_setup_and_add_test(test_oracle_walk_lead oracle/test_oracle_walk_lead.
 openblack_setup_and_add_test(
   test_oracle_villager_food oracle/test_oracle_villager_food.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_computer_hand_moves oracle/test_oracle_computer_hand_moves.cpp
+)
 # The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
 # environment variable for each test, and the file in the build folder serves a program started by hand from there
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
@@ -1266,6 +1271,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_logo_effect
                      test_oracle_walk_lead
                      test_oracle_villager_food
+                     test_oracle_computer_hand_moves
 )
   set_tests_properties(
     ${oracle_test}
@@ -1479,6 +1485,7 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_world_save_forget test_world_save_forget.cpp)
+target_link_libraries(test_world_save_forget PRIVATE dance)
 openblack_setup_and_add_test(test_dead_tree_lean test_dead_tree_lean.cpp)
 openblack_setup_and_add_test(test_particle_save test_particle_save.cpp)
 target_link_libraries(test_particle_save PRIVATE psys)
@@ -1743,7 +1750,6 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_hand_reports test_hand_reports.cpp)
 openblack_setup_and_add_test(test_magic_pile_height test_magic_pile_height.cpp)
 openblack_setup_and_add_test(test_build_version test_build_version.cpp)
-openblack_setup_and_add_test(test_build_version_file test_build_version_file.cpp)
 openblack_setup_and_add_test(test_gods_ring_map online/test_gods_ring_map.cpp)
 target_link_libraries(test_gods_ring_map PRIVATE lnd)
 openblack_setup_and_add_test(test_gods_ring_land test_gods_ring_land.cpp)
@@ -1765,13 +1771,13 @@ openblack_setup_and_add_test(
   test_challenge_picture_files test_challenge_picture_files.cpp
 )
 openblack_setup_and_add_test(test_reflection_order test_reflection_order.cpp)
-openblack_setup_and_add_test(test_grip_landscape_effect test_grip_landscape_effect.cpp)
 openblack_setup_and_add_test(test_game_socket online/test_game_socket.cpp)
 openblack_setup_and_add_test(test_join_ticket online/test_join_ticket.cpp)
 openblack_setup_and_add_test(test_websocket_frames online/test_websocket_frames.cpp)
 openblack_setup_and_add_test(test_turn_playout online/test_turn_playout.cpp)
 openblack_setup_and_add_test(test_lockstep online/test_lockstep.cpp)
 openblack_setup_and_add_test(test_network_commands test_network_commands.cpp)
+target_link_libraries(test_network_commands PRIVATE psys)
 openblack_setup_and_add_test(test_lobby_status online/test_lobby_status.cpp)
 openblack_setup_and_add_test(test_checksum_log test_checksum_log.cpp)
 openblack_setup_and_add_test(test_portable_math test_portable_math.cpp)
@@ -1790,15 +1796,20 @@ openblack_setup_and_add_test(test_other_held_draw test_other_held_draw.cpp)
 openblack_setup_and_add_test(test_miracle_selection test_miracle_selection.cpp)
 openblack_setup_and_add_test(test_hand_cast_commands test_hand_cast_commands.cpp)
 target_link_libraries(test_hand_cast_commands PRIVATE edt psys)
-openblack_setup_and_add_test(test_roots_pile test_roots_pile.cpp)
 openblack_setup_and_add_test(test_script_start test_script_start.cpp)
 target_link_libraries(test_script_start PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_help_reports test_help_reports.cpp)
+openblack_setup_and_add_test(test_roots_pile test_roots_pile.cpp)
+openblack_setup_and_add_test(test_creature_sent_reactions test_creature_sent_reactions.cpp)
+openblack_setup_and_add_test(test_input_steps test_input_steps.cpp)
+openblack_setup_and_add_test(test_camera_input_steps camera/test_camera_input_steps.cpp)
 openblack_setup_and_add_test(test_local_input_player test_local_input_player.cpp)
 openblack_setup_and_add_test(test_draw_trace test_draw_trace.cpp)
 add_test(NAME test_draw_trace_compare
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_draw_trace.py
 )
+openblack_setup_and_add_test(test_reported_view test_reported_view.cpp)
 openblack_setup_and_add_test(test_hand_held_seeds test_hand_held_seeds.cpp)
 target_link_libraries(test_hand_held_seeds PRIVATE edt psys)
 openblack_setup_and_add_test(test_frame_write_guard test_frame_write_guard.cpp)
@@ -1814,6 +1825,9 @@ openblack_setup_and_add_test(test_row_dump test_row_dump.cpp)
 add_test(NAME test_row_dump_compare
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_row_dump.py
 )
+add_test(NAME test_ai_soak
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_ai_soak.py
+)
 openblack_setup_and_add_test(test_start_camera test_start_camera.cpp)
 openblack_setup_and_add_test(test_game_end test_game_end.cpp)
 openblack_setup_and_add_test(test_influence_rules test_influence_rules.cpp)
@@ -1824,4 +1838,254 @@ openblack_setup_and_add_test(test_computer_mind test_computer_mind.cpp)
 openblack_setup_and_add_test(test_computer_hand test_computer_hand.cpp)
 openblack_setup_and_add_test(test_influence_citadel_reach test_influence_citadel_reach.cpp)
 openblack_setup_and_add_test(test_drawn_hand graphics/test_drawn_hand.cpp)
+openblack_setup_and_add_test(test_player_kind test_player_kind.cpp)
+openblack_setup_and_add_test(
+  test_computer_hand_moves test_computer_hand_moves.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_hand_objects test_computer_hand_objects.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_hand_casts test_computer_hand_casts.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_hand_creature test_computer_hand_creature.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_hand_totem test_computer_hand_totem.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_core test_computer_mind_core.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_towns test_computer_mind_towns.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_worship test_computer_mind_worship.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_miracles test_computer_mind_miracles.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_creature_care test_computer_mind_creature_care.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_creature_play test_computer_mind_creature_play.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_conquest test_computer_mind_conquest.cpp
+)
+openblack_setup_and_add_test(test_computer_mind_war test_computer_mind_war.cpp)
+openblack_setup_and_add_test(
+  test_computer_mind_defence test_computer_mind_defence.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_attitudes test_computer_mind_attitudes.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_player_state test_computer_player_state.cpp
+)
+openblack_setup_and_add_test(test_creature_animation_log test_creature_animation_log.cpp)
+openblack_setup_and_add_test(test_painted_skin_stamp test_painted_skin_stamp.cpp)
+openblack_setup_and_add_test(test_window_pixels windowing/test_window_pixels.cpp)
+add_test(NAME test_save_diff
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_save_diff.py
+)
+openblack_setup_and_add_test(test_scroll_pictures temple/test_scroll_pictures.cpp)
+openblack_setup_and_add_test(test_real_clock test_real_clock.cpp)
+openblack_setup_and_add_test(
+  test_footpath_system test_footpath_system.cpp
+)
+openblack_setup_and_add_test(test_pack_low_textures pack/test_pack_low_textures.cpp)
+target_link_libraries(test_pack_low_textures PRIVATE pack)
+openblack_setup_and_add_test(test_low_resolution_textures test_low_resolution_textures.cpp)
+openblack_setup_and_add_test(
+  test_creature_upload_cfg test_creature_upload_cfg.cpp
+)
+target_link_libraries(test_creature_upload_cfg PRIVATE creatureuploadcfg)
+openblack_setup_and_add_test(
+  test_creature_upload_dialog online/test_creature_upload_dialog.cpp
+)
+openblack_setup_and_add_test(test_drawn_effect_steps test_drawn_effect_steps.cpp)
+openblack_setup_and_add_test(test_entity_storage test_entity_storage.cpp)
+openblack_setup_and_add_test(test_physics_face_search test_physics_face_search.cpp)
+openblack_setup_and_add_test(test_physics_hit_bounds test_physics_hit_bounds.cpp)
+openblack_setup_and_add_test(test_land_reuse test_land_reuse.cpp)
+target_link_libraries(test_land_reuse PRIVATE lnd)
+openblack_setup_and_add_test(
+  test_creature_tattoo_change test_creature_tattoo_change.cpp
+)
+openblack_setup_and_add_test(test_throw_lead hand/test_throw_lead.cpp)
+openblack_setup_and_add_test(
+  test_oracle_throw_release oracle/test_oracle_throw_release.cpp
+)
+set_tests_properties(
+  test_oracle_throw_release
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_land_thumbnail test_land_thumbnail.cpp)
+target_link_libraries(test_land_thumbnail PRIVATE onlinemap)
+  add_test(
+    NAME test_random_draw_order
+    COMMAND
+      ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_draw_order.py
+      --root ${CMAKE_SOURCE_DIR}
+  )
+openblack_setup_and_add_test(test_tattoo_editor_warning gui/test_tattoo_editor_warning.cpp)
+openblack_setup_and_add_test(test_ping_display gui/test_ping_display.cpp)
+openblack_setup_and_add_test(test_incoming_messages test_incoming_messages.cpp)
+openblack_setup_and_add_test(test_chat test_chat.cpp)
+openblack_setup_and_add_test(test_lobby_bans online/test_lobby_bans.cpp)
+openblack_setup_and_add_test(test_script_music audio/test_script_music.cpp)
+target_link_libraries(test_script_music PRIVATE pack)
+find_program(NODE_EXECUTABLE node)
+if (NODE_EXECUTABLE)
+  add_test(NAME test_web_launcher_arguments
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_arguments.test.js
+  )
+openblack_setup_and_add_test(test_main_thread_queue test_main_thread_queue.cpp)
+openblack_setup_and_add_test(test_profiler_threads test_profiler_threads.cpp)
+openblack_setup_and_add_test(test_side_thread test_side_thread.cpp)
+  add_test(
+    NAME test_text_encoding
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_text_encoding.py
+            ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME test_text_encoding_self
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_text_encoding.py --test
+  )
+openblack_setup_and_add_test(
+  test_oracle_computer_creature_care oracle/test_oracle_computer_creature_care.cpp
+)
+set_tests_properties(
+  test_oracle_computer_creature_care
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_creature_play oracle/test_oracle_computer_creature_play.cpp
+)
+set_tests_properties(
+  test_oracle_computer_creature_play
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_town_threat oracle/test_oracle_computer_town_threat.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_worship oracle/test_oracle_computer_worship.cpp
+)
+set_tests_properties(
+  test_oracle_computer_worship
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_debug_computer_actions test_debug_computer_actions.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_creature_teach oracle/test_oracle_computer_creature_teach.cpp
+)
+set_tests_properties(
+  test_oracle_computer_creature_teach
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_workshop_rules test_workshop_rules.cpp)
+openblack_setup_and_add_test(test_scaffold_offer_rules test_scaffold_offer_rules.cpp)
+openblack_setup_and_add_test(test_scaffold_ghost_rules test_scaffold_ghost_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_workshop_yard oracle/test_oracle_workshop_yard.cpp
+)
+set_tests_properties(
+  test_oracle_workshop_yard
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_attitudes oracle/test_oracle_computer_attitudes.cpp
+)
+set_tests_properties(
+  test_oracle_computer_attitudes
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_town_goods oracle/test_oracle_computer_town_goods.cpp
+)
+set_tests_properties(
+  test_oracle_computer_town_goods
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_forest_wood oracle/test_oracle_computer_forest_wood.cpp
+)
+set_tests_properties(
+  test_oracle_computer_forest_wood
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_scaffold_desire oracle/test_oracle_scaffold_desire.cpp
+)
+set_tests_properties(
+  test_oracle_scaffold_desire
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_scaffold_impression_rules test_scaffold_impression_rules.cpp)
+openblack_setup_and_add_test(test_need_flag_rules test_need_flag_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_workshop_wood_flag oracle/test_oracle_workshop_wood_flag.cpp
+)
+set_tests_properties(
+  test_oracle_workshop_wood_flag
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_scaffold_impression oracle/test_oracle_scaffold_impression.cpp
+)
+set_tests_properties(
+  test_oracle_scaffold_impression
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_conquest oracle/test_oracle_computer_conquest.cpp
+)
+set_tests_properties(
+  test_oracle_computer_conquest
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_computer_mind_scaffolds test_computer_mind_scaffolds.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_scaffolds oracle/test_oracle_computer_scaffolds.cpp
+)
+set_tests_properties(
+  test_oracle_computer_scaffolds
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_defence oracle/test_oracle_computer_defence.cpp
+)
+set_tests_properties(
+  test_oracle_computer_defence
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_computer_war oracle/test_oracle_computer_war.cpp
+)
+set_tests_properties(
+  test_oracle_computer_war
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_computer_god_times test_computer_god_times.cpp)
 openblack_setup_and_add_test(test_hash_identifier test_hash_identifier.cpp)

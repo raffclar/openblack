@@ -51,6 +51,8 @@ public:
 	void Start() override;
 	void Update() override;
 	void StartDraw() override;
+	void StepInput(std::chrono::microseconds stepTime) override;
+	[[nodiscard]] const input_steps::Steps& GetInputSteps() const override { return _inputSteps; }
 	[[nodiscard]] std::chrono::milliseconds GetElapsedTime() const override;
 
 	void StartGameClock(bool paused) override;
@@ -93,6 +95,7 @@ public:
 	[[nodiscard]] int64_t GetUnixTime() const override;
 	void RestartClock(std::optional<int64_t> unixTime) override;
 	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return _pinnedDate; }
+	void PinDate(std::optional<int64_t> pinnedDate) override { _pinnedDate = pinnedDate; }
 
 private:
 	/// The tick count the clock goes by: the tick source's, or while frames take a fixed time, one moved on by that
@@ -115,6 +118,8 @@ private:
 	/// The wall clock's whole milliseconds at the start of the last draw, and the real time of the draw
 	uint32_t _lastDrawTicks {0};
 	uint32_t _frameRealMs {1};
+	input_steps::Clock _inputClock;
+	input_steps::Steps _inputSteps;
 	std::chrono::milliseconds _elapsedTime {0};
 	/// The tick count the game's reading of the clock counts from, and the date pinned at that moment, if any
 	uint32_t _ticksEpoch {0};

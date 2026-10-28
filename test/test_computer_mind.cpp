@@ -12,12 +12,15 @@
 #include <bit>
 #include <map>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "ECS/ComputerMind.h"
 
+using namespace openblack;
 using namespace openblack::computer_mind;
 
 namespace
@@ -61,8 +64,11 @@ public:
 	void StartAction() override { ++starts; }
 	[[nodiscard]] bool ActionLocked() const override { return locked; }
 	void UnlockAction() override { locked = false; }
-	bool ForceQueued() override { return false; }
-	[[nodiscard]] bool HeldByHelp() const override { return false; }
+	[[nodiscard]] std::optional<glm::vec3> MarkerPlace(entt::entity thing) const override
+	{
+		return thing == marker ? std::optional<glm::vec3>(markerPlace) : std::nullopt;
+	}
+	[[nodiscard]] bool HeldByHelp() const override { return heldByHelp; }
 
 	std::map<NodeKind, float> intensities;
 	std::map<NodeKind, int> asked;
@@ -75,6 +81,9 @@ public:
 	int steps {0};
 	int clears {0};
 	int starts {0};
+	entt::entity marker {entt::null};
+	glm::vec3 markerPlace {0.0f};
+	bool heldByHelp {false};
 };
 
 /// The first node of the kind in the tree
@@ -303,4 +312,173 @@ TEST(ComputerMind, NamesSetEveryNodeThatStartsTheSame)
 	EXPECT_FALSE(SetSuppression(mind, "chargeupspell", 0.5f));
 	EXPECT_TRUE(SetSuppression(mind, "ChargeUpSpell", 0.5f));
 	EXPECT_FLOAT_EQ(mind.nodes[NodeOf(mind, NodeKind::ActionChargeUpSpell)].suppression, 0.5f);
+}
+
+TEST(ComputerMindScript, DirectActionUsesBothThingsAndHoldsTheHelp)
+{
+	auto mind = MakeMind();
+	FakeWorld world;
+	constexpr auto k_Thing = static_cast<entt::entity>(3);
+	constexpr auto k_Marker = static_cast<entt::entity>(4);
+	EXPECT_TRUE(ForceAction(mind, world, "DIRECTPickupAndDropObject", k_Thing, k_Marker, 1.0f, 10));
+	const auto node = NodeOf(mind, NodeKind::ObjectDIRECTPickupAndDropObject);
+	ASSERT_EQ(world.performed.size(), 1u);
+	EXPECT_EQ(world.performed[0], NodeKind::ObjectDIRECTPickupAndDropObject);
+	EXPECT_EQ(mind.nodes[node].object, k_Thing);
+	EXPECT_EQ(mind.nodes[node].argument, k_Marker);
+	EXPECT_TRUE(mind.scriptHand);
+	// The node gets the suppression after its action, which is 0 for this node
+	EXPECT_FLOAT_EQ(mind.nodes[node].suppression, 0.0f);
+	// A name that no node has does nothing
+	EXPECT_FALSE(ForceAction(mind, world, "NoSuchNode", k_Thing, k_Marker, 1.0f, 10));
+}
+
+TEST(ComputerMindScript, DirectActionThatCannotStartGivesTheThingsToItsParent)
+{
+	auto mind = MakeMind();
+	FakeWorld world;
+	world.performWorks = false;
+	constexpr auto k_Thing = static_cast<entt::entity>(3);
+	constexpr auto k_Other = static_cast<entt::entity>(4);
+	EXPECT_FALSE(ForceAction(mind, world, "DIRECTPickupAndDropObject", k_Thing, k_Other, 1.0f, 10));
+	const auto node = NodeOf(mind, NodeKind::ObjectDIRECTPickupAndDropObject);
+	// The node has an action and no children: the node above keeps the first thing, the node keeps the second
+	EXPECT_EQ(mind.nodes[*mind.nodes[node].parent].object, k_Thing);
+	EXPECT_EQ(mind.nodes[node].object, k_Other);
+	EXPECT_FLOAT_EQ(mind.nodes[node].suppression, k_FailedSuppression);
+	EXPECT_FALSE(mind.scriptHand);
+}
+
+TEST(ComputerMindScript, ActionWithChildrenGivesTheSecondThingOrTheMarkerPlaceToItsFirstChild)
+{
+	auto mind = MakeMind();
+	FakeWorld world;
+	constexpr auto k_Town = static_cast<entt::entity>(3);
+	constexpr auto k_Field = static_cast<entt::entity>(4);
+	const auto node = NodeOf(mind, NodeKind::ActionTownWithHighestFoodDesire);
+	const auto child = mind.nodes[node].children[0];
+	EXPECT_TRUE(ForceAction(mind, world, "TownWithHighestFoodDesire", k_Town, k_Field, 2.0f, 10));
+	EXPECT_EQ(mind.nodes[node].object, k_Town);
+	EXPECT_FLOAT_EQ(mind.nodes[node].value, 2.0f);
+	EXPECT_EQ(mind.nodes[child].object, k_Field);
+	EXPECT_EQ(mind.nodes[node].bestLeaf, child);
+	EXPECT_TRUE(mind.scriptHand);
+	// A script marker as the second thing gives its place to the node and to its first child
+	world.marker = static_cast<entt::entity>(5);
+	world.markerPlace = {100.0f, 20.0f, 300.0f};
+	mind.scriptHand = false;
+	EXPECT_TRUE(ForceAction(mind, world, "TownWithHighestFoodDesire", k_Town, world.marker, 1.0f, 11));
+	EXPECT_FLOAT_EQ(mind.nodes[node].place.z, 300.0f);
+	EXPECT_FLOAT_EQ(mind.nodes[child].place.x, 100.0f);
+	EXPECT_TRUE(mind.scriptHand);
+}
+
+TEST(ComputerMindScript, QueuedActionsStartInOrderWhenTheHandIsFree)
+{
+	auto mind = MakeMind();
+	mind.wasBusy = false;
+	FakeWorld world;
+	world.actionTurns = 2;
+	QueueAction(mind, "DIRECTPickupAndDropObject", static_cast<entt::entity>(3), entt::null, 5);
+	QueueAction(mind, "ChargeUpSpell", entt::null, entt::null, 6);
+	ASSERT_EQ(mind.queue.size(), 2u);
+	EXPECT_EQ(mind.queue[1].turn, 6u);
+	ProcessTurn(mind, world, 100);
+	ASSERT_EQ(world.performed.size(), 1u);
+	EXPECT_EQ(world.performed[0], NodeKind::ObjectDIRECTPickupAndDropObject);
+	ASSERT_EQ(mind.queue.size(), 1u);
+	// The hand does the action; the script action ends with its last step
+	ProcessTurn(mind, world, 101);
+	EXPECT_TRUE(mind.scriptHand);
+	ProcessTurn(mind, world, 102);
+	EXPECT_FALSE(mind.scriptHand);
+	// A long name keeps its first 260 letters
+	QueueAction(mind, std::string(300, 'a'), entt::null, entt::null, 7);
+	EXPECT_EQ(mind.queue.back().name.size(), k_QueuedNameLength);
+}
+
+TEST(ComputerMindScript, HelpHoldsTheMind)
+{
+	auto mind = MakeMind();
+	mind.wasBusy = false;
+	FakeWorld world;
+	world.heldByHelp = true;
+	world.intensities[NodeKind::ActionChargeUpSpell] = 1.0f;
+	ProcessTurn(mind, world, 100);
+	EXPECT_TRUE(world.performed.empty());
+	EXPECT_TRUE(world.asked.empty());
+}
+
+namespace
+{
+
+/// A map with things in some cells. Things 1 to 9 are trees of forest 100, 10 and above are seeds, and 50 is gone.
+class FakeSeenWorld final: public SeenWorld
+{
+public:
+	[[nodiscard]] std::vector<entt::entity> ThingsIn(glm::ivec2 cell) const override
+	{
+		++looked;
+		const auto found = cells.find({cell.x, cell.y});
+		return found != cells.end() ? found->second : std::vector<entt::entity> {};
+	}
+	[[nodiscard]] entt::entity SeenAs(entt::entity thing) const override
+	{
+		const auto value = static_cast<uint32_t>(thing);
+		if (value < 10)
+		{
+			return static_cast<entt::entity>(100);
+		}
+		return value < 200 ? thing : entt::null;
+	}
+	[[nodiscard]] bool Available(entt::entity thing) const override
+	{
+		return thing != entt::null && thing != static_cast<entt::entity>(50);
+	}
+
+	std::map<std::pair<int, int>, std::vector<entt::entity>> cells;
+	mutable int looked {0};
+};
+
+} // namespace
+
+TEST(ComputerMindSeen, GodSeesForestsAndSeedsNearItsHandOnce)
+{
+	FakeSeenWorld world;
+	// The hand is in the middle of cell (100, 100)
+	const map_coords::MapCoords hand {.x = map_coords::ToFixed(1005.0f), .z = map_coords::ToFixed(1005.0f), .altitude = 0.0f};
+	world.cells[{100, 100}] = {static_cast<entt::entity>(1), static_cast<entt::entity>(2), static_cast<entt::entity>(50)};
+	world.cells[{101, 100}] = {static_cast<entt::entity>(11), static_cast<entt::entity>(300)};
+	world.cells[{102, 100}] = {static_cast<entt::entity>(12)};
+	// Cell (106, 100) is 60 metres away, past the radius and the margin
+	world.cells[{106, 100}] = {static_cast<entt::entity>(13)};
+	std::vector<SeenThing> seen;
+	SeeNearHand(seen, hand, 7, world);
+	// The two trees give their forest once; the seeds come after, the newest first
+	ASSERT_EQ(seen.size(), 3u);
+	EXPECT_EQ(seen[0].thing, static_cast<entt::entity>(12));
+	EXPECT_EQ(seen[1].thing, static_cast<entt::entity>(11));
+	EXPECT_EQ(seen[2].thing, static_cast<entt::entity>(100));
+	EXPECT_EQ(seen[2].turn, 7u);
+	// The search stops at the first cell of the spiral that is too far: a square of 9 cells across has its corners
+	// further than 40 metres
+	EXPECT_LT(world.looked, 81);
+	// Things already in the list are not added again
+	SeeNearHand(seen, hand, 8, world);
+	EXPECT_EQ(seen.size(), 3u);
+}
+
+TEST(ComputerMindSeen, LongListForgetsOldThingsEveryFiveHundredTurns)
+{
+	FakeSeenWorld world;
+	const map_coords::MapCoords hand {.x = map_coords::ToFixed(1005.0f), .z = map_coords::ToFixed(1005.0f), .altitude = 0.0f};
+	std::vector<SeenThing> seen;
+	for (uint32_t i = 0; i < 51; ++i)
+	{
+		seen.push_back({.thing = static_cast<entt::entity>(10 + i), .turn = i < 10 ? 0u : 9000u});
+	}
+	SeeNearHand(seen, hand, 9001, world);
+	EXPECT_EQ(seen.size(), 51u);
+	SeeNearHand(seen, hand, 9000, world);
+	EXPECT_EQ(seen.size(), 41u);
 }

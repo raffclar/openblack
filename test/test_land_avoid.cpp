@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "3D/LandAvoid.h"
@@ -67,4 +70,19 @@ TEST(LandAvoid, ReachedWaterIsWater)
 	EXPECT_EQ(map.Seed(), glm::ivec2(k_Side - 2, k_Side - 2));
 	EXPECT_EQ(map.At({1, 1}), k_Water);
 	EXPECT_EQ(map.At({2, 1}), k_Land);
+}
+
+TEST(LandAvoid, EachCornerOfTheMapIsReadOneTime)
+{
+	// The corners off the map have no altitude, so the map reads only the corners of its own cells
+	std::vector<int> reads(static_cast<size_t>(k_Side * k_Side), 0);
+	const auto altitude = [&reads](glm::ivec2 corner) -> uint8_t {
+		EXPECT_TRUE(corner.x >= 0 && corner.y >= 0 && corner.x < k_Side && corner.y < k_Side);
+		++reads.at(static_cast<size_t>((corner.y * k_Side) + corner.x));
+		return 10;
+	};
+	const auto map = Build(k_Side, altitude, [](glm::ivec2) { return false; });
+	EXPECT_TRUE(std::ranges::all_of(reads, [](int count) { return count == 1; }));
+	// The last row and column of cells have corners off the map at altitude 0: a rise of 6.7 is not too steep
+	EXPECT_EQ(map.At({k_Side - 1, k_Side - 1}), k_Land);
 }

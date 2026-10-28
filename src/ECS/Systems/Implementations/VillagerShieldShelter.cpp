@@ -25,6 +25,7 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/TownDesire.h"
@@ -54,25 +55,21 @@ float FacingOf(const Transform& transform)
 	return -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
 }
 
-void Face(Transform& transform, float angle)
-{
-	transform.rotation = portable_math::EulerAngleY(-angle - glm::radians(90.0f));
-}
-
 /// Turns a villager towards a point by at most its turn a game turn; whether it faces it
-bool LookAtPos(Transform& transform, glm::vec2 point)
+bool LookAtPos(entt::entity villager, const Transform& transform, glm::vec2 point)
 {
 	const auto towards = point - glm::xz(transform.position);
 	const float target = portable_math::Atan2(towards.y, towards.x);
 	const float step = shield::k_LookTurnPerTurn * k_TwoPi;
 	const float facing = FacingOf(transform);
 	const float diff = std::remainder(target - facing, k_TwoPi);
+	auto& registry = Locator::entitiesRegistry::value();
 	if (std::abs(diff) < step)
 	{
-		Face(transform, target);
+		openblack::ecs::living_facing::FaceAngle(registry, villager, target);
 		return true;
 	}
-	Face(transform, facing + (diff > 0.0f ? step : -step));
+	openblack::ecs::living_facing::FaceAngle(registry, villager, facing + (diff > 0.0f ? step : -step));
 	return false;
 }
 
@@ -116,7 +113,7 @@ uint32_t villager_shield::AmazedByMagicShield(LivingAction& action)
 		auto& transform = registry.Get<Transform>(villager);
 		const auto centre = glm::xz(registry.Get<const Transform>(reacting->shield).position);
 		// It looks out through the shield, now and then somewhere else once it faces where it looked
-		if (LookAtPos(transform, reacting->lookAt) && random.GameRand(4) == 0)
+		if (LookAtPos(villager, transform, reacting->lookAt) && random.GameRand(4) == 0)
 		{
 			reacting->lookAt =
 			    shield::LookOut(centre, glm::xz(transform.position), random.GameFloatRand(shield::k_ShelterTurnRange));

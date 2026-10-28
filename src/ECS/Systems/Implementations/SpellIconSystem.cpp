@@ -39,6 +39,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -560,9 +561,12 @@ bool SpellIconSystem::HandReady(PlayerNames player) const
 	{
 		return false;
 	}
-	const bool human = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player).has_value()
+	// A computer god has hands too, but its hand never takes a miracle: the god casts from the store of the icon. The hand
+	// of a player that nobody plays does not take one either.
+	const bool person = !Locator::playerSystem::has_value() || Locator::playerSystem::value().IsHumanPlayer(player);
+	const bool hands = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player).has_value()
 	                                                    : player == PlayerNames::PLAYER_ONE;
-	if (!human)
+	if (!person || !hands)
 	{
 		return false;
 	}
@@ -696,15 +700,9 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 {
 	auto& registry = Entities();
 	auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
-	if (component == nullptr || component->charging || HeldSeedOf(*component) != entt::null ||
-	    !Locator::infoConstants::has_value())
-	{
-		return false;
-	}
-	const auto& info = Locator::infoConstants::value();
-	const auto plain =
-	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, component->seed), magic::k_BasePowerUpLevel);
-	if (!IsEnabled(player, plain))
+	// Only an icon that charges already refuses the god. A seed of the icon in a hand does not stop the charge, and the
+	// god asked only for a miracle that it may cast.
+	if (component == nullptr || component->charging)
 	{
 		return false;
 	}
@@ -726,6 +724,12 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 	component->powerUp = magic::k_BasePowerUpLevel;
 	component->charger = player;
 	component->chargeStartTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// An icon that is full already gives its miracle to the hand of the god. Only the hand of a human player takes it,
+	// so the hand of a computer god never holds the seed: the god casts from the store of the icon.
+	if (icons::ReadyForHand(ChargeOf(*component, player), HandReady(player)))
+	{
+		GiveSeed(icon);
+	}
 	return true;
 }
 

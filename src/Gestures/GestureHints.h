@@ -13,6 +13,7 @@
 
 #include <array>
 #include <functional>
+#include <map>
 #include <optional>
 #include <span>
 #include <vector>
@@ -41,8 +42,14 @@ struct Hint
 	int order {0};
 	/// The leash it picks, whose collar is pictured over it
 	LeashType leash {LeashType::None};
-	/// The miracle seed it gives, pictured over it
+	/// The miracle seed pictured over it
 	SpellSeedType seed {SpellSeedType::None};
+	/// The power-up level of the seed pictured, which puts rings round it; -1 for none
+	int powerUp {-1};
+	/// The miracle of the seed pictured: hints of the same miracle show the same seed, which turns as each draws it
+	MagicType magic {MagicType::None};
+	/// A globe is pictured over it: the hint of the gesture that opens the selection for the player's own miracles
+	bool globe {false};
 	/// The gesture's shape, its points taken evenly along it in a square 0 to 1 across (x to the right, z down)
 	std::vector<glm::vec3> path;
 	/// How long the dot takes to run along it, in seconds
@@ -62,6 +69,19 @@ inline constexpr int k_LeashGestureOrder = 2;
 /// miracles nearer the screen's right than the leash's
 inline constexpr int k_SpecialMoveOrder = 1;
 inline constexpr int k_FightMiracleOrder = 11;
+/// The gestures that open the selection for the player's own miracles and for the creature's, the gesture that calls
+/// the last miracle again, and each gesture that the open selection waits for
+inline constexpr int k_OwnSelectionOrder = 8;
+inline constexpr int k_CreatureSelectionOrder = 9;
+inline constexpr int k_RepeatOrder = 10;
+inline constexpr int k_SelectionStepOrder = 11;
+/// The circle that sizes the seed in the hand, the scribble that calls off the power-up asked for, and the gesture of
+/// each power-up level after this number
+inline constexpr int k_SizeCircleOrder = 12;
+inline constexpr int k_CancelPowerUpOrder = 13;
+inline constexpr int k_PowerUpOrderBase = 14;
+/// The hint of the gesture that opens the selection for the creature's miracles shows this seed
+inline constexpr auto k_CreatureSelectionSeed = SpellSeedType::CreatureSpellHungry;
 
 /// A gesture's shape: its points evenly along it, and its length in the square it was drawn in (see
 /// gesture::TrailSymbol)
@@ -75,10 +95,20 @@ using ShapeOf = std::function<std::optional<Shape>(GestureType)>;
 /// The dot runs along a circle in this many seconds, along other gestures in as many more as they are longer
 inline constexpr float k_CirclePeriod = 2.0f;
 
-/// The hints for what the hand waits for, in the order of the row: the leash gesture with the collar of the leash it
-/// is about, a hint for each leash the picker offers, and in a fight the special move and each fight miracle with its
-/// seed. A gesture without a shape of its own takes the circle's.
-[[nodiscard]] std::vector<Hint> HintsFor(std::span<const gesture::Request> requests, const ShapeOf& shapeOf);
+/// The miracle that a seed casts at a power-up level (-1 for the plain miracle)
+using MagicOf = std::function<MagicType(SpellSeedType, int)>;
+
+/// The hints for what the hand waits for, in the order of the row. A gesture without a shape of its own takes the
+/// circle's. The hints are:
+/// - the leash gesture, with the collar of the leash it is about, and a hint for each leash that the picker offers
+/// - in a fight, the special move, and each fight miracle with its seed
+/// - the gestures that open the selection: a globe over the gesture for the player's miracles, a seed over the other
+/// - the gesture that calls the last miracle again, with that seed, and each gesture that the open selection waits for
+/// - the circle that sizes the seed in the hand
+/// - with a seed that can power up, each other level's gesture with the seed and its rings, and, after a level is
+/// asked for, the scribble with the seed
+[[nodiscard]] std::vector<Hint> HintsFor(std::span<const gesture::Request> requests, const ShapeOf& shapeOf,
+                                         const MagicOf& magicOf = nullptr);
 /// Whether a new row of hints differs from the one shown; the row is then replaced, every dot starting again
 [[nodiscard]] bool Differs(std::span<const Hint> shown, std::span<const Hint> next);
 
@@ -185,6 +215,47 @@ struct PixelRect
 /// point of the screen (the middle of the picture's square), with depth from the near clip out to infinity
 [[nodiscard]] glm::mat4 CollarProjection(const PixelRect& rect, glm::vec2 centre, float focalPixels, float nearClip);
 
+/// A seed pictured over a hint, seen through the collars' camera at the point they look at. The seed has its own
+/// size share and height, at this share of the seed's full size. Its rings are at this share of their size round a
+/// seed, at this alpha of 256.
+inline constexpr float k_SeedScale = 0.12f;
+inline constexpr float k_SeedRingShare = 0.5f;
+inline constexpr uint8_t k_SeedRingAlpha = 120;
+/// The seed turns about the up axis at this many radians a second
+inline constexpr float k_SeedSpin = 2.0f;
+/// The globe over the hint is at this share of its size, and turned a quarter turn about the camera's right
+inline constexpr float k_GlobeScale = 0.1f;
+
+/// A seed pictured over the hints of one miracle, as it is stepped each time a hint draws it
+struct SeedPicture
+{
+	SpellSeedType seed {SpellSeedType::None};
+	/// The power-up level of the first hint that pictured it, which gives its rings
+	int powerUp {-1};
+	float spin {0.0f};
+	float ringSpin {0.0f};
+	/// A creature spell's phial runs through its texture and pulses, at the pace of how its creature takes the spell
+	float phialFrame {0.0f};
+	float phialPhase {0.0f};
+	int phialReceiveType {0};
+	/// The effect of the seed's holder that plays over it, none for a seed without one
+	std::optional<uint32_t> holderEffect;
+
+	bool operator==(const SeedPicture&) const = default;
+};
+/// A seed picture some seconds on: its spin, its rings' spin, and a phial's frame and pulse
+void StepPicture(SeedPicture& picture, float seconds);
+/// Where the seed's middle is: the point the collars' camera looks at
+[[nodiscard]] glm::vec3 SeedMiddle();
+/// Where the effect of the seed's holder plays: above the middle by the holder's height at the seed's share
+[[nodiscard]] glm::vec3 HolderPoint(float holderHeight);
+/// Where the globe is drawn: at the middle, at its share of its size, its up axis turned towards the camera
+[[nodiscard]] glm::mat4 GlobeModel();
+/// The alpha, of 255, that the seed, its effect and the globe are drawn at, for the row's opacity
+[[nodiscard]] uint8_t PictureAlpha(float alpha);
+/// The alpha, of 255, of the rings round a seed drawn at an alpha
+[[nodiscard]] uint8_t SeedRingAlpha(uint8_t drawnAlpha);
+
 /// The row as it is shown
 struct Row
 {
@@ -192,8 +263,12 @@ struct Row
 	float alpha {1.0f};
 	/// How each leash's collar has turned, by leash number. Each starts unturned on a new land.
 	std::array<Axes, 4> collars {};
+	/// The seeds pictured, by miracle. A seed starts unturned on a new land and keeps its turn while the row changes.
+	std::map<MagicType, SeedPicture> seeds;
 };
-/// The row some seconds of game time on: it fades, and while it shows the dots run and the collars of its leashes turn
+/// The row some seconds of game time on: it fades, and while it shows the dots run and the collars of its leashes turn.
+/// While it shows, each hint with a seed steps the seed picture of its miracle, if the row's seeds have it. Thus two
+/// hints of one miracle step it twice.
 void Step(Row& row, float seconds, bool wordsShowing);
 
 } // namespace openblack::gesture_hints

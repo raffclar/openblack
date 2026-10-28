@@ -163,8 +163,7 @@ TEST(GameTurnOrder, TheAnimalsTakeTheirTurnWithTheLivingBeforeTheFires)
 {
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::ForestGrowth, Step::Living));
-	EXPECT_TRUE(recorder.Before(Step::Living, Step::MapCellsAfterLiving));
-	EXPECT_TRUE(recorder.Before(Step::MapCellsAfterLiving, Step::Fires));
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::Fires));
 	EXPECT_TRUE(recorder.Before(Step::Fires, Step::Reactions));
 	EXPECT_TRUE(recorder.Before(Step::Reactions, Step::Miracles));
 }
@@ -178,6 +177,14 @@ TEST(GameTurnOrder, TheScriptsSeeTheWorldAfterTheMiraclesParticlesAndPhysics)
 	EXPECT_TRUE(recorder.Before(Step::Physics, Step::Vortices));
 	EXPECT_TRUE(recorder.Before(Step::Vortices, Step::Scripts));
 	EXPECT_TRUE(recorder.Before(Step::Scripts, Step::ScriptFade));
+}
+
+TEST(GameTurnOrder, TheScriptsSeeTheHandDemonstrationAtTheTimeOfTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Clock, Step::HandDemo));
+	EXPECT_TRUE(recorder.Before(Step::HandDemo, Step::Scripts));
+	EXPECT_TRUE(recorder.Before(Step::IntroLift, Step::Scripts));
 }
 
 TEST(GameTurnOrder, TheHelpComesAfterTheScriptsAndBeforeTheTimeOfDay)

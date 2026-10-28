@@ -12,6 +12,8 @@
 #include <glm/gtx/component_wise.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 
+#include "ECS/Components/MapCellResident.h"
+#include "ECS/Registry.h"
 #include "Locator.h"
 
 using namespace openblack::ecs;
@@ -33,4 +35,13 @@ MapInterface::CellId MapInterface::GetGridCell(const glm::vec3& pos)
 glm::vec2 MapInterface::GetCellCenter(const MapInterface::CellId& cellId)
 {
 	return glm::vec2(cellId.x << 0x10, cellId.y << 0x10) / k_PositionToGridFactor + 5.0f;
+}
+
+bool openblack::ecs::InMapCells(const Registry& registry, entt::entity entity)
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().FileNew();
+	}
+	return registry.AllOf<components::MapCellResident>(entity);
 }

@@ -13,6 +13,7 @@
 #include <span>
 #include <string_view>
 
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -45,6 +46,38 @@ void RegisterFields_Components_s(entt::meta_ctx& context);
 
 void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& context)
 {
+	Reflect<components::ScaffoldOffer>(context)
+	    .Field<&components::ScaffoldOffer::info>("info")
+	    .Field<&components::ScaffoldOffer::number>("number")
+	    .Field<&components::ScaffoldOffer::mesh>("mesh")
+	    .Field<&components::ScaffoldOffer::yAngle>("yAngle")
+	    .Field<&components::ScaffoldOffer::scale>("scale");
+	Reflect<components::ScaffoldPhantom>(context)
+	    .Field<&components::ScaffoldPhantom::shown>("shown")
+	    .Field<&components::ScaffoldPhantom::next>("next")
+	    .Field<&components::ScaffoldPhantom::changeMs>("changeMs")
+	    .Field<&components::ScaffoldPhantom::grows>("grows")
+	    .Field<&components::ScaffoldPhantom::yAngle>("yAngle")
+	    .Field<&components::ScaffoldPhantom::scale>("scale")
+	    .Field<&components::ScaffoldPhantom::looked>("looked")
+	    .Field<&components::ScaffoldPhantom::noOfferTurns>("noOfferTurns")
+	    .Field<&components::ScaffoldPhantom::foundsTown>("foundsTown")
+	    .Field<&components::ScaffoldPhantom::fixedAngle>("fixedAngle");
+	Reflect<components::Scaffold>(context)
+	    .Field<&components::Scaffold::town>("town")
+	    .Field<&components::Scaffold::workshop>("workshop")
+	    .Field<&components::Scaffold::place>("place")
+	    .Field<&components::Scaffold::putDownTurn>("putDownTurn")
+	    .Field<&components::Scaffold::scriptBuilding>("scriptBuilding")
+	    .Field<&components::Scaffold::gentle>("gentle")
+	    .Field<&components::Scaffold::handPlayer>("handPlayer")
+	    .Field<&components::Scaffold::phantom>("phantom")
+	    .Field<&components::Scaffold::site>("site")
+	    .Field<&components::Scaffold::ghost>("ghost");
+	Reflect<components::ScaffoldGhost>(context)
+	    .Field<&components::ScaffoldGhost::scaffold>("scaffold")
+	    .Field<&components::ScaffoldGhost::alpha>("alpha");
+	Reflect<components::ScaffoldDrawnScale>(context).Field<&components::ScaffoldDrawnScale::scale>("scale");
 	Reflect<components::ScriptAnimation>(context)
 	    .Field<&components::ScriptAnimation::clip>("clip")
 	    .Field<&components::ScriptAnimation::playsLeft>("playsLeft");
@@ -120,10 +153,10 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")
 	    .Field<&components::SoundTag::active>("active")
-	    .Field<&components::SoundTag::emitter>("emitter")
+	    .RunField<&components::SoundTag::emitter>("emitter")
 	    .Field<&components::SoundTag::point>("point")
 	    .Field<&components::SoundTag::delayed>("delayed")
-	    .Field<&components::SoundTag::turns>("turns")
+	    .RunField<&components::SoundTag::turns>("turns")
 	    .Field<&components::SoundTag::owner>("owner")
 	    .Field<&components::SoundTag::loops>("loops");
 	Reflect<components::SpellCaster>(context)

@@ -54,6 +54,8 @@
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/ReportedHand.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellSeed.h"
@@ -70,6 +72,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ScaffoldImpressionRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
@@ -84,6 +87,8 @@
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownHomes.h"
+#include "ECS/WorkshopRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
@@ -237,18 +242,29 @@ reaction_timing::Reacting WhoOf(const ecs::Registry& registry, entt::entity livi
 	return registry.AllOf<Creature>(living) ? reaction_timing::Reacting::Creature : reaction_timing::Reacting::Other;
 }
 
+/// Where a thing is now, as the turn knows it. A hand is where the last report of its player put it: its drawn place
+/// follows the pointer of one computer only. Empty when the thing has no place.
+std::optional<glm::vec3> TurnPlaceOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (const auto* reported = registry.TryGet<const ReportedHand>(thing))
+	{
+		return reported->handPoint;
+	}
+	if (const auto* transform = registry.TryGet<const Transform>(thing))
+	{
+		return transform->position;
+	}
+	return std::nullopt;
+}
+
 /// Where the thing a reaction is about is now: the thing itself while it is there, else where the reaction is
 glm::vec3 ThingAt(const ecs::Registry& registry, const ReactionSystem::Active& reaction)
 {
-	const auto thing = reaction.source.initiator;
-	if (thing != entt::null && registry.Valid(thing))
-	{
-		if (const auto* transform = registry.TryGet<const Transform>(thing))
-		{
-			return transform->position;
-		}
-	}
-	return reaction.source.position;
+	return TurnPlaceOf(registry, reaction.source.initiator).value_or(reaction.source.position);
 }
 
 /// Whether what a living reacts to has gone: deleted, or a villager dying
@@ -1098,11 +1114,8 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		}
 		const auto at = registry.Get<const Transform>(entity).position;
 		// Under a shield that what made the reaction isn't inside, where it is now, it is kept off
-		const auto* initiatorAt =
-		    registry.Valid(reaction.source.initiator) ? registry.TryGet<const Transform>(reaction.source.initiator) : nullptr;
 		if (Locator::magicShieldSystem::has_value() &&
-		    Locator::magicShieldSystem::value().KeepsReactionOff(at, initiatorAt != nullptr ? initiatorAt->position
-		                                                                                    : reaction.source.position))
+		    Locator::magicShieldSystem::value().KeepsReactionOff(at, ThingAt(registry, reaction)))
 		{
 			continue;
 		}
@@ -1379,7 +1392,9 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	// for a nasty one the neutral player's
 	auto& minds = Locator::creatureMindSystem::value();
 	const bool byCreature = source.casterCreature != entt::null;
-	const bool computer = source.player != PlayerNames::PLAYER_ONE && source.player != PlayerNames::NEUTRAL;
+	const bool computer = Locator::playerSystem::has_value()
+	                          ? Locator::playerSystem::value().IsComputerPlayer(source.player)
+	                          : source.player != PlayerNames::PLAYER_ONE && source.player != PlayerNames::NEUTRAL;
 	// A shield, either kind, teaches the spiritual shield
 	const auto magic = shield                                ? std::optional(static_cast<size_t>(MagicType::Shield))
 	                   : source.magicType != MagicType::None ? std::optional(static_cast<size_t>(source.magicType))
@@ -1816,6 +1831,11 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 	                           ? Locator::artefactSystem::value().ImpressiveModifier(source.initiator)
 	                           : 1.0f;
 	const auto value = [&](float boredom, entt::entity town) {
+		// A scaffold has its own impressiveness, as a thing in the world with the value of its scaffolds
+		if (const auto scaffold = ScaffoldImpressiveValue(reaction, at, boredom, multiplier(town), artefact))
+		{
+			return *scaffold;
+		}
 		return artefact * magic::ImpressiveValue({.landBalance = GetLandBalance(source.balance),
 		                                          .impressiveValue = source.impressiveValue,
 		                                          .reactionMultiplier = multiplier(town),
@@ -1847,7 +1867,7 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		const float belief = ignored ? 0.0f : creature.value_or(value(boredom, villager->town)) * share;
 		magic::town_belief::Add(impression->belief, source.player, belief);
 		impression->lastImpression = belief;
-		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX, _voice, _turn);
+		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX);
 		// Whatever a villager is impressed by moves the player's alignment a little, by how much its town wants what it
 		// shows for those kinds that look to a desire
 		std::optional<float> desire;
@@ -1865,10 +1885,14 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 			    source.player, magic::DampAlignmentChange(magic::ImpressionAlignment(info->alignmentModifier, desire),
 			                                              alignment.GetPlayerAlignment(source.player)));
 		}
-		// The town tires of the kind of thing, by its share of the town
+		// The town tires of the kind of thing, by its share of the town. A scaffold tires the town by its own amount.
 		if (Locator::infoConstants::has_value())
 		{
-			boredom = magic::BoredomAfterImpression(boredom, Locator::infoConstants::value().belief.defaultBoredomOfMe * share);
+			const bool scaffold = source.initiator != entt::null && registry.Valid(source.initiator) &&
+			                      registry.AllOf<Scaffold>(source.initiator);
+			const float step =
+			    scaffold ? scaffold_impression::k_BoredomStep : Locator::infoConstants::value().belief.defaultBoredomOfMe;
+			boredom = magic::BoredomAfterImpression(boredom, step * share);
 		}
 		return;
 	}
@@ -1898,6 +1922,64 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 	}
 }
 
+std::optional<float> ReactionSystem::ScaffoldImpressiveValue(const Active& reaction, const glm::vec3& at, float boredom,
+                                                             float reactionMultiplier, float artefact) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto scaffold = reaction.source.initiator;
+	const auto* info = InfoOf(reaction.source.type);
+	if (info == nullptr || scaffold == entt::null || !registry.Valid(scaffold) || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* data = registry.TryGet<const Scaffold>(scaffold);
+	const auto* transform = registry.TryGet<const Transform>(scaffold);
+	if (data == nullptr || transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	// The scaffold is a thing in the world, at the distance between the watcher and the scaffold
+	const auto& scaffoldInfo = static_cast<const GObjectInfo&>(Locator::infoConstants::value().scaffold);
+	const float objectValue = magic::ObjectImpressiveValue({
+	    .landBalance = GetLandBalance(Balance::Things),
+	    .impressiveValue = scaffoldInfo.impressiveValue,
+	    .reactionMultiplier = reactionMultiplier,
+	    .distance = gutils::GetDistanceInMetres(at, transform->position),
+	    .maxDistance = info->maxReactionDistance,
+	    .boredom = boredom,
+	    .artefact = artefact,
+	});
+	// A scaffold on a site is as impressive as the town of the building wants that kind of building
+	std::optional<float> siteWant;
+	if (data->site != entt::null && registry.Valid(data->site))
+	{
+		const auto town = ecs::town_homes::TownOfAbode(registry, data->site);
+		const auto* wants = town != entt::null && registry.Valid(town) ? registry.TryGet<const TownDesire>(town) : nullptr;
+		if (wants != nullptr)
+		{
+			const auto kind = scaffold_impression::SiteWant(registry.AllOf<Abode>(data->site));
+			siteWant = town_desire::GetRawDesire(*wants, static_cast<size_t>(kind));
+		}
+	}
+	return scaffold_impression::ImpressiveValue(workshop::ValueOfScale(transform->scale.x), objectValue, siteWant);
+}
+
+void ReactionSystem::Impress(uint32_t id, entt::entity living)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto found = std::ranges::find(_reactions, id, &Active::id);
+	if (found == _reactions.end() || living == entt::null || !registry.Valid(living))
+	{
+		return;
+	}
+	const auto* transform = registry.TryGet<const Transform>(living);
+	if (transform == nullptr)
+	{
+		return;
+	}
+	Impress(*found, living, transform->position);
+}
+
 void ReactionSystem::GiveTownBelief(entt::entity town, PlayerNames player, float amount, entt::entity from,
                                     GuidanceAlignment alignment)
 {
@@ -1909,7 +1991,7 @@ void ReactionSystem::GiveTownBelief(entt::entity town, PlayerNames player, float
 	magic::town_belief::Add(villager_reactions::ImpressionOf(town).belief, player, amount);
 	if (from != entt::null && registry.Valid(from) && registry.AllOf<Transform>(from))
 	{
-		villager_reactions::ShowObjectBelief(from, town, player, amount, alignment, _voice, _turn);
+		villager_reactions::ShowObjectBelief(from, town, player, amount, alignment);
 	}
 }
 
@@ -1921,7 +2003,6 @@ void ReactionSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _turn);
 	reflection::Save(out, _joins);
 	reflection::Save(out, _landBalances);
-	reflection::Save(out, _voice);
 }
 
 bool ReactionSystem::LoadState(reflection::BinaryReader& in)
@@ -1932,7 +2013,6 @@ bool ReactionSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _turn);
 	reflection::Load(in, _joins);
 	reflection::Load(in, _landBalances);
-	reflection::Load(in, _voice);
 	return !in.Failed();
 }
 
@@ -1946,7 +2026,6 @@ void ReactionSystem::Reset()
 	_cursor = 0;
 	_turn = 0;
 	_joins = 0;
-	_voice = {};
 	_landBalances = {1.0f, 1.0f, 1.0f};
 }
 

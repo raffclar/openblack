@@ -9,8 +9,6 @@
 
 #include "GameMusic.h"
 
-#include <charconv>
-
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -208,7 +206,6 @@ void GameMusic::Reset()
 	_landType = MusicType::None;
 	_blockedType = MusicType::None;
 	_blockedTurns = 0;
-	_scriptType = MusicType::None;
 	_scriptStarted = false;
 	_alignmentMusicEnabled = true;
 	_landMusicWasAllowed.reset();
@@ -226,12 +223,8 @@ void GameMusic::SaveState(ecs::reflection::BinaryWriter& out) const
 		Save(out, music.thing);
 		Save(out, music.type);
 	}
-	Save(out, _scriptType);
-	Save(out, _scriptStarted);
 	Save(out, _rememberedTown);
 	Save(out, _alignmentMusicEnabled);
-	Save(out, _lyrics.line);
-	Save(out, _lyrics.word);
 }
 
 bool GameMusic::LoadState(ecs::reflection::BinaryReader& in)
@@ -248,29 +241,18 @@ bool GameMusic::LoadState(ecs::reflection::BinaryReader& in)
 		Load(in, music.thing);
 		Load(in, music.type);
 	}
-	MusicType scriptType {MusicType::None};
-	bool scriptStarted {false};
 	std::optional<uint32_t> rememberedTown;
 	bool alignmentMusicEnabled {true};
-	MusicLyrics lyrics;
-	Load(in, scriptType);
-	Load(in, scriptStarted);
 	Load(in, rememberedTown);
 	Load(in, alignmentMusicEnabled);
-	Load(in, lyrics.line);
-	Load(in, lyrics.word);
 	if (in.Failed())
 	{
 		return false;
 	}
 	// The order of the attached music stays: the most recently attached first
 	_attached = std::move(attached);
-	_scriptType = scriptType;
-	// The flag stays as saved, so music that played at the save counts as playing, though no music plays
-	_scriptStarted = scriptStarted;
 	_rememberedTown = rememberedTown;
 	_alignmentMusicEnabled = alignmentMusicEnabled;
-	_lyrics = lyrics;
 	return true;
 }
 
@@ -341,51 +323,6 @@ void GameMusic::RestartAttachedMusic(uint32_t thing)
 	}
 }
 
-void GameMusic::ApplyMusicCue(MusicLyrics& lyrics, std::string_view cue)
-{
-	if (cue.empty())
-	{
-		return;
-	}
-	switch (cue.front())
-	{
-	case 'L':
-	case 'l':
-	{
-		// The line's number is read as far as its digits go, and as 0 without any
-		auto line = int32_t {0};
-		const auto digits = cue.substr(1);
-		std::from_chars(digits.data(), digits.data() + digits.size(), line);
-		lyrics.line = line;
-		lyrics.word = 1;
-		break;
-	}
-	case 'P':
-	case 'p':
-	case 'W':
-	case 'w':
-		++lyrics.word;
-		break;
-	default:
-		break;
-	}
-}
-
-bool GameMusic::ReachedMusicLine(int32_t lastLine, int32_t line)
-{
-	return static_cast<uint32_t>(lastLine) >= static_cast<uint32_t>(line);
-}
-
-void GameMusic::StartScriptMusic(MusicType type)
-{
-	_scriptType = type;
-	// Music a script starts plays from its beginning, even over the script's music already playing
-	if (type != MusicType::None)
-	{
-		_scriptStarted = false;
-	}
-}
-
 void GameMusic::ProcessTurn(const TurnInputs& inputs)
 {
 	const auto before = _playing;
@@ -430,7 +367,7 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 		_landType = MusicType::None;
 		return;
 	}
-	if (ProcessScript())
+	if (ProcessScript(inputs.script))
 	{
 		_landType = MusicType::None;
 		return;
@@ -495,11 +432,12 @@ bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
 	return true;
 }
 
-// Music a script has started plays from its start once through, until it ends or the script stops it
-bool GameMusic::ProcessScript()
+// The music that the scripts start plays in step with the world's clock of the piece. The world times its cues and
+// its end, so the music heard gives no calls back.
+bool GameMusic::ProcessScript(const TurnInputs::ScriptPiece& script)
 {
 	auto& audio = Locator::audio::value();
-	if (_scriptType == MusicType::None)
+	if (script.type == MusicType::None)
 	{
 		if (_scriptStarted)
 		{
@@ -509,34 +447,30 @@ bool GameMusic::ProcessScript()
 		}
 		return false;
 	}
-	if (_scriptStarted)
-	{
-		return true;
-	}
-	const auto path = std::string(BankPath(_scriptType));
-	if (path.empty() || !audio.GetMusicBankInfo(path))
+	// A piece without a bank does not play, and other music takes over
+	if (!script.started)
 	{
 		return false;
 	}
+	if (_scriptStarted && _scriptPlayCount == script.playCount)
+	{
+		return true;
+	}
+	_scriptStarted = true;
+	_scriptPlayCount = script.playCount;
+	_playing = script.type;
+	// A piece that played before a load has no channel in the world, so it plays no sound
+	const auto path = std::string(BankPath(script.type));
+	if (!script.place.has_value() || path.empty() || !audio.GetMusicBankInfo(path))
+	{
+		return true;
+	}
 	SaveResumeChunks();
-	const auto type = _scriptType;
 	audio.MusicPlay(path, MusicPlayOptions {
 	                          .volume = k_FullVolume,
-	                          .startChunk = 1,
-	                          .onFinished =
-	                              [this, type]() {
-		                              // Played to its end, the script's music is over unless the script has since
-		                              // asked for other music
-		                              if (_scriptType == type)
-		                              {
-			                              _scriptType = MusicType::None;
-		                              }
-	                              },
-	                          // The words of a song mark its lines, which the script waits on
-	                          .onCue = [this](std::string_view cue) { OnScriptMusicCue(cue); },
+	                          .startChunk = script.place->chunk,
+	                          .startFrame = script.place->frame,
 	                      });
-	_scriptStarted = true;
-	_playing = _scriptType;
 	return true;
 }
 
