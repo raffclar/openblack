@@ -116,9 +116,10 @@ public:
 	virtual void ReportPick([[maybe_unused]] PlayerNames player, [[maybe_unused]] entt::entity object) {}
 	/// The thing under the cursor of the player's hand from the last pick that a turn did. None in a single game.
 	[[nodiscard]] virtual entt::entity GetReportedPick() const noexcept { return entt::null; }
-	/// Each frame the hands catch up with their player's alignment once it has moved far enough, and blend their skin
-	/// again as they go into or out of the player's influence, tested at the point picked under the cursor (see
-	/// hand_morph::Pick and NextPoint)
+	/// Each frame the hands of the player at this computer catch up with the alignment of that player once it has moved
+	/// far enough, and blend their skin again as they go into or out of the influence of that player, tested at the point
+	/// picked under the cursor (see hand_morph::Pick and NextPoint). The hands of the other players have no model on the
+	/// screen, so they do not change.
 	virtual void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) = 0;
 	/// Once a game turn, before the creatures think: counts the turns that the player's hand stays in one place
 	virtual void ProcessTurn() {}
