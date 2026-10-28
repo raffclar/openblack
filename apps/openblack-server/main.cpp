@@ -287,6 +287,11 @@ int main(int argc, char* argv[])
 #if defined(SIGBREAK)
 	std::signal(SIGBREAK, StopOnSignal);
 #endif
+#if defined(SIGPIPE)
+	// The TLS library writes to the socket of a client that can close at any time. A write to a closed socket must give
+	// an error that the server handles, not a signal that stops the server.
+	std::signal(SIGPIPE, SIG_IGN);
+#endif
 
 	try
 	{

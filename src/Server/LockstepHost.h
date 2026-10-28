@@ -165,7 +165,8 @@ public:
 	[[nodiscard]] bool Starting() const { return _startStep != StartStep::None; }
 	/// True when the game started and no god's player is connected
 	[[nodiscard]] bool Paused() const;
-	/// True when the game started and every god left or was defeated: no player can come back
+	/// True when the game started and every god left or was defeated: no player can come back. A room with no human god
+	/// is over when no observer is connected and no observer can come back.
 	[[nodiscard]] bool GameOver() const;
 	/// The last turn of the game, after a client asked the server to stop the turns of a decided game. None before.
 	[[nodiscard]] std::optional<uint32_t> StoppedAfter() const { return _stoppedAfter; }
