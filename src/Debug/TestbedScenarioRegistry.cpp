@@ -6148,6 +6148,26 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 3}},
 	});
 
+	// The camera looks down at 45 degrees on a very large oak from about 150 m. The hand pulls it for a tenth of a second
+	// and lets go before it comes out, so the oak stays drawn in the lean of the pull.
+	all.push_back({
+	    .id = "hand.tree_tug_let_go",
+	    .name = "Letting go of a tree before it comes out",
+	    .facet = Facet::Hand,
+	    .description = "Seen from about 150 m away at 45 degrees, the hand grips a very large oak, pulls it up the screen "
+	                   "for a tenth of a second, then lets go before the oak comes out of the ground.",
+	    .expected = "The oak leans and stretches a little towards the pull. After the hand lets go, the oak stays in "
+	                "that lean in a game alone. In a network game, it stands straight again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 106.0f, -66.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, 40.0f}, .scale = 2.5f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.42f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.1f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.8f, 0.8f}}},
+	});
+
 	// The camera looks at a conifer from 25 m, 20 degrees down, the pointer on its crown. A press of a fifth of a second
 	// is shorter than a tap, but the pull starts after the 0.13 s fade and the hand is far from its grip on the trunk.
 	// Thus the conifer comes free on the first frame of the pull and the hand takes it. The same press does the same in

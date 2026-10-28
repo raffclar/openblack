@@ -178,7 +178,7 @@ public:
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
 	[[nodiscard]] std::optional<uint32_t> TakeHeldMiracleToolTip() override;
 
-	void UpdateHand(const HandFrame& frame, float seconds) override;
+	void UpdateHand(const HandFrame& frame, const input_steps::Steps& steps) override;
 	bool TapFireBall(entt::entity ball) override;
 	bool TapGlobe(entt::entity globe, PlayerNames player) override;
 	bool PressFireBall(uint32_t nowMs, uint32_t turn) override;
@@ -387,7 +387,10 @@ private:
 	/// The held seed as the hand shows it, after it came to the hand, became ready or was powered up: how the hand holds
 	/// it, its model once it is ready (for the seeds that show one), and its in-hand effect drawn once it is ready
 	void ShowHeldSeed();
-	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp)
+	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp). Each turn: whether each
+	/// seed out of the hand shows over its miracle.
+	void ShowSeedsWithSpellsTurn();
+	/// Each frame: places the seeds out of the hand that show over their miracles
 	void ShowSeedsWithSpells();
 	/// What decides whether a seed bound to its miracle is shown over it
 	[[nodiscard]] magic::SeedWithSpell SeedWithSpellOf(const components::SpellSeed& seed, const components::Spell& spell) const;
@@ -478,6 +481,8 @@ private:
 	/// The hand's speed, smoothed, and where it was last frame
 	glm::vec3 _handVelocity {0.0f};
 	std::optional<glm::vec3> _lastHandPosition;
+	/// The hand's place at the last frame, from which the hand moved in this frame
+	std::optional<glm::vec3> _lastFrameHandPosition;
 	/// The spin the hand gives the miracle it holds, measured from when that miracle came to it
 	magic::HandSpin _handSpin;
 	entt::entity _spinningSeed {entt::null};

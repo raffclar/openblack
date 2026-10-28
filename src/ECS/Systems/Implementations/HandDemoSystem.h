@@ -32,7 +32,9 @@ class HandDemoSystem final: public HandDemoSystemInterface
 public:
 	void Play(std::string_view name, uint32_t task, bool pauseOnTrigger, bool withoutHandModify) override;
 	[[nodiscard]] bool IsPlaying(uint32_t task) const override;
+	[[nodiscard]] bool IsReplaying() const override;
 	bool TakeTrigger() override;
+	void ProcessTurn() override;
 	void Update() override;
 	void Stop() override;
 	void TaskStopped(uint32_t task) override;
@@ -47,9 +49,13 @@ public:
 private:
 	/// The records played this go, through the player's interface
 	void Apply(const std::vector<hand_demo::Played>& played);
+	/// The frames have played the last record: the player's mouse has the hand again
+	void EndReplay();
 
 	std::shared_ptr<const hnd::HNDFile> _file;
-	std::unique_ptr<hand_demo::Playback> _playback;
+	std::unique_ptr<hand_demo::SplitPlayback> _playback;
+	/// The frames still play records
+	bool _replaying {false};
 	std::string _name;
 	/// The task that started it
 	uint32_t _task {0};

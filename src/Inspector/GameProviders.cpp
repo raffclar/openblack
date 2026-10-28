@@ -4044,7 +4044,8 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	        }));
 	provider->Add(Query("hand_demo",
 	                    "The tutorial's hand demonstration playing: its name, the script task that started it, the record "
-	                    "it is at, whether it holds at a mark, and the camera and hints it has"),
+	                    "the turns are at, whether it holds at a mark, the record the frames are at, and the camera and "
+	                    "hints it has"),
 	              Serve<Locator::handDemoSystem>(
 	                  "the hand demonstrations",
 	                  [](const ecs::systems::HandDemoSystemInterface& demos, const QueryContext& /*c*/) -> Json {
@@ -4061,6 +4062,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		                               {"pause_on_trigger", status->pauseOnTrigger},
 		                               {"trigger_reached", status->triggerReached},
 		                               {"holding", status->holding},
+		                               {"replaying", status->replaying},
+		                               {"replay_record", status->replayRecord},
+		                               {"replay_holding", status->replayHolding},
 		                               {"hints", demos.GetHints()}};
 		                  if (const auto camera = demos.GetCamera(); camera.has_value())
 		                  {

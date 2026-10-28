@@ -128,6 +128,86 @@ glm::vec3 light::HeadPosition(Light& light)
 	return Along(light.start, light.way, distance);
 }
 
+namespace
+{
+/// The light's fall, hold and fade move on, as light::Step moves them
+void StepLightTimes(intro_rules::LiftClock& clock, uint32_t milliseconds)
+{
+	using light::State;
+	if (clock.light == State::Gone)
+	{
+		return;
+	}
+	if (clock.light == State::Falling)
+	{
+		// It arrives when the distance of its fall before this step is past the end
+		if (!(static_cast<float>(clock.elapsed) * light::k_Speed <= light::k_Arrives))
+		{
+			clock.arrived = true;
+		}
+		if (clock.arrived)
+		{
+			clock.light = State::Holding;
+			clock.timer = light::k_HoldMs;
+		}
+		clock.elapsed = static_cast<int32_t>(static_cast<uint32_t>(clock.elapsed) + milliseconds);
+		return;
+	}
+	if (clock.light == State::Holding)
+	{
+		clock.timer = static_cast<int32_t>(static_cast<uint32_t>(clock.timer) - milliseconds);
+		if (clock.timer < 0)
+		{
+			clock.light = State::Fading;
+			clock.timer = light::k_FadeMs;
+		}
+	}
+	if (clock.light == State::Fading)
+	{
+		clock.timer = static_cast<int32_t>(static_cast<uint32_t>(clock.timer) - milliseconds);
+		if (clock.timer < 0)
+		{
+			clock.light = State::Gone;
+		}
+	}
+}
+} // namespace
+
+bool intro_rules::StepLiftClock(LiftClock& clock, uint32_t milliseconds, int32_t playTime, bool looping)
+{
+	if (!clock.lifting)
+	{
+		// The hand comes to lift the boy in the step after the light landed
+		const bool landed = clock.light == light::State::Holding;
+		StepLightTimes(clock, milliseconds);
+		clock.lifting = landed;
+		return false;
+	}
+	// The lifting clip waits until the light has gone, then plays from the start of that step
+	if (!clock.clipPlays)
+	{
+		if (clock.light == light::State::Gone)
+		{
+			clock.clipPlays = true;
+		}
+		else
+		{
+			StepLightTimes(clock, milliseconds);
+		}
+	}
+	if (!clock.clipPlays)
+	{
+		return false;
+	}
+	bool cameRound = false;
+	const auto time = AdvanceClip(clock.clipTime, milliseconds, playTime, looping, cameRound);
+	if (!cameRound)
+	{
+		clock.clipTime = time;
+	}
+	return cameRound;
+}
+
 void light::Step(Light& light, uint32_t milliseconds, const Random& random, Frame& out)
 {
 	out.drawn.clear();

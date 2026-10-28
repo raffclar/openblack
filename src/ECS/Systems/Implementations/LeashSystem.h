@@ -75,6 +75,7 @@ public:
 	bool TapPost(entt::entity post) override;
 	bool PickType(PlayerNames player, LeashType type) override;
 	void DoOrder(PlayerNames player, const player_commands::LeashOrder& order) override;
+	void DoLeashLength(PlayerNames player, float length) override;
 	bool PressKey(PlayerNames player, creature_leash::LeashKey key) override;
 	bool TapCreature(PlayerNames player, entt::entity creature) override;
 	bool Shake(PlayerNames player) override;
