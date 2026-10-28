@@ -2202,6 +2202,11 @@ void AnimalSystem::StopReaction(entt::entity entity, bool resetState)
 	// states of a reaction.
 	const auto next =
 	    animals::StateAfterReacting(animal->stateBeforeReaction, Locator::infoConstants::value().animalStateTable);
+	// The state of the hand refuses most changes: a held animal stays in it
+	if (animal->state == AnimalState::InHand && !animals::HandStateAllows(next))
+	{
+		return;
+	}
 	if (const auto state = AnimalStateOfGame(next))
 	{
 		SetTopState(*animal, *state);

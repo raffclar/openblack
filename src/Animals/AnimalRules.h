@@ -190,6 +190,9 @@ struct AnimalHolders
 /// Whether an animal takes its own turn: not while a tornado or the physics moves it. In the player's hand or in the
 /// hand of a creature it takes its turn as in the land. Its state in the hand does nothing, but its needs grow.
 [[nodiscard]] bool TakesOwnTurn(const AnimalHolders& holders);
+/// Whether an animal in the state of the hand can go into this state of the game's table. The state of the hand lets it
+/// go only into flight, a landing or a state of death
+[[nodiscard]] bool HandStateAllows(uint8_t gameState);
 /// What an animal knows about its target at the start of its turn
 struct TargetFacts
 {

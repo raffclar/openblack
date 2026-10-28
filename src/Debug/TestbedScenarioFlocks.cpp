@@ -220,7 +220,7 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	                "that the hand takes the cow, the wolf stops its meal and runs on to where the miracle sent it. Let "
 	                "go, the cow gets up and wanders off.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 80.0f}}, .distance = 0.6f},
+	    .framing = {.shot = Shot::Placed, .eye = {8.0f, 9.0f, 34.0f}, .look = {0.0f, 2.0f, 50.0f}},
 	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 50.0f}, .living = true}},
 	    .miracles = {{.type = MagicType::FlockGround,
 	                  .point = k_Spot,

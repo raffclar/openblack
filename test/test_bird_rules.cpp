@@ -255,3 +255,18 @@ TEST(BirdRules, AnAnimalLetsGoOfATargetThatIsGoneOrInThePlayersHand)
 	EXPECT_EQ(DropOfTarget({.gone = true, .inHand = true}), TargetDrop::Drops);
 	EXPECT_EQ(DropOfTarget({.inPlayersHand = true, .inHand = true}), TargetDrop::Drops);
 }
+
+TEST(BirdRules, TheStateOfTheHandLetsAnAnimalGoOnlyIntoFlightALandingOrDeath)
+{
+	using animals::HandStateAllows;
+	// Flying, landed, and the states of death from the start of a death to brought down
+	for (const uint8_t state : {10, 11, 13, 14, 15, 16, 17})
+	{
+		EXPECT_TRUE(HandStateAllows(state)) << static_cast<int>(state);
+	}
+	// No other state: for example a move, being eaten, the state of the hand itself, a wander or deciding again
+	for (const uint8_t state : {0, 1, 12, 18, 24, 31, 43})
+	{
+		EXPECT_FALSE(HandStateAllows(state)) << static_cast<int>(state);
+	}
+}
