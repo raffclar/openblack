@@ -60,19 +60,22 @@ int main(int argc, char* argv[])
 		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
 		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
-		("seed", "The seed of every random number of the world.", cxxopts::value<uint32_t>()->default_value("1"))
+		("seed", "Tools: the seed of every random number of the world, which also pins the date of the world. Without it, the world starts from the seed of a room and reads the date from the clock of the computer.", cxxopts::value<uint32_t>())
 		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
 		("frame-ms", "The game time of each frame in milliseconds. A turn is 100 ms.", cxxopts::value<double>()->default_value("100"))
 		("fast", "Tools: play the frames one after the other with no wait for the wall clock.")
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
+		("log-checksums", "Tools: write the checksum of each turn to the log, which server_check and net_check read.")
 		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
 		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
+		("gods-need-no-temple", "Tests: a god with no temple stays in the game, for a land that makes no temple at its start (a story land). Each client needs the same switch (--sim-gods-need-no-temple).")
 		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0). Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
 		("all-computer-gods", "Tools: every god with a citadel is a computer god, and the room has no human god. The game starts at once: with --gods N the world turns when N observers joined (for the AI soak).")
 		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
+		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.")
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 		("row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world of a client parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("row-dump-turn", "Tools: with --row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
@@ -154,11 +157,15 @@ int main(int argc, char* argv[])
 			std::cerr << "This server " << *refusal << "." << std::endl;
 			return EXIT_FAILURE;
 		}
-		settings.seed = result["seed"].as<uint32_t>();
+		if (result.count("seed") != 0)
+		{
+			settings.seed = result["seed"].as<uint32_t>();
+		}
 		if (result.count("turns") != 0)
 		{
 			settings.turns = result["turns"].as<uint32_t>();
 		}
+		settings.godsNeedNoTemple = result.count("gods-need-no-temple") != 0;
 		if (result.count("temple-loss") != 0)
 		{
 			settings.templeLoss = openblack::sim_run::ParseTempleLoss(result["temple-loss"].as<std::string>());
@@ -170,6 +177,7 @@ int main(int argc, char* argv[])
 			settings.profileFolder = std::filesystem::path(result["profile-folder"].as<std::string>());
 		}
 		settings.logFile = result["log-file"].as<std::string>();
+		settings.logChecksums = result.count("log-checksums") != 0;
 		if (result.count("record") != 0)
 		{
 			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
@@ -229,6 +237,7 @@ int main(int argc, char* argv[])
 			network.minGods = result.count("min-gods") == 0 && result.count("gods") != 0 ? result["gods"].as<uint32_t>()
 			                                                                             : result["min-gods"].as<uint32_t>();
 			network.comeBackSeconds = result["come-back-seconds"].as<uint32_t>();
+			network.testCommands = result.count("test-commands") != 0;
 			if (result.count("lobby-api") != 0)
 			{
 				network.lobbyApi = result["lobby-api"].as<std::string>();

@@ -43,9 +43,15 @@ ScreenshotPlan PlanScreenshot(WindowBuffers buffers, bool minimised, bool canRea
 		return {.route = ScreenshotRoute::Screen, .why = {}};
 	}
 	// The reason that the window's buffers cannot be read, at the start of each refusal
-	const std::string_view cause = buffers == WindowBuffers::UncoveredOnly
-	                                   ? "this renderer gives no pixels where other windows cover the window"
-	                                   : "the window is minimised, which leaves this renderer nothing to read";
+	std::string_view cause = "the window is minimised, which leaves this renderer nothing to read";
+	if (buffers == WindowBuffers::UncoveredOnly)
+	{
+		cause = "this renderer gives no pixels where other windows cover the window";
+	}
+	else if (buffers == WindowBuffers::ReleasedAfterPresent)
+	{
+		cause = "the browser releases the canvas texture after each frame";
+	}
 	if (!canReadBack)
 	{
 		return {.route = ScreenshotRoute::Refused,

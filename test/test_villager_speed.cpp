@@ -141,3 +141,23 @@ TEST(VillagerSpeed, ScriptedAndDancingVillagersKeepTheirSpeed)
 	EXPECT_FALSE(StateChangeSetsSpeed(false, true));
 	EXPECT_FALSE(StateChangeSetsSpeed(true, true));
 }
+
+TEST(VillagerSpeed, ASkirmishAndANetworkGameUseTheMultiplayerBeliefScale)
+{
+	EXPECT_FALSE(MultiplayerBeliefScale(false, false));
+	EXPECT_TRUE(MultiplayerBeliefScale(true, false));
+	EXPECT_TRUE(MultiplayerBeliefScale(false, true));
+	EXPECT_TRUE(MultiplayerBeliefScale(true, true));
+
+	// Believed beyond the neutral belief by 2 on story land 2: the multiplayer scale replaces the story land's scale
+	auto in = Fleeing();
+	in.belief = Inputs::Belief {.player = 3.0f, .neutral = 1.0f};
+	in.landNumber = 2;
+	in.beliefSpeedScaleStory = {0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0.0f};
+	in.beliefSpeedScaleMultiPlayer = 4.0f;
+	in.multiplayer = MultiplayerBeliefScale(false, true);
+	EXPECT_EQ(StateSpeed(in, Zero), static_cast<int32_t>(2000.0f * (4.0f * 0.2f + 1.0f)));
+	// A land that sets its own scale keeps it in a network game too
+	in.landBeliefSpeedScale = 2.0f;
+	EXPECT_EQ(StateSpeed(in, Zero), static_cast<int32_t>(2000.0f * (2.0f * 0.2f + 1.0f)));
+}

@@ -42,11 +42,13 @@
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureSaveState.h"
 #include "Creature/CreatureTeleportAgendas.h"
+#include "Creature/CreatureTownCompassion.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashOwnership.h"
@@ -79,6 +81,7 @@
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
@@ -693,9 +696,47 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 	LayRopeAfresh(registry, creature);
 	if (const auto* body = registry.TryGet<const Creature>(creature))
 	{
+		// The leash that goes on becomes the picked leash at the temple of the creature's player
+		PickPost(body->owner, type);
 		ForgetLocalGesturePath(body->owner);
 	}
 	return true;
+}
+
+void LeashSystem::PickPost(PlayerNames owner, LeashType worn)
+{
+	// A player with no temple has no posts, and nothing changes
+	Locator::entitiesRegistry::value().Each<LeashPost>([owner, worn](LeashPost& post) {
+		if (post.owner != owner)
+		{
+			return;
+		}
+		if (const auto picked = leash::PostPickedFor(post.type, worn); picked.has_value())
+		{
+			post.selected = *picked;
+		}
+	});
+}
+
+bool LeashSystem::PlayerCanChangeType(entt::entity creature) const
+{
+	const auto* spells = Locator::entitiesRegistry::value().TryGet<const CreatureSpells>(creature);
+	if (spells == nullptr)
+	{
+		return true;
+	}
+	return leash::PlayerCanChangeType(spells->spells.IsActive(creature_spells::Spell::Nice),
+	                                  spells->spells.IsActive(creature_spells::Spell::Nasty));
+}
+
+bool LeashSystem::PickType(PlayerNames player, LeashType type)
+{
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value() || !PlayerCanChangeType(*creature))
+	{
+		return false;
+	}
+	return ChangeType(*creature, type);
 }
 
 void LeashSystem::TakeOff(entt::entity creature)
@@ -763,10 +804,20 @@ bool LeashSystem::Carry(PlayerNames player, entt::entity creature, const leash::
 		TakeOff(creature);
 		return true;
 	case Kind::UntieToHand:
+	{
+		// Only the leash key frees the creature from the desire of a town's desire flag that the leash was tied to
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto tied = TiedTo(creature);
+		if (auto* mind = MindOf(registry, creature);
+		    mind != nullptr && tied.has_value() && registry.Valid(*tied) && registry.AllOf<TownDesireFlag>(*tied))
+		{
+			creature_town_compassion::UntiedFromFlag(mind->townCompassion);
+		}
 		UntieToHand(creature);
 		return true;
+	}
 	case Kind::ChangeType:
-		return ChangeType(creature, command.type);
+		return PlayerCanChangeType(creature) && ChangeType(creature, command.type);
 	}
 	return false;
 }
@@ -795,6 +846,31 @@ bool LeashSystem::Shake(PlayerNames player)
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} shook the leash off creature {}", PlayerNumber(player),
 	                   entt::to_integral(*creature));
 	TakeOff(*creature);
+	return true;
+}
+
+bool LeashSystem::ComesOffAtTemple(PlayerNames player) const
+{
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value())
+	{
+		return false;
+	}
+	const auto* leashes = Locator::entitiesRegistry::value().TryGet<const CreatureLeash>(*creature);
+	const auto holder = leashes != nullptr && leashes->worn.has_value() ? std::optional(leashes->worn->holder) : std::nullopt;
+	return leash::ComesOffAtTemple(player, holder);
+}
+
+bool LeashSystem::TakeOffAtTemple(PlayerNames player)
+{
+	if (!ComesOffAtTemple(player))
+	{
+		return false;
+	}
+	const auto creature = *PlayersCreature(player);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} goes into the temple: the leash comes off creature {}",
+	                   PlayerNumber(player), entt::to_integral(creature));
+	TakeOff(creature);
 	return true;
 }
 
@@ -842,17 +918,11 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 		}
 	}
 	// Its player's posts show the leash picked
-	const auto* body = registry.TryGet<const Creature>(creature);
-	if (body != nullptr)
+	if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
 	{
+		PickPost(body->owner, type);
 		ForgetLocalGesturePath(body->owner);
 	}
-	registry.Each<LeashPost>([leashes, body](LeashPost& post) {
-		if (body != nullptr && post.owner == body->owner)
-		{
-			post.selected = post.type == leashes->selected;
-		}
-	});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s picked leash is now the {} leash", entt::to_integral(creature),
 	                   leash::Name(type));
 	return true;
@@ -873,6 +943,12 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 		{
 			return false;
 		}
+	}
+	else if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
+	{
+		// A tie puts the worn leash on again: the worn leash becomes the picked leash at the temple again
+		PickPost(body->owner, TypeOf(creature));
+		ForgetLocalGesturePath(body->owner);
 	}
 	auto* leashes = &registry.Get<CreatureLeash>(creature);
 	auto& worn = *leashes->worn;
@@ -916,6 +992,15 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 		    .lessons = leash::LessonsFor(worn.type, isCreature),
 		});
 		mind->leash.actOn.push_back(static_cast<uint32_t>(object));
+		// Tied to a town's desire flag, the creature helps the town with the desire of that flag
+		const auto* flag = registry.TryGet<const TownDesireFlag>(object);
+		const auto* tables =
+		    Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
+		if (flag != nullptr && tables != nullptr)
+		{
+			creature_town_compassion::TiedToFlag(mind->townCompassion, static_cast<uint32_t>(flag->desire),
+			                                     tables->townActions);
+		}
 	}
 	return true;
 }
@@ -1217,7 +1302,8 @@ bool LeashSystem::TapPost(entt::entity post)
 			other.selected = &other == tapped;
 		}
 	});
-	if (creature.has_value())
+	// The tap changes the picked leash at once, but the creature keeps its leash while a nice or nasty spell is on it
+	if (creature.has_value() && PlayerCanChangeType(*creature))
 	{
 		ChangeType(*creature, tapped->type);
 	}
@@ -1768,23 +1854,41 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	const auto tiedPoint = Locator::terrainSystem::has_value()
 	                           ? map_coords::ToWorld(Locator::terrainSystem::value(), tiedAt)
 	                           : glm::vec3(map_coords::ToMetres(tiedAt.x), 0.0f, map_coords::ToMetres(tiedAt.z));
-	const auto lengths = leash_snap::LengthsOnLettingGo(*hand, tiedPoint, object_measures::TwoDRadius(registry, tied));
-	// TODO(multiplayer): the frame changes the lengths of the leash here; a network game needs a command for it
-	worn->slackLength = lengths.slack;
-	worn->maxLength = lengths.max;
-	// And the creature goes to the place under the hand. The turn gives the order on every computer, as it gives the
-	// orders of the taps.
+	const auto length = leash_snap::LengthOnLettingGo(*hand, tiedPoint, object_measures::TwoDRadius(registry, tied));
+	// The turn sets the lengths of the leash on every computer, before the order to the place under the hand
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(player_commands::LeashLength {.length = length});
+	}
+	else
+	{
+		DoLeashLength(player, length);
+	}
+	// And the creature goes to the place under the hand. The order is a command, which every computer does at a turn.
 	if (place.has_value())
 	{
-		if (Locator::playerCommandSystem::has_value())
-		{
-			SendOrder({.kind = player_commands::LeashOrder::Kind::AtPlace, .place = *place});
-		}
-		else
-		{
-			OrderAt(player, *place);
-		}
+		SendOrder({.kind = player_commands::LeashOrder::Kind::AtPlace, .place = *place});
 	}
+}
+
+void LeashSystem::DoLeashLength(PlayerNames player, float length)
+{
+	// The leash of the player's creature that the player holds, tied to a thing that still exists
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* leashes = registry.TryGet<CreatureLeash>(*creature);
+	if (leashes == nullptr || !leashes->worn.has_value() || leashes->worn->holder != player ||
+	    !leashes->worn->tiedTo.has_value() || !registry.Valid(*leashes->worn->tiedTo))
+	{
+		return;
+	}
+	const auto lengths = leash_snap::LengthsOf(length);
+	leashes->worn->slackLength = lengths.slack;
+	leashes->worn->maxLength = lengths.max;
 }
 
 void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken)
@@ -1819,10 +1923,10 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 		const auto* post = picked.has_value() && registry.Valid(*picked) ? registry.TryGet<const LeashPost>(*picked) : nullptr;
 		if (post != nullptr && post->owner == player && post->hung)
 		{
-			// The help counts the tap of this computer's hand on its own leash
+			// The help counts the tap of this computer's hand on its own leash, at the turn of its next report
 			if (Locator::helpProfileSystem::has_value())
 			{
-				Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+				Locator::helpProfileSystem::value().Report(help::profile::k_TapThing);
 			}
 			// The tap is a command, which the world does at the start of a later turn
 			if (Locator::playerCommandSystem::has_value())
@@ -1960,8 +2064,17 @@ void LeashSystem::DoOrder(PlayerNames player, const player_commands::LeashOrder&
 		break;
 	}
 	case LeashOrder::Kind::Untie:
-		UntieToHand(*creature);
+	{
+		// The hand takes the tied leash off and puts it on again, held in the hand. Thus the leash becomes the picked
+		// leash at the temple again.
+		const auto type = TypeOf(*creature);
+		if (TiedTo(*creature).has_value())
+		{
+			TakeOff(*creature);
+			PutOnFor(player, *creature, type);
+		}
 		break;
+	}
 	}
 }
 

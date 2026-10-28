@@ -197,13 +197,18 @@ bool animals::DeadBodyGoes(int16_t& turnsLeft, bool scriptControlled)
 	return goes;
 }
 
-bool animals::TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead)
+bool animals::TakesOwnTurn(const AnimalHolders& holders)
 {
-	if (holders.tornado || holders.playersHand || holders.physics)
+	return !holders.tornado && !holders.physics;
+}
+
+animals::LandedAs animals::LandsAs(bool alive, bool dying)
+{
+	if (alive)
 	{
-		return false;
+		return LandedAs::Landed;
 	}
-	return !holders.creature || dyingOrDead;
+	return dying ? LandedAs::Dead : LandedAs::Dying;
 }
 
 glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, float height)

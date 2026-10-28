@@ -96,6 +96,16 @@ TEST(DeveloperTools, TheFilterKeepsThePlayerAndWindowOptions)
 	EXPECT_TRUE(filtered.ignored.empty());
 }
 
+TEST(DeveloperTools, TheFilterKeepsThePingDisplayOfThePlayer)
+{
+	// The ping display is an option of the player (deviation 143), so a build without the tools keeps it
+	const std::vector<std::string_view> arguments {"openblack", "--show-ping"};
+	const auto filtered = FilterDeveloperOptions(arguments, k_DeveloperOptions);
+	EXPECT_EQ(filtered.kept.size(), arguments.size());
+	EXPECT_TRUE(filtered.ignored.empty());
+	EXPECT_FALSE(IsDeveloperOption("show-ping", k_DeveloperOptions));
+}
+
 TEST(DeveloperTools, TheFilterRemovesAShortDeveloperOptionAndItsValue)
 {
 	const std::vector<std::string_view> arguments {"openblack", "-s", "Land2.txt", "-u", "2"};
@@ -209,6 +219,12 @@ TEST(DeveloperTools, ABuildForPlayersRefusesTheSoakToolsAndADeveloperBuildAllows
 	EXPECT_TRUE(SoakRefusalOf(false, seeded).has_value());
 	EXPECT_FALSE(SoakRefusalOf(true, computers).has_value());
 	EXPECT_FALSE(SoakRefusalOf(true, seeded).has_value());
+}
+
+TEST(DeveloperTools, ABuildForPlayersRefusesTheScenarioOfAGameServer)
+{
+	EXPECT_TRUE(ScenarioRefusalOf(false).has_value());
+	EXPECT_FALSE(ScenarioRefusalOf(true).has_value());
 }
 
 TEST(DeveloperTools, TheSoakOptionsOfTheGameAndTheServerAreDeveloperOptions)

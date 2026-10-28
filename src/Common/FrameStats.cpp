@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <numeric>
 
+#include <fmt/format.h>
+
 namespace openblack::frame_stats
 {
 
@@ -35,7 +37,25 @@ Summary Summarise(std::span<const float> milliseconds)
 	    .p95 = rank(95),
 	    .p99 = rank(99),
 	    .max = sorted.back(),
+	    .slow = static_cast<size_t>(std::ranges::distance(std::ranges::lower_bound(sorted, k_SlowMilliseconds), sorted.end())),
 	};
+}
+
+std::string ToCsv(std::span<const FrameRecord> frames)
+{
+	std::string text = "frame,ms,processor_ms,turn,played\n";
+	for (size_t i = 0; i < frames.size(); ++i)
+	{
+		const auto& frame = frames[i];
+		text += fmt::format("{},{:.3f},{:.3f},{},{}\n", i + 1, frame.milliseconds, frame.processorMilliseconds, frame.turn,
+		                    frame.played ? 1 : 0);
+	}
+	return text;
+}
+
+Summary Window::Peek() const
+{
+	return Summarise(_times);
 }
 
 Summary Window::Take()

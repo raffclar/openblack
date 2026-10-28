@@ -51,7 +51,7 @@ void openblack::Profiler::Begin(Stage stage)
 	auto& entry = _entries.at(_currentEntry).stages.at(static_cast<uint8_t>(stage));
 	entry.level = _currentLevel;
 	_currentLevel++;
-	entry.start = std::chrono::system_clock::now();
+	entry.start = std::chrono::steady_clock::now();
 	entry.finalized = false;
 }
 
@@ -77,7 +77,7 @@ void openblack::Profiler::End(Stage stage)
 	assert(!entry.finalized);
 	_currentLevel--;
 	assert(entry.level == _currentLevel);
-	entry.end = std::chrono::system_clock::now();
+	entry.end = std::chrono::steady_clock::now();
 	entry.finalized = true;
 	entry.total += entry.end - entry.start;
 	++entry.calls;
@@ -121,7 +121,7 @@ void openblack::Profiler::Frame()
 	MergeInto(prevEntry);
 	_currentEntry = (_currentEntry + 1) % k_BufferSize;
 	auto& entry = _entries.at(_currentEntry);
-	prevEntry.frameEnd = entry.frameStart = std::chrono::system_clock::now();
+	prevEntry.frameEnd = entry.frameStart = std::chrono::steady_clock::now();
 	// The new frame's stages have taken no time yet
 	for (auto& stage : entry.stages)
 	{

@@ -96,3 +96,8 @@ bool creature_leash::ClaimsOnArrival(std::span<const Claim> others, PlayerNames 
 {
 	return CanLead(owner) && !LeashableOf(others, owner).has_value();
 }
+
+bool creature_leash::ComesOffAtTemple(PlayerNames player, std::optional<PlayerNames> holder)
+{
+	return CanLead(player) && holder == player;
+}

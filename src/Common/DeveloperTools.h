@@ -135,8 +135,10 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "join-part-again"},
     DeveloperOption {.name = "join-creature", .takesValue = true},
     DeveloperOption {.name = "sim-network-game"},
+    DeveloperOption {.name = "throw-lead-latency-ms", .takesValue = true},
     DeveloperOption {.name = "sim-still-hand"},
     DeveloperOption {.name = "sim-temple-loss", .takesValue = true},
+    DeveloperOption {.name = "sim-gods-need-no-temple"},
     DeveloperOption {.name = "sim-leave-at", .takesValue = true},
     DeveloperOption {.name = "sim-checksums", .takesValue = true},
     DeveloperOption {.name = "sim-checksum-parts"},
@@ -190,8 +192,11 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "row-dump-keep", .takesValue = true},
     DeveloperOption {.name = "commands", .takesValue = true},
     DeveloperOption {.name = "reload-at", .takesValue = true},
+    DeveloperOption {.name = "test-commands"},
+    DeveloperOption {.name = "log-checksums"},
     DeveloperOption {.name = "all-computer-gods"},
     DeveloperOption {.name = "ai-seed", .takesValue = true},
+    DeveloperOption {.name = "gods-need-no-temple"},
 };
 
 /// The tool modes of the AI soak: long games in which computer gods play every god. They exist only in builds with the
@@ -214,6 +219,17 @@ struct SoakTools
 	if (!built && tools.Any())
 	{
 		return "the build has no developer tools, so it cannot play a game of computer gods only";
+	}
+	return std::nullopt;
+}
+
+/// Why a build cannot play a network game in which the game server plays a testbed scenario, or none when it can. Only a
+/// build with the developer tools has the testbed scenarios.
+[[nodiscard]] constexpr std::optional<std::string_view> ScenarioRefusalOf(bool built) noexcept
+{
+	if (!built)
+	{
+		return "the build has no developer tools, so it cannot play a testbed scenario";
 	}
 	return std::nullopt;
 }

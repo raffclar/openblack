@@ -114,10 +114,15 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ResourcePile", .field = "shownAmount", .marker = ""},
     {.component = "ResourcePile", .field = "risen", .marker = ""},
     {.component = "LeashPost", .field = "look", .marker = ""},
+    // The frames draw a leash at its temple, or in the hand that carries the picked leash. The turns go by
+    // LeashPost::point, and no turn reads the Transform of a leash (it has no place in the map).
+    {.component = "Transform", .field = "position", .marker = "LeashPost"},
     {.component = "Transform", .field = "rotation", .marker = "LeashPost"},
     // The frames find whether a post hangs its leash, for the hand's picks and tooltips, and show it at its size
     {.component = "LeashPost", .field = "hung", .marker = ""},
     {.component = "Transform", .field = "scale", .marker = "LeashPost"},
+    // The frames put the picked leash of this computer's player in its hand. The turns read the point of the post.
+    {.component = "Transform", .field = "position", .marker = "LeashPost"},
     // The moving bodies are drawn between their last two turns. The turns read the Transform.
     {.component = "PhysicsDrawPose", .field = "", .marker = ""},
     // The particle effects that the frames step
@@ -139,11 +144,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // from the fish of the farm.
     {.component = "FishFarm", .field = "shoal", .marker = ""},
     {.component = "FishFarm", .field = "shownAlpha", .marker = ""},
-    // The frames grow, spread and turn the sprites of a grip's puff of dust. Each computer puts the sprites with its own
-    // numbers. The turns make and remove the puff by its centre and its turns.
-    {.component = "GripLandscapeParticle", .field = "offset", .marker = ""},
-    {.component = "GripLandscapeParticle", .field = "age", .marker = ""},
-    {.component = "GripLandscapeParticle", .field = "frame", .marker = ""},
     // The pictures that face the camera, the glows and sparks of the scripts' highlights, and the highlights' spin
     {.component = "Sprite", .field = "", .marker = ""},
     {.component = "Transform", .field = "", .marker = "Sprite"},
@@ -200,6 +200,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The sparkles of the moves that the player queued in a fight: only the computer of the player adds them, as the
     // game draws them. The turns read the queue, not its sparkles.
     {.component = "CreatureFighting", .field = "marks", .marker = ""},
+    // The static that a creature fizzes through slides only while this computer draws it, as a knocked out fighter
+    // fades. The turns read how far it fizzed, not the static.
+    {.component = "CreatureSpells", .field = "staticScroll", .marker = ""},
     // The glow of the hand while a gesture is drawn, which only the computer that draws the gesture shows
     {.component = "HandGlow", .field = "", .marker = ""},
     // The sum of the strokes and slaps that the hand let go of a creature with, which only the creature's status panel
@@ -212,6 +215,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The number of a miracle's particle effect: each computer numbers its effects, and makes more of them for its own
     // hand
     {.component = "Spell", .field = "effect", .marker = ""},
+    // The numbers of other effects that the turns make, as the particles of this computer numbered them. The frames make
+    // effects of their own, such as the hand's gesture trails, which take numbers too. The turns use a number only to
+    // find their effect on this computer.
+    {.component = "SpellDispenser", .field = "effect", .marker = ""},
+    {.component = "TownArtefact", .field = "effect", .marker = ""},
+    {.component = "MagicShield", .field = "effect", .marker = ""},
     // The number of the spot visual that a temple's heart fires its beams from, as the particles of this computer
     // numbered it
     {.component = "Temple", .field = "beamSource", .marker = ""},
@@ -244,6 +253,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "OneOffSpellSeed", .field = "seedPlacement", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnModel", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnTurn", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "flightModel", .marker = ""},
     // The frames ease the drawn height of a field's crop toward the height that its food gives. Only the draw reads it.
     {.component = "Field", .field = "height", .marker = ""},
     // The roots that the frames show on a tree out of the land. Only the draw reads them.
@@ -297,6 +307,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "springPending", .marker = ""},
     {.component = "HandGrab", .field = "recordedThrow", .marker = ""},
     {.component = "HandGrab", .field = "lastThrow", .marker = ""},
+    {.component = "HandGrab", .field = "predicted", .marker = ""},
     {.component = "HandGrab", .field = "lastTarget", .marker = ""},
     {.component = "HandGrab", .field = "scoopSource", .marker = ""},
     {.component = "HandGrab", .field = "scoopTurns", .marker = ""},
@@ -322,6 +333,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "offeredTo", .marker = ""},
     {.component = "HandGrab", .field = "offer", .marker = ""},
     {.component = "HandGrab", .field = "givenTo", .marker = ""},
+    {.component = "HandGrab", .field = "callingOff", .marker = ""},
     {.component = "HandGrab", .field = "offerTurn", .marker = ""},
     {.component = "HandGrab", .field = "lastHand", .marker = ""},
     // The frames bend the trees away from what moves near them, and only the frames read the bend
@@ -354,6 +366,11 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The creature's bones as the frame draws them, between the poses of its last two turns. The turns read the pose of
     // the newest turn.
     {.component = "CreatureAnimation", .field = "boneMatrices", .marker = ""},
+    // The blended animations of a creature are a store of blends made the first time that something asks for them: a
+    // turn, or a frame that finds where the creature's hand takes a gift. A blend comes only from the species and the
+    // drawn body, which only a turn changes, and a change of the body empties the store. Thus a turn reads the same
+    // blend whoever made it, and only which blends the store keeps can differ.
+    {.component = "CreatureAnimation", .field = "animations", .marker = ""},
     // Where the frame draws a walking creature between its last two turns. The turns go by its Transform and slots.
     {.component = "CreatureAnimation", .field = "drawnPlace", .marker = ""},
     // Where the frame draws the thing in a creature's hand. The turns go by its Transform.
@@ -364,10 +381,19 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "CreatureDrawnFeet", .field = "", .marker = ""},
     // The creature's skins as the frames paint them for the renderer
     {.component = "CreatureSkin", .field = "", .marker = ""},
+    // The skin paints the tattoos that the tattoo editor shows, and the masks of the player, in the frames. The turns put
+    // the slots and the block of pictures on the creature (player_commands::CreatureTattoo) and read only those.
+    {.component = "CreatureTattoos", .field = "shown", .marker = ""},
+    {.component = "CreatureTattoos", .field = "picturesShown", .marker = ""},
+    {.component = "CreatureTattoos", .field = "shownPictures", .marker = ""},
+    {.component = "CreatureTattoos", .field = "revision", .marker = ""},
+    {.component = "TattooMasks", .field = "", .marker = ""},
     // Whether an object's sound is on: the frames turn the street lanterns' sounds on at dusk, and only the sounds read it
     {.component = "SoundTag", .field = "active", .marker = ""},
     // The sound that the audio of this computer plays for a tag. A server with no audio plays none.
     {.component = "SoundTag", .field = "emitter", .marker = ""},
+	// The dust of a reward chest: the C library's random numbers place it, and the frames fade it. Only the draw reads it.
+	{.component = "Reward", .field = "dust", .marker = ""},
     // The frames draw a reward chest that falls between its last two turns. The turns go by its Transform and clock.
     {.component = "Reward", .field = "drawn", .marker = ""},
     // The lid of an opened chest lifts in the frames that draw it, and its dust fades in the frames
@@ -447,6 +473,16 @@ std::vector<std::string> UnregisteredReporter::Fresh(std::span<const std::string
 		}
 	}
 	return fresh;
+}
+
+uint64_t MixValues(uint64_t stateHash, std::span<const int64_t> values)
+{
+	uint64_t hash = stateHash;
+	for (const auto value : values)
+	{
+		Mix(hash, &value, sizeof(value));
+	}
+	return hash;
 }
 
 uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws)

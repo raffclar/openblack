@@ -43,6 +43,9 @@ public:
 	virtual void ShowLoadingFrame() = 0;
 	/// The load is complete and the loading screen goes
 	virtual void EndLoadingScreen() = 0;
+	/// A load with no loading screen is complete: the view prepares the work of the first frame, as at the end of a
+	/// loading screen, but draws no frame
+	virtual void EndLoadWithoutScreen() = 0;
 	/// Closes the start-of-game question with no answer. Gives true when the question was open.
 	virtual bool WithdrawSkipBox() = 0;
 	/// Closes the menu before the land changes
@@ -69,6 +72,7 @@ public:
 	void BeginLoadingScreen(loading::LoadingClock::Mode /*look*/) override {}
 	void ShowLoadingFrame() override {}
 	void EndLoadingScreen() override {}
+	void EndLoadWithoutScreen() override {}
 	bool WithdrawSkipBox() override { return false; }
 	void CloseMenuForNewLand() override {}
 	void MakeSymbolSheet() override {}

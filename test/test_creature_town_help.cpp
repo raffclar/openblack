@@ -255,3 +255,14 @@ TEST(CreatureTownHelp, PlayingWithVillagers)
 	EXPECT_FALSE(kiss[2].object.has_value());
 	EXPECT_EQ(HandsNeededFor(kiss[2]), HandsNeed::Any);
 }
+
+// Each player watches its own creatures, also a computer god with no hands. Only in a game alone does the local player
+// watch a creature of no player.
+TEST(CreatureTownHelp, ThePlayerOfACreatureWatchesIt)
+{
+	using creature_town_help::WatchingPlayer;
+	EXPECT_EQ(WatchingPlayer(PlayerNames::PLAYER_TWO, false, PlayerNames::PLAYER_ONE), PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(WatchingPlayer(PlayerNames::PLAYER_THREE, true, PlayerNames::PLAYER_ONE), PlayerNames::PLAYER_THREE);
+	EXPECT_EQ(WatchingPlayer(PlayerNames::NEUTRAL, false, PlayerNames::PLAYER_ONE), PlayerNames::PLAYER_ONE);
+	EXPECT_FALSE(WatchingPlayer(PlayerNames::NEUTRAL, true, PlayerNames::PLAYER_ONE).has_value());
+}

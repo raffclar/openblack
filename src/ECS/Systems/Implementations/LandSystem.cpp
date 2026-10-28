@@ -36,6 +36,7 @@
 #include "3D/GodsRingLand.h"
 #include "3D/LandData.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandReuse.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
@@ -69,6 +70,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -109,6 +111,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -534,14 +537,35 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 {
 	const InspectorLoading loading(landPath.filename().generic_string());
 	LoadTimer timer(fmt::format("saved land {}", landPath.stem().string()));
-	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
+	// A world state of the land that is open keeps the land: the landscape is the same, so only the altitudes that the
+	// world changed go back. The world loads its own changes after. The load is short and shows no loading screen.
+	const bool builtByGame = landPath == k_TestbedLandPath || gods_ring_map::IsThisMap(landPath.generic_string());
+	const bool keepsLand = land_reuse::KeepsLand({
+	    .worldState = use == SavedLandUse::WorldState,
+	    .landLoaded = Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded(),
+	    .openLand = _landPath,
+	    .openLandscape = _landscapePath,
+	    .savedLand = landPath,
+	    .savedLandscape = landscape,
+	    .builtByGame = builtByGame,
+	});
+	if (!keepsLand)
+	{
+		View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
+	}
 	PrepareNewLand(land_change::Kind::SavedGame);
 	_landPath = landPath;
+	timer.Step("reset");
 	View().ShowLoadingFrame();
 	try
 	{
+		if (keepsLand)
+		{
+			InitializeLevelOnOpenLand();
+			SetUpLandscape();
+		}
 		// The testbed's flat land comes from no file: it is built again
-		if (landPath == k_TestbedLandPath)
+		else if (landPath == k_TestbedLandPath)
 		{
 			InitializeLevel(flat_land::Build());
 			SetUpLandscape();
@@ -615,6 +639,7 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	}
 	RemakeModelsAfterLoad();
 	registry.SetDirty();
+	timer.Step("found again");
 	// Each load of a saved game starts a game. The world of a game server continues as the server has it.
 	if (use == SavedLandUse::SavedGame)
 	{
@@ -630,8 +655,24 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// save keeps no symbol.
 	View().MakeSymbolSheet();
 	View().ShowLoadingFrame();
+	// The creatures' map of the land that the saved world brings stays: the start of the land makes the map from the towns
+	// of now, but the saved world made it from the towns at the start. A save with no map gets the map of now.
+	auto exploration = std::move(registry.Context().explorationMap);
 	StartNewLand(land_change::Kind::SavedGame);
-	View().EndLoadingScreen();
+	if (exploration.has_value())
+	{
+		registry.Context().explorationMap = std::move(exploration);
+	}
+	timer.Step("start");
+	if (keepsLand)
+	{
+		View().EndLoadWithoutScreen();
+	}
+	else
+	{
+		View().EndLoadingScreen();
+	}
+	timer.Step("first frames");
 	return restored;
 }
 
@@ -822,6 +863,10 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	// Nor the beat of its scrolls
 	Locator::scriptHighlightSystem::value().Reset();
 	Locator::tipBubbleSystem::value().Reset();
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().Reset();
+	}
 	Locator::handDemoSystem::value().Reset();
 	// The commands that the players made on the old land do nothing on the new land
 	Locator::playerCommandSystem::value().Reset();
@@ -960,6 +1005,11 @@ void LandSystem::StartNewLand(land_change::Kind change)
 		// The game starts running, at the normal speed, as Black & White does
 		clock.StartGameClock(false);
 		clock.SetSpeed(1.0f / k_NormalTurnDurationMultiplier);
+	}
+	// A new land starts with no music of the scripts
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		Locator::scriptMusicSystem::value().Reset();
 	}
 	View().StartLandAudio();
 }
@@ -1195,6 +1245,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		}
 		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn). A second
 		// turn in the frame follows the turn before it at once: the frame steps only draw, so none come between them.
+		// The tools that act by the turns act first, so that each computer of a network game does them before the same
+		// turn.
+		view.BeforeTurn();
 		simulation::PlayTurn(view);
 
 		_lastGameLoopTime = currentTime;

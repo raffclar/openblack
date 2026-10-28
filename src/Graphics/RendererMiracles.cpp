@@ -125,8 +125,12 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 			}
 		}
 		const float pulse = visuals::PhialPulse(shown.phialPhase);
-		const auto draws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
-		                         : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = 255, .landLit = true}};
+		// A seed that is not a phial takes the light of the land, unless it is drawn at once. A seed drawn at once has the
+		// alpha that it is drawn at. A phial is lit and faded in the same way when it is drawn at once.
+		const uint8_t seedAlpha = shown.drawnAtOnce ? shown.phialAlpha : std::numeric_limits<uint8_t>::max();
+		const auto draws =
+		    phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
+		          : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = seedAlpha, .landLit = !shown.drawnAtOnce}};
 		const auto shape = phial ? visuals::PhialScale(receiveType, shown.phialPhase) : glm::vec3(1.0f);
 		const bool environmentMapped = environment != nullptr && (phial || shown.seed == SpellSeedType::Food);
 		const bool added = shown.seed == k_AddedSeed;

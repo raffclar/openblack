@@ -50,10 +50,17 @@ public:
 	/// every computer of a network game. The frames, the input and the sounds of a computer use the player of that
 	/// computer instead (see HandSystemInterface::GetOwnPlayer).
 	[[nodiscard]] virtual PlayerNames GetLocalPlayer() const { return PlayerNames::PLAYER_ONE; }
-	/// Whether the computer plays a player (see player_kind::IsComputer)
+	/// Whether a computer mind plays a player (see player_kind::IsComputer). A player that nobody plays is not a computer
+	/// player.
 	[[nodiscard]] virtual bool IsComputerPlayer(PlayerNames name) const
 	{
 		return player_kind::IsComputer({.player = name, .networkGame = false, .computerMind = false});
+	}
+	/// Whether a person plays a player (see player_kind::IsHuman). A computer god is not a human player, also when it
+	/// has hands.
+	[[nodiscard]] virtual bool IsHumanPlayer(PlayerNames name) const
+	{
+		return player_kind::IsHuman({.player = name, .networkGame = false, .computerMind = false});
 	}
 };
 } // namespace openblack::ecs::systems

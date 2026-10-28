@@ -104,6 +104,7 @@ void IntroSystem::Play(int32_t special)
 		// A new light falls; one still falling is forgotten, as the game forgets it
 		_stage = Stage::Falling;
 		_light = light::Make(rules::k_BoySpot, rules::k_LightWay, CrtRandom);
+		_liftClock = rules::LiftClock {};
 		_holdingBoy = false;
 		// The hand that lifts the boy is made now, in the turn, and the frames show it once the light lands
 		MakeHiddenHand();
@@ -132,6 +133,7 @@ void IntroSystem::Play(int32_t special)
 		MakeHand(k_SetDownClip);
 		PlaceHand(rules::k_PutDownSpot, rules::PutDownYaw());
 		_stage = Stage::SettingDown;
+		_liftClock.reset();
 		return;
 	case 5:
 		if (_stage != Stage::SettingDown)
@@ -159,6 +161,7 @@ void IntroSystem::Play(int32_t special)
 void IntroSystem::ReleaseAll()
 {
 	_light.reset();
+	_liftClock.reset();
 	FreeHand();
 	_handPlaying = false;
 	_cameraChasing = false;
@@ -351,6 +354,25 @@ void IntroSystem::PlaceFollowers()
 	});
 }
 
+void IntroSystem::ProcessTurn(uint32_t milliseconds)
+{
+	if (!_liftClock.has_value() || !Locator::resources::has_value())
+	{
+		return;
+	}
+	// The hand without its clip never comes round
+	const auto id = LoadMisc(Locator::resources::value().GetAnimations(), k_LiftClip);
+	const auto* clip = id.has_value() ? ClipOf(*id) : nullptr;
+	if (clip == nullptr)
+	{
+		return;
+	}
+	if (rules::StepLiftClock(*_liftClock, milliseconds, static_cast<int32_t>(clip->GetPlayTime()), clip->IsLooping()))
+	{
+		_liftFinished = true;
+	}
+}
+
 void IntroSystem::Update(uint32_t milliseconds)
 {
 	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
@@ -418,9 +440,10 @@ void IntroSystem::Update(uint32_t milliseconds)
 		{
 			stepLight();
 		}
-		if (_liftGo != 0 && AdvanceHand(milliseconds))
+		// The turns find when the clip comes round, for the scripts
+		if (_liftGo != 0)
 		{
-			_liftFinished = true;
+			static_cast<void>(AdvanceHand(milliseconds));
 		}
 		PlaceHand(rules::k_PickUpSpot, rules::k_PickUpYaw);
 		break;

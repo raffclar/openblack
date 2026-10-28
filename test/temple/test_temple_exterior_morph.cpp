@@ -125,11 +125,23 @@ TEST(TempleExteriorMorph, TheMeshIsBlendedAgainWhenItIsNotLoaded)
 	EXPECT_TRUE(NeedsBlend(look, look, false));
 }
 
-// After a load each temple with a kept look gets a new blend, also when the cache has a mesh of the same name. A network
-// game loads the server's world over a world that this computer blended for another look.
+// After a load each temple with a kept look gets a new blend when the cache has no blend of its own. A network game
+// loads the server's world over a world that this computer blended for another look.
 TEST(TempleExteriorMorph, EveryTempleWithALookIsBlendedAgainAfterALoad)
 {
-	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}));
-	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.0f, 0.0f}));
-	EXPECT_FALSE(BlendsAfterLoad(std::nullopt));
+	const Blend wanted {.look = {0.2f, 0.5f}, .textureSet = 1};
+	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}, std::nullopt, wanted));
+	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.0f, 0.0f}, std::nullopt, wanted));
+	EXPECT_FALSE(BlendsAfterLoad(std::nullopt, std::nullopt, wanted));
+}
+
+// A load of a world state over the same world keeps each mesh that the cache blended for the same look and textures.
+// A mesh of another look or of another player's textures is blended again.
+TEST(TempleExteriorMorph, AMeshInTheCacheOfTheSameBlendStaysAfterALoad)
+{
+	const Blend wanted {.look = {0.2f, 0.5f}, .textureSet = 1};
+	EXPECT_FALSE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}, wanted, wanted));
+	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}, Blend {.look = {0.2f, 0.6f}, .textureSet = 1}, wanted));
+	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}, Blend {.look = {0.3f, 0.5f}, .textureSet = 1}, wanted));
+	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}, Blend {.look = {0.2f, 0.5f}, .textureSet = 2}, wanted));
 }

@@ -63,6 +63,15 @@ struct Lengths
 /// Whether taking the leash off lets go of the desire made dominant: yes, unless the leash its player has chosen is the
 /// learning leash. The other desires are then free again at once.
 [[nodiscard]] bool TakingOffEndsDominantDesire(LeashType chosen);
+/// What a leash that goes on, or a change of the worn leash, does to one of the player's leashes on the temple:
+/// - The leash on the temple of the same kind becomes the picked one (true).
+/// - The other two leashes on the temple are not picked (false).
+/// - A kind that the temple does not hang (no leash) keeps the picked leash as it is (no value).
+/// The player must have a temple with its leashes. A leash that comes off keeps the picked leash.
+[[nodiscard]] std::optional<bool> PostPickedFor(LeashType post, LeashType worn);
+/// Whether the player can change the leash of their creature. The player cannot do this while a nice or nasty spell
+/// is on the creature. The nice and nasty spells themselves change the leash, and the player cannot change it back.
+[[nodiscard]] bool PlayerCanChangeType(bool niceSpellOn, bool nastySpellOn);
 /// How long the leash's desire holds the creature's other desires (but its bodily needs) down, in seconds
 constexpr float k_ForcedDesireSeconds = 36000.0f;
 /// How long a creature tied to a village it wants to impress holds its other desires down, in seconds

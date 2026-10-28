@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -171,4 +172,59 @@ TEST(VillageVoices, TheScoreOfADesireVoice)
 	EXPECT_FLOAT_EQ(
 	    DesireVoiceScore({.turnsSinceHeard = 25, .turnsSinceSeen = 0, .distance = 0.0f, .desire = 1.0f, .sameAsLast = true}),
 	    0.125f);
+}
+
+TEST(VillageVoices, AVoiceOfAweNeedsAnotherPlayerToLead)
+{
+	// The player leads, or the beliefs are equal: no voice
+	EXPECT_FALSE(BeliefVoiceShare(std::array {0.5f, 0.2f, 0.0f}, 0).has_value());
+	EXPECT_FALSE(BeliefVoiceShare(std::array {0.5f, 0.5f, 0.0f}, 1).has_value());
+	// Another player leads: the share against the most belief, with the small amount added to the two
+	const auto share = BeliefVoiceShare(std::array {0.0f, 0.2f, 0.8f}, 1);
+	ASSERT_TRUE(share.has_value());
+	EXPECT_EQ(*share, (0.2f + 0.0001f) / (0.8f + 0.0001f));
+	// A town with no belief in the player still gives a small share
+	EXPECT_GT(*BeliefVoiceShare(std::array {0.0f, 0.0f, 1.0f}, 0), 0.0f);
+}
+
+TEST(VillageVoices, TheDrawOffTheShareIsAThird)
+{
+	// The game multiplies by the float nearest a third; it does not divide by three
+	EXPECT_EQ(BeliefVoiceDrawLimit(0.7f), 0.7f * 0.333333343f);
+	EXPECT_EQ(BeliefVoiceDrawLimit(0.0f), 0.0f);
+}
+
+TEST(VillageVoices, TheLeftSharePicksTheVoiceOfAwe)
+{
+	EXPECT_EQ(BeliefVoice(GuidanceAlignment::Good, 0.7f), 187u);
+	EXPECT_EQ(BeliefVoice(GuidanceAlignment::Good, 0.69f), 188u);
+	EXPECT_EQ(BeliefVoice(GuidanceAlignment::Good, 0.4f), 188u);
+	EXPECT_EQ(BeliefVoice(GuidanceAlignment::Good, 0.39f), 189u);
+	EXPECT_EQ(BeliefVoice(GuidanceAlignment::Evil, 1.0f), 174u);
+	EXPECT_EQ(BeliefVoice(GuidanceAlignment::Evil, 0.5f), 175u);
+	EXPECT_EQ(BeliefVoice(GuidanceAlignment::Evil, 0.06f), 176u);
+	// The third voice needs more than 0.05
+	EXPECT_FALSE(BeliefVoice(GuidanceAlignment::Good, 0.05f).has_value());
+	EXPECT_FALSE(BeliefVoice(GuidanceAlignment::Evil, 0.0f).has_value());
+	// Only good or evil has voices
+	EXPECT_FALSE(BeliefVoice(GuidanceAlignment::None, 1.0f).has_value());
+}
+
+TEST(VillageVoices, TheWantOfAVoiceOfAwe)
+{
+	// At the point under the cursor, 50 turns or more since the last town desire voice: wanted in full
+	EXPECT_EQ(BeliefVoiceWanted(50, 0.0f, false), 1.0f);
+	EXPECT_EQ(BeliefVoiceWanted(5000, 0.0f, false), 1.0f);
+	// At 200 metres or more, or just after a town desire voice: not wanted
+	EXPECT_EQ(BeliefVoiceWanted(50, 200.0f, false), 0.0f);
+	EXPECT_EQ(BeliefVoiceWanted(50, 300.0f, false), 0.0f);
+	EXPECT_EQ(BeliefVoiceWanted(0, 0.0f, false), 0.0f);
+	// Half the distance takes a quarter off; half the time halves it
+	EXPECT_EQ(BeliefVoiceWanted(50, 100.0f, false), 0.75f);
+	EXPECT_EQ(BeliefVoiceWanted(25, 100.0f, false), 0.375f);
+	// The same voice again needs the time to the fourth power
+	EXPECT_EQ(BeliefVoiceWanted(25, 0.0f, true), 0.0625f);
+	// The least want that plays a voice
+	EXPECT_FALSE(BeliefVoiceWanted(15, 0.0f, false) > k_BeliefVoiceLeast);
+	EXPECT_TRUE(BeliefVoiceWanted(16, 0.0f, false) > k_BeliefVoiceLeast);
 }

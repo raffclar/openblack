@@ -107,6 +107,15 @@ std::vector<Record> music_mood::FromMindFile(std::span<const creaturemind::MindD
 	return records;
 }
 
+Listen music_mood::ForGame(bool networkGame, Listen player)
+{
+	if (networkGame)
+	{
+		return []() -> std::optional<uint32_t> { return std::nullopt; };
+	}
+	return player;
+}
+
 std::optional<Packet> Controller::Turn(float seconds, bool reset, const Listen& listen, std::optional<Emotion> feelings,
                                        int64_t now)
 {
