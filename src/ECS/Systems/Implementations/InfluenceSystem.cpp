@@ -47,6 +47,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -177,43 +178,29 @@ float CitadelReach(entt::entity temple)
 	return Globals().playerInfluenceMultiplier * reach;
 }
 
-/// The player's hand in the world, if it is in it, as the reports of the player put it. The turns measure from here.
-std::optional<glm::vec3> ReportedHandPosition()
-{
-	if (!Locator::handSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-}
-
 /// This computer's hand where the frames draw it, if it is in the world. Only the frames of this computer measure from
 /// here.
 std::optional<glm::vec3> HandPosition()
 {
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetDrawnHandPosition() : std::nullopt;
+}
+
+/// Where a player's hand is in the world, as the reports of the player put it. The turns measure from here. Each god
+/// with a hand has one: the first player's, and each god of a network game. The computer's gods have no hand in the
+/// world yet, so theirs keep nothing past the border.
+std::optional<glm::vec3> HandOf(PlayerNames player)
+{
 	if (!Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	const auto* transform = registry.TryGet<const Transform>(hand);
-	if (transform == nullptr || transform->position == glm::vec3(0.0f))
-	{
-		return std::nullopt;
-	}
-	return transform->position;
+	return Locator::handSystem::value().GetHandPositionsOf(player)[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 
-/// Where a player's hand is in the world: this computer's player's is the hand that the reports put. The computer's
-/// gods have no hand in the world yet, so theirs keep nothing past the border.
-std::optional<glm::vec3> HandOf(PlayerNames player)
+/// The player whose hand this computer moves and draws. Only the frames of this computer ask.
+PlayerNames OwnPlayer()
 {
-	if (!Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() != player)
-	{
-		return std::nullopt;
-	}
-	return ReportedHandPosition();
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
 /// A player's entity on this land, if they are on it
@@ -575,7 +562,7 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	{
 		return;
 	}
-	const auto player = Locator::playerSystem::value().GetLocalPlayer();
+	const auto player = OwnPlayer();
 	const auto entity = Locator::playerSystem::value().FindPlayer(player);
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!entity.has_value() || !registry.Valid(*entity) || !registry.AnyOf<VirtualInfluence>(*entity))
@@ -722,7 +709,7 @@ float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::Map
 		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
 		// player's are measured from where their hand is now
 		auto hand = state->turnHand;
-		if (!_inGameTurn && Locator::playerSystem::has_value() && Locator::playerSystem::value().GetLocalPlayer() == player)
+		if (!_inGameTurn && player == OwnPlayer())
 		{
 			if (const auto live = HandPosition(); live.has_value())
 			{
@@ -761,10 +748,12 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	const auto distanceTo = [&position](const glm::vec3& point) {
 		return gutils::GetDistanceInMetres(map_coords::FromMetres({point.x, point.z}), position);
 	};
-	// In a network game a player with no temple has no influence at all
+	// In a network game a player with no temple has no influence at all. A developer tool's network game on the testbed,
+	// which has no temples, is the exception: its hands could do nothing else.
 	const bool hasTemple = Citadels().at(static_cast<size_t>(player)) != entt::null;
-	if (!openblack::influence_rules::CanHaveInfluence(Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
-	                                                  hasTemple))
+	const bool testbed = Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed();
+	if (!openblack::influence_rules::CanHaveInfluence(
+	        Locator::time::has_value() && Locator::time::value().IsNetworkGame() && !testbed, hasTemple))
 	{
 		return 0.0f;
 	}

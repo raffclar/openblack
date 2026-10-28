@@ -24,6 +24,7 @@
 #include "ECS/AltarOffering.h"
 #include "Enums.h"
 #include "HandGrabRules.h"
+#include "ThrowLead.h"
 
 namespace openblack::ecs
 {
@@ -241,20 +242,35 @@ public:
 	[[nodiscard]] virtual std::vector<PlayerNames> OtherHandPlayers() const { return {}; }
 	/// Whether a hand is the hand of another player of a network game, which this computer does not move or draw
 	[[nodiscard]] virtual bool IsOtherPlayersHand([[maybe_unused]] entt::entity hand) const { return false; }
+	/// The player of a hand that a god of a network game has, none for a hand of the first player
+	[[nodiscard]] virtual std::optional<PlayerNames> PlayerOfHand([[maybe_unused]] entt::entity hand) const
+	{
+		return std::nullopt;
+	}
 	/// A point as the game keeps a place on the map: the ground under it, the height above the ground and the place on
 	/// the map's grid of fixed points
 	[[nodiscard]] virtual glm::vec3 AsMapPlace(glm::vec3 point) const { return point; }
 	virtual void SetPose(entt::entity object, const Pose& pose) = 0;
 	/// The pose that the frames draw a thing in while the hand pulls at it. The world keeps the thing as it stood.
 	virtual void DrawPulledPose(entt::entity object, const Pose& pose) { SetPose(object, pose); }
-	/// The frames draw the thing at its own place again, as the pull ends
+	/// The frames draw the thing at its own place again: at the take, at the start of a new pull, and at the let go in a
+	/// network game
 	virtual void ForgetPulledPose([[maybe_unused]] entt::entity object) {}
 	/// A thing's axes at its own size, as they are once it stops being stretched
 	[[nodiscard]] virtual glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const = 0;
 
-	/// Letting go, on the computer of the player that lets go: where the thing starts as it leaves the hand. The thing
-	/// starts as this computer last drew it, comes up out of the land, and lies along the land or not.
-	[[nodiscard]] virtual player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) = 0;
+	/// Letting go, on the computer of the player that lets go: where the thing starts as it leaves the hand, and its
+	/// velocity. The thing starts as this computer last drew it, comes up out of the land, and lies along the land or
+	/// not. Then it flies for the turns of lead.
+	[[nodiscard]] virtual throw_lead::LedThrow ThrowStartOf(entt::entity object, bool alignToSlope, glm::vec3 velocity,
+	                                                        int leadTurns) = 0;
+	/// The latency of the reports of this computer's hand, in milliseconds (see throw_lead::ReportLatency)
+	[[nodiscard]] virtual uint32_t ReportLatencyMs() const { return 0; }
+	/// The turn that the frames of this computer are in, and how far through it they are
+	[[nodiscard]] virtual uint32_t FrameTurn() const { return 0; }
+	[[nodiscard]] virtual float FrameTurnFraction() const { return 0.0f; }
+	/// The frames draw a thing that this computer threw at a place on the flight of its lead. The axes have no size.
+	virtual void DrawThrownPose([[maybe_unused]] entt::entity object, [[maybe_unused]] const physics::Pose& pose) {}
 	/// Letting go, on every computer: the thing goes to the start that the command has, at its own size
 	virtual void StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start) = 0;
 	/// A pot let go slowly is poured out where it is: what it holds goes to what takes it there or into a pile, and the

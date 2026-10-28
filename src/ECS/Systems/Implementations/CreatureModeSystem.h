@@ -39,7 +39,7 @@ public:
 	void Update(std::chrono::microseconds dt, const Frame& frame) override;
 	bool Press(const creature_mode::Press& press) override;
 	void PressCreatureKey() override;
-	bool Enter(entt::entity creature) override;
+	bool Enter(entt::entity creature, creature_follow::StartDistance start) override;
 	void Leave() override;
 	[[nodiscard]] bool IsActive() const override { return _creature.has_value(); }
 	[[nodiscard]] std::optional<entt::entity> GetCreature() const override { return _creature; }

@@ -44,5 +44,6 @@ void openblack::ecs::reflection::RegisterFields_Components_o(entt::meta_ctx& con
 	    .Field<&components::OneOffSpellSeed::seedPlacement>("seedPlacement")
 	    .Field<&components::OneOffSpellSeed::drawnModel>("drawnModel")
 	    .Field<&components::OneOffSpellSeed::drawnTurn>("drawnTurn")
+	    .Field<&components::OneOffSpellSeed::flightModel>("flightModel")
 	    .Field<&components::OneOffSpellSeed::dispenser>("dispenser");
 }

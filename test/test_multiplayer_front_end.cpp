@@ -21,17 +21,22 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <LobbyApiJson.h>
 #include <gtest/gtest.h>
 
+#include "Commands/TurnCodec.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Gui/LandThumbnail.h"
 #include "Gui/MultiplayerBoxes.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
 #include "Gui/ScreenFit.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkSession.h"
@@ -262,6 +267,8 @@ struct FrontEndTest: public ::testing::Test
 	FakeLan lan;
 	std::vector<std::string> opened;
 	std::unique_ptr<MultiplayerFrontEnd> frontEnd;
+	/// The ping display of the room, as --show-ping turns it on
+	bool showPing {false};
 
 	void Make(bool withLan = false)
 	{
@@ -282,6 +289,7 @@ struct FrontEndTest: public ::testing::Test
 		    .browser = false,
 		    .localMaps = std::string(k_LocalMaps),
 		    .conditionTemplate = std::string(k_Conditions),
+		    .showPing = showPing,
 		};
 		frontEnd = std::make_unique<MultiplayerFrontEnd>(std::move(services), std::move(settings));
 	}
@@ -378,6 +386,7 @@ TEST(MultiplayerRules, JoinFailuresGiveTheGamesMessages)
 	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "email_required"), Message::EmailRequired);
 	EXPECT_EQ(JoinFailureMessage("already", LobbyKind::Internet), Message::AlreadyInRoom);
 	EXPECT_EQ(JoinFailureMessage("started", LobbyKind::Internet), Message::ConnectionFailed);
+	EXPECT_EQ(JoinFailureMessage("kicked", LobbyKind::Internet), Message::ConnectionFailed);
 	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Internet), Message::ConnectionFailed);
 	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Lan), Message::CouldNotConnect);
 	EXPECT_EQ(ButtonsOf(Message::IncorrectPassword), MessageButtons::Ok);
@@ -395,6 +404,23 @@ TEST(MultiplayerRules, FormatTextFillsTheCodesInOrder)
 	EXPECT_EQ(FormatText(u"%s and %s", std::span<const TextArgument>(arguments).first(1)), u"Alice and %s");
 	EXPECT_EQ(TimeLimitText(90), u"1:30");
 	EXPECT_EQ(TimeLimitText(5), u"0:05");
+	EXPECT_EQ(TimeLimitText(k_DefaultTimeLimitMinutes), u"0:30");
+}
+
+TEST(MultiplayerRules, TheConditionsPageOfAPlayerWhoIsNotTheHost)
+{
+	// With a land: the list of the game's conditions, the time limit and View Chat
+	constexpr auto withLand = ConditionsPageOf(true);
+	EXPECT_FALSE(withLand.selectMap);
+	EXPECT_TRUE(withLand.conditions);
+	EXPECT_TRUE(withLand.timeLimit);
+	EXPECT_TRUE(withLand.viewChat);
+	// With no land: only "Please select a map first."
+	constexpr auto noLand = ConditionsPageOf(false);
+	EXPECT_TRUE(noLand.selectMap);
+	EXPECT_FALSE(noLand.conditions);
+	EXPECT_FALSE(noLand.timeLimit);
+	EXPECT_FALSE(noLand.viewChat);
 }
 
 TEST(MultiplayerRules, GameLinesShowTheStatesOfAGame)
@@ -556,6 +582,12 @@ TEST(MultiplayerRules, ClanLogosKeepSixteenGreys)
 	EXPECT_EQ(logo->at(static_cast<size_t>(k_LogoSize) + 1), 5);
 	// Past the picture the logo has no opacity
 	EXPECT_EQ(logo->at(2), 0);
+	// Each part of a colour goes to the middle of its step of eight before the grey: a blue of 46 gives the grey 17
+	bmp[54 + 12] = 46;
+	bmp[54 + 14] = 0;
+	const auto blue = DecodeClanLogo(bmp);
+	ASSERT_TRUE(blue.has_value());
+	EXPECT_EQ(blue->at(static_cast<size_t>(k_LogoSize) + 1), 1);
 	EXPECT_FALSE(DecodeClanLogo(std::span(bmp).first(20)).has_value());
 }
 
@@ -719,6 +751,8 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(frontEnd->GetOwnSeat()->god, 2);
 	EXPECT_EQ(frontEnd->GetServerLand(), 0u);
 	ASSERT_TRUE(frontEnd->GetConditions().has_value());
+	// The game server sends no time limit, so the game's default of 30 minutes shows
+	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
 	// Back leaves the room and its channel, and the server gets the leave
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
@@ -815,6 +849,24 @@ TEST_F(FrontEndTest, TheServerRefusesAnAccountThatIsInTheRoom)
 	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "already"}));
 	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::AlreadyInRoom);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_FALSE(frontEnd->IsBusy());
+}
+
+TEST_F(FrontEndTest, AJoinThatTheServerRefusesForABanShowsConnectionFailed)
+{
+	// The game server refuses the join of a banned god with a kick. The player was not in the room, so the game shows
+	// the failed join, as the channel of a host refuses a banned player.
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "kicked"}));
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
 	EXPECT_FALSE(frontEnd->IsBusy());
 }
@@ -1057,6 +1109,26 @@ TEST(MultiplayerRules, The32GodsHaveDistinctReadableChatColours)
 		const auto contrast = (Luminance(GodColourBits(god)) + 0.05) / 0.05;
 		EXPECT_GE(contrast, 4.5) << "god " << god;
 	}
+}
+
+TEST(MultiplayerRules, TheRoomAndTheLandShowGodsThreeAndFourInOtherColours)
+{
+	// Nobody picks a colour: the god's slot gives it. The room shows a god in the colour of its team, and the land shows
+	// it in the colour of its player. The network lands have the land number 0, so the land takes the colours of the
+	// players as they are. Gods 1 and 2 are red and green in both. God 3 is blue in the room but magenta on the land,
+	// and god 4 is yellow in the room but cyan on the land, as in the game (vanilla-bugs 478).
+	constexpr int32_t k_NetworkLand = 0;
+	const auto onLand = [](int32_t god) {
+		return openblack::player_colour::OnLand(static_cast<openblack::PlayerNames>(god - 1), k_NetworkLand);
+	};
+	EXPECT_EQ(GodColourBits(1), 0xFFFF0000u);
+	EXPECT_EQ(onLand(1), 0xFFFF4646u);
+	EXPECT_EQ(GodColourBits(2), 0xFF00FF00u);
+	EXPECT_EQ(onLand(2), 0xFF47FF54u);
+	EXPECT_EQ(GodColourBits(3), 0xFF0000FFu);
+	EXPECT_EQ(onLand(3), 0xFFE347FFu);
+	EXPECT_EQ(GodColourBits(4), 0xFFFFFF00u);
+	EXPECT_EQ(onLand(4), 0xFF47F9FFu);
 }
 
 namespace
@@ -1338,4 +1410,130 @@ TEST_F(FrontEndTest, NoControlOfTheGameListGoesUnderRefreshList)
 	boxes.GetFrontEnd()->SelectGame(0);
 	boxes.Update(0.0f);
 	check("a game picked");
+}
+
+TEST(MultiplayerRules, PlayerDetailsShowTheLinesOfThePlayerDatabase)
+{
+	const std::array<PlayerDetail, 2> details {{{.label = u"Points", .value = u"12"}, {.label = u"Country", .value = u"gb"}}};
+	EXPECT_EQ(PlayerDetailLines(details), (std::vector<std::u16string> {u"Points:12", u"Country:gb"}));
+	EXPECT_TRUE(PlayerDetailLines({}).empty());
+}
+
+namespace
+{
+/// A BMP file of one white pixel, 24 bits a pixel
+std::vector<uint8_t> WhitePixelBmp()
+{
+	std::vector<uint8_t> bmp(54 + 4, 0);
+	const auto put32 = [&bmp](size_t at, uint32_t value) {
+		for (size_t i = 0; i < 4; ++i)
+		{
+			bmp[at + i] = static_cast<uint8_t>(value >> (i * 8));
+		}
+	};
+	bmp[0] = 'B';
+	bmp[1] = 'M';
+	put32(10, 54);
+	put32(14, 40);
+	put32(18, 1);
+	put32(22, 1);
+	bmp[26] = 1;
+	bmp[28] = 24;
+	bmp[54] = 0xFF;
+	bmp[55] = 0xFF;
+	bmp[56] = 0xFF;
+	return bmp;
+}
+
+bool Inside(const DialogRect& inner, const DialogRect& outer)
+{
+	return inner.min.x >= outer.min.x && inner.min.y >= outer.min.y && inner.max.x <= outer.max.x && inner.max.y <= outer.max.y;
+}
+
+bool Crosses(const DialogRect& a, const DialogRect& b)
+{
+	return a.min.x < b.max.x && b.min.x < a.max.x && a.min.y < b.max.y && b.min.y < a.max.y;
+}
+} // namespace
+
+TEST_F(FrontEndTest, TheRoomsPicturesAreInTheFrameOfTheRoom)
+{
+	const auto texts = ButtonTexts();
+	const auto font = gui::test::LoadFont();
+	MultiplayerBoxes boxes {texts, font};
+	std::vector<std::string> asked;
+	boxes.SetThumbnailSource([&asked](const std::string& file) {
+		asked.push_back(file);
+		return std::make_shared<const land_thumbnail::LandThumbnail>(
+		    land_thumbnail::LandThumbnail {.texture = nullptr, .side = 74, .description = "A land"});
+	});
+	ToRoom();
+	boxes.Open(std::move(frontEnd));
+	auto& room = *boxes.GetFrontEnd();
+	const auto frame = MultiplayerBoxes::FrameOf(Box::Room);
+
+	// The Landscape tab shows the thumbnail of the land picked, between the two lists
+	room.SelectTab(RoomTab::Landscape);
+	room.ShowLand(0);
+	boxes.Update(0.0f);
+	ASSERT_FALSE(asked.empty());
+	EXPECT_EQ(asked.back(), room.GetLocalMaps()[0].file);
+	ASSERT_EQ(boxes.GetPictureRects(), std::vector<DialogRect> {land_thumbnail::k_Place});
+	EXPECT_TRUE(Inside(land_thumbnail::k_Place, frame));
+	const auto rects = boxes.GetVisibleRects();
+	// No control of the tab is at the place of the picture
+	EXPECT_EQ(std::ranges::count_if(rects, [](const DialogRect& rect) { return Crosses(rect, land_thumbnail::k_Place); }), 0);
+
+	// No other tab shows it
+	room.SelectTab(RoomTab::Chat);
+	boxes.Update(0.0f);
+	EXPECT_TRUE(boxes.GetPictureRects().empty());
+
+	// The Clans tab shows the logo of the clan picked, inside the clan's information
+	FakeLobby::Give(lobby.myClans, lobby_api::ClanList {.clans = {{.id = 4, .name = "The Clan", .points = 0.0}}});
+	room.ShowClan(0);
+	FakeLobby::Give(lobby.clan, lobby_api::ClanDetails {.id = 4, .name = "The Clan"});
+	FakeLobby::Give(lobby.logo, WhitePixelBmp());
+	room.SelectTab(RoomTab::Clans);
+	boxes.Update(0.0f);
+	const DialogRect info {.min = {410, 410}, .max = {660, 530}};
+	ASSERT_EQ(boxes.GetPictureRects(), std::vector<DialogRect> {land_thumbnail::LogoPlace(info)});
+	EXPECT_TRUE(Inside(land_thumbnail::LogoPlace(info), info));
+	EXPECT_TRUE(Inside(land_thumbnail::LogoPlace(info), frame));
+	// The conditions page shows no picture
+	room.Next();
+	boxes.Update(0.0f);
+	EXPECT_TRUE(boxes.GetPictureRects().empty());
+TEST_F(FrontEndTest, ThePingDisplayIsOffByDefault)
+{
+	ToRoom();
+	EXPECT_FALSE(frontEnd->ShowsPing());
+}
+
+TEST_F(FrontEndTest, TheRoomGivesTheRoundTripOfTheOwnGameSocket)
+{
+	showPing = true;
+	ToRoom();
+	EXPECT_TRUE(frontEnd->ShowsPing());
+	EXPECT_FALSE(frontEnd->GetRoundTrip().has_value());
+	const auto socket = sockets.order.back();
+	sockets.TakeSent(socket);
+	// The session pings the server one second after the join
+	network.now = 1'000'000;
+	Step();
+	std::optional<turn_codec::Ping> ping;
+	for (const auto& sent : sockets.TakeSent(socket))
+	{
+		const auto decoded = sent.text ? turn_codec::DecodeResult {} : turn_codec::Decode(sent.bytes);
+		if (decoded.frame.has_value() && std::holds_alternative<turn_codec::Ping>(*decoded.frame))
+		{
+			ping = std::get<turn_codec::Ping>(*decoded.frame);
+		}
+	}
+	ASSERT_TRUE(ping.has_value());
+	network.now += 48'000;
+	sockets.ServerBinary(socket, turn_codec::Encode(turn_codec::Pong {.id = ping->id, .time = ping->time}));
+	Step();
+	EXPECT_EQ(frontEnd->GetRoundTrip(), 48'000u);
+	EXPECT_EQ(ping_display::Text(frontEnd->GetRoundTrip()), u"ping 48");
 }

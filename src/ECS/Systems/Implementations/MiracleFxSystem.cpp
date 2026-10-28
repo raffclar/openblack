@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <chrono>
 #include <numbers>
 #include <vector>
 
@@ -39,6 +40,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -51,6 +53,7 @@
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Particles/ParticleEffect.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -99,7 +102,7 @@ HandMiracleFx* HandFx()
 		return nullptr;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	if (!registry.Valid(hand) || !registry.AllOf<Hand>(hand))
 	{
 		return nullptr;
@@ -219,8 +222,12 @@ void MiracleFxSystem::PlacePilesOnLand()
 	});
 }
 
-void MiracleFxSystem::UpdateGlobes(float seconds)
+void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime,
+                                   bool landDrawn)
 {
+	const float seconds = std::chrono::duration<float>(std::chrono::duration<float, std::milli>(frameGameTime)).count();
+	// The effects in the globes step at the pace of the screen's refresh
+	const auto holderStep = particles::drawn_steps::StepSeconds(_holderPace, frameRealTime, frameGameTime, landDrawn);
 	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
 	{
 		return;
@@ -244,9 +251,24 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		    // The dome's top faces the camera, turning about the middle of the globe where it is now, so that a globe thrown
 		    // about turns where it flies. Only the draw turns it: the world keeps the globe where the turns put it, so the
 		    // camera does not change the world.
-		    globe.middle = transform.position + transform.rotation * (centre * transform.scale);
-		    const auto facing = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
-		    const auto drawnOrigin = globe.middle - facing * (centre * transform.scale);
+		    // A globe that this computer threw keeps the turn of its flight and does not turn to the camera
+		    glm::mat3 facing(1.0f);
+		    glm::vec3 drawnOrigin(0.0f);
+		    if (globe.flightModel.has_value())
+		    {
+			    facing = glm::mat3(*globe.flightModel);
+			    drawnOrigin = glm::vec3((*globe.flightModel)[3]);
+			    globe.middle = drawnOrigin + facing * (centre * transform.scale);
+			    globe.flightModel.reset();
+		    }
+		    else
+		    {
+			    // A globe in a hand is drawn where the frame draws the hand, not where the turn put it
+			    const auto placed = ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+			    globe.middle = placed.position + placed.rotation * (centre * transform.scale);
+			    facing = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
+			    drawnOrigin = globe.middle - facing * (centre * transform.scale);
+		    }
 		    glm::mat4 drawnModel(facing * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
 		    drawnModel[3] = glm::vec4(drawnOrigin, 1.0f);
 		    globe.drawnModel = drawnModel;
@@ -261,13 +283,13 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		    }
 		    // The miracle's own effect in the globe steps as the globe is drawn, before the seed's model is placed for this
 		    // frame, so its glints sparkle on where the model was last drawn
-		    // It steps only while the globe shows on the screen
+		    // It steps only while the globe shows on the screen, in the frames where its step is due
 		    if (const auto stepped = _holderEffects.find(entity);
-		        stepped != _holderEffects.end() && particles != nullptr &&
+		        holderStep.has_value() && stepped != _holderEffects.end() && particles != nullptr &&
 		        (!meshes.Contains(bubble) ||
 		         GlobeOnScreen(drawnOrigin, transform.scale.x, globe.middle, *meshes.Handle(bubble), eye)))
 		    {
-			    particles->ProcessByFrame(stepped->second, seconds);
+			    particles->ProcessByFrame(stepped->second, *holderStep);
 		    }
 		    // The seed's model as it is drawn, which glints of its effect sparkle on from the next step: below the middle,
 		    // spun, at the seed's scale and a phial's swell or squash, a big one's growing copy last

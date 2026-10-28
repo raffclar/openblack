@@ -170,4 +170,23 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 		    .townBeliefInPlayer = k_TownBelief,
 		});
 	}
+	all.push_back({
+	    .id = "town.belief_symbols_frames",
+	    .name = "The symbols of belief of two players over a totem, stepped in the drawn frames",
+	    .facet = Facet::Objects,
+	    .description = "A Norse town centre of the player's town, which believes in the player and in a rival, seen from "
+	                   "the south south west a little above the top of the totem, with the camera still. The symbols "
+	                   "move on by a whole turn's time in each drawn frame, no more often than 60 times a second.",
+	    .expected = "One symbol sits over the totem; the other circles it and now and then rises to fight it, with "
+	                "sparkles. The symbols move at the same speed at 60 frames a second and at hundreds of frames a "
+	                "second, and they continue to move while the game is paused. Their random numbers are only this "
+	                "computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Centre.x - 12.7f, 24.0f, k_Centre.y - 27.2f},
+	                .look = {k_Centre.x, 21.0f, k_Centre.y}},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townBeliefInRival = k_TownBelief,
+	});
 }

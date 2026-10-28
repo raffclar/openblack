@@ -16,6 +16,8 @@
 
 #include <entt/fwd.hpp>
 
+#include "Common/InputSteps.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -74,6 +76,11 @@ public:
 	/// less those at the start of the last draw, at least 1: what the hand and the camera step by. Before the draw of the
 	/// frame starts, it is the time of the last draw.
 	[[nodiscard]] virtual std::chrono::milliseconds GetFrameRealTime() const = 0;
+	/// The input clock counts the fixed steps that the player's input takes in this frame, by the time that the hand and
+	/// the camera step by (see CameraStep)
+	virtual void StepInput(std::chrono::microseconds stepTime) = 0;
+	/// The fixed steps that the player's input takes in this frame: the hand, the strokes, the throws and the camera
+	[[nodiscard]] virtual const input_steps::Steps& GetInputSteps() const = 0;
 
 	/// Pausing stops the game clock; unpausing starts it again from where it stopped
 	virtual void SetPaused(bool paused) = 0;
@@ -114,10 +121,19 @@ public:
 	virtual void RestartClock(std::optional<int64_t> unixTime) = 0;
 	/// The date pinned for a deterministic run, none while the wall clock's date is read
 	[[nodiscard]] virtual std::optional<int64_t> GetPinnedDate() const = 0;
+	/// Pins the date as GetPinnedDate gives it (none for the wall clock's again), and leaves the ticks as they are. So
+	/// the date is this value and the ticks since the clock was last restarted.
+	virtual void PinDate(std::optional<int64_t> pinnedDate) = 0;
 
 	/// The date a seeded run pins unless given another: 1 January 2001, 12:00 UTC
 	static constexpr int64_t k_DeterministicDate = 978350400;
 };
+
+/// The pinned date that makes the clock read this date now, with the ticks since the clock was last restarted
+[[nodiscard]] constexpr int64_t PinForDateNow(int64_t date, uint32_t ticks) noexcept
+{
+	return date - static_cast<int64_t>(ticks / 1000u);
+}
 
 /// Whether the player's pause or the temple's hold stops the game clock. In a network game the other players continue
 /// to play, so nothing that one player does stops the clock.

@@ -11,15 +11,19 @@
 
 #include "ComputerPlayerSystem.h"
 
+#include <cstring>
+
 #include <algorithm>
 #include <span>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include <spdlog/spdlog.h>
 
+#include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
@@ -34,11 +38,12 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureHome.h"
-#include "ECS/CreatureNaming.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Gui/TextDatabase.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
@@ -134,6 +139,11 @@ public:
 
 	[[nodiscard]] bool Skirmish() const override { return Locator::entitiesRegistry::value().Context().skirmish; }
 
+	[[nodiscard]] bool NetworkGame() const override
+	{
+		return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	}
+
 	[[nodiscard]] Player::Miracles Miracles(PlayerNames player) const override
 	{
 		Player::Miracles miracles;
@@ -167,6 +177,15 @@ public:
 	uint32_t GameRand(uint32_t range) override { return Locator::gameRandom::value().GameRand(range); }
 
 	float GameFloatRand(float most) override { return Locator::gameRandom::value().GameFloatRand(most); }
+
+	void SetPersonality([[maybe_unused]] PlayerNames player, [[maybe_unused]] std::string_view need,
+	                    [[maybe_unused]] float weight) override
+	{
+		// The weights of the decision tree have no place in the game yet: a god keeps the weight in the log until the
+		// tree reads it
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "AI seed: the computer god {} weighs {} at {:.3f}", static_cast<int>(player),
+		                    need, weight);
+	}
 };
 
 /// The game's own world for the start of a network game
@@ -200,7 +219,19 @@ public:
 
 	void SwitchOn(PlayerNames player) override { _minds.SwitchOn(player, true); }
 
-	void MakeSlotCreature(PlayerNames player, CreatureType species, uint32_t nameText, uint32_t stage) override
+	[[nodiscard]] std::string SpeciesDebugName(CreatureType species) const override
+	{
+		const auto row = creature::InfoRow(species);
+		const auto& table = Locator::infoConstants::value().creature;
+		if (row >= table.size())
+		{
+			return {};
+		}
+		const auto& debugString = table.at(row).debugString;
+		return {debugString.data(), strnlen(debugString.data(), debugString.size())};
+	}
+
+	void MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) override
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto home = ecs::creature_home::CitadelCreatureHomeOf(registry, player);
@@ -219,14 +250,14 @@ public:
 		{
 			Locator::playerSystem::value().MakePrimaryCreature(creature);
 		}
-		registry.Get<ecs::components::Creature>(creature).name = ecs::creature_naming::HelpWords(nameText);
+		registry.Get<ecs::components::Creature>(creature).name = gui::ToUtf16(name);
 		if (Locator::creatureMindSystem::has_value())
 		{
 			Locator::creatureMindSystem::value().MoveToStage(creature, stage);
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Made creature {} of species {} for the computer god {} at {:.1f}, {:.1f}",
-		                   entt::to_integral(creature), static_cast<int>(species), static_cast<int>(player), position.x,
-		                   position.z);
+		SPDLOG_LOGGER_INFO(
+		    spdlog::get("game"), "Made creature {} \"{}\" of species {} for the computer god {} at {:.1f}, {:.1f}",
+		    entt::to_integral(creature), name, static_cast<int>(species), static_cast<int>(player), position.x, position.z);
 	}
 
 	uint32_t GameRand(uint32_t range) override { return Locator::gameRandom::value().GameRand(range); }
@@ -450,7 +481,12 @@ void ComputerPlayerSystem::ProcessTurn()
 			// The hand starts at the temple, or at a fixed place when the god has none
 			mind->hand.hand = computer_world::StartingHand(name).value_or(k_HandWithoutTemple);
 			// A start can make a creature, so the mind is found again after it
-			computer_player::Start(*_world, name, *mind);
+			if (_aiSeed.has_value())
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The computer god {} starts with the personality of AI seed {}",
+				                   static_cast<int>(name), *_aiSeed);
+			}
+			computer_player::Start(*_world, name, *mind, _aiSeed);
 			mind = registry.TryGet<ComputerPlayer>(entity);
 			if (mind == nullptr)
 			{

@@ -125,8 +125,12 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 			}
 		}
 		const float pulse = visuals::PhialPulse(shown.phialPhase);
-		const auto draws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
-		                         : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = 255, .landLit = true}};
+		// A seed that is not a phial takes the light of the land, unless it is drawn at once. A seed drawn at once has the
+		// alpha that it is drawn at. A phial is lit and faded in the same way when it is drawn at once.
+		const uint8_t seedAlpha = shown.drawnAtOnce ? shown.phialAlpha : std::numeric_limits<uint8_t>::max();
+		const auto draws =
+		    phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
+		          : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = seedAlpha, .landLit = !shown.drawnAtOnce}};
 		const auto shape = phial ? visuals::PhialScale(receiveType, shown.phialPhase) : glm::vec3(1.0f);
 		const bool environmentMapped = environment != nullptr && (phial || shown.seed == SpellSeedType::Food);
 		const bool added = shown.seed == k_AddedSeed;
@@ -225,9 +229,9 @@ void Renderer::DrawCaveSeeds(const DrawSceneDesc& desc) const
 	}
 	// The seeds are the player's at this computer: theirs is the alignment that makes the flock's seed a bat. Each is
 	// drawn at its full size and colour, the land's light not on it.
-	const float alignment = Locator::alignmentSystem::has_value()
-	                            ? Locator::alignmentSystem::value().GetPlayerAlignment(PlayerNames::PLAYER_ONE)
-	                            : 0.0f;
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	const float alignment =
+	    Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(own) : 0.0f;
 	for (const auto& seed : Locator::temple::value().GetCaveSeeds())
 	{
 		DrawSeedModel(desc, {.seed = seed.seed,

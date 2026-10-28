@@ -160,7 +160,8 @@ void AlignmentSystem::UpdatePlayersTurn()
 		// before it is held to a whole one
 		if (Locator::guidanceSystem::has_value() && Locator::playerSystem::has_value())
 		{
-			const auto here = Locator::playerSystem::value().GetLocalPlayer();
+			const auto here =
+			    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 			Locator::guidanceSystem::value().AlignmentTurn(GetPendingAlignment(here) * change);
 		}
 		auto& registry = Locator::entitiesRegistry::value();

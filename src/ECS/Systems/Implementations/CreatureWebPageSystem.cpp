@@ -39,6 +39,7 @@
 #include "ECS/Components/CreatureTallies.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -49,6 +50,7 @@
 #include "Help/ScriptSpirits.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "MainThreadWork.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -60,9 +62,10 @@ namespace
 constexpr auto k_TurnMilliseconds =
     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
 
-PlayerNames LocalPlayer()
+/// The player of this computer, whose creature the web page shows
+PlayerNames OwnPlayer()
 {
-	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
 /// What the plan of a creature's mind does: its action, its desire, and its priority. The action of the last plan stays
@@ -161,7 +164,7 @@ void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto turn = Locator::time::value().GetTurn();
-	const auto local = LocalPlayer();
+	const auto local = OwnPlayer();
 	const auto player = _player ? _player() : std::nullopt;
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	if (!registry.Valid(entity) || !registry.AllOf<Creature, CreatureAnimation>(entity))
@@ -213,7 +216,10 @@ void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
 	}
 	auto name =
 	    fmt::format("{}creature-picture/{}/{}", graphics::ScreenPictures::k_Prefix, entt::to_integral(entity), _asked++);
-	Locator::rendererInterface::value().RequestScreenPicture(name, &creature_web_page::TakePicture);
+	// The renderer takes the picture at the end of a draw, so the request goes to the main thread
+	PostToMainThread(MainThreadApi::Renderer, [name] {
+		Locator::rendererInterface::value().RequestScreenPicture(name, &creature_web_page::TakePicture);
+	});
 	_waiting.push_back({.name = std::move(name), .player = *player, .slot = *slot});
 }
 

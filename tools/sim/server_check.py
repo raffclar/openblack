@@ -169,6 +169,9 @@ def main():
     parser.add_argument("--scenario", help="a testbed scenario that the server and the game both play from the first "
                                            "frame, so that the recorded input gets to what it sets up")
     parser.add_argument("--opening", default="cow")
+    parser.add_argument("--all-computer-gods", action="store_true",
+                        help="the AI soak: the server and the game both give a computer god to every god with a citadel")
+    parser.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods, on both")
     parser.add_argument("--frame-ms", type=float, default=100.0)
     parser.add_argument("--config", default="Debug")
     parser.add_argument("--bin", help="the folder of openblack.exe and openblack-server.exe")
@@ -182,6 +185,7 @@ def main():
                         help="both runs record the hash of each component, to find what made them part")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, and the hash of each field")
     parser.add_argument("--input", help="a JSON file of recorded input, [{frame, event}...], for the game's hand")
+    parser.add_argument("--throw-lead-latency-ms", type=int, help="a fixed latency in ms for the reports of the hand, so that the lead of each throw is the same in each run")
     parser.add_argument("--no-relay", action="store_true",
                         help="the server plays first and gets no commands of the game (the hand reports part them)")
     parser.add_argument("--draw-every", type=int, help="the game draws one frame in this many (0 for none)")
@@ -227,11 +231,19 @@ def main():
     local = wsl_path if options.wsl_server else (lambda path: path)
     server_command = [server_exe, "-g", options.game_path] + server_where + [
                       "--seed", str(options.seed), "-n", str(options.turns), "--frame-ms", str(options.frame_ms),
-                      "-l", local(server_log)]
+                      "-l", local(server_log), "--log-checksums"]
     if options.wsl_server:
         server_command = ["wsl", "-d", options.wsl_distro, "--", options.wsl_server, "-g",
                           local(options.game_path)] + server_command[3:]
     server_command += options.server_args.split()
+    if options.all_computer_gods:
+        server_command.append("--all-computer-gods")
+    if options.ai_seed is not None:
+        server_command += ["--ai-seed", str(options.ai_seed)]
+    # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
+    land_kind = {"land": options.land, "testbed": options.testbed, "gods_ring_map": options.gods_ring_map,
+                 "scenario": options.scenario}
+    server_command += sim_report.gods_need_no_temple_args(True, **land_kind)
     if options.server_fast:
         server_command.append("--fast")
     if options.hash_parts or options.hash_fields:
@@ -249,12 +261,19 @@ def main():
                     "--sim-until-turn", str(options.turns + 1), "--sim-record", record,
                     "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
                     "-l", game_log, "--sim-network-game"] + where
+    if options.all_computer_gods:
+        game_command.append("--sim-all-computer-gods")
+    if options.ai_seed is not None:
+        game_command += ["--sim-ai-seed", str(options.ai_seed)]
+    game_command += sim_report.gods_need_no_temple_args(False, **land_kind)
     if events is None:
         game_command.append("--sim-still-hand")
     else:
         game_command += ["--sim-input", os.path.abspath(options.input)]
     if relay:
         game_command += ["--sim-commands", commands]
+    if options.throw_lead_latency_ms is not None:
+        game_command += ["--throw-lead-latency-ms", str(options.throw_lead_latency_ms)]
     game_command += [argument for argument in options.game_args.split(" ") if argument]
     if options.hash_fields:
         game_command.append("--sim-hash-fields")
@@ -316,20 +335,22 @@ def main():
     # What the turns did with the hand: the game and the server do the same commands, so each must count the same deeds.
     # An input that expects deeds of its hand (its "expect") fails the run when the hand did fewer: the checksums are
     # then the same only because the hand did nothing.
-    game_deeds = sim_report.hand_deeds_in_file(game_log)
-    server_deeds = sim_report.hand_deeds_in_file(server_log)
+    # Only the deeds up to the last turn that the checksums were compared at are counted: the game can play on a few turns
+    # after the last one that the record keeps, and a deed in those turns is not a difference (the 32 god map shows it).
+    last_compared = compared[-1] if compared else None
+    game_deeds, server_deeds, deeds_same = sim_report.hand_deeds_of_both(game_log, server_log, last_compared)
     missing = sim_report.missing_deeds(game_deeds.get(0, {}), sim_report.expected_deeds(options.input))
     summary["hand_deeds"] = {str(player): counts for player, counts in sorted(server_deeds.items())}
-    summary["hand_deeds_same"] = game_deeds == server_deeds
+    summary["hand_deeds_same"] = deeds_same
     summary["missing_deeds"] = missing
-    # A land with no temple for the player's god (Land 1, the testbed) decides the network game at its first turn: the
+    # A land with no temple for the player's god (Land 1) decides the network game at its first turn: the
     # god is out, its creature goes, and the end box takes the mouse, so a recorded input does nothing there
     with open(game_log, encoding="utf-8", errors="replace") as file:
         decided = [re.search(r"Turn (\d+):", line) for line in file if "and the game is decided" in line]
     summary["decided_at_turn"] = int(decided[0].group(1)) if decided and decided[0] else None
     if events is not None and summary["decided_at_turn"] is not None:
         print(f"the game was decided at turn {summary['decided_at_turn']}: the end box takes the input of the hand")
-    if missing or game_deeds != server_deeds:
+    if missing or not deeds_same:
         summary["same"] = False
         print(f"the hand did not do what its input expects: {missing}" if missing
               else f"the game and the server count other deeds of the hand: game {game_deeds}, server {server_deeds}")

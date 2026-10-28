@@ -36,6 +36,20 @@ void AddDispensers(std::vector<Scenario>& all)
 	                   {.type = MagicType::LightningBolt, .offset = {0.0f, 25.0f}},
 	                   {.type = MagicType::Food, .offset = {10.0f, 25.0f}, .charged = false}},
 	});
+
+	all.push_back({
+	    .id = "miracles.dispenser_swirl_frames",
+	    .name = "A dispenser swirl close up, stepped in the drawn frames",
+	    .facet = Facet::Miracles,
+	    .description = "One fire dispenser close up, with the camera still. Its swirl moves on in each frame that draws "
+	                   "the dispenser, no more often than 60 times a second, not once a turn.",
+	    .expected = "The stars of the disk under the dispenser creep round and outwards smoothly, with no jerk ten times a "
+	                "second. They stop when the dispenser is off the screen and the camera does not move. Their random "
+	                "numbers are only this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, 14.0f}, .look = {0.0f, 0.0f, 25.0f}},
+	    .dispensers = {{.type = MagicType::Fireball, .offset = {0.0f, 25.0f}}},
+	});
 }
 
 /// The miracles that the challenges of the first land give as dispensers, a row of them this far apart
@@ -224,6 +238,20 @@ void AddGlobes(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 18.0f}, {20.0f, 36.0f}}, .distance = 0.55f},
 	    .dispensers = everySeed,
+	});
+
+	all.push_back({
+	    .id = "miracles.globe_effect_frames",
+	    .name = "A fireball globe close up, its effect stepped in the drawn frames",
+	    .facet = Facet::Miracles,
+	    .description = "One fireball globe close up, with the camera still. The fireball inside steps in the frames that "
+	                   "draw the globe, no more often than 60 times a second.",
+	    .expected = "The little fireball in the globe burns as it does at 60 frames a second, also at hundreds of frames "
+	                "a second. It does not burn faster or flicker more at a high frame rate. Its random numbers are only "
+	                "this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 7.0f, 15.0f}, .look = {0.0f, 5.0f, 25.0f}},
+	    .dispensers = GlobeRow({MagicType::Fireball}, 25.0f),
 	});
 
 	auto extreme = GlobeRow({MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo}, 34.0f);

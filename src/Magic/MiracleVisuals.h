@@ -109,6 +109,20 @@ struct PhialDraw
 };
 [[nodiscard]] std::vector<PhialDraw> PhialDraws(int receiveType, float phase, float pulse, uint8_t globeAlpha);
 
+// A seed's picture in the temple
+
+/// How far a seed's picture has turned, and how far its phial has gone through its texture and its pulse
+struct SeedTurn
+{
+	float spin {0.0f};
+	float phialFrame {0.0f};
+	float phialPhase {0.0f};
+};
+/// A seed's picture after more seconds of the game's time. It turns two radians a second and stays between 0 and a
+/// full turn. A phial (a receive type is given) goes through its texture and its pulse by the same time. A paused game
+/// gives 0 seconds, so the picture does not move.
+[[nodiscard]] SeedTurn TurnSeed(SeedTurn turn, std::optional<int> phialReceiveType, float gameSeconds);
+
 // The hand that holds a miracle
 
 /// The bands that fly onto the hand, the bracelets that stay on it and the one that flies off
