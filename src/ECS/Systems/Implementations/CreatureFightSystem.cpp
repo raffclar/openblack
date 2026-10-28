@@ -1075,8 +1075,9 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entit
 		}
 		if (Locator::creatureObjectActionSystem::has_value())
 		{
+			// A fight needs free hands, thus each creature puts down what it holds, as at the end of a put-down clip
 			Locator::creatureObjectActionSystem::value().Cancel(self);
-			Locator::creatureObjectActionSystem::value().Drop(self);
+			Locator::creatureObjectActionSystem::value().PutDownAtOnce(self);
 		}
 		registry.Get<CreatureAnimation>(self).body = {};
 

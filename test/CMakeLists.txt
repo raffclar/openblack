@@ -2105,3 +2105,5 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_computer_god_times test_computer_god_times.cpp)
 openblack_setup_and_add_test(test_hash_identifier test_hash_identifier.cpp)
+openblack_setup_and_add_test(test_released_turns test_released_turns.cpp)
+target_link_libraries(test_released_turns PRIVATE psys)
