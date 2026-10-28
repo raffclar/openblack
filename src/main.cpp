@@ -37,6 +37,7 @@
 #include "Common/Platform.h"
 #include "Common/SystemLibraries.h"
 #include "Creature/BonusCreatures.h"
+#include "Debug/TestbedScenarioRegistry.h"
 #include "EngineConfig.h"
 #include "Game.h"
 #include "LaunchSwitches.h"
@@ -147,6 +148,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
 		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
+		("list-scenarios", "Tools: write the id of each testbed scenario, one on each line, and stop.")
 		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
 		("profile-folder", "For developers and tests: keep the players' profiles and their creatures in this folder rather than the Profiles folder in the working folder, as on a first start when it is empty. Without it, a developer's or a tool's run (a level, the testbed, a scenario, --skip-opening, --skip-logos, the inspector, a seed, a video, a number of frames or a screenshot asked for) plays as a profile of its own, kept apart, and never sees the new player's box.", cxxopts::value<std::string>())
 		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
@@ -239,6 +241,17 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		{
 			// The help of a build without the developer tools shows only the options of the player
 			std::cout << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
+			returnCode = EXIT_SUCCESS;
+			return false;
+		}
+		if (result.count("list-scenarios") != 0)
+		{
+			for (const auto& scenario : openblack::testbed_scenarios::All())
+			{
+				std::cout << scenario.id << '
+';
+			}
+			std::cout << std::flush;
 			returnCode = EXIT_SUCCESS;
 			return false;
 		}

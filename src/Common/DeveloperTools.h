@@ -125,6 +125,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "benchmark-warmup", .takesValue = true},
     DeveloperOption {.name = "benchmark-frames", .takesValue = true},
     DeveloperOption {.name = "scenario-hide-window"},
+    DeveloperOption {.name = "list-scenarios"},
     DeveloperOption {.name = "benchmark-out", .takesValue = true},
     DeveloperOption {.name = "profile-folder", .takesValue = true},
     DeveloperOption {.name = "seed", .takesValue = true},

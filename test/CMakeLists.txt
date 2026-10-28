@@ -2119,3 +2119,7 @@ openblack_setup_and_add_test(test_vanilla_world test_vanilla_world.cpp)
 add_test(NAME test_net_check_web
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_web.py
 )
+add_test(NAME test_guard_sweep
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/guard_sweep.py --self-test
+)
