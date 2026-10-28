@@ -16,6 +16,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include <glm/common.hpp>
@@ -256,6 +257,7 @@ public:
 	{
 		_gathered->keep = keep;
 		std::ranges::fill(_gathered->blocks, std::nullopt);
+		_gathered->circles.clear();
 	}
 
 private:
@@ -263,6 +265,8 @@ private:
 	struct Gathered
 	{
 		bool keep {false};
+		/// The circles of each thing to go round
+		std::unordered_map<entt::entity, std::vector<route::Circle>> circles;
 		std::vector<std::optional<route::BlockGathering>> blocks = std::vector<std::optional<route::BlockGathering>>(
 		    static_cast<size_t>(route::Obstacles::k_BlocksPerSide * route::Obstacles::k_BlocksPerSide));
 	};
@@ -310,13 +314,17 @@ private:
 				return;
 			}
 			route::BlockGathering gathering;
+			const auto* land = Locator::creatureLocomotionSystem::has_value()
+			                       ? &Locator::creatureLocomotionSystem::value().GetWalkableLand()
+			                       : nullptr;
+			const auto* map = Locator::entitiesMap::has_value() ? &Locator::entitiesMap::value() : nullptr;
 			for (int32_t cz = 0; cz < route::Obstacles::k_CellsPerBlock; ++cz)
 			{
 				for (int32_t cx = 0; cx < route::Obstacles::k_CellsPerBlock; ++cx)
 				{
 					GatherCell({(block.x * route::Obstacles::k_CellsPerBlock) + cx,
 					            (block.y * route::Obstacles::k_CellsPerBlock) + cz},
-					           gathering);
+					           land, map, *gathered, gathering);
 				}
 			}
 			gathering.AddTo(into);
@@ -327,24 +335,39 @@ private:
 		};
 	}
 
-	/// What stands in a cell: the land that cannot be walked on and the water, then each thing to go round
-	static void GatherCell(glm::ivec2 cell, route::BlockGathering& gathering)
+	/// What stands in a cell: the land that cannot be walked on and the water, then each thing to go round. While the
+	/// world keeps what the plans gather, it keeps the circles of each thing too.
+	static void GatherCell(glm::ivec2 cell, const route::WalkableLand* land, const MapInterface* map, Gathered& gathered,
+	                       route::BlockGathering& gathering)
 	{
-		if (Locator::creatureLocomotionSystem::has_value())
+		if (land != nullptr)
 		{
-			route::AddLandCircles(Locator::creatureLocomotionSystem::value().GetWalkableLand(), cell, gathering, true);
+			route::AddLandCircles(*land, cell, gathering, true);
 		}
-		if (!Locator::entitiesMap::has_value())
+		if (map == nullptr)
 		{
 			return;
 		}
 		const auto& registry = Registry();
-		for (const auto entity : Locator::entitiesMap::value().GetAllInCell(cell))
+		for (const auto entity : map->GetAllInCell(cell))
 		{
-			const auto circles = CirclesToGoRound(registry, entity);
-			if (!circles.empty())
+			if (!gathered.keep)
 			{
-				gathering.Thing(cell, entt::to_integral(entity), circles);
+				const auto circles = CirclesToGoRound(registry, entity);
+				if (!circles.empty())
+				{
+					gathering.Thing(cell, entt::to_integral(entity), circles);
+				}
+				continue;
+			}
+			auto found = gathered.circles.find(entity);
+			if (found == gathered.circles.end())
+			{
+				found = gathered.circles.emplace(entity, CirclesToGoRound(registry, entity)).first;
+			}
+			if (!found->second.empty())
+			{
+				gathering.Thing(cell, entt::to_integral(entity), found->second);
 			}
 		}
 	}
