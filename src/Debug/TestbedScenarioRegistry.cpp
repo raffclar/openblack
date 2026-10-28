@@ -11615,6 +11615,16 @@ glm::vec2 testbed_scenarios::MapPoint(glm::vec2 middle, glm::vec2 offset)
 	return middle + offset;
 }
 
+std::optional<uint32_t> testbed_scenarios::HelpTextNumber(std::span<const std::string> names, std::string_view name)
+{
+	const auto found = std::ranges::find(names, name);
+	if (found == names.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(std::distance(names.begin(), found));
+}
+
 float testbed_scenarios::CreatureHeight(float size)
 {
 	// A creature of size 1 stands about 15 units tall, whatever its species' mesh

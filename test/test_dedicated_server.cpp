@@ -101,6 +101,15 @@ TEST(DedicatedServer, TheSeedOfAToolAlsoPinsTheDate)
 	EXPECT_EQ(RoomStartLine(start), "The seed of the world: 7 (from a tool), date pinned");
 }
 
+// The commands file of the game has the commands of its testbed scenario. The server drops the same commands of its
+// own scenario, so that each command occurs one time only.
+TEST(DedicatedServer, AServerThatPlaysTheCommandsOfAFileDropsTheCommandsOfItsOwnPlayer)
+{
+	using openblack::server::OwnCommands;
+	EXPECT_EQ(openblack::server::OwnCommandsOf(ServerSettings {}), OwnCommands::Send);
+	EXPECT_EQ(openblack::server::OwnCommandsOf(ServerSettings {.commandsPath = "commands.jsonl"}), OwnCommands::Drop);
+}
+
 TEST(DedicatedServer, TheToolsReadTheTurnAndTheChecksumFromTheLineOfTheLog)
 {
 	const auto line = ChecksumLine(42, 0x0123456789abcdefull);

@@ -157,6 +157,20 @@ struct ServerSettings
 /// The line of the log that tells the seed and the date of the world
 [[nodiscard]] std::string RoomStartLine(const RoomStart& start);
 
+/// What the server does with the commands of its own player at the end of a frame
+enum class OwnCommands
+{
+	/// The next turn does them
+	Send,
+	/// No turn does them
+	Drop,
+};
+
+/// The commands of the own player of a server that plays the commands of a file. The file has all the commands of the
+/// game, also the commands of the game's testbed scenario. Thus the server drops the same commands of its own scenario,
+/// and each command occurs one time only.
+[[nodiscard]] OwnCommands OwnCommandsOf(const ServerSettings& settings);
+
 /// The line of the log for the checksum of one turn, which the tools read
 [[nodiscard]] std::string ChecksumLine(uint32_t turn, uint64_t checksum);
 

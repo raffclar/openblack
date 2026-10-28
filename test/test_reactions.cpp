@@ -37,6 +37,7 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/TownDesire.h"
@@ -1624,6 +1625,26 @@ TEST_F(Reactions, VillagersHeedTheHandPickingUpOrSomethingCrushedWithoutTakingIt
 		EXPECT_TRUE(impression == nullptr ||
 		            impression->belief.pending.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)) == 0.0f);
 	}
+}
+
+// The turn finds the hand where the last report of its player put it. The drawn hand follows the pointer of one
+// computer only, so the turn does not use it.
+TEST_F(Reactions, TheTurnFindsTheHandAtItsReportedPlaceAndNotAtItsDrawnPlace)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	PlayTurn();
+	PlayTurn();
+	const auto hand = registry.Create();
+	registry.Assign<Transform>(hand, k_Here + glm::vec3(1000.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ReportedHand>(hand).handPoint = k_Here;
+	auto source = Miracle(Reaction::ReactToHandPickUp);
+	source.initiator = hand;
+	_reactions.Create(source);
+	const auto* memory = registry.TryGet<const VillagerReactionMemory>(_villagers[0]);
+	ASSERT_NE(memory, nullptr);
+	EXPECT_NE(memory->memory.LastReacted(static_cast<uint32_t>(Reaction::ReactToHandPickUp)), 0u);
+	const auto* far = registry.TryGet<const VillagerReactionMemory>(_villagers[2]);
+	EXPECT_TRUE(far == nullptr || far->memory.LastReacted(static_cast<uint32_t>(Reaction::ReactToHandPickUp)) == 0u);
 }
 
 TEST(ReactionRules, OnlyATownsOwnBuildingsAreReactedToWhenBuilt)
