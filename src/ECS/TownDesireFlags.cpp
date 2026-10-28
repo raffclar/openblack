@@ -34,6 +34,11 @@ map_coords::MapCoords PlaceWithoutStore(const map_coords::MapCoords& town, uint3
 	return town + gutils::GetPosFromAngle(static_cast<float>(place) * k_AngleWithoutStore, k_DistanceWithoutStore);
 }
 
+bool MovedSinceMade(const map_coords::MapCoords& madeAt, const map_coords::MapCoords& now)
+{
+	return madeAt.x != now.x || madeAt.z != now.z;
+}
+
 bool Shows(bool storeWorking, float level, float showsAfter)
 {
 	return storeWorking && showsAfter <= level;

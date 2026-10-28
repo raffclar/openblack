@@ -490,6 +490,7 @@ void TownDesireSystem::MakeFlags(entt::entity town)
 		{
 			ecs::thing_map_place::Keep(registry, flag, *placeWithoutStore);
 		}
+		component.madeAt = ecs::thing_map_place::Of(registry, flag);
 		made.flags.at(i) = flag;
 	}
 	registry.Assign<TownDesireFlags>(town, made);

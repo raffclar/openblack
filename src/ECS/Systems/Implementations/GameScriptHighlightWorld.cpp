@@ -24,8 +24,10 @@
 #include "Common/GameRandom.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
@@ -35,7 +37,9 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
+#include "ECS/TownDesireFlags.h"
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -138,13 +142,19 @@ std::vector<rules::ThingBelow> GameScriptHighlightWorld::ThingsBelow(entt::entit
 			}
 		}
 		const auto& at = transform->position;
+		// A firefly always counts as a thing that moves. A town's flag counts as one after a store took it away from the
+		// place where the game made it.
+		const auto* flag = registry.TryGet<const TownDesireFlag>(thing);
+		const bool moving = registry.AnyOf<Firefly>(thing) ||
+		                    (flag != nullptr &&
+		                     ecs::town_desire_flags::MovedSinceMade(flag->madeAt, ecs::thing_map_place::Of(registry, thing)));
 		things.push_back({
 		    .inCell = rules::InCell({at.x, at.z}),
 		    .radius = radius,
 		    .top = at.y - LandHeight({at.x, at.z}) + height,
-		    // TODO(script-natives): the game also skips a thing whose position changed since its last turn; openblack
-		    // keeps no last position, so only a thing in flight counts as moving
-		    .livingOrMoving = registry.AnyOf<Villager, Creature, Animal, InPhysics>(thing),
+		    // TODO(script-natives): the game also skips any other thing whose position changed since it was made or since
+		    // its last turn. openblack keeps no such position for other things, so of them only a thing in flight moves.
+		    .livingOrMoving = moving || registry.AnyOf<Villager, Creature, Animal, InPhysics>(thing),
 		});
 	}
 	return things;

@@ -50,6 +50,9 @@ inline constexpr float k_AngleWithoutStore = 0.36959913f;
 /// direction of an angle that increases with the place
 [[nodiscard]] map_coords::MapCoords PlaceWithoutStore(const map_coords::MapCoords& town, uint32_t place);
 
+/// Whether a flag counts as a thing that moves: the game compares its map position with the position where it was made
+[[nodiscard]] bool MovedSinceMade(const map_coords::MapCoords& madeAt, const map_coords::MapCoords& now);
+
 /// Whether a flag shows: its store stands built and the flag is up at least as far as its desire first shows
 [[nodiscard]] bool Shows(bool storeWorking, float level, float showsAfter);
 

@@ -203,6 +203,7 @@ void openblack::ecs::reflection::RegisterFields_Components_t(entt::meta_ctx& con
 	    .Field<&components::TownDesireFlag::point>("point")
 	    .Field<&components::TownDesireFlag::store>("store")
 	    .Field<&components::TownDesireFlag::place>("place")
+	    .Field<&components::TownDesireFlag::madeAt>("madeAt")
 	    .Field<&components::TownDesireFlag::overGround>("overGround")
 	    .Field<&components::TownDesireFlag::level>("level")
 	    .Field<&components::TownDesireFlag::speed>("speed")

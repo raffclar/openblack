@@ -134,3 +134,13 @@ TEST(TownDesireFlags, BeforeItsTownHasAStoreAFlagStandsFiveMetresFromTheTownAtTh
 		EXPECT_NEAR(std::atan2(dz, dx), static_cast<float>(place) * 0.36959913f, 0.001f);
 	}
 }
+
+TEST(TownDesireFlags, AFlagMovesOnceItIsNotWhereTheGameMadeIt)
+{
+	const openblack::map_coords::MapCoords made {.x = 1000, .z = 2000, .altitude = 0.0f};
+	EXPECT_FALSE(flags::MovedSinceMade(made, made));
+	// Only x and z count
+	EXPECT_FALSE(flags::MovedSinceMade(made, {.x = 1000, .z = 2000, .altitude = 3.0f}));
+	EXPECT_TRUE(flags::MovedSinceMade(made, {.x = 1001, .z = 2000, .altitude = 0.0f}));
+	EXPECT_TRUE(flags::MovedSinceMade(made, {.x = 1000, .z = 1999, .altitude = 0.0f}));
+}
