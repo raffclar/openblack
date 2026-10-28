@@ -30,7 +30,7 @@
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
-#include "Common/BuildVersionFile.h"
+#include "Common/BuildVersion.h"
 #include "Common/LoadTimer.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
