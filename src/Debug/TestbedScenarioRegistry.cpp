@@ -7833,6 +7833,27 @@ void AddCombat(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// The other tiger plays an action as the fight starts. The action plays on, and its turn to face waits for it.
+		auto asker = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto asked = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		asker.pauseMind = true;
+		asked.pauseMind = true;
+		all.push_back({
+		    .id = "combat.face_off_waits_for_body",
+		    .name = "A tiger finishes its action before it turns to fight",
+		    .facet = Facet::Combat,
+		    .description = "The blue tiger starts its impress action. Six seconds later, near the end of the action, the "
+		                   "red tiger asks the blue tiger to fight. Both fight by themselves.",
+		    .expected = "The red tiger turns to face the blue tiger. The blue tiger plays its action to the end, and only "
+		                "then turns to face the red tiger. Then both taunt.",
+		    .framing = ringside,
+		    .creatures = {asker, asked},
+		    .commands = {Play(Kind::PlayAction, 1, animations::k_Impress, 1.0f, false), Fight(Kind::StartFight, 0, 1, 6.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "saves.arena_ring_back",
 	    .name = "Save and load: the ring of the arena shows again",
