@@ -296,6 +296,11 @@ glm::mat4 boat_launch::OnDeck(const DeckPart& part, const glm::mat4& boat)
 	return boat * part.local;
 }
 
+glm::vec2 boat_launch::DeckLightOffset(const glm::mat4& boat, const glm::mat4& part)
+{
+	return {boat[3].x - part[3].x, boat[3].z - part[3].z};
+}
+
 boat_launch::Wake boat_launch::WakeAt(int32_t phase, const glm::mat4& boat)
 {
 	const float life = static_cast<float>(phase) * k_WakeLifeScale;

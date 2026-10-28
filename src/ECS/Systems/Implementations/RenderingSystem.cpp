@@ -30,6 +30,7 @@
 #include "3D/PhysicsDrawMatrix.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureFizzLook.h"
+#include "ECS/BoatLaunchRules.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -672,9 +673,17 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	// The instances of each mesh go in the order of their segments. Each pass places the things of one segment.
 	uint32_t segmentPlaced = 0;
 	uint32_t lastSegment = 0;
+	// The matrix of the explorers' boat, if its film plays. The parts on its deck take the land's light of its place.
+	std::optional<glm::mat4> filmBoat;
+	registry.Each<const BoatFilmPart, const DrawnMatrix>([&filmBoat](const BoatFilmPart& part, const DrawnMatrix& drawn) {
+		if (part.role == BoatFilmPart::Role::Boat)
+		{
+			filmBoat = drawn.model;
+		}
+	});
 	const auto drawnHand = DrawnHand();
 	EachBySegment<const Mesh, const Transform>(
-	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, &fizzOrder, &segmentPlaced, &lastSegment,
+	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, &fizzOrder, &segmentPlaced, &lastSegment, &filmBoat,
 	     drawBoundingBox, camera, &view, modelDetail, drawList,
 	     drawnHand](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
@@ -1065,6 +1074,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    look.w = lanternLook.snowCap;
 				    lightOffset = lanternLook.lightOffset;
 			    }
+		    }
+
+		    // A part on the deck of the explorers' boat takes the land's light of the boat's place, and no colour of the land
+		    if (filmPart != nullptr && filmPart->role == BoatFilmPart::Role::DeckPart && filmBoat.has_value())
+		    {
+			    lightOffset = openblack::ecs::boat_launch::DeckLightOffset(*filmBoat, modelMatrix);
+			    look.y = graphics::instance_light::k_NoLandColour;
 		    }
 
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
