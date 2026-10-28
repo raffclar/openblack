@@ -7725,6 +7725,11 @@ void AddCombat(std::vector<Scenario>& all)
 		// Each tiger holds a rock as the fight starts. It lets go of the rock before its taunt.
 		auto start = Fight(Kind::StartFight, 0, 1, 1.0f);
 		start.waitUntilFree = true;
+		// The minds wait, so that each tiger keeps its rock until the fight
+		auto holder = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto other = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		holder.pauseMind = true;
+		other.pauseMind = true;
 		all.push_back({
 		    .id = "combat.let_go_before_taunt",
 		    .name = "Two tigers let go of their rocks before they taunt",
@@ -7736,7 +7741,7 @@ void AddCombat(std::vector<Scenario>& all)
 		                "away or puts it down with its let-go clip, and after that it taunts. No rock falls from a hand at "
 		                "the start of the fight.",
 		    .framing = ringside,
-		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+		    .creatures = {holder, other},
 		    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {-21.0f, 34.0f}},
 		                {.type = MobileStaticInfo::RockChalk, .offset = {21.0f, 34.0f}}},
 		    .commands = {OnObject(Kind::PickUp, 1, 1, 1.0f), OnObject(Kind::PickUp, 0, 0, 0.2f), start,
