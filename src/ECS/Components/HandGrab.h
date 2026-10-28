@@ -21,6 +21,7 @@
 #include "Creature/CreatureGiving.h"
 #include "Enums.h"
 #include "Hand/HandGrabRules.h"
+#include "Hand/ThrowLead.h"
 
 namespace openblack::ecs::components
 {
@@ -149,6 +150,9 @@ struct HandGrab
 		glm::vec3 from {0.0f};
 	};
 	std::optional<Throw> lastThrow;
+	/// The flight of the throw that this computer sent, which the frames draw the thing along until the turn of the
+	/// command. Only the draw of this computer reads it.
+	std::optional<hand_grab::throw_lead::Flight> predicted;
 	/// Where the hand was last meant to be while holding, before it rose, for the twist of a throw
 	glm::vec3 lastTarget {0.0f};
 

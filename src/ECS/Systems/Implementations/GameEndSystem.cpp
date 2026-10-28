@@ -181,7 +181,8 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 	    .turn = turn,
 	    .timeLimitTurn = networkGame ? std::optional(game_end::TimeLimitTurn(GetTimeLimit())) : std::nullopt,
 	    .conditionCount = context.gameEnd.conditionCount,
-	    .templesNeeded = !(networkGame && Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed()),
+	    .templesNeeded = !(networkGame && Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed()) &&
+	                     !(Locator::simulation::has_value() && Locator::simulation::value().GetSettings().godsNeedNoTemple),
 	};
 	if ((!facts.networkGame && !facts.skirmish) || context.gameEnd.decided)
 	{

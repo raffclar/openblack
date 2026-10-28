@@ -184,20 +184,19 @@ TEST(GameFrameOrder, AFilmShowsItsFramesAfterTheCameraAndBeforeTheCreaturesArePo
 	EXPECT_TRUE(recorder.Before(Step::Video, Step::CreaturePoses));
 }
 
-TEST(GameFrameOrder, TheHighDetailTheGripDustTheFadeAndThePauseWordsAreInTheDraw)
+TEST(GameFrameOrder, TheHighDetailTheFadeAndThePauseWordsAreInTheDraw)
 {
 	const auto recorder = PlayOneFrame();
 	// The land's draw lets the high-detail villagers go, after the creatures are posed and the hand moved
 	EXPECT_TRUE(recorder.Before(Step::Hand, Step::HighDetail));
 	EXPECT_TRUE(recorder.Before(Step::HighDetail, Step::Entities));
-	EXPECT_TRUE(recorder.Before(Step::Hand, Step::GripEffect));
 	// The words of the pause and the speed fade as the interface finishes the draw
 	// The fade steps after the world is drawn and before the words of the pause
 	EXPECT_TRUE(recorder.Before(Step::Entities, Step::ScreenFade));
 	EXPECT_TRUE(recorder.Before(Step::ScreenFade, Step::PauseText));
 	EXPECT_TRUE(recorder.Before(Step::Entities, Step::PauseText));
 	EXPECT_TRUE(recorder.Before(Step::PauseText, Step::CameraKeys));
-	for (const auto step : {Step::HighDetail, Step::GripEffect, Step::ScreenFade, Step::PauseText})
+	for (const auto step : {Step::HighDetail, Step::ScreenFade, Step::PauseText})
 	{
 		EXPECT_TRUE(IsGraphics(step)) << static_cast<int>(step);
 	}
@@ -214,9 +213,9 @@ TEST(GameFrameOrder, TheBookmarksThrobAsTheDrawShowsThem)
 // the world
 TEST(GameFrameOrder, TheGraphicsAreTheCameraTheDrawStartThePreDrawAndTheDraw)
 {
-	for (const auto step : {Step::CameraMouse, Step::CameraPaths, Step::CameraControllers, Step::Camera, Step::Temple,
-	                        Step::DrawClock, Step::Video, Step::CreaturePoses, Step::Hand, Step::HighDetail, Step::GripEffect,
-	                        Step::Entities, Step::ScreenFade, Step::PauseText})
+	for (const auto step :
+	     {Step::CameraMouse, Step::CameraPaths, Step::CameraControllers, Step::Camera, Step::Temple, Step::DrawClock,
+	      Step::Video, Step::CreaturePoses, Step::Hand, Step::HighDetail, Step::Entities, Step::ScreenFade, Step::PauseText})
 	{
 		EXPECT_TRUE(IsGraphics(step)) << static_cast<int>(step);
 	}
@@ -287,8 +286,8 @@ TEST(GameFrameOrder, APictureForAMinimisedWindowDoesNotMoveTheCameraOrTheHand)
 	{
 		EXPECT_FALSE(DoesStep(step, picture)) << static_cast<int>(step);
 	}
-	for (const auto step : {Step::DrawClock, Step::Video, Step::CreaturePoses, Step::HighDetail, Step::GripEffect,
-	                        Step::Entities, Step::ScreenFade, Step::PauseText})
+	for (const auto step : {Step::DrawClock, Step::Video, Step::CreaturePoses, Step::HighDetail, Step::Entities,
+	                        Step::ScreenFade, Step::PauseText})
 	{
 		EXPECT_TRUE(DoesStep(step, picture)) << static_cast<int>(step);
 	}

@@ -19,7 +19,6 @@
 #include <variant>
 #include <vector>
 
-#include "3D/GripLandscapeEffect.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -41,6 +40,7 @@
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -124,7 +124,7 @@ void Run(const Command& command, uint32_t turn)
 			    }
 			    else
 			    {
-				    hand.DoGive(command.player, action.creature, action.object);
+				    hand.DoGive(command.player, action.creature, action.object, action.leftHand);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashOrder>)
@@ -164,7 +164,13 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, GripDust>)
 		    {
-			    openblack::GripLandscapeEffect::Spawn(action.point);
+			    // The puff of dust is the spot visual of a grip of the land. Each computer and the game server make it at the
+			    // same turn, so its random numbers come from the shared seed.
+			    if (openblack::Locator::particleSystem::has_value())
+			    {
+				    openblack::Locator::particleSystem::value().StartSpotVisual(openblack::SpotVisualType::GripLandscape,
+				                                                                action.point, std::nullopt, entt::null, 1.0f);
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)
 		    {
@@ -377,6 +383,21 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::handGrabSystem::has_value())
 			    {
 				    openblack::Locator::handGrabSystem::value().DoShakeOff(command.player);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, CreatureFightCheat>)
+		    {
+			    if (openblack::Locator::creatureFightSystem::has_value())
+			    {
+				    openblack::Locator::creatureFightSystem::value().DoFightCheat(command.player);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, TempleLeashOff>)
+		    {
+			    // The player went into their temple: the turn checks again that the player holds the leash
+			    if (openblack::Locator::leashSystem::has_value())
+			    {
+				    openblack::Locator::leashSystem::value().TakeOffAtTemple(command.player);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)

@@ -352,6 +352,10 @@ public:
 /// Whether a move from the queue teaches a creature to lean: a step teaches every creature, the other moves teach only
 /// the human player's creature. The moves that the computer chooses do not go into the queue, thus they teach nothing.
 [[nodiscard]] bool LearnsFromMove(Move::Kind kind, bool humanPlayers);
+/// Whether the moves that a player sends teach the creature of the player to lean. In a game alone, only the creature of
+/// the first player learns. In a network game, the creature of each human god learns on each computer, thus the worlds
+/// stay the same.
+[[nodiscard]] bool LearnsFromPresses(bool networkGame, bool firstPlayer, bool humanGod);
 /// A creature's first fight starts it leaning against its alignment: evil creatures attack, good ones defend
 [[nodiscard]] float FirstTendency(float alignment);
 /// The lean a creature has learnt, as it starts a fight that it asked for. Until it completes a fight (a knock-out or a

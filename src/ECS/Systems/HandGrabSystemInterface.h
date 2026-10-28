@@ -79,6 +79,9 @@ public:
 	/// Each drawn frame of some game milliseconds: what the hands of the other players of a network game hold moves
 	/// toward the place of their last report, upright and at the size that it had as the hand took it
 	virtual void PlaceOthersHeldForFrame([[maybe_unused]] int32_t frameMs) {}
+	/// Each drawn frame, after the hand poses what it holds: a thing that this computer threw and that waits for the
+	/// turn of the command shows on the flight of its lead
+	virtual void DrawThrownForFrame() {}
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
 	/// Each hand of a god that holds the thing lets go of it as ForceDrop does: the first player's hand, then the hands of
@@ -114,8 +117,9 @@ public:
 	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// At the turn: the twist of a thing that the hand let go (player_commands::HandTwist)
 	virtual void DoTwist(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*moved*/) {}
-	/// The hand gives the thing that it holds to a creature
-	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/) {}
+	/// At the turn: the hand gives the thing that it holds to a creature, which takes it with the hand that matches the
+	/// side of the hand of the giver (player_commands::HandGive)
+	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/, bool /*leftHand*/) {}
 	/// At the turn: the hand of the player called off the gift to the creature (player_commands::GiveCallOff)
 	virtual void DoGiveCallOff(PlayerNames /*player*/, entt::entity /*creature*/) {}
 	/// A creature takes a thing the hand gave it: the hand lets go of it into the creature's hand, without dropping it.

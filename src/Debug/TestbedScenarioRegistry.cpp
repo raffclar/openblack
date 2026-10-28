@@ -6131,6 +6131,53 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
 
+	// The reports of the hand come 300 ms late, as in a network game. The hand takes a rock and throws it.
+	all.push_back({
+	    .id = "hand.throw_lead",
+	    .name = "The lead of a throw for a late report",
+	    .facet = Facet::Hand,
+	    .description = "The reports of the player's hand get a fixed latency of 300 ms. The hand holds the Action button on "
+	                   "a rock until it takes it, then makes ready to throw and throws it with an upward sweep of the "
+	                   "pointer.",
+	    .expected = "At the release the rock stops in the hand's move and starts its flight at once. The hand does not "
+	                "carry it. At the next turn the rock jumps forward along its flight, to where it is three turns "
+	                "after the release, and flies on from there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::SetReportLatency, .delaySeconds = 0.0f, .value = 300},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.45f, 0.85f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
+
+	// The same throw with no latency of the reports, to compare with hand.throw_lead
+	all.push_back({
+	    .id = "hand.throw_no_lead",
+	    .name = "A throw with no lead",
+	    .facet = Facet::Hand,
+	    .description = "The reports of the player's hand have no latency. The hand holds the Action button on "
+	                   "a rock until it takes it, then makes ready to throw and throws it with an upward sweep of the "
+	                   "pointer.",
+	    .expected = "At the release the rock starts its flight from the hand. It flies on with no jump, as in a game alone "
+	                "with no latency.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::SetReportLatency, .delaySeconds = 0.0f, .value = 0},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.45f, 0.85f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
+
 	// The camera looks at a cuddly toy and a toy ball on flat land from 35 m. The hand takes each toy in turn.
 	all.push_back({
 	    .id = "hand.hold_toys",
@@ -11394,12 +11441,13 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
 	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
 	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
-	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
-	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
-	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
-	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
-	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
+	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::SetReportLatency ||
+	       kind == Kind::RemoveObject || kind == Kind::ReadTip || kind == Kind::LookAtTempleScroll ||
+	       kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck || kind == Kind::PlayCustomMusic ||
+	       kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture || kind == Kind::OpenTattooMenu ||
+	       kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey ||
+	       kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame || kind == Kind::LoadGame ||
+	       kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
@@ -11620,6 +11668,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "press Join Online Game of the page",
 	    "end box",
 	    "bring a creature into a network game",
+	    "give the hand's reports a latency",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

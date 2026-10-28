@@ -230,6 +230,29 @@ struct ChatItem
 /// The time limit as hours and minutes: "1:30"
 [[nodiscard]] std::u16string TimeLimitText(uint32_t minutes);
 
+/// The time limit of a network game in minutes, when the host does not change it
+inline constexpr uint32_t k_DefaultTimeLimitMinutes = 30;
+
+/// The parts of the conditions page that show to a player who is not the host. The host's controls never show: the
+/// box of each condition, the value of a condition with its arrows, and the arrows of the time limit. Ready always
+/// shows.
+struct ConditionsPage
+{
+	/// "Please select a map first."
+	bool selectMap;
+	/// The list of the conditions of the game, one line for each condition that the host switched on
+	bool conditions;
+	/// "Time Limit (Hours:Minutes):" and the time limit
+	bool timeLimit;
+	bool viewChat;
+};
+
+/// With no land, the page shows only "Please select a map first." and Ready
+[[nodiscard]] constexpr ConditionsPage ConditionsPageOf(bool landKnown) noexcept
+{
+	return {.selectMap = !landKnown, .conditions = landKnown, .timeLimit = landKnown, .viewChat = landKnown};
+}
+
 /// A land of the local maps' file, "Online Maps\localmaps.txt": a line "number:name:file:players:"
 struct LocalMap
 {
@@ -269,10 +292,21 @@ struct ClanInfoTexts
 inline constexpr int32_t k_LogoSize = 64;
 using LogoOpacities = std::array<uint8_t, static_cast<size_t>(k_LogoSize* k_LogoSize)>;
 
-/// The logo from the bytes of a BMP file of 8, 24 or 32 bits a pixel. Each pixel becomes the nearest of the 256
-/// greys, and the top 4 bits of the grey are its opacity. The picture is cut to its top-left 64 by 64 pixels, and a
-/// smaller picture has black (no opacity) around it. None when the bytes are not such a file.
+/// The logo from the bytes of a BMP file of 8, 24 or 32 bits a pixel. Each pixel becomes one of 256 greys, as Windows
+/// changes a colour to a grey, and the top 4 bits of the grey are its opacity. The picture is cut to its top-left 64 by 64
+/// pixels, and a smaller picture has black (no opacity) around it. None when the bytes are not such a file.
 [[nodiscard]] std::optional<LogoOpacities> DecodeClanLogo(std::span<const uint8_t> bmp);
+
+/// A line of the lobby's player database: a label and a value, as the server gives them
+struct PlayerDetail
+{
+	std::u16string label;
+	std::u16string value;
+};
+
+/// The lines of the Player Details tab under its title: "label:value" for each line of the player database, in its
+/// order. The game shows no other lines there.
+[[nodiscard]] std::vector<std::u16string> PlayerDetailLines(std::span<const PlayerDetail> details);
 
 /// The limits of a winning condition for a land: its first value, the least and the most, and the steps of a click
 /// with the left and the right mouse button

@@ -56,6 +56,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerAge.h"
@@ -928,6 +929,8 @@ void villager_reactions::SetStateSpeed(entt::entity villager, VillagerStates sta
 	    .landBeliefSpeedScale = globals.landBalance.at(k_BeliefSpeedBalance),
 	    .beliefSpeedScaleMultiPlayer = townInfo.beliefSpeedScaleMultiPlayer,
 	    .beliefSpeedScaleStory = townInfo.beliefSpeedScaleStory,
+	    .multiplayer = villager_speed::MultiplayerBeliefScale(
+	        registry.Context().skirmish, Locator::time::has_value() && Locator::time::value().IsNetworkGame()),
 	    .landNumber = static_cast<uint32_t>(globals.landNumber),
 	    .baseForTownNeedsSpeedMod = info.baseForTownNeedsSpeedMod,
 	    .divisorForTownNeedsSpeedMod = info.divisorForTownNeedsSpeedMod,

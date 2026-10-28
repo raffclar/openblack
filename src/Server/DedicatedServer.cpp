@@ -742,6 +742,7 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 	simulation.settings.untilTurn = settings.turns;
 	simulation.settings.stillHand = true;
 	simulation.settings.templeLoss = settings.templeLoss;
+	simulation.settings.godsNeedNoTemple = settings.godsNeedNoTemple;
 	simulation.settings.timeLimit = settings.timeLimit;
 	if (settings.conditions.has_value())
 	{

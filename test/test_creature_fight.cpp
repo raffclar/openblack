@@ -293,6 +293,19 @@ TEST(CreatureFight, StepsTeachEveryCreatureAndOtherMovesOnlyTheHumanPlayers)
 	EXPECT_TRUE(LearnsFromMove(Move::Kind::Special, true));
 }
 
+TEST(CreatureFight, PressesTeachTheFirstPlayerAloneAndEachHumanGodInANetworkGame)
+{
+	// A game alone: the creature of the first player learns, a god that has hands but is not first does not
+	EXPECT_TRUE(LearnsFromPresses(false, true, true));
+	EXPECT_FALSE(LearnsFromPresses(false, false, true));
+	EXPECT_FALSE(LearnsFromPresses(false, false, false));
+	// A network game: each human god learns, a computer god does not, also in the first slot
+	EXPECT_TRUE(LearnsFromPresses(true, false, true));
+	EXPECT_TRUE(LearnsFromPresses(true, true, true));
+	EXPECT_FALSE(LearnsFromPresses(true, false, false));
+	EXPECT_FALSE(LearnsFromPresses(true, true, false));
+}
+
 TEST(CreatureFight, TheLeanIsSetAgainstItsAlignmentUntilAFightIsCompleted)
 {
 	// No completed fight: the alignment sets the learnt lean again

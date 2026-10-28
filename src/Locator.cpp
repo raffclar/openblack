@@ -679,8 +679,10 @@ namespace openblack
 {
 namespace
 {
-template <typename LandSource>
-void InitializeLevelWith(const LandSource& land)
+/// Starts the services of a new level. makeLand gives the level its land, at the place in the order where the land
+/// changes.
+template <typename MakeLand>
+void InitializeLevelWith(MakeLand&& makeLand)
 {
 	// Both seeds go to 0 with every map, as the game clears them
 	Locator::gameRandom::value().SetSeeds({0, 0});
@@ -716,7 +718,7 @@ void InitializeLevelWith(const LandSource& land)
 	Locator::cameraBookmarkSystem::emplace<CameraBookmarkSystem>();
 	// A land starts with no camera zones
 	Locator::cameraZoneSystem::emplace<CameraZoneSystem>();
-	Locator::terrainSystem::emplace<LandIsland>(land);
+	makeLand();
 	// The things on the land's blocks that are drawn, near to far
 	Locator::objectDrawListSystem::emplace<ObjectDrawListSystem>();
 	Locator::cameraPathSystem::emplace<CameraPathSystem>();
@@ -726,12 +728,21 @@ void InitializeLevelWith(const LandSource& land)
 
 void openblack::InitializeLevel(const std::filesystem::path& path)
 {
-	InitializeLevelWith(path);
+	InitializeLevelWith([&path] { Locator::terrainSystem::emplace<LandIsland>(path); });
 }
 
 void openblack::InitializeLevel(const LandData& land)
 {
-	InitializeLevelWith(land);
+	InitializeLevelWith([&land] { Locator::terrainSystem::emplace<LandIsland>(land); });
+}
+
+void openblack::InitializeLevelOnOpenLand()
+{
+	InitializeLevelWith([] {
+		const auto restored = Locator::terrainSystem::value().RestoreBuiltAltitudes();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The level keeps its land: {} cells went back to their built altitude",
+		                   restored);
+	});
 }
 
 void openblack::InitializeComputerSettings(std::optional<std::filesystem::path> file)
@@ -769,6 +780,8 @@ void openblack::ShutDownServices()
 		resources.GetSounds().Clear();
 		// The advisors' models hold meshes of their own
 		resources.GetAdvisorModels().Clear();
+		// The thumbnails of the network lands hold textures of their own
+		resources.GetLandThumbnails().Clear();
 	}
 	Locator::advisorSystem::reset();
 

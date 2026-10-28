@@ -135,6 +135,14 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+TEST(SyncedState, TheStaticOfAFizzOnlyThisComputerSlidesIsNotSynced)
+{
+	// Each computer slides the static only while it draws the creature. The turns read how far the creature fizzed.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "staticScroll"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "fizz"));
+}
+
 // Only the frames of this computer change the hum and the mana path of the hand past the border. The turns change the
 // strength that the hand keeps.
 TEST(SyncedState, TheHumAndTheManaPathOfTheHandPastTheBorderAreNotSynced)

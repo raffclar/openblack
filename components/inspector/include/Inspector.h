@@ -93,8 +93,9 @@ private:
 };
 
 /// Whether a live network game refuses a query: each query that writes, and the queries that control the run or load a
-/// scenario. Some queries that write stay: the input, the camera, the pictures, the run record and the fight
-/// transcripts. They act only on this computer, as the player's own mouse and keyboard do.
+/// scenario. Some queries that write stay: the input, the camera, the pictures, the run record, the fight transcripts
+/// and the fight autopilot. They act only on this computer, as the player's own mouse and keyboard do. The fight cheat
+/// stays too: it is a command that the game server checks.
 [[nodiscard]] bool RefusedInNetworkGame(std::string_view query, bool writes);
 
 /// A query's description as JSON

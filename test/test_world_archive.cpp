@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <regex>
+#include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -37,6 +38,7 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameHeading.h"
+#include "Creature/CreatureExplorationMap.h"
 #include "Creature/CreatureRouteFollow.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureArena.h"
@@ -462,6 +464,30 @@ TEST(WorldArchive, ValuesOutsideTheRegistryRoundTrip)
 	FakeWalker read;
 	ASSERT_TRUE(LoadValue(context, bytes, read, EntityRemap {}));
 	EXPECT_EQ(read, walker);
+}
+
+TEST(WorldArchive, TheCreaturesMapOfTheLandGoesWithTheWorld)
+{
+	// A computer that takes the world of another computer gets its map of the land, made from the towns at the start
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	openblack::creature_exploration::RegionMap map;
+	map.regions.resize(3);
+	map.regions[1] = {
+	    .highest = 12.5f, .highestCell = {9, 10}, .firstCoast = glm::ivec2 {8, 11}, .firstSea = std::nullopt, .kinds = 0x13};
+	map.highest = 12.5f;
+	std::set<UnsavedValue> unsaved;
+	const auto bytes = SaveValue(context, map, &unsaved);
+	EXPECT_TRUE(unsaved.empty());
+	openblack::creature_exploration::RegionMap read;
+	ASSERT_TRUE(LoadValue(context, bytes, read, EntityRemap {}));
+	ASSERT_EQ(read.regions.size(), 3u);
+	EXPECT_EQ(read.regions[1].highest, 12.5f);
+	EXPECT_EQ(read.regions[1].highestCell, glm::ivec2(9, 10));
+	EXPECT_EQ(read.regions[1].firstCoast, std::optional(glm::ivec2(8, 11)));
+	EXPECT_FALSE(read.regions[1].firstSea.has_value());
+	EXPECT_EQ(read.regions[1].kinds, 0x13);
+	EXPECT_EQ(read.highest, 12.5f);
 }
 
 TEST(WorldArchive, EveryComponentOfTheGameCanBeMadeForALoad)

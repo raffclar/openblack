@@ -21,6 +21,8 @@
 #include <optional>
 #include <ostream>
 #include <span>
+#include <streambuf>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -39,6 +41,25 @@ struct Settings
 	std::optional<uint32_t> atTurn;
 	/// The most turns that the dump writes, so that a world that stays parted does not fill the disk
 	uint32_t mostWrites {8};
+};
+
+/// Tools: an output that writes each line of the text to the standard output after a tag. The page of the web build
+/// keeps the lines that have the tag, as it keeps the checksum lines, so a test script can read the rows of the web.
+class TaggedLines: public std::streambuf
+{
+public:
+	explicit TaggedLines(std::string_view tag)
+	    : _tag(tag)
+	{
+	}
+
+protected:
+	int_type overflow(int_type character) override;
+	int sync() override;
+
+private:
+	std::string _tag;
+	std::string _line;
 };
 
 /// Adds a value that is not in a component to the rows of a turn, such as the count of the synced random numbers. Its

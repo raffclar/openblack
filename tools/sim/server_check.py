@@ -206,6 +206,7 @@ def main():
                         help="both runs record the hash of each component, to find what made them part")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, and the hash of each field")
     parser.add_argument("--input", help="a JSON file of recorded input, [{frame, event}...], for the game's hand")
+    parser.add_argument("--throw-lead-latency-ms", type=int, help="a fixed latency in ms for the reports of the hand, so that the lead of each throw is the same in each run")
     parser.add_argument("--no-relay", action="store_true",
                         help="the server plays first and gets no commands of the game (the hand reports part them)")
     parser.add_argument("--draw-every", type=int, help="the game draws one frame in this many (0 for none)")
@@ -267,6 +268,10 @@ def main():
         server_command.append("--all-computer-gods")
     if options.ai_seed is not None:
         server_command += ["--ai-seed", str(options.ai_seed)]
+    # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
+    land_kind = {"land": options.land, "testbed": options.testbed, "gods_ring_map": options.gods_ring_map,
+                 "scenario": options.scenario}
+    server_command += sim_report.gods_need_no_temple_args(True, **land_kind)
     if options.server_fast:
         server_command.append("--fast")
     if options.conditions:
@@ -290,6 +295,7 @@ def main():
         game_command.append("--sim-all-computer-gods")
     if options.ai_seed is not None:
         game_command += ["--sim-ai-seed", str(options.ai_seed)]
+    game_command += sim_report.gods_need_no_temple_args(False, **land_kind)
     if options.conditions:
         game_command += ["--sim-conditions", options.conditions]
     if events is None:
@@ -298,6 +304,8 @@ def main():
         game_command += ["--sim-input", os.path.abspath(options.input)]
     if relay:
         game_command += ["--sim-commands", commands]
+    if options.throw_lead_latency_ms is not None:
+        game_command += ["--throw-lead-latency-ms", str(options.throw_lead_latency_ms)]
     game_command += [argument for argument in options.game_args.split(" ") if argument]
     if options.hash_fields:
         game_command.append("--sim-hash-fields")

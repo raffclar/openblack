@@ -24,6 +24,7 @@
 
 #include <SDL.h>
 #include <bgfx/bgfx.h>
+#include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/TempleInteriorInterface.h"
@@ -286,6 +287,27 @@ WorldTextView PrepareWorldTextCanvas(Canvas& canvas)
 	}
 	return view;
 }
+
+/// The thumbnail of a network land from the resource cache, read from "Online Maps/<file>.thm" the first time
+std::shared_ptr<const land_thumbnail::LandThumbnail> LoadLandThumbnail(const std::string& file)
+{
+	if (!Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return nullptr;
+	}
+	const auto path = std::filesystem::path("Online Maps") / (file + ".thm");
+	auto& cache = Locator::resources::value().GetLandThumbnails();
+	const auto id = entt::hashed_string(path.generic_string().c_str()).value();
+	if (!cache.Contains(id))
+	{
+		if (!Locator::filesystem::value().Exists(path))
+		{
+			return nullptr;
+		}
+		cache.Load(id, openblack::resources::LandThumbnailLoader::FromDiskTag {}, path);
+	}
+	return cache.Handle(id).handle();
+}
 } // namespace
 
 TextDatabase GameInterface::LoadTexts()
@@ -391,6 +413,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
 	_menuCreaturePainter.SetPictures(_symbols.get(), _mice.get());
+	_multiplayerBoxes->SetThumbnailSource(LoadLandThumbnail);
 	_fullFontTexture = MakeGlyphTexture(_font.GetFullAtlas(), _font.GetFullAtlasSize(), "Font full height");
 	_painter.SetFullGlyphs(_fullFontTexture.get());
 	_menuCreaturePainter.SetFullGlyphs(_fullFontTexture.get());
