@@ -333,6 +333,21 @@ size_t CurlHttpClient::Pending() const
 	return _transfers.size();
 }
 
+std::optional<uint64_t> CurlHttpClient::SentBytes(HttpRequestId id) const
+{
+	const auto found = std::ranges::find_if(_transfers, [id](const auto& transfer) { return transfer->id == id; });
+	if (found == _transfers.end() || !(*found)->easy)
+	{
+		return std::nullopt;
+	}
+	curl_off_t sent = 0;
+	if (curl_easy_getinfo((*found)->easy.get(), CURLINFO_SIZE_UPLOAD_T, &sent) != CURLE_OK || sent < 0)
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint64_t>(sent);
+}
+
 void CurlHttpClient::Finish(Transfer& transfer, HttpResponse&& response)
 {
 	long status = 0;

@@ -1898,3 +1898,10 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_pack_low_textures pack/test_pack_low_textures.cpp)
 target_link_libraries(test_pack_low_textures PRIVATE pack)
 openblack_setup_and_add_test(test_low_resolution_textures test_low_resolution_textures.cpp)
+openblack_setup_and_add_test(
+  test_creature_upload_cfg test_creature_upload_cfg.cpp
+)
+target_link_libraries(test_creature_upload_cfg PRIVATE creatureuploadcfg)
+openblack_setup_and_add_test(
+  test_creature_upload_dialog online/test_creature_upload_dialog.cpp
+)
