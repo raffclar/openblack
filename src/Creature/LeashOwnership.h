@@ -80,4 +80,8 @@ struct Claim
 /// the player's other creatures is leashable yet. A player's first creature is theirs to lead; extra ones are not.
 [[nodiscard]] bool ClaimsOnArrival(std::span<const Claim> others, PlayerNames owner);
 
+/// Whether the tap of a player on a leash post at a temple picks that leash: only the posts of the player's own temple
+/// do. The turn asks this of the player that sent the tap.
+[[nodiscard]] bool MayTapPost(PlayerNames tapper, PlayerNames postOwner);
+
 } // namespace openblack::creature_leash

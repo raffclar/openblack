@@ -333,3 +333,13 @@ TEST(CreatureHand, AQuickPressIsAClickAndALongOneAHold)
 	// A click can never last long enough to stroke
 	EXPECT_LE(creature_hand::k_ClickMaxMs, creature_feedback::k_StrokeHoldMs);
 }
+
+TEST(LeashOwnership, AnotherPlayersTapOnALeashPostDoesNothing)
+{
+	EXPECT_TRUE(MayTapPost(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(MayTapPost(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_TWO));
+	// The turn does the tap for the player that sent it, never for the owner of the post alone
+	EXPECT_FALSE(MayTapPost(PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(MayTapPost(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE));
+	EXPECT_FALSE(MayTapPost(PlayerNames::NEUTRAL, PlayerNames::NEUTRAL));
+}

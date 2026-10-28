@@ -191,7 +191,7 @@ public:
 	{
 		return std::nullopt;
 	}
-	bool TapPost(entt::entity /*post*/) override { return false; }
+	bool TapPost(PlayerNames /*player*/, entt::entity /*post*/) override { return false; }
 
 	std::optional<entt::entity> playersCreature;
 };

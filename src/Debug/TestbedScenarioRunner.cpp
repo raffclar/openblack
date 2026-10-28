@@ -2063,7 +2063,7 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 				    post = entity;
 			    }
 		    });
-		return post.has_value() && leashes.TapPost(*post) ? "tapped" : "no such leash";
+		return post.has_value() && leashes.TapPost(command.player, *post) ? "tapped" : "no such leash";
 	}
 	case Kind::LeashTapBuilding:
 	{

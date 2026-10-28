@@ -58,4 +58,12 @@ constexpr uint32_t k_StrayNameCount = 4;
 	return owner != Owner::Computer;
 }
 
+/// Whether a change of the profile, or an edit of its creature name, gives the player's creature the creature name of the
+/// profile. Only a game alone does this. In a network game, the profile of one computer does not change a creature of
+/// the world.
+[[nodiscard]] constexpr bool ProfileRenamesCreature(bool networkGame)
+{
+	return !networkGame;
+}
+
 } // namespace openblack::creature_names
