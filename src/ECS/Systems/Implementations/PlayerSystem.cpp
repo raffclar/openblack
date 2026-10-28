@@ -13,6 +13,7 @@
 
 #include "Creature/PrimaryCreature.h"
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
@@ -21,6 +22,8 @@
 #include "ECS/PlayerMiracles.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Locator.h"
 
@@ -44,9 +47,35 @@ void PlayerSystem::AddPlayer(entt::entity playerEntity)
 	_players.insert_or_assign(player.name, playerEntity);
 }
 
-entt::entity PlayerSystem::GetPlayer(PlayerNames playerName) const
+std::optional<entt::entity> PlayerSystem::FindPlayer(PlayerNames playerName) const
 {
-	return _players.at(playerName);
+	const auto player = _players.find(playerName);
+	return player != _players.end() ? std::optional(player->second) : std::nullopt;
+}
+
+openblack::player_kind::Facts PlayerSystem::FactsOf(PlayerNames name) const
+{
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	// A computer mind that a land script or the start of a game switched on marks its player
+	bool computerMind = false;
+	if (const auto player = FindPlayer(name); player.has_value() && Locator::entitiesRegistry::has_value())
+	{
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto* mind = registry.Valid(*player) ? registry.TryGet<const ComputerPlayer>(*player) : nullptr;
+		computerMind = mind != nullptr && mind->marked;
+	}
+	const bool hands = Locator::handSystem::has_value() && Locator::handSystem::value().GetHandsOf(name).has_value();
+	return {.player = name, .networkGame = networkGame, .computerMind = computerMind, .hands = hands};
+}
+
+bool PlayerSystem::IsComputerPlayer(PlayerNames name) const
+{
+	return player_kind::IsComputer(FactsOf(name));
+}
+
+bool PlayerSystem::IsHumanPlayer(PlayerNames name) const
+{
+	return player_kind::IsHuman(FactsOf(name));
 }
 
 void PlayerSystem::AddCreature(entt::entity creature)
@@ -120,6 +149,7 @@ void PlayerSystem::KeepForNextLand()
 		          .windResistance = player.windResistance,
 		          .miracles = player.miracles,
 		          .virtualInfluence = virtualInfluence != nullptr ? std::optional(virtualInfluence->state) : std::nullopt,
+		          .virtualInfluenceShown = virtualInfluence != nullptr ? virtualInfluence->shown : virtual_influence::Shown {},
 		          .influenceHistory = statistics != nullptr ? statistics->influenceHistory : statistics::History {},
 		          .populationHistory = statistics != nullptr ? statistics->populationHistory : statistics::History {}});
 	});
@@ -167,7 +197,7 @@ void PlayerSystem::TakeUpKept(entt::entity playerEntity)
 	// hum went with that land
 	if (kept.virtualInfluence.has_value())
 	{
-		registry.AssignOrReplace<VirtualInfluence>(playerEntity, *kept.virtualInfluence);
+		registry.AssignOrReplace<VirtualInfluence>(playerEntity, *kept.virtualInfluence, kept.virtualInfluenceShown);
 	}
 	// Their histories go on, though their statistics' counters start again
 	if (auto* statistics = registry.TryGet<PlayerStatistics>(playerEntity))

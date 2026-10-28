@@ -24,7 +24,6 @@
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
-#include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/NeverFades.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptControl.h"
@@ -34,6 +33,8 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Dances.h"
+#include "ECS/Map.h"
+#include "ECS/Reflection/PlainImage.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -122,7 +123,7 @@ public:
 	[[nodiscard]] bool IsInMap(entt::entity object) const override
 	{
 		const auto& registry = Registry();
-		return registry.AllOf<MapCellResident>(object) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(object);
+		return ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, InPhysics, CarriedByTornado>(object);
 	}
 
 	void SetVillagerDecideWhatToDo(entt::entity villager) override
@@ -641,10 +642,12 @@ bool ScriptObjectsSystem::Disband(entt::entity container)
 
 std::vector<uint8_t> ScriptObjectsSystem::SaveTable() const
 {
-	// The table is plain data: its bytes keep it whole
+	// The table is plain data: its bytes keep it whole. The gaps between the fields are zero, so that the same table
+	// always gives the same bytes.
 	static_assert(std::is_trivially_copyable_v<script_objects::Table>);
+	const auto image = ecs::reflection::PlainImage(_table);
 	std::vector<uint8_t> bytes(sizeof(_table));
-	std::memcpy(bytes.data(), &_table, sizeof(_table));
+	std::memcpy(bytes.data(), image.bytes.data(), sizeof(_table));
 	return bytes;
 }
 

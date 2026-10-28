@@ -29,7 +29,8 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
   };
 
   let rawMovement = false;
-  // The place of the click that took the lock, in the pixels of the game window
+  // The place of the click that took the lock, in the CSS pixels of the game canvas. The game changes it to the pixels
+  // of its back buffer.
   let lockClick = null;
   // The game window must listen to the pointer lock before the lock starts, else the window does not know of the lock
   let lockAllowed = false;
@@ -87,7 +88,6 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
   // Full screen. The game asks for it after a key press. The browser lets the page start the full screen only soon
   // after a press or a click, thus a request that fails waits for the next press or click.
   let fullscreenWanted = false;
-  let windowSize = null;
   const startFullscreen = () => {
     fullscreenWanted = false;
     if (document.fullscreenElement === game) {
@@ -113,24 +113,16 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
   window.addEventListener('keyup', retryFullscreen, true);
   window.addEventListener('mouseup', retryFullscreen, true);
 
-  // In full screen the game canvas fills the screen, and SDL takes the new size from the canvas at the resize event. In
-  // Chromium the keyboard lock gives all the keys to the game: the browser then frees the pointer only when the player
-  // holds Escape down, and the game gets a short press.
+  // The game canvas fills the page, and in full screen it fills the screen (page.css). SDL takes the new size from the
+  // canvas at the resize event. In Chromium the keyboard lock gives all the keys to the game: the browser then frees the
+  // pointer only when the player holds Escape down, and the game gets a short press.
   document.addEventListener('fullscreenchange', () => {
     if (document.fullscreenElement === game) {
-      windowSize = { width: canvas.style.width, height: canvas.style.height };
-      canvas.style.width = `${window.innerWidth}px`;
-      canvas.style.height = `${window.innerHeight}px`;
       if (navigator.keyboard && navigator.keyboard.lock) {
         navigator.keyboard.lock().then(() => say('keyboard lock on'), (error) => say(`no keyboard lock: ${error.name}`));
       }
       say(`full screen ${window.innerWidth}x${window.innerHeight}`);
     } else {
-      if (windowSize) {
-        canvas.style.width = windowSize.width;
-        canvas.style.height = windowSize.height;
-        windowSize = null;
-      }
       if (navigator.keyboard && navigator.keyboard.unlock) {
         navigator.keyboard.unlock();
       }
@@ -138,6 +130,19 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
     }
     window.dispatchEvent(new Event('resize'));
   });
+
+  // The game draws at the full resolution of the screen: the CSS size of the canvas times the device pixel ratio. The
+  // ratio changes when the browser zooms or the window goes to a screen of another scale. Then the page sends a resize
+  // event: SDL takes the new ratio from it, and the game draws at the new size.
+  const followPixelRatio = () => {
+    matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', () => {
+      say(`device pixel ratio ${window.devicePixelRatio}`);
+      window.dispatchEvent(new Event('resize'));
+      followPixelRatio();
+    }, { once: true });
+  };
+  say(`device pixel ratio ${window.devicePixelRatio}`);
+  followPixelRatio();
 
   // While the game has the pointer, the keys of the game do not do the browser's actions, such as Tab to the next
   // button or Alt to the menu. A key that writes a character keeps its action, because the game reads the text of

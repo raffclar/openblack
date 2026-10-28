@@ -26,6 +26,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/HandGrab.h"
@@ -39,6 +40,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
@@ -263,7 +265,14 @@ void villager_script::SetAge(entt::entity villager, uint32_t age)
 		    villager_age::GrownScale(setting.age, info.grownUpAge, info.ageToScale.values, start, [](float limit) {
 			    return Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(limit) : 0.0f;
 		    });
+		// The size changes two times: to the start size, then to the grown size. A villager in the map's cells comes out
+		// of them and goes in again when either change is not zero.
+		const bool resized = transform->scale.x != start || grown != start;
 		transform->scale = glm::vec3(grown);
+		if (resized)
+		{
+			ecs::thing_map_place::Reinsert(villager);
+		}
 	}
 	villager_age::SetBirthTurnForAge(*person, setting.age);
 	registry.SetDirty();
@@ -281,7 +290,7 @@ void villager_script::Face(entt::entity villager, glm::vec2 point)
 	{
 		return;
 	}
-	SetYAngle(villager, std::atan2(offset.y, offset.x));
+	SetYAngle(villager, portable_math::Atan2(offset.y, offset.x));
 }
 
 namespace
@@ -373,10 +382,7 @@ void villager_script::SetYAngle(entt::entity villager, float angle)
 	{
 		return;
 	}
-	wallHug->yAngle = angle;
-	wallHug->gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(angle));
-	transform->rotation = glm::eulerAngleY(-angle - glm::radians(90.0f));
-	registry.SetDirty();
+	openblack::ecs::living_facing::FaceAngle(registry, villager, angle);
 }
 
 bool villager_script::StartPathWalk(entt::entity villager, int32_t number, bool forward, float from, float to)
@@ -442,7 +448,7 @@ uint32_t villager_script::MoveAlongPath(LivingAction& action)
 	constexpr float k_LeastSquaredDistance = 0.001f;
 	if (glm::dot(offset, offset) > k_LeastSquaredDistance)
 	{
-		SetYAngle(villager, std::atan2(offset.y, offset.x));
+		SetYAngle(villager, portable_math::Atan2(offset.y, offset.x));
 	}
 	// At the map position there, on the ground
 	const auto place = map_coords::FromMetres(*point);

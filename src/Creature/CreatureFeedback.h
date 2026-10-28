@@ -66,13 +66,6 @@ constexpr float k_RewardFaceMs = 2000.0f;
 /// The part nearest a point the hand touches, given where each part's bone is, in part order
 [[nodiscard]] BodyPart NearestPart(const glm::vec3& touch, std::span<const glm::vec3, k_BodyPartCount> parts);
 
-/// The hand runs its strokes and slaps at most this many times a second, as the game did once a frame at the screen's
-/// refresh; each step takes all the time since the last
-constexpr float k_StepsPerSecond = 60.0f;
-/// The milliseconds the next step runs on after a frame of some milliseconds, the time left over kept in `sinceStep`;
-/// nothing until a step's worth has gone by
-[[nodiscard]] std::optional<float> Pace(float& sinceStep, float frameMs);
-
 /// The clocks a stroke waits on, in milliseconds
 struct StrokeClocks
 {
@@ -292,4 +285,9 @@ constexpr float k_LooksNearerTheCamera = 0.3f;
 /// lineOfSight is the way from the camera through the cursor
 [[nodiscard]] glm::vec3 HeldLookPoint(const glm::vec3& hand, const glm::vec3& middle, const glm::vec3& camera,
                                       const glm::vec3& lineOfSight, float creatureHeight);
+/// The look point of HeldLookPoint from the hand and the camera that a player reported. The hand is on the line of
+/// sight through the cursor, so the line from the camera to the hand gives the way of the line of sight. None when the
+/// hand is at the camera.
+[[nodiscard]] std::optional<glm::vec3> ReportedLookPoint(const glm::vec3& hand, const glm::vec3& middle,
+                                                         const glm::vec3& camera, float creatureHeight);
 } // namespace openblack::creature_feedback

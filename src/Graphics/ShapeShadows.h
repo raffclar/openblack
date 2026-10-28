@@ -53,12 +53,14 @@ struct Sample
 	float row;
 };
 
-/// Where a flattened point falls in the samples of the block with its corner at block
-[[nodiscard]] Sample SampleOf(glm::vec2 cast, glm::vec2 block);
+/// Where a flattened point falls in the samples of the block with its corner at block. side is the texels along a side
+/// of the block: tree_shadows::k_BlockTexels, or 128 at the low resolution of the lowest detail levels.
+[[nodiscard]] Sample SampleOf(glm::vec2 cast, glm::vec2 block, int side = tree_shadows::k_BlockTexels);
 
 /// Scans a flattened triangle into a block's samples, covering them in each texel's bits. A triangle cast from both
 /// sides is turned around to face the sun; any other facing away from it casts nothing.
-void Fill(tree_shadows::Coverage& coverage, const std::array<Sample, 3>& corners, bool bothSides);
+void Fill(tree_shadows::Coverage& coverage, const std::array<Sample, 3>& corners, bool bothSides,
+          int side = tree_shadows::k_BlockTexels);
 
 } // namespace shape_shadows
 

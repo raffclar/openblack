@@ -23,6 +23,7 @@
 #include "CreatureSpawner.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
@@ -36,6 +37,7 @@ using namespace openblack;
 using namespace openblack::debug::gui;
 using openblack::ecs::components::Creature;
 using openblack::ecs::components::CreatureLeash;
+using openblack::ecs::components::CreatureLeashRope;
 using openblack::ecs::components::CreatureMindState;
 using openblack::ecs::components::LeashPost;
 using openblack::ecs::components::Mesh;
@@ -237,11 +239,14 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 		ImGui::Text("%s leash, %s", leash::Name(worn.type),
 		            worn.tiedTo.has_value() ? fmt::format("tied to entity {}", static_cast<uint32_t>(*worn.tiedTo)).c_str()
 		                                    : "held in the hand");
-		ImGui::Text("Tension");
-		ImGui::SameLine();
-		ImGui::ProgressBar(worn.rope.tension, ImVec2(k_BarWidth, 0.0f), fmt::format("{:.2f}", worn.rope.tension).c_str());
-		ImGui::Text("Length %.1f (rest %.1f, full %.1f)", glm::distance(worn.rope.start, worn.rope.end), worn.rope.slackLength,
-		            worn.rope.maxLength);
+		if (const auto* rope = registry.TryGet<const CreatureLeashRope>(entity); rope != nullptr)
+		{
+			ImGui::Text("Tension");
+			ImGui::SameLine();
+			ImGui::ProgressBar(rope->rope.tension, ImVec2(k_BarWidth, 0.0f), fmt::format("{:.2f}", rope->rope.tension).c_str());
+			ImGui::Text("Length %.1f", glm::distance(rope->rope.start, rope->rope.end));
+		}
+		ImGui::Text("Rest %.1f, full %.1f", worn.slackLength, worn.maxLength);
 	}
 	else
 	{
@@ -300,11 +305,12 @@ void CreatureSpawner::DrawRope(entt::entity entity) noexcept
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* state = registry.TryGet<const CreatureLeash>(entity);
-	if (state == nullptr || !state->worn.has_value() || !state->worn->ropeStarted)
+	const auto* drawn = registry.TryGet<const CreatureLeashRope>(entity);
+	if (state == nullptr || !state->worn.has_value() || drawn == nullptr || !drawn->started)
 	{
 		return;
 	}
-	const auto& rope = state->worn->rope;
+	const auto& rope = drawn->rope;
 	const auto& camera = Locator::camera::value();
 	const auto display = ImGui::GetIO().DisplaySize;
 	const glm::vec4 viewport {0.0f, 0.0f, display.x, display.y};

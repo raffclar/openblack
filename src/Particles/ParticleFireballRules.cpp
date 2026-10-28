@@ -26,6 +26,7 @@
 
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/PortableMath.h"
 #include "Common/X87.h"
 #include "ParticleArchive.h"
 #include "ParticleBlast.h"
@@ -479,8 +480,8 @@ public:
 		}
 		const float fade = std::clamp(effect.AtomAge(atom) / timeToFade, 0.0f, 1.0f);
 		const float angle = data.a.x * (1.0f - fade) * effect.GetDt();
-		const float c = std::cos(angle);
-		const float s = std::sin(angle);
+		const float c = openblack::portable_math::Cos(angle);
+		const float s = openblack::portable_math::Sin(angle);
 		const auto v = atom.velocity;
 		atom.velocity = {c * v.x - s * v.z, v.y, c * v.z + s * v.x};
 		return true;
@@ -600,6 +601,13 @@ public:
 		glm::vec3 position {0.0f};
 		float scale {1.0f};
 		glm::mat3 rotation {1.0f};
+
+		/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+		template <typename Visitor>
+		static void VisitPlainFields(const Sample& self, Visitor&& visit)
+		{
+			visit(self.position, self.scale, self.rotation);
+		}
 	};
 	/// Where the parent was over the last turns, newest at the head of the ring
 	struct History
@@ -646,10 +654,9 @@ public:
 					groups = trailGroup >= 0 ? std::span<const int>(tail) : std::span<const int> {};
 				}
 				auto& atom = effect.NewAtom(collection, atomCreator, groups);
-				if (useParentsDrawOffset && collection.parent != nullptr)
+				if (useParentsDrawOffset)
 				{
-					atom.drawOffset = collection.parent->drawOffset;
-					atom.drawOffsetFrom = collection.parent->drawOffsetFrom;
+					ShareParentDrawOffset(atom);
 				}
 			}
 			return true;

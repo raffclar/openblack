@@ -33,7 +33,7 @@ class PlayerSystem final: public PlayerSystemInterface
 public:
 	void RegisterPlayers() override;
 	void AddPlayer(entt::entity playerEntity) override;
-	[[nodiscard]] entt::entity GetPlayer(PlayerNames playerName) const override;
+	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames playerName) const override;
 	void AddCreature(entt::entity creature) override;
 	void MakePrimaryCreature(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;
@@ -41,8 +41,12 @@ public:
 	void ForgetKept() override;
 	[[nodiscard]] bool KeepAlignmentAt(uint32_t turn) override;
 	void TakeUpKept(entt::entity playerEntity) override;
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override;
+	[[nodiscard]] bool IsHumanPlayer(PlayerNames name) const override;
 
 private:
+	/// What decides who plays a player now
+	[[nodiscard]] player_kind::Facts FactsOf(PlayerNames name) const;
 	/// Remembers that the owner of the creature got it, after the creatures they got before or before all of them
 	void Acquire(entt::entity creature, bool primary);
 	/// What a player keeps from land to land
@@ -54,6 +58,8 @@ private:
 		components::Player::Miracles miracles;
 		/// What their hand keeps of their influence past the border, and whether a script switched it off
 		std::optional<virtual_influence::State> virtualInfluence;
+		/// What the frames showed of it: the hum and the mana path
+		virtual_influence::Shown virtualInfluenceShown;
 		/// Their histories of influence and population, which run on over the whole game
 		statistics::History influenceHistory;
 		statistics::History populationHistory;

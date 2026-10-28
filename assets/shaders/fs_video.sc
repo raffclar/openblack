@@ -4,7 +4,7 @@ $input v_texcoord0, v_color0
 
 // A full-screen Bink video, from its three decoded planes as the game's video library and renderer show it:
 // - each pixel's colour from its luma and its 2x2 block's chroma through the library's integer tables;
-// - optionally cut to 5 bits a channel and widened again, as the game's 16-bit copy of the picture does;
+// - optionally through the game's 16-bit surface, 555 or 565 (see Graphics/FilmSurface.h);
 // - spread over the screen as the game's 256x256 tiles were, each sampled half a texel in from its edges with clamped
 //   bilinear filtering, so no tile blends into the next.
 
@@ -17,7 +17,7 @@ SAMPLER2D(s_colourTables, 3);
 uniform vec4 u_videoSize;
 // x, y: the chroma plane textures' size
 uniform vec4 u_videoChroma;
-// x: 1 for the game's 16-bit copy; y: 1 when there is a picture, 0 for black
+// x: 0 for full colour, 1 for the 555 surface, 2 for the 565 surface; y: 1 when there is a picture, 0 for black
 uniform vec4 u_videoOptions;
 
 float PlaneValue(sampler2D plane, vec2 texel, vec2 size)
@@ -43,9 +43,10 @@ vec3 TexelColour(vec2 texel)
 	vec3 colour = clamp(vec3(byY.x + byV.y, byY.x + byU.x + byV.z, byY.x + byU.y), 0.0, 255.0);
 	if (u_videoOptions.x > 0.5)
 	{
-		// The top 5 bits, widened again by repeating their top bits
-		vec3 top = floor(colour / 8.0);
-		colour = top * 8.0 + floor(top / 4.0);
+		// Keep the top bits of each channel. The display card reads a level n of m bits as n / (2^m - 1)
+		vec3 step = u_videoOptions.x > 1.5 ? vec3(8.0, 4.0, 8.0) : vec3_splat(8.0);
+		vec3 levels = 256.0 / step - vec3_splat(1.0);
+		return floor(colour / step) / levels;
 	}
 	return colour / 255.0;
 }

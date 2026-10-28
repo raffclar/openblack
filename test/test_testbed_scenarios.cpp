@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -456,6 +457,20 @@ TEST(TestbedScenarios, AFoodPileWhoseModelIsFarFromItsPointIsAProblem)
 	EXPECT_EQ(Problems(piles).size(), 1u);
 }
 
+// In a network game a scenario steps by the turns. It is laid out before its first turn and gives no commands before
+// that turn, as a game that lays it out in the frame of its first turn does. From the next turn it steps on before each
+// turn. The frames do not change when it steps, so each computer gives the commands before the same turn.
+TEST(TestbedScenarios, AScenarioOfANetworkGameStepsByTheTurnsFromTheSecondTurnAfterItsLayout)
+{
+	EXPECT_EQ(TurnStepOf(std::nullopt, 0), TurnStep::None);
+	EXPECT_EQ(TurnStepOf(std::nullopt, 7), TurnStep::None);
+	EXPECT_EQ(TurnStepOf(0u, 0), TurnStep::Wait);
+	EXPECT_EQ(TurnStepOf(0u, 1), TurnStep::Update);
+	EXPECT_EQ(TurnStepOf(40u, 40), TurnStep::Wait);
+	EXPECT_EQ(TurnStepOf(40u, 41), TurnStep::Update);
+	EXPECT_EQ(TurnStepOf(40u, 2000), TurnStep::Update);
+}
+
 TEST(TestbedScenarios, BoundsTakeInEveryPoint)
 {
 	const std::array<glm::vec2, 3> points {glm::vec2 {-10.0f, 0.0f}, glm::vec2 {30.0f, 20.0f}, glm::vec2 {10.0f, -40.0f}};
@@ -812,4 +827,27 @@ TEST(TestbedScenarios, CoversCastingThroughTheHand)
 	{
 		EXPECT_TRUE(withoutEffects.contains(type)) << static_cast<int>(type);
 	}
+}
+
+TEST(TestbedScenarios, TheMapForThirtyTwoGodsHasScenariosThatLoadIt)
+{
+	for (const auto id : {"multiplayer.gods_ring_map", "multiplayer.gods_ring_slot"})
+	{
+		const auto* scenario = Find(id);
+		ASSERT_NE(scenario, nullptr) << id;
+		EXPECT_EQ(scenario->environment.land, Land::GodsRingMap) << id;
+		EXPECT_EQ(scenario->facet, Facet::Multiplayer) << id;
+		EXPECT_FALSE(scenario->environment.dispenserGrid) << id;
+	}
+	EXPECT_EQ(Name(Facet::Multiplayer), "Multiplayer");
+}
+
+TEST(TestbedScenarios, AChallengeTitleIsTheNumberOfTheHelpTextWithItsName)
+{
+	const std::vector<std::string> names {"HELP_TEXT_DIALOG_CONTINUEGAME", "HELP_TEXT_TITLE_01", "HELP_TEXT_TITLE_03"};
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_01"), 1U);
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_03"), 2U);
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_DIALOG_CONTINUEGAME"), 0U);
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_15"), std::nullopt);
+	EXPECT_EQ(HelpTextNumber({}, "HELP_TEXT_TITLE_01"), std::nullopt);
 }

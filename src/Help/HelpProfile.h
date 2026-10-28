@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <utility>
 #include <vector>
 
 /// The help system's profile of the player: how often and how lately the player has done each of the things the help
@@ -40,10 +41,19 @@ constexpr uint32_t k_CastCreatureMiracle = 10;
 /// The hand holds the leash over nothing and the tooltip offers to focus on the creature
 constexpr uint32_t k_FocusCreatureTip = 47;
 /// The gestures that the help counts. All of them also count as the event for any gesture.
+/// - The R calls the last miracle again.
+/// - A gesture opens the miracle selection.
+/// - A gesture of the open selection matches a miracle, and a gesture chooses a miracle.
+/// - A scribble closes the selection.
 /// - The hand powers up the miracle that it holds.
 /// - The player calls the special move of the creature in a fight.
 /// - A scribble stops the power-up of the miracle in the hand, or drops the miracle when it has no power-up.
 /// - The hand casts a miracle that has a power-up.
+constexpr uint32_t k_GestureRepeatMiracle = 14;
+constexpr uint32_t k_GestureOpenSelection = 15;
+constexpr uint32_t k_GestureSelectionStep = 16;
+constexpr uint32_t k_GestureSelectionChosen = 17;
+constexpr uint32_t k_GestureCloseSelection = 21;
 constexpr uint32_t k_GesturePowerUp = 18;
 constexpr uint32_t k_GestureSpecialMove = 19;
 constexpr uint32_t k_GestureStopPowerUp = 20;
@@ -152,6 +162,23 @@ struct WorldCameraView
 /// - No land shows there and the camera looks up at the sky: k_CameraSeesSky.
 [[nodiscard]] std::vector<uint32_t> CameraViewEvents(const WorldCameraView& view);
 
+/// The help events of the input of this computer's player, which wait for the next report of the help. One bit keeps
+/// each event, thus an event that occurs many times before a report goes once.
+class ReportedEvents
+{
+public:
+	/// The event occurs. Nothing for a number past the last.
+	void Add(uint32_t event);
+	/// The events that occurred since the last take, one bit for each event (bit n is event n). The kept events go.
+	[[nodiscard]] uint64_t Take();
+
+private:
+	uint64_t _events {0};
+};
+
+/// The events of the bits of a report, in the order of their numbers. The bits past the last event give nothing.
+[[nodiscard]] std::vector<uint32_t> EventsOf(uint64_t events);
+
 /// Every event's count and the profile's clock
 class HelpProfile
 {
@@ -166,7 +193,7 @@ public:
 	[[nodiscard]] EventCount& Count(uint32_t event) { return _counts.at(event); }
 
 	/// Whether the scripts may ask about an event: 1 to 48
-	[[nodiscard]] static constexpr bool ScriptMayAsk(int32_t event) { return event > 0 && event < k_EventCount; }
+	[[nodiscard]] static constexpr bool ScriptMayAsk(int32_t event) { return event > 0 && static_cast<uint32_t>(event) < k_EventCount; }
 
 private:
 	std::array<EventCount, k_EventCount> _counts {};

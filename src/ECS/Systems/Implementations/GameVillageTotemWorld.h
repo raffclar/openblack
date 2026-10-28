@@ -36,6 +36,7 @@ public:
 	void SeeHandTakeTotem(PlayerNames player) override;
 	void ShareSet(entt::entity town) override;
 	void FloatNumber(glm::vec3 position, float value, uint32_t colour) override;
+	bool SendCommand(const player_commands::Action& action) override;
 };
 
 } // namespace openblack::ecs::systems

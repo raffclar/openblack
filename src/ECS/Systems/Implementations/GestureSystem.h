@@ -52,13 +52,16 @@ public:
 	}
 	void ForgetPath() override;
 	void SeedFirstTurnInHand() override;
-	[[nodiscard]] bool IsSelecting() const override { return _picker.open; }
 	[[nodiscard]] std::span<const gestures::GestureTemplate> GetTemplates() const override;
 	[[nodiscard]] const gesture::GestureRecorder& GetPath() const override { return _recorder; }
 	[[nodiscard]] float GetScreenAspect() const override { return _screenAspect; }
 	[[nodiscard]] const std::vector<gesture::Request>& GetRequests() const override { return _requests; }
 	[[nodiscard]] std::optional<Recognised> GetLastRecognised() const override { return _lastRecognised; }
 	[[nodiscard]] bool IsLeashPickerOpen() const override { return _picker.open; }
+	[[nodiscard]] bool IsSelectionOpen() const override { return _selection.IsOpen(); }
+	bool OpenSelectionByKey(PlayerNames player) override;
+	bool RepeatMiracleByKey(PlayerNames player) override;
+	[[nodiscard]] bool IsSelecting() const override { return _selection.IsOpen() || _picker.open; }
 	[[nodiscard]] float GetCircleSecondsLeft() const override { return _circleSeconds; }
 	[[nodiscard]] bool IsGesturing() const override { return _gesturing; }
 	[[nodiscard]] const gesture_hints::Row& GetHints() const override { return _hints; }
@@ -69,8 +72,15 @@ public:
 private:
 	/// What the hand holds and the player's creature, for the requests
 	[[nodiscard]] gesture::HandContext ContextOf(const Frame& frame);
-	/// Carries out a recognised gesture
-	void Act(const gesture::Request& request, const gesture::Match& match, const Frame& frame);
+	/// Carries out a recognised gesture. Returns false when the gesture did nothing and the gestures after it are
+	/// still tried.
+	bool Act(const gesture::Request& request, const gesture::Match& match, const Frame& frame);
+	/// Opens the miracle selection with a gesture, for the miracles that the player's icons offer for it
+	bool OpenSelection(GestureType opening, PlayerNames player);
+	/// The miracle selection waits for its gestures this frame, closes when the hand is not ready, and its time passes
+	void StepSelection(gesture::HandContext& context, const Frame& frame);
+	/// One sample of the cursor goes on the path, and the first gesture waited for that the path draws acts
+	void SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context);
 	/// The recognised gesture's trail on the land, for the particles to show
 	void LayTrail(GestureType gesture, const gesture::Match& match, const Frame& frame) const;
 	/// The hints for what the hand waits for now, replacing those shown when they differ
@@ -84,6 +94,8 @@ private:
 	std::deque<glm::vec2> _drawing;
 	bool _drawingHoldsAction {false};
 	float _sinceSample {0.0f};
+	/// The cursor of the last frame, from which the cursor of this frame moved
+	std::optional<glm::vec2> _lastCursor;
 	/// Where the camera's eye was last frame
 	std::optional<glm::vec3> _lastCameraEye;
 	/// The rest after a gesture, while nothing is recorded
@@ -93,8 +105,10 @@ private:
 	std::optional<Recognised> _lastRecognised;
 	uint32_t _recognisedCount {0};
 	gesture::LeashPicker _picker;
-	/// A miracle did its first turn in the hand on this land: the chain follows the hand while it holds any miracle
+	/// A miracle did its first turn in the hand on this land, or the miracle selection opened on this land: the chain
+	/// follows the hand while it holds any miracle
 	bool _seedTurnedOnLand {false};
+	gesture::MiracleSelection _selection;
 	/// The circle drawn for the seed in the hand, while it is remembered
 	float _circleSeconds {0.0f};
 	bool _gesturing {false};

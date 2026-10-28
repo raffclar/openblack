@@ -71,6 +71,11 @@ std::optional<uint8_t> villager_held::HeldAlpha(std::optional<uint8_t> ownFade, 
 	return ownFade.has_value() ? ownFade : villagerFade;
 }
 
+bool villager_held::DrawsHeldThing(Holder holder)
+{
+	return holder == Holder::None;
+}
+
 bool villager_held::DropsLog(CarriedObject shown, int16_t wood, uint32_t minWoodToShowGraphic)
 {
 	return MeshOf(shown).has_value() && static_cast<int32_t>(wood) > static_cast<int32_t>(minWoodToShowGraphic);

@@ -21,9 +21,11 @@ using namespace openblack::ecs::systems;
 namespace
 {
 constexpr auto k_TurnMs = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
-/// Further behind than this, the game gives up on the time it lost
+/// Further behind than this, a game with one player gives up on the time it lost
 constexpr int32_t k_MaxLagMs = 2000;
+/// The turns that a frame can do: one alone, and up to 10 in a network game, so that a computer that is behind catches up
 constexpr uint32_t k_MaxTurnsPerFrame = 1;
+constexpr uint32_t k_MaxNetworkTurnsPerFrame = 10;
 constexpr int32_t k_MaxRemainderMs = 99;
 constexpr float k_FractionPerMs = 0.01f;
 /// The timer is started at this speed so that taking its saved speed counts from now
@@ -153,6 +155,11 @@ void TimeSystem::StartDraw()
 	_lastDrawTicks = ticks;
 }
 
+void TimeSystem::StepInput(std::chrono::microseconds stepTime)
+{
+	_inputSteps = _inputClock.Advance(stepTime);
+}
+
 std::chrono::milliseconds TimeSystem::GetElapsedTime() const
 {
 	return _elapsedTime;
@@ -178,6 +185,9 @@ void TimeSystem::StartGameClock(bool paused)
 	_visualMs = 0;
 	_frameGameMs = 0;
 	_turnFraction = 0.0f;
+	// The steps of the input count from the start of the game's clock, so that the same input steps the same way
+	_inputClock.Restart();
+	_inputSteps = {};
 	ResetTimerToTurn();
 }
 
@@ -211,13 +221,14 @@ void TimeSystem::ResumeAtTurn(uint32_t turn, int32_t remainderMs)
 
 bool TimeSystem::IsTurnDue()
 {
-	if (Stopped() || _turnsThisFrame >= k_MaxTurnsPerFrame)
+	if (Stopped() || _turnsThisFrame >= (_catchesUp ? k_MaxNetworkTurnsPerFrame : k_MaxTurnsPerFrame))
 	{
 		return false;
 	}
 	const auto timer = _timer.Milliseconds(Ticks());
 	const auto due = static_cast<int32_t>(_turn * k_TurnMs);
-	if (timer - due > k_MaxLagMs)
+	// A player's computer in a network game keeps the time it lost, and catches up
+	if (!_catchesUp && timer - due > k_MaxLagMs)
 	{
 		ResetTimerToTurn();
 	}
@@ -250,6 +261,11 @@ void TimeSystem::ResetTimerToTurn()
 void TimeSystem::UpdateFrame()
 {
 	_turnsThisFrame = 0;
+	CatchUpFrame();
+}
+
+void TimeSystem::CatchUpFrame()
+{
 	if (Stopped())
 	{
 		// The fraction stays as it was
@@ -289,8 +305,30 @@ void TimeSystem::SetPaused(bool paused)
 	FollowStop(wasStopped);
 }
 
+void TimeSystem::SetPlayerPause(bool paused)
+{
+	if (PlayerCanStopClock(_networkGame))
+	{
+		SetPaused(paused);
+	}
+}
+
+void TimeSystem::SetNetworkGame(bool networkGame)
+{
+	_networkGame = networkGame;
+	// A hold that started before the game became a network game ends
+	if (networkGame && _held)
+	{
+		SetHeld(false);
+	}
+}
+
 void TimeSystem::SetHeld(bool held)
 {
+	if (held && !PlayerCanStopClock(_networkGame))
+	{
+		return;
+	}
 	const bool wasStopped = Stopped();
 	_held = held;
 	// The things that the frame steps after the start of the hold are in the stopped world, so they get no game time

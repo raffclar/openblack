@@ -24,6 +24,13 @@
 namespace openblack::gamesave
 {
 
+/// A value whose bytes are all in its fields. A value with gaps between its fields can have other bytes in the gaps
+/// after a copy, so a save of it can change from run to run. A type of the game with no gaps adds itself here.
+template <typename T>
+inline constexpr bool k_HasNoGaps = std::is_arithmetic_v<T> || std::is_enum_v<T> || std::has_unique_object_representations_v<T>;
+template <typename T, size_t Size>
+inline constexpr bool k_HasNoGaps<std::array<T, Size>> = k_HasNoGaps<T>;
+
 /// Adds values to the end of a block of bytes
 class ByteWriter
 {
@@ -32,6 +39,7 @@ public:
 	void Put(const T& value)
 	{
 		static_assert(std::is_trivially_copyable_v<T>);
+		static_assert(k_HasNoGaps<T>, "A value with gaps between its fields must go in field by field");
 		const auto at = _bytes.size();
 		_bytes.resize(at + sizeof(T));
 		std::memcpy(_bytes.data() + at, &value, sizeof(T));

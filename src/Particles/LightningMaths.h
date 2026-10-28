@@ -109,6 +109,13 @@ struct ArcEnds
 	glm::vec3 to {0.0f};
 	glm::vec3 fromNormal {0.0f};
 	glm::vec3 toNormal {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const ArcEnds& self, Visitor&& visit)
+	{
+		visit(self.from, self.to, self.fromNormal, self.toNormal);
+	}
 };
 /// The arc's length: the distance from one end to the other
 [[nodiscard]] float ArcLength(const ArcEnds& ends);

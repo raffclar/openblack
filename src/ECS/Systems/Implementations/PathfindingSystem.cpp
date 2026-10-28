@@ -30,6 +30,7 @@
 #include "3D/MapCoords.h"
 #include "Animals/AnimalMove.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -52,6 +53,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingCircles.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerSpeed.h"
@@ -258,6 +260,11 @@ void MoveWalker(Walker& walker, glm::ivec2 position)
 	                           ? Locator::terrainSystem::value().GetHeightAt(wallHug.placedAt)
 	                           : walker.transform.position.y;
 	walker.transform.position = glm::xzy(glm::vec3(wallHug.placedAt, altitude));
+	// It goes into the map cell that it stepped into at once
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Moved(walker.entity);
+	}
 }
 
 /// Faces the walker along a game angle and makes its step that way
@@ -265,8 +272,15 @@ void FaceAngle(Walker& walker, uint16_t angle)
 {
 	auto& wallHug = walker.wallHug;
 	wallHug.gameAngle = static_cast<uint16_t>(angle & gutils::k_GameAngleMask);
-	wallHug.yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
-	walker.transform.rotation = glm::eulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
+	const float yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
+	const bool turned = yAngle != wallHug.yAngle;
+	wallHug.yAngle = yAngle;
+	walker.transform.rotation = portable_math::EulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
+	// A walker that turns comes out of its map cell and goes in again, at the front of the cell's list
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(walker.entity);
+	}
 	wallHug.step = wall_hug::StepAlong(wallHug.gameAngle, walker.speed);
 	wallHug.stepAltitude = 0.0f;
 }

@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <array>
 
+#include <ComputerSettings.h>
+
 /// Black & White's graphics detail levels, 0 to 6. The game's options name the first five Minimum, Low, Medium, High and
 /// Maximum Detail; 5 is Custom Detail, whose values here are where the player's own settings start, and 6 "SUPER
 /// Detail!", which only differs from Maximum in the sea's texture. Maximum (4) is the default, which is what the game
@@ -27,6 +29,8 @@ inline constexpr uint8_t k_Default = 4;
 inline constexpr uint8_t k_Maximum = 4;
 inline constexpr uint8_t k_Custom = 5;
 inline constexpr uint8_t k_Count = 7;
+/// How many levels the options' selector steps through unless the computer's settings say otherwise
+inline constexpr uint8_t k_MenuLevels = 5;
 
 /// Everything a detail level switches
 struct Settings
@@ -67,6 +71,8 @@ struct Settings
 	bool lowResTextures {false};
 	/// The whole land is drawn with its coarse texture pages, without painting each block's texture
 	bool coarseLand {false};
+	/// Brightens the light of the sky and the land (see LandLightTable::RampDivisor); 0 for every level of the table
+	float lightBoost {0.0f};
 };
 
 // The game's tables, one value per level
@@ -100,10 +106,48 @@ inline constexpr std::array<uint8_t, k_Count> k_RainSplashes = {0, 0, 3, 5, 8, 8
 	};
 }
 
-/// The options' detail selector steps round the first five levels; a level beyond them shows as the one it wraps to
-[[nodiscard]] constexpr uint8_t MenuLevel(uint8_t level)
+/// The settings of a level, with the computer's own values in place of the table's for the custom level. Other levels
+/// take only their table.
+[[nodiscard]] constexpr Settings WithCustom(uint8_t level, const computer_settings::CustomDetail& custom)
 {
-	return level % (k_Maximum + 1);
+	auto settings = For(level);
+	if (level != k_Custom)
+	{
+		return settings;
+	}
+	const auto take = [](auto& value, const auto& kept) {
+		if (kept.has_value())
+		{
+			value = *kept;
+		}
+	};
+	take(settings.modelDetail, custom.modelDetail);
+	take(settings.smallBump, custom.smallBump);
+	take(settings.clouds, custom.clouds);
+	take(settings.cloudShadows, custom.cloudShadows);
+	take(settings.waterTiling, custom.waterTiling);
+	take(settings.landReflection, custom.landReflection);
+	take(settings.templeReflections, custom.templeReflections);
+	take(settings.templeLightmaps, custom.templeLightmaps);
+	take(settings.templeGlows, custom.templeGlows);
+	take(settings.templeVolumeLight, custom.templeVolumeLight);
+	take(settings.templePeople, custom.templePeople);
+	take(settings.rainSplashes, custom.rainSplashes);
+	take(settings.fog, custom.fog);
+	take(settings.weather, custom.weather);
+	take(settings.objectLighting, custom.objectLighting);
+	take(settings.objectShadows, custom.objectShadows);
+	take(settings.lowResTextures, custom.lowResTextures);
+	take(settings.coarseLand, custom.coarseLand);
+	take(settings.lightBoost, custom.lightBoost);
+	return settings;
+}
+
+/// The options' detail selector steps round the first levels (five unless the computer's settings say otherwise); a
+/// level beyond them shows as the one it wraps to
+[[nodiscard]] constexpr uint8_t MenuLevel(uint8_t level, uint8_t menuLevels = k_MenuLevels)
+{
+	return static_cast<uint8_t>(level % std::max<uint8_t>(menuLevels, 1));
 }
 
 /// Whether the temple's main room is mirrored in its floor: that needs its light maps too

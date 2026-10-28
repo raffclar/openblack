@@ -37,14 +37,18 @@
 #include "Camera/CameraBookmarks.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureSaveState.h"
+#include "Creature/CreatureTeleportAgendas.h"
+#include "Creature/CreatureTownCompassion.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashOwnership.h"
@@ -56,6 +60,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -65,15 +70,18 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/LeashOrderSparkles.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
@@ -114,12 +122,12 @@ using creature_desires::Desire;
 
 namespace
 {
-/// The creature of the local player gets a leash, loses it, or its leash changes: the hand forgets the path of the
-/// gesture that it draws
+/// The creature of the player of this computer gets a leash, loses it, or its leash changes: the hand forgets the path
+/// of the gesture that it draws
 void ForgetLocalGesturePath(PlayerNames player)
 {
-	if (Locator::gestureSystem::has_value() && Locator::playerSystem::has_value() &&
-	    player == Locator::playerSystem::value().GetLocalPlayer())
+	if (Locator::gestureSystem::has_value() &&
+	    player == (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE))
 	{
 		Locator::gestureSystem::value().ForgetPath();
 	}
@@ -153,31 +161,56 @@ constexpr float k_CreatureTapShare = 0.4f;
 /// How far a tap reaches
 constexpr float k_TapReach = 1e6f;
 
-/// The player's hand in the world, as the reports of the player put it. The turns measure from here.
-std::optional<glm::vec3> HandPoint()
+/// The hand of a player in the world, as the reports of the player put it, none off the land. The turns measure from
+/// here.
+std::optional<glm::vec3> HandPoint(PlayerNames player)
 {
 	if (!Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto& hands = Locator::handSystem::value();
+	if (player == PlayerNames::PLAYER_ONE)
+	{
+		return hands.GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	}
+	const auto own = hands.GetHandsOf(player);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = own.has_value() ? (*own)[static_cast<size_t>(HandSystemInterface::Side::Left)] : entt::null;
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	if (reported == nullptr || reported->handPoint == glm::vec3(0.0f))
+	{
+		return std::nullopt;
+	}
+	return reported->handPoint;
+}
+
+/// The player whose hand this computer moves
+PlayerNames OwnPlayer()
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
+
+/// The rope of the worn leash, as the frames draw it, none before the frames made it
+CreatureLeashRope* DrawnRopeOf(Registry& registry, entt::entity creature)
+{
+	return registry.Valid(creature) ? registry.TryGet<CreatureLeashRope>(creature) : nullptr;
+}
+
+/// The turn asks the frames to lay the rope afresh from the hand or the tied thing to the collar. The rope is not part
+/// of the world, so the turn may change it.
+void LayRopeAfresh(Registry& registry, entt::entity creature)
+{
+	if (auto* rope = DrawnRopeOf(registry, creature))
+	{
+		rope->started = false;
+	}
 }
 
 /// This computer's hand where the frames draw it, none off the land. The ropes and the hold of a rope go from here.
 std::optional<glm::vec3> DrawnHandPoint()
 {
-	if (!Locator::handSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	const auto* transform = registry.Valid(hand) ? registry.TryGet<const Transform>(hand) : nullptr;
-	if (transform == nullptr || transform->position == glm::vec3(0.0f))
-	{
-		return std::nullopt;
-	}
-	return transform->position;
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetDrawnHandPosition() : std::nullopt;
 }
 
 float CreatureHeight(const Creature& creature)
@@ -202,10 +235,12 @@ enum class CollarPose
 /// Where the leash meets the creature: its collar bone in a pose of the body, or high on its body when it has none
 glm::vec3 CollarPoint(const Registry& registry, entt::entity entity, CollarPose pose = CollarPose::Drawn)
 {
-	const auto& transform = registry.Get<const Transform>(entity);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(entity);
+	// The drawn collar is on the body where the frame draws it
+	const auto& turnTransform = registry.Get<const Transform>(entity);
+	const auto transform = pose == CollarPose::Drawn ? DrawnTransform(turnTransform, animation) : turnTransform;
 	const auto& creature = registry.Get<const Creature>(entity);
 	const auto fallback = transform.position + glm::vec3(0.0f, CreatureHeight(creature) * k_CollarHeightShare, 0.0f);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(entity);
 	const auto& rigs = Locator::resources::value().GetCreatureRigs();
 	const auto rigId = creature::GetRigId(creature.species);
 	if (animation == nullptr || animation->boneMatrices.empty() || !rigs.Contains(rigId))
@@ -332,9 +367,6 @@ constexpr auto k_SmokeAlphaId = entt::hashed_string("raw/smokea");
 constexpr uint32_t k_SmokeCellsPerRow = 8;
 constexpr float k_SmokeCellsPerSide = 8.0f;
 
-/// The player at this computer, whose own creature's marker is drawn and who hears their orders acknowledged
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
-
 /// Whether a point is in the sea: a cell of the land with water in it, or off the land
 bool IsWater(glm::vec2 point)
 {
@@ -420,7 +452,8 @@ bool CarriedByTeleport(entt::entity creature)
 /// was going, or until its plan stops
 bool TravelsByTeleport(const Registry& registry, entt::entity creature)
 {
-	return registry.AllOf<TeleportTraveller>(creature);
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	return registry.AllOf<TeleportTraveller>(creature) && mind != nullptr && creature_mind::StoneControls(mind->idle);
 }
 
 using ForcedPlan = CreatureMindSystemInterface::ForcedPlan;
@@ -660,12 +693,50 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 	leashes->worn->type = type;
 	leashes->selected = type;
 	// The rope is laid afresh from the hand to the collar next frame
-	leashes->worn->ropeStarted = false;
+	LayRopeAfresh(registry, creature);
 	if (const auto* body = registry.TryGet<const Creature>(creature))
 	{
+		// The leash that goes on becomes the picked leash at the temple of the creature's player
+		PickPost(body->owner, type);
 		ForgetLocalGesturePath(body->owner);
 	}
 	return true;
+}
+
+void LeashSystem::PickPost(PlayerNames owner, LeashType worn)
+{
+	// A player with no temple has no posts, and nothing changes
+	Locator::entitiesRegistry::value().Each<LeashPost>([owner, worn](LeashPost& post) {
+		if (post.owner != owner)
+		{
+			return;
+		}
+		if (const auto picked = leash::PostPickedFor(post.type, worn); picked.has_value())
+		{
+			post.selected = *picked;
+		}
+	});
+}
+
+bool LeashSystem::PlayerCanChangeType(entt::entity creature) const
+{
+	const auto* spells = Locator::entitiesRegistry::value().TryGet<const CreatureSpells>(creature);
+	if (spells == nullptr)
+	{
+		return true;
+	}
+	return leash::PlayerCanChangeType(spells->spells.IsActive(creature_spells::Spell::Nice),
+	                                  spells->spells.IsActive(creature_spells::Spell::Nasty));
+}
+
+bool LeashSystem::PickType(PlayerNames player, LeashType type)
+{
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value() || !PlayerCanChangeType(*creature))
+	{
+		return false;
+	}
+	return ChangeType(*creature, type);
 }
 
 void LeashSystem::TakeOff(entt::entity creature)
@@ -733,10 +804,20 @@ bool LeashSystem::Carry(PlayerNames player, entt::entity creature, const leash::
 		TakeOff(creature);
 		return true;
 	case Kind::UntieToHand:
+	{
+		// Only the leash key frees the creature from the desire of a town's desire flag that the leash was tied to
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto tied = TiedTo(creature);
+		if (auto* mind = MindOf(registry, creature);
+		    mind != nullptr && tied.has_value() && registry.Valid(*tied) && registry.AllOf<TownDesireFlag>(*tied))
+		{
+			creature_town_compassion::UntiedFromFlag(mind->townCompassion);
+		}
 		UntieToHand(creature);
 		return true;
+	}
 	case Kind::ChangeType:
-		return ChangeType(creature, command.type);
+		return PlayerCanChangeType(creature) && ChangeType(creature, command.type);
 	}
 	return false;
 }
@@ -796,7 +877,6 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 	if (leashes->worn.has_value())
 	{
 		leashes->worn->type = type;
-		leashes->worn->rope.look = leash::LookFor(type);
 		// Picked while it is worn, the learning leash lets go of the desire a leash made dominant, and the others make
 		// theirs dominant at once
 		if (Locator::creatureMindSystem::has_value())
@@ -813,17 +893,11 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 		}
 	}
 	// Its player's posts show the leash picked
-	const auto* body = registry.TryGet<const Creature>(creature);
-	if (body != nullptr)
+	if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
 	{
+		PickPost(body->owner, type);
 		ForgetLocalGesturePath(body->owner);
 	}
-	registry.Each<LeashPost>([leashes, body](LeashPost& post) {
-		if (body != nullptr && post.owner == body->owner)
-		{
-			post.selected = post.type == leashes->selected;
-		}
-	});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s picked leash is now the {} leash", entt::to_integral(creature),
 	                   leash::Name(type));
 	return true;
@@ -845,14 +919,20 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 			return false;
 		}
 	}
+	else if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
+	{
+		// A tie puts the worn leash on again: the worn leash becomes the picked leash at the temple again
+		PickPost(body->owner, TypeOf(creature));
+		ForgetLocalGesturePath(body->owner);
+	}
 	auto* leashes = &registry.Get<CreatureLeash>(creature);
 	auto& worn = *leashes->worn;
 	worn.tiedTo = object;
 	worn.tiedTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	const auto lengths = LengthsOf(registry, creature, worn);
-	worn.rope.slackLength = lengths.slack;
-	worn.rope.maxLength = lengths.max;
-	worn.ropeStarted = false;
+	worn.slackLength = lengths.slack;
+	worn.maxLength = lengths.max;
+	LayRopeAfresh(registry, creature);
 
 	// The two tying sounds play in turn. The local player hears the leash of their own creature without a place. The
 	// leash of each other creature makes its sound at the thing, and the sound belongs to the player of that creature.
@@ -861,8 +941,8 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	const auto tieSound = _secondAttachSound ? audio::SoundId::G_LeashAttach_01_2 : audio::SoundId::G_LeashAttach_01_1;
 	_secondAttachSound = !_secondAttachSound;
 	const auto* body = registry.TryGet<const Creature>(creature);
-	const auto owner = body != nullptr ? body->owner : k_LocalPlayer;
-	if (!leash::TieSoundIsPlaced(owner, k_LocalPlayer))
+	const auto owner = body != nullptr ? body->owner : OwnPlayer();
+	if (!leash::TieSoundIsPlaced(owner, OwnPlayer()))
 	{
 		PlaySound(tieSound, std::nullopt);
 	}
@@ -887,6 +967,15 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 		    .lessons = leash::LessonsFor(worn.type, isCreature),
 		});
 		mind->leash.actOn.push_back(static_cast<uint32_t>(object));
+		// Tied to a town's desire flag, the creature helps the town with the desire of that flag
+		const auto* flag = registry.TryGet<const TownDesireFlag>(object);
+		const auto* tables =
+		    Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
+		if (flag != nullptr && tables != nullptr)
+		{
+			creature_town_compassion::TiedToFlag(mind->townCompassion, static_cast<uint32_t>(flag->desire),
+			                                     tables->townActions);
+		}
 	}
 	return true;
 }
@@ -900,7 +989,7 @@ void LeashSystem::UntieToHand(entt::entity creature)
 		return;
 	}
 	leashes->worn->tiedTo.reset();
-	leashes->worn->ropeStarted = false;
+	LayRopeAfresh(registry, creature);
 }
 
 void LeashSystem::SetWorks(entt::entity creature, bool works)
@@ -1010,7 +1099,7 @@ std::optional<glm::vec3> LeashSystem::HolderPoint(entt::entity creature) const
 	{
 		return std::nullopt;
 	}
-	return HandPoint();
+	return HandPoint(leashes->worn->holder);
 }
 
 LeashType LeashSystem::TypeOf(entt::entity creature) const
@@ -1109,11 +1198,11 @@ void LeashSystem::ShowPosts(bool handShown)
 	_handShown = handShown;
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto light = temple_leashes::GlowAlpha(FrameLandLight(LandLightTable::k_Size - 1));
-	// The wrist of the hand carrying the picked leash: its first bone, where it is posed this frame
+	// The wrist of this computer's hand, which carries the picked leash: its first bone, where this frame poses it
 	std::optional<std::pair<glm::mat4, float>> wrist;
 	if (Locator::handSystem::has_value())
 	{
-		const auto entity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+		const auto entity = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 		const auto* at = registry.Valid(entity) ? registry.TryGet<const Transform>(entity) : nullptr;
 		const auto* hand = registry.Valid(entity) ? registry.TryGet<const Hand>(entity) : nullptr;
 		if (at != nullptr)
@@ -1127,7 +1216,7 @@ void LeashSystem::ShowPosts(bool handShown)
 	registry.Each<LeashPost, Transform>([&](const LeashPost& post, Transform& transform) {
 		auto* glow = post.glow != entt::null && registry.Valid(post.glow) ? registry.TryGet<Transform>(post.glow) : nullptr;
 		// The picked leash of this machine's player is carried in the hand; the others tumble where they hang
-		const bool carried = post.selected && post.owner == k_LocalPlayer;
+		const bool carried = post.selected && post.owner == OwnPlayer();
 		if (!post.hung || !temple_leashes::Shows(carried, handShown))
 		{
 			transform.scale = glm::vec3(0.0f);
@@ -1188,7 +1277,8 @@ bool LeashSystem::TapPost(entt::entity post)
 			other.selected = &other == tapped;
 		}
 	});
-	if (creature.has_value())
+	// The tap changes the picked leash at once, but the creature keeps its leash while a nice or nasty spell is on it
+	if (creature.has_value() && PlayerCanChangeType(*creature))
 	{
 		ChangeType(*creature, tapped->type);
 	}
@@ -1324,7 +1414,7 @@ bool LeashSystem::ShouldWalkBack(entt::entity creature) const
 	const auto& leashes = registry.Get<const CreatureLeash>(creature);
 	const auto& transform = registry.Get<const Transform>(creature);
 	// The creature that the hand holds does nothing until the hand lets go of it
-	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == creature)
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(creature))
 	{
 		return false;
 	}
@@ -1407,10 +1497,20 @@ void LeashSystem::ProcessTurn()
 
 void LeashSystem::BeginTurn()
 {
-	if (!_postsPlaced)
+	if (_postsPlaced)
 	{
-		PlacePostsAtTemples();
+		return;
 	}
+	// A loaded world (a save, or the world state of the game server) keeps the posts that its temples got. Do not
+	// make them again.
+	bool loaded = false;
+	Locator::entitiesRegistry::value().Each<const LeashPost>([&loaded](const LeashPost& /*post*/) { loaded = true; });
+	if (loaded)
+	{
+		_postsPlaced = true;
+		return;
+	}
+	PlacePostsAtTemples();
 }
 
 void LeashSystem::CreatureTurn(entt::entity entity)
@@ -1439,13 +1539,14 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 		{
 			return;
 		}
-		// On the first land a young creature of the local player's is kept near its home while off the leash
+		// In a game alone, on the first land, a young creature of the local player's stays near its home off the leash
 		if (mind != nullptr && Locator::playerSystem::has_value() &&
 		    creature_development::KeptAtHome({
 		        .stage = mind->developmentPhase,
 		        .leashed = leashes.worn.has_value(),
 		        .localPlayers = body->owner == Locator::playerSystem::value().GetLocalPlayer(),
 		        .land = registry.Context().mapScriptGlobals.landNumber,
+		        .networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
 		    }))
 		{
 			ConfineToHome(entity, creature_development::k_YoungHomeRadius);
@@ -1474,10 +1575,18 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 			    (!registry.Valid(*worn.tiedTo) || registry.TryGet<const Transform>(*worn.tiedTo) == nullptr))
 			{
 				worn.tiedTo.reset();
-				worn.ropeStarted = false;
+				LayRopeAfresh(registry, entity);
 			}
-			// The leash holds the creature within its full length of the hand, or of the thing that it is tied to
-			const auto hand = HandPoint();
+			// Held in the hand, the leash's lengths follow the creature's size
+			if (!worn.tiedTo.has_value())
+			{
+				const auto lengths = LengthsOf(registry, entity, worn);
+				worn.slackLength = lengths.slack;
+				worn.maxLength = lengths.max;
+			}
+			// The leash holds the creature within its full length of the hand of its holder, or of the thing that it is
+			// tied to
+			const auto hand = HandPoint(worn.holder);
 			if (worn.tiedTo.has_value())
 			{
 				leashes.confinementCentre = registry.Get<const Transform>(*worn.tiedTo).position;
@@ -1486,7 +1595,7 @@ void LeashSystem::CreatureTurn(entt::entity entity)
 			{
 				leashes.confinementCentre = *hand;
 			}
-			leashes.confinementRadius = worn.rope.maxLength;
+			leashes.confinementRadius = worn.maxLength;
 
 			// The leash's feelings, every turn
 			if (mind != nullptr)
@@ -1530,9 +1639,10 @@ void LeashSystem::Update(float seconds)
 	    [&](entt::entity entity, CreatureLeash& leashes, const Creature& /*creature*/, const Transform& /*transform*/) {
 		    if (!leashes.worn.has_value())
 		    {
+			    registry.Remove<CreatureLeashRope>(entity);
 			    return;
 		    }
-		    auto& worn = *leashes.worn;
+		    const auto& worn = *leashes.worn;
 		    std::optional<glm::vec3> start;
 		    if (worn.tiedTo.has_value() && registry.Valid(*worn.tiedTo) &&
 		        registry.TryGet<const Transform>(*worn.tiedTo) != nullptr)
@@ -1541,7 +1651,9 @@ void LeashSystem::Update(float seconds)
 		    }
 		    else
 		    {
-			    start = hand;
+			    // The rope goes to the hand of its holder: the hand of this computer where it is drawn, or the reported hand
+			    // of another player
+			    start = worn.holder == OwnPlayer() ? hand : HandPoint(worn.holder);
 		    }
 		    if (!start.has_value())
 		    {
@@ -1549,35 +1661,36 @@ void LeashSystem::Update(float seconds)
 			    return;
 		    }
 		    const auto end = CollarPoint(registry, entity);
-		    // Held in the hand, its length follows the creature's size
-		    if (!worn.tiedTo.has_value() || !worn.ropeStarted)
+		    auto* drawn = registry.TryGet<CreatureLeashRope>(entity);
+		    if (drawn == nullptr)
 		    {
-			    const auto lengths = LengthsOf(registry, entity, worn);
-			    worn.rope.slackLength = lengths.slack;
-			    worn.rope.maxLength = lengths.max;
+			    drawn = &registry.Assign<CreatureLeashRope>(entity);
 		    }
+		    // The rope takes the lengths of the leash that the world has
+		    drawn->rope.slackLength = worn.slackLength;
+		    drawn->rope.maxLength = worn.maxLength;
 		    // The rope runs from the collar to the hand or the tied thing, so its tension is the stretch at the collar. A new
 		    // rope starts straight from the collar where the body was at the end of its newest game turn. It then moves on
 		    // in the same frame, as each rope does.
-		    if (!worn.ropeStarted)
+		    if (!drawn->started)
 		    {
-			    worn.rope = leash_rope::Create(CollarPoint(registry, entity, CollarPose::Turn), *start, worn.rope.slackLength,
-			                                   worn.rope.maxLength, leash::LookFor(worn.type));
-			    worn.ropeStarted = true;
+			    drawn->rope = leash_rope::Create(CollarPoint(registry, entity, CollarPose::Turn), *start, worn.slackLength,
+			                                     worn.maxLength, leash::LookFor(worn.type));
+			    drawn->started = true;
 		    }
-		    worn.rope.look = leash::LookFor(worn.type);
-		    leash_rope::Step(worn.rope, end, *start, seconds, GroundAt);
+		    drawn->rope.look = leash::LookFor(worn.type);
+		    leash_rope::Step(drawn->rope, end, *start, seconds, GroundAt);
 		    // The hand holding the rope of the tied leash: its two ropes run from the collar and from what it is tied to
 		    // to the hand
-		    if (worn.held.has_value() && hand.has_value() && worn.tiedTo.has_value())
+		    if (drawn->held.has_value() && hand.has_value() && worn.tiedTo.has_value())
 		    {
-			    leash_rope::Step(worn.held->toCollar, end, *hand, seconds, GroundAt);
-			    leash_rope::Step(worn.held->toTied, registry.Get<const Transform>(*worn.tiedTo).position, *hand, seconds,
+			    leash_rope::Step(drawn->held->toCollar, end, *hand, seconds, GroundAt);
+			    leash_rope::Step(drawn->held->toTied, registry.Get<const Transform>(*worn.tiedTo).position, *hand, seconds,
 			                     GroundAt);
 		    }
 	    });
 	// Untied while the hand held its rope, the hand lets go of it
-	if (_ropeHand == leash_snap::Hand::Holding && HeldLeash(k_LocalPlayer) == nullptr)
+	if (_ropeHand == leash_snap::Hand::Holding && HeldLeash(OwnPlayer()) == nullptr)
 	{
 		_ropeHand = leash_snap::Hand::Away;
 	}
@@ -1592,13 +1705,14 @@ CreatureLeash::Worn* LeashSystem::TiedLeash(PlayerNames player)
 	}
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* leashes = registry.TryGet<CreatureLeash>(*creature);
+	auto* drawn = DrawnRopeOf(registry, *creature);
 	if (leashes == nullptr || !leashes->worn.has_value() || leashes->worn->holder != player ||
 	    !leashes->worn->tiedTo.has_value() || !registry.Valid(*leashes->worn->tiedTo) ||
-	    registry.TryGet<const Transform>(*leashes->worn->tiedTo) == nullptr || !leashes->worn->ropeStarted)
+	    registry.TryGet<const Transform>(*leashes->worn->tiedTo) == nullptr || drawn == nullptr || !drawn->started)
 	{
-		if (leashes != nullptr && leashes->worn.has_value())
+		if (drawn != nullptr)
 		{
-			leashes->worn->held.reset();
+			drawn->held.reset();
 		}
 		return nullptr;
 	}
@@ -1608,17 +1722,25 @@ CreatureLeash::Worn* LeashSystem::TiedLeash(PlayerNames player)
 CreatureLeash::Worn* LeashSystem::HeldLeash(PlayerNames player)
 {
 	auto* worn = TiedLeash(player);
-	return worn != nullptr && worn->held.has_value() ? worn : nullptr;
+	const auto* drawn = worn != nullptr ? DrawnRope(player) : nullptr;
+	return drawn != nullptr && drawn->held.has_value() ? worn : nullptr;
+}
+
+CreatureLeashRope* LeashSystem::DrawnRope(PlayerNames player)
+{
+	const auto creature = PlayersCreature(player);
+	return creature.has_value() ? DrawnRopeOf(Locator::entitiesRegistry::value(), *creature) : nullptr;
 }
 
 std::optional<float> LeashSystem::RopeUnderCursor(PlayerNames player, const RopeFrame& frame)
 {
-	if (player != k_LocalPlayer || _ropeHand == leash_snap::Hand::Holding)
+	if (player != OwnPlayer() || _ropeHand == leash_snap::Hand::Holding)
 	{
 		return std::nullopt;
 	}
 	const auto* worn = TiedLeash(player);
-	if (worn == nullptr || frame.screenSize.x <= 0.0f || frame.screenSize.y <= 0.0f)
+	const auto* drawn = worn != nullptr ? DrawnRope(player) : nullptr;
+	if (drawn == nullptr || frame.screenSize.x <= 0.0f || frame.screenSize.y <= 0.0f)
 	{
 		return std::nullopt;
 	}
@@ -1626,7 +1748,7 @@ std::optional<float> LeashSystem::RopeUnderCursor(PlayerNames player, const Rope
 	std::array<leash_snap::ScreenPoint, leash_rope::k_PointCount> points {};
 	for (size_t i = 0; i < points.size(); ++i)
 	{
-		const auto clip = frame.viewProjection * glm::vec4(leash_rope::Point(worn->rope, i), 1.0f);
+		const auto clip = frame.viewProjection * glm::vec4(leash_rope::Point(drawn->rope, i), 1.0f);
 		if (clip.w <= 0.0f)
 		{
 			continue;
@@ -1638,12 +1760,12 @@ std::optional<float> LeashSystem::RopeUnderCursor(PlayerNames player, const Rope
 		    .inFront = true,
 		};
 	}
-	return leash_snap::TouchDepth(points, frame.cursor, frame.screenSize.x, worn->rope.look.halfWidth);
+	return leash_snap::TouchDepth(points, frame.cursor, frame.screenSize.x, drawn->rope.look.halfWidth);
 }
 
 void LeashSystem::SetRopeHovered(PlayerNames player, bool hovered)
 {
-	if (player != k_LocalPlayer || _ropeHand == leash_snap::Hand::Holding)
+	if (player != OwnPlayer() || _ropeHand == leash_snap::Hand::Holding)
 	{
 		return;
 	}
@@ -1652,14 +1774,15 @@ void LeashSystem::SetRopeHovered(PlayerNames player, bool hovered)
 
 leash_snap::Hand LeashSystem::RopeHand(PlayerNames player) const
 {
-	return player == k_LocalPlayer ? _ropeHand : leash_snap::Hand::Away;
+	return player == OwnPlayer() ? _ropeHand : leash_snap::Hand::Away;
 }
 
 bool LeashSystem::PressRope(PlayerNames player)
 {
 	const auto hand = DrawnHandPoint();
-	auto* worn = player == k_LocalPlayer && _ropeHand == leash_snap::Hand::Over ? TiedLeash(player) : nullptr;
-	if (worn == nullptr || !hand.has_value())
+	auto* worn = player == OwnPlayer() && _ropeHand == leash_snap::Hand::Over ? TiedLeash(player) : nullptr;
+	auto* drawn = worn != nullptr ? DrawnRope(player) : nullptr;
+	if (drawn == nullptr || !hand.has_value())
 	{
 		return false;
 	}
@@ -1667,12 +1790,12 @@ bool LeashSystem::PressRope(PlayerNames player)
 	// as the leash, the tied thing's short
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto creature = *PlayersCreature(player);
-	const auto collar = leash_snap::CollarRopeLengths({.slack = worn->rope.slackLength, .max = worn->rope.maxLength});
+	const auto collar = leash_snap::CollarRopeLengths({.slack = worn->slackLength, .max = worn->maxLength});
 	const auto tied = leash_snap::k_TiedRopeLengths;
-	worn->held = CreatureLeash::Worn::HeldRopes {
-	    .toCollar = leash_rope::Create(CollarPoint(registry, creature), *hand, collar.slack, collar.max, worn->rope.look),
+	drawn->held = CreatureLeashRope::HeldRopes {
+	    .toCollar = leash_rope::Create(CollarPoint(registry, creature), *hand, collar.slack, collar.max, drawn->rope.look),
 	    .toTied = leash_rope::Create(registry.Get<const Transform>(*worn->tiedTo).position, *hand, tied.slack, tied.max,
-	                                 worn->rope.look),
+	                                 drawn->rope.look),
 	};
 	_ropeHand = leash_snap::Hand::Holding;
 	return true;
@@ -1680,7 +1803,7 @@ bool LeashSystem::PressRope(PlayerNames player)
 
 void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place)
 {
-	if (player != k_LocalPlayer || _ropeHand != leash_snap::Hand::Holding)
+	if (player != OwnPlayer() || _ropeHand != leash_snap::Hand::Holding)
 	{
 		return;
 	}
@@ -1691,7 +1814,10 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	{
 		return;
 	}
-	worn->held.reset();
+	if (auto* drawn = DrawnRope(player))
+	{
+		drawn->held.reset();
+	}
 	if (!hand.has_value())
 	{
 		return;
@@ -1703,14 +1829,41 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	const auto tiedPoint = Locator::terrainSystem::has_value()
 	                           ? map_coords::ToWorld(Locator::terrainSystem::value(), tiedAt)
 	                           : glm::vec3(map_coords::ToMetres(tiedAt.x), 0.0f, map_coords::ToMetres(tiedAt.z));
-	const auto lengths = leash_snap::LengthsOnLettingGo(*hand, tiedPoint, object_measures::TwoDRadius(registry, tied));
-	worn->rope.slackLength = lengths.slack;
-	worn->rope.maxLength = lengths.max;
+	const auto length = leash_snap::LengthOnLettingGo(*hand, tiedPoint, object_measures::TwoDRadius(registry, tied));
+	// The turn sets the lengths of the leash on every computer, before the order to the place under the hand
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(player_commands::LeashLength {.length = length});
+	}
+	else
+	{
+		DoLeashLength(player, length);
+	}
 	// And the creature goes to the place under the hand
 	if (place.has_value())
 	{
 		OrderAt(player, *place);
 	}
+}
+
+void LeashSystem::DoLeashLength(PlayerNames player, float length)
+{
+	// The leash of the player's creature that the player holds, tied to a thing that still exists
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* leashes = registry.TryGet<CreatureLeash>(*creature);
+	if (leashes == nullptr || !leashes->worn.has_value() || leashes->worn->holder != player ||
+	    !leashes->worn->tiedTo.has_value() || !registry.Valid(*leashes->worn->tiedTo))
+	{
+		return;
+	}
+	const auto lengths = leash_snap::LengthsOf(length);
+	leashes->worn->slackLength = lengths.slack;
+	leashes->worn->maxLength = lengths.max;
 }
 
 void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken)
@@ -1721,7 +1874,9 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	}
 	using input::BindableActionMap;
 	const auto& actions = Locator::gameActionSystem::value();
-	const auto player = k_LocalPlayer;
+	// The taps of the player whose hand this computer moves
+	const auto player =
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const auto creature = PlayersCreature(player);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto pressed = [&actions](BindableActionMap action) { return actions.GetChanged(action) && actions.Get(action); };
@@ -1743,10 +1898,10 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 		const auto* post = picked.has_value() && registry.Valid(*picked) ? registry.TryGet<const LeashPost>(*picked) : nullptr;
 		if (post != nullptr && post->owner == player && post->hung)
 		{
-			// The help counts the tap of this computer's hand on its own leash
+			// The help counts the tap of this computer's hand on its own leash, at the turn of its next report
 			if (Locator::helpProfileSystem::has_value())
 			{
-				Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+				Locator::helpProfileSystem::value().Report(help::profile::k_TapThing);
 			}
 			// The tap is a command, which the world does at the start of a later turn
 			if (Locator::playerCommandSystem::has_value())
@@ -1884,8 +2039,17 @@ void LeashSystem::DoOrder(PlayerNames player, const player_commands::LeashOrder&
 		break;
 	}
 	case LeashOrder::Kind::Untie:
-		UntieToHand(*creature);
+	{
+		// The hand takes the tied leash off and puts it on again, held in the hand. Thus the leash becomes the picked
+		// leash at the temple again.
+		const auto type = TypeOf(*creature);
+		if (TiedTo(*creature).has_value())
+		{
+			TakeOff(*creature);
+			PutOnFor(player, *creature, type);
+		}
 		break;
+	}
 	}
 }
 
@@ -2304,7 +2468,7 @@ void LeashSystem::Acknowledge(entt::entity creature)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
 	// The player whose leash it is hears the order taken
-	if (leashes != nullptr && leashes->worn.has_value() && leashes->worn->holder == k_LocalPlayer)
+	if (leashes != nullptr && leashes->worn.has_value() && leashes->worn->holder == OwnPlayer())
 	{
 		PlaySound(audio::SoundId::G_AcknowledgeCommand, std::nullopt);
 	}
@@ -2332,14 +2496,15 @@ void LeashSystem::MarkOrder(entt::entity creature, std::optional<entt::entity> o
 	    .object = object,
 	    .point = point,
 	};
-	// The sparkles, which every player sees, stay where they were made
+	// The sparkles, which every player sees, stay where they were made. Only the computers that draw have them.
 	if (Locator::particleSystem::has_value())
 	{
-		order.sparkles = Locator::particleSystem::value().StartSpotVisual(SpotVisualType::CreatureTarget, point,
-		                                                                  orders::k_SparkleTurns, creature, 1.0f);
+		registry.AssignOrReplace<LeashOrderSparkles>(
+		    creature, LeashOrderSparkles {.effect = Locator::particleSystem::value().StartSpotVisual(
+		                                      SpotVisualType::CreatureTarget, point, orders::k_SparkleTurns, creature, 1.0f)});
 	}
-	// The ring only its player sees
-	if (leashes.worn.has_value() && leashes.worn->holder == k_LocalPlayer)
+	// The ring of the player who holds the leash. Every computer makes it, and only the computer of that player draws it.
+	if (leashes.worn.has_value())
 	{
 		if (const auto ring =
 		        archetypes::LeashMarkerArchetype::Create(creature, registry.Get<const Creature>(creature).species))
@@ -2372,11 +2537,13 @@ void LeashSystem::EndOrder(entt::entity creature)
 		target->object.reset();
 		target->has = false;
 	}
-	if (order.sparkles != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value() &&
-	    Locator::particleSystem::value().IsRunning(order.sparkles))
+	if (const auto* sparkles = registry.TryGet<const LeashOrderSparkles>(creature);
+	    sparkles != nullptr && sparkles->effect != ParticleSystemInterface::k_NoEffect &&
+	    Locator::particleSystem::has_value() && Locator::particleSystem::value().IsRunning(sparkles->effect))
 	{
-		Locator::particleSystem::value().CloseDown(order.sparkles);
+		Locator::particleSystem::value().CloseDown(sparkles->effect);
 	}
+	registry.Remove<LeashOrderSparkles>(creature);
 	for (const auto sprite : {order.ring, order.footprint})
 	{
 		if (sprite != entt::null && registry.Valid(sprite))
@@ -2435,7 +2602,7 @@ void LeashSystem::UpdateMarkers()
 	const auto size = Locator::cameraBookmarkSystem::has_value() ? Locator::cameraBookmarkSystem::value().GetMarkerHalfSize()
 	                                                             : camera_bookmarks::MarkerHalfSize(0);
 	// The footprint turns a quarter turn to the left, in the plane that faces the camera
-	const auto quarterTurn = glm::mat3(glm::rotate(orders::k_FootprintTurn, glm::vec3(0.0f, 0.0f, 1.0f)));
+	const auto quarterTurn = glm::mat3(portable_math::Rotate(orders::k_FootprintTurn, glm::vec3(0.0f, 0.0f, 1.0f)));
 	std::vector<std::pair<entt::entity, CreatureLeash::Order>> marked;
 	registry.Each<const CreatureLeash>([&marked](entt::entity creature, const CreatureLeash& leashes) {
 		if (leashes.order.has_value() && leashes.order->ring != entt::null)

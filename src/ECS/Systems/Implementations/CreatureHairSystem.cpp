@@ -85,9 +85,11 @@ void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType specie
 	// The hair takes the look of the alignment the body is drawn with
 	const auto alignment = morph.evilGood;
 	const auto scale = creature_hair::HairScale(size);
+	// The hair grows from the body where the frame draws it
+	const auto drawn = DrawnTransform(transform, &animation);
 	// The strands of the body share its bones, so each bone is placed in the world one time
 	creature::PosedBones posed(animation.boneMatrices,
-	                           creature::PlacementMatrix(transform.position, transform.rotation, transform.scale));
+	                           creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale));
 	StepHair(
 	    hair, rig.hairGroups.size(),
 	    [&](size_t g) {
@@ -129,23 +131,23 @@ void CreatureHairSystem::Update(std::chrono::duration<float, std::milli> gameTim
 	    });
 }
 
-void CreatureHairSystem::StepCopy(entt::entity copy, std::chrono::duration<float, std::milli> frameTime)
+void CreatureHairSystem::StepCopy(Registry& copies, entt::entity copy, std::chrono::duration<float, std::milli> frameTime)
 {
-	if (!_shown)
+	if (!_shown || !copies.Valid(copy))
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* body = registry.TryGet<const CreatureCopy>(copy);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(copy);
-	const auto* transform = registry.TryGet<const Transform>(copy);
-	auto* hair = registry.TryGet<CreatureHair>(copy);
-	if (body == nullptr || animation == nullptr || transform == nullptr || hair == nullptr || !registry.Valid(body->creature))
+	const auto& land = Locator::entitiesRegistry::value();
+	const auto* body = copies.TryGet<const CreatureCopy>(copy);
+	const auto* animation = copies.TryGet<const CreatureAnimation>(copy);
+	const auto* transform = copies.TryGet<const Transform>(copy);
+	auto* hair = copies.TryGet<CreatureHair>(copy);
+	if (body == nullptr || animation == nullptr || transform == nullptr || hair == nullptr || !land.Valid(body->creature))
 	{
 		return;
 	}
-	const auto* creature = registry.TryGet<const Creature>(body->creature);
-	const auto* morph = registry.TryGet<const CreatureMorph>(body->creature);
+	const auto* creature = land.TryGet<const Creature>(body->creature);
+	const auto* morph = land.TryGet<const CreatureMorph>(body->creature);
 	if (creature == nullptr || morph == nullptr)
 	{
 		return;

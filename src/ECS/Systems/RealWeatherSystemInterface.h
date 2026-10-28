@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <optional>
 
 #include <LobbyApi.h>
@@ -39,12 +40,17 @@ public:
 	[[nodiscard]] virtual bool IsMultiplayer() const = 0;
 };
 
-/// The real-world weather, as the original game's internet weather. It is off unless the player turns it on. When it
+/// The real-world weather, as the original game's internet weather. It is on unless the player turns it off. When it
 /// is on, a single-player game asks the lobby for the weather of the place of the player's account as the game starts.
-/// At the next turn the weather changes the background weather of the land, and its preset can make a storm.
+/// The game does not wait for the answer. At the next turn after the answer the weather changes the background weather
+/// of the land, and its preset can make a storm. An answer that comes too late, or no answer, leaves the land's own
+/// weather.
 class RealWeatherSystemInterface
 {
 public:
+	/// The longest time from the question to the answer. A later answer is ignored.
+	static constexpr auto k_AnswerTimeout = std::chrono::seconds(10);
+
 	virtual ~RealWeatherSystemInterface() = default;
 
 	/// Once as a game starts: when the real weather is on and the player has a lobby account, the system asks the lobby

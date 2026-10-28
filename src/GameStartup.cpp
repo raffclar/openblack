@@ -42,6 +42,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
+#include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
@@ -391,6 +392,7 @@ void Game::PlayStartupScreens()
 	{
 		return;
 	}
+	_loadingScreen->SetBuild(_buildVersion.Short());
 	if (!_skipLogos)
 	{
 		PlayLogoScreens();
@@ -798,6 +800,11 @@ void Game::PrepareFirstFrames()
 	if (Locator::particleSystem::has_value())
 	{
 		Locator::particleSystem::value().LoadAllTypes();
+	}
+	// The first thing that a script puts in high detail reads its detailed model and its eyes
+	if (Locator::highDetailSystem::has_value())
+	{
+		Locator::highDetailSystem::value().LoadModels();
 	}
 	// The first frame loads the models of the globes and the gesture templates
 	if (Locator::miracleFxSystem::has_value())

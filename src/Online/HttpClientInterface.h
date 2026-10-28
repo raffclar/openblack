@@ -103,6 +103,9 @@ public:
 	virtual void Poll() = 0;
 	/// The number of requests that did not run their callback yet
 	[[nodiscard]] virtual size_t Pending() const = 0;
+	/// The number of bytes of the body of a request that went to the server. None when the client cannot tell, or the
+	/// request ran its callback.
+	[[nodiscard]] virtual std::optional<uint64_t> SentBytes(HttpRequestId /*id*/) const { return std::nullopt; }
 };
 
 /// The rules of the addresses
@@ -115,6 +118,9 @@ namespace http_policy
 [[nodiscard]] bool IsSameOriginPath(std::string_view url) noexcept;
 /// True when the address starts with wss:// and has a host
 [[nodiscard]] bool IsWssAddress(std::string_view url) noexcept;
+/// True when the host of an https:// or wss:// address is this computer: localhost or an IPv4 address 127.x.x.x. The
+/// test authorities of the tools are only for such addresses.
+[[nodiscard]] bool IsLoopbackAddress(std::string_view url) noexcept;
 
 } // namespace http_policy
 

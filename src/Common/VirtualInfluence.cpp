@@ -58,7 +58,6 @@ void virtual_influence::ProcessTurn(State& state, const TurnInputs& inputs, cons
 	if (inputs.handInInfluence)
 	{
 		state.anchor = inputs.hand;
-		state.manaPathStart.reset();
 		state.lastInsideTurn = inputs.turn;
 		state.fraction = std::min(state.fraction + k_TurnStep, 1.0f);
 		return;
@@ -70,7 +69,7 @@ void virtual_influence::ProcessTurn(State& state, const TurnInputs& inputs, cons
 	// Chants at the worship sites slow the waning with time
 	const float timeScale = 1.0f / (inputs.chants / settings.chantsToDouble + 1.0f);
 	const float power = inputs.influencePower * k_PowerShare;
-	const float nearness = gutils::GetDistanceModifier(distance, power + settings.maxDistance);
+	const float nearness = gutils::GetDistanceModifier(distance, MaximumDistance(inputs.influencePower, settings));
 	const float freshness = gutils::GetDistanceModifier(timeScale * static_cast<float>(inputs.turn - state.lastInsideTurn),
 	                                                    power + static_cast<float>(settings.maxTurns));
 	state.fraction -= 1.0f - freshness * nearness;
@@ -78,6 +77,11 @@ void virtual_influence::ProcessTurn(State& state, const TurnInputs& inputs, cons
 	{
 		state.fraction = 0.0f;
 	}
+}
+
+float virtual_influence::MaximumDistance(float influencePower, const Settings& settings)
+{
+	return influencePower * k_PowerShare + settings.maxDistance;
 }
 
 bool virtual_influence::HumPlays(const State& state, bool handShielded, bool handInInfluence, bool anchorShielded,
@@ -96,15 +100,20 @@ map_coords::MapCoords virtual_influence::ManaPathStart(const map_coords::MapCoor
 	return {.x = halfway(hand.x, anchor.x), .z = halfway(hand.z, anchor.z), .altitude = 0.0f};
 }
 
-std::optional<uint8_t> virtual_influence::EmitManaPath(State& state, float frameMilliseconds)
+bool virtual_influence::ManaPathEnds(const State& state, const TurnInputs& inputs)
+{
+	return !state.disabled && !inputs.handShielded && inputs.handInInfluence;
+}
+
+std::optional<uint8_t> virtual_influence::EmitManaPath(Shown& shown, const State& state, float frameMilliseconds)
 {
 	const float strength = std::min(state.fraction, 1.0f);
-	state.manaPathEmission = frameMilliseconds * strength + state.manaPathEmission;
-	if (!(k_ManaPathMilliseconds < state.manaPathEmission))
+	shown.manaPathEmission = frameMilliseconds * strength + shown.manaPathEmission;
+	if (!(k_ManaPathMilliseconds < shown.manaPathEmission))
 	{
 		return std::nullopt;
 	}
-	state.manaPathEmission = 0.0f;
+	shown.manaPathEmission = 0.0f;
 	return static_cast<uint8_t>(map_coords::FtoL(strength * k_ByteScale));
 }
 
@@ -118,7 +127,7 @@ uint32_t virtual_influence::ScaleColour(uint32_t argb, uint8_t scale)
 	return scaled;
 }
 
-uint32_t virtual_influence::HumPitchPercent(const State& state)
+uint32_t virtual_influence::HumPitchPercent(const State& state, const Shown& shown)
 {
-	return static_cast<uint32_t>(std::min(state.soundFraction, state.fraction) * k_PercentPerFraction);
+	return static_cast<uint32_t>(std::min(shown.soundFraction, state.fraction) * k_PercentPerFraction);
 }

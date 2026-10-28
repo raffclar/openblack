@@ -39,7 +39,7 @@ struct Switches
 	bool editor {false};
 	/// Load the first land, then close the program before the first frame of play
 	bool convert {false};
-	/// Write the number that the network game uses to compare its versions
+	/// Write the version of openblack and stop, as the --version option does
 	bool version {false};
 	/// Load no music
 	bool noLoadMusic {false};

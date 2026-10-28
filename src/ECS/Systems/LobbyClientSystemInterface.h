@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include <GameSocket.h>
 #include <LobbyApi.h>
 
 namespace openblack::ecs::systems
@@ -59,6 +60,8 @@ struct LobbyError
 	int32_t status {0};
 	/// The detail of the problem that the lobby gave, can be empty
 	std::string detail;
+	/// The code of the problem that the lobby gave, for example "server_full". Empty when the answer had none.
+	std::string code;
 	/// The seconds to wait before the next call, for RateLimited
 	std::optional<int32_t> retryAfterSeconds;
 };
@@ -117,6 +120,9 @@ public:
 	[[nodiscard]] virtual std::optional<lobby_api::AccountRef> GetAccount() const = 0;
 	/// Whether the push channel is open
 	[[nodiscard]] virtual bool IsPushOpen() const = 0;
+	/// The account of the session has no email address. The lobby refuses most calls until the player adds one on the
+	/// account page of the site.
+	[[nodiscard]] virtual bool IsEmailRequired() const = 0;
 
 	/// Logs in with a name and a password. The client checks the name before it calls the lobby.
 	virtual void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) = 0;
@@ -137,8 +143,10 @@ public:
 	/// Asks the lobby for the events of a channel of the push channel ("lobby", "servers" or "server-<id>"), or stops
 	/// them. The client asks again for each channel when the push channel opens again.
 	virtual void WatchChannel(std::string channel, bool watch) = 0;
-	/// A ticket to join a game server. The address of the game socket must be a WSS address.
-	virtual void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) = 0;
+	/// A ticket to join a game server, as a god or as an observer. The address of the game socket must be a WSS
+	/// address.
+	virtual void RequestJoinTicket(std::string serverId, game_socket::Role role,
+	                               LobbyCallback<lobby_api::JoinTicket> callback) = 0;
 	/// Sends a chat line of 1 to 254 characters to a channel: "lobby", or "server-<id>" for the room of a server. The
 	/// line comes back to each player in the channel as a "chat.line" event.
 	virtual void SendChatLine(std::string channel, std::string text, LobbyCallback<LobbyDone> callback) = 0;

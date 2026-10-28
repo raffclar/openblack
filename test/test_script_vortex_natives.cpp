@@ -65,8 +65,8 @@ public:
 class FakeGameRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t) override { return 0; }
-	float GameFloatRand(float x) override
+	uint32_t SyncedRand(uint32_t, DrawSite) override { return 0; }
+	float SyncedFloatRand(float x, DrawSite /*site*/) override
 	{
 		++draws;
 		return x * 0.25f;

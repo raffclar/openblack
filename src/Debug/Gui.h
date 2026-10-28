@@ -47,6 +47,7 @@ public:
 	bool PressButton(std::string_view window, std::span<const ButtonPathStep> path) noexcept override;
 	bool Loop() noexcept override;
 	void Draw() noexcept override;
+	void WarmUp() noexcept override;
 
 private:
 	/// Whether the debug windows are kept off the mouse, as while the input is locked or the pointer is driven
@@ -84,5 +85,9 @@ private:
 	bool _menuBarVisible = true;
 	/// The player's input was locked out last frame
 	bool _inputLocked = false;
+	/// A network game was live last frame: the debug windows and the menu do not show and take no input
+	bool _networkDormant = false;
+	/// Closes the editor when a network game starts, and tells the log when the debug windows stop or start again
+	void FollowNetworkSession() noexcept;
 };
 } // namespace openblack::debug::gui

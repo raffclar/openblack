@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string_view>
 
 /// The order of the steps of one frame. The game does its frame in a fixed order of stages: the input, the turns, the
 /// camera, the poses of the creatures, the hand, the draw and then the keys of the camera. What one stage changes, the next
@@ -87,6 +88,21 @@ enum class Step : uint8_t
 
 	_Count
 };
+
+/// The names of the steps, in the order of the enumeration, for the logs of the tools
+inline constexpr std::array<std::string_view, static_cast<size_t>(Step::_Count)> k_StepNames {
+    "FrameClock",   "Input",        "KeyCommands",      "DebugGui",    "Interface",         "GripEffect", "Turns",
+    "SendCommands", "FrameTime",    "CameraMouse",      "CameraPaths", "CameraControllers", "Camera",     "CameraShake",
+    "Temple",       "FilmClock",    "DrawClock",        "Video",       "CreaturePoses",     "Hand",       "HighDetail",
+    "Bookmarks",    "FrameEffects", "ScreenMarks",      "Entities",    "ScreenFade",        "PauseText",  "Audio",
+    "Online",       "CameraKeys",   "ProfileAlignment",
+};
+
+/// The name of a step of the frame
+[[nodiscard]] constexpr std::string_view Name(Step step)
+{
+	return step < Step::_Count ? k_StepNames.at(static_cast<size_t>(step)) : std::string_view("unknown");
+}
 
 /// A step of the frame and the stage of the game that it does. No stage: the place of the step in the game's frame is
 /// not known, and the step keeps its place between its neighbours.
@@ -213,10 +229,51 @@ struct CameraKeyState
 	return false;
 }
 
-/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary
-[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted)
+/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary.
+/// A run with a fixed frame time draws each frame also while the window is minimised. The renderer keeps some of what it
+/// drew before, such as the shadows on the land. Thus a picture of the run is the same whatever the desktop did with the
+/// window.
+[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted, bool fixedFrameTime)
 {
-	return !minimised || pictureWanted;
+	return !minimised || pictureWanted || fixedFrameTime;
+}
+
+/// The state of the window and the run that decides which steps of the graphics a frame does
+struct GraphicsWindow
+{
+	/// The window is minimised
+	bool minimised {false};
+	/// The inspector, a challenge, the creature's page or a saved game waits for a picture of this frame
+	bool pictureWanted {false};
+	/// Each frame takes a fixed game time, as in a tool's simulation run
+	bool fixedFrameTime {false};
+};
+
+/// Whether the frame does this step. A minimised window stops the graphics, but the turns continue.
+///
+/// The camera steps and the hand step make the camera and the hand that the player reports to the turns. Thus:
+/// - A frame that only draws a picture for a minimised window does not move the camera or the hand. The time when the
+///   picture is necessary does not change the world.
+/// - A run with a fixed frame time does all of its steps, whatever the desktop does with the window. Two such runs
+///   with the same seed give the same turns.
+[[nodiscard]] constexpr bool DoesStep(Step step, GraphicsWindow window)
+{
+	if (!IsGraphics(step) || !window.minimised || window.fixedFrameTime)
+	{
+		return true;
+	}
+	if (!window.pictureWanted)
+	{
+		return false;
+	}
+	for (const auto& place : k_Frame)
+	{
+		if (place.step == step)
+		{
+			return place.stage == Stage::DrawStart || place.stage == Stage::Draw;
+		}
+	}
+	return false;
 }
 
 /// Does each step of the frame, in the order of the frame. A step that returns false stops the frame.

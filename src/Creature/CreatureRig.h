@@ -60,6 +60,15 @@ struct CreatureRig
 	std::array<bool, k_MeshCount> hasMesh {};
 	/// Each animated mesh's animations, in the order of the creature spec file, absent where it has none of its own
 	std::array<std::vector<std::optional<skeletal_animation::Animation>>, k_AnimatedMeshCount> animations;
+	/// Each animation's line in the creature spec file, in the order of the file: its name without the type letter, the
+	/// type letter and the name of its set. The developer tools show these names.
+	struct SpecLine
+	{
+		std::string name;
+		char type;
+		std::string set;
+	};
+	std::vector<SpecLine> specLines;
 
 	/// A point on the body the eyes are placed by
 	struct EyePoint

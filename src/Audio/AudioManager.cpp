@@ -207,7 +207,7 @@ std::string TooFar(const glm::vec3& position, float range)
 }
 } // namespace
 
-Listener openblack::audio::CameraListener()
+Listener CameraListener()
 {
 	if (!Locator::camera::has_value())
 	{

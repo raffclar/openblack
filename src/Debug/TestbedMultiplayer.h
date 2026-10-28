@@ -39,6 +39,16 @@ enum class Stage : uint8_t
 	WaitingForStart,
 	LanGameList,
 	NotRegistered,
+	/// The chat of the room of 32 gods, a line from each god
+	RoomChat32,
+	/// The join of a full room, which the player comes into as an observer
+	FullRoomObserver,
+	/// The start of the game: the creature files go to all players
+	StartTransfer,
+	/// The start of the game stops: another player does not have the land
+	StartCancelled,
+	/// The start of the game stops: the player's land file is not the server's
+	KickedFromGame,
 	_Count
 };
 

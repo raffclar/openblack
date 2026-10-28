@@ -10,6 +10,8 @@
 #include "GestureRequests.h"
 
 #include <algorithm>
+#include <tuple>
+#include <utility>
 
 #include "Help/HelpProfile.h"
 
@@ -42,6 +44,14 @@ std::string_view gesture::Name(Purpose purpose)
 		return "fight miracle";
 	case Purpose::HiddenScript:
 		return "hidden script";
+	case Purpose::OpenSelection:
+		return "open the miracle selection";
+	case Purpose::SelectMiracle:
+		return "select a miracle";
+	case Purpose::CloseSelection:
+		return "close the miracle selection";
+	case Purpose::RepeatMiracle:
+		return "repeat the last miracle";
 	}
 	return "";
 }
@@ -55,6 +65,7 @@ bool gesture::ShowsRecognition(Purpose purpose)
 	case Purpose::ShakeOffHeld:
 	case Purpose::ClosePicker:
 	case Purpose::HiddenScript:
+	case Purpose::CloseSelection:
 		return false;
 	case Purpose::SizeCircle:
 	case Purpose::PowerUp:
@@ -62,6 +73,9 @@ bool gesture::ShowsRecognition(Purpose purpose)
 	case Purpose::PickLeash:
 	case Purpose::FightSpecialMove:
 	case Purpose::FightMiracle:
+	case Purpose::OpenSelection:
+	case Purpose::SelectMiracle:
+	case Purpose::RepeatMiracle:
 		return true;
 	}
 	return false;
@@ -144,14 +158,27 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 	if (poweringUp)
 	{
 		// A scribble calls off the power-up asked for, or drops the seed; each other level's gesture powers it up
-		requests.push_back({.gesture = GestureType::Scribble, .purpose = Purpose::DropSeed});
+		requests.push_back({.gesture = GestureType::Scribble,
+		                    .purpose = Purpose::DropSeed,
+		                    .powerUpLevel = seed->powerUp,
+		                    .seed = seed->type});
 		for (int level = 0; level < static_cast<int>(seed->powerUpGestures.size()); ++level)
 		{
 			const auto gesture = seed->powerUpGestures.at(static_cast<size_t>(level));
 			if (gesture != GestureType::None && level != seed->powerUp)
 			{
-				requests.push_back({.gesture = gesture, .purpose = Purpose::PowerUp, .powerUpLevel = level});
+				requests.push_back(
+				    {.gesture = gesture, .purpose = Purpose::PowerUp, .powerUpLevel = level, .seed = seed->type});
 			}
+		}
+	}
+	else if (context.selection.has_value())
+	{
+		// The selection: a scribble closes it; each gesture that follows in the chain of a miracle it offers is waited for
+		requests.push_back({.gesture = GestureType::Scribble, .purpose = Purpose::CloseSelection});
+		for (const auto& wait : context.selection->waiting)
+		{
+			requests.push_back({.gesture = wait.gesture, .purpose = Purpose::SelectMiracle, .seed = wait.seed});
 		}
 	}
 	else if (context.pickerOpen && context.creature.has_value() && context.creature->leashed)
@@ -199,8 +226,33 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 		}
 	}
 
+	// While the player's creature fights, no gesture opens the selection, calls a miracle again or puts the leash on
+	const bool fighting = context.creature.has_value() && context.creature->fighting;
+	const bool selectionOpen = context.selection.has_value() && context.selection->open;
+
+	// With the hand ready, a spiral opens the selection for the player's own miracles and an inverse spiral for the
+	// creature's. The gesture that opened the selection is not waited for again while it is open.
+	if (!fighting && context.handReady)
+	{
+		for (const auto& [gesture, offered, forCreature] :
+		     {std::tuple {context.ownSelectionGesture, context.ownSelectionOffered, false},
+		      std::tuple {context.creatureSelectionGesture, context.creatureSelectionOffered, true}})
+		{
+			if (offered && gesture != GestureType::None && (!selectionOpen || context.selection->openedWith != gesture))
+			{
+				requests.push_back({.gesture = gesture, .purpose = Purpose::OpenSelection, .forCreature = forCreature});
+			}
+		}
+	}
+
+	// With the hand ready and the selection closed, the R calls the last miracle again
+	if (!fighting && !selectionOpen && context.handReady && context.repeatGesture != GestureType::None && context.repeatOffered)
+	{
+		requests.push_back({.gesture = context.repeatGesture, .purpose = Purpose::RepeatMiracle, .seed = context.lastSeed});
+	}
+
 	// The leash gesture: on an unleashed creature that knows a leash, or to change the leash of one that knows two
-	if (context.creature.has_value() && !context.creature->fighting && !context.pickerOpen &&
+	if (context.creature.has_value() && !context.creature->fighting && !context.pickerOpen && !selectionOpen &&
 	    context.leashGesture != GestureType::None)
 	{
 		const auto known = KnownLeashes(*context.creature);

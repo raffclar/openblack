@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <map>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -26,6 +27,7 @@
 #include "Components/Town.h"
 #include "Components/VillageLight.h"
 #include "Creature/CreatureExplorationMap.h"
+#include "ECS/GameEndRules.h"
 #include "ECS/StatisticsRules.h"
 #include "Enums.h"
 
@@ -41,8 +43,10 @@ struct RegistryContext
 	std::vector<components::FootpathObstacleChange> footpathObstacleChanges;
 	/// Each thing on the map that the footpaths go round, as it was when it was put there
 	std::unordered_map<entt::entity, components::FootpathObstacleChange> footpathObstacles;
-	std::unordered_map<components::Stream::Id, entt::entity> streams;
-	std::unordered_map<uint32_t, entt::entity> towns;
+	/// The streams and the towns by their numbers. The turns go through them in the order of their numbers, which is
+	/// the same with each C++ library, so that each build plays the same turns.
+	std::map<components::Stream::Id, entt::entity> streams;
+	std::map<uint32_t, entt::entity> towns;
 	components::VillageLightFlames villageLightFlames {.clock = 0, .starts = village_lights::k_FlameStarts};
 	components::MapScriptGlobals mapScriptGlobals;
 	/// The rock-tapping sounds go round in turn: the next of the four a tap of the hand plays, and the next a creature's
@@ -52,6 +56,10 @@ struct RegistryContext
 	/// The scripts let the player go into their temple by tapping its entrance. They allow it until they say otherwise, and
 	/// every land starts allowing it again.
 	bool scriptLetsTempleBeEntered {true};
+	/// How many orders the scripts gave the camera: each command that takes, moves, turns or gives back the camera adds
+	/// one. The view report of a player tells how many of them its camera got, so that the turns know when the camera's
+	/// arrival in the report comes after the last order.
+	uint32_t scriptCameraOrders {0};
 	/// Each player's temple entrances take the cursor from the first turn a temple of theirs stands fully built on this
 	/// land, until the land is left
 	std::array<bool, static_cast<size_t>(PlayerNames::_COUNT)> templeEntrancesTakeCursor {};
@@ -60,6 +68,11 @@ struct RegistryContext
 	/// A skirmish: a playground land played rather than the story's. Losing a temple doesn't end it. openblack plays no
 	/// online games, which would be the same.
 	bool skirmish {false};
+	/// The land of a network game waits for the humans of the network session. At the turn that they join, each slot with
+	/// no player gets a computer god.
+	bool slotsWaitForHumans {false};
+	/// The end of a skirmish or a network game: whether it is decided, and the last place that a god took
+	game_end::State gameEnd;
 	/// Once a script or the hand has forced an action on a creature, a free creature always agrees to play, to be friends
 	/// or to be shown something when another creature asks it, until the land changes
 	bool partnersAlwaysAgree {false};

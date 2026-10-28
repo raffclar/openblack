@@ -92,6 +92,9 @@ struct Session
 	int64_t refreshTokenExpires {0};
 	/// "account"
 	AccountRef account;
+	/// "email_required": the account has no email address. The lobby refuses every other call with 403
+	/// "email_required" until the player adds an address on the account page of the site.
+	bool emailRequired {false};
 };
 
 /// A clan of the account in GET /api/v1/me
@@ -175,10 +178,53 @@ struct ServerEntry
 	int64_t updated {0};
 };
 
+/// A god or an observer in the status report of a game server
+struct ServerStatusPlayer
+{
+	/// "account": the account id from the player's ticket
+	int64_t account {0};
+	/// "role": "god" or "observer"
+	std::string role;
+	/// "clan": the clan that the god plays for, or null
+	std::optional<int64_t> clan;
+};
+
+/// PUT /api/v1/servers/{id}/status: the report of a game server every 5 seconds, over mutual TLS
+struct ServerStatus
+{
+	/// "hostname": the name of the room
+	std::string hostname;
+	/// "land"
+	std::string land;
+	/// "gamemode": "openstaging" (in the room before the game), "closedplaying" or "exiting"
+	std::string gamemode;
+	/// "locked"
+	bool locked {false};
+	/// "password": the room needs a password
+	bool password {false};
+	/// "maxplayers": 1 to 32 gods
+	int32_t maxplayers {1};
+	/// "gamever": the version of the game server, 16 characters at most
+	std::string gamever;
+	/// "players"
+	std::vector<ServerStatusPlayer> players;
+};
+
 /// GET /api/v1/servers: {"servers": [...]}
 struct ServerList
 {
 	std::vector<ServerEntry> servers;
+};
+
+/// The roles of a join ticket
+constexpr std::string_view k_GodRole = "god";
+constexpr std::string_view k_ObserverRole = "observer";
+
+/// The body of POST /api/v1/servers/{id}/tickets
+struct TicketRequest
+{
+	/// "role": "god" takes a god slot. "observer" only watches, takes no slot and can join a full room.
+	std::string role {k_GodRole};
 };
 
 /// POST /api/v1/servers/{id}/tickets (201)
@@ -190,7 +236,24 @@ struct JoinTicket
 	std::string ticket;
 	/// "expires": 60 seconds after the lobby made it
 	int64_t expires {0};
+	/// "role": the role that the ticket gives
+	std::string role {k_GodRole};
 };
+
+/// The codes of the problems that the front end tells the player about
+namespace problems
+{
+/// The account has no email address (403)
+constexpr std::string_view k_EmailRequired = "email_required";
+/// The gods fill the room of the server. An observer ticket can still join (409).
+constexpr std::string_view k_ServerFull = "server_full";
+/// The admins of the server banned the account (403)
+constexpr std::string_view k_BannedFromServer = "banned_from_server";
+/// The game of the server started (409)
+constexpr std::string_view k_GameStarted = "game_started";
+/// The room of the server is locked (409)
+constexpr std::string_view k_ServerLocked = "server_locked";
+} // namespace problems
 
 /// A clan in a list. Not in the contract of the lobby yet: the shape of the plan.
 struct ClanSummary
@@ -295,10 +358,10 @@ struct Date
 };
 
 /// POST /api/v1/me/creatures: the files of the player's creature as multipart/form-data, as the creature upload tool of
-/// the game sent them. Not in the contract of the lobby yet.
+/// the game sent them
 struct CreatureUpload
 {
-	/// The field "creature": creature.lhp, the package of the values and the pictures of the creature's web page
+	/// The field "lhp": creature.lhp, the package of the values and the pictures of the creature's web page
 	std::vector<uint8_t> package;
 	/// The field "mind": the creature's mind file, with its file name
 	std::vector<uint8_t> mind;
@@ -309,7 +372,7 @@ struct CreatureUpload
 };
 
 /// The names of the fields of the creature upload
-constexpr std::string_view k_UploadPackageField = "creature";
+constexpr std::string_view k_UploadPackageField = "lhp";
 constexpr std::string_view k_UploadMindField = "mind";
 constexpr std::string_view k_UploadPhysiqueField = "physique";
 constexpr std::string_view k_UploadPackageFileName = "creature.lhp";
@@ -516,6 +579,17 @@ struct RoomClanChoice
 	AccountRef account;
 	/// "clan": none when the god plays for itself
 	std::optional<ClanRef> clan;
+};
+
+/// The data of "server.banned": a game server banned the account
+struct ServerBanned
+{
+	/// "server": "id"
+	std::string server;
+	/// "server": "name"
+	std::string name;
+	/// "reason"
+	std::string reason;
 };
 
 /// The data of "account.banned"

@@ -16,6 +16,8 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 
 #include "Graphics/EmbeddedShaders.h"
 #ifdef __GNUC__
@@ -35,6 +37,7 @@
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
 #include <imgui_user.h>
+#include <spdlog/spdlog.h>
 #ifdef _WIN32
 #include <SDL2/SDL_syswm.h>
 #endif
@@ -44,6 +47,7 @@
 #include "Audio.h"
 #include "Camera.h"
 #include "Camera/Camera.h"
+#include "Common/DeveloperToolsGate.h"
 #include "Console.h"
 #include "Creature/BonusCreatures.h"
 #include "CreatureSpawner.h"
@@ -56,6 +60,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "Editor/EditorWindow.h"
 #include "EngineConfig.h"
@@ -83,6 +88,7 @@
 #include "TextureViewer.h"
 #include "VideoViewer.h"
 #include "Weather.h"
+#include "Windowing/SystemPointer.h"
 #include "Windowing/WindowingInterface.h"
 
 // Turn off formatting because it adds spaces which break the stringifying
@@ -169,6 +175,9 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 			{
 				return nullptr;
 			}
+			// A background run (a tool or an agent) never touches the pointer of the system: it is the user's
+			const bool background = Locator::config::has_value() && Locator::config::value().background;
+			ImGui_ImplSDL2_KeepOffSystemPointer(!openblack::windowing::system_pointer::MayTouch(background));
 		}
 	}
 	// The system's cursor stays hidden: the game shows the hand, and its menu its own pointer
@@ -242,9 +251,43 @@ void Gui::SetScale(float scale) noexcept
 	ImGui::GetIO().FontGlobalScale = scale;
 }
 
+void Gui::FollowNetworkSession() noexcept
+{
+	const bool live = developer_tools::NetworkSessionLive();
+	if (live == _networkDormant)
+	{
+		return;
+	}
+	_networkDormant = live;
+	if (live)
+	{
+		// The editor keeps the camera while it is open, thus it closes. The other windows stay as they are, hidden.
+		for (auto& window : _debugWindows)
+		{
+			if (window->GetName() == "Editor" && window->IsOpen())
+			{
+				window->Close();
+			}
+		}
+		_stealsFocus = false;
+	}
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, live ? "A network game is live: the debug windows and the editor stop"
+		                                : "The network game ended: the debug windows start again");
+	}
+}
+
 bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 {
 	ImGui::SetCurrentContext(_imgui);
+	// While a network game is live, no debug window or editor tool takes an event, so that none changes the shared
+	// world
+	FollowNetworkSession();
+	if (_networkDormant)
+	{
+		return false;
+	}
 
 	auto takenByWindow = false;
 	for (auto& window : _debugWindows)
@@ -400,12 +443,42 @@ void Gui::NewFrame() noexcept
 	ImGui::SetCurrentContext(_imgui);
 	ImGui_ImplSDL2_NewFrame();
 	ImGuiIO& io = ImGui::GetIO();
+	// The debug windows use the pixels of the back buffer, as the game does. On the web, SDL gives the size in CSS
+	// pixels, and the game gives the mouse events to the windows in pixels of the back buffer. A window that is
+	// minimised keeps the size of 0 that SDL gives.
+	if (Locator::windowing::has_value() && io.DisplaySize.x > 0.0f && io.DisplaySize.y > 0.0f)
+	{
+		const auto size = Locator::windowing::value().GetSize();
+		io.DisplaySize = ImVec2(static_cast<float>(size.x), static_cast<float>(size.y));
+	}
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+	// A tool's run with a fixed frame time gives the debug windows that time too, so that their frame rate and their
+	// animations do not change with the speed of the machine
+	if (Locator::time::has_value())
+	{
+		if (const auto fixed = Locator::time::value().GetFixedFrameTime(); fixed.has_value() && fixed->count() > 0)
+		{
+			io.DeltaTime = std::chrono::duration<float>(*fixed).count();
+		}
+	}
 	ImGui::NewFrame();
 }
 
 bool Gui::Loop() noexcept
 {
+	FollowNetworkSession();
+	if (_networkDormant)
+	{
+		// An empty frame: no menu, no window and no overlay. The tools that the game server asks for continue.
+		for (auto& window : _debugWindows)
+		{
+			window->UpdateInNetworkGame();
+		}
+		NewFrame();
+		ShowInputLockNotice();
+		ImGui::Render();
+		return false;
+	}
 	for (auto& window : _debugWindows)
 	{
 		window->WindowUpdate();
@@ -434,6 +507,26 @@ bool Gui::Loop() noexcept
 
 	return false;
 }
+
+namespace
+{
+/// The states that each draw of the debug windows has
+constexpr uint64_t k_ImGuiState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_MSAA;
+/// The blend of the text and of the pictures that have their alpha
+constexpr uint64_t k_ImGuiAlphaBlend = BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+
+/// The corners of the debug windows' triangles: a place, a texture place and a colour
+[[nodiscard]] bgfx::VertexLayout ImGuiLayout() noexcept
+{
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .end();
+	return layout;
+}
+} // namespace
 
 /// Returns true if both internal transient index and vertex buffer have
 /// enough space.
@@ -486,12 +579,7 @@ void Gui::RenderDrawDataBgfx(ImDrawData* drawData) noexcept
 		const auto numVertices = static_cast<uint32_t>(drawList->VtxBuffer.size());
 		const auto numIndices = static_cast<uint32_t>(drawList->IdxBuffer.size());
 
-		bgfx::VertexLayout layout;
-		layout.begin()
-		    .add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
-		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-		    .end();
+		const auto layout = ImGuiLayout();
 
 		if (!checkAvailTransientBuffers(numVertices, layout, numIndices))
 		{
@@ -518,11 +606,7 @@ void Gui::RenderDrawDataBgfx(ImDrawData* drawData) noexcept
 			}
 			else if (0 != cmd->ElemCount)
 			{
-				uint64_t state = 0                      //
-				                 | BGFX_STATE_WRITE_RGB //
-				                 | BGFX_STATE_WRITE_A   //
-				                 | BGFX_STATE_MSAA      //
-				    ;
+				uint64_t state = k_ImGuiState;
 
 				bgfx::TextureHandle th = toBgfx(_texture);
 				bgfx::ProgramHandle program = toBgfx(_program);
@@ -539,9 +623,7 @@ void Gui::RenderDrawDataBgfx(ImDrawData* drawData) noexcept
 							uint8_t mip;
 						} s;
 					} texture = {cmd->GetTexID()};
-					state |= 0 != (IMGUI_FLAGS_ALPHA_BLEND & texture.s.flags)
-					             ? BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA)
-					             : BGFX_STATE_NONE;
+					state |= 0 != (IMGUI_FLAGS_ALPHA_BLEND & texture.s.flags) ? k_ImGuiAlphaBlend : BGFX_STATE_NONE;
 					th = texture.s.handle;
 					if (0 != texture.s.mip)
 					{
@@ -552,7 +634,7 @@ void Gui::RenderDrawDataBgfx(ImDrawData* drawData) noexcept
 				}
 				else
 				{
-					state |= BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA);
+					state |= k_ImGuiAlphaBlend;
 				}
 
 				// Project scissor/clipping rectangles into framebuffer space
@@ -587,6 +669,42 @@ void Gui::Draw() noexcept
 	ImGui::SetCurrentContext(_imgui);
 
 	RenderDrawDataBgfx(ImGui::GetDrawData());
+}
+
+void Gui::WarmUp() noexcept
+{
+	// One triangle with its corners in one place for each program and each blend. The first open of the debug menu
+	// then makes no new states of the graphics card.
+	constexpr uint32_t k_Corners = 3;
+	const std::array programs {toBgfx(_program), toBgfx(_imageProgram)};
+	constexpr std::array k_States {k_ImGuiState | k_ImGuiAlphaBlend, k_ImGuiState};
+	const glm::vec4 lodEnabled = {1.0f, 1.0f, 0.0f, 0.0f};
+	const auto layout = ImGuiLayout();
+	for (const auto program : programs)
+	{
+		for (const auto state : k_States)
+		{
+			if (!checkAvailTransientBuffers(k_Corners, layout, k_Corners))
+			{
+				return;
+			}
+			bgfx::TransientVertexBuffer vertices;
+			bgfx::TransientIndexBuffer indices;
+			bgfx::allocTransientVertexBuffer(&vertices, k_Corners, layout);
+			bgfx::allocTransientIndexBuffer(&indices, k_Corners, sizeof(ImDrawIdx) == 4);
+			std::fill_n(reinterpret_cast<ImDrawVert*>(vertices.data), k_Corners, ImDrawVert {});
+			std::fill_n(reinterpret_cast<ImDrawIdx*>(indices.data), k_Corners, ImDrawIdx {0});
+			if (program.idx == toBgfx(_imageProgram).idx)
+			{
+				bgfx::setUniform(toBgfx(_u_imageLodEnabled), glm::value_ptr(lodEnabled));
+			}
+			bgfx::setState(state);
+			bgfx::setTexture(0, toBgfx(_s_tex), toBgfx(_texture));
+			bgfx::setVertexBuffer(0, &vertices);
+			bgfx::setIndexBuffer(&indices);
+			bgfx::submit(_viewId, program);
+		}
+	}
 }
 
 bool Gui::ShowMenu() noexcept
@@ -653,6 +771,15 @@ bool Gui::ShowMenu() noexcept
 			{
 				ImGui::SetTooltip("A flat plane over the whole map with a lake north of the middle, for trying out how "
 				                  "creatures move, are animated, drink and wade, and what the water reflects");
+			}
+			if (ImGui::MenuItem("Map for 32 Gods"))
+			{
+				game.LoadGodsRingMap();
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("The network map for 32 gods on this computer alone: a round island with a citadel and "
+				                  "a village in each of its 32 slots");
 			}
 			ImGui::EndMenu();
 		}

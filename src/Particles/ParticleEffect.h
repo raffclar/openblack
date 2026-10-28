@@ -31,17 +31,13 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "Common/GameRandom.h"
 #include "ManaPathMaths.h"
 #include "ParticleMaths.h"
 #include "ParticleSpellLink.h"
 #include "PlasmaCommand.h"
 #include "RisingSparks.h"
 #include "StormMaths.h"
-
-namespace openblack
-{
-class GameRandomInterface;
-}
 
 /// The particle effects of the miracles and spot visuals, as their files describe them.
 ///
@@ -152,6 +148,13 @@ struct BeliefSprite
 	glm::vec3 position {0.0f};
 	int32_t amount {0};
 	uint32_t colour {0xFFFFFF};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const BeliefSprite& self, Visitor&& visit)
+	{
+		visit(self.position, self.amount, self.colour);
+	}
 };
 
 /// A village centre as its symbols of belief see it: the top of its totem and how much the village believes in each
@@ -183,6 +186,13 @@ struct SurfacePoint
 {
 	glm::vec3 position {0.0f};
 	glm::vec3 normal {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const SurfacePoint& self, Visitor&& visit)
+	{
+		visit(self.position, self.normal);
+	}
 };
 
 /// A lightning bolt cast from a hand, as the others see it to clash with it. The bolt's effect owns it; the world keeps
@@ -576,6 +586,13 @@ struct DrawState
 	float stretch {1.0f};
 	float alpha {255.0f};
 	float frame {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const DrawState& self, Visitor&& visit)
+	{
+		visit(self.position, self.rotation, self.scale, self.stretch, self.alpha, self.frame);
+	}
 };
 
 /// What a rule keeps for one atom, such as when a condition first held
@@ -605,6 +622,13 @@ struct ObjectGlow
 	glm::vec2 textureFraction {0.0f};
 	/// The game's milliseconds when its shell was made, from which its texture slides
 	uint64_t startedAt {0};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const ObjectGlow& self, Visitor&& visit)
+	{
+		visit(self.object, self.zoom, self.argb, self.texture, self.animSpeed, self.textureFraction, self.startedAt);
+	}
 };
 
 /// The shower of sparks an atom sends up from the object it is kept on (see rising_sparks): the sparks are made the first
@@ -615,6 +639,23 @@ struct ObjectShower
 	std::optional<rising_sparks::Sparks> sparks;
 	rising_sparks::FrameMilliseconds clock;
 };
+
+/// The shift of a drawn atom from where it stepped: the move of this computer's live hand away from a reference point
+/// since the last step, times a weight. Only the casts of this computer give it. Thus the parts of a miracle that
+/// follow the hand stay on the live hand between steps.
+struct HandOffset
+{
+	/// The point that the last step put the atom at, or the hand point of that step
+	glm::vec3 reference {0.0f};
+	/// How much of the move it takes, 0..1
+	float weight {0.0f};
+};
+
+/// The shift of an atom with the offset from where it stepped, when this computer draws its hand at a point
+[[nodiscard]] inline glm::vec3 LiveHandShift(const HandOffset& offset, glm::vec3 hand)
+{
+	return (hand - offset.reference) * offset.weight;
+}
 
 /// A particle
 struct Atom
@@ -677,6 +718,11 @@ struct Atom
 	/// effect's age then: a wisp let out of this computer's hand starts at the hand
 	std::optional<glm::vec3> drawOffset;
 	float drawOffsetFrom {0.0f};
+	/// It keeps the atom at the live hand of this computer's cast between steps. An atom has only one draw offset: this one,
+	/// the shift above, or the one of its parent atom.
+	std::optional<HandOffset> handOffset;
+	/// It uses the draw offset of its parent atom, the same one, as the rain cone keeps with its cloud
+	bool sharesParentOffset {false};
 	/// The surface it is drawn as, its own, when a rule draws it as a surface of revolution
 	std::shared_ptr<SurfaceInstance> surface;
 	/// The shell it lays over an object's model, when a rule keeps it on one
@@ -726,6 +772,17 @@ struct Collection
 	std::vector<std::unique_ptr<Atom>> atoms;
 	std::vector<Slot> modifiers;
 };
+
+/// The atom whose draw offset an atom uses: the atom itself, or the parent atom whose offset it shares
+[[nodiscard]] const Atom& DrawOffsetHolder(const Atom& atom);
+/// Whether the atom has a draw offset of any kind, its own or a shared one
+[[nodiscard]] bool HasDrawOffset(const Atom& atom);
+/// The atom keeps up with this computer's live hand: it takes the move of the hand from the reference point, times the
+/// weight (clamped to 0..1). An atom with another draw offset keeps that offset.
+void FollowLiveHand(Atom& atom, glm::vec3 reference, float weight);
+/// The atom shares the draw offset of its parent atom, if it has no draw offset and the parent has one. Returns true
+/// only when it starts to share the offset now.
+bool ShareParentDrawOffset(Atom& atom);
 
 /// A rule of a group: it creates atoms, moves them, changes how they look, or removes them
 class Modifier
@@ -855,12 +912,13 @@ public:
 	[[nodiscard]] bool IsHidden() const { return _hidden; }
 
 	// For the rules
-	/// Random numbers on the effect's stream; 0 outside a step, as the game draws them
-	[[nodiscard]] float Random(float max);
-	[[nodiscard]] float Random(float min, float max);
-	[[nodiscard]] int32_t Rand(int32_t n);
+	/// Random numbers on the effect's stream; 0 outside a step, as the game draws them. The site is the place of the
+	/// call, for the draw trace
+	[[nodiscard]] float Random(float max, DrawSite site = DrawSite::current());
+	[[nodiscard]] float Random(float min, float max, DrawSite site = DrawSite::current());
+	[[nodiscard]] int32_t Rand(int32_t n, DrawSite site = DrawSite::current());
 	/// A point in the unit ball
-	[[nodiscard]] glm::vec3 RandomInBall();
+	[[nodiscard]] glm::vec3 RandomInBall(DrawSite site = DrawSite::current());
 	/// The value of a float provider object this step, or the fallback for none
 	[[nodiscard]] float FloatProvider(const std::string& name, float fallback) const;
 	[[nodiscard]] bool ConditionForCollection(const std::string& name, const Collection& collection) const;
@@ -917,6 +975,8 @@ public:
 		const SurfaceInstance* surface {nullptr};
 		/// How much of its effect's draw offset it takes (Atom::drawWeight)
 		float offsetWeight {1.0f};
+		/// The offset from the live hand that it holds or shares (Atom::handOffset)
+		std::optional<HandOffset> handOffset;
 		/// The triangles of a piece of a broken model
 		std::shared_ptr<const blast::MeshFragment> fragment;
 		/// The player it shows, when not its effect's (Atom::player); -1 for its effect's

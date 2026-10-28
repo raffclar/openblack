@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <optional>
 #include <string>
 
 #include <entt/locator/locator.hpp>
@@ -97,6 +98,7 @@ class WindowingInterface;
 namespace ecs
 {
 class Registry;
+class DrawnRegistry;
 class MapInterface;
 } // namespace ecs
 
@@ -118,6 +120,7 @@ class VillageTotemSystemInterface;
 class SpellIconSystemInterface;
 class ArtefactSystemInterface;
 class HeartbeatSystemInterface;
+class GameEndSystemInterface;
 class FieldSystemInterface;
 class FishFarmSystemInterface;
 class AnimalSystemInterface;
@@ -140,6 +143,7 @@ class CreaturePenSystemInterface;
 class LeashSystemInterface;
 class CreatureFightSystemInterface;
 class FightTranscriptSystemInterface;
+class CreatureAnimationLogSystemInterface;
 class CreatureModeSystemInterface;
 class CreatureCaveSystemInterface;
 class TattooEditorSystemInterface;
@@ -158,6 +162,7 @@ class SharkSystemInterface;
 class VideoSystemInterface;
 class HelpTextSystemInterface;
 class HelpProfileSystemInterface;
+class ComputerSettingsSystemInterface;
 class CreatureHelpSystemInterface;
 class GuidanceSystemInterface;
 class HelpMessageSystemInterface;
@@ -209,6 +214,7 @@ class CreatureCarryOverSystemInterface;
 class SaveGameSystemInterface;
 class CreatureWebPageSystemInterface;
 class LobbyClientSystemInterface;
+class NetworkGameSystemInterface;
 class RealWeatherSystemInterface;
 class TornadoSystemInterface;
 class MagicShieldSystemInterface;
@@ -220,6 +226,7 @@ class PauseTextSystemInterface;
 class LandSystemInterface;
 class FireSystemInterface;
 class ExplosionSystemInterface;
+class FloatingNumberSystemInterface;
 class RewardSystemInterface;
 class ScriptObjectsSystemInterface;
 class BuildingDamageSystemInterface;
@@ -245,6 +252,8 @@ bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
+/// The settings of this computer, read from the file when there is one (see computer_settings)
+void InitializeComputerSettings(std::optional<std::filesystem::path> file);
 void ShutDownServices();
 /// Starts the debug inspector's server on a port of 127.0.0.1 (any free one for 0): false, with why in the log, if it
 /// can't listen. Only in builds with the inspector.
@@ -285,6 +294,8 @@ struct Locator
 	using weatherSystem = entt::locator<ecs::systems::WeatherSystemInterface>;
 	using pathfindingSystem = entt::locator<ecs::systems::PathfindingSystemInterface>;
 	using entitiesRegistry = entt::locator<ecs::Registry>;
+	/// The things that only the frames make and draw, out of the synced world
+	using drawnRegistry = entt::locator<ecs::DrawnRegistry>;
 	using entitiesMap = entt::locator<ecs::MapInterface>;
 	using playerSystem = entt::locator<ecs::systems::PlayerSystemInterface>;
 	using alignmentSystem = entt::locator<ecs::systems::AlignmentSystemInterface>;
@@ -310,6 +321,7 @@ struct Locator
 	using spellIconSystem = entt::locator<ecs::systems::SpellIconSystemInterface>;
 	using artefactSystem = entt::locator<ecs::systems::ArtefactSystemInterface>;
 	using heartbeatSystem = entt::locator<ecs::systems::HeartbeatSystemInterface>;
+	using gameEndSystem = entt::locator<ecs::systems::GameEndSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
 	using fishFarmSystem = entt::locator<ecs::systems::FishFarmSystemInterface>;
 	using animalSystem = entt::locator<ecs::systems::AnimalSystemInterface>;
@@ -333,6 +345,8 @@ struct Locator
 	using creatureFightSystem = entt::locator<ecs::systems::CreatureFightSystemInterface>;
 	/// Only in builds with the inspector, and only once the inspector started
 	using fightTranscript = entt::locator<ecs::systems::FightTranscriptSystemInterface>;
+	/// Only in builds with the inspector, and only once the inspector started
+	using creatureAnimationLog = entt::locator<ecs::systems::CreatureAnimationLogSystemInterface>;
 	using creatureModeSystem = entt::locator<ecs::systems::CreatureModeSystemInterface>;
 	using creatureCaveSystem = entt::locator<ecs::systems::CreatureCaveSystemInterface>;
 	using tattooEditorSystem = entt::locator<ecs::systems::TattooEditorSystemInterface>;
@@ -351,6 +365,7 @@ struct Locator
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
 	using helpProfileSystem = entt::locator<ecs::systems::HelpProfileSystemInterface>;
+	using computerSettingsSystem = entt::locator<ecs::systems::ComputerSettingsSystemInterface>;
 	using creatureHelpSystem = entt::locator<ecs::systems::CreatureHelpSystemInterface>;
 	using helpMessageSystem = entt::locator<ecs::systems::HelpMessageSystemInterface>;
 	using guidanceSystem = entt::locator<ecs::systems::GuidanceSystemInterface>;
@@ -384,6 +399,8 @@ struct Locator
 	using webSocketClient = entt::locator<online::WebSocketClientInterface>;
 	/// The client of the lobby (bwgame-service)
 	using lobbyClient = entt::locator<ecs::systems::LobbyClientSystemInterface>;
+	/// The network game of this computer: the session with a game server, which gives the turns of the world
+	using networkGame = entt::locator<ecs::systems::NetworkGameSystemInterface>;
 	/// The real-world weather of a single-player game, off unless the player turns it on
 	using realWeatherSystem = entt::locator<ecs::systems::RealWeatherSystemInterface>;
 	using tornadoSystem = entt::locator<ecs::systems::TornadoSystemInterface>;
@@ -396,6 +413,7 @@ struct Locator
 	using landSystem = entt::locator<ecs::systems::LandSystemInterface>;
 	using fireSystem = entt::locator<ecs::systems::FireSystemInterface>;
 	using explosionSystem = entt::locator<ecs::systems::ExplosionSystemInterface>;
+	using floatingNumberSystem = entt::locator<ecs::systems::FloatingNumberSystemInterface>;
 	using rewardSystem = entt::locator<ecs::systems::RewardSystemInterface>;
 	using scriptObjects = entt::locator<ecs::systems::ScriptObjectsSystemInterface>;
 	using buildingDamageSystem = entt::locator<ecs::systems::BuildingDamageSystemInterface>;

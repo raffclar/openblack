@@ -70,6 +70,13 @@ public:
 	void Stop();
 	/// Once a frame
 	void Update(float seconds);
+	/// Once a frame of a network game: only the camera follows the scenario. The commands come before the turns.
+	void UpdateView() { UpdateCamera(); }
+	/// Before each turn of a network game: the scenario steps on by the time of one turn and gives the commands that are
+	/// due. The first turn after the layout gives no commands (see TurnStepOf).
+	void BeforeTurn();
+	/// The turn count at which the last scenario was laid out, or none before the first scenario
+	[[nodiscard]] std::optional<uint32_t> GetLayoutTurn() const { return _layoutTurn; }
 
 	[[nodiscard]] bool IsRunning() const { return _running; }
 	/// The scenario running, or last run
@@ -107,6 +114,8 @@ public:
 
 private:
 	void SetUpEnvironment(const Environment& environment);
+	/// The machine's clock gives the scenario's date, or the date it gave before a scenario set one
+	void SetUpDate(const std::optional<RealDate>& date);
 	void PlaceHighlights(const Scenario& scenario, glm::vec2 middle);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
 	/// Lays the scenario's footpaths and links them to the objects they lead from
@@ -192,6 +201,7 @@ private:
 	[[nodiscard]] std::optional<glm::ivec2> RopeOnScreen(size_t creature, glm::vec2 size) const;
 	/// Where the middle of the foot of the scenario's town's worship site altar is on the screen
 	[[nodiscard]] std::optional<glm::ivec2> AltarOnScreen(glm::vec2 size) const;
+	[[nodiscard]] std::optional<glm::ivec2> ObjectOnScreen(size_t object, float height, glm::vec2 size) const;
 	/// A pixel over the body of the creature in the Creature Cave, as the cave finds it under the pointer, on a screen
 	/// of a size
 	[[nodiscard]] static std::optional<glm::ivec2> CaveCreatureOnScreen(glm::vec2 size);
@@ -218,9 +228,17 @@ private:
 	const Scenario* _scenario {nullptr};
 	bool _running {false};
 	float _seconds {0.0f};
+	/// The turn count at which the scenario was laid out
+	std::optional<uint32_t> _layoutTurn;
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// The date that the machine's clock was pinned to (none for the wall clock's) before a scenario set the date
+	std::optional<std::optional<int64_t>> _pinnedDateBefore;
+	/// Whether the game was a skirmish before a scenario made it one
+	std::optional<bool> _skirmishBefore;
+	/// Whether the world played as a network game before a scenario made it one
+	std::optional<bool> _networkGameBefore;
 	/// The players that the scenario put in the game, which go when it stops
 	std::vector<entt::entity> _addedPlayers;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't

@@ -31,6 +31,18 @@ TEST(VortexRules, ElapsedSecondsCountsTurnsAndThePartOfOne)
 	EXPECT_FLOAT_EQ(ElapsedSeconds(0, 0.0f, k_MillisecondsPerTurn), 0.0f);
 }
 
+TEST(VortexRules, TheTurnReadsNoPartOfAFrame)
+{
+	// The turn reads whole turns only, the frame still reads the part for what it draws
+	static_assert(TurnFractionFor(0.4f, true) == 0.0f);
+	static_assert(TurnFractionFor(0.4f, false) == 0.4f);
+	// Two frame rates give two parts, but the same seconds in the turn
+	EXPECT_EQ(ElapsedSeconds(48, TurnFractionFor(0.2f, true), k_MillisecondsPerTurn),
+	          ElapsedSeconds(48, TurnFractionFor(0.7f, true), k_MillisecondsPerTurn));
+	EXPECT_NE(ElapsedSeconds(48, TurnFractionFor(0.2f, false), k_MillisecondsPerTurn),
+	          ElapsedSeconds(48, TurnFractionFor(0.7f, false), k_MillisecondsPerTurn));
+}
+
 TEST(VortexRules, AFadeIsOverOnTheSeventiethTurn)
 {
 	// The game's thousandth of a second is a float a hair over a thousandth, so 70 turns are just over 7 seconds

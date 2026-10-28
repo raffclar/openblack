@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "Creature/BonusCreatures.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/LandDetail.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -34,6 +35,10 @@ enum class GraphicsBackend : uint8_t
 	OpenGLES,
 	/// WebGPU. In a web browser, the browser gives it. On the desktop, bgfx needs the Dawn library next to the game.
 	WebGPU,
+	/// Direct3D 11. Only the Windows build has it.
+	Direct3D11,
+	/// OpenGL 4.3 on the desktop. The web build does not have it.
+	OpenGL,
 };
 
 /// The names a backend is given by on the command line, in any case: its own and the common short ones
@@ -48,6 +53,16 @@ static constexpr auto k_GraphicsBackendNames = std::to_array<std::pair<std::stri
     {"MTL", GraphicsBackend::Metal},
     {"Vulkan", GraphicsBackend::Vulkan},
     {"VK", GraphicsBackend::Vulkan},
+#if defined(_WIN32)
+    {"Direct3D11", GraphicsBackend::Direct3D11},
+    {"D3D11", GraphicsBackend::Direct3D11},
+    {"DX11", GraphicsBackend::Direct3D11},
+    {"DirectX11", GraphicsBackend::Direct3D11},
+#endif
+#if !defined(__EMSCRIPTEN__)
+    {"OpenGL", GraphicsBackend::OpenGL},
+    {"GL", GraphicsBackend::OpenGL},
+#endif
 #if defined(__EMSCRIPTEN__)
     {"OpenGLES", GraphicsBackend::OpenGLES},
     {"GLES", GraphicsBackend::OpenGLES},
@@ -130,6 +145,13 @@ struct EngineConfig
 	float cameraNearClip {1.0f};
 	/// The game's graphics detail level, 0 to 6, read once at start-up (see graphics::detail_level)
 	uint8_t detailLevel {4};
+	/// What the detail level turns on and off: the level's table, with this computer's own values for the custom level
+	graphics::detail_level::Settings detail {graphics::detail_level::For(4)};
+	/// How many detail levels the options' selector steps through, from this computer's settings
+	uint8_t maxDetailLevel {graphics::detail_level::k_MenuLevels};
+	/// The volumes of the sound effects and the music that this computer keeps, if it keeps them (0 to 1)
+	std::optional<float> keptEffectsVolume;
+	std::optional<float> keptMusicVolume;
 	/// Debug: the land's detail lines in place of the detail level's (see graphics::land_detail)
 	std::optional<graphics::land_detail::Lines> landDetailLines;
 
@@ -151,8 +173,11 @@ struct EngineConfig
 	/// The https:// origin of the lobby (bwgame-service). With none, the game has no online services. The web build
 	/// uses the origin of the page for any value.
 	std::optional<std::string> lobbyOrigin;
-	/// The real-world weather of the player's place changes the weather of a single-player game. It is off unless the
-	/// player turns it on, as in the original game.
-	bool useInternetWeather {false};
+	/// Tests on this computer only: a PEM file of more certificate authorities for a lobby on a loopback address. The
+	/// lobby's web client, its push channel and the game sockets then also trust it.
+	std::optional<std::string> lobbyTestAuthorities;
+	/// The real-world weather of the player's place changes the weather of a single-player game. It is on unless the
+	/// player turns it off.
+	bool useInternetWeather {true};
 };
 } // namespace openblack

@@ -216,4 +216,16 @@ constexpr std::string_view k_DeveloperFolder = "developer";
 /// - For a player, in the profile folder.
 [[nodiscard]] Store StoreFor(const RunOptions& options);
 
+/// Where a game server keeps the profile it plays as: nowhere. The server plays as a profile made in memory that no file
+/// ever holds, and it has no folder for saved games, so it saves no game and keeps no player's data. A folder given on
+/// the command line is not used.
+[[nodiscard]] Store ServerStore();
+
+/// Where the game keeps the settings of this computer (see computer_settings), which all the profiles share:
+/// - In the folder that the command line gives for the profiles, for all runs.
+/// - Nowhere for a run of a developer or a tool, so that its runs do not change with the player's settings.
+/// - For a player, in the file next to the profile folder (playerFile), when there is one.
+[[nodiscard]] std::optional<std::filesystem::path> SettingsFileFor(const RunOptions& options,
+                                                                   std::optional<std::filesystem::path> playerFile);
+
 } // namespace openblack::player_profiles

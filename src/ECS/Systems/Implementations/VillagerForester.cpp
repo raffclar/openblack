@@ -24,6 +24,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/PortableRotations.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/DeadTree.h"
@@ -44,6 +45,7 @@
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/DiscipleRules.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
@@ -320,11 +322,10 @@ void TurnBy(entt::entity villager, int32_t gameAngle)
 {
 	auto& transform = Entities().Get<Transform>(villager);
 	const auto x = transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-	const float facingRadians = -std::atan2(-x.z, x.x) - glm::radians(90.0f);
+	const float facingRadians = -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
 	const auto facing = static_cast<int32_t>(gutils::ConvertAngle3DToGame(facingRadians));
 	const auto angle = (facing - gameAngle) & gutils::k_GameAngleMask;
-	transform.rotation = glm::eulerAngleY(-gutils::ConvertGameAngleTo3D(angle) - glm::radians(90.0f));
-	Entities().SetDirty();
+	openblack::ecs::living_facing::FaceGameAngle(Entities(), villager, static_cast<uint16_t>(angle));
 }
 
 /// Whether a pile is one a building site keeps its wood in

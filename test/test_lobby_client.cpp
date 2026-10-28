@@ -601,17 +601,49 @@ TEST_F(LobbyClientTest, AJoinTicketMustBeForAnEncryptedSocket)
 	Make();
 	LogIn();
 	std::optional<LobbyResult<lobby_api::JoinTicket>> got;
-	_client->RequestJoinTicket("eden", [&](auto&& result) { got = std::move(result); });
+	_client->RequestJoinTicket("eden", game_socket::Role::God, [&](auto&& result) { got = std::move(result); });
 	EXPECT_EQ(_http.Next().method, HttpMethod::Post);
 	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/servers/eden/tickets");
+	EXPECT_EQ(_http.NextBody(), R"({"role":"god"})");
 	_http.Answer(201, R"({"url":"ws://bw.example/game/eden","ticket":"t","expires":"2026-10-22T10:01:00Z"})");
 	ASSERT_TRUE(got.has_value());
 	EXPECT_EQ(got->error.kind, LobbyErrorKind::AddressRefused);
 
-	_client->RequestJoinTicket("eden", [&](auto&& result) { got = std::move(result); });
-	_http.Answer(201, R"({"url":"wss://bw.example/game/eden","ticket":"t","expires":"2026-10-22T10:01:00Z"})");
+	_client->RequestJoinTicket("eden", game_socket::Role::Observer, [&](auto&& result) { got = std::move(result); });
+	EXPECT_EQ(_http.NextBody(), R"({"role":"observer"})");
+	_http.Answer(201,
+	             R"({"url":"wss://bw.example/game/eden","ticket":"t","expires":"2026-10-22T10:01:00Z","role":"observer"})");
 	ASSERT_TRUE(got->Ok());
 	EXPECT_EQ(got->value->ticket, "t");
+	EXPECT_EQ(got->value->role, "observer");
+}
+
+TEST_F(LobbyClientTest, AFullRoomGivesTheCodeOfTheProblem)
+{
+	Make();
+	LogIn();
+	std::optional<LobbyResult<lobby_api::JoinTicket>> got;
+	_client->RequestJoinTicket("eden", game_socket::Role::God, [&](auto&& result) { got = std::move(result); });
+	_http.Answer(409,
+	             R"({"type":"about:blank","title":"Conflict","status":409,)"
+	             R"("detail":"The room is full. You can still join as an observer.","instance":"/x","code":"server_full"})");
+	ASSERT_TRUE(got.has_value());
+	EXPECT_EQ(got->error.kind, LobbyErrorKind::Refused);
+	EXPECT_EQ(got->error.code, "server_full");
+}
+
+TEST_F(LobbyClientTest, TheSessionSaysWhenTheAccountNeedsAnEmailAddress)
+{
+	Make();
+	EXPECT_FALSE(_client->IsEmailRequired());
+	_client->Login("abc", "secret", [](auto&& /*result*/) {});
+	_http.Answer(201, R"({"token_type":"Bearer","access_token":"access1","access_token_expires":"2026-10-22T10:15:00.000Z",)"
+	                  R"("refresh_token":"refresh1","refresh_token_expires":"2026-11-21T10:00:00.000Z",)"
+	                  R"("account":{"id":7,"name":"abc"},"email_required":true,"second_factor":"not_needed"})");
+	EXPECT_TRUE(_client->IsEmailRequired());
+	_client->Logout(false, [](auto&& /*result*/) {});
+	_http.Answer(204, "");
+	EXPECT_FALSE(_client->IsEmailRequired());
 }
 
 TEST_F(LobbyClientTest, ClansRankingAndPlayerUseTheirPaths)
@@ -678,7 +710,7 @@ TEST_F(LobbyClientTest, CreatureUploadSendsTheThreeFiles)
 	ASSERT_TRUE(type.has_value());
 	EXPECT_TRUE(type->starts_with("multipart/form-data; boundary=openblack-"));
 	const auto body = _http.NextBody();
-	EXPECT_NE(body.find(R"(name="creature"; filename="creature.lhp")"), std::string::npos);
+	EXPECT_NE(body.find(R"(name="lhp"; filename="creature.lhp")"), std::string::npos);
 	EXPECT_NE(body.find(R"(name="mind"; filename="_A_b_c.chl")"), std::string::npos);
 	EXPECT_NE(body.find(R"(name="physique"; filename="_A_b_c.phy")"), std::string::npos);
 	_http.Answer(201, R"({"url":"https://bw.example/creatures/abc"})");

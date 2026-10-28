@@ -114,11 +114,14 @@ bool MagicSystem::SeedShownWithSpell(const SpellSeed& seed, const Spell& spell) 
 void MagicSystem::KeepSeedInHand(const Spell& spell)
 {
 	auto& registry = EntityRegistry();
-	if (!_held.has_value() || spell.seed != *_held || !registry.Valid(*_held))
+	// Only a seed in the hand of a player, which these rules act on in that hand
+	const auto holder = HolderOf(spell.seed);
+	if (!holder.has_value() || !registry.Valid(spell.seed))
 	{
 		return;
 	}
-	const auto& info = magic::GetSpellSeedInfo(Info(), registry.Get<const SpellSeed>(*_held).seedType);
+	const ActingAs acting(*this, *holder);
+	const auto& info = magic::GetSpellSeedInfo(Info(), registry.Get<const SpellSeed>(*Held()).seedType);
 	// Only a phial kept in the hand after its cast (a kept seed that is not cast in the hand) has these rules
 	if (info.isKeptInHand == 0 || info.castType == SpellCastType::SpellCastInHand)
 	{
@@ -127,7 +130,7 @@ void MagicSystem::KeepSeedInHand(const Spell& spell)
 	// It goes when its miracle has closed down; it leaves the hand, still linked, once its miracle is old enough
 	if (spell.closedDown)
 	{
-		DeleteSeed(*_held);
+		DeleteSeed(*Held());
 	}
 	else if (magic::SeedLeavesHandWithSpell(spell.spellClass, spell.age))
 	{
@@ -150,10 +153,56 @@ void MagicSystem::KeepSeedInInfluence(entt::entity spellEntity, const Spell& spe
 	{
 		return;
 	}
-	if (magic::ClosesOutOfInfluence(SeedShownWithSpell(*seed, spell), _world.InInfluence(seed->player, transform->position),
+	// A seed in the hand is where the reports of its player put the hand; the frames draw it at the hand of this computer
+	auto position = transform->position;
+	if (const auto holder = HolderOf(spell.seed); holder.has_value())
+	{
+		position = ReportedHandOf(*holder).value_or(position);
+	}
+	if (magic::ClosesOutOfInfluence(SeedShownWithSpell(*seed, spell), _world.InInfluence(seed->player, position),
 	                                spell.closedDown))
 	{
 		CloseDown(spellEntity);
+	}
+}
+
+void MagicSystem::ShowSeedsWithSpellsTurn()
+{
+	auto& registry = EntityRegistry();
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	std::vector<entt::entity> seeds;
+	registry.Each<const SpellSeed>([&seeds](entt::entity entity, const SpellSeed& seed) {
+		if (seed.followsSpell)
+		{
+			seeds.push_back(entity);
+		}
+	});
+	// The turn decides whether a seed out of the hand shows over its miracle: it has the seed's model or not
+	for (const auto entity : seeds)
+	{
+		const auto& seed = registry.Get<const SpellSeed>(entity);
+		const auto* spell = FindSpell(seed.spell);
+		if (!registry.AllOf<Transform>(entity) || spell == nullptr)
+		{
+			continue;
+		}
+		if (!SeedShownWithSpell(seed, *spell))
+		{
+			registry.Remove<Mesh>(entity);
+			continue;
+		}
+		if (!registry.AllOf<Mesh>(entity))
+		{
+			const auto& info = magic::GetSpellSeedInfo(Info(), seed.seedType);
+			registry.Assign<Mesh>(entity, resources::HashIdentifier(info.mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
+		}
+		// Drawn at its model's own size, unturned
+		auto& transform = registry.Get<Transform>(entity);
+		transform.rotation = glm::mat3(1.0f);
+		transform.scale = glm::vec3(1.0f);
 	}
 }
 
@@ -184,19 +233,13 @@ void MagicSystem::ShowSeedsWithSpells()
 		// It stays with its miracle across the land
 		transform->position.x = spell->position.x;
 		transform->position.z = spell->position.z;
-		if (!SeedShownWithSpell(seed, *spell))
+		// Only a seed that the turn shows has its model
+		if (!registry.AllOf<Mesh>(entity))
 		{
-			registry.Remove<Mesh>(entity);
 			continue;
 		}
 		const auto& info = magic::GetSpellSeedInfo(Info(), seed.seedType);
-		if (!registry.AllOf<Mesh>(entity))
-		{
-			registry.Assign<Mesh>(entity, resources::HashIdentifier(info.mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
-		}
-		// Drawn at its model's own size, unturned; its reach across the land is its model's at the seed's size
-		transform->rotation = glm::mat3(1.0f);
-		transform->scale = glm::vec3(1.0f);
+		// Its reach across the land is its model's at the seed's size
 		const float radius = ecs::world_objects::SizeOf(entity).radius * info.scale;
 		const auto things = ThingsUnder(entity, transform->position, land);
 		float height = magic::TopUnderSeed(radius, things);

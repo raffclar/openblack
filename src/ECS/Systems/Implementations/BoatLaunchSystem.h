@@ -37,9 +37,17 @@ public:
 	[[nodiscard]] State GetState() const override;
 
 private:
-	/// The things of the launch (the boat and its five sailors) or of the sailing (the boat and its deck)
-	void MakeParts();
-	void FreeParts();
+	/// The things of the launch (the boat and its five sailors) or of the sailing (the boat and its deck), which the turns
+	/// make and remove
+	[[nodiscard]] std::vector<entt::entity> MakeParts(boat_launch::Stage stage);
+	void FreeParts(std::vector<entt::entity>& parts);
+	/// The frames show or hide things of the film, and hide all of them at its end
+	void Show(const std::vector<entt::entity>& parts, bool shown);
+	[[nodiscard]] bool Shown(const std::vector<entt::entity>& parts) const;
+	void EndInFrame();
+	/// The things of the stage that plays
+	[[nodiscard]] std::vector<entt::entity>& StageParts();
+	[[nodiscard]] const std::vector<entt::entity>& StageParts() const;
 	/// The boat's matrix for this frame, from its clip
 	[[nodiscard]] std::optional<glm::mat4> BoatMatrix() const;
 	/// The sounds and spray of the launch at this frame
@@ -54,7 +62,8 @@ private:
 	entt::id_type _launchClip {0};
 	entt::id_type _sailingClip {0};
 	std::optional<glm::mat4> _boat;
-	std::vector<entt::entity> _parts;
+	std::vector<entt::entity> _launchParts;
+	std::vector<entt::entity> _sailingParts;
 };
 
 } // namespace openblack::ecs::systems

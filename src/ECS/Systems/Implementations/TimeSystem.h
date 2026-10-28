@@ -51,6 +51,8 @@ public:
 	void Start() override;
 	void Update() override;
 	void StartDraw() override;
+	void StepInput(std::chrono::microseconds stepTime) override;
+	[[nodiscard]] const input_steps::Steps& GetInputSteps() const override { return _inputSteps; }
 	[[nodiscard]] std::chrono::milliseconds GetElapsedTime() const override;
 
 	void StartGameClock(bool paused) override;
@@ -61,6 +63,7 @@ public:
 	[[nodiscard]] bool IsTurnDue() override;
 	void StartTurn() override;
 	void UpdateFrame() override;
+	void CatchUpFrame() override;
 
 	[[nodiscard]] uint32_t GetTurn() const override { return _turn; }
 	[[nodiscard]] float GetTurnFraction() const override { return _turnFraction; }
@@ -76,8 +79,12 @@ public:
 
 	void SetPaused(bool paused) override;
 	[[nodiscard]] bool IsPaused() const override { return _paused; }
+	void SetPlayerPause(bool paused) override;
 	void SetHeld(bool held) override;
 	[[nodiscard]] bool IsHeld() const override { return _held; }
+	void SetNetworkGame(bool networkGame) override;
+	[[nodiscard]] bool IsNetworkGame() const override { return _networkGame; }
+	void SetCatchesUp(bool catchesUp) override { _catchesUp = catchesUp; }
 	void SetSpeed(float speed) override;
 	[[nodiscard]] float GetSpeed() const override { return _speed; }
 
@@ -88,6 +95,7 @@ public:
 	[[nodiscard]] int64_t GetUnixTime() const override;
 	void RestartClock(std::optional<int64_t> unixTime) override;
 	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return _pinnedDate; }
+	void PinDate(std::optional<int64_t> pinnedDate) override { _pinnedDate = pinnedDate; }
 
 private:
 	/// The tick count the clock goes by: the tick source's, or while frames take a fixed time, one moved on by that
@@ -110,6 +118,8 @@ private:
 	/// The wall clock's whole milliseconds at the start of the last draw, and the real time of the draw
 	uint32_t _lastDrawTicks {0};
 	uint32_t _frameRealMs {1};
+	input_steps::Clock _inputClock;
+	input_steps::Steps _inputSteps;
 	std::chrono::milliseconds _elapsedTime {0};
 	/// The tick count the game's reading of the clock counts from, and the date pinned at that moment, if any
 	uint32_t _ticksEpoch {0};
@@ -119,6 +129,8 @@ private:
 	uint32_t _turn {0};
 	bool _paused {true};
 	bool _held {false};
+	bool _networkGame {false};
+	bool _catchesUp {false};
 	float _speed {1.0f};
 	uint32_t _turnsThisFrame {0};
 	// The frame clock: the timer at the last frame, the turn then, and the time past that turn

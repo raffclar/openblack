@@ -96,6 +96,10 @@ public:
 	[[nodiscard]] bool TakeArcsWanted();
 	[[nodiscard]] std::shared_ptr<particles::GestureTrail> TakeGestureTrail() override;
 	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override;
+	/// A sheet of light that a system or an entity keeps, such as the ring of an arena. A save of the particles does not
+	/// keep it: its owner keeps it and makes it again after a load. A sheet that is in the list already is not added
+	/// again.
+	void AddOwnedSheet(const std::shared_ptr<particles::LightSheet>& sheet);
 	void SetHandGlow(uint32_t rgb) override;
 	void QueueGestureTrail(std::shared_ptr<particles::GestureTrail> trail);
 	/// The sheets of light still standing; those gone are forgotten
@@ -134,10 +138,12 @@ public:
 	void ProcessGlows();
 	[[nodiscard]] size_t SoundCount() const { return _sounds.size(); }
 	void Reset();
+	/// The sounds of the particles of effects that a save does not keep, which the save leaves out too
+	using LeftOutSounds = std::set<const particles::ParticleSoundLink*>;
 	/// The things that the world shares with the effects go first in the tables of a save, in the order of the world
-	void NumberShared(particles::SharedTables& tables) const;
+	void NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut) const;
 	/// The running state of the world: its lists, and the sounds that the particles keep
-	void SaveState(particles::EffectWriter& out) const;
+	void SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut) const;
 	bool LoadState(particles::EffectReader& in);
 
 private:
@@ -155,6 +161,11 @@ private:
 		/// Seconds before it is heard, while it travels to the listener
 		float wait {0.0f};
 	};
+	/// A sound that its particle let go of was dying away, and a sound whose particle is gone and that does not wait to
+	/// be heard is over: a load ends them
+	[[nodiscard]] static bool EndsWithLoad(const PlayingSound& sound);
+	/// Whether a save keeps the sound
+	[[nodiscard]] static bool Saved(const PlayingSound& sound, const LeftOutSounds& leftOut);
 	void Play(PlayingSound& sound) const;
 	/// The particle let go of the sound: stopped at once, or, when its effect file soft-releases it, its loop released
 	/// and its first step quieter taken
@@ -177,6 +188,8 @@ private:
 	/// The recognised gestures' trails waiting to be shown, and the sheets of light the trails raised
 	std::vector<std::shared_ptr<particles::GestureTrail>> _gestureTrails;
 	mutable std::vector<std::weak_ptr<particles::LightSheet>> _lightSheets;
+	/// The sheets of light that systems and entities keep
+	mutable std::vector<std::weak_ptr<particles::LightSheet>> _ownedSheets;
 	bool _arcsWanted {false};
 	/// The bolts from hands, and how many there have been
 	std::vector<std::weak_ptr<particles::BoltShare>> _bolts;
@@ -221,6 +234,8 @@ public:
 	                       particles::SpellSink& sink, bool synced) override;
 	bool ProcessForSpell(EffectId id, const particles::ProcessInfo& info, float seconds) override;
 	bool ProcessByFrame(EffectId id, float seconds) override;
+	EffectId StartByFrame(ParticleType type, glm::vec3 origin, float magnitude) override;
+	void SetShown(EffectId id, bool shown) override;
 	EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                         float magnitude) override;
 
@@ -231,8 +246,12 @@ public:
 	void SetFightMarks(std::vector<particles::draw::FightMark> marks) override { _fightMarks = std::move(marks); }
 	void SetLearningMarks(std::vector<particles::draw::LearningMark> marks) override { _learningMarks = std::move(marks); }
 	void SetDrawPath(EffectId id, particles::draw::DrawPath path) override;
+	bool Renumber(EffectId from, EffectId to) override;
+	void KeepOutOfSaves(EffectId id) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
+	void SetLiveHand(EffectId id, glm::vec3 hand) override;
 	void SetInTemple(EffectId id) override;
+	void SetDrawnAlone(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
 	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
 	void AddTarget(EffectId id, entt::entity target) override;
@@ -242,7 +261,7 @@ public:
 	void AddHandManaPathSpark(const particles::mana_path::Spark& spark) override;
 	void AddStormBolt(glm::vec3 cloudPoint) override;
 	void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) override;
-	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override { _world.AddLightSheet(sheet); }
+	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override { _world.AddOwnedSheet(sheet); }
 	void UpdateFrame(float gameSeconds, const HandFrame& hand) override;
 	void ScrollChains(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 	void CloseDown(EffectId id) override;
@@ -253,10 +272,12 @@ public:
 
 	void ProcessTurn() override;
 	void Reset() override;
+	void SetFreshIdsAtNextReset() override { _freshIdsAtNextReset = true; }
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
 	void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const override;
+	void CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const override;
 	[[nodiscard]] DrawStats GetDrawStats() const override { return _drawStats; }
 	[[nodiscard]] std::vector<EffectInfo> GetEffects() const override;
 	[[nodiscard]] std::vector<std::string> GetFileNames() const override;
@@ -266,7 +287,7 @@ public:
 private:
 	/// A thing holding a visual a script started has been deleted: its visual ends at once
 	void OnScriptSpotVisualGone(entt::registry& registry, entt::entity thing);
-	/// Steps the effect of a selection at the hand
+	/// The effect of a selection at the hand steps
 	void StepSelectionEffect(float gameSeconds, const HandFrame& hand);
 	std::vector<entt::scoped_connection> _connections;
 	/// The effect that throws the pieces of what the blasts break
@@ -278,7 +299,7 @@ private:
 	/// all the time, started again whenever they end
 	EffectId _gestureTrails {k_NoEffect};
 	EffectId _gestureChain {k_NoEffect};
-	/// The effect round the hand while the leash picker is open
+	/// The effect round the hand while the miracle selection or the leash picker is open
 	EffectId _selectionEffect {k_NoEffect};
 	struct Running
 	{
@@ -291,6 +312,10 @@ private:
 		bool everyFrame {false};
 		/// One of the temple's rooms' effects, drawn only while the player is in the temple
 		bool inTemple {false};
+		/// Drawn only by itself, never with the world's or the temple's effects
+		bool drawnAlone {false};
+		/// Drawn in this frame; false while the frame does not draw the thing that draws it
+		bool shown {true};
 		/// A spot visual's turns left, negative for ever
 		std::optional<int> turnsLeft;
 		/// An object it follows and ends with
@@ -298,8 +323,18 @@ private:
 		particles::draw::DrawPath path {particles::draw::DrawPath::Sorted};
 		/// Everything it draws is moved by this, as the miracle in the hand follows the hand between turns
 		glm::vec3 drawOffset {0.0f};
+		/// A save keeps it, unless its owner starts it again after a load
+		bool saved {true};
+		/// The point where this computer draws its hand this frame, when it casts the miracle from the hand. The frame sets it
+		/// again before each draw, so a save does not keep it.
+		std::optional<glm::vec3> liveHand;
 	};
 
+	/// What the draw of the effects reads from the world
+	[[nodiscard]] particles::draw::Sources DrawSources() const;
+	/// Adds what a running effect draws to a frame
+	void AddRunning(const Running& running, float turnFraction, particles::draw::Frame& frame,
+	                const particles::draw::Sources& sources) const;
 	std::deque<Running>::iterator FindRunning(EffectId id);
 	[[nodiscard]] std::deque<Running>::const_iterator FindRunning(EffectId id) const;
 	/// Steps an effect; true once it has ended
@@ -324,6 +359,7 @@ private:
 	/// Newest first, as they are stepped and drawn
 	std::deque<Running> _effects;
 	EffectId _nextId {1};
+	bool _freshIdsAtNextReset {false};
 	bool _paused {false};
 	/// When the ribbons' textures last slid on
 	water_rings::Pace _chainScrollPace;

@@ -35,6 +35,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureReactionRules.h"
+#include "Creature/CreatureTeleportAgendas.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
@@ -53,6 +54,7 @@
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellSeed.h"
@@ -236,18 +238,29 @@ reaction_timing::Reacting WhoOf(const ecs::Registry& registry, entt::entity livi
 	return registry.AllOf<Creature>(living) ? reaction_timing::Reacting::Creature : reaction_timing::Reacting::Other;
 }
 
+/// Where a thing is now, as the turn knows it. A hand is where the last report of its player put it: its drawn place
+/// follows the pointer of one computer only. Empty when the thing has no place.
+std::optional<glm::vec3> TurnPlaceOf(const ecs::Registry& registry, entt::entity thing)
+{
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (const auto* reported = registry.TryGet<const ReportedHand>(thing))
+	{
+		return reported->handPoint;
+	}
+	if (const auto* transform = registry.TryGet<const Transform>(thing))
+	{
+		return transform->position;
+	}
+	return std::nullopt;
+}
+
 /// Where the thing a reaction is about is now: the thing itself while it is there, else where the reaction is
 glm::vec3 ThingAt(const ecs::Registry& registry, const ReactionSystem::Active& reaction)
 {
-	const auto thing = reaction.source.initiator;
-	if (thing != entt::null && registry.Valid(thing))
-	{
-		if (const auto* transform = registry.TryGet<const Transform>(thing))
-		{
-			return transform->position;
-		}
-	}
-	return reaction.source.position;
+	return TurnPlaceOf(registry, reaction.source.initiator).value_or(reaction.source.position);
 }
 
 /// Whether what a living reacts to has gone: deleted, or a villager dying
@@ -504,11 +517,13 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	}
 	// Nor does one with no life left, one that the hand holds, or one that a teleport stone carries
 	const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
-	const bool held =
-	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == std::optional(entity);
-	if (!creature_reaction::BodyFree({.life = needs != nullptr ? needs->needs.life : 1.0f,
-	                                  .heldByHand = held,
-	                                  .teleporting = registry.AllOf<TeleportTraveller>(entity)}))
+	const bool held = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(entity);
+	// A stone controls the creature only while its plan still has a step of the teleport to do
+	const auto* plans = registry.TryGet<const CreatureMindState>(entity);
+	const bool teleporting =
+	    registry.AllOf<TeleportTraveller>(entity) && plans != nullptr && creature_mind::StoneControls(plans->idle);
+	if (!creature_reaction::BodyFree(
+	        {.life = needs != nullptr ? needs->needs.life : 1.0f, .heldByHand = held, .teleporting = teleporting}))
 	{
 		return false;
 	}
@@ -1095,11 +1110,8 @@ void ReactionSystem::SpreadInCell(Active& reaction, const std::vector<entt::enti
 		}
 		const auto at = registry.Get<const Transform>(entity).position;
 		// Under a shield that what made the reaction isn't inside, where it is now, it is kept off
-		const auto* initiatorAt =
-		    registry.Valid(reaction.source.initiator) ? registry.TryGet<const Transform>(reaction.source.initiator) : nullptr;
 		if (Locator::magicShieldSystem::has_value() &&
-		    Locator::magicShieldSystem::value().KeepsReactionOff(at, initiatorAt != nullptr ? initiatorAt->position
-		                                                                                    : reaction.source.position))
+		    Locator::magicShieldSystem::value().KeepsReactionOff(at, ThingAt(registry, reaction)))
 		{
 			continue;
 		}
@@ -1376,7 +1388,9 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	// for a nasty one the neutral player's
 	auto& minds = Locator::creatureMindSystem::value();
 	const bool byCreature = source.casterCreature != entt::null;
-	const bool computer = source.player != PlayerNames::PLAYER_ONE && source.player != PlayerNames::NEUTRAL;
+	const bool computer = Locator::playerSystem::has_value()
+	                          ? Locator::playerSystem::value().IsComputerPlayer(source.player)
+	                          : source.player != PlayerNames::PLAYER_ONE && source.player != PlayerNames::NEUTRAL;
 	// A shield, either kind, teaches the spiritual shield
 	const auto magic = shield                                ? std::optional(static_cast<size_t>(MagicType::Shield))
 	                   : source.magicType != MagicType::None ? std::optional(static_cast<size_t>(source.magicType))
@@ -1936,6 +1950,10 @@ bool ReactionSystem::LoadState(reflection::BinaryReader& in)
 void ReactionSystem::Reset()
 {
 	_reactions.clear();
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_nextId = 1;
+	}
 	_cursor = 0;
 	_turn = 0;
 	_joins = 0;

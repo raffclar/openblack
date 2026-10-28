@@ -101,10 +101,25 @@ public:
 	/// Steps an effect that is stepped as it is drawn, by the frame's game time, rather than each turn; false once it has
 	/// gone
 	virtual bool ProcessByFrame(EffectId /*id*/, float /*seconds*/) { return false; }
+	/// An effect that only ProcessByFrame steps, never the turn, as the draw of its thing moves it on. Its random numbers
+	/// are only this computer's.
+	virtual EffectId StartByFrame(ParticleType type, glm::vec3 origin, float magnitude)
+	{
+		return Start(type, origin, magnitude, false);
+	}
+	/// Whether an effect that its thing draws shows in this frame: it shows only while the frame draws its thing
+	virtual void SetShown(EffectId /*id*/, bool /*shown*/) {}
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
 	/// when negative), staying where it was made, and ending when its owner object (if any) goes
 	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                                 float magnitude = 1.0f) = 0;
+
+	/// Gives a running effect another number, as an effect that its owner starts again after a load takes the number that
+	/// the save has for it. When the effect had the newest number, the next effect gets that number again. Returns false,
+	/// and changes nothing, when no effect has the first number or an effect has the second.
+	virtual bool Renumber(EffectId /*from*/, EffectId /*to*/) { return false; }
+	/// A save does not keep the effect: its owner starts it again after a load
+	virtual void KeepOutOfSaves(EffectId /*id*/) {}
 
 	virtual void SetOrigin(EffectId id, glm::vec3 origin) = 0;
 	virtual void SetPlayer(EffectId id, int player) = 0;
@@ -123,8 +138,14 @@ public:
 	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows
 	/// the hand between turns
 	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
+	/// The point where this computer draws its hand this frame, for a miracle that this computer casts from the hand.
+	/// The draw moves the atoms of the effect that follow the live hand by it.
+	virtual void SetLiveHand(EffectId id, glm::vec3 hand) = 0;
 	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
 	virtual void SetInTemple(EffectId id) = 0;
+	/// An effect that the world and the temple do not draw. Only CollectEffectDrawFrame draws it, as for the seeds
+	/// pictured over the gestures' hints.
+	virtual void SetDrawnAlone(EffectId /*id*/) {}
 	/// The live shield holding a point, its sphere grown by a margin, if any
 	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
 	/// How many particle sounds are playing or dying away, for the debug window
@@ -152,10 +173,10 @@ public:
 		/// How big the hand is drawn
 		float size {1.0f};
 		glm::vec3 cameraPosition {0.0f};
-		/// It is drawing a gesture that shows the chain: one that powers up the miracle in it, or the circle that sizes
-		/// it
+		/// It is drawing a gesture that shows the chain: one that powers up the miracle in it, the circle that sizes it,
+		/// or a gesture of the miracle selection
 		bool gesturing {false};
-		/// The leash picker is open: the effect of a selection shows round the hand
+		/// The miracle selection or the leash picker is open: the effect of a selection shows round the hand
 		bool selecting {false};
 	};
 	/// A recognised gesture's trail to show on the land, in the effect every trail shows in, which runs all the time
@@ -181,11 +202,19 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// A new land: every effect goes
 	virtual void Reset() = 0;
+	/// The next Reset also numbers the effects after it from the first number again, as a new program does. Every
+	/// computer of a network game loads its land this way, because the world keeps the numbers of some effects.
+	virtual void SetFreshIdsAtNextReset() = 0;
 
 	/// Everything the effects draw this frame, t of the way through the game turn, into a frame that is cleared first.
 	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple
 	/// only the temple's effects are drawn, and outside it only the world's.
 	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const = 0;
+	/// Clears the frame and fills it with what one effect draws, none if the effect does not run
+	virtual void CollectEffectDrawFrame(EffectId /*id*/, float /*turnFraction*/, particles::draw::Frame& frame) const
+	{
+		frame.Clear();
+	}
 	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
 	[[nodiscard]] virtual std::vector<EffectInfo> GetEffects() const = 0;
 	/// The particle files' names, for the debug window

@@ -53,19 +53,31 @@ public:
 	}
 };
 
-/// Each atom sits on the hand, without a speed
+/// Each atom sits on the hand, without a speed. For a cast of this computer, the draw shows its collection as last
+/// stepped and the atom keeps up with the live hand, so that it stays on the hand between steps.
 class FollowCastPosition final: public Modifier
 {
 public:
 	bool ModifyAtom(Effect& effect, Atom& atom, Collection::Slot& /*slot*/) const override
 	{
-		atom.position = ToCollection(effect, atom, effect.GetProcessInfo().handPosition);
+		const auto hand = ToCollection(effect, atom, effect.GetProcessInfo().handPosition);
+		atom.position = hand;
+		if (effect.IsMyInterfaceCasting())
+		{
+			if (atom.collection != nullptr)
+			{
+				atom.collection->interpolated = false;
+			}
+			FollowLiveHand(atom, hand, 1.0f);
+		}
 		return true;
 	}
 };
 
 /// One source atom that follows the hand, no higher than a limit above the land, from which the sprinkled grains, logs
-/// or drops fall. Its speed is the hand's rise or fall, plus a lift of its own when a human player casts.
+/// or drops fall. Its speed is the hand's rise or fall, plus a lift of its own when a human player casts. For a cast of
+/// this computer, the draw shows the collection as last stepped and the source keeps up with the live hand. The limit of
+/// height applies only to the step, so the caster sees the source at the live hand, also above the limit.
 class HandSprinkle final: public Modifier
 {
 public:
@@ -91,12 +103,21 @@ public:
 			}
 			effect.NewAtom(collection, source, nextGroups).position = target;
 		}
+		const bool mine = effect.IsMyInterfaceCasting();
+		if (mine)
+		{
+			collection.interpolated = false;
+		}
 		const float dt = std::max(effect.GetDt(), k_MinimumStep);
 		const float lift = effect.IsHumanPlayerCasting() ? liftForHuman : 0.0f;
 		for (auto& atom : collection.atoms)
 		{
 			atom->velocity = glm::vec3(0.0f, (target.y - atom->position.y) / dt + lift, 0.0f);
 			atom->position = target;
+			if (mine)
+			{
+				FollowLiveHand(*atom, target, 1.0f);
+			}
 		}
 		return true;
 	}
@@ -222,6 +243,13 @@ private:
 	{
 		float owed {0.0f};
 		int emitted {0};
+
+		/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+		template <typename Visitor>
+		static void VisitPlainFields(const State& self, Visitor&& visit)
+		{
+			visit(self.owed, self.emitted);
+		}
 	};
 
 	std::string _creator;

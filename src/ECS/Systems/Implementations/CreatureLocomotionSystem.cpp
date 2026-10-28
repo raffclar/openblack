@@ -33,6 +33,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureCastMoves.h"
@@ -83,6 +84,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureDrawnWalk.h"
 #include "ECS/CreatureObstacleThings.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -114,15 +116,15 @@ namespace route = openblack::creature_route;
 namespace planner = openblack::creature_walk_planner;
 namespace obstacles = openblack::creature_obstacles;
 namespace things = openblack::ecs::creature_obstacle_things;
+namespace drawn_walk = openblack::ecs::creature_drawn_walk;
 using Motion = CreatureLocomotion::Motion;
 
 namespace
 {
 constexpr float k_TurnMs = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
 constexpr float k_TurnSeconds = k_TurnMs / 1000.0f;
-/// Steps of the route search each turn: more on a new walk's first turn
+/// Steps of the route search on a new walk's first turn. In the other turns, the search gets the turn's share.
 constexpr int32_t k_FirstTurnSearchSteps = 256;
-constexpr int32_t k_TurnSearchSteps = 16;
 /// A route costing more than this much a unit of the straight distance, and this much besides, is given up
 constexpr float k_CostPerUnit = 2.0f;
 constexpr float k_BaseCost = 5000.0f;
@@ -247,7 +249,7 @@ float HeightAt(glm::vec2 point)
 GameHeading HeadingOfRotation(const glm::mat3& rotation)
 {
 	// The drawn body is turned about y by a yaw; its mesh looks back along +z
-	return GameHeading::FromYaw(std::atan2(rotation[2].x, rotation[2].z));
+	return GameHeading::FromYaw(portable_math::Atan2(rotation[2].x, rotation[2].z));
 }
 
 /// How far round its middle a species' body reaches at its drawn scale of one: the furthest any of its base mesh's bones
@@ -1347,6 +1349,12 @@ void CreatureLocomotionSystem::Place(entt::entity creature, glm::vec3 position)
 		transform->position = position;
 		registry.SetDirty();
 	}
+	// The frames draw it at the new point at once
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature);
+	    animation != nullptr && animation->drawnPlace.has_value())
+	{
+		animation->drawnPlace->position = position;
+	}
 }
 
 void CreatureLocomotionSystem::PlaceWithoutWalking(entt::entity creature, glm::vec3 position)
@@ -1449,8 +1457,22 @@ bool CreatureLocomotionSystem::IsMoving(entt::entity creature) const
 	return self != nullptr && IsMovingMotion(self->motion);
 }
 
+void CreatureLocomotionSystem::ShareSearchSteps()
+{
+	size_t searching = 0;
+	Locator::entitiesRegistry::value().Each<const CreatureLocomotion>(
+	    [&searching](entt::entity /*entity*/, const CreatureLocomotion& self) {
+		    if (self.follower.IsSearching())
+		    {
+			    ++searching;
+		    }
+	    });
+	_searchShare = route::TurnSearchShare(searching);
+}
+
 void CreatureLocomotionSystem::ProcessTurn()
 {
+	ShareSearchSteps();
 	std::vector<entt::entity> walkers;
 	Locator::entitiesRegistry::value().Each<CreatureLocomotion>(
 	    [&walkers](entt::entity entity, CreatureLocomotion& /*self*/) { walkers.push_back(entity); });
@@ -1531,7 +1553,7 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 		if (self.follower.IsSearching() && !self.searchHeld)
 		{
 			const auto first = std::exchange(self.firstSearchTurn, false);
-			switch (self.follower.Update(first ? k_FirstTurnSearchSteps : k_TurnSearchSteps, first, JoinAhead(self)))
+			switch (self.follower.Update(first ? k_FirstTurnSearchSteps : _searchShare, first, JoinAhead(self)))
 			{
 			case route::Follower::Outcome::Found:
 				if (self.motion == Motion::Planning || self.motion == Motion::Confused || self.motion == Motion::Pointing)
@@ -1712,46 +1734,19 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 
 namespace
 {
-/// Places a creature and poses its legs a part of the way through the turn, 0 to 1. It is true when the place or the
-/// heading changed.
-bool ShowAt(CreatureLocomotion& self, Transform& transform, CreatureAnimation& animation, float f)
+/// Places a creature and poses its legs at the end of its turn. The frames draw it there until the next frame. It is
+/// true when the place or the heading changed.
+bool ShowTurnEndOf(const CreatureLocomotion& self, Transform& transform, CreatureAnimation& animation)
 {
-	const auto position = self.fromPosition + ((self.toPosition - self.fromPosition) * f);
-	const auto heading = GameHeading(self.fromHeading.Radians() + (self.toHeading.TurnFrom(self.fromHeading) * f));
-	const auto rotation = glm::mat3(glm::eulerAngleY(heading.Yaw()));
-	bool moved = false;
-	if (position != transform.position || rotation != transform.rotation)
-	{
-		transform.position = position;
-		transform.rotation = rotation;
-		moved = true;
-	}
-	animation.slots.clear();
-	for (const auto& track : self.tracks)
-	{
-		auto time = track.fromMs + (track.advanceMs * f);
-		if (track.breathing)
-		{
-			time = static_cast<float>(
-			    creature_animation::BreathTime(animation.breathPhase, static_cast<uint32_t>(std::max(track.durationMs, 1.0f))));
-		}
-		else if (track.looping)
-		{
-			time = track.durationMs > 0.0f ? std::fmod(time, track.durationMs) : 0.0f;
-		}
-		else
-		{
-			time = std::clamp(time, 0.0f, std::max(track.durationMs - 1.0f, 0.0f));
-		}
-		animation.slots.push_back({.animation = track.animation,
-		                           .timeMs = time,
-		                           .weight = track.weight,
-		                           .mirrored = track.mirrored,
-		                           .blendedWith = track.blendedWith,
-		                           .blendWeight = track.blendWeight});
-	}
+	auto place = drawn_walk::PlaceAt(self, animation.breathPhase, 1.0f);
+	const bool moved = place.position != transform.position || place.rotation != transform.rotation;
+	transform.position = place.position;
+	transform.rotation = place.rotation;
+	animation.slots = place.slots;
+	animation.drawnPlace = std::move(place);
 	return moved;
 }
+
 } // namespace
 
 void CreatureLocomotionSystem::Update(float turnFraction)
@@ -1759,9 +1754,39 @@ void CreatureLocomotionSystem::Update(float turnFraction)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto f = std::clamp(turnFraction, 0.0f, 1.0f);
 	bool moved = false;
+	// The frame only draws: each walking creature is drawn between the places of its last two turns. The god's hand
+	// draws a creature that it holds where the hand is.
+	registry.Each<const CreatureLocomotion, const Transform, CreatureAnimation>(
+	    [&](entt::entity entity, const CreatureLocomotion& self, const Transform& /*transform*/, CreatureAnimation& animation) {
+		    if (!self.started || registry.AllOf<InHand>(entity))
+		    {
+			    if (animation.drawnPlace.has_value())
+			    {
+				    animation.drawnPlace.reset();
+				    moved = true;
+			    }
+			    return;
+		    }
+		    auto place = drawn_walk::PlaceAt(self, animation.breathPhase, f);
+		    if (drawn_walk::Changed(animation.drawnPlace, place))
+		    {
+			    animation.drawnPlace = std::move(place);
+			    moved = true;
+		    }
+	    });
+	if (moved)
+	{
+		registry.SetDirty();
+	}
+}
+
+void CreatureLocomotionSystem::ShowTurnEnds()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	bool moved = false;
 	registry.Each<CreatureLocomotion, Transform, CreatureAnimation>(
 	    [&](CreatureLocomotion& self, Transform& transform, CreatureAnimation& animation) {
-		    if (self.started && ShowAt(self, transform, animation, f))
+		    if (self.started && ShowTurnEndOf(self, transform, animation))
 		    {
 			    moved = true;
 		    }
@@ -1779,7 +1804,7 @@ void CreatureLocomotionSystem::ShowTurnEnd(entt::entity creature)
 	auto* transform = registry.TryGet<Transform>(creature);
 	auto* animation = registry.TryGet<CreatureAnimation>(creature);
 	if (self != nullptr && transform != nullptr && animation != nullptr && self->started &&
-	    ShowAt(*self, *transform, *animation, 1.0f))
+	    ShowTurnEndOf(*self, *transform, *animation))
 	{
 		registry.SetDirty();
 	}

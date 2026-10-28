@@ -42,6 +42,7 @@
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandLightTable.h"
+#include "3D/LowResolutionTextures.h"
 #include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
@@ -52,6 +53,8 @@
 #include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
 #include "Common/BufferedLogSink.h"
+#include "Common/GameRandom.h"
+#include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
@@ -66,6 +69,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
@@ -73,9 +77,11 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -115,6 +121,30 @@ std::optional<size_t> GameFileBytes(const std::filesystem::path& path)
 		// Not found: there is nothing to load
 	}
 	return std::nullopt;
+}
+
+/// The bytes of a raw picture file at half its size, when the lowest detail levels load it so; none otherwise
+std::optional<std::vector<uint8_t>> HalvedAtThisDetail(const std::filesystem::path& path)
+{
+	if (!Locator::config::value().detail.lowResTextures || !low_resolution_textures::HalvedAtLowDetail(path.stem().string()))
+	{
+		return std::nullopt;
+	}
+	return low_resolution_textures::Halve(Locator::filesystem::value().ReadAll(path));
+}
+
+/// Loads a raw picture file into the texture cache, at half its size when the lowest detail levels load it so
+template <typename Id>
+void LoadRawTexture(resources::TextureManager& textures, Id id, const std::filesystem::path& path,
+                    graphics::texel_depth::Depth depth)
+{
+	if (auto halved = HalvedAtThisDetail(path))
+	{
+		textures.Load(id, resources::Texture2DLoader::FromBufferTag {}, ("raw" / path.stem()).string(), std::move(*halved),
+		              depth);
+		return;
+	}
+	textures.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, depth);
 }
 
 /// Registers a resource read from a game file, to be loaded by its cache's loader with these arguments when it is first
@@ -170,6 +200,9 @@ void StartLogs(const std::string& logFile, const LogLevels& levels)
 	// TODO (#749) use std::views::enumerate
 	for (size_t i = 0; const auto& subsystem : k_LoggingSubsystemStrs)
 	{
+		// A logger of this name that an earlier user left in the registry would make the new one fail. A test program
+		// that runs many tests in one process leaves such loggers.
+		spdlog::drop(subsystem.data());
 		auto logger = createLogger(subsystem.data());
 		logger->set_level(levels.at(i));
 		// An error is written out at once, so it is in the file even if the process is then ended from outside, where no
@@ -269,8 +302,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		    fileSystem.Exists(sheet))
 		{
 			// Loaded with its alpha by the game, so both keep four bits a channel
-			textureManager.Load(fmt::format("raw/{}", name), resources::Texture2DLoader::FromDiskTag {}, sheet,
-			                    graphics::texel_depth::Depth::FourBits);
+			LoadRawTexture(textureManager, fmt::format("raw/{}", name), sheet, graphics::texel_depth::Depth::FourBits);
 		}
 	}
 
@@ -290,7 +322,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 			    // At the lowest detail the rooms are built from their low meshes, which have no light maps. Only one of
 			    // the two is loaded: both together are more meshes than the renderer holds.
 			    const auto stem = f.stem().string();
-			    const bool lightmaps = graphics::detail_level::For(config.detailLevel).templeLightmaps;
+			    const bool lightmaps = config.detail.templeLightmaps;
 			    const auto lowMesh = f.parent_path() / (temple_room_meshes::LowName(stem) + f.extension().string());
 			    const auto name = temple_room_meshes::LoadedName(stem, lightmaps, fileSystem.Exists(lowMesh));
 			    if (!name.has_value())
@@ -348,14 +380,18 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 	}
 
 	view.StartupStep("mesh pack meshes");
+	// The lowest detail levels draw each texture's own low resolution picture, where the pack has one
+	const bool lowTextures = Locator::config::value().detail.lowResTextures;
 	for (const auto& [name, g3dTexture] : pack->GetTextures())
 	{
+		const auto low = pack->GetLowTextures().find(name);
+		const auto* picture = lowTextures && low != pack->GetLowTextures().end() ? &low->second : &g3dTexture;
 		textureManager.Register(
 		    g3dTexture.header.id,
-		    [pack, name] {
-			    return resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, pack->GetTexture(name));
+		    [pack, name, picture] {
+			    return resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, *picture);
 		    },
-		    g3dTexture.ddsData.size());
+		    picture->ddsData.size());
 	}
 
 	view.StartupStep("mesh pack textures");
@@ -769,9 +805,11 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 	// The sea's texture, its colours and alpha together
 	try
 	{
+		// The lowest detail levels load the sea's picture at half its size
 		textureManager.Load(sea_texture::k_Id.value(), resources::Texture2DLoader::FromDiskWithAlphaTag {},
 		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_ColourFile,
-		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side);
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side,
+		                    Locator::config::value().detail.lowResTextures);
 	}
 	catch (std::runtime_error& err)
 	{
@@ -807,8 +845,17 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
 		try
 		{
-			textureManager.RegisterLoad(fmt::format("raw/{}", f.stem().string()), *bytes,
-			                            resources::Texture2DLoader::FromDiskTag {}, f, graphics::texel_depth::DepthOf(kind));
+			const auto name = fmt::format("raw/{}", f.stem().string());
+			const auto depth = graphics::texel_depth::DepthOf(kind);
+			if (auto halved = HalvedAtThisDetail(f))
+			{
+				textureManager.RegisterLoad(name, halved->size(), resources::Texture2DLoader::FromBufferTag {}, name,
+				                            std::move(*halved), depth);
+			}
+			else
+			{
+				textureManager.RegisterLoad(name, *bytes, resources::Texture2DLoader::FromDiskTag {}, f, depth);
+			}
 		}
 		catch (std::runtime_error& err)
 		{
@@ -829,7 +876,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		try
 		{
 			// The game loads the hair with its alpha, so both keep four bits a channel
-			textureManager.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, graphics::texel_depth::Depth::FourBits);
+			LoadRawTexture(textureManager, id, path, graphics::texel_depth::Depth::FourBits);
 		}
 		catch (std::runtime_error& err)
 		{
@@ -955,7 +1002,7 @@ void LoadCreatureSkinArt()
 		              .oldDamageAlpha = data / "damage_old256A.raw",
 		              .palette = data / "tattoocols.raw",
 		              .pictures = Locator::tattooEditorSystem::value().GetPictures(),
-		              .lowDetail = graphics::detail_level::For(Locator::config::value().detailLevel).lowResTextures,
+		              .lowDetail = Locator::config::value().detail.lowResTextures,
 		          });
 	}
 	catch (std::runtime_error& err)
@@ -1020,7 +1067,9 @@ ProfileMenu ProfileMenuSettings()
 	auto& audio = Locator::audio::value();
 	settings.sfxVolume = audio.GetSfxVolume();
 	settings.musicVolume = audio.GetMusicVolume();
-	settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
+	const auto& config = Locator::config::value();
+	settings.detailLevels = config.maxDetailLevel;
+	settings.detail = graphics::detail_level::MenuLevel(config.detailLevel, config.maxDetailLevel);
 	return {.playerName = std::move(playerName), .settings = std::move(settings)};
 }
 
@@ -1041,6 +1090,55 @@ void ApplyPlayerSettings(const player_profiles::Settings& settings)
 		Locator::helpTextSystem::value().SetTextChoices(
 		    {.textDraw = settings.storyText, .topToBottom = settings.textFromBottom, .readSpeed = settings.readSpeed});
 	}
+}
+
+void PrepareNetworkLand(uint32_t seed)
+{
+	Locator::entitiesRegistry::value().SetFreshIdsAtNextReset();
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().SetFreshIdsAtNextReset();
+	}
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().SetFreshIdsAtNextReset();
+	}
+	if (Locator::gameRandom::has_value())
+	{
+		Locator::gameRandom::value().Restart();
+	}
+	Locator::rng::value().SetRunSeed(seed);
+}
+
+std::optional<std::string_view> ApplySoakTools(const developer_tools::SoakTools& tools)
+{
+	if (const auto refusal = developer_tools::SoakRefusalOf(developer_tools::k_Built, tools); refusal.has_value())
+	{
+		return refusal;
+	}
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().SetAllComputerGods(tools.allComputerGods);
+	}
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetAiSeed(tools.aiSeed);
+	}
+	return std::nullopt;
+}
+
+void LoadEveryResource()
+{
+	auto& loading = Locator::resources::value();
+	const auto loadStart = std::chrono::steady_clock::now();
+	while (loading.PendingCount() > 0)
+	{
+		loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
+		// The graphics card takes what the loading made, as on the loading screen
+		Locator::rendererInterface::value().Frame();
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every resource loaded in {:.0f} ms",
+	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
 }
 
 void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
@@ -1070,16 +1168,7 @@ void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
 	// picture or its model then starts after the same frames each run, at any speed.
 	if (loadAllFirst)
 	{
-		auto& loading = Locator::resources::value();
-		const auto loadStart = std::chrono::steady_clock::now();
-		while (loading.PendingCount() > 0)
-		{
-			loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
-			// The graphics card takes what the loading made, as on the loading screen
-			Locator::rendererInterface::value().Frame();
-		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: every resource loaded in {:.0f} ms",
-		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+		LoadEveryResource();
 	}
 	view.BeforeFirstFrame(continued);
 	// Just before its first frame, the game puts the turn timer back to the start of the current turn. Thus the time of

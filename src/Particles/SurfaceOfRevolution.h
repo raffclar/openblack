@@ -88,6 +88,13 @@ struct Vertex
 	glm::vec2 uv;
 	Argb colour;
 	Argb specular;
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Vertex& self, Visitor&& visit)
+	{
+		visit(self.position, self.uv, self.colour, self.specular);
+	}
 };
 
 struct Mesh

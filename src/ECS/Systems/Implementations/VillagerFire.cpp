@@ -27,6 +27,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Fire.h"
@@ -44,6 +45,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/GraveyardRules.h"
 #include "ECS/Graveyards.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -210,7 +212,7 @@ glm::vec2 CoordsToMetres(const map_coords::MapCoords& coords)
 float AngleBetween(glm::vec2 from, glm::vec2 to)
 {
 	const auto d = to - from;
-	auto units = static_cast<int32_t>(std::atan2(d.y, d.x) * static_cast<float>(k_AngleUnits) / k_TwoPi);
+	auto units = static_cast<int32_t>(portable_math::Atan2(d.y, d.x) * static_cast<float>(k_AngleUnits) / k_TwoPi);
 	units &= k_AngleUnits - 1;
 	return static_cast<float>(units) * k_TwoPi / static_cast<float>(k_AngleUnits);
 }
@@ -218,7 +220,8 @@ float AngleBetween(glm::vec2 from, glm::vec2 to)
 /// A map position a distance along an angle, x by its cosine and z by its sine, in whole map units
 map_coords::MapCoords PosFromAngle(float angle, float distance)
 {
-	return {map_coords::ToFixedGUtils(std::cos(angle) * distance), map_coords::ToFixedGUtils(std::sin(angle) * distance), 0.0f};
+	return {map_coords::ToFixedGUtils(portable_math::Cos(angle) * distance),
+	        map_coords::ToFixedGUtils(portable_math::Sin(angle) * distance), 0.0f};
 }
 
 /// The point a distance from an object, on the villager's side of it, straight away from it
@@ -236,12 +239,7 @@ glm::vec2 FleeingPosition(const glm::vec3& villager, const glm::vec3& object, fl
 float FacingOf(const Transform& transform)
 {
 	const auto x = transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-	return -std::atan2(-x.z, x.x) - glm::radians(90.0f);
-}
-
-void Face(Transform& transform, float angle)
-{
-	transform.rotation = glm::eulerAngleY(-angle - glm::radians(90.0f));
+	return -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
 }
 
 /// Turns the villager towards an object by a quarter of 1024 a turn; whether it faces it. Nothing to look at is looked at.
@@ -257,10 +255,10 @@ bool LookAtObject(entt::entity villager, entt::entity object)
 	const float diff = std::remainder(target - FacingOf(*transform), k_TwoPi);
 	if (std::abs(diff) < step)
 	{
-		Face(*transform, target);
+		openblack::ecs::living_facing::FaceAngle(Entities(), villager, target);
 		return true;
 	}
-	Face(*transform, FacingOf(*transform) + (diff > 0.0f ? step : -step));
+	openblack::ecs::living_facing::FaceAngle(Entities(), villager, FacingOf(*transform) + (diff > 0.0f ? step : -step));
 	return false;
 }
 

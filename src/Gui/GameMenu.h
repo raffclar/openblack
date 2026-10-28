@@ -20,6 +20,7 @@
 
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
+#include "ConditionsBoxRules.h"
 #include "Dialog.h"
 #include "DialogKeyRules.h"
 #include "ECS/StatisticsRules.h"
@@ -30,6 +31,7 @@ namespace openblack::gui
 {
 
 class GameFont;
+class ConditionsBox;
 class StatisticsBox;
 class TextDatabase;
 
@@ -39,8 +41,10 @@ struct MenuSettings
 	/// 0 to 1
 	float sfxVolume {1.0f};
 	float musicVolume {1.0f};
-	/// HELP_TEXT_DIALOG_DETAIL_00 to _04, Minimum to Maximum Detail (graphics::detail_level)
+	/// HELP_TEXT_DIALOG_DETAIL_00 to _06, Minimum to Super Detail (graphics::detail_level)
 	int detail {4};
+	/// How many detail levels the selector steps through, 1 to 7, as the settings of this computer say (5 by default)
+	int detailLevels {5};
 	bool autoSave {true};
 	bool pushScrolling {false};
 	/// HELP_TEXT_DIALOG_NOHELP to ALLHELP
@@ -83,6 +87,11 @@ public:
 		Continue,
 		StartSkirmish,
 		JoinOnline,
+		/// Exit Online Game, in a network game: the game asks the question to leave, or leaves at once when the god of
+		/// the player is out
+		ExitOnlineGame,
+		/// The Quit arrow of the options, in a network game: the game asks the question to leave
+		AskToLeave,
 		/// Create New Player: the new player's box is to be shown
 		CreatePlayer,
 		/// The player picked another profile from the list (GetPickedPlayer), to be played from now on
@@ -107,6 +116,8 @@ public:
 		Controls,
 		/// The Game Statistics box, from the main menu's Statistics tab
 		Statistics,
+		/// The box of the winning conditions, from the main menu's Multiplayer tab in a network game
+		Conditions,
 		_Count
 	};
 
@@ -138,6 +149,17 @@ public:
 	/// Opens the Game Statistics box with the figures as they are now
 	void OpenStatistics();
 	[[nodiscard]] const StatisticsBox& GetStatistics() const noexcept { return *_statistics; }
+	/// What the box of the winning conditions shows as it opens
+	using ConditionsSource = std::function<conditions_box::Figures()>;
+	void SetConditionsSource(ConditionsSource source) { _conditionsSource = std::move(source); }
+	/// Opens the box of the winning conditions with the figures as they are now
+	void OpenConditions();
+	[[nodiscard]] const ConditionsBox& GetConditions() const noexcept { return *_conditions; }
+	/// In a network game, the main menu has no Start Skirmish Game, its third button is Exit Online Game, and its
+	/// buttons are 100 apart. Its Multiplayer tab opens the box of the winning conditions. The Quit arrow of the
+	/// options asks to leave the game.
+	void SetNetworkGame(bool networkGame);
+	[[nodiscard]] bool IsNetworkGame() const noexcept { return _networkGame; }
 
 	void Update(float deltaSeconds);
 
@@ -327,7 +349,7 @@ private:
 	std::u16string _quitGameQuestion;
 	/// HELP_TEXT_DIALOG_VIDEOCHANGE, told as the player leaves the Options page after a change of the detail
 	std::u16string _videoChange;
-	std::array<std::u16string, 5> _detailLabels;
+	std::array<std::u16string, 7> _detailLabels;
 	std::array<std::u16string, 5> _helpLabels;
 	std::array<std::u16string, 3> _storyLabels;
 	std::array<std::u16string, 4> _toolTipLabels;
@@ -338,6 +360,14 @@ private:
 	/// The Game Statistics box, its own page's dialog
 	std::unique_ptr<StatisticsBox> _statistics;
 	StatisticsSource _statisticsSource;
+	/// The box of the winning conditions, its own page's dialog
+	std::unique_ptr<ConditionsBox> _conditions;
+	ConditionsSource _conditionsSource;
+	/// The buttons of the main menu, and the labels of the third in a game alone and in a network game
+	std::array<Button*, k_ButtonCount> _mainButtons {};
+	std::u16string _exitOnlineLabel;
+	std::u16string _multiplayerTab;
+	bool _networkGame {false};
 	/// The options' first tab, outside the temple and inside it
 	std::u16string _mainMenuTab;
 	std::u16string _worldRoomTab;

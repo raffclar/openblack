@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include "Common/PortableMath.h"
+
 namespace openblack::influence
 {
 
@@ -117,13 +119,13 @@ Ripple MakeRipple(const Circle& circle, const glm::vec3& previous, const glm::ve
 	ripple.point.y = std::max(ground(glm::vec2(ripple.point.x, ripple.point.z)), hand.y);
 	ripple.rgb = k_PlayerColours.at(static_cast<size_t>(circle.player) & 7u);
 	// Upright along the border: square to the line from the circle's centre
-	float yaw = std::atan2(ripple.point.z - circle.centre.z, ripple.point.x - circle.centre.x);
+	float yaw = portable_math::Atan2(ripple.point.z - circle.centre.z, ripple.point.x - circle.centre.x);
 	if (yaw < 0.0f)
 	{
 		yaw += k_TwoPi;
 	}
 	yaw += k_HalfPi;
-	ripple.along = {std::cos(yaw), 0.0f, std::sin(yaw)};
+	ripple.along = {portable_math::Cos(yaw), 0.0f, portable_math::Sin(yaw)};
 	for (size_t i = 0; i < Ripple::k_Puffs; ++i)
 	{
 		ripple.sizes.at(i) = std::max(k_PuffSpacing * static_cast<float>(i), k_SmallestPuff);
@@ -157,8 +159,8 @@ bool AdvanceRipple(Ripple& ripple, float milliseconds)
 std::array<glm::vec3, 4> PuffCorners(const Ripple& ripple, size_t puff)
 {
 	const glm::vec3 up {0.0f, 1.0f, 0.0f};
-	const float c = std::cos(ripple.angles.at(puff));
-	const float s = std::sin(ripple.angles.at(puff));
+	const float c = portable_math::Cos(ripple.angles.at(puff));
+	const float s = portable_math::Sin(ripple.angles.at(puff));
 	const auto across = (c * ripple.along) + (s * up);
 	const auto upward = (c * up) - (s * ripple.along);
 	const float size = ripple.sizes.at(puff);
@@ -189,7 +191,7 @@ Curtain MakeCurtain(const Ground& ground, const glm::vec3& centre, float radius)
 	for (int32_t i = 0; i < steps; ++i)
 	{
 		const float angle = static_cast<float>(i) * k_TwoPi / static_cast<float>(steps);
-		addColumn((std::cos(angle) * radius) + centre.x, (std::sin(angle) * radius) + centre.z);
+		addColumn((portable_math::Cos(angle) * radius) + centre.x, (portable_math::Sin(angle) * radius) + centre.z);
 		const auto b = static_cast<uint32_t>(3 * i);
 		for (const uint32_t index : {b, b + 3, b + 4, b, b + 4, b + 1, b + 1, b + 4, b + 5, b + 1, b + 5, b + 2})
 		{

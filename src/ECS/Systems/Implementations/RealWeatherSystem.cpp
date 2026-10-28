@@ -18,11 +18,13 @@
 namespace openblack::ecs::systems
 {
 
-RealWeatherSystem::RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today)
+RealWeatherSystem::RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today,
+                                     Clock clock)
     : _turnedOn(turnedOn)
     , _lobby(lobby)
     , _readPresets(std::move(readPresets))
     , _today(std::move(today))
+    , _clock(std::move(clock))
 {
 }
 
@@ -46,11 +48,21 @@ void RealWeatherSystem::StartGame(RealWeatherLandInterface& land)
 		return;
 	}
 	const auto date = _today();
+	// The game tries one time and never waits: an answer after the timeout leaves the land's own weather
+	_askedAt = _clock();
 	auto ask = [this, game, date]() {
 		_lobby.GetWeather(date, [this, game](LobbyResult<lobby_api::RealWeather>&& result) {
 			// Only an answer for this game counts
 			if (game != _game)
 			{
+				return;
+			}
+			if (_clock() - _askedAt > k_AnswerTimeout)
+			{
+				if (const auto logger = spdlog::get("game"))
+				{
+					SPDLOG_LOGGER_INFO(logger, "The real weather came too late: the land keeps its own weather");
+				}
 				return;
 			}
 			if (!result.Ok())

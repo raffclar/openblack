@@ -25,6 +25,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "InfoConstants.h"
@@ -107,8 +108,8 @@ void creature_sight::SeePlayerAction(PlayerNames player, creature_desires::Desir
 		return;
 	}
 	// The player must look at the creature, and the creature must look towards the hand
-	const auto& camera = Locator::camera::value();
-	if (!creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), at->position))
+	const auto camera = openblack::ecs::ReportedCreatureCamera(*creature);
+	if (!camera.has_value() || !creature_attention::IsLookingAt(camera->origin, camera->focus, at->position))
 	{
 		return;
 	}

@@ -9,10 +9,14 @@
 
 #include "WebPlatform.h"
 
+#include <cstdlib>
+
 #include <atomic>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -24,6 +28,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include "Common/BuildVersionFile.h"
 #include "Common/UserData.h"
 
 // clang-format off
@@ -75,7 +80,23 @@ EM_ASYNC_JS(void, openblack_yield_to_browser, (), {
 		channel.port2.postMessage(0);
 	});
 });
-EM_JS_DEPS(openblack_web_platform, "$UTF8ToString");
+// The text of the version file of the page (version.txt), which the page gives to the game threads. Null without it.
+EM_JS(char*, openblack_page_version, (), {
+	const text = globalThis.openblackWeb && globalThis.openblackWeb.version;
+	return typeof text === 'string' ? stringToNewUTF8(text) : 0;
+});
+// The host of the page, with its port. The game thread reads its own location, which has the host of the page. The
+// game does not use emscripten_run_script for this, because the page's content security policy refuses eval.
+EM_JS(char*, openblack_page_host, (), {
+	return stringToNewUTF8(typeof location === 'object' && location ? location.host : '');
+});
+// The Join Online Game button of the page writes 1 into the first slot of the shared requests array. The game thread
+// reads the slot and puts 0 back in one step, so that it takes each press one time.
+EM_JS(int, openblack_take_join_online, (), {
+	const requests = globalThis.openblackWeb && globalThis.openblackWeb.requests;
+	return requests ? Atomics.exchange(requests, 0, 0) : 0;
+});
+EM_JS_DEPS(openblack_web_platform, "$UTF8ToString,$stringToNewUTF8");
 // clang-format on
 
 namespace
@@ -161,15 +182,15 @@ void SendFrame()
 /// One frame of RunFrames. Returns false after the last frame.
 bool RunOneFrame(const std::function<bool()>& frame)
 {
-	if (GetRenderThread().running.load())
-	{
-		return frame();
-	}
 	auto& state = GetPresentState();
 	state.inRunFrame = true;
 	state.framesDrawn = 0;
 	const bool goOn = frame();
 	state.inRunFrame = false;
+	if (GetRenderThread().running.load())
+	{
+		return goOn;
+	}
 	if (state.framesDrawn == 1)
 	{
 		// The browser shows this frame while the game thread waits for the next display frame
@@ -209,7 +230,32 @@ bool LinkStoredProfiles(const std::filesystem::path& profiles)
 	return !error;
 }
 
+/// Put the version file of the page into the working folder, where the game reads it as the version file next to the
+/// game. Without the file of the page, the game finds no version file.
+void WritePageVersion()
+{
+	const std::unique_ptr<char, decltype(&free)> text(openblack_page_version(), free);
+	if (!text)
+	{
+		return;
+	}
+	std::ofstream file(std::filesystem::path(openblack::web::k_WorkingFolder) / openblack::build_version::k_FileName,
+	                   std::ios::binary);
+	file << text.get();
+}
+
 } // namespace
+
+std::string openblack::web::PageHost()
+{
+	const std::unique_ptr<char, decltype(&free)> host(openblack_page_host(), free);
+	return host ? std::string(host.get()) : std::string();
+}
+
+bool openblack::web::TakeJoinOnlineRequest()
+{
+	return openblack_take_join_online() != 0;
+}
 
 bool openblack::web::PrepareFileSystem()
 {
@@ -220,6 +266,8 @@ bool openblack::web::PrepareFileSystem()
 	{
 		std::cerr << "The web build cannot use the working folder " << k_WorkingFolder << ": " << error.message() << '\n';
 	}
+
+	WritePageVersion();
 
 	const auto profiles = std::filesystem::path(k_WorkingFolder) / user_data::k_ProfileFolderName;
 	if (!LinkStoredProfiles(profiles))
@@ -295,17 +343,23 @@ void openblack::web::BeforeFrame()
 
 void openblack::web::PresentFrame()
 {
-	if (GetRenderThread().running.load())
-	{
-		return;
-	}
 	auto& state = GetPresentState();
 	if (state.inRunFrame)
 	{
 		++state.framesDrawn;
-		return;
 	}
-	SendFrame();
+	else if (!GetRenderThread().running.load())
+	{
+		SendFrame();
+	}
+	// The page sends its input events to the game thread as calls that wait in the queue of the thread. The thread does
+	// these calls when it gives control back to the browser, which it does only between two frames of RunFrames. A
+	// start-up screen, such as the new player's name box, and a loading screen draw their frames in a loop of their own
+	// and read the input between them. Thus, after such a frame, the thread does the waiting calls at once.
+	if (!state.inRunFrame || state.framesDrawn > 1)
+	{
+		emscripten_current_thread_process_queued_calls();
+	}
 }
 
 void openblack::web::ShowPageMessage(std::string_view title, std::string_view text)

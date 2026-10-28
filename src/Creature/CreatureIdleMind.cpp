@@ -18,6 +18,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/PortableMath.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureEmoteAgendas.h"
@@ -329,10 +330,11 @@ std::vector<Step> creature_mind::ThrowAbout(uint32_t object, const Random& rando
 	constexpr uint32_t k_Degrees = 360;
 	const auto angle = static_cast<float>(random(k_Degrees)) * std::numbers::pi_v<float> / 180.0f;
 	const auto distance = k_ThrowAroundDistance + static_cast<float>(random(k_ThrowAroundExtra));
-	return WithFace({PickUp(object), Object({.kind = ObjectOrder::Kind::ThrowNearby,
-	                                         .point = distance * glm::vec2(std::cos(angle), std::sin(angle))},
-	                                        Effect::ThrewAbout)},
-	                creature_face::Cue::Playfulness);
+	return WithFace(
+	    {PickUp(object), Object({.kind = ObjectOrder::Kind::ThrowNearby,
+	                             .point = distance * glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle))},
+	                            Effect::ThrewAbout)},
+	    creature_face::Cue::Playfulness);
 }
 
 std::vector<Step> creature_mind::Hurl(uint32_t object, glm::vec2 target, const Random& random)

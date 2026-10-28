@@ -57,6 +57,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptSpotVisuals.h"
@@ -77,6 +78,7 @@
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleSoundRelease.h"
+#include "Particles/ParticleTurnOrder.h"
 #include "Particles/ParticleTypes.h"
 #include "Particles/VolumeGlow.h"
 #include "Resources/ResourcesInterface.h"
@@ -168,17 +170,18 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	{
 		return std::nullopt;
 	}
-	// Its totem's top, over the icon on the plinth, where it stands as it rises with the worship
+	// Its totem's top, over the icon on the plinth, where the frames draw it as it rises with the worship
 	std::optional<glm::vec3> totemTop;
 	registry.Each<const VillageTotem, const Transform>(
-	    [&registry, &totemTop, centre](const VillageTotem& standing, const Transform& plinth) {
+	    [&registry, &totemTop, centre](entt::entity totem, const VillageTotem& standing, const Transform& plinth) {
 		    if (totemTop.has_value() || standing.townCentre != centre)
 		    {
 			    return;
 		    }
 		    const auto* icon = registry.Valid(standing.icon) ? registry.TryGet<const Transform>(standing.icon) : nullptr;
-		    auto top = icon != nullptr ? icon->position
-		                               : plinth.position + glm::vec3(0.0f, ecs::village_totem::k_IconAbovePlinth, 0.0f);
+		    auto top = icon != nullptr ? ecs::drawn_place::DrawnTransformOf(registry, standing.icon, *icon).position
+		                               : ecs::drawn_place::DrawnTransformOf(registry, totem, plinth).position +
+		                                     glm::vec3(0.0f, ecs::village_totem::k_IconAbovePlinth, 0.0f);
 		    const float iconHeight = icon != nullptr ? ecs::world_objects::SizeOf(standing.icon).height : 0.0f;
 		    top.y = ecs::village_totem::TopY(top.y, iconHeight);
 		    totemTop = top;
@@ -270,7 +273,7 @@ std::optional<particles::ParticleWorldInterface::TargetInfo> GameParticleWorld::
 
 bool GameParticleWorld::IsTargetHeld(entt::entity target) const
 {
-	return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == target;
+	return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(target);
 }
 
 void GameParticleWorld::ClaimTarget(entt::entity target, bool claimed)
@@ -834,6 +837,7 @@ void GameParticleWorld::Reset()
 	_beliefSprites.clear();
 	_gestureTrails.clear();
 	_lightSheets.clear();
+	_ownedSheets.clear();
 	SetHandGlow(0);
 	_arcsWanted = false;
 	_bolts.clear();
@@ -1096,6 +1100,25 @@ bool ParticleSystem::ProcessByFrame(EffectId id, float seconds)
 	return true;
 }
 
+ParticleSystemInterface::EffectId ParticleSystem::StartByFrame(ParticleType type, glm::vec3 origin, float magnitude)
+{
+	const auto id = Start(type, origin, magnitude, false);
+	// The turn does not step it, also before its first frame step
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->ownedBySpell = true;
+	}
+	return id;
+}
+
+void ParticleSystem::SetShown(EffectId id, bool shown)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->shown = shown;
+	}
+}
+
 ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType type, glm::vec3 position,
                                                                   std::optional<int> turns, entt::entity owner, float magnitude)
 {
@@ -1174,11 +1197,27 @@ void ParticleSystem::SetInTemple(EffectId id)
 	}
 }
 
+void ParticleSystem::SetDrawnAlone(EffectId id)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->drawnAlone = true;
+	}
+}
+
 void ParticleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
 	{
 		it->drawOffset = offset;
+	}
+}
+
+void ParticleSystem::SetLiveHand(EffectId id, glm::vec3 hand)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->liveHand = hand;
 	}
 }
 
@@ -1244,6 +1283,29 @@ void ParticleSystem::CloseDown(EffectId id)
 	}
 }
 
+bool ParticleSystem::Renumber(EffectId from, EffectId to)
+{
+	const auto it = FindRunning(from);
+	if (to == k_NoEffect || it == _effects.end() || FindRunning(to) != _effects.end())
+	{
+		return false;
+	}
+	it->id = to;
+	if (from + 1 == _nextId)
+	{
+		_nextId = from;
+	}
+	return true;
+}
+
+void ParticleSystem::KeepOutOfSaves(EffectId id)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->saved = false;
+	}
+}
+
 void ParticleSystem::Delete(EffectId id)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
@@ -1298,11 +1360,14 @@ void ParticleSystem::ProcessTurn()
 	_pendingStormBolts.clear();
 	KeepGestureTrails();
 	const auto* registry = Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
-	// By id: a step may start other effects
-	std::vector<EffectId> ids;
-	ids.reserve(_effects.size());
-	std::ranges::transform(_effects, std::back_inserter(ids), &Running::id);
-	for (const auto id : ids)
+	// By id: a step may start other effects, which take their first step in the next turn. The spot visuals take their
+	// steps last, the newest first.
+	std::vector<particles::turn_order::Entry> started;
+	started.reserve(_effects.size());
+	std::ranges::transform(_effects, std::back_inserter(started), [](const Running& running) {
+		return particles::turn_order::Entry {.id = running.id, .spotVisual = running.turnsLeft.has_value()};
+	});
+	for (const auto id : particles::turn_order::Steps(started))
 	{
 		const auto it = FindRunning(id);
 		if (it == _effects.end() || it->ownedBySpell || it->everyFrame)
@@ -1361,6 +1426,10 @@ void ParticleSystem::Reset()
 	_gestureChain = k_NoEffect;
 	_selectionEffect = k_NoEffect;
 	_world.Reset();
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_nextId = 1;
+	}
 }
 
 void ParticleSystem::FindTextureStems()
@@ -1426,10 +1495,9 @@ void ParticleSystem::ResolveTextures(const particles::Effect& effect)
 	}
 }
 
-void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const
+particles::draw::Sources ParticleSystem::DrawSources() const
 {
-	frame.Clear();
-	const particles::draw::Sources sources {
+	return {
 	    .textures = [this](std::string_view texture) -> std::optional<std::pair<entt::id_type, entt::id_type>> {
 		    const auto found = _textures.find(texture);
 		    if (found == _textures.end())
@@ -1447,27 +1515,59 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	    .objectPosition = [this](entt::entity object) { return _world.ObjectPosition(object); },
 	    .gameMilliseconds = _world.GameMilliseconds(),
 	};
+}
+
+void ParticleSystem::AddRunning(const Running& running, float turnFraction, particles::draw::Frame& frame,
+                                const particles::draw::Sources& sources) const
+{
+	_walk.Clear();
+	running.effect->Walk(turnFraction, _walk);
+	if (running.drawOffset != glm::vec3(0.0f))
+	{
+		for (auto& atom : _walk.atoms)
+		{
+			atom.position += running.drawOffset * atom.offsetWeight;
+		}
+		for (auto& joint : _walk.joints)
+		{
+			joint.position += running.drawOffset * joint.offsetWeight;
+		}
+	}
+	// Move each atom that follows the hand of this computer's cast by the move of the hand since the step
+	if (running.liveHand.has_value())
+	{
+		const auto followHand = [&hand = *running.liveHand](particles::Effect::DrawAtom& atom) {
+			if (atom.handOffset.has_value())
+			{
+				atom.position += particles::LiveHandShift(*atom.handOffset, hand);
+			}
+		};
+		std::ranges::for_each(_walk.atoms, followHand);
+		std::ranges::for_each(_walk.joints, followHand);
+	}
+	particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(), sources);
+}
+
+void ParticleSystem::CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const
+{
+	frame.Clear();
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		AddRunning(*it, turnFraction, frame, DrawSources());
+	}
+}
+
+void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const
+{
+	frame.Clear();
+	const auto sources = DrawSources();
 	for (const auto& running : _effects)
 	{
-		if (running.inTemple != inTemple)
+		if (running.inTemple != inTemple || running.drawnAlone || !running.shown)
 		{
 			continue;
 		}
-		_walk.Clear();
-		running.effect->Walk(turnFraction, _walk);
-		if (running.drawOffset != glm::vec3(0.0f))
-		{
-			for (auto& atom : _walk.atoms)
-			{
-				atom.position += running.drawOffset * atom.offsetWeight;
-			}
-			for (auto& joint : _walk.joints)
-			{
-				joint.position += running.drawOffset * joint.offsetWeight;
-			}
-		}
-		particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(),
-		                           sources);
+		AddRunning(running, turnFraction, frame, sources);
 	}
 	// The land's light sheets and the players' symbols over their artefacts are the world's
 	if (!inTemple)
@@ -1583,11 +1683,14 @@ void ReadLive(particles::EffectReader& in, std::vector<std::weak_ptr<Type>>& lis
 
 } // namespace
 
-void GameParticleWorld::NumberShared(particles::SharedTables& tables) const
+void GameParticleWorld::NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut) const
 {
 	for (const auto& sound : _sounds)
 	{
-		tables.sounds.Add(sound.link);
+		if (Saved(sound, leftOut))
+		{
+			tables.sounds.Add(sound.link);
+		}
 	}
 	for (const auto& weak : _bolts)
 	{
@@ -1607,7 +1710,17 @@ void GameParticleWorld::NumberShared(particles::SharedTables& tables) const
 	}
 }
 
-void GameParticleWorld::SaveState(particles::EffectWriter& out) const
+bool GameParticleWorld::EndsWithLoad(const PlayingSound& sound)
+{
+	return !sound.link || sound.letGo || (sound.link->atom == nullptr && sound.wait <= 0.0f);
+}
+
+bool GameParticleWorld::Saved(const PlayingSound& sound, const LeftOutSounds& leftOut)
+{
+	return !EndsWithLoad(sound) && !leftOut.contains(sound.link.get());
+}
+
+void GameParticleWorld::SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut) const
 {
 	out.WriteValue(_claimed);
 	out.WriteValue(_arcsWaiting);
@@ -1621,12 +1734,13 @@ void GameParticleWorld::SaveState(particles::EffectWriter& out) const
 	out.WriteValue(_arcsWanted);
 	WriteLive(out, _bolts);
 	out.WriteValue(_boltOrder);
-	// A sound goes with the particle that keeps its record; the audio's own emitter does not
-	out.Out().WriteSize(_sounds.size());
-	for (const auto& sound : _sounds)
+	// A sound goes with the particle that keeps its record. The audio's own emitter and the sound's owner, an entity of
+	// the audio, are of this run only and do not go. A sound that a load ends at once does not go either.
+	const auto kept = [&leftOut](const PlayingSound& sound) { return Saved(sound, leftOut); };
+	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, kept)));
+	for (const auto& sound : _sounds | std::views::filter(kept))
 	{
 		out.WriteShared(sound.link);
-		out.WriteValue(sound.owner);
 		out.WriteValue(sound.letGo);
 		out.WritePlain(sound.fade);
 		out.WriteValue(sound.wait);
@@ -1664,14 +1778,12 @@ bool GameParticleWorld::LoadState(particles::EffectReader& in)
 	{
 		PlayingSound sound;
 		sound.link = in.ReadShared<particles::ParticleSoundLink>();
-		in.ReadValue(sound.owner);
-		// The saved owner was of the last run's audio. The sound gets an owner of this run.
+		// The sound gets an owner of this run's audio
 		sound.owner = NewSoundOwner();
 		in.ReadValue(sound.letGo);
 		in.ReadPlain(sound.fade);
 		in.ReadValue(sound.wait);
-		// A sound that its particle let go of was dying away: it ends with the load
-		if (!sound.link || sound.letGo || (sound.link->atom == nullptr && sound.wait <= 0.0f))
+		if (EndsWithLoad(sound))
 		{
 			Forget(sound);
 			continue;
@@ -1721,12 +1833,30 @@ void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 
 	// The effects and the world go into writers of their own first, so that the tables have every shared thing in them
 	// when they are written
+	// The sounds of the effects that the save leaves out stay out too: the effects make them again when their owners
+	// start them again
+	particles::SharedTables leftOutTables;
+	reflection::BinaryWriter leftOutBytes(out.Context());
+	particles::EffectWriter leftOutWriter(leftOutBytes, leftOutTables);
+	for (const auto& running : _effects)
+	{
+		if (!running.saved)
+		{
+			running.effect->Save(leftOutWriter);
+		}
+	}
+	GameParticleWorld::LeftOutSounds leftOut;
+	for (const auto& link : leftOutTables.sounds.items)
+	{
+		leftOut.insert(link.get());
+	}
 	particles::SharedTables tables;
-	_world.NumberShared(tables);
+	_world.NumberShared(tables, leftOut);
 	reflection::BinaryWriter effectBytes(out.Context());
 	particles::EffectWriter effects(effectBytes, tables);
-	effectBytes.WriteSize(_effects.size());
-	for (const auto& running : _effects)
+	const auto saved = [](const Running& running) { return running.saved; };
+	effectBytes.WriteSize(static_cast<size_t>(std::ranges::count_if(_effects, saved)));
+	for (const auto& running : _effects | std::views::filter(saved))
 	{
 		reflection::Save(effectBytes, running.id);
 		reflection::Save(effectBytes, running.file);
@@ -1744,7 +1874,7 @@ void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 	}
 	reflection::BinaryWriter worldBytes(out.Context());
 	particles::EffectWriter world(worldBytes, tables);
-	_world.SaveState(world);
+	_world.SaveState(world, leftOut);
 	for (const auto* writer : {&effectBytes, &worldBytes})
 	{
 		for (const auto& unsaved : writer->Unsaved())

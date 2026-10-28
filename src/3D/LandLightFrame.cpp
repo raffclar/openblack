@@ -45,6 +45,12 @@ LandLightInputs FrameLandLightInputs()
 	return inputs;
 }
 
+uint32_t FrameRampDivisor()
+{
+	return Locator::config::has_value() ? LandLightTable::RampDivisor(Locator::config::value().detail.lightBoost)
+	                                    : LandLightTable::k_RampDivisor;
+}
+
 uint32_t FrameLandLight(uint8_t level)
 {
 	const auto& palettes = Locator::resources::value().GetLandLightPalettes();
@@ -55,7 +61,7 @@ uint32_t FrameLandLight(uint8_t level)
 	const auto inputs = FrameLandLightInputs();
 	LandLightTable table;
 	table.Build(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.alignment, inputs.overcast,
-	            inputs.flash);
+	            inputs.flash, FrameRampDivisor());
 	// The texels are red, green, blue and alpha bytes
 	const auto texel = table.GetTexels().at(level);
 	return ((texel & 0xFFu) << 16u) | (texel & 0xFF00u) | ((texel >> 16u) & 0xFFu);
@@ -73,7 +79,7 @@ FrameLightTable FrameLandLightTable()
 	const auto inputs = FrameLandLightInputs();
 	LandLightTable table;
 	table.Build(*palettes.Handle(LandLightPalette::k_Id.value()), inputs.skyType, inputs.alignment, inputs.overcast,
-	            inputs.flash);
+	            inputs.flash, FrameRampDivisor());
 	// The texels are red, green, blue and alpha bytes
 	const auto& texels = table.GetTexels();
 	for (size_t level = 0; level < texels.size(); ++level)
@@ -84,7 +90,7 @@ FrameLightTable FrameLandLightTable()
 	}
 	const auto& haze = table.GetHaze();
 	light.haze = {
-	    .on = Locator::config::has_value() && graphics::detail_level::Fog(Locator::config::value().detailLevel),
+	    .on = Locator::config::has_value() && Locator::config::value().detail.fog,
 	    .nearDepth = haze.nearDistance,
 	    .farDepth = haze.farDistance,
 	    .k = static_cast<int32_t>(haze.k),

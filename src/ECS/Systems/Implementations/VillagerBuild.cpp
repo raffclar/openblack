@@ -26,6 +26,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/BuildingSiteRules.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
@@ -37,6 +38,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -163,7 +165,7 @@ bool LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
 {
 	auto& transform = Entities().Get<Transform>(villager);
 	const auto x = transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-	const float facingRadians = -std::atan2(-x.z, x.x) - glm::radians(90.0f);
+	const float facingRadians = -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
 	const auto target = static_cast<int32_t>(gutils::GetAngleFromXZ(glm::xz(transform.position), point));
 	const auto facing = static_cast<int32_t>(gutils::ConvertAngle3DToGame(facingRadians));
 	const int32_t difference = target - facing;
@@ -175,8 +177,7 @@ bool LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
 		angle = (facing + (forwards ? step : -step)) & gutils::k_GameAngleMask;
 		facesIt = false;
 	}
-	transform.rotation = glm::eulerAngleY(-gutils::ConvertGameAngleTo3D(angle) - glm::radians(90.0f));
-	Entities().SetDirty();
+	openblack::ecs::living_facing::FaceGameAngle(Entities(), villager, static_cast<uint16_t>(angle));
 	return facesIt;
 }
 

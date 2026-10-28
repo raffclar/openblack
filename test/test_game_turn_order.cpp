@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -162,8 +163,7 @@ TEST(GameTurnOrder, TheAnimalsTakeTheirTurnWithTheLivingBeforeTheFires)
 {
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::ForestGrowth, Step::Living));
-	EXPECT_TRUE(recorder.Before(Step::Living, Step::MapCellsAfterLiving));
-	EXPECT_TRUE(recorder.Before(Step::MapCellsAfterLiving, Step::Fires));
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::Fires));
 	EXPECT_TRUE(recorder.Before(Step::Fires, Step::Reactions));
 	EXPECT_TRUE(recorder.Before(Step::Reactions, Step::Miracles));
 }
@@ -177,6 +177,14 @@ TEST(GameTurnOrder, TheScriptsSeeTheWorldAfterTheMiraclesParticlesAndPhysics)
 	EXPECT_TRUE(recorder.Before(Step::Physics, Step::Vortices));
 	EXPECT_TRUE(recorder.Before(Step::Vortices, Step::Scripts));
 	EXPECT_TRUE(recorder.Before(Step::Scripts, Step::ScriptFade));
+}
+
+TEST(GameTurnOrder, TheScriptsSeeTheHandDemonstrationAtTheTimeOfTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Clock, Step::HandDemo));
+	EXPECT_TRUE(recorder.Before(Step::HandDemo, Step::Scripts));
+	EXPECT_TRUE(recorder.Before(Step::IntroLift, Step::Scripts));
 }
 
 TEST(GameTurnOrder, TheHelpComesAfterTheScriptsAndBeforeTheTimeOfDay)
@@ -193,7 +201,8 @@ TEST(GameTurnOrder, TheLateStepsOfTheTurnComeInTheGamesOrder)
 {
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::Climates, Step::HeldThing));
-	EXPECT_TRUE(recorder.Before(Step::HeldThing, Step::Rewards));
+	EXPECT_TRUE(recorder.Before(Step::HeldThing, Step::PlayerSparkles));
+	EXPECT_TRUE(recorder.Before(Step::PlayerSparkles, Step::Rewards));
 	EXPECT_TRUE(recorder.Before(Step::Rewards, Step::Guidance));
 	EXPECT_TRUE(recorder.Before(Step::Guidance, Step::CameraChecks));
 	EXPECT_TRUE(recorder.Before(Step::CameraChecks, Step::BuildingPieces));
@@ -241,6 +250,15 @@ TEST(GameTurnOrder, TheTotemsTakeTheirTurnWithTheirTowns)
 	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::PlayerAlignment));
 }
 
+TEST(GameTurnOrder, TheTeleportTravellersAreDroppedAfterTheTownsAndBeforeTheComputerPlayers)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::Teleports));
+	EXPECT_TRUE(recorder.Before(Step::Teleports, Step::ComputerPlayers));
+	EXPECT_TRUE(recorder.Before(Step::Teleports, Step::Living));
+	EXPECT_TRUE(recorder.Before(Step::Teleports, Step::Reactions));
+}
+
 TEST(GameTurnOrder, TheCreaturesHelpPictureAndAlignmentArePartOfTheirOwnTurn)
 {
 	const auto recorder = PlayOneTurn();
@@ -284,6 +302,10 @@ TEST(GameTurnOrder, TheBodyOfACreatureFollowsItsFatnessAfterItsAction)
 	EXPECT_TRUE(recorder.Before(Step::CreatureFizz, Step::CreatureSkin));
 	EXPECT_TRUE(recorder.Before(Step::CreatureSkin, Step::CreatureMotes));
 	EXPECT_TRUE(recorder.Before(Step::CreatureMotes, Step::CreatureBlood));
+	// The shape that the body is drawn with follows what it became after the marks heal, before the motes, as the game's
+	// creature does in its turn
+	EXPECT_TRUE(recorder.Before(Step::CreatureSkin, Step::CreatureMorph));
+	EXPECT_TRUE(recorder.Before(Step::CreatureMorph, Step::CreatureMotes));
 	EXPECT_TRUE(recorder.Before(Step::CreatureBlood, Step::CreatureSway));
 	EXPECT_TRUE(recorder.Before(Step::CreatureSway, Step::CreatureFightMoves));
 	EXPECT_TRUE(recorder.Before(Step::CreatureFightMoves, Step::CreaturePoses));
@@ -348,4 +370,72 @@ TEST(GameTurnOrder, TheChecksumComesAtTheEndOfTheTurn)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::GlobalStatistics, Step::SyncChecksum));
 	EXPECT_TRUE(recorder.Before(Step::SyncChecksum, Step::RunRecord));
+}
+
+TEST(GameTurnOrder, TheFullTurnMeasuresTheInfluenceFromTheTurnHands)
+{
+	// The players' commands and the hand's own work come before the influence of the turn, and measure as it does
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::DrawnPlaces));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::PlayerCommands));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::HandStillness));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::HandInterface));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::InfluenceTurnStart));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::Influence));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::CreatureHandMoments));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::HeldThing));
+	// After the end of that part, the frames measure from the hand that this computer shows
+	EXPECT_FALSE(MeasuresInfluenceFromTurnHands(Step::InfluenceTurnEnd));
+	EXPECT_FALSE(MeasuresInfluenceFromTurnHands(Step::SyncChecksum));
+}
+
+TEST(GameTurnOrder, EachStepOfTheTurnBeforeItsEndMeasuresFromTheTurnHands)
+{
+	// The turn with a creature's own steps in the turn of the living
+	const auto recorder = PlayOneTurn();
+	const auto& steps = recorder.Steps();
+	const auto end = std::ranges::find(steps, k_TurnHandsInfluenceEnd);
+	ASSERT_NE(end, steps.end());
+	EXPECT_TRUE(std::all_of(steps.begin(), end, MeasuresInfluenceFromTurnHands));
+	EXPECT_TRUE(std::none_of(end, steps.end(), MeasuresInfluenceFromTurnHands));
+}
+
+// The frames only draw: a creature that the turn made gets its skeleton and its first pose in the turn, before the
+// checksum reads the world
+TEST(GameTurnOrder, ANewCreatureGetsItsFirstPoseInTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::DrawnPlaces, Step::CreaturesTurnStart));
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::CreatureShapes));
+	EXPECT_TRUE(recorder.Before(Step::CreatureShapes, Step::SyncChecksum));
+}
+
+// The frames only read the map's cells: the things that the turn made go into them at the end of the turn, before the
+// checksum reads the world
+TEST(GameTurnOrder, TheThingsThatTheTurnMadeGoIntoTheMapAtItsEnd)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::WalkerLookahead, Step::MapCellsAtTurnEnd));
+	EXPECT_TRUE(recorder.Before(Step::MapCellsAtTurnEnd, Step::SyncChecksum));
+}
+
+// After the game is decided, the turn does only the input of the players, the turn count and the steps after the turn
+TEST(GameTurnOrder, ADecidedGameDoesOnlyTheInputTheCountAndTheStepsAfterTheTurn)
+{
+	TurnRecorder recorder;
+	PlayTurn([&recorder](Step step) { recorder(step); }, true);
+	const std::vector<Step> expected {Step::DrawnPlaces,       Step::PlayerCommands,   Step::HandStillness,
+	                                  Step::HandInterface,     Step::ChimneySmoke,     Step::Clock,
+	                                  Step::RealWeather,       Step::WalkerLookahead,  Step::CreatureShapes,
+	                                  Step::MapCellsAtTurnEnd, Step::InfluenceTurnEnd, Step::SyncChecksum,
+	                                  Step::RunRecord};
+	EXPECT_EQ(recorder.Steps(), expected);
+}
+
+// A step with no stage between two steps of the players' turns is part of the players' turns
+TEST(GameTurnOrder, AStepWithNoStageFollowsTheStepBeforeIt)
+{
+	const auto index =
+	    static_cast<size_t>(std::distance(k_Turn.begin(), std::ranges::find(k_Turn, Step::TownFlags, &Place::step)));
+	EXPECT_FALSE(PlaysOnceDecided(k_Turn, index));
+	EXPECT_TRUE(PlaysOnceDecided(k_Turn, 0));
 }

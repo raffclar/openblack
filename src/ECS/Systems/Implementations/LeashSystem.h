@@ -14,6 +14,7 @@
 
 #include "Creature/LeashOrders.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -72,7 +73,9 @@ public:
 	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
 	bool TapPost(entt::entity post) override;
+	bool PickType(PlayerNames player, LeashType type) override;
 	void DoOrder(PlayerNames player, const player_commands::LeashOrder& order) override;
+	void DoLeashLength(PlayerNames player, float length) override;
 	bool PressKey(PlayerNames player, creature_leash::LeashKey key) override;
 	bool TapCreature(PlayerNames player, entt::entity creature) override;
 	bool Shake(PlayerNames player) override;
@@ -83,6 +86,10 @@ private:
 	/// Carries out what a shortcut does to the player's creature
 	bool Carry(PlayerNames player, entt::entity creature, const creature_leash::KeyCommand& command);
 	void Refuse(PlayerNames player, entt::entity creature, creature_leash::Refusal why);
+	/// The player's leash on their temple that matches the worn leash becomes the picked one
+	void PickPost(PlayerNames owner, LeashType worn);
+	/// Whether the player can change the leash of the creature now: not while a nice or nasty spell is on it
+	[[nodiscard]] bool PlayerCanChangeType(entt::entity creature) const;
 	/// The creatures as the one-each assignment sees them
 	[[nodiscard]] std::vector<creature_leash::Claim> Claims() const;
 	/// The posts of each temple whose heart mesh has the three points to hang them at, once the temples are there
@@ -112,6 +119,8 @@ private:
 	components::CreatureLeash::Worn* TiedLeash(PlayerNames player);
 	/// The player's tied leash while the hand holds its rope
 	components::CreatureLeash::Worn* HeldLeash(PlayerNames player);
+	/// The rope of the player's worn leash as the frames draw it, none before the frames made it
+	components::CreatureLeashRope* DrawnRope(PlayerNames player);
 	/// The temple's leashes hang if the creature knows them, tumble and glow, the picked one carried in the hand
 	void UpdatePosts(float seconds);
 	/// Whether the posts have been looked for at the temples yet

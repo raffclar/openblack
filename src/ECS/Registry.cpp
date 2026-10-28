@@ -9,7 +9,12 @@
 
 #include "Registry.h"
 
+#include <utility>
+
+#include "Components/Animal.h"
+#include "Components/Flock.h"
 #include "Locator.h"
+#include "ScriptFlocks.h"
 #include "Systems/RenderingSystemInterface.h"
 
 namespace openblack::ecs
@@ -22,6 +27,17 @@ Registry::Registry()
 	_registry.on_construct<entt::entity>().connect<&Registry::EntityMade>(*this);
 	// The registry also counts each entity that goes. A reader can then know if entities went since it last looked.
 	_registry.on_destroy<entt::entity>().connect<&Registry::EntityGone>(*this);
+	// Every living that goes leaves its flock first, as each living does when the game deletes it. Thus a flock never
+	// keeps a member that is gone, and its leader is always a living that is there. The stores of the flock components
+	// exist from the start, so that the removal of a living never adds a store while the registry removes components.
+	_registry.storage<components::Flock>();
+	_registry.on_destroy<components::Animal>().connect<&Registry::LivingGone>(*this);
+	_registry.on_destroy<components::FlockMember>().connect<&Registry::LivingGone>(*this);
+}
+
+void Registry::LivingGone(entt::registry& /*registry*/, entt::entity living)
+{
+	script_flocks::Remove(*this, living, true);
 }
 
 void Registry::Release(entt::entity entity)
@@ -32,6 +48,7 @@ void Registry::Release(entt::entity entity)
 
 void Registry::Destroy(entt::entity entity)
 {
+	_destroying.publish(entity);
 	SetLayoutDirty();
 	_registry.destroy(entity);
 }
@@ -50,11 +67,18 @@ void Registry::Reset()
 {
 	SetLayoutDirty();
 	_registry.clear();
+	// The store of the ids forgets the ids of the entities that went, so that the next ids are those of a new registry.
+	// The components' stores, their signals and the context stay.
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_registry.storage<entt::entity>().clear();
+	}
 	_registry.ctx().erase<RegistryContext>();
 	_registry.ctx().emplace<RegistryContext>();
 	_entitiesMade = 0;
+	++_resets;
 	++_entitiesGone;
-};
+}
 
 void Registry::SetDirty()
 {

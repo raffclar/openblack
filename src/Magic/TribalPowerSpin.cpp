@@ -16,6 +16,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack::magic::tribal_spin;
 
 namespace
@@ -46,7 +48,7 @@ glm::vec3 UnitOrSame(glm::vec3 v)
 /// The ring's radius for its age
 float RingRadius(float age)
 {
-	return std::sin(age * k_SwellRate) * k_RingSwell + k_RingRadius;
+	return openblack::portable_math::Sin(age * k_SwellRate) * k_RingSwell + k_RingRadius;
 }
 } // namespace
 
@@ -111,8 +113,8 @@ std::vector<Letter> Spin::Letters() const
 		}
 		const auto side = UnitOrSame(glm::cross(reference, axis));
 		const auto other = down == 2 ? glm::cross(axis, side) : glm::cross(side, axis);
-		const auto outward = side * std::cos(angle) + other * std::sin(angle);
-		const auto along = other * std::cos(angle) - side * std::sin(angle);
+		const auto outward = side * openblack::portable_math::Cos(angle) + other * openblack::portable_math::Sin(angle);
+		const auto along = other * openblack::portable_math::Cos(angle) - side * openblack::portable_math::Sin(angle);
 
 		letters.push_back(Letter {
 		    .character = character,

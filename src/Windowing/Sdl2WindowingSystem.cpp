@@ -19,8 +19,10 @@
 
 #include "Common/Platform.h"
 #include "DisplayScaling.h"
+#include "SystemPointer.h"
 #include "Web/WebPointer.h"
 #include "WindowFit.h"
+#include "WindowPixels.h"
 #include "WindowState.h"
 
 #if defined(SDL_VIDEO_DRIVER_WAYLAND)
@@ -73,6 +75,7 @@ void Sdl2WindowingSystem::SDLDestroyer::operator()(SDL_Window* window) const
 
 Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, int height, DisplayMode requestedDisplayMode,
                                          uint32_t extraFlags, bool background)
+    : _background(background)
 {
 	const DisplayMode displayMode = BackgroundDisplayMode(requestedDisplayMode, background);
 	SDL_version compiledVersion;
@@ -118,7 +121,9 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 		}
 	}
 
-	SDL_ShowCursor(SDL_DISABLE);
+	// The game draws its own pointer, the hand, so the pointer of the system hides over the window. A background run
+	// leaves the pointer of the system to the user.
+	system_pointer::Show(false, background);
 	SDL_SetHint(SDL_HINT_VIDEO_EXTERNAL_CONTEXT, "1");
 	// A second press makes a double click only within the system's small box round the first, as the game's window
 	// took them (SDL's own allowance is far wider); the time between them is the system's already
@@ -145,8 +150,10 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	}
 
 	// Get SDL Window requirements from Renderer
-	const int x = SDL_WINDOWPOS_UNDEFINED;
-	const int y = SDL_WINDOWPOS_UNDEFINED;
+	// A background run is placed by the game: the system's own placing of new windows can cut a window short when other
+	// games are open. Other runs leave the placing to the system.
+	const int x = background ? SDL_WINDOWPOS_CENTERED : SDL_WINDOWPOS_UNDEFINED;
+	const int y = background ? SDL_WINDOWPOS_CENTERED : SDL_WINDOWPOS_UNDEFINED;
 
 	auto window = std::unique_ptr<SDL_Window, SDLDestroyer>(SDL_CreateWindow(title.c_str(), x, y, width, height, flags));
 
@@ -173,14 +180,18 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	if constexpr (k_Platform == Platform::Web)
 	{
 		web::AllowPointerLock();
+		const auto pixels = GetSize();
+		const auto scale = GetPixelScale();
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The game draws at {}x{} pixels, {} pixels for each CSS pixel", pixels.x,
+		                   pixels.y, scale.x);
 	}
 	if (displayMode == DisplayMode::Windowed)
 	{
-		KeepInsideDesktop();
+		KeepInsideDesktop({width, height});
 	}
 }
 
-void Sdl2WindowingSystem::KeepInsideDesktop()
+void Sdl2WindowingSystem::KeepInsideDesktop(glm::ivec2 asked)
 {
 	auto* window = _window.get();
 	const int display = SDL_GetWindowDisplayIndex(window);
@@ -193,13 +204,23 @@ void Sdl2WindowingSystem::KeepInsideDesktop()
 	}
 	DesktopRect picture {};
 	SDL_GetWindowPosition(window, &picture.position.x, &picture.position.y);
-	SDL_GetWindowSize(window, &picture.size.x, &picture.size.y);
+	// The size that was asked for is the one to fit: the system may have cut the window short while it opened
+	picture.size = asked;
+	glm::ivec2 current {};
+	SDL_GetWindowSize(window, &current.x, &current.y);
 	const auto fitted = FitWindow(picture, borders, {.position = {usable.x, usable.y}, .size = {usable.w, usable.h}});
 	if (!fitted.has_value())
 	{
+		if (current != asked)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("graphics"),
+			                   "The window opened at {}x{} and not at the {}x{} that was asked for: made {}x{}", current.x,
+			                   current.y, asked.x, asked.y, asked.x, asked.y);
+			SDL_SetWindowSize(window, asked.x, asked.y);
+		}
 		return;
 	}
-	if (fitted->size != picture.size)
+	if (fitted->size != current)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"),
 		                   "The window's {}x{} picture doesn't fit on the desktop with its frame ({}x{} usable): made {}x{}",
@@ -344,13 +365,13 @@ uint32_t Sdl2WindowingSystem::GetFlags() const
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::GrabInput(bool b)
 {
-	SDL_SetWindowGrab(_window.get(), b ? SDL_TRUE : SDL_FALSE);
+	system_pointer::Grab(_window.get(), b, _background);
 	return *this;
 }
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::SetMousePosition(glm::ivec2 position)
 {
-	SDL_WarpMouseInWindow(_window.get(), position.x, position.y);
+	system_pointer::Warp(_window.get(), position, _background);
 	return *this;
 }
 
@@ -372,11 +393,8 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::SetTitle(const std::string& str)
 
 float Sdl2WindowingSystem::GetAspectRatio() const
 {
-	int width;
-	int height;
-	SDL_GetWindowSize(_window.get(), &width, &height);
-
-	return static_cast<float>(width) / static_cast<float>(height);
+	const auto size = GetSize();
+	return static_cast<float>(size.x) / static_cast<float>(size.y);
 }
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::SetPosition(glm::ivec2 position)
@@ -447,8 +465,31 @@ bool Sdl2WindowingSystem::IsWindowed() const
 glm::ivec2 Sdl2WindowingSystem::GetSize() const
 {
 	glm::ivec2 result;
-	SDL_GetWindowSize(_window.get(), &result.x, &result.y);
+	// In a web browser the window size is in CSS pixels. The game draws at the full resolution of the screen: the CSS
+	// size times the device pixel ratio, which SDL follows at each resize event of the page.
+	if constexpr (k_Platform == Platform::Web)
+	{
+		SDL_GetWindowSizeInPixels(_window.get(), &result.x, &result.y);
+	}
+	else
+	{
+		SDL_GetWindowSize(_window.get(), &result.x, &result.y);
+	}
 	return result;
+}
+
+glm::vec2 Sdl2WindowingSystem::GetPixelScale() const
+{
+	if constexpr (k_Platform == Platform::Web)
+	{
+		glm::ivec2 units;
+		SDL_GetWindowSize(_window.get(), &units.x, &units.y);
+		return PixelScale(units, GetSize());
+	}
+	else
+	{
+		return glm::vec2(1.0f);
+	}
 }
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::Show()

@@ -12,6 +12,19 @@ if (NOT OPENBLACK_INSPECTOR)
        "/Inspector/|/InspectorSystem[.]h$"
   )
 endif ()
+# Without the developer tools, the game does not make the debug windows: a debug GUI that does nothing replaces them.
+# The windows, the editor and the editor system are then not in the program, because no part of the program uses them.
+# The trace of the synced random draws is a developer tool too.
+if (OPENBLACK_DEVELOPER_TOOLS)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/NoDebugGui[.]cpp$")
+else ()
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/Gui[.]cpp$")
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Common/DrawTrace[.]cpp$")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Common/DrawTrace[.]h$")
+  # The dump of the rows of the synced world is a developer tool
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/RowDump[.]cpp$")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Debug/RowDump[.]h$")
+endif ()
 # The code that connects the game to a browser page is built only for the web
 if (NOT EMSCRIPTEN)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Web/")
@@ -21,6 +34,11 @@ endif ()
 if (EMSCRIPTEN)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Online/Desktop/")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Online/Desktop/")
+endif ()
+# The sockets, the TLS and the signatures of the game server. The game server is not in the web or Android builds.
+if (EMSCRIPTEN OR ANDROID)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Server/Desktop/")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Server/Desktop/")
 endif ()
 if (APPLE)
   file(GLOB_RECURSE OPENBLACK_OBJC_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.mm")
@@ -153,6 +171,28 @@ add_custom_command(
 )
 target_sources(openblack_lib PRIVATE ${OPENBLACK_UNIMPLEMENTED_NATIVES})
 
+# The version of the build: the project's semantic version and the git commit
+# of the sources. The script runs at each build and changes the file only when
+# the commit changes.
+set(OPENBLACK_BUILD_VERSION_SOURCE
+    ${CMAKE_BINARY_DIR}/include/generated/BuildVersion.cpp
+)
+set(OPENBLACK_BUILD_VERSION_COMMAND
+    ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+    -DOUTPUT=${OPENBLACK_BUILD_VERSION_SOURCE} -DVERSION=${PROJECT_VERSION} -P
+    ${CMAKE_SOURCE_DIR}/CMakeModules/WriteBuildVersion.cmake
+)
+execute_process(COMMAND ${OPENBLACK_BUILD_VERSION_COMMAND})
+add_custom_target(
+  openblack_build_version
+  COMMAND ${OPENBLACK_BUILD_VERSION_COMMAND}
+  BYPRODUCTS ${OPENBLACK_BUILD_VERSION_SOURCE}
+  COMMENT "Writing the build version"
+  VERBATIM
+)
+target_sources(openblack_lib PRIVATE ${OPENBLACK_BUILD_VERSION_SOURCE})
+add_dependencies(openblack_lib openblack_build_version)
+
 target_include_directories(
   openblack_lib
   PUBLIC ${CMAKE_CURRENT_LIST_DIR}
@@ -190,6 +230,7 @@ target_link_libraries(
           helpstats
           creaturehtml
           lhp
+          onlinemap
           imgui::imgui
           imgui_user
           ScriptLibrary
@@ -203,6 +244,10 @@ target_link_libraries(
   PUBLIC spdlog::spdlog
          # The JSON shapes of the lobby's API are part of the lobby client
          lobbyapi
+         # The settings file of this computer
+         computersettings
+         # The language file of the creature upload tool
+         creatureuploadcfg
          # The mind file's types are part of the creature mind component
          creaturemind
          # The saved game's files are part of the saved game component
@@ -221,6 +266,14 @@ if (NOT EMSCRIPTEN)
   # The HTTPS client of the desktop: libcurl with OpenSSL, for TLS 1.3 and its cipher suites on every platform
   find_package(CURL CONFIG REQUIRED)
   target_link_libraries(openblack_lib PRIVATE CURL::libcurl)
+  if (NOT ANDROID)
+    # The game server's WebSocket listener with TLS, and the Ed25519 check of the lobby's join tickets
+    find_package(OpenSSL REQUIRED)
+    target_link_libraries(openblack_lib PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    if (WIN32)
+      target_link_libraries(openblack_lib PRIVATE ws2_32)
+    endif ()
+  endif ()
   if (WIN32)
     # The data protection of Windows encrypts the refresh token of the lobby
     target_link_libraries(openblack_lib PRIVATE crypt32)
@@ -430,6 +483,12 @@ if (NOT ANDROID)
   target_link_libraries(openblack_lib PUBLIC openblack_systems openblack_sim)
   target_link_libraries(openblack_systems PUBLIC openblack_lib)
   target_link_libraries(openblack_sim PUBLIC openblack_systems openblack_lib)
+  # A linker that reads each static library one time (GNU ld) finds the symbols of the three libraries only if the link
+  # line names them again. MSVC's linker and LLVM's lld look through each library again by themselves.
+  set_property(
+    TARGET openblack_lib openblack_systems openblack_sim
+    PROPERTY LINK_INTERFACE_MULTIPLICITY 4
+  )
 endif ()
 
 set_property(
@@ -450,6 +509,28 @@ else ()
   add_executable(openblack main.cpp)
   # The game is the simulation library and the game's own library
   target_link_libraries(openblack PRIVATE openblack_sim openblack_lib)
+
+  # The openblack commit of the build goes into version.txt next to the game, at each build (see
+  # CMakeModules/WriteVersionFile.cmake). The game and the web page read it.
+  find_package(Git QUIET)
+  get_property(OPENBLACK_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+  if (OPENBLACK_MULTI_CONFIG)
+    set(OPENBLACK_VERSION_FILE
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/version.txt"
+    )
+  else ()
+    set(OPENBLACK_VERSION_FILE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/version.txt")
+  endif ()
+  add_custom_target(
+    openblack_version_file
+    COMMAND
+      ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+      -DOUTPUT=${OPENBLACK_VERSION_FILE} -DGIT_EXECUTABLE=${GIT_EXECUTABLE} -P
+      ${CMAKE_SOURCE_DIR}/CMakeModules/WriteVersionFile.cmake
+    COMMENT "Write the openblack commit into version.txt"
+    VERBATIM
+  )
+  add_dependencies(openblack openblack_version_file)
 
   if (MSVC)
     # Debug builds create a debug console
@@ -538,6 +619,25 @@ else ()
               $<TARGET_FILE_DIR:openblack>
       COMMENT "Copy the web page of the game"
     )
+    # The page takes its developer parameters (args and tool-file) only when the file developer-tools.txt is next to
+    # it. The build without the developer tools removes the file.
+    if (OPENBLACK_DEVELOPER_TOOLS)
+      add_custom_command(
+        TARGET openblack
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E touch
+                $<TARGET_FILE_DIR:openblack>/developer-tools.txt
+        COMMENT "Let the web page take its developer parameters"
+      )
+    else ()
+      add_custom_command(
+        TARGET openblack
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -f
+                $<TARGET_FILE_DIR:openblack>/developer-tools.txt
+        COMMENT "Keep the developer parameters of the web page off"
+      )
+    endif ()
   elseif (APPLE)
     set(OPENBLACK_ICON_SOURCE_DIR ${CMAKE_SOURCE_DIR}/assets/resource/icon)
     set(OPENBLACK_ICON_BINARY_DIR ${CMAKE_BINARY_DIR}/assets/resource/icon)

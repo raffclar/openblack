@@ -21,6 +21,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerCheckRules.h"
 #include "ECS/WorldObjects.h"
@@ -83,8 +84,15 @@ float GrownScaleFor(const Villager& person, uint32_t age, float scale)
 
 void SetScale(entt::entity villager, float scale)
 {
-	Entities().Get<Transform>(villager).scale = glm::vec3(scale);
+	auto& transform = Entities().Get<Transform>(villager);
+	const bool resized = transform.scale.x != scale;
+	transform.scale = glm::vec3(scale);
 	Entities().SetDirty();
+	// A villager in the map's cells that changes its size comes out of them and goes in again
+	if (resized)
+	{
+		ecs::thing_map_place::Reinsert(villager);
+	}
 }
 
 /// A child grows on the growth turns its checks fall on, and once old enough becomes an adult: the youngest adult's

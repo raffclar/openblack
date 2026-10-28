@@ -17,13 +17,14 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "Audio/Sound.h"
-#include "ECS/Archetypes/FloatingNumberArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/CreatureSight.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/VillageTotem.h"
@@ -151,7 +152,20 @@ void GameVillageTotemWorld::SeeHandTakeTotem(PlayerNames player)
 
 void GameVillageTotemWorld::FloatNumber(glm::vec3 position, float value, uint32_t colour)
 {
-	archetypes::FloatingNumberArchetype::Create(position, value, colour);
+	if (Locator::floatingNumberSystem::has_value())
+	{
+		Locator::floatingNumberSystem::value().Add(position, value, colour);
+	}
+}
+
+bool GameVillageTotemWorld::SendCommand(const player_commands::Action& action)
+{
+	if (!Locator::playerCommandSystem::has_value())
+	{
+		return false;
+	}
+	Locator::playerCommandSystem::value().Submit(action);
+	return true;
 }
 
 void GameVillageTotemWorld::ShareSet(entt::entity town)

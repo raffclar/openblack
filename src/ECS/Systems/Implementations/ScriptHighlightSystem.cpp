@@ -11,14 +11,19 @@
 
 #include "ScriptHighlightSystem.h"
 
+#include <cstdint>
+
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
 #include "3D/AllMeshes.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -27,6 +32,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "GameScriptHighlightWorld.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -294,10 +300,16 @@ bool ScriptHighlightSystem::Drawn(const ScriptHighlight& highlight) const
 	return rules::IsTipSign(highlight.kind) || _world->ScrollsDrawn();
 }
 
-void ScriptHighlightSystem::UpdateFrame(float frameMilliseconds, float /*turnFraction*/, glm::vec3 camera)
+void ScriptHighlightSystem::UpdateFrame(float frameMilliseconds, float /*turnFraction*/, glm::vec3 camera,
+                                        std::chrono::milliseconds frameRealTime, bool landDrawn)
 {
 	auto& registry = _world->Entities();
 	const auto frame = _world->DrawFrame();
+	// The effects of the drawn highlights step at the pace of the screen's refresh
+	const auto effectStep = particles::drawn_steps::StepTime(
+	    _effectPace, frameRealTime, std::chrono::milliseconds(static_cast<int64_t>(frameMilliseconds)), landDrawn);
+	_effectStep = effectStep.has_value() ? std::optional(static_cast<float>(effectStep->count()) * k_SecondsPerMillisecond)
+	                                     : std::nullopt;
 	bool moved = false;
 	registry.Each<ScriptHighlight>(
 	    [this, &registry, &moved, frame, frameMilliseconds, camera](entt::entity entity, ScriptHighlight& highlight) {
@@ -358,7 +370,7 @@ void ScriptHighlightSystem::UpdateHighlight(entt::entity entity, ScriptHighlight
 	highlight.yAngle = rules::IsTipSign(highlight.kind) && highlight.active ? rules::FacingAngle(camera, point)
 	                                                                        : rules::Spin(highlight.yAngle, frameMilliseconds);
 	const float scale = rules::DrawnScale(highlight.kind, k_Scale, glm::distance(point, camera));
-	transform.rotation = glm::mat3(glm::eulerAngleY(-highlight.yAngle));
+	transform.rotation = glm::mat3(portable_math::EulerAngleY(-highlight.yAngle));
 	transform.scale = glm::vec3(scale);
 
 	// Where its model's middle is drawn, and how far the model reaches from it
@@ -375,16 +387,19 @@ void ScriptHighlightSystem::UpdateHighlight(entt::entity entity, ScriptHighlight
 		highlight.radius = 0.0f;
 	}
 
-	// Its effects step as it is drawn; the active one plays about the model's middle
-	const float seconds = frameMilliseconds * k_SecondsPerMillisecond;
+	// Its effects step as it is drawn, in the frames where they are due; the active one plays about the model's middle
+	if (!_effectStep.has_value())
+	{
+		return;
+	}
 	if (highlight.glints != 0)
 	{
-		_world->StepEffect(highlight.glints, seconds);
+		_world->StepEffect(highlight.glints, *_effectStep);
 	}
 	if (highlight.activeEffect != 0)
 	{
 		_world->MoveEffect(highlight.activeEffect, highlight.centre);
-		_world->StepEffect(highlight.activeEffect, seconds);
+		_world->StepEffect(highlight.activeEffect, *_effectStep);
 	}
 }
 
@@ -460,7 +475,7 @@ void ScriptHighlightSystem::UpdateSparks(entt::entity entity, bool drawn, float 
 		auto& transform = registry.Get<Transform>(made);
 		transform.position = look->position;
 		// Turned about the line to the camera, as it faces it
-		transform.rotation = glm::mat3(glm::eulerAngleZ(look->angle));
+		transform.rotation = glm::mat3(portable_math::EulerAngleZ(look->angle));
 		transform.scale = glm::vec3(look->halfSize, look->halfSize, 1.0f);
 		auto& drawnSprite = registry.AllOf<Sprite>(made) ? registry.Get<Sprite>(made) : registry.Assign<Sprite>(made, *picture);
 		drawnSprite = *picture;

@@ -144,9 +144,27 @@ public:
 	}
 	[[nodiscard]] const std::set<UnsavedValue>& Unsaved() const { return _unsaved; }
 
+	/// For tools: the writer keeps where each value that the caller saves ends, so that a tool can find the values that
+	/// changed between two saves
+	void KeepValueEnds() { _keepValueEnds = true; }
+	[[nodiscard]] const std::vector<size_t>& ValueEnds() const { return _valueEnds; }
+	/// A value starts and ends. Only the ends of the outer values are kept.
+	void EnterValue() { ++_depth; }
+	void LeaveValue()
+	{
+		--_depth;
+		if (_depth == 0 && _keepValueEnds)
+		{
+			_valueEnds.push_back(_bytes.size());
+		}
+	}
+
 private:
 	const entt::meta_ctx* _context;
 	std::vector<uint8_t> _bytes;
+	bool _keepValueEnds {false};
+	uint32_t _depth {0};
+	std::vector<size_t> _valueEnds;
 	std::string_view _owner;
 	std::string_view _field;
 	std::set<UnsavedValue> _unsaved;
@@ -317,6 +335,19 @@ template <typename Type>
 void Save(BinaryWriter& out, const Type& value)
 {
 	static_assert(!detail::k_IsRunHandle<Type>, "A save must not keep a pointer or a graphics handle: keep a stable key");
+	// The writer knows where each outer value ends
+	struct Value
+	{
+		BinaryWriter& out;
+		explicit Value(BinaryWriter& writer)
+		    : out(writer)
+		{
+			out.EnterValue();
+		}
+		Value(const Value&) = delete;
+		Value& operator=(const Value&) = delete;
+		~Value() { out.LeaveValue(); }
+	} const valueEnds(out);
 	if constexpr (std::is_same_v<Type, bool>)
 	{
 		out.WriteRaw(static_cast<uint8_t>(value ? 1 : 0));
@@ -324,6 +355,10 @@ void Save(BinaryWriter& out, const Type& value)
 	else if constexpr (std::is_same_v<Type, GameHeading>)
 	{
 		out.WriteRaw(value.Radians());
+	}
+	else if constexpr (detail::k_IsBuildSized<Type>)
+	{
+		out.WriteRaw(static_cast<std::conditional_t<std::is_signed_v<Type>, int64_t, uint64_t>>(value));
 	}
 	else if constexpr (std::is_arithmetic_v<Type> || std::is_enum_v<Type>)
 	{
@@ -483,6 +518,19 @@ void Load(BinaryReader& in, Type& value)
 		if (in.ReadRaw(saved))
 		{
 			value = in.Remap()(saved);
+		}
+	}
+	else if constexpr (detail::k_IsBuildSized<Type>)
+	{
+		std::conditional_t<std::is_signed_v<Type>, int64_t, uint64_t> wide {};
+		if (in.ReadRaw(wide))
+		{
+			if (!std::in_range<Type>(wide))
+			{
+				in.Fail();
+				return;
+			}
+			value = static_cast<Type>(wide);
 		}
 	}
 	else if constexpr (std::is_arithmetic_v<Type> || std::is_enum_v<Type>)

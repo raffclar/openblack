@@ -14,6 +14,7 @@
 #endif
 
 #include <functional>
+#include <string>
 #include <string_view>
 
 /// The parts of the web build that connect the game to the browser page
@@ -45,7 +46,9 @@ void BeforeFrame();
 
 /// Call after the renderer drew a frame. When a frame of RunFrames draws one frame only, the browser shows it when the
 /// game thread gives control back. All other frames go to the page as images, because the game thread does not give
-/// control back to the browser while it draws them. With a render thread, this function does nothing.
+/// control back to the browser while it draws them. With a render thread, the render thread shows all frames. After a
+/// frame that the game thread does not give control back for, the game thread takes the input events of the page that
+/// wait for it.
 void PresentFrame();
 
 /// Start the thread that draws the frames of the renderer. This thread owns the canvas, and it gives control back to
@@ -59,6 +62,12 @@ void WaitForRenderThreadStop();
 
 /// Show a message from the game on the page, under the game's picture
 void ShowPageMessage(std::string_view title, std::string_view text);
+
+/// The host of the page and its port, such as "bw.example.org" or "127.0.0.1:8443"
+[[nodiscard]] std::string PageHost();
+
+/// True one time after each press of the page's Join Online Game button
+[[nodiscard]] bool TakeJoinOnlineRequest();
 
 /// Put the user's install that the page gives at the path. Returns false when the page gave no install.
 [[nodiscard]] bool MountUserFolder(std::string_view path);

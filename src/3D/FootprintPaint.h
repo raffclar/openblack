@@ -99,11 +99,13 @@ struct Placement
 	glm::vec2 origin {0.0f};
 };
 
-/// Paints a footprint into a block's texture. `block` holds k_BlockTexels by k_BlockTexels ARGB texels at 4 bits a
-/// channel, a row for each texel along x ([x * k_BlockTexels + z]). `blockIndex` is the block's column and row on the
-/// land, along x and z. The parts of the footprint outside the block are not painted.
+/// Paints a footprint into a block's texture. `block` holds side by side ARGB texels at 4 bits a channel, a row for each
+/// texel along x ([x * side + z]). The side is k_BlockTexels, or 128 at the low resolution of the lowest detail levels.
+/// The footprint's corners then go to the nearest texel of the smaller texture, and its picture stays the same.
+/// `blockIndex` is the block's column and row on the land, along x and z. The parts of the footprint outside the block
+/// are not painted.
 void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Picture& picture,
-                    std::span<const Triangle> triangles, const Placement& placement, Mix mix);
+                    std::span<const Triangle> triangles, const Placement& placement, Mix mix, int side = k_BlockTexels);
 } // namespace footprint_paint
 
 } // namespace openblack

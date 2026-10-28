@@ -26,10 +26,12 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "InjectedInput.h"
 #include "Locator.h"
 #include "ScriptedMouse.h"
 #include "Web/WebPointer.h"
+#include "Windowing/SystemPointer.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack::input;
@@ -52,17 +54,37 @@ void WarpMouse(int x, int y)
 	{
 		return;
 	}
-	if (IsBackground() || !Locator::windowing::has_value())
+	if (!Locator::windowing::has_value())
 	{
 		return;
 	}
-	SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), x, y);
+	openblack::windowing::system_pointer::Warp(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), {x, y},
+	                                           IsBackground());
+}
+
+// The clock that the help times the messages of the mouse with: the game's ticks, which follow the fixed frame time
+// in a deterministic run
+uint32_t HelpClockNow()
+{
+	using openblack::Locator;
+	return Locator::time::has_value() ? Locator::time::value().GetTicks() : SDL_GetTicks();
 }
 
 glm::ivec2 WindowSize()
 {
 	using openblack::Locator;
 	return Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(1, 1);
+}
+
+/// A place in the window's units (CSS pixels on the web) in pixels of the back buffer
+glm::ivec2 WindowPointToPixels(glm::ivec2 point)
+{
+	using openblack::Locator;
+	if (!Locator::windowing::has_value())
+	{
+		return point;
+	}
+	return openblack::windowing::PointToPixels(point, Locator::windowing::value().GetPixelScale());
 }
 
 } // namespace
@@ -220,7 +242,13 @@ void GameActionMap::ApplyQueuedPresses()
 
 bool GameActionMap::GetBindable(BindableActionMap action) const
 {
-	return (static_cast<uint64_t>(_bindableMap) & static_cast<uint64_t>(action) & ~static_cast<uint64_t>(_blocked)) != 0;
+	auto held = static_cast<uint64_t>(_bindableMap);
+	// A step of the input sees the actions that the wheel pressed only when it takes the wheel
+	if (_inputStep.has_value())
+	{
+		held = (held & ~_wheelActions) | _stepMice.at(*_inputStep).wheelActions;
+	}
+	return (held & static_cast<uint64_t>(action) & ~static_cast<uint64_t>(_blocked)) != 0;
 }
 
 bool GameActionMap::GetUnbindable(UnbindableActionMap action) const
@@ -254,6 +282,10 @@ bool GameActionMap::GetUnbindableRepeat(UnbindableActionMap action) const
 
 glm::uvec2 GameActionMap::GetMousePosition() const
 {
+	if (_inputStep.has_value())
+	{
+		return glm::uvec2(glm::max(_stepMice.at(*_inputStep).position, glm::ivec2(0)));
+	}
 	return _mousePosition;
 }
 
@@ -319,7 +351,12 @@ uint32_t GameActionMap::PointerState(glm::ivec2* position) const
 	}
 	if (position != nullptr)
 	{
-		return SDL_GetMouseState(&position->x, &position->y);
+		const auto buttons = SDL_GetMouseState(&position->x, &position->y);
+		if constexpr (k_Platform == Platform::Web)
+		{
+			*position = WindowPointToPixels(*position);
+		}
+		return buttons;
 	}
 	return SDL_GetMouseState(nullptr, nullptr);
 }
@@ -413,8 +450,9 @@ void GameActionMap::FollowPagePointerLock()
 	{
 		// The pointer starts at the click that took the pointer. When the page does not know the click, the pointer starts
 		// where the game's cursor was, or in the middle of the window before the game saw the cursor.
-		const auto start =
-		    web::PointerLockClick().value_or(_playerCursorSeen ? glm::ivec2(_mousePosition) : RestingPointer(WindowSize()));
+		const auto click = web::PointerLockClick();
+		const auto start = click.has_value() ? WindowPointToPixels(*click)
+		                                     : (_playerCursorSeen ? glm::ivec2(_mousePosition) : RestingPointer(WindowSize()));
 		_scaledPointer.Place(start);
 		_pointerScaled = true;
 		_playerCursorSeen = true;
@@ -470,7 +508,7 @@ void GameActionMap::StartScaledPointer(glm::ivec2 at)
 	// The movements are the mouse's own, without the system's pointer speed and acceleration (the user's choice), before
 	// the screen's scale
 	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");
-	if (IsBackground() || SDL_SetRelativeMouseMode(SDL_TRUE) != 0)
+	if (!windowing::system_pointer::SetRelative(true, IsBackground()))
 	{
 		return;
 	}
@@ -488,9 +526,36 @@ void GameActionMap::StopScaledPointer()
 	}
 	const auto at = _scaledPointer.Position();
 	WarpMouse(at.x, at.y);
-	if (!IsBackground())
+	windowing::system_pointer::SetRelative(false, IsBackground());
+}
+
+void GameActionMap::ToBackBufferPixels(SDL_Event& event)
+{
+	if (!Locator::windowing::has_value())
 	{
-		SDL_SetRelativeMouseMode(SDL_FALSE);
+		return;
+	}
+	const auto scale = Locator::windowing::value().GetPixelScale();
+	if (event.type == SDL_MOUSEMOTION)
+	{
+		const auto at = windowing::PointToPixels({event.motion.x, event.motion.y}, scale);
+		const auto by = _movementPixels.Move({event.motion.xrel, event.motion.yrel}, scale);
+		event.motion.x = at.x;
+		event.motion.y = at.y;
+		event.motion.xrel = by.x;
+		event.motion.yrel = by.y;
+	}
+	else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP)
+	{
+		const auto at = windowing::PointToPixels({event.button.x, event.button.y}, scale);
+		event.button.x = at.x;
+		event.button.y = at.y;
+	}
+	else if (event.type == SDL_MOUSEWHEEL)
+	{
+		const auto at = windowing::PointToPixels({event.wheel.mouseX, event.wheel.mouseY}, scale);
+		event.wheel.mouseX = at.x;
+		event.wheel.mouseY = at.y;
 	}
 }
 
@@ -504,6 +569,7 @@ void GameActionMap::PointPlayerEvent(SDL_Event& event)
 	// action map, so the lock state is read here too.
 	if constexpr (k_Platform == Platform::Web)
 	{
+		ToBackBufferPixels(event);
 		FollowPagePointerLock();
 	}
 	else
@@ -668,12 +734,12 @@ bool GameActionMap::IsCursorFrozen() const
 
 glm::ivec2 GameActionMap::GetMouseDelta() const
 {
-	return _mouseMotion.Delta();
+	return _inputStep.has_value() ? _stepMice.at(*_inputStep).delta : _mouseMotion.Delta();
 }
 
 glm::ivec2 GameActionMap::GetMousePushDelta() const
 {
-	return _pushMotion;
+	return _inputStep.has_value() ? _stepMice.at(*_inputStep).pushDelta : _pushMotion;
 }
 
 uint32_t GameActionMap::TakeMouseMoves()
@@ -683,7 +749,28 @@ uint32_t GameActionMap::TakeMouseMoves()
 
 float GameActionMap::GetMouseWheelDelta() const
 {
-	return _mouseWheelDelta;
+	return _inputStep.has_value() ? _stepMice.at(*_inputStep).wheel : _mouseWheelDelta;
+}
+
+void GameActionMap::SplitInput(const input_steps::Steps& steps)
+{
+	_inputStep.reset();
+	_stepMice = _mouseSplit.Split(
+	    {
+	        .from = _lastFramePosition,
+	        .to = glm::ivec2(_mousePosition),
+	        .jumped = _cursorJumped || _cursorWarp.has_value(),
+	        .delta = _mouseMotion.Delta(),
+	        .pushDelta = _pushMotion,
+	        .wheel = _mouseWheelDelta,
+	        .wheelActions = _wheelActions,
+	    },
+	    steps);
+}
+
+void GameActionMap::UseInputStep(std::optional<uint32_t> step)
+{
+	_inputStep = step.has_value() && *step < input_steps::k_MostSteps ? step : std::nullopt;
 }
 
 void GameActionMap::Frame()
@@ -773,10 +860,7 @@ void GameActionMap::Frame()
 			// On the web the pointer lock of the page holds the pointer, when the page has it
 			if constexpr (k_Platform != Platform::Web)
 			{
-				if (!IsBackground())
-				{
-					SDL_SetRelativeMouseMode(SDL_TRUE);
-				}
+				windowing::system_pointer::SetRelative(true, IsBackground());
 			}
 		}
 		if (cursor.warpTo.has_value() && _scriptedPointer.has_value())
@@ -788,13 +872,15 @@ void GameActionMap::Frame()
 			// The window keeps the mouse if it had it before the turn
 			if constexpr (k_Platform != Platform::Web)
 			{
-				if (!_pointerScaled && !IsBackground())
+				if (!_pointerScaled)
 				{
-					SDL_SetRelativeMouseMode(SDL_FALSE);
+					windowing::system_pointer::SetRelative(false, IsBackground());
 				}
 			}
 			WarpPlayerCursor(*cursor.warpTo);
 		}
+		_lastFramePosition = glm::ivec2(_mousePosition);
+		_cursorJumped = cursor.warpTo.has_value();
 		_mousePosition = glm::clamp(cursor.cursor, glm::zero<decltype(screenSize)>(), screenSize);
 		// A pinned cursor's image stays where it was pinned; the pointer itself is still followed
 		if (_cursorPinned && !_cursorPinnedAt.has_value())
@@ -811,11 +897,13 @@ void GameActionMap::Frame()
 		    .cursorFrozen = _cursorFreeze.IsFrozen(),
 		    .playerMouseBlocked = _playerMouseBlocked,
 		});
-		_helpMouseMoves.Wait(SDL_GetTicks(), glm::ivec2(_mousePosition), stillMessages);
+		_helpMouseMoves.Wait(HelpClockNow(), glm::ivec2(_mousePosition), stillMessages);
 	}
 	_mouseMotion.NewFrame();
 	_pushMotion = glm::ivec2(0);
 	_mouseWheelDelta = 0.0f;
+	_wheelActions = 0;
+	_inputStep.reset();
 	_bindableMapPrevious = _bindableMap;
 	_bindableMap =
 	    static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) &
@@ -909,6 +997,10 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	else if (event.type == SDL_MOUSEWHEEL)
 	{
 		_mouseWheelDelta += event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.preciseY : event.wheel.preciseY;
+		const auto wheelAction = event.wheel.y > 0   ? _mouseWheelBinding[0].value_or(BindableActionMap::NONE)
+		                         : event.wheel.y < 0 ? _mouseWheelBinding[1].value_or(BindableActionMap::NONE)
+		                                             : BindableActionMap::NONE;
+		_wheelActions |= static_cast<uint64_t>(wheelAction);
 		if (event.wheel.y > 0)
 		{
 			_bindableMap =
@@ -968,7 +1060,9 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 		// The help counts the player's own movements of the mouse, not the moves of a hand demonstration
 		if (!_playerMouseBlocked && !_cursorFreeze.IsFrozen())
 		{
-			_helpMouseMoves.Message(event.motion.timestamp, {event.motion.x, event.motion.y});
+			const bool fixedFrameTime = Locator::time::has_value() && Locator::time::value().GetFixedFrameTime().has_value();
+			_helpMouseMoves.Message(help::MessageTime(event.motion.timestamp, SDL_GetTicks(), HelpClockNow(), fixedFrameTime),
+			                        {event.motion.x, event.motion.y});
 		}
 		// While the window has the mouse, its own movement was taken as the event came in
 		if (!_pointerScaled)

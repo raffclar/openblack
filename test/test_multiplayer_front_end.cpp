@@ -7,33 +7,47 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The rules of the multiplayer front end over the temple's future room, and its calls to the lobby client and the game
-// socket, with a fake lobby and a fake socket
+// The rules of the multiplayer front end over the temple's future room, and its calls to the lobby client and the network
+// game, with a fake lobby, a fake network game and a fake socket
 
+#include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <map>
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <LobbyApiJson.h>
 #include <gtest/gtest.h>
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "Gui/MultiplayerBoxes.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
+#include "Gui/ScreenFit.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/NetworkSession.h"
+#include "gui/FakeGameFont.h"
 #include "online/FakeWebSocketClient.h"
 
 using namespace openblack;
 using namespace openblack::gui;
 using namespace openblack::gui::multiplayer;
 using namespace openblack::ecs::systems;
+
+namespace
+{
+/// The version of the client in these tests, as the build writes it
+constexpr std::string_view k_GameVersion = "0.1.0+0123456789ab";
+} // namespace
 
 namespace
 {
@@ -69,6 +83,7 @@ public:
 	}
 	[[nodiscard]] std::optional<lobby_api::AccountRef> GetAccount() const override { return account; }
 	[[nodiscard]] bool IsPushOpen() const override { return true; }
+	[[nodiscard]] bool IsEmailRequired() const override { return emailRequired; }
 	void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) override
 	{
 		loginName = std::move(name);
@@ -82,9 +97,10 @@ public:
 	[[nodiscard]] std::span<const lobby_api::ServerEntry> GetKnownServers() const override { return known; }
 	void WatchServers(bool watch) override { watchingServers = watch; }
 	void WatchChannel(std::string channel, bool watch) override { watched[channel] = watch; }
-	void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) override
+	void RequestJoinTicket(std::string serverId, game_socket::Role role, LobbyCallback<lobby_api::JoinTicket> callback) override
 	{
 		ticketFor = std::move(serverId);
+		ticketRoles.push_back(role);
 		ticket = std::move(callback);
 	}
 	void SendChatLine(std::string channel, std::string text, LobbyCallback<LobbyDone>) override
@@ -156,6 +172,8 @@ public:
 	std::map<std::string, bool> watched;
 	std::string ticketFor;
 	LobbyCallback<lobby_api::JoinTicket> ticket;
+	std::vector<game_socket::Role> ticketRoles;
+	bool emailRequired {false};
 	std::string chatChannel;
 	std::string chatText;
 	std::string useClanServer;
@@ -169,6 +187,46 @@ public:
 	LobbyCallback<std::vector<uint8_t>> logo;
 	std::vector<LobbyEventListener> listeners;
 	std::vector<uint32_t> removed;
+};
+
+/// A network game for the tests: a real session on the fake socket, with a clock that the test moves
+class FakeNetworkGame final: public NetworkGameSystemInterface
+{
+public:
+	explicit FakeNetworkGame(online::WebSocketClientInterface& sockets)
+	    : session(sockets, [this] { return now; })
+	{
+	}
+
+	bool Join(NetworkJoin join) override
+	{
+		joins.push_back(join);
+		session.Join(online::NetworkSessionSettings {
+		    .request = {.url = join.url, .headers = {}, .subprotocols = {}},
+		    .ticket = join.ticket,
+		    .gamePassword = join.gamePassword,
+		    .name = join.name,
+		});
+		return true;
+	}
+	void SetReady(bool ready) override { session.SetReady(ready); }
+	void Leave() override
+	{
+		++leaves;
+		session.Leave();
+	}
+	void Update() override { session.Update(); }
+	[[nodiscard]] std::optional<game_socket::Start> TakeStart() override { return std::nullopt; }
+	void BeginPlay() override {}
+	void PlayAlone() override {}
+	[[nodiscard]] bool InGame() const override { return session.GetState() != online::NetworkSession::State::Ended; }
+	[[nodiscard]] const online::NetworkSession* Session() const override { return &session; }
+	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override { return session.TakeStartEvent(); }
+
+	int64_t now {0};
+	online::NetworkSession session;
+	std::vector<NetworkJoin> joins;
+	int leaves {0};
 };
 
 class FakeLan final: public online::LanDiscoveryInterface
@@ -200,6 +258,7 @@ struct FrontEndTest: public ::testing::Test
 {
 	FakeLobby lobby;
 	test_fakes::FakeWebSocketClient sockets;
+	FakeNetworkGame network {sockets};
 	FakeLan lan;
 	std::vector<std::string> opened;
 	std::unique_ptr<MultiplayerFrontEnd> frontEnd;
@@ -208,15 +267,15 @@ struct FrontEndTest: public ::testing::Test
 	{
 		MultiplayerFrontEnd::Services services {
 		    .lobby = &lobby,
-		    .sockets = &sockets,
+		    .network = &network,
 		    .lan = withLan ? &lan : nullptr,
 		    .openPage = [this](std::string_view url) { opened.emplace_back(url); },
-		    .clock = [] { return uint64_t {0}; },
 		    .owner = {},
 		    .poll = {},
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
+		    .accountPage = "https://lobby.test/account/",
 		    .internetName = u"lobby.test",
 		    .profileName = u"Alice",
 		    .gameVersion = std::string(k_GameVersion),
@@ -244,18 +303,40 @@ struct FrontEndTest: public ::testing::Test
 		FakeLobby::Give(lobby.servers, lobby_api::ServerList {.servers = lobby.known});
 	}
 
-	/// The player joins the first game and its socket opens
+	/// A frame: the socket, the network game and the front end move on
+	void Step()
+	{
+		sockets.Poll();
+		network.Update();
+		frontEnd->Update();
+	}
+
+	/// The game server lets the player in on the last socket
+	void ServerJoins(game_socket::Role role = game_socket::Role::God)
+	{
+		const std::optional<uint8_t> slot = role == game_socket::Role::God ? std::optional<uint8_t>(1) : std::nullopt;
+		sockets.ServerText(sockets.order.back(),
+		                   game_socket::ToJson(game_socket::Joined {
+		                       .role = role, .slot = slot, .session = "s", .name = "Alice", .start = std::nullopt}));
+		Step();
+	}
+
+	/// The player joins the first game, its socket opens and the server lets the player in
 	void ToRoom()
 	{
 		ToGameList();
 		frontEnd->SelectGame(0);
 		frontEnd->Join(u"");
 		ASSERT_EQ(lobby.ticketFor, "w1");
-		FakeLobby::Give(lobby.ticket,
-		                lobby_api::JoinTicket {.url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0});
+		FakeLobby::Give(
+		    lobby.ticket,
+		    lobby_api::JoinTicket {.url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
 		ASSERT_FALSE(sockets.order.empty());
 		sockets.Accept(sockets.order.back());
-		sockets.Poll();
+		Step();
+		// The room opens only when the server lets the player in
+		ASSERT_EQ(frontEnd->GetBox(), Box::GameList);
+		ServerJoins();
 		ASSERT_EQ(frontEnd->GetBox(), Box::Room);
 	}
 };
@@ -286,7 +367,19 @@ TEST(MultiplayerRules, LoginFailuresGiveTheGamesMessages)
 	EXPECT_TRUE(AsksAboutName(LobbyErrorKind::Refused));
 	EXPECT_FALSE(AsksAboutName(LobbyErrorKind::Timeout));
 	EXPECT_EQ(ButtonsOf(Message::NotRegistered), MessageButtons::YesNo);
-	EXPECT_EQ(ButtonsOf(Message::WaitingForStart), MessageButtons::Cancel);
+}
+
+TEST(MultiplayerRules, JoinFailuresGiveTheGamesMessages)
+{
+	// On the internet the game shows "Connection Failed." for each failed join
+	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "banned_from_server"), Message::ConnectionFailed);
+	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "game_started"), Message::ConnectionFailed);
+	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Network, ""), Message::ConnectionFailed);
+	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "email_required"), Message::EmailRequired);
+	EXPECT_EQ(JoinFailureMessage("already", LobbyKind::Internet), Message::AlreadyInRoom);
+	EXPECT_EQ(JoinFailureMessage("started", LobbyKind::Internet), Message::ConnectionFailed);
+	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Internet), Message::ConnectionFailed);
+	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Lan), Message::CouldNotConnect);
 	EXPECT_EQ(ButtonsOf(Message::IncorrectPassword), MessageButtons::Ok);
 }
 
@@ -368,9 +461,14 @@ TEST(MultiplayerRules, ChatLinesHaveTheGodsColours)
 	EXPECT_EQ(other.colour, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 	EXPECT_EQ(GodColour(0), GodColour(-1));
 	EXPECT_EQ(GodColour(4), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
-	// The fifth god takes the first god's colour again
-	EXPECT_EQ(GodColour(5), GodColour(1));
-	EXPECT_EQ(GodColour(32), GodColour(4));
+	// The fifth god has a colour of its own, and a number past the last god is grey as the observers
+	EXPECT_NE(GodColour(5), GodColour(1));
+	EXPECT_EQ(GodColour(33), GodColour(0));
+	EXPECT_EQ(GodColourBits(1), 0xFFFF0000u);
+	EXPECT_EQ(GodColourBits(2), 0xFF00FF00u);
+	EXPECT_EQ(GodColourBits(3), 0xFF0000FFu);
+	EXPECT_EQ(GodColourBits(4), 0xFFFFFF00u);
+	EXPECT_EQ(GodColourBits(0), 0xFF808080u);
 	EXPECT_EQ(ClampChat(std::u16string(300, u'x')).size(), 254u);
 }
 
@@ -384,6 +482,11 @@ TEST(MultiplayerRules, LocalMapsAndTheirConditions)
 	EXPECT_EQ(FindLand(maps, "mpm_3p_1"), 1u);
 	EXPECT_EQ(FindLand(maps, "Bombardment - 2 players"), 0u);
 	EXPECT_FALSE(FindLand(maps, "mpm_9p_1").has_value());
+	// The server sends the path of the map file of a network land
+	EXPECT_EQ(FindLand(maps, "Online Maps/mpm_3p_1.map"), 1u);
+	EXPECT_EQ(FindLand(maps, "Online Maps/MPM_2P_1.MAP"), 0u);
+	EXPECT_FALSE(FindLand(maps, "Online Maps/mpm_9p_1.map").has_value());
+	EXPECT_FALSE(FindLand(maps, "Playgrounds/TwoGods.txt").has_value());
 	EXPECT_EQ(LandInfoText(0), "HELP_TEXT_DYK_RULES_02");
 	EXPECT_EQ(LandInfoText(2), "HELP_TEXT_DYK_RULES_11");
 	EXPECT_FALSE(LandInfoText(3).has_value());
@@ -604,28 +707,174 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(socket.request.url, "wss://lobby.test/game/w1");
 	ASSERT_EQ(socket.sent.size(), 1u);
 	EXPECT_EQ(socket.sent[0].Text(), R"({"ticket":"v4.public.t","type":"room.join"})");
+	// The network game joins for the front end: the server's land loads only after the start
+	ASSERT_EQ(network.joins.size(), 1u);
+	EXPECT_FALSE(network.joins[0].fromCommandLine);
+	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God}));
 	EXPECT_TRUE(frontEnd->IsJoined());
+	EXPECT_FALSE(frontEnd->IsObserver());
 	EXPECT_TRUE(lobby.watched.at("server-w1"));
 	ASSERT_EQ(frontEnd->GetSeats().size(), 3u);
 	ASSERT_NE(frontEnd->GetOwnSeat(), nullptr);
 	EXPECT_EQ(frontEnd->GetOwnSeat()->god, 2);
 	EXPECT_EQ(frontEnd->GetServerLand(), 0u);
 	ASSERT_TRUE(frontEnd->GetConditions().has_value());
-	// Back leaves the room and its channel
+	// Back leaves the room and its channel, and the server gets the leave
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
 	EXPECT_FALSE(lobby.watched.at("server-w1"));
+	EXPECT_EQ(network.leaves, 1);
+	EXPECT_EQ(socket.sent.back().Text(), R"({"type":"room.leave"})");
+	Step();
 	EXPECT_EQ(sockets.Count(), 0u);
 }
 
-TEST_F(FrontEndTest, ARefusedTicketCannotConnect)
+TEST_F(FrontEndTest, ARefusedTicketShowsConnectionFailed)
 {
 	ToGameList();
 	frontEnd->SelectGame(1);
 	frontEnd->Join(u"");
 	FakeLobby::Fail(lobby.ticket, LobbyErrorKind::Refused);
-	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotConnect);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_TRUE(network.joins.empty());
+}
+
+TEST_F(FrontEndTest, AServerBanShowsConnectionFailed)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	auto done = std::move(lobby.ticket);
+	done({.value = std::nullopt,
+	      .error = {.kind = LobbyErrorKind::Refused, .status = 403, .detail = {}, .code = "banned_from_server"}});
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+	EXPECT_EQ(lobby.ticketRoles.size(), 1u);
+}
+
+TEST_F(FrontEndTest, AFullRoomIsJoinedAsAnObserver)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	auto full = std::move(lobby.ticket);
+	full({.value = std::nullopt,
+	      .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "server_full"}});
+	// The front end asks again, for an observer's ticket, with no message
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God, game_socket::Role::Observer}));
+	FakeLobby::Give(
+	    lobby.ticket,
+	    lobby_api::JoinTicket {.url = "wss://lobby.test/game/w1", .ticket = "v4.public.o", .expires = 0, .role = "observer"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	ServerJoins(game_socket::Role::Observer);
+	EXPECT_EQ(frontEnd->GetBox(), Box::Room);
+	EXPECT_TRUE(frontEnd->IsObserver());
+	// A second full answer for the observer is a failure, not a loop
+	frontEnd->Back();
+	FakeLobby::Give(lobby.servers, lobby_api::ServerList {.servers = lobby.known});
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	full = std::move(lobby.ticket);
+	full({.value = std::nullopt,
+	      .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "server_full"}});
+	auto again = std::move(lobby.ticket);
+	again({.value = std::nullopt,
+	       .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "server_full"}});
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+}
+
+TEST_F(FrontEndTest, AStartedGameIsJoinedAsAnObserverWhenTheAccountHasNoGodInIt)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	auto started = std::move(lobby.ticket);
+	started({.value = std::nullopt,
+	         .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "game_started"}});
+	// The front end asks again, for an observer's ticket, with no message
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God, game_socket::Role::Observer}));
+	// The lobby also refuses the observer: the join fails, with no loop
+	auto again = std::move(lobby.ticket);
+	again({.value = std::nullopt,
+	       .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "game_started"}});
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+}
+
+TEST_F(FrontEndTest, TheServerRefusesAnAccountThatIsInTheRoom)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "already"}));
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::AlreadyInRoom);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_FALSE(frontEnd->IsBusy());
+}
+
+TEST_F(FrontEndTest, ASocketThatNeverOpensShowsConnectionFailed)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.End(sockets.order.back(), {.end = online::WebSocketEnd::Network, .code = 0, .httpStatus = 0});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+}
+
+TEST_F(FrontEndTest, AnAccountWithNoEmailIsSentToTheAccountPage)
+{
+	Make();
+	frontEnd->Next();
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	lobby.emailRequired = true;
+	FakeLobby::Give(lobby.login, *lobby.account);
+	// The lobby would refuse the list: the box stays on the login
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::EmailRequired);
+	EXPECT_EQ(ButtonsOf(Message::EmailRequired), MessageButtons::YesNo);
+	EXPECT_FALSE(lobby.servers);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Yes);
+	EXPECT_EQ(opened, (std::vector<std::string> {"https://lobby.test/account/"}));
+}
+
+TEST_F(FrontEndTest, ALostLobbySessionGoesBackToTheLogin)
+{
+	ToRoom();
+	// The lobby ended the session, for example for a ban
+	lobby.account.reset();
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+	EXPECT_EQ(network.leaves, 1);
+}
+
+TEST_F(FrontEndTest, TheStartGivesTheSessionToTheNetworkGame)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	sockets.ServerText(sockets.order.back(),
+	                   game_socket::ToJson(game_socket::Start {
+	                       .land = {}, .testbed = true, .seed = 3, .turn = 0, .opening = {}, .godsRingMap = false}));
+	Step();
+	EXPECT_TRUE(frontEnd->IsStarted());
+	// The front end closes, and the network game keeps the socket for the game
+	frontEnd.reset();
+	EXPECT_EQ(network.leaves, 0);
+	EXPECT_EQ(sockets.Count(), 1u);
+	EXPECT_EQ(network.session.GetState(), online::NetworkSession::State::Playing);
 }
 
 TEST_F(FrontEndTest, TheRoomChatUsesTheServersChannel)
@@ -678,18 +927,19 @@ TEST_F(FrontEndTest, UseThisClan)
 	EXPECT_FALSE(frontEnd->GetUsedClan().has_value());
 }
 
-TEST_F(FrontEndTest, ReadyWaitsForTheStart)
+TEST_F(FrontEndTest, ReadyShowsNoBoxAndTheTickTakesItAway)
 {
 	ToRoom();
 	frontEnd->Next();
 	EXPECT_EQ(frontEnd->GetBox(), Box::Conditions);
 	frontEnd->SetReady(true);
 	EXPECT_TRUE(frontEnd->IsReady());
-	EXPECT_EQ(frontEnd->GetMessage(), Message::WaitingForStart);
+	// The game shows no box while the player waits for the start
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 	const auto& socket = sockets.sockets.at(sockets.order.back());
 	EXPECT_EQ(socket.sent.back().Text(), R"({"ready":true,"type":"room.ready"})");
-	// Cancel takes the tick away
-	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Cancel);
+	// The tick of the Ready box takes the Ready away
+	frontEnd->SetReady(false);
 	EXPECT_FALSE(frontEnd->IsReady());
 	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 	EXPECT_EQ(socket.sent.back().Text(), R"({"ready":false,"type":"room.ready"})");
@@ -699,7 +949,11 @@ TEST_F(FrontEndTest, TheServerGoingSendsThePlayerToTheList)
 {
 	ToRoom();
 	sockets.End(sockets.order.back(), {.end = online::WebSocketEnd::ClosedByServer, .code = 1000, .httpStatus = 0});
-	sockets.Poll();
+	Step();
+	// The session tries to come back to the server for its time, then gives up
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	network.now += 6LL * 60 * 1'000'000;
+	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::HostLeft);
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
@@ -723,8 +977,9 @@ TEST_F(FrontEndTest, TheLanListComesFromTheSearch)
 	// On the LAN there is no ticket: the profile's name goes in the join
 	ASSERT_FALSE(sockets.order.empty());
 	sockets.Accept(sockets.order.back());
-	sockets.Poll();
+	Step();
 	EXPECT_EQ(sockets.sockets.at(sockets.order.back()).sent[0].Text(), R"({"name":"Alice","type":"room.join"})");
+	ServerJoins();
 	EXPECT_EQ(frontEnd->GetBox(), Box::Room);
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
@@ -738,4 +993,349 @@ TEST_F(FrontEndTest, TheListenerGoesWithTheFrontEnd)
 	Make();
 	frontEnd.reset();
 	EXPECT_EQ(lobby.removed, (std::vector<uint32_t> {1}));
+}
+
+namespace
+{
+/// The light of one part of a colour, from 0 to 1, as the sRGB curve has it
+double LinearPart(uint32_t part)
+{
+	const auto value = static_cast<double>(part) / 255.0;
+	return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+}
+
+/// The relative luminance of a colour, 0 for black and 1 for white
+double Luminance(uint32_t argb)
+{
+	return (0.2126 * LinearPart((argb >> 16u) & 0xFFu)) + (0.7152 * LinearPart((argb >> 8u) & 0xFFu)) +
+	       (0.0722 * LinearPart(argb & 0xFFu));
+}
+
+/// A colour in the CIE L*a*b* space, where the distance between two colours is near how different they look
+std::array<double, 3> Lab(uint32_t argb)
+{
+	const auto r = LinearPart((argb >> 16u) & 0xFFu);
+	const auto g = LinearPart((argb >> 8u) & 0xFFu);
+	const auto b = LinearPart(argb & 0xFFu);
+	const auto x = ((0.4124 * r) + (0.3576 * g) + (0.1805 * b)) / 0.95047;
+	const auto y = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+	const auto z = ((0.0193 * r) + (0.1192 * g) + (0.9505 * b)) / 1.08883;
+	const auto f = [](double t) { return t > 216.0 / 24389.0 ? std::cbrt(t) : ((24389.0 / 27.0 * t) + 16.0) / 116.0; };
+	return {(116.0 * f(y)) - 16.0, 500.0 * (f(x) - f(y)), 200.0 * (f(y) - f(z))};
+}
+
+double Difference(uint32_t first, uint32_t second)
+{
+	const auto a = Lab(first);
+	const auto b = Lab(second);
+	return std::hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+} // namespace
+
+TEST(MultiplayerRules, The32GodsHaveDistinctReadableChatColours)
+{
+	// Each pair of the 32 gods, the observers' grey and the player's own lines differ clearly
+	std::vector<uint32_t> colours;
+	for (int32_t god = 1; god <= k_MostGods; ++god)
+	{
+		EXPECT_EQ(GodColourBits(god) >> 24u, 0xFFu) << "god " << god;
+		colours.push_back(GodColourBits(god));
+	}
+	colours.push_back(GodColourBits(0));
+	colours.push_back(OwnLineColourBits());
+	constexpr double k_LeastDifference = 25.0;
+	for (size_t i = 0; i < colours.size(); ++i)
+	{
+		for (size_t j = i + 1; j < colours.size(); ++j)
+		{
+			EXPECT_GE(Difference(colours[i], colours[j]), k_LeastDifference) << std::hex << colours[i] << " and " << colours[j];
+		}
+	}
+	// Gods 5 to 32 are bright enough to read on the dark chat box: a contrast of 4.5 to 1 or more with black
+	for (int32_t god = 5; god <= k_MostGods; ++god)
+	{
+		const auto contrast = (Luminance(GodColourBits(god)) + 0.05) / 0.05;
+		EXPECT_GE(contrast, 4.5) << "god " << god;
+	}
+}
+
+namespace
+{
+
+/// The text of a frame from the server to the player's last socket
+void ServerSends(test_fakes::FakeWebSocketClient& sockets, const game_socket::Frame& frame)
+{
+	sockets.ServerText(sockets.order.back(), game_socket::ToJson(frame));
+}
+
+} // namespace
+
+TEST_F(FrontEndTest, TheStepsOfTheStartShowTheGamesBoxes)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	const auto& socket = sockets.sockets.at(sockets.order.back());
+	ServerSends(sockets, game_socket::StartQuery {.land = {}, .testbed = true, .checksum = 0});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::WaitingForTransfer);
+	EXPECT_EQ(ButtonsOf(Message::WaitingForTransfer), MessageButtons::None);
+	EXPECT_EQ(socket.sent.back().Text(), R"({"checksum":0,"have":true,"type":"start.reply"})");
+	ServerSends(sockets, game_socket::StartTransfer {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::SendingStartData);
+	EXPECT_EQ(ButtonsOf(Message::SendingStartData), MessageButtons::None);
+	// The player of the test has no creature: an empty file goes to the server
+	EXPECT_EQ(socket.sent.back().Text(), R"({"alignment":0.0,"file":"","type":"start.creature"})");
+	ServerSends(sockets, game_socket::StartCreature {.slot = 1, .file = {}});
+	ServerSends(sockets, game_socket::Start {.land = {}, .testbed = true, .seed = 3, .turn = 0, .opening = {}});
+	Step();
+	EXPECT_TRUE(frontEnd->IsStarted());
+	EXPECT_EQ(network.session.StartCreatures().size(), 1u);
+}
+
+TEST_F(FrontEndTest, AStartThatAnotherPlayerCannotMakeShowsTheGamesText)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	ServerSends(sockets, game_socket::StartQuery {.land = {}, .testbed = true, .checksum = 0});
+	Step();
+	ServerSends(sockets, game_socket::StartCancel {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::OthersDownloading);
+	EXPECT_EQ(ButtonsOf(Message::OthersDownloading), MessageButtons::Ok);
+	// The player is still ready, and waits for the next start
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_TRUE(frontEnd->IsReady());
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+}
+
+TEST_F(FrontEndTest, APlayerWithoutTheLandIsToldAndIsNotReady)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	// The test's network game reads no land: the player does not have it
+	ServerSends(sockets, game_socket::StartQuery {.land = "Land1.txt", .testbed = false, .checksum = 9});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::StillDownloading);
+	EXPECT_FALSE(frontEnd->IsReady());
+	const auto& socket = sockets.sockets.at(sockets.order.back());
+	EXPECT_EQ(socket.sent.back().Text(), R"({"checksum":0,"have":false,"type":"start.reply"})");
+	// The stop of the start does not hide the player's own box
+	ServerSends(sockets, game_socket::StartCancel {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::StillDownloading);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(frontEnd->GetBox(), Box::Conditions);
+}
+
+TEST_F(FrontEndTest, APlayerWhoLeavesDuringTheStartTakesAwayItsBoxes)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	ServerSends(sockets, game_socket::StartQuery {.land = {}, .testbed = true, .checksum = 0});
+	ServerSends(sockets, game_socket::StartTransfer {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::SendingStartData);
+	ServerSends(sockets, game_socket::StartStop {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_TRUE(frontEnd->IsReady());
+}
+
+TEST_F(FrontEndTest, ARemovalFromTheRoomNamesTheServer)
+{
+	ToRoom();
+	ServerSends(sockets, game_socket::Refused {.reason = "kicked"});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::KickedFromGame);
+	EXPECT_EQ(frontEnd->GetMessageName(), u"Bob's game");
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+}
+
+TEST_F(FrontEndTest, ABanOfTheRoomsServerTakesThePlayerOutOfTheRoom)
+{
+	ToRoom();
+	// A ban of another server does nothing here
+	lobby.Event("server.banned", R"({"server":{"id":"w2","name":"Fun"},"reason":"spam"})");
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	lobby.Event("server.banned", R"({"server":{"id":"w1","name":"Bob's game"},"reason":"spam"})");
+	EXPECT_EQ(frontEnd->GetMessage(), Message::KickedFromGame);
+	EXPECT_EQ(frontEnd->GetMessageName(), u"Bob's game");
+	EXPECT_EQ(network.leaves, 1);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+}
+
+TEST_F(FrontEndTest, ThePickStaysOnItsGameWhenTheListChanges)
+{
+	ToGameList();
+	frontEnd->SelectGame(1);
+	// The first game goes from the list (servers.removed on the push channel)
+	lobby.known.erase(lobby.known.begin());
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetSelectedGame(), 0u);
+	// A new game comes before it
+	lobby.known.insert(lobby.known.begin(), Server("w3", "New", 0, 2));
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetSelectedGame(), 1u);
+	// The picked game goes
+	lobby.known.erase(lobby.known.begin() + 1);
+	frontEnd->Update();
+	EXPECT_FALSE(frontEnd->GetSelectedGame().has_value());
+}
+
+namespace
+{
+
+/// The texts of the buttons, the check boxes and the tabs of the boxes. A control with no text has no name, and the
+/// check below sees only the controls with a name.
+TextDatabase ButtonTexts()
+{
+	constexpr std::array k_Names = {
+	    u"HELP_TEXT_DIALOG_BACK",
+	    u"HELP_TEXT_DIALOG_ADDITION_96",
+	    u"HELP_TEXT_DIALOG_TATOOBACK",
+	    u"HELP_TEXT_DIALOG_ADDITION_76",
+	    u"HELP_TEXT_PATCH_09",
+	    u"HELP_TEXT_DIALOG_ADDITION_104",
+	    u"HELP_TEXT_DIALOG_ADDITION_105",
+	    u"HELP_TEXT_DIALOG_ADDITION_142",
+	    u"HELP_TEXT_DIALOG_ADDITION_49",
+	    u"HELP_TEXT_MULTIPLAYER_TOCHAT",
+	    u"HELP_TEXT_MULTIPLAYER_READY",
+	    u"HELP_TEXT_PAUSE_STATS_126",
+	    u"HELP_TEXT_PAUSE_STATS_127",
+	    u"HELP_TEXT_PAUSE_STATS_128",
+	    u"HELP_TEXT_DIALOG_ADDITION_110",
+	};
+	std::u16string script;
+	for (const auto* name : k_Names)
+	{
+		// Each text is the end of its name, so that each control has a name of its own
+		const std::u16string_view view(name);
+		script.append(u"ADD_TEXT(1, N, \"").append(view).append(u"\", \"A").append(view.substr(10)).append(u"\")\n");
+	}
+	TextDatabase database;
+	database.AddScript(gui::test::Utf16Script(script));
+	return database;
+}
+
+/// The controls that act in the boxes, which are not in the frame of the box
+std::vector<std::u16string> ControlsOutOfTheFrame(const MultiplayerBoxes& boxes)
+{
+	const auto frame = MultiplayerBoxes::FrameOf(boxes.GetFrontEnd()->GetBox());
+	std::vector<std::u16string> outside;
+	const auto controls = boxes.GetNamedControls();
+	// Each box has Back at its bottom left
+	EXPECT_TRUE(std::ranges::any_of(controls, [](const auto& control) { return control.name.starts_with(u"ADIALOG"); }));
+	for (const auto& control : controls)
+	{
+		// The tabs of the game room stand on the top edge of the frame, out of it
+		auto rect = control.rect;
+		if (control.kind == "tab" && rect.max.y == frame.min.y)
+		{
+			rect.min.y = frame.min.y;
+		}
+		if (rect.min.x < frame.min.x || rect.min.y < frame.min.y || rect.max.x > frame.max.x || rect.max.y > frame.max.y)
+		{
+			outside.push_back(control.name);
+		}
+	}
+	return outside;
+}
+
+} // namespace
+
+TEST(MultiplayerBoxes, TheFrameOfEachBoxIsAsTallAsTheFrameOfTheGameRoom)
+{
+	// The game draws the frame of every box of the front end 40 below the box, as for a box with tabs
+	EXPECT_EQ(MultiplayerBoxes::k_Box.min, glm::ivec2(10, 50));
+	EXPECT_EQ(MultiplayerBoxes::k_Box.max, glm::ivec2(790, 590));
+	EXPECT_EQ(MultiplayerBoxes::FrameOf(Box::GameList).max, MultiplayerBoxes::k_RoomBox.max);
+	EXPECT_EQ(MultiplayerBoxes::FrameOf(Box::Conditions).max, MultiplayerBoxes::k_RoomBox.max);
+}
+
+TEST_F(FrontEndTest, EveryControlOfEachBoxIsInTheFrameOfTheBox)
+{
+	const auto texts = ButtonTexts();
+	const auto font = gui::test::LoadFont();
+	MultiplayerBoxes boxes {texts, font};
+
+	// The boxes before the login
+	Make();
+	boxes.Open(std::move(frontEnd));
+	EXPECT_EQ(boxes.GetFrontEnd()->GetBox(), Box::ChooseConnection);
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+	boxes.GetFrontEnd()->Next();
+	boxes.Update(0.0f);
+	EXPECT_EQ(boxes.GetFrontEnd()->GetBox(), Box::FindGames);
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+	boxes.GetFrontEnd()->SetLobbyKind(LobbyKind::Internet);
+	boxes.GetFrontEnd()->Next();
+	boxes.Update(0.0f);
+	EXPECT_EQ(boxes.GetFrontEnd()->GetBox(), Box::Login);
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+
+	// The game list
+	ToGameList();
+	boxes.Open(std::move(frontEnd));
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+
+	// Each tab of the game room, then the conditions
+	ToRoom();
+	boxes.Open(std::move(frontEnd));
+	for (size_t tab = 0; tab < k_RoomTabCount; ++tab)
+	{
+		boxes.GetFrontEnd()->SelectTab(static_cast<RoomTab>(tab));
+		boxes.Update(0.0f);
+		EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {}) << "tab " << tab;
+	}
+	boxes.GetFrontEnd()->Next();
+	boxes.Update(0.0f);
+	EXPECT_EQ(boxes.GetFrontEnd()->GetBox(), Box::Conditions);
+	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+}
+
+TEST_F(FrontEndTest, NoControlOfTheGameListGoesUnderRefreshList)
+{
+	const auto texts = ButtonTexts();
+	const auto font = gui::test::LoadFont();
+	MultiplayerBoxes boxes {texts, font};
+	ToGameList();
+	boxes.Open(std::move(frontEnd));
+	const auto check = [&boxes](std::string_view when) {
+		const auto controls = boxes.GetNamedControls();
+		const auto refresh = std::ranges::find(controls, std::u16string(u"APATCH_09"), &Dialog::NamedControl::name);
+		ASSERT_NE(refresh, controls.end()) << when;
+		const auto crosses = [](const DialogRect& a, const DialogRect& b) {
+			return a.min.x < b.max.x && b.min.x < a.max.x && a.min.y < b.max.y && b.min.y < a.max.y;
+		};
+		const auto rects = boxes.GetVisibleRects();
+		// Only the button itself is in its place, on the default screen and on the screens of the looks
+		EXPECT_EQ(std::ranges::count_if(rects, [&](const DialogRect& rect) { return crosses(rect, refresh->rect); }), 1)
+		    << when;
+		for (const auto& [width, height] : {std::pair {1280, 1024}, std::pair {1920, 1080}})
+		{
+			const auto space = FrontEndSpace(width, height);
+			const auto onScreen = [&space](const DialogRect& rect) {
+				return std::pair {space.ToScreen(glm::vec2(rect.min)), space.ToScreen(glm::vec2(rect.max))};
+			};
+			const auto [buttonMin, buttonMax] = onScreen(refresh->rect);
+			const auto count = std::ranges::count_if(rects, [&](const DialogRect& rect) {
+				const auto [min, max] = onScreen(rect);
+				return min.x < buttonMax.x && buttonMin.x < max.x && min.y < buttonMax.y && buttonMin.y < max.y;
+			});
+			EXPECT_EQ(count, 1) << when << " " << width << "x" << height;
+		}
+	};
+	check("no game picked");
+	boxes.GetFrontEnd()->SelectGame(0);
+	boxes.Update(0.0f);
+	check("a game picked");
 }

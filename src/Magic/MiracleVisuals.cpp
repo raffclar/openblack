@@ -15,7 +15,11 @@
 #include <array>
 #include <numbers>
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#include "Common/PortableRotations.h"
+#include "Magic/DispenserRules.h"
 
 using namespace openblack::magic;
 using namespace openblack::magic::visuals;
@@ -78,8 +82,8 @@ using Rows = std::array<glm::vec3, 3>;
 
 void TurnAboutVertical(Rows& rows, float angle)
 {
-	const float c = std::cos(angle);
-	const float s = std::sin(angle);
+	const float c = openblack::portable_math::Cos(angle);
+	const float s = openblack::portable_math::Sin(angle);
 	for (auto& row : rows)
 	{
 		const float x = row.x;
@@ -90,8 +94,8 @@ void TurnAboutVertical(Rows& rows, float angle)
 
 void Tip(Rows& rows, float angle)
 {
-	const float c = std::cos(angle);
-	const float s = std::sin(angle);
+	const float c = openblack::portable_math::Cos(angle);
+	const float s = openblack::portable_math::Sin(angle);
 	for (auto& row : rows)
 	{
 		const float x = row.x;
@@ -182,9 +186,24 @@ float visuals::PhialPulseSpeed(int receiveType)
 	return receiveType == k_FreezeReceiveType ? k_FreezePulseSpeed : k_PulseSpeed;
 }
 
+visuals::SeedTurn visuals::TurnSeed(SeedTurn turn, std::optional<int> phialReceiveType, float gameSeconds)
+{
+	turn.spin = std::fmod(turn.spin + (k_OrbSeedSpin * gameSeconds), glm::two_pi<float>());
+	if (turn.spin < 0.0f)
+	{
+		turn.spin += glm::two_pi<float>();
+	}
+	if (phialReceiveType.has_value())
+	{
+		turn.phialFrame = StepPhialFrame(turn.phialFrame, gameSeconds);
+		turn.phialPhase = std::fmod(turn.phialPhase + (PhialPulseSpeed(*phialReceiveType) * gameSeconds), 1.0f);
+	}
+	return turn;
+}
+
 float visuals::PhialPulse(float phase)
 {
-	return (std::sin(phase * k_TwoPi) + 1.0f) * 0.5f;
+	return (openblack::portable_math::Sin(phase * k_TwoPi) + 1.0f) * 0.5f;
 }
 
 glm::vec3 visuals::PhialScale(int receiveType, float phase)
@@ -339,7 +358,7 @@ glm::mat4 visuals::BandOnHandUnspun(const HandBand& band)
 glm::mat4 visuals::BandOnHand(const HandBand& band)
 {
 	// Spinning about its own length, the other way round from a turn by the spin
-	return BandOnHandUnspun(band) * glm::rotate(glm::mat4(1.0f), -band.spin, {0.0f, 0.0f, 1.0f});
+	return BandOnHandUnspun(band) * openblack::portable_math::Rotate(glm::mat4(1.0f), -band.spin, {0.0f, 0.0f, 1.0f});
 }
 
 glm::mat4 visuals::BandAtCamera(float nearPlane)

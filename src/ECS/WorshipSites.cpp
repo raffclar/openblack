@@ -14,6 +14,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/GUtilsDistance.h"
+#include "Common/PortableMath.h"
 
 namespace openblack::ecs::worship_site
 {
@@ -25,8 +26,8 @@ float PlaceFacing(float templeFacing, uint32_t place)
 
 glm::vec2 TurnedPoint(glm::vec2 spot, float facing, glm::vec3 point)
 {
-	const float cosine = std::cos(facing);
-	const float sine = std::sin(facing);
+	const float cosine = portable_math::Cos(facing);
+	const float sine = portable_math::Sin(facing);
 	return spot + glm::vec2(cosine * point.x - sine * point.z, sine * point.x + cosine * point.z);
 }
 
@@ -34,6 +35,11 @@ glm::vec2 CentreOnLand(glm::vec3 position, const glm::mat3& rotation, float scal
 {
 	const auto centre = position + rotation * (k_CentrePoint * scale);
 	return {centre.x, centre.z};
+}
+
+float EdgeGap(glm::vec2 centre, glm::vec2 thing, float thingRadius)
+{
+	return gutils::GetDistanceInMetres(centre, thing) - (k_EffectRadius + thingRadius);
 }
 
 std::optional<uint32_t> NearestFreePlace(const std::array<bool, k_Places>& taken, glm::vec2 temple, glm::vec3 placePoint,

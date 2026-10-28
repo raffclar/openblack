@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <random>
 #include <set>
@@ -26,6 +27,12 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/WorldArchive.h"
+#include "Enums.h"
+
+namespace openblack::dance
+{
+struct DanceFile;
+}
 
 /// The whole world of a saved game in openblack's own layout (deviation 83): the entities and their components, the
 /// values that the registry keeps beside them, the game clock, the streams of random numbers, the camera, and the
@@ -63,6 +70,8 @@ struct ClockState
 	uint32_t runSeed = 0;
 	std::vector<std::mt19937> streams;
 	std::optional<std::mt19937> general;
+	/// How many numbers the synced seed gave, which the checksum of each turn has. A save of an older build has none.
+	std::optional<uint64_t> syncedDraws;
 };
 
 /// The bytes of the block of the clock
@@ -76,18 +85,39 @@ struct ClockState
 /// Whether the file keeps the whole world, or only the creatures of an older save
 [[nodiscard]] bool HasWholeWorld(const gamesave::WorldFile& file);
 
+/// What a load of the whole world is for
+enum class LoadKind : uint8_t
+{
+	/// A saved game: the load forgets what the game keeps in no save, such as the sounds that played
+	SavedGame,
+	/// The world state of a game server: the load puts back the world exactly, so that it turns as the server's world.
+	/// Only the parts that show the world on one computer, such as the emitters of the sounds, start again.
+	WorldState,
+};
+
+/// The saved state of each system that a save keeps, by the name of the system. With valueEnds, each section also keeps
+/// where each value ends, for tools.
+[[nodiscard]] std::vector<reflection::NamedSection> SavedSystemSections(const entt::meta_ctx& reflection,
+                                                                        bool valueEnds = false);
+
 /// Puts back the entities, their components and the context of the registry. The registry must have no live entity.
 /// Returns nothing when the blocks do not read.
-[[nodiscard]] std::optional<reflection::WorldLoadReport> LoadEntities(const entt::meta_ctx& reflection,
-                                                                      const gamesave::WorldFile& file);
+[[nodiscard]] std::optional<reflection::WorldLoadReport>
+LoadEntities(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, LoadKind kind = LoadKind::SavedGame);
 
 /// The camera that a save keeps: the camera of the world. Inside the temple that is the camera that the player left
 /// outside, not the camera of the temple's rooms.
 [[nodiscard]] OutsideCamera CameraToSave(const std::optional<OutsideCamera>& outside, const OutsideCamera& current);
 
 /// Forgets what the game does not keep in a save. After a load the creature wants again the actions that the area that
-/// holds it refused. The rooms of the temple go, because the temple makes them when the player goes into it.
+/// holds it refused. The rooms of the temple go, because the temple makes them when the player goes into it. A footpath
+/// that the game still looks for starts its search again.
 void ForgetUnsavedState(entt::registry& registry);
+
+/// A save does not keep the file of a dance. After a load each dance takes its file again from the row of the dances'
+/// table that it dances, so its groups continue to move as before the save.
+void TakeDanceFilesAgain(entt::registry& registry,
+                         const std::function<std::shared_ptr<const dance::DanceFile>(DanceInfo)>& fileOf);
 
 /// After the land starts again: puts back the game clock at the turn, the streams of random numbers, the camera, the
 /// scripts, the table of the objects that they hold and the running state of the systems. Returns whether every block

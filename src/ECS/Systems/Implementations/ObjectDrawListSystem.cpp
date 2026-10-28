@@ -135,8 +135,7 @@ void ObjectDrawListSystem::Update(uint32_t turn)
 	                                .eye = camera.GetOrigin()};
 	// A block in view that starts or stops to show triangles makes the list again. With the land mirrored in the sea,
 	// a block's box reaches as far under the water as it stands over it.
-	const bool reflected =
-	    !Locator::config::has_value() || graphics::detail_level::For(Locator::config::value().detailLevel).landReflection;
+	const bool reflected = !Locator::config::has_value() || Locator::config::value().detail.landReflection;
 	bool changed = false;
 	for (auto& block : _blocks)
 	{
@@ -230,14 +229,15 @@ bool ObjectDrawListSystem::Listed(entt::entity entity) const
 	return index < _listedByIndex.size() && _listedByIndex[index] == entity;
 }
 
+bool ObjectDrawListSystem::Decides(const Registry& registry, entt::entity entity) const
+{
+	const auto* resident = registry.TryGet<const MapCellResident>(entity);
+	return _view.has_value() && resident != nullptr && !resident->cells.empty() && !DrawnOnTheirOwn(registry, entity);
+}
+
 bool ObjectDrawListSystem::Drawn(const Registry& registry, entt::entity entity) const
 {
-	if (!_view.has_value())
-	{
-		return true;
-	}
-	const auto* resident = registry.TryGet<const MapCellResident>(entity);
-	if (resident == nullptr || resident->cells.empty() || DrawnOnTheirOwn(registry, entity))
+	if (!Decides(registry, entity))
 	{
 		return true;
 	}

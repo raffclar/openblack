@@ -13,6 +13,7 @@
 
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Online/GodsRingMap.h"
 
 openblack::gui::OnlineMapTexts openblack::gui::ReadOnlineMapTexts()
 {
@@ -30,5 +31,7 @@ openblack::gui::OnlineMapTexts openblack::gui::ReadOnlineMapTexts()
 		return std::string(bytes.begin(), bytes.end());
 	};
 	const std::filesystem::path folder = "Online Maps";
-	return {.localMaps = readText(folder / "localmaps.txt"), .conditionTemplate = readText(folder / "ConditionTemplate.txt")};
+	// The list of the lands also has openblack's map for 32 gods, at its end
+	return {.localMaps = gods_ring_map::AddToLocalMaps(readText(folder / "localmaps.txt")),
+	        .conditionTemplate = readText(folder / "ConditionTemplate.txt")};
 }

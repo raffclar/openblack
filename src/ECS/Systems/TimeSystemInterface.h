@@ -16,6 +16,8 @@
 
 #include <entt/fwd.hpp>
 
+#include "Common/InputSteps.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -61,6 +63,9 @@ public:
 	virtual void StartTurn() = 0;
 	/// Works out the frame's game time and how far through its turn the game is, after the frame's turns
 	virtual void UpdateFrame() = 0;
+	/// Between two turns of one frame, as a computer that catches up does them: the frame clock takes the time of the
+	/// turn, as the frame after a turn does, and the frame keeps its count of turns
+	virtual void CatchUpFrame() {}
 
 	[[nodiscard]] virtual uint32_t GetTurn() const = 0;
 	/// How far the game is through the turn after the last one played, from 0 to 0.99
@@ -71,14 +76,30 @@ public:
 	/// less those at the start of the last draw, at least 1: what the hand and the camera step by. Before the draw of the
 	/// frame starts, it is the time of the last draw.
 	[[nodiscard]] virtual std::chrono::milliseconds GetFrameRealTime() const = 0;
+	/// The input clock counts the fixed steps that the player's input takes in this frame, by the time that the hand and
+	/// the camera step by (see CameraStep)
+	virtual void StepInput(std::chrono::microseconds stepTime) = 0;
+	/// The fixed steps that the player's input takes in this frame: the hand, the strokes, the throws and the camera
+	[[nodiscard]] virtual const input_steps::Steps& GetInputSteps() const = 0;
 
 	/// Pausing stops the game clock; unpausing starts it again from where it stopped
 	virtual void SetPaused(bool paused) = 0;
 	[[nodiscard]] virtual bool IsPaused() const = 0;
+	/// The player's pause: the P key, the in-game menu, the start-of-game question and the films. It stops the clock as
+	/// SetPaused does, but a network game ignores it and its clock continues to run.
+	virtual void SetPlayerPause(bool paused) = 0;
 	/// The temple holds the game clock while the player is in it. A hold stops the clock as a pause does, but it
-	/// does not change the player's pause. The frame's game time is none from the moment that the hold starts.
+	/// does not change the player's pause. The frame's game time is none from the moment that the hold starts. A network
+	/// game ignores the hold.
 	virtual void SetHeld(bool held) = 0;
 	[[nodiscard]] virtual bool IsHeld() const = 0;
+	/// A network game: the world of each computer must follow only the seed and the commands of the players. Its clock
+	/// never stops for one player, and its turns read no part of a frame
+	virtual void SetNetworkGame(bool networkGame) = 0;
+	[[nodiscard]] virtual bool IsNetworkGame() const = 0;
+	/// A player's computer in a network game does up to 10 turns a frame and keeps the time it lost, so that it catches up
+	/// with the server's turns, as the game does. The game server's own world turns as a game alone does.
+	virtual void SetCatchesUp([[maybe_unused]] bool catchesUp) {}
 	/// The game's speed: 1 is normal and 2 twice as fast. The time already gone keeps the speed it went at
 	virtual void SetSpeed(float speed) = 0;
 	[[nodiscard]] virtual float GetSpeed() const = 0;
@@ -100,10 +121,26 @@ public:
 	virtual void RestartClock(std::optional<int64_t> unixTime) = 0;
 	/// The date pinned for a deterministic run, none while the wall clock's date is read
 	[[nodiscard]] virtual std::optional<int64_t> GetPinnedDate() const = 0;
+	/// Pins the date as GetPinnedDate gives it (none for the wall clock's again), and leaves the ticks as they are. So
+	/// the date is this value and the ticks since the clock was last restarted.
+	virtual void PinDate(std::optional<int64_t> pinnedDate) = 0;
 
 	/// The date a seeded run pins unless given another: 1 January 2001, 12:00 UTC
 	static constexpr int64_t k_DeterministicDate = 978350400;
 };
+
+/// The pinned date that makes the clock read this date now, with the ticks since the clock was last restarted
+[[nodiscard]] constexpr int64_t PinForDateNow(int64_t date, uint32_t ticks) noexcept
+{
+	return date - static_cast<int64_t>(ticks / 1000u);
+}
+
+/// Whether the player's pause or the temple's hold stops the game clock. In a network game the other players continue
+/// to play, so nothing that one player does stops the clock.
+[[nodiscard]] constexpr bool PlayerCanStopClock(bool networkGame) noexcept
+{
+	return !networkGame;
+}
 
 /// What the hand and the camera step by in a frame: the frame's real time, except while a script holds the widescreen
 /// for a cut scene, when they keep to the game's time. Inside the temple, where the world is paused, the rooms' camera

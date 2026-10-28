@@ -36,23 +36,6 @@ constexpr float k_Tolerance = 1e-3f;
 constexpr float k_Height = 15.0f;
 } // namespace
 
-TEST(CreatureTouch, StepsComeAtMostSixtyTimesASecondTakingAllTheTimeSinceTheLast)
-{
-	float since = 0.0f;
-	// Fast frames step only once a sixtieth of a second has gone by, with all of it
-	for (int i = 0; i < 10; ++i)
-	{
-		EXPECT_FALSE(feedback::Pace(since, 1.6f).has_value());
-	}
-	const auto step = feedback::Pace(since, 2.0f);
-	ASSERT_TRUE(step.has_value());
-	EXPECT_NEAR(*step, 18.0f, k_Tolerance);
-	// A slow frame steps once with all its time
-	const auto slow = feedback::Pace(since, 40.0f);
-	ASSERT_TRUE(slow.has_value());
-	EXPECT_NEAR(*slow, 40.0f, k_Tolerance);
-}
-
 TEST(CreatureTouch, StrokesWaitLongerTheLessTheCreatureHasBeenRewarded)
 {
 	EXPECT_NEAR(feedback::StrokeWaitMs(0.0f), 1250.0f, k_Tolerance);
@@ -392,6 +375,22 @@ TEST(CreatureTouch, HeldTheCreatureLooksAtTheHandOrAtTheCameraWithTheHandNearIts
 	const auto look = feedback::HeldLookPoint(glm::vec3(10.0f, 5.0f, -2.0f), middle, camera, sight, k_Height);
 	EXPECT_NEAR(look.x, 10.0f, k_Tolerance);
 	EXPECT_NEAR(look.z, -2.0f - (0.3f * k_Height), k_Tolerance);
+}
+
+// In a network game the turn takes the way of the line of sight from the reported camera to the reported hand
+TEST(CreatureTouch, TheReportedHandAndCameraGiveTheSameLookAsTheLineOfSight)
+{
+	const glm::vec3 middle(0.0f, 5.0f, 0.0f);
+	const glm::vec3 camera(0.0f, 5.0f, -30.0f);
+	// The hand on the line straight ahead of the camera, far from the middle
+	const glm::vec3 hand(0.0f, 5.0f, -12.0f);
+	const auto look = feedback::ReportedLookPoint(hand, middle, camera, k_Height);
+	ASSERT_TRUE(look.has_value());
+	EXPECT_EQ(*look, feedback::HeldLookPoint(hand, middle, camera, glm::vec3(0.0f, 0.0f, 1.0f), k_Height));
+	// Near its middle it looks at the camera
+	EXPECT_EQ(feedback::ReportedLookPoint(glm::vec3(0.0f, 5.0f, -1.0f), middle, camera, k_Height), camera);
+	// A hand at the camera gives no way, and no look
+	EXPECT_FALSE(feedback::ReportedLookPoint(camera, middle, camera, k_Height).has_value());
 }
 
 TEST(CreatureTouch, AStrokeDoesNotHoldBackTheNextSlap)
