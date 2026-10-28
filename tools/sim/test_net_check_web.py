@@ -248,6 +248,26 @@ class LeashCheck(unittest.TestCase):
 
 
 @unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class BoxBack(unittest.TestCase):
+    CLIENT = ["Tests: the player presses Back in the land information box at turn 200",
+              "The land information box: Back leaves the network game", "The player leaves the network game"]
+    SERVER = ["The player of slot 1 leaves the game"]
+
+    def test_back_leaves_the_network_game_and_the_server_sees_one_slot_leave(self):
+        result = net_check.box_back_leave(self.CLIENT, self.SERVER)
+        self.assertTrue(result["same"])
+        self.assertEqual(result["server_slots"], [1])
+
+    def test_back_that_did_not_leave_fails(self):
+        # The box did not show, Back only closed the box, the leave did not go out, or the server saw no leave
+        for missing in range(len(self.CLIENT)):
+            lines = self.CLIENT[:missing] + self.CLIENT[missing + 1:]
+            self.assertFalse(net_check.box_back_leave(lines, self.SERVER)["same"], missing)
+        self.assertFalse(net_check.box_back_leave(self.CLIENT, [])["same"])
+        self.assertFalse(net_check.box_back_leave(self.CLIENT, self.SERVER * 2)["same"])
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
 class LeashCheckOfTheWebGod(unittest.TestCase):
     def test_a_land_with_a_game_message_shows_the_information_box(self):
         with tempfile.TemporaryDirectory() as folder:

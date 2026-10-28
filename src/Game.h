@@ -384,8 +384,9 @@ public:
 	/// Exit Online Game of the menu: the question to leave, or a leave at once when the god of the player is out
 	void ExitOnlineGame();
 	/// The player leaves the network game. The game server makes the god of the player a leaver. A join from the command
-	/// line and a run of the tools stop the game; a join from the front end goes back to the multiplayer front end.
-	void LeaveNetworkGame();
+	/// line and a run of the tools stop the game. A join from the front end goes to the box that the control gives: the
+	/// multiplayer front end after Leave Game, the skirmish box after Back in the land information box.
+	void LeaveNetworkGame(game_session::NetworkLeave leave = game_session::NetworkLeave::LeaveGame);
 	/// Tests: the player leaves the network game through the menu and the question to leave, as a player does
 	void LeaveAsAPlayerDoes();
 	/// A run of the tools that stops: an observer leaves the network game at once, so that the server does not wait
@@ -615,8 +616,11 @@ private:
 	[[nodiscard]] static std::vector<gui::skirmish_box::Land> ReadSkirmishLands();
 	/// The answer of the skirmish box over the game: Start Game starts the skirmish, Back continues the story
 	void FollowSkirmishBox();
-	/// The choice in the land information box: Back ends the skirmish, and the skirmish box shows again
+	/// The choice in the land information box: Back ends the skirmish or leaves the network game, and the skirmish box
+	/// shows again
 	void FollowLandInfoBox();
+	/// Tests: the player presses Back in the land information box of a network game at the turn of the command line
+	void PressLandInfoBoxBackForTests();
 	/// The menu shows the buttons of the game that plays: a network game, a skirmish or the story
 	void TellMenuTheGame();
 	/// The name of the profile played, for the files that the game keeps for its player. There is no name on a run of a
@@ -711,6 +715,8 @@ private:
 	end_game_box::State _endGameBoxState;
 	/// Tests: the player left the network game at the turn that the command line gives
 	bool _testLeaveDone {false};
+	/// Tests: the player pressed Back in the land information box at the turn that the command line gives
+	bool _testLandInfoBoxBackDone {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
 	/// The lands that the skirmish box shows, in the order of its list

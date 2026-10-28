@@ -89,6 +89,8 @@ struct Settings
 	std::vector<game_end::ConditionPick> conditions;
 	/// Tests: at this turn the player of a network game leaves it as a player does: Escape, Exit Online Game, Leave Game
 	std::optional<uint32_t> leaveAt;
+	/// Tests: at this turn the player of a network game presses Back in the land information box, as a player clicks it
+	std::optional<uint32_t> landInfoBoxBackAt;
 };
 
 /// What the command line asks of a simulation run
