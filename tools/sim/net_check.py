@@ -1120,9 +1120,12 @@ def free_port():
 
 
 WEB_WIDTH = 1280
-# The click on the speech button of the web client, from the top right corner of the page: below the small line of the
-# page (the build, Join Online Game and Log) that lies over the top of the button
-WEB_SPEECH_FROM_CORNER = (16, 24)
+# The height of the strip above the game in the web page (--badge-bar in web/page/page.css): the build, Join Online Game
+# and Log have their own strip, so they lie over no control of the game
+WEB_BADGE_BAR = 22
+# The click on the speech button of the web client: the centre of the button, from the top right corner of the game
+# canvas, which starts below the strip
+WEB_SPEECH_FROM_CORNER = (16, 12)
 
 
 # The keys of the leash check in the web page, as the page reads them
@@ -1218,7 +1221,7 @@ def web_chat_steps(chats, seconds, width=WEB_WIDTH, leashes=(), close_box=False)
         text = value
         for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
             steps.append({"at": at, "do": "mouse", "type": kind, "x": width - WEB_SPEECH_FROM_CORNER[0],
-                          "y": WEB_SPEECH_FROM_CORNER[1],
+                          "y": WEB_BADGE_BAR + WEB_SPEECH_FROM_CORNER[1],
                           "button": "none" if kind == "mouseMoved" else "left"})
             at += 0.1
         steps.append({"at": at, "do": "shot", "name": f"chat{number}-open"})
