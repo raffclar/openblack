@@ -32,12 +32,14 @@
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -46,6 +48,7 @@
 #include "Magic/DispenserRules.h"
 #include "Magic/MiracleVisuals.h"
 #include "Magic/SpellSeedRules.h"
+#include "Magic/WorshipBattery.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -558,9 +561,12 @@ bool SpellIconSystem::HandReady(PlayerNames player) const
 	{
 		return false;
 	}
-	const bool human = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player).has_value()
+	// A computer god has hands too, but its hand never takes a miracle: the god casts from the store of the icon. The hand
+	// of a player that nobody plays does not take one either.
+	const bool person = !Locator::playerSystem::has_value() || Locator::playerSystem::value().IsHumanPlayer(player);
+	const bool hands = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player).has_value()
 	                                                    : player == PlayerNames::PLAYER_ONE;
-	if (!human)
+	if (!person || !hands)
 	{
 		return false;
 	}
@@ -688,6 +694,62 @@ icons::TapResult SpellIconSystem::TapSiteIcon(entt::entity icon, PlayerNames pla
 		break;
 	}
 	return result;
+}
+
+bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
+{
+	auto& registry = Entities();
+	auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
+	if (component == nullptr || component->charging || HeldSeedOf(*component) != entt::null ||
+	    !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto plain =
+	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, component->seed), magic::k_BasePowerUpLevel);
+	if (!IsEnabled(player, plain))
+	{
+		return false;
+	}
+	// The site must have prayer power to give this turn, or the icon must have some stored
+	const auto* chants = registry.Valid(component->site) ? registry.TryGet<const WorshipChants>(component->site) : nullptr;
+	if (chants != nullptr)
+	{
+		const float available = chants->infinite ? magic::k_InfiniteChants : chants->available;
+		if (!(available > 0.0f) && component->store == 0.0f)
+		{
+			return false;
+		}
+	}
+	else if (component->store == 0.0f)
+	{
+		return false;
+	}
+	component->charging = true;
+	component->powerUp = magic::k_BasePowerUpLevel;
+	component->charger = player;
+	component->chargeStartTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	return true;
+}
+
+float SpellIconSystem::ChantNeeded(entt::entity icon) const
+{
+	const auto& registry = Entities();
+	const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+	return component != nullptr ? icons::Need(ChargeOf(*component, PlayerNames::NEUTRAL)) : 0.0f;
+}
+
+void SpellIconSystem::TakeCastCharge(entt::entity icon)
+{
+	auto& registry = Entities();
+	auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
+	if (component == nullptr)
+	{
+		return;
+	}
+	const float cost = RequiredNow(*component, HeldSeedOf(*component));
+	component->store -= std::min(cost, component->store);
 }
 
 void SpellIconSystem::StartCharge(entt::entity icon, PlayerNames player)

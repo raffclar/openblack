@@ -1787,6 +1787,42 @@ TEST(CreatureTownCompassion, HurtPeopleMakeItThinkOfHealingFirstOnceItHasSeenHea
 	EXPECT_EQ(town_compassion::Actions({}, town.actions, 101u), (std::vector<uint32_t> {101}));
 }
 
+TEST(CreatureTownCompassion, ALeashTiedToADesireFlagHoldsItToTheDesireOfTheFlag)
+{
+	const FakeTown town;
+	const auto desires = town_compassion::DesiresToHelp(town.order, town.felt, town.actions);
+	town_compassion::State state {.desire = 0, .index = 0, .remembered = 0.68f, .lastTurn = 100};
+	town_compassion::TiedToFlag(state, 1, town.actions);
+	EXPECT_EQ(state.desire, std::optional<uint32_t>(1));
+	EXPECT_FALSE(state.choosesFreely);
+	// The place in the list and the remembered desire stay as they were
+	EXPECT_EQ(state.index, 0u);
+	EXPECT_FLOAT_EQ(state.remembered, 0.68f);
+	// Held to the desire, it does not move on as it plans or after it helps
+	EXPECT_FALSE(town_compassion::MovesOnWhilePlanning(state, true, false, 200));
+	town_compassion::FinishedHelping(state, desires, town.felt, 200, Always(0));
+	EXPECT_EQ(state.desire, std::optional<uint32_t>(1));
+	EXPECT_EQ(town_compassion::Actions(state, town.actions, std::nullopt), (std::vector<uint32_t> {32}));
+
+	// The leash key frees it
+	town_compassion::UntiedFromFlag(state);
+	EXPECT_EQ(state.desire, std::nullopt);
+	EXPECT_TRUE(state.choosesFreely);
+}
+
+TEST(CreatureTownCompassion, AFlagOfADesireWithNoActionsLeavesItFreeWithNoDesire)
+{
+	const FakeTown town;
+	town_compassion::State state {.desire = 0, .choosesFreely = false};
+	// Desire 2 has no actions
+	town_compassion::TiedToFlag(state, 2, town.actions);
+	EXPECT_EQ(state.desire, std::nullopt);
+	EXPECT_TRUE(state.choosesFreely);
+	town_compassion::TiedToFlag(state, static_cast<uint32_t>(town_compassion::k_TownDesireCount), town.actions);
+	EXPECT_EQ(state.desire, std::nullopt);
+	EXPECT_TRUE(state.choosesFreely);
+}
+
 TEST(CreatureTownCompassion, WhatACreatureMakesOfATown)
 {
 	EXPECT_EQ(town_compassion::ReligiousBelief(0.19f), 0u);

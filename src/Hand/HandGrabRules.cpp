@@ -236,10 +236,10 @@ void HandSpring::Start(glm::vec3 position)
 	_velocity = glm::vec3(0.0f);
 }
 
-void HandSpring::Count(uint32_t frameGameMs, float frameRealMs)
+void HandSpring::Count(uint32_t frameGameMs)
 {
+	_frameStartMs = _elapsedMs;
 	_elapsedMs += frameGameMs;
-	_sinceRefreshMs += frameRealMs;
 }
 
 void HandSpring::StepOnce(glm::vec3 target)
@@ -255,26 +255,34 @@ void HandSpring::StepOnce(glm::vec3 target)
 	_position += _velocity * k_Step;
 }
 
-void HandSpring::Step(glm::vec3 target)
+void HandSpring::Step(glm::vec3 from, glm::vec3 to, const input_steps::Steps& refreshes)
 {
-	// As many steps as the game's time has run
 	_steps = 0;
-	while (_steppedMs < _elapsedMs)
+	const auto frameMs = _elapsedMs - _frameStartMs;
+	uint32_t refresh = 0;
+	// A step of the input with no step of the spring since the last takes one anyway, as the game's frame did
+	const auto refreshUpTo = [&](float part) {
+		for (; refresh < refreshes.count && refreshes.Point(refresh) < part; ++refresh)
+		{
+			if (!_steppedSinceRefresh)
+			{
+				StepOnce(input_steps::Between(from, to, refreshes.Point(refresh)));
+			}
+			_steppedSinceRefresh = false;
+		}
+	};
+	// A step for each 10 ms of game time that has run to its end. Each step goes towards where the hand was at its end.
+	// Game time and real time go in the same ratio through a frame, so the steps of the spring and of the input fall in
+	// their order.
+	while (_steppedMs + k_SpringStepMs <= _elapsedMs)
 	{
-		StepOnce(target);
+		const auto end = static_cast<float>(_steppedMs + k_SpringStepMs) - static_cast<float>(_frameStartMs);
+		const auto part = frameMs > 0 ? std::clamp(end / static_cast<float>(frameMs), 0.0f, 1.0f) : 1.0f;
+		refreshUpTo(part);
+		StepOnce(input_steps::Between(from, to, part));
+		_steppedSinceRefresh = true;
 	}
-	_steppedSinceRefresh = _steppedSinceRefresh || _steps > 0;
-	if (_sinceRefreshMs < k_SpringFrameMs)
-	{
-		return;
-	}
-	// A refresh with no step since the last takes one anyway, as the game's frame did
-	if (!_steppedSinceRefresh)
-	{
-		StepOnce(target);
-	}
-	_sinceRefreshMs = std::fmod(_sinceRefreshMs - k_SpringFrameMs, k_SpringFrameMs);
-	_steppedSinceRefresh = false;
+	refreshUpTo(2.0f);
 }
 
 Countdown hand_grab::CountDown(int32_t& msLeft, uint32_t frameMs)

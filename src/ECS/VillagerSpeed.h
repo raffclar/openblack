@@ -86,6 +86,13 @@ using FloatRandom = std::function<float(float)>;
 	return !controlledByScript && !dancing;
 }
 
+/// Whether the belief speed scale is the multiplayer scale: in a skirmish and in a network game. A land that sets its
+/// own scale keeps it.
+[[nodiscard]] constexpr bool MultiplayerBeliefScale(bool skirmish, bool networkGame)
+{
+	return skirmish || networkGame;
+}
+
 /// The part of the speed that comes from the player of the villager's town
 struct PlayerTerms
 {

@@ -384,6 +384,8 @@ private:
 	void DrawVillagerLabels(glm::u16vec2 resolution);
 	/// The tip bubble over the "did you know" sign tapped last, with the pointer over it keeping it up
 	void DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse);
+	/// The pictures of gestures and controls on the temple's scroll that the camera is close to
+	void DrawTempleScrollPictures(glm::u16vec2 resolution);
 	/// A run of the bubble's words' width as the bubble measures it
 	[[nodiscard]] float BubbleTextWidth(std::u16string_view text, float size) const;
 	/// A line of the bubble's words in a colour, fading from its top to its bottom

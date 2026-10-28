@@ -45,6 +45,7 @@
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -68,7 +69,8 @@ bool IsLocalPlayersCreature(entt::entity entity)
 		return false;
 	}
 	const auto& players = Locator::playerSystem::value();
-	return players.GetPrimaryCreature(players.GetLocalPlayer()) == entity;
+	return players.GetPrimaryCreature((Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+	                                                                    : PlayerNames::PLAYER_ONE)) == entity;
 }
 
 const CreatureRig* RigOf(const Creature& creature)

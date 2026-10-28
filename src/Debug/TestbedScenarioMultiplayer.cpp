@@ -23,6 +23,12 @@ using namespace openblack::testbed_scenarios;
 namespace
 {
 
+/// The lines of a land script that switch the computer mind of player two on and then off: the player stays a computer
+/// player with no mind that plays
+constexpr std::string_view k_StoppedComputerGod = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 0)
+)";
+
 struct BoxScenario
 {
 	std::string_view id;
@@ -86,8 +92,9 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.conditions", "The multiplayer front end: the winning conditions", Stage::Conditions,
 	     "The player joins Bob's game and clicks Next. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an observer, "
 	     "on Bombardment.",
-	     "The page lists the 15 winning conditions of Bombardment. \"Condition Value:\" and \"Time Limit "
-	     "(Hours:Minutes):\" show, and \"View Chat\" at the right. The Ready box is at the bottom left."},
+	     "The list of the winning conditions is empty, because the game has no conditions. \"Time Limit "
+	     "(Hours:Minutes):\" shows with 0:30, and \"View Chat\" is at the right. \"Condition Value:\" does not show. The "
+	     "Ready box is at the bottom left."},
 	    {"multiplayer.waiting_for_start", "The multiplayer front end: joined and waiting for the start", Stage::WaitingForStart,
 	     "The player joins Bob's game, goes to the conditions and ticks Ready. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
@@ -176,7 +183,7 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	    .expected = "The barrel moves from where it stood to the west and stays in the air 5 m above the land, with no hand "
 	                "about it. High above the barrel, sparkles in the second player's colour come out one after another "
 	                "and fall down slowly. They do not stop while the scenario runs.",
-	    .environment = {.clockRuns = false, .dispenserGrid = false},
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .networkGame = true},
 	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
 	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {20.0f, 0.0f}}},
 	    .commands = {{.kind = Kind::OtherGodHand,
@@ -198,13 +205,36 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	    .expected = "After a short time, the model of the miracle shows 5 m above the land to the west, with no hand about it "
 	                "and no effect round it. High above it, sparkles in the second player's colour come out one after "
 	                "another and fall down slowly.",
-	    .environment = {.clockRuns = false, .dispenserGrid = false},
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .networkGame = true},
 	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
 	    .commands = {{.kind = Kind::OtherGodHand,
 	                  .player = PlayerNames::PLAYER_TWO,
 	                  .delaySeconds = 1.0f,
 	                  .point = {-20.0f, 0.0f},
 	                  .heldSeed = SpellSeedType::Food,
+	                  .radius = 5.0f}},
+	});
+	// A computer god whose mind stopped keeps its hands and its last camera, but it shows no sparkles
+	all.push_back({
+	    .id = "multiplayer.stopped_god_sparkles",
+	    .name = "No sparkles of a computer god whose mind stopped",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game. The land script switches on the computer mind of the second "
+	                   "player and then switches it off again. After a second, the second player's hand takes the barrel "
+	                   "to the west, and the second player reports the hand 5 m above the land and the camera 30 m above "
+	                   "that hand, as in the scenario of another god's sparkles.",
+	    .expected = "The barrel moves from where it stood to the west and stays in the air 5 m above the land, with no hand "
+	                "about it. No sparkles come out above the barrel while the scenario runs: a computer god shows its "
+	                "sparkles only while its mind plays.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {20.0f, 0.0f}}},
+	    .landScript = k_StoppedComputerGod,
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-20.0f, 0.0f},
+	                  .object = 0,
 	                  .radius = 5.0f}},
 	});
 	// The second god brings its player's creature at the start of a network game

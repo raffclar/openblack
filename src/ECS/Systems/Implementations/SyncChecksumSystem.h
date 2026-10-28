@@ -74,8 +74,9 @@ private:
 	synced_state::UnregisteredReporter _reported;
 	std::function<void(const TurnChecksum&)> _listener;
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
-	/// Tools: the file of the row dump, and the dump that writes to it
-	std::unique_ptr<std::ofstream> _rowFile;
+	/// Tools: the file of the row dump, or the standard output with a tag on each line, and the dump that writes to it
+	std::unique_ptr<row_dump::TaggedLines> _rowLines;
+	std::unique_ptr<std::ostream> _rowFile;
 	std::unique_ptr<row_dump::RowDump> _rowDump;
 #endif
 };

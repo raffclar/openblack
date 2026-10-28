@@ -19,6 +19,7 @@
 
 #include <spdlog/common.h>
 
+#include "Common/DeveloperTools.h"
 #include "Common/PlayerProfiles.h"
 #include "Creature/CreatureTattoo.h"
 #include "Graphics/UploadPacer.h"
@@ -134,5 +135,9 @@ void LoadEveryResource();
 /// the land from the same state: the next reset of the registry gives the ids of a new registry, the game's random state
 /// is as in a new program, and every stream starts from the seed
 void PrepareNetworkLand(uint32_t seed);
+/// Tools only: the AI soak modes for the land that loads next. Every computer of a network game calls this with the
+/// same values just before it loads the land, the game server too. A build without the developer tools refuses the
+/// modes: this gives the reason, and sets nothing.
+[[nodiscard]] std::optional<std::string_view> ApplySoakTools(const developer_tools::SoakTools& tools);
 
 } // namespace openblack::simulation

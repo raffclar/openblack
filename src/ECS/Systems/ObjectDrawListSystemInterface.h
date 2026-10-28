@@ -87,6 +87,9 @@ public:
 	/// Whether the list lets a thing be drawn: true for anything it doesn't decide. A frame that does not draw all of
 	/// the list draws only the listed things that the last full frame kept (see NoteFullFrame).
 	[[nodiscard]] virtual bool Drawn(const Registry& registry, entt::entity entity) const = 0;
+	/// Whether the list decides if a frame draws a thing: the thing stands on the land's blocks, and the game does not draw
+	/// it on its own
+	[[nodiscard]] virtual bool Decides(const Registry& /*registry*/, entt::entity /*entity*/) const { return false; }
 	/// On a frame that draws all of the list, the renderer tells for each listed thing whether it stays drawn on the
 	/// next frames that do not (see object_draw_list::StaysDrawn)
 	virtual void NoteFullFrame(entt::entity entity, bool staysDrawn) = 0;

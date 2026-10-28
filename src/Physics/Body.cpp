@@ -15,6 +15,7 @@
 #include <limits>
 #include <tuple>
 
+#include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/matrix.hpp>
@@ -52,7 +53,6 @@ constexpr int k_RestCounterLoosens = 15000;
 constexpr float k_RestLoosening = 1.0f / 15000.0f;
 constexpr int k_RestCounterPerStep = 5;
 constexpr float k_MinRotationStep = 1e-5f;
-constexpr float k_FacingThreshold = -0.0001f;
 constexpr float k_AnyFaceStart = -10000.0f;
 /// The overlap test takes a face that faces the line more than this, a double
 constexpr double k_AnyFacingThreshold = -0.0001;
@@ -69,6 +69,12 @@ glm::vec3 NormaliseOrKeep(glm::vec3 v)
 	}
 	// The game adds the squares from z to x and multiplies by the inverse of the length
 	return v * (1.0f / openblack::x87::LengthZyx(v));
+}
+
+/// The largest size of the parts of a vector
+float LargestPart(glm::vec3 v)
+{
+	return std::max({std::abs(v.x), std::abs(v.y), std::abs(v.z)});
 }
 
 /// The axes times a vector, as the game adds the parts of each row: z first, then y, then x
@@ -239,6 +245,8 @@ void Body::SetUpPose(const Pose& objectMatrix)
 	_axes = NormaliseAxes(objectMatrix.axes);
 	_turnStartAxes = _axes;
 	_turnStartCentre = _centre;
+	PointsMoved(true, glm::vec3(0.0f));
+	_shapeMargin = -1.0f;
 	for (auto& point : _points)
 	{
 		point.world = TurnedZyx(_axes, point.local) + _centre;
@@ -269,6 +277,8 @@ void Body::SetPoseDirect(const glm::mat3& axes, glm::vec3 centre)
 	_centre = centre;
 	_turnStartAxes = _axes;
 	_turnStartCentre = _centre;
+	PointsMoved(true, glm::vec3(0.0f));
+	_shapeMargin = -1.0f;
 	for (auto& point : _points)
 	{
 		point.world = _axes * point.local + _centre;
@@ -289,6 +299,7 @@ void Body::SetPoseDirect(const glm::mat3& axes, glm::vec3 centre)
 void Body::PlacePoints(glm::vec3 centre, std::span<const glm::vec3> worldPoints)
 {
 	_centre = centre;
+	PointsMoved(false, glm::vec3(0.0f));
 	_turnStartAxes = _axes;
 	_turnStartCentre = _centre;
 	for (size_t i = 0; i < _points.size() && i < worldPoints.size(); ++i)
@@ -340,6 +351,7 @@ void Body::ClearForces()
 		return;
 	}
 	const auto ahead = velocity * k_LookAheadSeconds;
+	PointsMoved(true, ahead);
 	for (auto& point : _points)
 	{
 		point.world = TurnedYxz(_axes, point.local) + _centre + ahead;
@@ -373,6 +385,7 @@ void Body::TouchGround(const Ground& ground)
 		{
 			// A resting skeleton's points all stand at its first part's origin
 			const auto origin = glm::vec3(_bones.front().localToWorld[3]);
+			PointsMoved(false, glm::vec3(0.0f));
 			for (auto& point : _points)
 			{
 				point.world = origin;
@@ -436,34 +449,105 @@ void Body::TouchGround(const Ground& ground)
 	}
 }
 
+std::span<const face_search::FaceBlock> Body::FaceBlocks() const
+{
+	if (_faceBlocksStale)
+	{
+		_faceBlocks.resize(face_search::BlocksFor(_faces.size()));
+		// An empty place in the last block keeps a zero normal, so it never faces a line
+		if (!_faceBlocks.empty())
+		{
+			_faceBlocks.back() = {};
+		}
+		for (size_t i = 0; i < _faces.size(); ++i)
+		{
+			const auto& face = _faces[i];
+			face_search::Store(_faceBlocks, i,
+			                   {.normal = face.worldNormal,
+			                    .a = _points[face.indices[0]].world,
+			                    .b = _points[face.indices[1]].world,
+			                    .c = _points[face.indices[2]].world});
+		}
+		_faceBlocksStale = false;
+	}
+	return _faceBlocks;
+}
+
+void Body::PointsMoved(bool rigid, glm::vec3 ahead)
+{
+	_faceBlocksStale = true;
+	_hitBoxStale = true;
+	_rigidPose = rigid && hit_bounds::FitsMargin(_axes, _centre, ahead, hit_bounds::k_LargestShift);
+	_poseShift = LargestPart(_centre) + LargestPart(ahead);
+}
+
+const hit_bounds::Box& Body::HitBox() const
+{
+	if (!_hitBoxStale)
+	{
+		return _hitBox;
+	}
+	_hitBoxStale = false;
+	constexpr float k_Infinity = std::numeric_limits<float>::infinity();
+	_hitBox = {.min = glm::vec3(-k_Infinity), .max = glm::vec3(k_Infinity)};
+	if (!_rigidPose || _faces.empty())
+	{
+		return _hitBox;
+	}
+	// The margin holds for each shift up to a power of two. The body makes it again only for a larger shift.
+	constexpr float k_SmallestShift = 16.0f;
+	float shift = k_SmallestShift;
+	while (0.99f * shift < _poseShift && shift < hit_bounds::k_LargestShift)
+	{
+		shift *= 2.0f;
+	}
+	if (_shapeMargin < 0.0f || _marginShift < shift)
+	{
+		float largestPart = 0.0f;
+		for (const auto& point : _points)
+		{
+			largestPart = std::max(largestPart, LargestPart(point.local));
+		}
+		std::vector<hit_bounds::LocalFace> faces;
+		faces.reserve(_faces.size());
+		for (const auto& face : _faces)
+		{
+			faces.push_back({.normal = face.localNormal,
+			                 .a = _points[face.indices[0]].local,
+			                 .b = _points[face.indices[1]].local,
+			                 .c = _points[face.indices[2]].local});
+		}
+		_shapeMargin = hit_bounds::ShapeMargin(faces, largestPart, shift);
+		_marginShift = shift;
+	}
+	if (!std::isfinite(_shapeMargin))
+	{
+		return _hitBox;
+	}
+	glm::vec3 low(k_Infinity);
+	glm::vec3 high(-k_Infinity);
+	for (const auto& point : _points)
+	{
+		low = glm::min(low, point.world);
+		high = glm::max(high, point.world);
+	}
+	_hitBox = {.min = low - _shapeMargin, .max = high + _shapeMargin};
+	return _hitBox;
+}
+
 std::optional<RayHit> Body::FaceBehind(glm::vec3 point, glm::vec3 direction) const
 {
-	std::optional<RayHit> found;
-	float best = -1.0f;
-	for (const auto& face : _faces)
+	// A line that does not touch the box of all hits meets no face
+	if (!hit_bounds::LineTouches(HitBox(), point, direction))
 	{
-		const auto& normal = face.worldNormal;
-		// The facing adds x, z, then y; the distance along the line adds z, y, then x
-		const float facing = openblack::x87::Dot<openblack::x87::SumOrder::Xzy>(normal, direction);
-		if (!(facing < k_FacingThreshold))
-		{
-			continue;
-		}
-		const auto& v0 = _points[face.indices[0]].world;
-		const float t = -openblack::x87::DotZyx(point - v0, normal) / facing;
-		if (!(t < 0.0f) || !(best < t))
-		{
-			continue;
-		}
-		const auto hit = point + t * direction;
-		if (!InsideTriangle(hit, v0, _points[face.indices[1]].world, _points[face.indices[2]].world, normal))
-		{
-			continue;
-		}
-		best = t;
-		found = RayHit {.point = hit, .normal = normal};
+		return std::nullopt;
 	}
-	return found;
+	const auto hit = face_search::NearestBehind(FaceBlocks(), point, direction);
+	if (!hit.has_value())
+	{
+		return std::nullopt;
+	}
+	return RayHit {.point = hit->point, .normal = _faces[hit->face].worldNormal};
 }
 
 std::optional<glm::vec3> Body::AnyFaceBehind(glm::vec3 point, glm::vec3 direction) const

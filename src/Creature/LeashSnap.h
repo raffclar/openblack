@@ -57,8 +57,12 @@ constexpr float k_MinSegmentSpan = 0.1f;
 [[nodiscard]] std::optional<float> TouchDepth(std::span<const ScreenPoint> points, glm::ivec2 cursor, float screenWidth,
                                               float halfWidth);
 
-/// The leash's lengths once the hand lets go of its rope: as long as the hand is from what it is tied to, and never less
-/// than twice its radius on the ground; half of that at rest
+/// The length of the leash once the hand lets go of its rope: as far as the hand is from what it is tied to, and never
+/// less than twice its radius on the ground
+[[nodiscard]] float LengthOnLettingGo(const glm::vec3& hand, const glm::vec3& tied, float tiedRadius);
+/// The leash's lengths for a length that the hand set: that long, and half of that at rest
+[[nodiscard]] creature_leash::Lengths LengthsOf(float length);
+/// The leash's lengths once the hand lets go of its rope (LengthOnLettingGo, then LengthsOf)
 [[nodiscard]] creature_leash::Lengths LengthsOnLettingGo(const glm::vec3& hand, const glm::vec3& tied, float tiedRadius);
 
 /// The rope from the collar to the held hand: the leash's own look, half as long again as the leash's rope

@@ -626,7 +626,7 @@ void ForestSystem::GrowForests()
 		if (pick < grown.size())
 		{
 			const auto parent = grown[pick];
-			const auto added = PlantBeside(parent);
+			[[maybe_unused]] const auto added = PlantBeside(parent);
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: forest {} spread from tree #{} on turn {}: {}", turns.id,
 			                    entt::to_integral(parent), turn, added.has_value() ? "planted" : "no room");
 		}
@@ -674,6 +674,8 @@ void ForestSystem::ProcessForests()
 					return true;
 				}
 				Resize(tree, *after);
+				// A tree that withers comes out of the map's cells and goes in again. A tree that grows does not.
+				ecs::thing_map_place::Reinsert(tree);
 				return false;
 			});
 		}
@@ -854,10 +856,7 @@ uint32_t ForestSystem::TakeBigForestWood(entt::entity bigForest, uint32_t amount
 		transform.scale = glm::vec3(*taken.shrinksTo);
 		const auto [centre, radius] = ecs::archetypes::GetFixedObstacleBoundingCircle(kind.meshId, transform);
 		registry.AssignOrReplace<Fixed>(bigForest, centre, radius);
-		if (Locator::entitiesMap::has_value())
-		{
-			Locator::entitiesMap::value().Refile(bigForest);
-		}
+		ecs::thing_map_place::Reinsert(bigForest);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: big forest #{} shrinks to {:.3f} with {:.1f} wood left",
 		                    entt::to_integral(bigForest), *taken.shrinksTo, taken.woodLeft);
 		PlantPineAround(bigForest);

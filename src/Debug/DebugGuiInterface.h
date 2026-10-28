@@ -71,5 +71,8 @@ public:
 	virtual void SetInputLock([[maybe_unused]] bool locked, [[maybe_unused]] bool pointerScripted) noexcept {}
 	virtual bool Loop() noexcept = 0;
 	virtual void Draw() noexcept = 0;
+	/// Draws nothing in each way that the debug windows draw, so that the graphics card makes its states before the
+	/// first frame of the game
+	virtual void WarmUp() noexcept {}
 };
 } // namespace openblack::debug::gui

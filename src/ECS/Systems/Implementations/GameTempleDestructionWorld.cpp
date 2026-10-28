@@ -20,6 +20,7 @@
 #include "Common/GameRandom.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -58,7 +59,7 @@ std::optional<PlayerNames> GameTempleDestructionWorld::LocalPlayer() const
 	{
 		return std::nullopt;
 	}
-	return Locator::playerSystem::value().GetLocalPlayer();
+	return (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 }
 
 bool GameTempleDestructionWorld::NetworkGame() const

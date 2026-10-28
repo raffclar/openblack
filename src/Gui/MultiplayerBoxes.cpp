@@ -105,7 +105,6 @@ constexpr std::string_view k_NoClanText = "HELP_TEXT_DIALOG_ADDITION_49";
 constexpr std::string_view k_PlayerInfoText = "HELP_TEXT_DIALOG_ADDITION_109";
 constexpr std::string_view k_GodText = "HELP_TEXT_DIALOG_ADDITION_63";
 constexpr std::string_view k_ObserversText = "HELP_TEXT_PAUSE_STATS_137";
-constexpr std::string_view k_ConditionValueText = "HELP_TEXT_MULTIPLAYER_CONDITION_VALUE";
 constexpr std::string_view k_TimeLimitText = "HELP_TEXT_MULTIPLAYER_TIMELIMIT";
 constexpr std::string_view k_ViewChatText = "HELP_TEXT_MULTIPLAYER_TOCHAT";
 constexpr std::string_view k_ReadyText = "HELP_TEXT_MULTIPLAYER_READY";
@@ -260,8 +259,9 @@ void MultiplayerBoxes::Build()
 	_playerInfo = nullptr;
 	_conditions = nullptr;
 	_selectMap = nullptr;
-	_conditionValue = nullptr;
+	_timeLabel = nullptr;
 	_timeLimit = nullptr;
+	_viewChat = nullptr;
 	_ready = nullptr;
 	_chatLines = 0;
 	_shownTab.reset();
@@ -387,9 +387,13 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 	_playersLabel = &dialog.Add<StaticText>(DialogRect {.min = {420, 130}, .max = {690, 170}}, Text(k_PlayersInGameText),
 	                                        Layout::Right, k_Mid);
 	_players = &dialog.Add<List>(_font, DialogRect {.min = {420, 175}, .max = {690, 485}}, k_Mid, false, true, false);
-	dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	// The game keeps the name's box and its label hidden. The box only holds the name of the game that the player picks.
+	auto& nameLabel =
+	    dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	nameLabel.visible = false;
 	_name = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 480}, .max = {550, 510}}, std::u16string(),
 	                             lobby_api::k_MostNameCharacters, k_Mid);
+	_name->visible = false;
 	_passwordLabel = &dialog.Add<StaticText>(DialogRect {.min = {130, 530}, .max = {330, 570}}, Text(k_GamePasswordText),
 	                                         Layout::Right, k_Mid);
 	_password = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 530}, .max = {550, 570}}, std::u16string(),
@@ -478,26 +482,23 @@ void MultiplayerBoxes::BuildRoom()
 	_playerInfo = &dialog.Add<List>(_font, DialogRect {.min = {140, 410}, .max = {660, 530}}, k_Mid, false, true, false);
 	_playerControls = {_playerLabel, _playerInfo};
 
-	// The conditions page
+	// The conditions page, as the game shows it to a player who is not the host. The game server has the host's part,
+	// so the value of a condition and the arrows do not show.
 	_conditions = &dialog.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 320}}, k_Mid, false, true, true);
 	_selectMap = &dialog.Add<StaticText>(DialogRect {.min = {100, 200}, .max = {700, 260}}, Text(k_SelectMapText),
 	                                     Layout::Centre, k_Mid);
-	auto& valueLabel = dialog.Add<StaticText>(DialogRect {.min = {98, 340}, .max = {218, 370}}, Text(k_ConditionValueText),
-	                                          Layout::Left, k_Mid);
-	_conditionValue =
-	    &dialog.Add<StaticText>(DialogRect {.min = {260, 320}, .max = {340, 380}}, std::u16string(), Layout::Centre, k_Mid);
-	auto& timeLabel =
-	    dialog.Add<StaticText>(DialogRect {.min = {400, 340}, .max = {560, 370}}, Text(k_TimeLimitText), Layout::Left, k_Mid);
+	_timeLabel =
+	    &dialog.Add<StaticText>(DialogRect {.min = {400, 340}, .max = {560, 370}}, Text(k_TimeLimitText), Layout::Left, k_Mid);
 	_timeLimit =
 	    &dialog.Add<StaticText>(DialogRect {.min = {600, 320}, .max = {680, 380}}, std::u16string(), Layout::Centre, k_Mid);
-	auto& viewChat = dialog.Add<Button>(DialogRect {.min = {675, 440}, .max = {775, 472}}, Text(k_ViewChatText), k_Mid);
-	viewChat.onClick = [this] {
+	_viewChat = &dialog.Add<Button>(DialogRect {.min = {675, 440}, .max = {775, 472}}, Text(k_ViewChatText), k_Mid);
+	_viewChat->onClick = [this] {
 		_frontEnd->SelectTab(RoomTab::Chat);
 		_frontEnd->Back();
 	};
 	_ready = &dialog.Add<CheckBox>(_font, glm::ivec2 {65, 460}, k_Mid, Text(k_ReadyText), LabelSide::Below, false, false);
 	_ready->onChange = [this](bool checked) { _frontEnd->SetReady(checked); };
-	_conditionControls = {_conditions, &valueLabel, _conditionValue, &timeLabel, _timeLimit, &viewChat, _ready};
+	_conditionControls = {_conditions, _selectMap, _timeLabel, _timeLimit, _viewChat, _ready};
 
 	// Back leaves the room; Next goes to the conditions page. The host's Start is the server's own: it does not show.
 	dialog.Add<BigButton>(_font, k_RoomBackPosition, k_ArrowSize, Text(k_RoomBackText), LabelSide::Right, Look::LeftArrow)
@@ -744,25 +745,16 @@ void MultiplayerBoxes::SyncRoom()
 	}
 	SetItemsIfChanged(*_playerInfo, Items(details));
 
-	// The conditions page: the conditions of the server's land, or "Please select a map first."
-	const auto& conditions = _frontEnd->GetConditions();
-	_selectMap->visible = conditionsPage && !conditions.has_value();
-	_conditions->visible = conditionsPage && conditions.has_value();
-	std::vector<std::u16string> conditionLines;
-	if (conditions.has_value())
-	{
-		for (size_t i = 0; i < k_ConditionCount; ++i)
-		{
-			conditionLines.push_back(Text(ConditionText(i)));
-		}
-	}
-	SetItemsIfChanged(*_conditions, Items(conditionLines));
-	const auto pickedCondition = _conditions->GetSelection();
-	_conditionValue->text = conditions.has_value() && pickedCondition.has_value() && *pickedCondition < k_ConditionCount
-	                            ? ToUtf16(std::to_string(conditions->at(*pickedCondition).value))
-	                            : std::u16string();
-	const auto timeLimit = _frontEnd->GetTimeLimit();
-	_timeLimit->text = timeLimit.has_value() ? TimeLimitText(*timeLimit) : std::u16string();
+	// The conditions page: the conditions of the game and its time limit, or "Please select a map first." A game of
+	// the game server has no conditions, so the list is empty.
+	const auto page = ConditionsPageOf(_frontEnd->GetConditions().has_value());
+	_selectMap->visible = conditionsPage && page.selectMap;
+	_conditions->visible = conditionsPage && page.conditions;
+	_timeLabel->visible = conditionsPage && page.timeLimit;
+	_timeLimit->visible = conditionsPage && page.timeLimit;
+	_viewChat->visible = conditionsPage && page.viewChat;
+	SetItemsIfChanged(*_conditions, Items({}));
+	_timeLimit->text = TimeLimitText(_frontEnd->GetTimeLimit());
 	_ready->SetChecked(_frontEnd->IsReady());
 }
 
@@ -823,7 +815,7 @@ void MultiplayerBoxes::SendChat()
 
 void MultiplayerBoxes::Join()
 {
-	// A name typed in the name's box picks the game of that name
+	// The name's box holds the name of the game that the player picked, and that name picks the game
 	const auto games = _frontEnd->GetGames();
 	const auto typed = ToUtf8(_name->GetText());
 	if (const auto found = std::ranges::find(games, typed, &lobby_api::ServerEntry::hostname); found != games.end())
@@ -1008,6 +1000,11 @@ std::vector<Dialog::NamedControl> MultiplayerBoxes::GetNamedControls() const
 		return _message->answers.GetNamedControls();
 	}
 	return _dialog != nullptr ? _dialog->GetNamedControls() : std::vector<Dialog::NamedControl> {};
+}
+
+std::vector<DialogRect> MultiplayerBoxes::GetVisibleRects() const
+{
+	return _dialog != nullptr ? _dialog->GetVisibleRects() : std::vector<DialogRect> {};
 }
 
 std::u16string_view MultiplayerBoxes::GetMessageText() const

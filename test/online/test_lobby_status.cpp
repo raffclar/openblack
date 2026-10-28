@@ -13,6 +13,8 @@
 #include <LobbyApiJson.h>
 #include <gtest/gtest.h>
 
+#include "Common/BuildVersion.h"
+#include "Gui/MultiplayerFrontEndRules.h"
 #include "Server/LobbyStatus.h"
 
 using namespace openblack::server;
@@ -86,4 +88,32 @@ TEST(LobbyStatus, ReportGoesToTheJsonOfTheLobby)
 	EXPECT_NE(text.find(R"("gamemode":"openstaging")"), std::string::npos);
 	EXPECT_NE(text.find(R"("maxplayers":2)"), std::string::npos);
 	EXPECT_NE(text.find(R"("players":[{"account":7,"clan":null,"role":"god"}])"), std::string::npos);
+}
+
+TEST(LobbyStatus, TheGameListComparesTheVersionThatTheServerReports)
+{
+	// The game server reports its semantic version whole, and the game list of a client of the same build shows no
+	// "(Wrong Version)" for it
+	const Room room {
+	    .hostname = "Room", .land = "", .maxGods = 2, .version = std::string(openblack::build_version::Semantic())};
+	const auto status = MakeStatus(room, Phase::Staging, {});
+	EXPECT_LE(openblack::build_version::Semantic().size(), k_MostVersionCharacters);
+	EXPECT_EQ(status.gamever, openblack::build_version::Semantic());
+
+	openblack::lobby_api::ServerEntry listed;
+	listed.hostname = status.hostname;
+	listed.numplayers = 1;
+	listed.maxplayers = status.maxplayers;
+	listed.gamemode = status.gamemode;
+	listed.gamever = status.gamever;
+	const openblack::gui::multiplayer::GameLineTexts texts {.playing = u" - PLAYING",
+	                                                        .wrongVersion = u" (Wrong Version)",
+	                                                        .needsPassword = u"(Needs Password)",
+	                                                        .locked = u"Locked"};
+	using openblack::gui::multiplayer::LobbyKind;
+	EXPECT_EQ(GameLine(listed, texts, openblack::build_version::Semantic(), LobbyKind::Internet), u"Room (1/2)");
+	// A server of another build shows it
+	listed.gamever = "0.0.1";
+	EXPECT_EQ(GameLine(listed, texts, openblack::build_version::Semantic(), LobbyKind::Internet),
+	          u"Room (1/2) (Wrong Version)");
 }

@@ -9,14 +9,18 @@
 
 #include "DrawTrace.h"
 
+#include <cstdio>
+
 #include <algorithm>
 #include <fstream>
+#include <streambuf>
 
 #include <fmt/format.h>
 
 #include "GameRandom.h"
 #include "LHVM.h"
 #include "Locator.h"
+#include "Simulation/ChecksumLog.h"
 
 using namespace openblack::draw_trace;
 
@@ -43,8 +47,62 @@ DrawTrace::DrawTrace(std::unique_ptr<std::ostream> out)
 {
 }
 
+namespace
+{
+/// Writes each line to the standard output after the tag of the checksum lines. The web page keeps these lines for
+/// the test tools, because the web build has no file that a tool can read.
+class TaggedLineBuffer final: public std::streambuf
+{
+protected:
+	int_type overflow(int_type character) override
+	{
+		if (traits_type::eq_int_type(character, traits_type::eof()))
+		{
+			return traits_type::not_eof(character);
+		}
+		if (traits_type::to_char_type(character) == '\n')
+		{
+			std::fputs(fmt::format("{}{}\n", openblack::checksum_log::k_OutputTag, _line).c_str(), stdout);
+			_line.clear();
+		}
+		else
+		{
+			_line.push_back(traits_type::to_char_type(character));
+		}
+		return character;
+	}
+
+	int sync() override
+	{
+		std::fflush(stdout);
+		return 0;
+	}
+
+private:
+	std::string _line;
+};
+
+/// A stream that owns its line buffer
+class TaggedLineStream final: public std::ostream
+{
+public:
+	TaggedLineStream()
+	    : std::ostream(nullptr)
+	{
+		rdbuf(&_buffer);
+	}
+
+private:
+	TaggedLineBuffer _buffer;
+};
+} // namespace
+
 std::shared_ptr<DrawTrace> DrawTrace::ToFile(const std::filesystem::path& path)
 {
+	if (path == std::filesystem::path(openblack::checksum_log::k_StandardOutput))
+	{
+		return std::make_shared<DrawTrace>(std::make_unique<TaggedLineStream>());
+	}
 	auto file = std::make_unique<std::ofstream>(path, std::ios::out | std::ios::trunc);
 	if (!file->is_open())
 	{

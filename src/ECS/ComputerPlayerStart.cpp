@@ -12,6 +12,7 @@
 #include <algorithm>
 
 #include "Creature/CreatureMindFileBody.h"
+#include "ECS/ComputerPlayerPersonality.h"
 #include "ECS/PlayerMiracles.h"
 
 namespace openblack::computer_player
@@ -88,15 +89,22 @@ StartFacts FactsOf(const World& world, PlayerNames player)
 	    .pen = world.Pen(player).has_value(),
 	    .creature = world.Creature(player).has_value(),
 	    .skirmish = world.Skirmish(),
-	    .network = false,
+	    .network = world.NetworkGame(),
 	    .localCreature = world.Creature(local).has_value(),
 	};
 }
 } // namespace
 
-void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state)
+void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state, std::optional<uint32_t> aiSeed)
 {
 	state.started = true;
+	if (aiSeed.has_value())
+	{
+		for (const auto& weight : personality::WeightsFor(*aiSeed, player))
+		{
+			world.SetPersonality(player, weight.name, weight.value);
+		}
+	}
 	// A player with a temple but no creature gets a creature of a random species at the pen of the temple
 	if (GetsCreature(FactsOf(world, player)))
 	{
@@ -127,6 +135,11 @@ void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& st
 bool SlotHasNoPlayer(bool human, bool computer, bool citadel)
 {
 	return !human && !computer && citadel;
+}
+
+bool LandScriptSwitchesMind(bool networkMapScript)
+{
+	return !networkMapScript;
 }
 
 void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans)

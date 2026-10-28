@@ -21,9 +21,11 @@
 
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "ECS/ProfileAlignment.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -178,6 +180,14 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		    return fileSystem.ReadAll(*path);
 	    },
 	    .readCreature = std::move(readCreature),
+	    .readAlignment =
+	        []() {
+		        // The god starts the game at the alignment that the player's profile kept from earlier games
+		        const auto profile = Locator::playerProfileSystem::has_value()
+		                                 ? Locator::playerProfileSystem::value().GetCurrentProfile()
+		                                 : std::nullopt;
+		        return profile_alignment::Sent(profile.has_value() ? profile->alignment : 0.0);
+	        },
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	    .parts =
 	        [](uint32_t turn) {
@@ -426,12 +436,17 @@ void NetworkGameSystem::Update()
 
 void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& world)
 {
+	const auto start = std::chrono::steady_clock::now();
 	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadWorldState(world.bytes))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The world state of turn {} from the game server did not load", world.turn);
 		_session->Leave();
 		return;
 	}
+	// The log gives the time of the load, so that the tools can see how long a client stops when it comes back in step
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state of turn {} ({} bytes) loaded in {:.2f} ms", world.turn,
+	                   world.bytes.size(),
+	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
 	// The load starts the land again: the world is still the world of a network game, which turns with the server
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(true);

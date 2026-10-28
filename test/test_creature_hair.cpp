@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
 #include <array>
 #include <numbers>
@@ -339,5 +340,51 @@ TEST(CreatureHair, RibbonFacesTheEye)
 		EXPECT_FLOAT_EQ(ribbon[i * 2].uv.x, static_cast<float>(i) / 2.0f);
 		EXPECT_FLOAT_EQ(ribbon[i * 2].uv.y, 0.0f);
 		EXPECT_FLOAT_EQ(ribbon[(i * 2) + 1].uv.y, k_RibbonTextureHeight);
+	}
+}
+
+// A point of a strand moves by the points before it only. Thus a long strand, whose step keeps its points on the heap,
+// moves its first points as a short strand of those points does, whose step keeps them on the stack.
+TEST(CreatureHair, LongAndShortStrandsMoveTheSame)
+{
+	const auto physics = PhysicsFor(k_Looks[1], HairScale(1.0f), 10);
+	auto longStrand = FromZero(100);
+	auto shortStrand = FromZero(40);
+	for (int step = 0; step < 30; ++step)
+	{
+		const float angle = static_cast<float>(step) * 0.3f;
+		const Root root {.position = {std::cos(angle), 5.0f, std::sin(angle)},
+		                 .inwardNormal = {0.1f, 1.0f, 0.2f},
+		                 .direction = {0.0f, -1.0f, 0.0f}};
+		const float seconds = step % 3 == 0 ? 0.0f : 0.02f * static_cast<float>(step % 4);
+		Step(longStrand, root, physics, seconds);
+		Step(shortStrand, root, physics, seconds);
+		for (size_t i = 0; i < shortStrand.positions.size(); ++i)
+		{
+			ASSERT_EQ(std::memcmp(&longStrand.positions[i], &shortStrand.positions[i], sizeof(glm::vec3)), 0)
+			    << step << " " << i;
+			ASSERT_EQ(std::memcmp(&longStrand.velocities[i], &shortStrand.velocities[i], sizeof(glm::vec3)), 0)
+			    << step << " " << i;
+		}
+	}
+}
+
+// A step given the share of speed kept is the same as a step that finds it
+TEST(CreatureHair, AStepWithTheKeptSpeedIsTheSame)
+{
+	for (const auto& look : k_Looks)
+	{
+		const auto physics = PhysicsFor(look, HairScale(0.7f), 6);
+		auto found = FromZero(6);
+		auto given = FromZero(6);
+		for (int step = 0; step < 20; ++step)
+		{
+			const float seconds = 0.013f * static_cast<float>(step % 5);
+			const auto root = CeilingRoot({0.3f * static_cast<float>(step), 2.0f, 0.0f});
+			Step(found, root, physics, seconds);
+			Step(given, root, physics, seconds, KeptSpeed(physics, seconds));
+			ASSERT_EQ(std::memcmp(found.positions.data(), given.positions.data(), 6 * sizeof(glm::vec3)), 0) << step;
+			ASSERT_EQ(std::memcmp(found.velocities.data(), given.velocities.data(), 6 * sizeof(glm::vec3)), 0) << step;
+		}
 	}
 }
