@@ -517,3 +517,19 @@ std::optional<glm::vec3> damage::RandomSurfacePoint(const Mesh& mesh, const std:
 	return corners[0].position + ((corners[1].position - corners[0].position) * a) +
 	       ((corners[2].position - corners[0].position) * b);
 }
+
+std::optional<glm::vec3> damage::FlamePointOnModel(const Mesh& mesh, const glm::mat4& inversePlacement,
+                                                   const std::function<float(float)>& random)
+{
+	const auto point = RandomSurfacePoint(mesh, random);
+	if (!point.has_value())
+	{
+		return std::nullopt;
+	}
+	// For each axis, the game adds the parts in this order: from z, from y, from x, and then the move
+	const auto& m = inversePlacement;
+	const auto axis = [&m, &point](glm::length_t row) {
+		return ((m[2][row] * point->z + m[1][row] * point->y) + m[0][row] * point->x) + m[3][row];
+	};
+	return glm::vec3(axis(0), axis(1), axis(2));
+}
