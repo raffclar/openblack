@@ -804,6 +804,15 @@ TEST(CreatureFight, OutcomesAndStarting)
 	EXPECT_EQ(Response(0.4f, 0.5f), animations::k_Sad);
 }
 
+TEST(CreatureFight, AnOpponentWithNoLifeLeftLosesTheDuel)
+{
+	EXPECT_TRUE(WinsByOpponentsLife(0.0f, false));
+	EXPECT_TRUE(WinsByOpponentsLife(-0.1f, false));
+	EXPECT_FALSE(WinsByOpponentsLife(0.01f, false));
+	// A creature that a script controls continues its duel
+	EXPECT_FALSE(WinsByOpponentsLife(0.0f, true));
+}
+
 TEST(CreatureFightHud, AtTheDefaultScreenThePanelIsFlushInTheCorner)
 {
 	const auto layout = creature_fight_hud::Compute({800, 600});

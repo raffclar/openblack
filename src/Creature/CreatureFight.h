@@ -844,6 +844,9 @@ struct StepLengths
 /// Whether the living around the winner see a fight won: only when a blow knocked the loser out and the winner has a
 /// player. A loser that a miracle or a loss of life knocked out gives no such sight.
 [[nodiscard]] bool FightWonIsSeen(bool byBlow, bool winnerHasPlayer);
+/// Whether a creature in a duel wins it because its opponent has no life left (life at zero or less). A creature that
+/// a script controls does not win this way, and it continues its duel.
+[[nodiscard]] bool WinsByOpponentsLife(float opponentLife, bool scriptControlled);
 /// The priority of the winner's plan after a knock out, before the planner's scale
 constexpr float k_WinPlanPriority = 1.0f;
 /// Whether the winner's plan after a knock out is forced. It is not forced when a blow knocked the loser out, and it is

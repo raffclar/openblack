@@ -28,6 +28,7 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
@@ -692,6 +693,7 @@ public:
 	void AlignmentTurn(float) override {}
 	void SayOneOff(guidance::OneOff) override {}
 	void KilledVillager(entt::entity) override {}
+	void CreatureWonFight(entt::entity creature) override { wonFight.push_back(creature); }
 	void WorshipperDied() override {}
 	void LosingVillager(entt::entity) override {}
 	void LowOnPeople(entt::entity) override {}
@@ -700,6 +702,7 @@ public:
 	[[nodiscard]] int32_t GetMoonWait() const override { return 0; }
 
 	std::vector<guidance::Kind> asked;
+	std::vector<entt::entity> wonFight;
 	std::vector<Remark> remarks;
 };
 } // namespace
@@ -728,6 +731,40 @@ TEST_F(CreatureFightSystemTest, TheAdvisorsSpeakOfAFightOfThePlayersCreatureTooF
 	camera.SetFocus({0.0f, 0.0f, 1900.0f});
 	ShowTheFight({0.0f, 0.0f, 0.0f});
 	EXPECT_TRUE(guidance.asked.empty());
+	Locator::guidanceSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, AnOpponentWithNoLifeLeftLosesTheDuelToTheCreatureWhoseTurnItIs)
+{
+	auto& guidance = static_cast<RecordedGuidance&>(Locator::guidanceSystem::emplace<RecordedGuidance>());
+	auto& reactions = static_cast<RecordedReactions&>(Locator::reactionSystem::emplace<RecordedReactions>());
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+		registry.Get<CreatureFighting>(self).fighter.health = 0.6f;
+	}
+	// The second creature has no life left, but its fight health is not zero
+	registry.Assign<CreatureNeeds>(second).needs.life = 0.0f;
+	// A creature that a script controls continues its duel
+	registry.Assign<ScriptControlled>(first);
+	fights.FightTurn(first);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, CreatureFighting::Stage::Duel);
+	registry.Remove<ScriptControlled>(first);
+	fights.FightTurn(first);
+	const auto& won = registry.Get<const CreatureFighting>(first);
+	EXPECT_TRUE(won.ended);
+	EXPECT_TRUE(won.fighter.stopping);
+	EXPECT_EQ(won.stage, CreatureFighting::Stage::Respond);
+	EXPECT_EQ(registry.Get<const CreatureFightRecord>(first).wins, 1u);
+	EXPECT_EQ(guidance.wonFight, std::vector {first});
+	ASSERT_EQ(reactions.made.size(), 1u);
+	EXPECT_EQ(reactions.made.front().type, Reaction::ReactToFightWon);
+	EXPECT_EQ(reactions.made.front().initiator, first);
+	EXPECT_EQ(reactions.made.front().player, PlayerNames::PLAYER_ONE);
+	// The loser does not faint
+	EXPECT_FALSE(fights.IsKnockedOut(second));
+	Locator::reactionSystem::reset();
 	Locator::guidanceSystem::reset();
 }
 

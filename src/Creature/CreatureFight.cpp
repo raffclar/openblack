@@ -1352,6 +1352,11 @@ bool creature_fight::FightWonIsSeen(bool byBlow, bool winnerHasPlayer)
 	return byBlow && winnerHasPlayer;
 }
 
+bool creature_fight::WinsByOpponentsLife(float opponentLife, bool scriptControlled)
+{
+	return !(0.0f < opponentLife) && !scriptControlled;
+}
+
 bool creature_fight::WinPlanForced(bool byBlow)
 {
 	return !byBlow;
