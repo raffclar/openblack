@@ -1141,6 +1141,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_creature_file_load test_creature_file_load.cpp
 )
+openblack_setup_and_add_test(test_draw_window graphics/test_draw_window.cpp)
 openblack_setup_and_add_test(test_creature_web_page test_creature_web_page.cpp)
 target_link_libraries(test_creature_web_page PRIVATE creaturehtml lhp)
 openblack_setup_and_add_test(test_oracle_catch oracle/test_oracle_catch.cpp)

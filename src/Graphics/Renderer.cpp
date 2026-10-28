@@ -155,6 +155,7 @@
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/DrawOrder.h"
+#include "Graphics/DrawWindow.h"
 #include "Graphics/FizzDrawOrder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -5820,7 +5821,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	}
 }
 
-void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
+bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
 {
 	// The draws into the window keep to one pixel. The renderer makes a pipeline for each draw that has pixels.
 	for (const auto view : warm_up::k_WindowSceneViews)
@@ -5840,10 +5841,22 @@ void Renderer::WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept
 		const RenderContext::ObjectInstance hidden {.model = glm::mat4(0.0f), .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
 		_warmUpInstances = fromBgfx(bgfx::createDynamicVertexBuffer(bgfx::copy(&hidden, sizeof(hidden)), layout));
 	}
+	// Under Vulkan, one frame with all the draws can use all of the descriptor sets, so each part does some of them
+	constexpr auto k_PartedViews = [] {
+		std::array<uint16_t, warm_up::k_PartedViews.size()> views {};
+		std::ranges::transform(warm_up::k_PartedViews, views.begin(),
+		                       [](RenderPass view) { return static_cast<uint16_t>(view); });
+		return views;
+	}();
+	const auto window = WarmUpPartWindow(part, warm_up::k_DrawsPerPart);
+	const bool parted = _shaderManager->OpenDrawWindow(window.first, window.count, k_PartedViews);
 	_warmingUp = true;
 	DrawScene(drawDesc);
 	_warmingUp = false;
 	_warmUpInFrame = true;
+	const auto draws = _shaderManager->CloseDrawWindow();
+	return parted && draws.has_value() && part + 1 < warm_up::k_MaxParts &&
+	       WarmUpPartsLeft(part, *draws, warm_up::k_DrawsPerPart);
 }
 
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
