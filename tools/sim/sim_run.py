@@ -18,9 +18,9 @@ fixed turns, so that a style gives the same run each time:
     neglect   the hand stays far from the creature, and does nothing
     good      the hand strokes the creature each time some turns go by
     evil      the hand slaps the creature each time some turns go by
-    training  the hand trains the creature to be good, as a player does: after each thing it did that it can learn
-              from, a stroke when the thing moves the creature to good and a slap when it moves it to evil (see
-              training_feedback)
+    training  the hand trains the creature to be good, as a player does: at each input turn it judges the last thing
+              that the creature finished and can still learn from, a stroke when the thing moves the creature to good
+              and a slap when it moves it to evil (see training_feedback)
 
 With --stages, the run starts the creature at the first stage of growing up and moves it on one stage at a time, as
 the story's lessons do, up to the last; the run then continues as the creature grows old.
@@ -270,9 +270,9 @@ def act(game, style, state):
         return "slap" if slap(game, creature) else None
     if style == "training":
         record = game.call("sim.sample").get("creature") or {}
-        context = record.get("context")
-        key = (record.get("plan_serial"), json.dumps(context, sort_keys=True))
-        if context is None or key == state.get("last_context"):
+        context = record.get("last_finished")
+        key = training_key(context)
+        if key is None or key == state.get("last_context"):
             return None
         state["last_context"] = key
         feedback = training_feedback(context)
@@ -281,6 +281,14 @@ def act(game, style, state):
         if feedback == "slap":
             return "slap" if slap(game, creature) else None
     return None
+
+
+def training_key(context):
+    """What names a finished thing that the creature did, so that the training style judges each one once: None for no
+    thing. The seconds since it ended change from sample to sample, so they are not part of the name."""
+    if not context:
+        return None
+    return tuple(context.get(field) for field in ("action", "desire", "object", "object_kind"))
 
 
 def training_feedback(context):

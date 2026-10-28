@@ -45,6 +45,51 @@ class TrainingFeedbackTests(unittest.TestCase):
         self.assertIsNone(sim_run.training_feedback(None))
 
 
+class FakeGame:
+    """A game that gives one sample, and strokes and slaps that always count"""
+
+    def __init__(self, creature):
+        self.creature = creature
+        self.calls = []
+
+    def call(self, query, params=None):
+        self.calls.append(query)
+        if query == "sim.sample":
+            return {"creature": self.creature}
+        if query == "sim.feedback":
+            kind = (params or {}).get("kind")
+            return {"did": {"stroke": "stroked", "slap": "slapped"}.get(kind)}
+        return {}
+
+    def step_frames(self, frames):
+        return True
+
+
+class TrainingStyleTests(unittest.TestCase):
+    def test_the_last_finished_thing_is_judged_once(self):
+        finished = dict(context("Compassion", 1.0), object=12)
+        game = FakeGame({"id": 5, "context": context("Rest", 0.0, running=True), "last_finished": finished})
+        state = {}
+        self.assertEqual(sim_run.act(game, "training", state), "stroke")
+        # The same thing, later, with more seconds since it ended: no second stroke
+        game.creature["last_finished"] = dict(finished, seconds_since=3.0)
+        self.assertIsNone(sim_run.act(game, "training", state))
+
+    def test_an_evil_finished_thing_is_slapped(self):
+        game = FakeGame({"id": 5, "last_finished": dict(context("Anger", -0.2), object=3)})
+        self.assertEqual(sim_run.act(game, "training", {}), "slap")
+
+    def test_no_finished_thing_gets_nothing(self):
+        game = FakeGame({"id": 5, "context": context("Compassion", 1.0, running=True), "last_finished": None})
+        self.assertIsNone(sim_run.act(game, "training", {}))
+        self.assertNotIn("sim.feedback", game.calls)
+
+    def test_the_name_of_a_thing_leaves_out_its_seconds(self):
+        first = dict(context("Play"), object=1)
+        self.assertEqual(sim_run.training_key(first), sim_run.training_key(dict(first, seconds_since=9.0)))
+        self.assertIsNone(sim_run.training_key(None))
+
+
 def repeat_record(turn, local=9, draws=None):
     return {"type": "record", "turn": turn, "hash": "a", "seeds": [7, local], "draws": draws or turn * 3}
 

@@ -47,8 +47,8 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
-#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EntityDescription.h"
@@ -1075,36 +1075,39 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		creature["opinions"] = std::move(opinions);
 		creature["attitudes"] = learnt.creatures.size();
 		creature["thoughts"] = learnt.thoughts.size();
-		// The newest thing it did that feedback can be credited to, as a player sees it: the action, its desire, the kind
-		// of thing it acted on, and whether it can learn from it
-		if (!learnt.contexts.empty())
-		{
-			const auto& newest = learnt.contexts.back();
+		// A thing it did that feedback can be credited to, as a player sees it: the action, its desire, the kind of
+		// thing it acted on, and whether it can learn from it
+		const auto contextJson = [&tables](const creature_learning::Context& context) -> Json {
 			// How the game's table of desires says a plan for the desire moves the creature's alignment each turn
 			std::optional<float> alignmentChange;
 			if (Locator::infoConstants::has_value())
 			{
 				const auto& desires = Locator::infoConstants::value().creatureInitialDesire;
-				if (const auto index = static_cast<size_t>(newest.desire); index < desires.size())
+				if (const auto index = static_cast<size_t>(context.desire); index < desires.size())
 				{
 					alignmentChange = desires.at(index).alignmentChange;
 				}
 			}
-			creature["context"] = {
-			    {"action", ActionName(newest.action, tables)},
-			    {"desire", std::string(creature_desires::Name(newest.desire))},
-			    {"object_kind", newest.belief.has_value() ? Json(newest.belief->type) : Json(nullptr)},
+			return {
+			    {"action", ActionName(context.action, tables)},
+			    {"desire", std::string(creature_desires::Name(context.desire))},
+			    {"object", context.object.has_value() ? Json(*context.object) : Json(nullptr)},
+			    {"object_kind", context.belief.has_value() ? Json(context.belief->type) : Json(nullptr)},
 			    {"alignment_change", alignmentChange.has_value() ? Json(*alignmentChange) : Json(nullptr)},
-			    {"learnable", newest.learnable},
-			    {"running", newest.running},
-			    {"done", newest.done},
-			    {"seconds_since", newest.secondsSince},
+			    {"learnable", context.learnable},
+			    {"running", context.running},
+			    {"done", context.done},
+			    {"seconds_since", context.secondsSince},
+			    {"window_seconds", context.windowSeconds},
 			};
-		}
-		else
-		{
-			creature["context"] = nullptr;
-		}
+		};
+		// The newest thing it did
+		creature["context"] = learnt.contexts.empty() ? Json(nullptr) : contextJson(learnt.contexts.back());
+		// The newest thing that it finished and that feedback can still be credited to
+		const auto finished = std::ranges::find_if(learnt.contexts.rbegin(), learnt.contexts.rend(), [](const auto& context) {
+			return !context.running && context.secondsSince <= context.windowSeconds;
+		});
+		creature["last_finished"] = finished != learnt.contexts.rend() ? contextJson(*finished) : Json(nullptr);
 		check("learnt.alignment", learnt.alignment, k_Signed);
 		for (size_t i = 0; i < learnt.opinions.size(); ++i)
 		{
