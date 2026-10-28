@@ -612,9 +612,10 @@ def pixel_on(pid, entity, heights=(0.5, 1.0, 2.0, 3.0, 5.0)):
     return None
 
 
-def give_to_creature(pid):
+def give_to_creature(pid, log):
     """The hand of a client takes a villager near its god's creature and gives it to the creature, as a player does: a
-    click of the Action button on the villager takes it, and a press on the creature gives it. The camera looks at each
+    hold of the Action button on the villager takes it, and a press on the creature gives it. The log of the client
+    must tell the take of the villager by the hand of its god, else the hand tries the next villager. The camera looks at each
     thing first, and the pointer goes to a pixel where the interface picks it. Returns what it did."""
     done = {"creature": None, "object": None, "took": False, "gave": False}
     own = [item for item in items_of(inspector_call(pid, "players.list", {})) if item.get("local")]
@@ -623,24 +624,47 @@ def give_to_creature(pid):
         done["why"] = "the god of the client has no creature"
         return done
     done["creature"] = creature
+    player = own[0].get("player")
     found = inspector_call(pid, "ecs.entity", {"params": {"id": creature}})
     at = found.get("position") if isinstance(found, dict) else None
     if not isinstance(at, list):
         done["why"] = "the creature has no place"
         return done
     villagers = items_of(inspector_call(pid, "objects.find", {"params": {"kind": "Villager"}, "near": [at[0], at[2]],
-                                                              "radius": 120, "limit": 8}))
+                                                              "radius": 400, "limit": 12}))
+    done["villagers_near"] = len(villagers)
+    def press_on_walker(entity):
+        """The villager walks: the pointer goes to its place now and the press follows at once, when the interface
+        picks it there. Whether the press came."""
+        for height in (1.0, 0.5, 1.5, 2.0):
+            found = inspector_call(pid, "ecs.entity", {"params": {"id": entity}})
+            place = found.get("position") if isinstance(found, dict) else None
+            if not isinstance(place, list):
+                return False
+            inspector_call(pid, "input.pointer", {"params": {"world": [place[0], place[1] + height, place[2]],
+                                                             "timing": "immediate"}})
+            pick = inspector_call(pid, "players.pick", {})
+            if isinstance(pick, dict) and pick.get("object") == entity:
+                inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
+                time.sleep(1.0)
+                inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
+                return True
+        return False
+
     for villager in villagers:
-        pixel = pixel_on(pid, villager["id"])
-        if pixel is None:
-            continue
-        inspector_call(pid, "input.pointer", {"params": {"screen": pixel}})
-        time.sleep(0.3)
-        inspector_call(pid, "input.button", {"params": {"button": "right", "action": "click"}})
-        time.sleep(2.0)
-        done["object"] = villager["id"]
-        done["took"] = True
-        break
+        inspector_call(pid, "camera.frame", {"params": {"id": villager["id"], "yaw": 0, "pitch": 40, "distance": 30}})
+        time.sleep(1.0)
+        for _ in range(4):
+            if not press_on_walker(villager["id"]):
+                continue
+            done.setdefault("tries", []).append(villager["id"])
+            if wait_for(lambda: lines_with(log, [f"Hand deed: the hand of player {player} takes thing "
+                                                 f"{villager['id']} "]), 6):
+                done["object"] = villager["id"]
+                done["took"] = True
+            break
+        if done["took"]:
+            break
     if not done["took"]:
         done["why"] = "the pointer found no villager near the creature"
         return done
@@ -1529,7 +1553,7 @@ def main():
             giver = (options.give or 0) - 1
             if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None and lines_with(
                     os.path.join(client_dirs[giver], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
-                give_done = give_to_creature(clients[giver].pid)
+                give_done = give_to_creature(clients[giver].pid, os.path.join(client_dirs[giver], "client.log"))
             slot = (options.slot_miracle or 0) - 1
             if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
                     os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
