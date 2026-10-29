@@ -54,6 +54,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
+#include "Creature/CreatureLostThing.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureMode.h"
 #include "Creature/CreatureObjectActions.h"
@@ -2705,6 +2706,11 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 			}
 		}
 		CountCompleted(entity, mind, commands, GetTables());
+		if (commands.object.has_value() && mind.planActive && mind.planner.current.has_value())
+		{
+			creature_lost_thing::StopUseBeforeThrowIntoStore(*mind.planner.current, *commands.object,
+			                                                 entt::to_integral(entity));
+		}
 		// Taking in what a thing is does nothing for the desire the plan serves
 		const bool plannedMeal = commands.effect == creature_mind::Effect::Eat && mind.planActive;
 		if (commands.effect != creature_mind::Effect::None && commands.effect != creature_mind::Effect::Observed &&

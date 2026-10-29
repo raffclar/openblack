@@ -250,6 +250,22 @@ void testbed_scenarios::AddNatureScenarios(std::vector<Scenario>& all)
 	    .fireflyRewards = {{"HEAL", 1.0f}},
 	});
 	all.push_back({
+	    .id = "nature.firefly_burns",
+	    .name = "A firefly burns in its burning tree",
+	    .facet = Facet::Nature,
+	    .description = "Noon, with the clock held: a firefly hides in an oak, as a land's script places one, and the oak "
+	                   "is set alight as it is made.",
+	    .expected = "The oak burns. Its fire heats the firefly that hides in it as hot as the oak. After about two "
+	                "minutes the firefly catches at its low combustion temperature of 140 and burns. The firefly shows no "
+	                "flames of its own. In about a minute its fire takes its one unit of life, and the firefly is gone. The "
+	                "log shows the firefly catch and burn down, and the inspector "
+	                "finds no firefly after that.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, 12.0f}, .look = {k_Tree.x, 3.0f, k_Tree.y}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = k_Tree, .firefly = true, .alight = true},
+	                {.type = AbodeInfo::NorseHut, .offset = k_Tree + glm::vec2(30.0f, 6.0f), .yawDegrees = 200.0f}},
+	});
+	all.push_back({
 	    .id = "nature.apple_barrel_worm",
 	    .name = "The worm on the apple barrel",
 	    .facet = Facet::Nature,
