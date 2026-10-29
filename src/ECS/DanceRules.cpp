@@ -22,6 +22,7 @@ using namespace openblack;
 using namespace openblack::ecs;
 using openblack::ecs::components::Dance;
 using openblack::ecs::components::DanceGroups;
+using openblack::ecs::components::DanceHand;
 
 namespace
 {
@@ -300,21 +301,32 @@ bool dance_rules::HandNear(const glm::vec3& point, const glm::vec3& hand)
 	return squared < k_HandNearSquared;
 }
 
-void dance_rules::CountHand(Dance& dance, bool near)
+dance_rules::HandsNear dance_rules::GodsNear(const glm::vec3& point,
+                                             std::span<const std::optional<glm::vec3>, components::k_DanceHandGods> hands)
+{
+	HandsNear near;
+	for (std::size_t god = 0; god < hands.size(); ++god)
+	{
+		near.set(god, hands[god].has_value() && HandNear(point, *hands[god]));
+	}
+	return near;
+}
+
+void dance_rules::CountHand(DanceHand& hand, bool near)
 {
 	if (!near)
 	{
-		dance.handNearTurns = 0;
+		hand.nearTurns = 0;
 		return;
 	}
-	++dance.handNearTurns;
-	if (dance.handNearTurns > k_CameraTurns)
+	++hand.nearTurns;
+	if (hand.nearTurns > k_CameraTurns)
 	{
-		dance.cameraWanted = true;
+		hand.cameraWanted = true;
 	}
 }
 
-std::vector<std::size_t> dance_rules::ProcessTurn(Dance& dance, uint32_t turn, bool handNear)
+std::vector<std::size_t> dance_rules::ProcessTurn(Dance& dance, uint32_t turn, const HandsNear& handsNear)
 {
 	if (dance.state == Dance::State::Stopped && dance.autostart && HasProperlyStarted(dance, turn))
 	{
@@ -329,7 +341,10 @@ std::vector<std::size_t> dance_rules::ProcessTurn(Dance& dance, uint32_t turn, b
 	{
 		return {};
 	}
-	CountHand(dance, handNear);
+	for (std::size_t god = 0; god < dance.hands.size(); ++god)
+	{
+		CountHand(dance.hands.at(god), handsNear.test(god));
+	}
 	std::vector<std::size_t> moving;
 	if (dance.file != nullptr)
 	{
