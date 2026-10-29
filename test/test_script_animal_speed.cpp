@@ -73,6 +73,7 @@ public:
 	entt::entity CreateScriptFlock(int32_t, glm::vec2, glm::vec2, float, float) override { return entt::null; }
 	[[nodiscard]] entt::entity FindScriptFlock(int32_t) const override { return entt::null; }
 	entt::entity CreateBird(AnimalInfo, glm::vec2, uint32_t, entt::entity) override { return entt::null; }
+	entt::entity CreateHunter(AnimalInfo, glm::vec2, uint32_t, entt::entity) override { return entt::null; }
 	void SetFlockTown(entt::entity, entt::entity) override {}
 	entt::entity CreateGrazer(AnimalInfo, glm::vec2, uint32_t, entt::entity, entt::entity) override { return entt::null; }
 	entt::entity CreateScriptAnimal(AnimalInfo, glm::vec2) override { return entt::null; }
