@@ -21,6 +21,7 @@
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
 namespace components = openblack::ecs::components;
@@ -91,4 +92,5 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	Reflect<components::PrayerPower>(context)
 	    .Field<&components::PrayerPower::chants>("chants")
 	    .Field<&components::PrayerPower::infinite>("infinite");
+	Reflect<components::PuzzleGame>(context).Field<&components::PuzzleGame::type>("type");
 }

@@ -59,6 +59,12 @@ inline constexpr float k_ArrivedDistanceSquared = 0.001f;
 {
 	return reportedArrived && reportedOrders == orders;
 }
+/// A take of the camera by a script is a camera order only when the take changes the camera. A refused take changes
+/// nothing, so the arrival stays as it was. Inside the temple, a take by a temple script keeps the temple's camera.
+[[nodiscard]] constexpr bool TakeIsCameraOrder(bool taken, bool insideTemple)
+{
+	return taken && !insideTemple;
+}
 /// The camera is kept within a sphere of 3500 around the middle of the world, at (2560, 0, 2560)
 inline constexpr float k_WorldCentre = 2560.0f;
 inline constexpr float k_WorldRadiusSquared = 1.225e7f;
@@ -223,6 +229,9 @@ struct DualSettings
 /// Where a camera following a thing is sent: its heading and pitch from the thing, the pitch at least the lowest; the
 /// heading turned with the thing when it is relative
 [[nodiscard]] glm::vec3 FollowOrigin(const FollowedThing& thing, FollowSettings& settings);
+/// A point at a distance in front of the camera: from the eye, along the direction to the focus. The direction is the
+/// one the frame draws with, so a camera that looks almost straight down moves it a little to the side.
+[[nodiscard]] glm::vec3 FacingPoint(const glm::vec3& eye, const glm::vec3& focus, float distance);
 
 } // namespace script_camera
 

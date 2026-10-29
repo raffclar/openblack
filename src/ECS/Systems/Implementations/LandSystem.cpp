@@ -1175,7 +1175,10 @@ bool LandSystem::StartChallengeScripts(bool startStory)
 
 void LandSystem::StartStoryScripts()
 {
-	const bool started = Locator::vm::value().StartScript("LandControlAll", script::start::StartableScripts()) != 0;
+	// Only the first land of the story starts the story. On another land the scripts stay ready, but none runs.
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const bool started = new_game_choice::LandStartsStoryScript(landNumber) &&
+	                     Locator::vm::value().StartScript("LandControlAll", script::start::StartableScripts()) != 0;
 	// The question comes whether or not the story started
 	const bool asked = AskNewGameChoice();
 	// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the opening
