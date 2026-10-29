@@ -633,6 +633,21 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "mind.die_for_good",
+	    .name = "A creature that a script tells to die for good falls and lies dead",
+	    .facet = Facet::Mind,
+	    .description = "A player's tiger. A script tells it to cower on the spot, as the death of a rival god's creature "
+	                   "on the second land does. Four seconds later the script tells it to die for good.",
+	    .expected = "The tiger cowers, then falls down at once and lies still with its eyes closed. It does not get up "
+	                "again.",
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .offset = {0.0f, 60.0f}}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .creature = 0, .delaySeconds = 0.5f, .action = "BeFrightenedOnTheSpot", .atCreature = 0},
+	         {.kind = Kind::DoAction, .creature = 0, .delaySeconds = 4.0f, .action = "DiePermanently", .atCreature = 0}},
+	});
+
+	all.push_back({
 	    .id = "combat.knockout_holding",
 	    .name = "A creature knocked out while it holds a thing keeps the thing",
 	    .facet = Facet::Combat,

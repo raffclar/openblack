@@ -456,6 +456,22 @@ TEST(CreatureActionAgendas, FrightenedPuttingDownAndLyingDead)
 	EXPECT_TRUE(dead[0].faint);
 }
 
+// Dying for good as a script orders is the same fall and lie as lying dead for good, only longer
+TEST(CreatureActionAgendas, DyingForGoodLiesLongerThanLyingDead)
+{
+	const auto dying = DiePermanently();
+	const auto dead = DeadForever();
+	ASSERT_EQ(dying.size(), 1);
+	EXPECT_EQ(dying[0].kind, Step::Kind::Static);
+	EXPECT_EQ(dying[0].sequence, dead[0].sequence);
+	EXPECT_TRUE(dying[0].holdLoop);
+	EXPECT_TRUE(dying[0].closedEyes);
+	EXPECT_TRUE(dying[0].faint);
+	EXPECT_EQ(dying[0].effect, Effect::None);
+	EXPECT_FLOAT_EQ(dying[0].seconds, 999999.0f);
+	EXPECT_GT(dying[0].seconds, dead[0].seconds);
+}
+
 // The actions Land 1's scripts force have an agenda, a casting one once it knows what it casts
 TEST(CreatureActionAgendas, TheForcedActionsOfLandOneCanBeCarriedOut)
 {
