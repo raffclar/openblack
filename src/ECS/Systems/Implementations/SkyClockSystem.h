@@ -13,7 +13,7 @@
 
 #include "ECS/Archetypes/SkyArchetype.h"
 #include "ECS/Components/Sky.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -22,25 +22,22 @@
 namespace openblack::ecs::systems
 {
 
-class SkySystem final: public SkySystemInterface
+class SkyClockSystem final: public SkyClockSystemInterface
 {
 public:
-	SkySystem();
+	SkyClockSystem();
 
 	void Initialize() override;
 	void KeepForNextLand() override;
 	void FindAfterLoad() override;
 	void ProcessTurn() override;
-	void UpdateFrame(bool skyDrawn) override;
 	void SetTime(float time) override;
 	[[nodiscard]] float GetCurrentSkyType() const override;
 	[[nodiscard]] float GetTime() const override { return GetClock().GetVisualTime(); }
 	[[nodiscard]] DayNightTimes GetDayNightTimes() const override { return GetClock().GetDayNightTimes(); }
 	[[nodiscard]] DayNightClock& GetClock() override;
 	[[nodiscard]] const DayNightClock& GetClock() const override;
-	[[nodiscard]] entt::entity GetDome() const override { return _entities.dome; }
-	[[nodiscard]] entt::entity GetSun() const override { return _entities.sun; }
-	[[nodiscard]] entt::entity GetMoon() const override { return _entities.moon; }
+	[[nodiscard]] const archetypes::SkyArchetype::Entities& GetEntities() const override { return _entities; }
 
 private:
 	/// The sky's components while the registry is emptied between lands

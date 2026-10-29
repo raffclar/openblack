@@ -40,7 +40,7 @@
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/TownDesire.h"
@@ -217,9 +217,9 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	}
 
 	// The game counts the sky from 2 at night to 0 by day
-	if (Locator::skySystem::has_value())
+	if (Locator::skyClockSystem::has_value())
 	{
-		const auto& clock = Locator::skySystem::value().GetClock();
+		const auto& clock = Locator::skyClockSystem::value().GetClock();
 		in.visualHour = clock.GetVisualTime();
 		in.skyType = 2.0f - clock.SkyType(in.visualHour);
 		in.dayFull = clock.GetVisualTimes()[3];

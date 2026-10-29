@@ -230,7 +230,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -1377,9 +1377,9 @@ void Runner::Stop()
 		Locator::footprintSystem::value().SetAprilFoolsOverride(std::nullopt);
 	}
 	SetUpDate(std::nullopt);
-	if (Locator::skySystem::has_value())
+	if (Locator::skyClockSystem::has_value())
 	{
-		Locator::skySystem::value().GetClock().SetRunning(true);
+		Locator::skyClockSystem::value().GetClock().SetRunning(true);
 	}
 	Log("Stopped");
 }
@@ -1420,9 +1420,9 @@ void Runner::SetUpDate(const std::optional<RealDate>& date)
 void Runner::SetUpEnvironment(const Environment& environment)
 {
 	SetUpDate(environment.realDate);
-	if (Locator::skySystem::has_value())
+	if (Locator::skyClockSystem::has_value())
 	{
-		auto& sky = Locator::skySystem::value();
+		auto& sky = Locator::skyClockSystem::value();
 		sky.SetTime(environment.hour);
 		sky.GetClock().SetRunning(environment.clockRuns);
 	}
@@ -3546,9 +3546,9 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::SetHour)
 	{
-		if (Locator::skySystem::has_value())
+		if (Locator::skyClockSystem::has_value())
 		{
-			Locator::skySystem::value().SetTime(command.hour);
+			Locator::skyClockSystem::value().SetTime(command.hour);
 		}
 		Log(fmt::format("{:.1f}s: the hour is {:.1f}", _seconds, command.hour));
 		return;

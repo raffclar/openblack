@@ -159,6 +159,7 @@
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
 #include "ECS/Systems/Implementations/SharkSystem.h"
 #include "ECS/Systems/Implementations/SimulationSystem.h"
+#include "ECS/Systems/Implementations/SkyClockSystem.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
@@ -681,7 +682,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
-	Locator::skySystem::emplace<ecs::systems::SkySystem>();
+	// The clock of day and night, and the entities of the sky, which every computer makes at this place in the order
+	Locator::skyClockSystem::emplace<ecs::systems::SkyClockSystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
@@ -804,8 +806,9 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 
 void openblack::InitializePresentation()
 {
-	// The sea, the mists, the clouds and the village lights, which the turns and the scripts do not read
+	// The sea, the sky, the mists, the clouds and the village lights, which the turns and the scripts do not read
 	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
+	Locator::skySystem::emplace<ecs::systems::SkySystem>();
 	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
@@ -1079,7 +1082,8 @@ void openblack::ShutDownServices()
 	Locator::gameActionSystem::reset();
 
 	Locator::oceanSystem::reset();
-	Locator::skySystem ::reset();
+	Locator::skySystem::reset();
+	Locator::skyClockSystem::reset();
 	Locator::cameraHelpSystem::reset();
 	Locator::cameraPathSystem::reset();
 	Locator::cloudSystem::reset();

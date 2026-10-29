@@ -202,6 +202,7 @@ class AppleBarrelSystemInterface;
 class TimeSystemInterface;
 class SimulationSystemInterface;
 class VegetationInterface;
+class SkyClockSystemInterface;
 class SkySystemInterface;
 class WeatherSystemInterface;
 class ParticleSystemInterface;
@@ -290,6 +291,7 @@ struct Locator
 	using gameRandom = entt::locator<GameRandomInterface>;
 	using terrainSystem = entt::locator<LandIslandInterface>;
 	using oceanSystem = entt::locator<OceanInterface>;
+	using skyClockSystem = entt::locator<ecs::systems::SkyClockSystemInterface>;
 	using skySystem = entt::locator<ecs::systems::SkySystemInterface>;
 	using audio = entt::locator<audio::AudioManagerInterface>;
 	using camera = entt::locator<Camera>;

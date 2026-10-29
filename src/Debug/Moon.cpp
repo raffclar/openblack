@@ -24,6 +24,7 @@
 #include "Common/MachineClock.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "Graphics/Moon.h"
 #include "Locator.h"
@@ -188,7 +189,7 @@ void Moon::DrawPhase() noexcept
 void Moon::DrawSky() noexcept
 {
 	const auto& theMoon = *MoonOfTheSky();
-	const auto& clock = Locator::skySystem::value().GetClock();
+	const auto& clock = Locator::skyClockSystem::value().GetClock();
 	ImGui::TextUnformatted("In the sky");
 	ImGui::Text("Script hour %.2f, visual hour %.2f, clock %s", static_cast<double>(clock.GetScriptTime()),
 	            static_cast<double>(clock.GetVisualTime()), clock.IsRunning() ? "running" : "stopped");
@@ -212,7 +213,7 @@ void Moon::DrawSky() noexcept
 
 void Moon::DrawTimeControls() noexcept
 {
-	auto& clock = Locator::skySystem::value().GetClock();
+	auto& clock = Locator::skyClockSystem::value().GetClock();
 	ImGui::TextUnformatted("Time of day");
 	float hour = clock.GetScriptTime();
 	if (ImGui::SliderFloat("Script hour", &hour, 0.0f, 24.0f, "%.2f"))
@@ -278,7 +279,7 @@ void Moon::DrawDateControls() noexcept
 	if (ImGui::Button("Reset to the game's values"))
 	{
 		theMoon.dateOverride.reset();
-		Locator::skySystem::value().GetClock().SetRunning(true);
+		Locator::skyClockSystem::value().GetClock().SetRunning(true);
 	}
 	if (ImGui::IsItemHovered())
 	{

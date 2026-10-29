@@ -213,6 +213,7 @@
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -304,7 +305,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"gameRandom", "engine.services"},
     LocatorCoverage {"terrainSystem", "land.terrain"},
     LocatorCoverage {"oceanSystem", "land.ocean"},
-    LocatorCoverage {"skySystem", "sky.state"},
+    LocatorCoverage {"skyClockSystem", "sky.state"},
+    LocatorCoverage {"skySystem", "sky.moon"},
     LocatorCoverage {"audio", "audio.state"},
     LocatorCoverage {"camera", "camera.state"},
     LocatorCoverage {"gameActionSystem", "players.input"},
@@ -997,19 +999,19 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 		provider->Add(description,
 		              [shared, name = description.name](const QueryContext& context) { return shared->Run(name, context); });
 	}
-	provider->Add(
-	    Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
-	    Serve<Locator::skySystem>("the sky", [](const ecs::systems::SkySystemInterface& sky, const QueryContext& /*c*/) {
-		    const auto times = sky.GetDayNightTimes();
-		    return Json {{"sky_type", sky.GetCurrentSkyType()},
-		                 {"time", sky.GetTime()},
-		                 {"script_hour", sky.GetClock().GetScriptTime()},
-		                 {"visual_hour", sky.GetClock().GetVisualTime()},
-		                 {"night_full", times.nightFull},
-		                 {"dusk_start", times.duskStart},
-		                 {"dusk_end", times.duskEnd},
-		                 {"day_full", times.dayFull}};
-	    }));
+	provider->Add(Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
+	              Serve<Locator::skyClockSystem>(
+	                  "the sky", [](const ecs::systems::SkyClockSystemInterface& sky, const QueryContext& /*c*/) {
+		                  const auto times = sky.GetDayNightTimes();
+		                  return Json {{"sky_type", sky.GetCurrentSkyType()},
+		                               {"time", sky.GetTime()},
+		                               {"script_hour", sky.GetClock().GetScriptTime()},
+		                               {"visual_hour", sky.GetClock().GetVisualTime()},
+		                               {"night_full", times.nightFull},
+		                               {"dusk_start", times.duskStart},
+		                               {"dusk_end", times.duskEnd},
+		                               {"day_full", times.dayFull}};
+	                  }));
 	return provider;
 }
 

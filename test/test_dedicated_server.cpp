@@ -21,7 +21,9 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Cloud.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/HeadlessRenderer.h"
 #include "Locator.h"
@@ -210,4 +212,27 @@ TEST(DedicatedServer, TheServerMakesTheSkysCloudsButNoSystemThatOnlyShowsTheWorl
 	EXPECT_EQ(exitCode, EXIT_SUCCESS);
 	EXPECT_FALSE(shown);
 	EXPECT_GT(clouds, 0u);
+}
+
+TEST(DedicatedServer, TheServerMovesTheSkysClockButDoesNotShowTheSky)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool shown = false;
+	bool clock = true;
+	size_t turns = 0;
+	const std::atomic<bool> stop {false};
+	const auto exitCode = openblack::server::Run(
+	    MockSettings(profileFolder.Path()), stop, [&shown, &clock, &turns](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    using openblack::Locator;
+		    ++turns;
+		    shown = shown || Locator::skySystem::has_value();
+		    // The clock of day and night, on the dome's entity, is part of the world on every computer
+		    clock = clock && Locator::skyClockSystem::has_value() &&
+		            std::as_const(Locator::entitiesRegistry::value())
+		                .AllOf<openblack::ecs::components::DayNightCycle>(Locator::skyClockSystem::value().GetEntities().dome);
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_GT(turns, 0u);
+	EXPECT_FALSE(shown);
+	EXPECT_TRUE(clock);
 }

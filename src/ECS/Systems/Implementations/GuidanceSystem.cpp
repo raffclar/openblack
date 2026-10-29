@@ -46,7 +46,7 @@
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/ThingOnScreen.h"
@@ -585,7 +585,7 @@ void GuidanceSystem::LookAtMoon()
 {
 	// The moon is looked at once its wait is over and the game's sky is at night
 	--_moonWait;
-	if (_moonWait >= 1 || !Locator::skySystem::has_value() || !Locator::skySystem::value().GetClock().IsVisualNight())
+	if (_moonWait >= 1 || !Locator::skyClockSystem::has_value() || !Locator::skyClockSystem::value().GetClock().IsVisualNight())
 	{
 		return;
 	}

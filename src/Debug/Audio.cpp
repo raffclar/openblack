@@ -27,7 +27,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Game.h"
 #include "Locator.h"
@@ -475,7 +475,7 @@ void Audio::Atmos() noexcept
 	const auto camera = Locator::camera::value().GetOrigin();
 	ImGui::Text("Camera (%.0f, %.0f, %.0f)  above land %.1f  one-shot clock %u", camera.x, camera.y, camera.z,
 	            soundMap.GetHeightAboveLand(), atmos->GetTick());
-	const auto& sky = Locator::skySystem::value();
+	const auto& sky = Locator::skyClockSystem::value();
 	ImGui::Text("Sky type %.2f (0 day, 2 night)  alignment %.2f, group %u (%s)",
 	            audio::AtmosAudio::CalculateSkyType(sky.GetTime(), sky.GetDayNightTimes()), atmosAudio->GetAlignmentValue(),
 	            atmosAudio->GetGroup(), atmosAudio->GetGroup() == 2 ? "evil" : "good");
