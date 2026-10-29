@@ -29,6 +29,11 @@ constexpr std::string_view k_StoppedComputerGod = R"(TOGGLE_COMPUTER_PLAYER("PLA
 TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 0)
 )";
 
+/// The lines of a land that give player two a temple, and then a computer mind that has nothing to do
+constexpr std::string_view k_ComputerGodAtCitadel = R"(CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+)";
+
 struct BoxScenario
 {
 	std::string_view id;
@@ -244,6 +249,21 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .point = {-20.0f, 0.0f},
 	                  .object = 0,
 	                  .radius = 5.0f}},
+	});
+	// The camera of a computer god starts above its temple, so its sparkles come out there before its hand moves
+	all.push_back({
+	    .id = "multiplayer.citadel_start_sparkles",
+	    .name = "The sparkles of a computer god above its new temple",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game. The land script makes the temple of the second player 90 m from "
+	                   "the middle of the testbed, and then switches on the computer mind of that player. The mind has no "
+	                   "town and does not move its hand. The camera of a god starts 20 m higher than the base of its temple, "
+	                   "20 m nearer the middle of the testbed.",
+	    .expected = "Sparkles in the second player's colour come out one after another at that point in front of the temple "
+	                "and fall down slowly. They do not stop while the scenario runs.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .networkGame = true},
+	    .framing = {.shot = Shot::Placed, .eye = {40.0f, 35.0f, -20.0f}, .look = {0.0f, 20.0f, -70.0f}},
+	    .landScript = k_ComputerGodAtCitadel,
 	});
 	// The second god brings its player's creature at the start of a network game
 	all.push_back({
