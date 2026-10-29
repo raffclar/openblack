@@ -2130,3 +2130,4 @@ add_test(NAME test_guard_sweep
                  ${CMAKE_SOURCE_DIR}/tools/sim/guard_sweep.py --self-test
 )
 openblack_setup_and_add_test(test_box_keyboard input/test_box_keyboard.cpp)
+openblack_setup_and_add_test(test_audio_library_log audio/test_audio_library_log.cpp)

@@ -23,26 +23,36 @@
 
 using namespace openblack::audio;
 
-void ALC_APIENTRY AudioPlayerAlLogger([[maybe_unused]] void* userptr, char level, const char* message,
-                                      [[maybe_unused]] int length) noexcept
+namespace
 {
+void ALC_APIENTRY AudioPlayerAlLogger([[maybe_unused]] void* userptr, char level, const char* message, int length) noexcept
+{
+	AudioPlayer::ForwardLibraryLog(level, std::string_view(message, static_cast<size_t>(std::max(length, 0))));
+}
+} // namespace
+
+void AudioPlayer::ForwardLibraryLog(char level, std::string_view message) noexcept
+{
+	// The audio library keeps the callback for all of the process. It calls the callback from its own threads, for
+	// example when the system adds or removes a sound device. At that time the logger can be gone.
+	const auto logger = spdlog::get("audio");
+	if (!logger)
+	{
+		return;
+	}
 	switch (level)
 	{
 	case 'E':
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("audio"), "{}", message);
-	}
-	break;
+		SPDLOG_LOGGER_ERROR(logger, "{}", message);
+		break;
 	case 'W':
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("audio"), "{}", message);
-	}
-	break;
+		SPDLOG_LOGGER_WARN(logger, "{}", message);
+		break;
 	case 'I':
-	{
-		SPDLOG_LOGGER_INFO(spdlog::get("audio"), "{}", message);
-	}
-	break;
+		SPDLOG_LOGGER_INFO(logger, "{}", message);
+		break;
+	default:
+		break;
 	}
 }
 
