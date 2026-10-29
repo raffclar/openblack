@@ -26,7 +26,7 @@
 #include "ECS/Components/VillageLight.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Locator.h"
@@ -42,11 +42,11 @@ namespace
 bool IsLandDark()
 {
 	const auto& palettes = Locator::resources::value().GetLandLightPalettes();
-	if (!palettes.Contains(LandLightPalette::k_Id.value()) || !Locator::skySystem::has_value())
+	if (!palettes.Contains(LandLightPalette::k_Id.value()) || !Locator::skyClockSystem::has_value())
 	{
 		return false;
 	}
-	const auto skyType = Locator::skySystem::value().GetCurrentSkyType();
+	const auto skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
 	const auto alignment = Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetSkyAlignment() : 0.0f;
 	float overcast = 0.0f;
 	if (Locator::weatherSystem::has_value() && Locator::camera::has_value())
@@ -93,9 +93,9 @@ void VillageLightSystem::Update(std::chrono::duration<float, std::milli> gameTim
 	// The flames and glows show at half the lights' brightness, in whole steps, and only while it is dark; their loop
 	// only moves on while they show
 	float alpha = 0.0f;
-	if (dark && Locator::skySystem::has_value())
+	if (dark && Locator::skyClockSystem::has_value())
 	{
-		alpha = std::trunc(village_lights::Intensity(Locator::skySystem::value().GetClock().GetScriptTime()) * 0.5f);
+		alpha = std::trunc(village_lights::Intensity(Locator::skyClockSystem::value().GetClock().GetScriptTime()) * 0.5f);
 	}
 	auto& flames = registry.Context().villageLightFlames;
 	int32_t step = 0;

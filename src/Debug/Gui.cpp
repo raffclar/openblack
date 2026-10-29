@@ -59,7 +59,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "Editor/EditorWindow.h"
@@ -793,7 +793,7 @@ bool Gui::ShowMenu() noexcept
 				Game::Instance()->SetTime(fmodf(config.timeOfDay, 24.0f));
 			}
 
-			ImGui::Text("Sky Type Index %f", Locator::skySystem::value().GetCurrentSkyType());
+			ImGui::Text("Sky Type Index %f", Locator::skyClockSystem::value().GetCurrentSkyType());
 			// The player's alignment, which the sky turns to and the temple shows
 			auto& alignment = Locator::alignmentSystem::value();
 			float player = alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE);

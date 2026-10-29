@@ -85,7 +85,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -1183,7 +1183,7 @@ void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
 	// A saved game keeps its own time of day
 	if (!continued)
 	{
-		Locator::skySystem::value().SetTime(Locator::config::value().timeOfDay);
+		Locator::skyClockSystem::value().SetTime(Locator::config::value().timeOfDay);
 	}
 	Locator::time::value().Start();
 

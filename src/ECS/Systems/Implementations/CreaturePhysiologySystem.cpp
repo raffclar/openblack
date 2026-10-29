@@ -54,7 +54,7 @@
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Graphics/Texture2D.h"
@@ -124,7 +124,7 @@ uint32_t PhaseOf(ecs::Registry& registry, entt::entity entity)
 
 bool IsNight()
 {
-	return Locator::skySystem::has_value() && Locator::skySystem::value().GetClock().IsVisualNight();
+	return Locator::skyClockSystem::has_value() && Locator::skyClockSystem::value().GetClock().IsVisualNight();
 }
 
 float TemperatureAt(const glm::vec3& position)

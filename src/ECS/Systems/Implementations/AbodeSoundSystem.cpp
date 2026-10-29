@@ -27,7 +27,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -38,7 +38,7 @@ using namespace openblack::ecs::systems;
 
 void AbodeSoundSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
-	if (!Locator::audio::has_value() || !Locator::objectDrawListSystem::has_value() || !Locator::skySystem::has_value() ||
+	if (!Locator::audio::has_value() || !Locator::objectDrawListSystem::has_value() || !Locator::skyClockSystem::has_value() ||
 	    !Locator::camera::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
@@ -61,7 +61,7 @@ void AbodeSoundSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 	}
 
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto& sky = Locator::skySystem::value();
+	const auto& sky = Locator::skyClockSystem::value();
 	const auto hour = sky.GetTime();
 	const auto keys = abode_sounds::KeysAt(abode_sounds::Darkness(hour, sky.GetDayNightTimes()), hour).ToArray();
 	const auto camera = Locator::camera::value().GetOrigin();

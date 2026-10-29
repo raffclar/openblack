@@ -143,6 +143,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -1444,9 +1445,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// Window submeshes are lit by their houses at night
 				glm::vec4 u_window {subMesh.GetFlags().isWindow ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
-				if (Locator::skySystem::has_value())
+				if (Locator::skyClockSystem::has_value())
 				{
-					const auto& clock = Locator::skySystem::value().GetClock();
+					const auto& clock = Locator::skyClockSystem::value().GetClock();
 					u_window.y = clock.GetVisualTime();
 					u_window.z = clock.IsVisualNight() ? 1.0f : 0.0f;
 				}
@@ -1640,7 +1641,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			if (!desc.isSky && has(MeshUniform::SkyAlphaThreshold))
 			{
 				const glm::vec4 u_skyAlphaThreshold = {
-				    Locator::skySystem::value().GetCurrentSkyType(),
+				    Locator::skyClockSystem::value().GetCurrentSkyType(),
 				    desc.alphaThreshold.value_or(prim.thresholdAlpha || desc.materialAlphaTest ? prim.alphaCutoutThreshold
 				                                                                               : 0.0f),
 				    0.0f,
@@ -4331,7 +4332,7 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	    .fullLightGreen =
 	        _landLightTable ? static_cast<uint8_t>((_landLightTable->GetTexels().back() >> 8u) & 0xFFu) : uint8_t {0xFF},
 	    .hand = std::nullopt,
-	    .scriptHour = Locator::skySystem::value().GetClock().GetScriptTime(),
+	    .scriptHour = Locator::skyClockSystem::value().GetClock().GetScriptTime(),
 	    .particleStamps = {},
 	    .flashes = 0,
 	};
@@ -5109,7 +5110,7 @@ glm::vec4 Renderer::GetModelLight() const
 {
 	// By day, or with no hand to carry it, the sun
 	auto light = model_light::k_Sun;
-	if (Locator::handSystem::has_value() && Locator::skySystem::has_value() && Locator::camera::has_value())
+	if (Locator::handSystem::has_value() && Locator::skyClockSystem::has_value() && Locator::camera::has_value())
 	{
 		const auto handEntity =
 		    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
@@ -5122,7 +5123,7 @@ glm::vec4 Renderer::GetModelLight() const
 			        : 0.0f;
 			const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 			light = model_light::FrameLight(transform->position, ground, Locator::camera::value().GetOrigin(),
-			                                Locator::skySystem::value().GetCurrentSkyType(),
+			                                Locator::skyClockSystem::value().GetCurrentSkyType(),
 			                                inTemple ? std::optional(Locator::temple::value().GetPosition()) : std::nullopt);
 		}
 	}
@@ -5446,7 +5447,7 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 	{
 		const auto& land = Locator::terrainSystem::value();
 		// The hand's, cast from the sun and laid on the ground beneath it, with what it holds
-		if (drawDesc.drawHand && Locator::handSystem::has_value() && Locator::skySystem::has_value())
+		if (drawDesc.drawHand && Locator::handSystem::has_value() && Locator::skyClockSystem::has_value())
 		{
 			const auto handEntity =
 			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
@@ -5461,7 +5462,7 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 				const auto ground = land.GetHeightAt(glm::vec2(transform->position.x, transform->position.z));
 				const auto radius =
 				    openblack::graphics::mesh_detail::HalfDiagonal(handMesh->GetBoundingBox().Size()) * scaleOf(model);
-				const auto& sky = Locator::skySystem::value();
+				const auto& sky = Locator::skyClockSystem::value();
 				const auto fade =
 				    GroundShadow::Fade(glm::distance(camera, glm::vec3(transform->position.x, ground, transform->position.z)),
 				                       radius) *
@@ -6219,7 +6220,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* objectShaderLightmapInstanced = _shaderManager->GetShader("ObjectLightmapInstanced");
 	const auto* objectShaderReflectiveLightmapInstanced = _shaderManager->GetShader("ObjectReflectiveLightmapInstanced");
 
-	const auto skyType = Locator::skySystem::value().GetCurrentSkyType();
+	const auto skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
 
 	{
 		auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawSky

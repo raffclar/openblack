@@ -160,7 +160,7 @@
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/TempleConstruction.h"
@@ -3863,9 +3863,9 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 void CreatureMindSystem::SituateEmotes(entt::entity creature, creature_plan_actions::Situation& situation)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (Locator::skySystem::has_value())
+	if (Locator::skyClockSystem::has_value())
 	{
-		const auto& clock = Locator::skySystem::value().GetClock();
+		const auto& clock = Locator::skyClockSystem::value().GetClock();
 		situation.night = clock.IsVisualNight();
 		// The creature looks for the moon at the place that the sky draws it at from the camera, taken as a place on
 		// the land
