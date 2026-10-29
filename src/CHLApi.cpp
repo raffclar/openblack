@@ -2601,10 +2601,12 @@ static std::optional<uint8_t> FinalGameStateOf(const ecs::Registry& registry, en
 	return std::nullopt;
 }
 
-/// Where a thing is measured from by the scripts' searches
+/// The place from which the scripts' searches measure a thing: the altar of a worship site, else the thing itself
 static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, entt::entity entity)
 {
-	const auto& position = registry.Get<const Transform>(entity).position;
+	const auto measured = ecs::script_find::MeasuredFrom(registry, entity);
+	const auto* transform = registry.TryGet<const Transform>(measured);
+	const auto& position = (transform != nullptr ? transform : &registry.Get<const Transform>(entity))->position;
 	return map_coords::FromMetres({position.x, position.z});
 }
 

@@ -239,6 +239,16 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	return std::nullopt;
 }
 
+entt::entity script_find::MeasuredFrom(const Registry& registry, entt::entity entity)
+{
+	// The game measures a worship site from the place of its altar, at the head of the site
+	if (const auto* site = registry.TryGet<const WorshipSite>(entity); site != nullptr && registry.Valid(site->altar))
+	{
+		return site->altar;
+	}
+	return entity;
+}
+
 script_find::CellRange script_find::CellsAround(const map_coords::MapCoords& from, float reach)
 {
 	return CellRange {
