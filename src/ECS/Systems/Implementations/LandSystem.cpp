@@ -291,6 +291,12 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 		Locator::forestSystem::value().AssignForestsToTowns();
 	}
 
+	// Each player with a citadel has their influence power worked out once, as the game does after the land is laid out
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().LandLaidOut();
+	}
+
 	timer.Step("forests");
 	// A new game starts the player as good or evil as their profile last kept them, once the land is set up
 	if (land_change::RulesFor(change).alignmentFromProfile)
@@ -488,6 +494,10 @@ bool LandSystem::LoadGodsRingMap()
 	{
 		Locator::forestSystem::value().MakeScenicForests();
 		Locator::forestSystem::value().AssignForestsToTowns();
+	}
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().LandLaidOut();
 	}
 	View().MakeSymbolSheet();
 

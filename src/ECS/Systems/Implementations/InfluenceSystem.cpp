@@ -38,13 +38,16 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/InfluenceRules.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -131,6 +134,14 @@ float AbodeInfluence(entt::entity entity, const Abode& abode, Tribe tribe)
 	const auto people = std::ranges::count_if(
 	    abode.inhabitants, [&registry](entt::entity villager) { return registry.AnyOf<Villager>(villager); });
 	return scale * info->influence * static_cast<float>(people + 1);
+}
+
+/// What a town reaches with no buildings, for the land that is played now
+float TownBaseInfluence()
+{
+	const auto& info = Locator::infoConstants::value().town;
+	const auto land = Globals().landNumber;
+	return land != 0 ? ForLand(info.storyInfluence, info.maxForTimeWillWorkUntil, land) : info.influence;
 }
 
 /// The first temple of each player, which is their citadel
@@ -308,9 +319,7 @@ void InfluenceSystem::ProcessTownInfluence(entt::entity entity)
 			buildings += AbodeInfluence(abode, data, tribe);
 		}
 	});
-	const auto& info = Locator::infoConstants::value().town;
-	const auto land = Globals().landNumber;
-	const float base = land != 0 ? ForLand(info.storyInfluence, info.maxForTimeWillWorkUntil, land) : info.influence;
+	const float base = TownBaseInfluence();
 	auto& influence =
 	    registry.AnyOf<TownInfluence>(entity) ? registry.Get<TownInfluence>(entity) : registry.Assign<TownInfluence>(entity);
 	influence.radius = (base + buildings) * Globals().townInfluenceMultiplier;
@@ -337,6 +346,37 @@ void InfluenceSystem::FixCitadelReaches()
 			FixCitadelReach(citadel);
 		}
 	}
+}
+
+void InfluenceSystem::LandLaidOut()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto citadels = Citadels();
+	registry.Each<const Player, PlayerInfluencePower>([&](const Player& player, PlayerInfluencePower& power) {
+		const auto index = static_cast<size_t>(player.name);
+		if (index >= citadels.size() || citadels.at(index) == entt::null)
+		{
+			return;
+		}
+		// No town has had a turn yet, so each reaches as far as when it was made: with no buildings, and without the
+		// land's multiplier
+		float total = CitadelReach(citadels.at(index));
+		registry.Each<const Town>([&](const Town& town) {
+			if (town.owner == player.name)
+			{
+				total += TownBaseInfluence();
+			}
+		});
+		registry.Each<const InfluenceSource>([&](const InfluenceSource& source) {
+			if (source.player == player.name && !source.anti)
+			{
+				total += source.radius;
+			}
+		});
+		power.power = total;
+		power.average = player_relations::NextAverageInfluence(power.average, total);
+		player_statistics::CountInfluence(registry, player.name, total);
+	});
 }
 
 void InfluenceSystem::ProcessCitadels()

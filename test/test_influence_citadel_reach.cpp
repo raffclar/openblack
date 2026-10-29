@@ -9,11 +9,16 @@
 
 #include <array>
 #include <memory>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerRelations.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
@@ -96,4 +101,87 @@ TEST_F(CitadelReach, TheAnswerIsTheSameBeforeAndAfterTheTurnFixesIt)
 	const float before = _influence.InfluencePower(PlayerNames::PLAYER_TWO);
 	_influence.FixCitadelReaches();
 	EXPECT_FLOAT_EQ(_influence.InfluencePower(PlayerNames::PLAYER_TWO), before);
+}
+
+namespace
+{
+/// A town reaches this far when it is made, before it has a turn
+constexpr float k_TownReach = 20.0f;
+} // namespace
+
+class PowerAtLoad: public CitadelReach
+{
+protected:
+	void SetUp() override
+	{
+		CitadelReach::SetUp();
+		// The locator keeps a copy, so the constants are put in it again
+		_info->town.influence = k_TownReach;
+		Locator::infoConstants::reset();
+		Locator::infoConstants::emplace(*_info);
+		auto& registry = Locator::entitiesRegistry::value();
+		for (const auto name : k_Players)
+		{
+			const auto player = registry.Create();
+			registry.Assign<components::Player>(player, components::Player {.name = name});
+			registry.Assign<components::PlayerInfluencePower>(player);
+			registry.Assign<components::PlayerStatistics>(player);
+			_players.push_back(player);
+		}
+		// Two towns of the second player and one of the first
+		MakeTown(PlayerNames::PLAYER_TWO);
+		MakeTown(PlayerNames::PLAYER_TWO);
+		MakeTown(PlayerNames::PLAYER_ONE);
+	}
+
+	static void MakeTown(PlayerNames owner)
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto town = registry.Create();
+		registry.Assign<components::Town>(town, components::Town {.owner = owner});
+	}
+
+	[[nodiscard]] static const components::PlayerInfluencePower& PowerOf(entt::entity player)
+	{
+		return Locator::entitiesRegistry::value().Get<const components::PlayerInfluencePower>(player);
+	}
+
+	std::vector<entt::entity> _players;
+};
+
+TEST_F(PowerAtLoad, ACitadelAndItsTownsAtTheirBaseGiveThePlayersPower)
+{
+	_influence.LandLaidOut();
+	EXPECT_FLOAT_EQ(PowerOf(_players.at(0)).power, k_HeartReach + k_TownReach);
+	EXPECT_FLOAT_EQ(PowerOf(_players.at(1)).power, k_HeartReach + (2.0f * k_TownReach));
+	EXPECT_FLOAT_EQ(PowerOf(_players.at(2)).power, k_HeartReach);
+}
+
+TEST_F(PowerAtLoad, TheRunningAverageTakesOneStepFromNothing)
+{
+	_influence.LandLaidOut();
+	EXPECT_FLOAT_EQ(PowerOf(_players.at(1)).average, 0.5f * (k_HeartReach + (2.0f * k_TownReach)));
+}
+
+TEST_F(PowerAtLoad, TheInfluenceHistoryTakesOneSample)
+{
+	_influence.LandLaidOut();
+	const auto& registry = Locator::entitiesRegistry::value();
+	for (const auto player : _players)
+	{
+		EXPECT_EQ(registry.Get<const components::PlayerStatistics>(player).influenceHistory.samplesInPoint, 1u);
+	}
+}
+
+TEST_F(PowerAtLoad, APlayerWithoutACitadelIsLeftAlone)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto player = registry.Create();
+	registry.Assign<components::Player>(player, components::Player {.name = PlayerNames::PLAYER_FOUR});
+	registry.Assign<components::PlayerInfluencePower>(player);
+	registry.Assign<components::PlayerStatistics>(player);
+	MakeTown(PlayerNames::PLAYER_FOUR);
+	_influence.LandLaidOut();
+	EXPECT_FLOAT_EQ(PowerOf(player).power, 0.0f);
+	EXPECT_EQ(registry.Get<const components::PlayerStatistics>(player).influenceHistory.samplesInPoint, 0u);
 }

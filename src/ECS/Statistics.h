@@ -55,6 +55,9 @@ void CountCast(ecs::Registry& registry, PlayerNames player, MagicType type);
 /// A worship site of the player's gave prayer power
 void CountChantsUsed(ecs::Registry& registry, PlayerNames player, float amount);
 
+/// The player's influence power goes into their influence history as one more sample, as a game turn does it
+void CountInfluence(ecs::Registry& registry, PlayerNames player, float power);
+
 /// A game turn: each player's towns' people are checked for their most and fewest and go into the population history,
 /// their influence into the influence history, their creature's size is noted the first time it is seen, and every 50
 /// turns each town with a player samples how satisfied its people are
