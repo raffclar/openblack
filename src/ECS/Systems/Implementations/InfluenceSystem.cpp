@@ -227,6 +227,19 @@ std::optional<entt::entity> PlayerEntityOf(PlayerNames player)
 	return found;
 }
 
+/// The reach of each source of influence of a player that is neither a town nor a citadel, anti-influence too
+std::vector<float> SourceReaches(PlayerNames player)
+{
+	std::vector<float> reaches;
+	Locator::entitiesRegistry::value().Each<const InfluenceSource>([&](const InfluenceSource& source) {
+		if (source.player == player)
+		{
+			reaches.push_back(source.radius);
+		}
+	});
+	return reaches;
+}
+
 influence::Ground LandHeight()
 {
 	return [](glm::vec2 point) {
@@ -360,19 +373,15 @@ void InfluenceSystem::LandLaidOut()
 		}
 		// No town has had a turn yet, so each reaches as far as when it was made: with no buildings, and without the
 		// land's multiplier
-		float total = CitadelReach(citadels.at(index));
+		std::vector<float> towns;
 		registry.Each<const Town>([&](const Town& town) {
 			if (town.owner == player.name)
 			{
-				total += TownBaseInfluence();
+				towns.push_back(TownBaseInfluence());
 			}
 		});
-		registry.Each<const InfluenceSource>([&](const InfluenceSource& source) {
-			if (source.player == player.name && !source.anti)
-			{
-				total += source.radius;
-			}
-		});
+		const float total =
+		    influence_rules::InfluencePowerOf(CitadelReach(citadels.at(index)), towns, SourceReaches(player.name));
 		power.power = total;
 		power.average = player_relations::NextAverageInfluence(power.average, total);
 		player_statistics::CountInfluence(registry, player.name, total);
@@ -485,25 +494,39 @@ float InfluenceSystem::CitadelReachOf(PlayerNames player) const
 
 float InfluenceSystem::InfluencePower(PlayerNames player) const
 {
+	const auto entity = PlayerEntityOf(player);
+	if (!entity.has_value())
+	{
+		return 0.0f;
+	}
+	const auto* noted = Locator::entitiesRegistry::value().TryGet<const PlayerInfluencePower>(*entity);
+	return noted != nullptr ? noted->power : 0.0f;
+}
+
+void InfluenceSystem::NoteInfluencePower(PlayerNames player)
+{
 	auto& registry = Locator::entitiesRegistry::value();
-	float power = 0.0f;
+	const auto entity = PlayerEntityOf(player);
+	auto* noted = entity.has_value() ? registry.TryGet<PlayerInfluencePower>(*entity) : nullptr;
+	if (noted == nullptr)
+	{
+		return;
+	}
+	float citadelReach = 0.0f;
 	if (const auto citadel = Citadels().at(static_cast<size_t>(player)); citadel != entt::null)
 	{
-		power = CitadelReach(citadel);
+		citadelReach = CitadelReach(citadel);
 	}
+	std::vector<float> towns;
 	registry.Each<const Town, const TownInfluence>([&](const Town& town, const TownInfluence& influence) {
 		if (town.owner == player)
 		{
-			power += influence.radius;
+			towns.push_back(influence.radius);
 		}
 	});
-	registry.Each<const InfluenceSource>([&](const InfluenceSource& source) {
-		if (source.player == player && !source.anti)
-		{
-			power += source.radius;
-		}
-	});
-	return power;
+	noted->power = influence_rules::InfluencePowerOf(citadelReach, towns, SourceReaches(player));
+	noted->average = player_relations::NextAverageInfluence(noted->average, noted->power);
+	player_statistics::CountInfluence(registry, player, noted->power);
 }
 
 void InfluenceSystem::ProcessVirtualInfluence(uint32_t turn)
