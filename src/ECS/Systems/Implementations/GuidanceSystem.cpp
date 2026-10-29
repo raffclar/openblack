@@ -32,6 +32,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/GuidanceHeard.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Town.h"
@@ -39,6 +40,7 @@
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -566,6 +568,48 @@ void GuidanceSystem::LowOnPeople(entt::entity town)
 	if (stats != nullptr && stats->adults + stats->children != 0 && NearPointUnderCursor(town))
 	{
 		SayRemark(guidance::Kind::LowOnPeople);
+	}
+}
+
+void GuidanceSystem::LosingBeliefTurn()
+{
+	if (!Locator::entitiesRegistry::has_value() || !Locator::infoConstants::has_value() ||
+	    Turn() % guidance::k_LosingBeliefEvery != 0)
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	// The first land does not look at all
+	constexpr int32_t k_FirstLand = 1;
+	if (registry.Context().mapScriptGlobals.landNumber == k_FirstLand)
+	{
+		return;
+	}
+	// The towns of the player at this computer, in the order of the player's list
+	const auto player = OwnPlayer();
+	const auto towns = ecs::player_towns::InOrder(registry, player);
+	std::vector<guidance::TownBeliefs> beliefs;
+	beliefs.reserve(towns.size());
+	for (const auto town : towns)
+	{
+		const auto* impression = registry.TryGet<const TownImpression>(town);
+		auto& belief = beliefs.emplace_back();
+		if (impression != nullptr)
+		{
+			std::ranges::copy(impression->belief.belief, belief.begin());
+		}
+	}
+	const auto margin = Locator::infoConstants::value().belief.beliefLeftWhenHelpSpritesWarn;
+	const auto found = guidance::LosingBeliefTown(beliefs, static_cast<size_t>(player), margin);
+	if (!found.has_value() || !RemarkNow(guidance::Kind::LosingBelief))
+	{
+		return;
+	}
+	// The advisors do not remark on a town with no people
+	const auto* stats = registry.TryGet<const TownStats>(towns.at(*found));
+	if (stats != nullptr && stats->adults + stats->children != 0)
+	{
+		SayRemark(guidance::Kind::LosingBelief);
 	}
 }
 

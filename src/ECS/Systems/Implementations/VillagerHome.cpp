@@ -524,9 +524,14 @@ std::optional<glm::vec2> TreeTentPos(entt::entity tree)
 
 bool villager_home::AreWeThere(entt::entity villager, glm::vec2 point)
 {
+	return AreWeThere(villager, wall_hug::ToWhole(point));
+}
+
+bool villager_home::AreWeThere(entt::entity villager, glm::ivec2 point)
+{
 	const auto* wallHug = WorldRegistry().TryGet<const WallHug>(villager);
 	const float speed = wallHug != nullptr ? wallHug->speed : 0.0f;
-	return walk_arrival::WithinAStep(WalkPositionOf(villager), wall_hug::ToWhole(point), speed);
+	return walk_arrival::WithinAStep(WalkPositionOf(villager), point, speed);
 }
 
 std::optional<glm::vec2> villager_home::PosOutsideAbode(entt::entity villager)
@@ -756,7 +761,7 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, Walk
 	auto& registry = WorldRegistry();
 	const auto villager = EntityOf(action);
 	auto& wallHug = registry.Get<WallHug>(villager);
-	wallHug.goal = goal;
+	wallHug.goalPlace = wall_hug::ToWhole(goal);
 	// A fresh step is worked out on the next pathfinding turn
 	wallHug.step = {0, 0};
 	wallHug.stepAltitude = 0.0f;
@@ -784,7 +789,12 @@ void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, Walk
 
 bool villager_home::WalkIsOverAt(entt::entity villager, glm::vec2 goal)
 {
-	return walk_arrival::WalkIsOver(WalkStateOf(villager), WalkPositionOf(villager), wall_hug::ToWhole(goal));
+	return WalkIsOverAt(villager, wall_hug::ToWhole(goal));
+}
+
+bool villager_home::WalkIsOverAt(entt::entity villager, glm::ivec2 goal)
+{
+	return walk_arrival::WalkIsOver(WalkStateOf(villager), WalkPositionOf(villager), goal);
 }
 
 glm::ivec2 villager_home::WalkPosition(entt::entity villager)
@@ -1070,7 +1080,7 @@ uint32_t villager_home::MoveToPos(LivingAction& action)
 	// The villager takes its step first. Then it looks at where the step put it.
 	TakeWalkStep(villager);
 	// The walk continues until its last step puts the villager on its goal
-	const auto goal = wall_hug::ToWhole(registry.Get<const WallHug>(villager).goal);
+	const auto goal = registry.Get<const WallHug>(villager).goalPlace;
 	if (!walk_arrival::WalkIsOver(WalkStateOf(villager), WalkPositionOf(villager), goal))
 	{
 		return 0;

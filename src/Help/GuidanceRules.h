@@ -14,6 +14,7 @@
 
 #include <array>
 #include <optional>
+#include <span>
 
 /// The guidance: the advisors' running commentary on what happens in the game (towns attacked, buildings wrecked, the
 /// player turning from good or evil, the moon) and the villagers' voices of guidance. Each kind of guidance waits a
@@ -165,5 +166,15 @@ struct MoonLook
 /// pi full) within 0.15 of full, the full moon remark; otherwise looked at again the cube of the phase's distance from
 /// full times 12000 turns later (at once for a waxing moon, whose distance is negative)
 [[nodiscard]] MoonLook LookAtMoon(float phase, bool clockSaysNight);
+
+/// The advisors look for a town that loses its belief in the player this often, in game turns
+constexpr uint32_t k_LosingBeliefEvery = 10;
+/// The number of players that a town believes in, the neutral player last
+constexpr size_t k_BeliefPlayers = 8;
+using TownBeliefs = std::array<float, k_BeliefPlayers>;
+/// The town that the advisors warn of as losing its belief in the player: the first town, in the order of the player's
+/// list, in which another player (the neutral player too) has more belief than the belief in the player less the
+/// margin. None when no town is so.
+[[nodiscard]] std::optional<size_t> LosingBeliefTown(std::span<const TownBeliefs> towns, size_t player, float margin);
 
 } // namespace openblack::guidance

@@ -213,6 +213,9 @@ public:
 	/// The first creature of a fight told the second creature to obey it. The second creature stops what it does, and
 	/// the fight has its mind until the fight ends.
 	virtual void FightOrdered(entt::entity /*creature*/, entt::entity /*asker*/) {}
+	/// The fight of the second creature ended. If its plan is still to obey the first creature, that plan stops as a
+	/// failure.
+	virtual void ObeyEnded(entt::entity /*creature*/, entt::entity /*asker*/) {}
 	/// What the creature does stops as a failure. The desire becomes fully dominant, and the creature plans to satisfy it
 	/// through the thing. Returns whether the creature has a plan for that desire.
 	virtual bool ForceDesireOn(entt::entity /*creature*/, creature_desires::Desire /*desire*/, entt::entity /*thing*/)
@@ -221,6 +224,9 @@ public:
 	}
 	/// Something stops what the creature is doing, which it gives up as a failure, as a spell freezing it does
 	virtual void AbandonAction(entt::entity /*creature*/) {}
+	/// What the creature does stops as a failure, as for AbandonAction. Also its walk stops, the pose of its body ends,
+	/// and a joint action stops for its partner too.
+	virtual void FailAction(entt::entity creature) { AbandonAction(creature); }
 	/// The creature is made to catch a thing flying at it: what it was doing fails, and it plays with the thing by catching
 	/// it, wanting to play less for a while
 	virtual void ForceCatch(entt::entity /*creature*/, entt::entity /*object*/) {}

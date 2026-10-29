@@ -596,6 +596,22 @@ void CreaturePhysiologySystem::ModifyStrength(entt::entity creature, float amoun
 	}
 }
 
+void CreaturePhysiologySystem::GainStrengthOf(entt::entity creature, std::string_view action)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& actions = Locator::infoConstants::value().creatureAction;
+	const auto found = std::ranges::find_if(actions, [action](const auto& row) {
+		return std::string_view(row.name.data(), strnlen(row.name.data(), row.name.size())) == action;
+	});
+	if (found != actions.end())
+	{
+		ModifyStrength(creature, found->strengthGain);
+	}
+}
+
 void CreaturePhysiologySystem::SetTimeScale(float scale)
 {
 	_timeScale = std::clamp(scale, 0.0f, k_MaxTimeScale);

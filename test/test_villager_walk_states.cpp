@@ -75,15 +75,16 @@ public:
 		steps.push_back({
 		    .villager = walker,
 		    .top = static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Top))),
-		    .goal = wallHug.goal,
+		    .goal = wall_hug::ToPoint(wallHug.goalPlace),
 		});
 		if (!arrives)
 		{
 			return;
 		}
-		registry.Get<Transform>(walker).position = glm::vec3(wallHug.goal.x, 0.0f, wallHug.goal.y);
-		wallHug.position = wall_hug::ToWhole(wallHug.goal);
-		wallHug.placedAt = wallHug.goal;
+		const auto goal = wall_hug::ToPoint(wallHug.goalPlace);
+		registry.Get<Transform>(walker).position = glm::vec3(goal.x, 0.0f, goal.y);
+		wallHug.position = wallHug.goalPlace;
+		wallHug.placedAt = goal;
 		registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
 		                MoveStateFinalStepTag>(walker);
 		registry.AssignOrReplace<MoveStateArrivedTag>(walker, MoveStateClockwise::Undefined,
@@ -134,7 +135,8 @@ protected:
 		_villager = registry.Create();
 		registry.Assign<Transform>(_villager, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
 		registry.Assign<Villager>(_villager).life = 1.0f;
-		registry.Assign<WallHug>(_villager, WallHug {.goal = glm::xz(k_Here) + glm::vec2(30.0f, 0.0f), .speed = 1.0f});
+		registry.Assign<WallHug>(
+		    _villager, WallHug {.goalPlace = wall_hug::ToWhole(glm::xz(k_Here) + glm::vec2(30.0f, 0.0f)), .speed = 1.0f});
 		registry.Assign<MoveStateLinearTag>(_villager, MoveStateClockwise::Undefined, glm::xz(k_Here));
 		registry.Assign<LivingAction>(_villager, VillagerStates::MoveToPos, static_cast<uint16_t>(0));
 		SetStates(VillagerStates::MoveToPos, k_Next);

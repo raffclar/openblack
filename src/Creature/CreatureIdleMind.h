@@ -797,6 +797,8 @@ struct Senses
 	/// Whether its life is full and it is not tired at all
 	bool better {false};
 	HandsState hands {HandsState::Idle};
+	/// Whether the action of the hands took hold of its thing or hit it, and the body still plays the action
+	bool handsTouched {false};
 	/// The thing that the creature holds, by the number of its entity
 	std::optional<uint32_t> held;
 	/// Whether it holds the thing in its left hand, as it reached for the thing on the left side
@@ -939,6 +941,17 @@ struct Commands
 	bool seesToDesire {false};
 	/// What to do with a thing
 	std::optional<ObjectOrder> object;
+	/// A stomp that hit its thing, on each turn that the body still plays it: the thing under the foot takes the stomp
+	struct Stomp
+	{
+		uint32_t object {0};
+		/// The stomp is the last step of the agenda
+		bool lastStep {false};
+	};
+	std::optional<Stomp> stomp;
+	/// A pick-up that took hold of its thing, on each turn that the body still plays it: the head and the eyes look at
+	/// no point
+	bool noLookPoint {false};
 	/// The creature lets go of the thing that it holds, because the next step needs empty hands
 	std::optional<LetGo> letGo;
 	/// A gesture to draw, by its number. A dance gives it each turn of its move, and the drawing continues only on these

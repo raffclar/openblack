@@ -136,7 +136,7 @@ void ObjectDrawListSystem::FindParts()
 	});
 }
 
-void ObjectDrawListSystem::Update(uint32_t turn)
+void ObjectDrawListSystem::Update(uint32_t turn, bool landDrawn)
 {
 	FindParts();
 	if (!Locator::camera::has_value() || !Locator::terrainSystem::has_value() || !Locator::entitiesMap::has_value() ||
@@ -145,6 +145,14 @@ void ObjectDrawListSystem::Update(uint32_t turn)
 		// With nothing to see from, the list decides nothing
 		_view.reset();
 		_frame = {.rebuilt = true, .drawAll = true};
+		return;
+	}
+	if (!landDrawn)
+	{
+		// Things made since the last frame go onto their blocks now, also on a frame that does not draw the land. The
+		// blocks, their last showing, the clock's camera, the requests and the list stay as they are.
+		static_cast<void>(Locator::entitiesMap::value().GetOffBlocks());
+		_frame = object_draw_list::FrameWithoutLand();
 		return;
 	}
 	LoadBlocks();
@@ -276,7 +284,7 @@ bool ObjectDrawListSystem::Drawn(const Registry& registry, entt::entity entity) 
 	{
 		return true;
 	}
-	if (!Listed(entity))
+	if (!_frame.landDrawn || !Listed(entity))
 	{
 		return false;
 	}

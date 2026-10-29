@@ -474,7 +474,7 @@ TEST_F(MapProductionFiling, AWalkerGoesToTheFrontOfItsCellOnlyWhenItsAngleChange
 	auto& map = Locator::entitiesMap::value();
 	const glm::vec3 here {500.0f, 0.0f, 500.0f};
 	const auto walker = MakeVillager(registry, here);
-	registry.Assign<WallHug>(walker, WallHug {.goal = glm::vec2(), .yAngle = 0.0f, .speed = 1.0f});
+	registry.Assign<WallHug>(walker, WallHug {.goalPlace = {0, 0}, .yAngle = 0.0f, .speed = 1.0f});
 	map.FileNew();
 	const auto other = MakeVillager(registry, here);
 	map.FileNew();

@@ -83,7 +83,6 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
-#include "ECS/Archetypes/PuzzleGameArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
@@ -128,7 +127,6 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
-#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -149,6 +147,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/CreatureReactionNotice.h"
@@ -161,7 +160,6 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/PlayerTowns.h"
-#include "ECS/PuzzleGameRules.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
@@ -221,6 +219,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -254,6 +253,7 @@
 #include "ECS/VillagerScriptRules.h"
 #include "ECS/VillagerSkeletons.h"
 #include "ECS/WalkerPlacement.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -742,13 +742,16 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return ScriptMarkerArchetype::Create(position);
 	case ObjectType::PuzzleGame:
 	{
-		// The puzzle game has no pieces yet, so the player cannot solve it. It is made only for the kinds whose answer
-		// before a solution is known.
+		// The system makes a puzzle game only for the kinds whose answer before a solution is known. Only the beach
+		// temple puzzle has pieces now.
 		const auto kind = static_cast<script::PuzzleGameType>(subtype);
-		if (subtype < static_cast<uint32_t>(script::PuzzleGameType::Last) &&
-		    ecs::puzzle_game::PlayedBeforeSolved(kind).has_value())
+		if (subtype < static_cast<uint32_t>(script::PuzzleGameType::Last) && Locator::puzzleGameSystem::has_value())
 		{
-			return PuzzleGameArchetype::Create(position, yAngleRadians, scale, kind);
+			const auto puzzle = Locator::puzzleGameSystem::value().Create(kind, position, yAngleRadians, scale);
+			if (puzzle != entt::null)
+			{
+				return puzzle;
+			}
 		}
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for puzzle game kind {}", subtype);
 		return entt::null;
@@ -2489,11 +2492,12 @@ void GetPosition() // 023 GET_POSITION
 		}
 		else if (const auto* wallHug = registry.TryGet<const ecs::components::WallHug>(object);
 		         wallHug != nullptr && transform != nullptr && !registry.AllOf<ecs::components::Creature>(object) &&
-		         ecs::villager_script_rules::WithinAStepOfGoal(glm::vec2(transform->position.x, transform->position.z),
-		                                                       wallHug->goal, wallHug->speed))
+		         ecs::villager_script_rules::WithinAStepOfGoalPlace(glm::vec2(transform->position.x, transform->position.z),
+		                                                            wallHug->goalPlace, wallHug->speed))
 		{
 			// A walker within a turn's step of where it is walking to is seen there, on the ground
-			position = {wallHug->goal.x, Locator::terrainSystem::value().GetHeightAt(wallHug->goal), wallHug->goal.y};
+			const auto goal = ecs::wall_hug::ToPoint(wallHug->goalPlace);
+			position = {goal.x, Locator::terrainSystem::value().GetHeightAt(goal), goal.y};
 		}
 		else if (transform != nullptr)
 		{
@@ -4134,11 +4138,14 @@ void Played() // 064 PLAYED
 		Pushb(played);
 		return;
 	}
-	if (const auto* puzzle = Locator::entitiesRegistry::value().TryGet<const ecs::components::PuzzleGame>(object))
+	if (Locator::puzzleGameSystem::has_value())
 	{
 		// A puzzle game has played once the player solves it
-		Pushb(ecs::puzzle_game::PlayedBeforeSolved(puzzle->type).value_or(false));
-		return;
+		if (const auto played = Locator::puzzleGameSystem::value().Played(object))
+		{
+			Pushb(*played);
+			return;
+		}
 	}
 	if (const auto* animal = Locator::entitiesRegistry::value().TryGet<const ecs::components::Animal>(object))
 	{
@@ -4467,10 +4474,11 @@ void InCreatureHand() // 076 IN_CREATURE_HAND
 		Pushb(false);
 		return;
 	}
-	const auto* held = registry.TryGet<const ecs::components::CreatureHeldObject>(creature);
+	// What the creature carries: while it prepares a throw, it carries nothing
+	const auto carried = ecs::creature_carried::CarriedBy(registry, creature);
 	const auto* action = registry.TryGet<const ecs::components::CreatureObjectAction>(creature);
 	const auto eating = action != nullptr && action->kind == creature_object_actions::Kind::Eat ? action->target : std::nullopt;
-	Pushb(script::property_rules::InCreatureHand(thing, held != nullptr ? held->object : entt::null, eating));
+	Pushb(script::property_rules::InCreatureHand(thing, carried.value_or(entt::null), eating));
 }
 
 /// Changes the desires of the creature a script names, telling the script when it names no creature
@@ -5526,11 +5534,13 @@ void GetObjectState() // 143 GET_OBJECT_STATE
 		return;
 	}
 	// A puzzle game that nobody has started gives whether it has played
-	if (const auto* puzzle = registry.TryGet<const ecs::components::PuzzleGame>(object))
+	if (Locator::puzzleGameSystem::has_value())
 	{
-		const bool played = ecs::puzzle_game::PlayedBeforeSolved(puzzle->type).value_or(false);
-		Pushi(static_cast<int32_t>(ecs::puzzle_game::StateBeforeStart(played)));
-		return;
+		if (const auto state = Locator::puzzleGameSystem::value().State(object))
+		{
+			Pushi(static_cast<int32_t>(*state));
+			return;
+		}
 	}
 	ScriptMessage("Thing not a known type for function");
 	Pushi(0);
@@ -6440,7 +6450,7 @@ void SetAviSequence() // 203 SET_AVI_SEQUENCE
 	if (sequence == 1)
 	{
 		// The intro is cut short: it fades from 58 s and ends at 60 s. The script's fade is lifted at once under it
-		videos.Play("Data/INTRO.bik");
+		videos.Play(ecs::systems::k_IntroFilm);
 		videos.ScheduleIntro();
 		director.FadeBackToNormal(0);
 	}
@@ -7597,7 +7607,7 @@ void GetObjectHeld273() // 273 GET_OBJECT_HELD
 		return;
 	}
 	const auto held = Locator::creatureObjectActionSystem::has_value()
-	                      ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
+	                      ? Locator::creatureObjectActionSystem::value().GetCarried(creature)
 	                      : std::nullopt;
 	if (!held.has_value())
 	{

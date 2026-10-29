@@ -63,6 +63,7 @@
 #include "ECS/VillagerDroppedLog.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WalkerPlacement.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "Fire/ViaPoint.h"
 #include "InfoConstants.h"
@@ -414,9 +415,9 @@ bool DecideHowToPutOutFire(LivingAction& action, entt::entity fire)
 }
 
 /// The villager's walk's goal
-glm::vec2& GoalOf(entt::entity villager)
+glm::ivec2& GoalOf(entt::entity villager)
 {
-	return Entities().Get<WallHug>(villager).goal;
+	return Entities().Get<WallHug>(villager).goalPlace;
 }
 } // namespace
 
@@ -553,7 +554,7 @@ uint32_t villager_fire::ReactToFire(LivingAction& action)
 		}
 	}
 	// Otherwise it goes round the fire on its way
-	SetupMoveAroundFire(action, GoalOf(villager), State(action, LivingAction::Index::Previous));
+	SetupMoveAroundFire(action, ecs::wall_hug::ToPoint(GoalOf(villager)), State(action, LivingAction::Index::Previous));
 	return 1;
 }
 
@@ -626,7 +627,7 @@ uint32_t villager_fire::MoveAroundFire(LivingAction& action)
 		// Where it was going lies in the fire: it stops there and decides again
 		SetPrevious(action, VillagerStates::DecideWhatToDo);
 		state.walkTarget = CoordsToMetres(target);
-		GoalOf(villager) = CoordsToMetres(target);
+		GoalOf(villager) = {target.x, target.z};
 		return 1;
 	}
 	const auto members = fires.GetBlazeMembers(state.fire);
@@ -679,7 +680,7 @@ void villager_fire::SetupOnFire(entt::entity villager, entt::entity fire)
 	}
 	villager_memory::StorePreviousState(*action);
 	auto& state = FireStateOf(villager);
-	state.walkTarget = GoalOf(villager);
+	state.walkTarget = ecs::wall_hug::ToPoint(GoalOf(villager));
 	villager_home::LeaveHome(villager);
 	SetTopState(*action, VillagerStates::DecideWhatToDo);
 	FireStateOf(villager).fire = fire;
@@ -692,7 +693,7 @@ namespace
 void FinishBeingOnFire(LivingAction& action)
 {
 	const auto villager = EntityOf(action);
-	GoalOf(villager) = FireStateOf(villager).walkTarget;
+	GoalOf(villager) = ecs::wall_hug::ToWhole(FireStateOf(villager).walkTarget);
 	PopFromPrevious(action);
 }
 } // namespace

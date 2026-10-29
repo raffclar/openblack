@@ -138,10 +138,12 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureBodyFile.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/LearningMarker.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -165,6 +167,7 @@
 #include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/TownDesire.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Moon.h"
 #include "Gui/TextDatabase.h"
@@ -720,7 +723,7 @@ std::optional<creature_plan_actions::Situation::Fishing> FishingFor(const ecs::R
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
 		const auto& hands = Locator::creatureObjectActionSystem::value();
-		if (const auto held = hands.GetHeld(creature))
+		if (const auto held = hands.GetCarried(creature))
 		{
 			holdingFood = hands.FoodValueOf(*held).has_value();
 		}
@@ -1011,12 +1014,12 @@ size_t MiraclesKnownBy(const ecs::Registry& registry, entt::entity creature)
 /// The object type of the thing that another creature carries, none when it carries no thing
 std::optional<uint32_t> CarriedObjectTypeOf(const ecs::Registry& registry, entt::entity creature)
 {
-	const auto* held = registry.TryGet<const CreatureHeldObject>(creature);
-	if (held == nullptr || !registry.Valid(held->object))
+	const auto held = ecs::creature_carried::CarriedBy(registry, creature);
+	if (!held.has_value())
 	{
 		return std::nullopt;
 	}
-	return mind_detail::ObjectSortOf(registry, held->object);
+	return mind_detail::ObjectSortOf(registry, *held);
 }
 
 /// The attributes only the beliefs about villagers, creatures, buildings, towns and forests have
@@ -1773,10 +1776,9 @@ std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Targe
 		{
 			continue;
 		}
-		const auto* held = registry.TryGet<const HeldByCreature>(thing);
 		candidates.push_back({.id = entt::to_integral(thing),
 		                      .distance = gutils::GetDistanceInMetres(map_coords::ToMetres(belief.place), position),
-		                      .held = held != nullptr && held->creature == creature});
+		                      .held = ecs::creature_carried::Carries(registry, creature, thing)});
 	}
 	return creature_planner::ChooseUsed(candidates, distanceWeight, goal);
 }
@@ -2119,8 +2121,7 @@ float mind_detail::Nearness(const ecs::Registry& registry, entt::entity creature
 			from = tied->position;
 		}
 	}
-	const auto* held = registry.TryGet<const HeldByCreature>(object);
-	return creature_planner::DistancePriority(held != nullptr && held->creature == creature,
+	return creature_planner::DistancePriority(ecs::creature_carried::Carries(registry, creature, object),
 	                                          gutils::GetDistanceInMetres(place, map_coords::FromMetres(glm::xz(from))),
 	                                          distanceWeight);
 }
@@ -2939,6 +2940,7 @@ bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const
 	                     mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Fight,
 	    .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
 	    .onlyAsked = fighting != nullptr && fighting->part == CreatureFighting::Part::Asked,
+	    .mindFree = fighting != nullptr && fighting->mindFree,
 	});
 }
 } // namespace
@@ -3221,10 +3223,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			const auto at = std::ranges::find(candidates, candidate.action, &creature_planner::ActionCandidate::action);
 			return executors.at(static_cast<size_t>(std::distance(candidates.begin(), at)));
 		};
-		const auto heldByItself = [&](entt::entity thing) {
-			const auto* held = registry.TryGet<const HeldByCreature>(thing);
-			return held != nullptr && held->creature == creature;
-		};
+		const auto heldByItself = [&](entt::entity thing) { return ecs::creature_carried::Carries(registry, creature, thing); };
 		// The thing that an action can act on: the most useful, the first of equals, and only one that is worth more than
 		// nothing. An action that must not act on what the creature holds does not take a thing that it holds.
 		const auto mostUseful = [](const std::vector<creature_planner::ObjectCandidate>& found) {
@@ -3426,12 +3425,12 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	{
 		return false;
 	}
-	// A forced plan first stops the reaction that the creature has. What the creature does stops as a failure, and this
-	// also stops a fight that it sets up, for both creatures.
+	// A forced plan first stops the reaction that the creature has. What the creature does stops as a failure. This also
+	// stops a fight that the creature is in, out of its duel.
 	EndReaction(creature);
 	if (!plan.ownFight)
 	{
-		CallOffFightSetUp(creature);
+		EndFightForPlan(creature);
 	}
 	// A creature told to do something as soon as it is made has a mind ready for it
 	SetUpMind(creature, *body, *mind);
@@ -3457,7 +3456,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				}
 			}
 			const bool alreadyHeld = Locator::creatureObjectActionSystem::has_value() &&
-			                         Locator::creatureObjectActionSystem::value().GetHeld(creature) == plan.object;
+			                         Locator::creatureObjectActionSystem::value().GetCarried(creature) == plan.object;
 			const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 			const auto eye = camera.has_value() ? camera->origin : transform->position;
 			agenda = creature_leash_orders::Hold(
@@ -3504,7 +3503,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 				situation.instrumentRadius = object_measures::TwoDRadius(registry, *plan.instrument);
 				situation.usedOneShot = OneShotOf(registry, *plan.instrument);
 			}
-			situation.handFull = registry.AllOf<CreatureHeldObject>(creature);
+			situation.handFull = ecs::creature_carried::CarriedBy(registry, creature).has_value();
 			if (plan.activityObject.has_value())
 			{
 				situation.activity = entt::to_integral(*plan.activityObject);
@@ -3742,19 +3741,21 @@ std::optional<glm::vec3> SacrificeAltarOf(const ecs::Registry& registry, PlayerN
 	return altar;
 }
 
-/// The storage pit of the nearest town of a player to a place, by the distance across the land. None when the player
-/// has no town, or when the nearest town has no storage pit.
+/// The storage pit of the nearest town of a player to a place, by the distance across the land. The towns come in the
+/// order of the player's list, so of two towns at the same distance the first in the list is the nearest. None when the
+/// player has no town, or when the nearest town has no storage pit.
 std::optional<uint32_t> OwnTownPitOf(const ecs::Registry& registry, PlayerNames player, glm::vec3 from)
 {
 	std::vector<entt::entity> towns;
 	std::vector<float> metres;
-	registry.Each<const Town, const Transform>([&](entt::entity town, const Town& data, const Transform& at) {
-		if (data.owner == player)
+	for (const auto town : ecs::player_towns::InOrder(registry, player))
+	{
+		if (const auto* at = registry.TryGet<const Transform>(town))
 		{
 			towns.push_back(town);
-			metres.push_back(gutils::GetDistanceInMetres(at.position, from));
+			metres.push_back(gutils::GetDistanceInMetres(at->position, from));
 		}
-	});
+	}
 	const auto nearest = creature_town_theft::NearestTown(metres);
 	const auto pit = nearest.has_value() ? ecs::construction::StoragePitOf(towns.at(*nearest)) : std::nullopt;
 	return pit.has_value() ? std::optional(entt::to_integral(*pit)) : std::nullopt;
@@ -3783,7 +3784,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	situation.radius = object_measures::TwoDRadius(registry, creature);
 	situation.height = body != nullptr ? k_HeightOfSizeOne * ShownSize(*body) : 0.0f;
 	const auto held = Locator::creatureObjectActionSystem::has_value()
-	                      ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
+	                      ? Locator::creatureObjectActionSystem::value().GetCarried(creature)
 	                      : std::nullopt;
 	situation.handFull = held.has_value();
 	if (held.has_value())
@@ -3885,7 +3886,7 @@ void CreatureMindSystem::SituateEmotes(entt::entity creature, creature_plan_acti
 	}
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
-		if (const auto held = Locator::creatureObjectActionSystem::value().GetHeld(creature))
+		if (const auto held = Locator::creatureObjectActionSystem::value().GetCarried(creature))
 		{
 			const auto life = magic_living::LifeOf(*held);
 			situation.holdingStrokeable =
@@ -4282,7 +4283,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	if (feedback > 0.0f && mind.developmentPhase > 0 && info != nullptr && info->eatWhenStroked &&
 	    Locator::creatureObjectActionSystem::has_value())
 	{
-		if (const auto held = Locator::creatureObjectActionSystem::value().GetHeld(creature);
+		if (const auto held = Locator::creatureObjectActionSystem::value().GetCarried(creature);
 		    held.has_value() && FoodValueOf(*held).has_value())
 		{
 			creature_learning::MakeFullyDominant(desires, Desire::Hunger, mind_detail::DesireFloorOf(creature));
@@ -4727,8 +4728,7 @@ bool CreatureMindSystem::ContinueKeptPlanWith(entt::entity creature, CreatureMin
 		return false;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* held = registry.TryGet<const HeldByCreature>(gift);
-	const bool holdsGift = held != nullptr && held->creature == creature;
+	const bool holdsGift = ecs::creature_carried::Carries(registry, creature, gift);
 	const auto whole = kept->about.has_value() ? kept->about : kept->activityObject;
 	const bool needsThingToUse = creature_plan_actions::NeedsThingToUse(action.name);
 	const auto use = executor->use != Target::None ? executor->use : Target::Pickable;
@@ -5120,7 +5120,8 @@ void CreatureMindSystem::WatchVillagerSkill(entt::entity creature, CreatureMindS
 	float toGoal = 0.0f;
 	if (const auto* walk = registry.TryGet<const WallHug>(villager); walk != nullptr)
 	{
-		toGoal = gutils::GetDistanceInMetres(glm::vec2(glm::xz(registry.Get<const Transform>(villager).position)), walk->goal);
+		toGoal = gutils::GetDistanceInMetres(glm::vec2(glm::xz(registry.Get<const Transform>(villager).position)),
+		                                     wall_hug::ToPoint(walk->goalPlace));
 	}
 	const auto state = creature_watching::StateToLearnFrom({
 	    .state = action->states.at(static_cast<size_t>(LivingAction::Index::Top)),
@@ -5402,14 +5403,13 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 		const auto kind = known != nullptr ? known->kind : context.belief->type;
 		sameKind = BelievedThingsToActOn(creature, mind, desire, [&](entt::entity candidate) {
 			const auto* belief = mind.beliefs.Find(candidate);
-			const auto* held = registry.TryGet<const HeldByCreature>(candidate);
 			return creature_follow_up::SuitsDoAgain({
 			    .sameKind = belief != nullptr && belief->kind == kind,
 			    .passesTest = executor->target == Target::None
 			                      ? std::nullopt
 			                      : std::optional(Accepts(registry, executor->target, candidate, creature)),
 			    .notWhatItHolds = executor->notWhatItHolds,
-			    .heldByItself = held != nullptr && held->creature == creature,
+			    .heldByItself = ecs::creature_carried::Carries(registry, creature, candidate),
 			});
 		});
 	}

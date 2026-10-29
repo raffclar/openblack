@@ -1,0 +1,36 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#pragma once
+
+#include <optional>
+
+#include <entt/entity/entity.hpp>
+
+namespace openblack::ecs
+{
+class Registry;
+}
+
+/// What a creature carries, as its mind, the scripts, the towns and the carried thing see it. This is the thing in its
+/// hand, except while it prepares a throw: then the hand keeps the thing until the release, but the creature carries
+/// nothing.
+namespace openblack::ecs::creature_carried
+{
+
+/// The thing that the creature carries, none when it carries nothing
+[[nodiscard]] std::optional<entt::entity> CarriedBy(const Registry& registry, entt::entity creature);
+
+/// The creature that carries the thing, none when no creature carries it
+[[nodiscard]] std::optional<entt::entity> CarrierOf(const Registry& registry, entt::entity thing);
+
+/// Whether the creature carries the thing
+[[nodiscard]] bool Carries(const Registry& registry, entt::entity creature, entt::entity thing);
+
+} // namespace openblack::ecs::creature_carried

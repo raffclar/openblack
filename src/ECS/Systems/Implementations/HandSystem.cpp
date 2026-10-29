@@ -20,19 +20,23 @@
 #include "3D/HandMorph.h"
 #include "Common/MachineClock.h"
 #include "ECS/Archetypes/HandArchetype.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
+#include "ECS/Components/HandStart.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/HeldDrawTrack.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Hand/HandStart.h"
 #include "Hand/HandStillness.h"
 #include "Hand/OtherHeldDraw.h"
 #include "Locator.h"
@@ -53,6 +57,36 @@ ReportedHand& ReportedOf(ecs::Registry& registry, entt::entity hand)
 		return *reported;
 	}
 	return registry.Assign<ReportedHand>(hand);
+}
+
+/// The entity of a player that has a start, or null
+entt::entity StartedPlayer(const ecs::Registry& registry, PlayerNames name)
+{
+	entt::entity found = entt::null;
+	registry.Each<const Player, const HandStart>([&found, name](entt::entity entity, const Player& player, const HandStart&) {
+		if (player.name == name && found == entt::null)
+		{
+			found = entity;
+		}
+	});
+	return found;
+}
+
+/// The reported hand of a player starts at a point. The camera looks at the point from above. The turn measures the
+/// first movement of the hand from the point.
+void StartHandAt(ecs::Registry& registry, entt::entity hand, const glm::vec3& point)
+{
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	auto& reported = ReportedOf(registry, hand);
+	reported.focus = point;
+	reported.camera = hand_start::CameraOf(point);
+	if (auto* stillness = registry.TryGet<HandStillness>(hand))
+	{
+		stillness->last = point;
+	}
 }
 } // namespace
 
@@ -97,11 +131,43 @@ std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>
 		registry.Assign<GodHand>(hand, player);
 	}
 	_godHands[player] = hands;
+	// Hands that the game makes after the citadel of their player start at the citadel
+	if (const auto started = StartedPlayer(registry, player); started != entt::null)
+	{
+		StartHandAt(registry, hands[static_cast<size_t>(Side::Left)], registry.Get<const HandStart>(started).point);
+	}
 	if (const auto logger = spdlog::get("game"))
 	{
 		SPDLOG_LOGGER_INFO(logger, "The god of player {} has hands of its own", static_cast<int>(player));
 	}
 	return hands;
+}
+
+void HandSystem::StartAtCitadel(PlayerNames owner, const glm::vec3& point)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The player keeps the start for the hands and the computer mind that the game makes later
+	entt::entity found = entt::null;
+	registry.Each<const Player>([&found, owner](entt::entity entity, const Player& player) {
+		if (player.name == owner && found == entt::null)
+		{
+			found = entity;
+		}
+	});
+	if (found != entt::null)
+	{
+		registry.AssignOrReplace<HandStart>(found, HandStart {.point = point});
+		// The camera of a computer mind also looks at the citadel until the mind moves its hand
+		if (auto* mind = registry.TryGet<ComputerPlayer>(found))
+		{
+			mind->hand.camera = hand_start::CameraOf(point);
+		}
+	}
+	// The reports move only the left hand, so only the left hand starts at the citadel
+	if (const auto hands = GetHandsOf(owner); hands.has_value())
+	{
+		StartHandAt(registry, (*hands)[static_cast<size_t>(Side::Left)], point);
+	}
 }
 
 void HandSystem::FindAfterLoad()
@@ -192,7 +258,10 @@ void HandSystem::Report(PlayerNames player, const player_commands::HandReport& r
 		{
 			track = &registry.Assign<HeldDrawTrack>(hand);
 		}
-		hand_grab::other_held::Reported(*track, before != nullptr ? before->handPoint : glm::vec3(0.0f));
+		// The held thing moves from where the hand was at the last turn. Before the first turn that is the start of the hand.
+		const auto* stillness = registry.TryGet<const HandStillness>(hand);
+		const auto from = stillness != nullptr ? stillness->last : (before != nullptr ? before->handPoint : glm::vec3(0.0f));
+		hand_grab::other_held::Reported(*track, from);
 	}
 	auto& reported = ReportedOf(registry, hand);
 	reported.collidePoint = report.collidePoint;

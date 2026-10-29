@@ -114,6 +114,24 @@ animals::Turn TurnAndStep(animals::Move& move, uint16_t turnAngle)
 }
 } // namespace
 
+std::optional<animals::MoveStage> animals::MoveStageOfGame(uint8_t moveState)
+{
+	constexpr uint8_t k_Arrived = 0x01;
+	constexpr uint8_t k_FinalStep = 0x04;
+	constexpr uint8_t k_StepThrough = 0x0B;
+	switch (moveState)
+	{
+	case k_Arrived:
+		return MoveStage::AtGoal;
+	case k_FinalStep:
+		return MoveStage::FinalStep;
+	case k_StepThrough:
+		return MoveStage::StepThrough;
+	default:
+		return std::nullopt;
+	}
+}
+
 animals::Turn animals::SetUpMove(Move& move, glm::ivec2 goal, uint16_t turnAngle)
 {
 	move.goal = goal;

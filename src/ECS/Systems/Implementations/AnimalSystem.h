@@ -43,6 +43,8 @@ public:
 	entt::entity CreateBird(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) override;
 	entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) override;
 	entt::entity CreateStillAnimal(AnimalInfo type, glm::vec3 position, float heading, float scale) override;
+	entt::entity CreateLoadedAnimal(const LoadedAnimal& loaded) override;
+	entt::entity TempleFlock(entt::entity temple) override;
 	void SetFlockTown(entt::entity flock, entt::entity town) override;
 	entt::entity CreateGrazer(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock,
 	                          entt::entity town) override;

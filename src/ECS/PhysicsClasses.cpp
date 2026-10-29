@@ -27,6 +27,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -177,7 +178,7 @@ physics_classes::ClassFacts MobileObjectFacts(MobileObjectInfo type)
 	case MobileObjectInfo::HanoiPuzzlePart2:
 	case MobileObjectInfo::HanoiPuzzlePart3:
 	case MobileObjectInfo::HanoiPuzzlePart4:
-		// The puzzle's blocks move only while they aren't set in place; the puzzle isn't ported, so none is set
+		// A ring moves only while it rests on no piece (see Classify)
 		break;
 	default:
 		break;
@@ -347,7 +348,13 @@ physics_classes::ClassFacts ClassifyKind(const Registry& registry, entt::entity 
 	}
 	if (const auto* mobile = registry.TryGet<const MobileObject>(entity))
 	{
-		return MobileObjectFacts(mobile->type);
+		auto facts = MobileObjectFacts(mobile->type);
+		// A ring of the beach temple puzzle that rests on a piece stays where it is
+		if (const auto* block = registry.TryGet<const HanoiBlock>(entity); block != nullptr && block->below != entt::null)
+		{
+			facts.canBecomePhysicsObject = false;
+		}
+		return facts;
 	}
 	if (const auto* shield = registry.TryGet<const MagicShield>(entity))
 	{

@@ -91,6 +91,11 @@ creature_object_actions::EatStop creature_object_actions::OnEatStop(bool playing
 	return playing && holds ? EatStop::Deletes : EatStop::Keeps;
 }
 
+bool creature_object_actions::CarriesHeld(std::optional<Kind> kind, Status status, bool released)
+{
+	return kind != Kind::Throw || status != Status::Running || released;
+}
+
 bool creature_object_actions::ShowsHoldPose(std::optional<Kind> playing)
 {
 	if (!playing.has_value())

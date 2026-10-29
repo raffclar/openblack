@@ -672,6 +672,39 @@ bool ScriptObjectsSystem::LoadTable(std::span<const uint8_t> bytes)
 	return true;
 }
 
+void ScriptObjectsSystem::PutSavedTable(const script_objects::Table& table, std::span<const ScriptHold> holds,
+                                        const std::function<bool(entt::entity)>& kept)
+{
+	for (uint16_t index = 1; index < script_objects::k_Places; ++index)
+	{
+		const auto& place = _table.At(index);
+		const auto object = static_cast<entt::entity>(place.object);
+		if (place.object == 0 || !_world->Exists(object) || table.Find(place.object).has_value() || kept(object))
+		{
+			continue;
+		}
+		// The saved game has no such thing: what a script made goes, and anything else is no longer held
+		if (place.createdByScript)
+		{
+			_world->Delete(object);
+			continue;
+		}
+		_world->SetControlled(object, false);
+		_world->SetInScript(object, false);
+	}
+	_table = table;
+	_takesControl = false;
+	_timesFull = 0;
+	for (const auto& hold : holds)
+	{
+		if (_world->Exists(hold.object))
+		{
+			_world->SetInScript(hold.object, hold.inScript);
+			_world->SetControlled(hold.object, hold.controlled);
+		}
+	}
+}
+
 std::vector<ScriptObjectPlace> ScriptObjectsSystem::Places() const
 {
 	std::vector<ScriptObjectPlace> places;

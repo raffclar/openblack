@@ -58,8 +58,10 @@ public:
 
 	virtual ~ObjectDrawListSystemInterface() = default;
 
-	/// Once a frame, after the camera has moved and before anything is drawn: the list is made again when it is due
-	virtual void Update(uint32_t turn) = 0;
+	/// Once a frame, after the camera has moved and before anything is drawn: the list is made again when it is due. The
+	/// game tests the blocks and makes the list as a part of the land's draw, so a frame that does not draw the land (see
+	/// object_draw_list::FrameWithoutLand) keeps the list as the last frame of the land left it.
+	virtual void Update(uint32_t turn, bool landDrawn) = 0;
 	/// Reads the blocks of the land. Call it behind the loading screen, so that the first frame of a land does not read
 	/// them.
 	virtual void PrepareLand() = 0;

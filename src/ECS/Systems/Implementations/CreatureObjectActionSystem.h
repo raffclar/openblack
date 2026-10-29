@@ -71,6 +71,9 @@ public:
 	void StopForPlan(entt::entity creature, bool stopsBody) override;
 	[[nodiscard]] std::optional<float> GetProgress(entt::entity creature) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeld(entt::entity creature) const override;
+	[[nodiscard]] std::optional<entt::entity> GetCarried(entt::entity creature) const override;
+	[[nodiscard]] bool HandsTouched(entt::entity creature) const override;
+	bool CrushUnderFoot(entt::entity creature, entt::entity thing) override;
 	[[nodiscard]] std::optional<float> FoodValueOf(entt::entity object) const override;
 	[[nodiscard]] bool CanPickUp(entt::entity creature, entt::entity object) const override;
 	[[nodiscard]] bool CanEat(entt::entity creature, entt::entity object) const override;

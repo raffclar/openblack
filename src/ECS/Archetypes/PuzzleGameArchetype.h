@@ -12,15 +12,19 @@
 #include <entt/fwd.hpp>
 #include <glm/fwd.hpp>
 
-#include "ScriptHeaders/ScriptEnums.h"
+namespace openblack::ecs::components
+{
+struct PuzzleGame;
+}
 
 namespace openblack::ecs::archetypes
 {
 class PuzzleGameArchetype
 {
 public:
-	/// A puzzle game that a script makes, at a place, turned and scaled. It has no pieces and is never drawn.
-	static entt::entity Create(const glm::vec3& position, float yAngleRadians, float scale, script::PuzzleGameType type);
+	/// A puzzle game that a script makes, at a place, turned and scaled. The game never draws the puzzle itself; its pieces
+	/// are things of their own.
+	static entt::entity Create(const glm::vec3& position, float yAngleRadians, const components::PuzzleGame& game);
 	PuzzleGameArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

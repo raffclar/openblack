@@ -228,7 +228,7 @@ TEST(ScriptFlocks, MovingAFlockMovesItsPlaceAndItsLeadersGoal)
 	script_flocks::AddLiving(registry, flock, leader);
 	script_flocks::MoveTo(registry, flock, Metres(30, 40));
 	EXPECT_EQ(registry.Get<components::Flock>(flock).place, Metres(30, 40));
-	EXPECT_NEAR(registry.Get<components::WallHug>(leader).goal.x, 30.0f, 0.001f);
+	EXPECT_EQ(registry.Get<components::WallHug>(leader).goalPlace.x, Metres(30, 40).x);
 }
 
 TEST(ScriptFlocks, ARandomMemberPassesOverTheOneLeftOut)

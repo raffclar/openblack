@@ -73,6 +73,7 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerRoutine.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -286,6 +287,82 @@ entt::entity AnimalSystem::CreateStillAnimal(AnimalInfo type, glm::vec3 position
 	}
 	registry.Assign<AnimalPose>(entity, AnimalPose {.light = light});
 	return entity;
+}
+
+entt::entity AnimalSystem::CreateLoadedAnimal(const LoadedAnimal& loaded)
+{
+	auto& registry = EntityRegistry();
+	const bool bird = animals::birds::IsLandBird(loaded.type);
+	const bool grazer = animals::grazers::IsGrazer(loaded.type);
+	const auto xz = Metres(loaded.position);
+	if ((!bird && !grazer) || !OnMap(xz))
+	{
+		return entt::null;
+	}
+	const glm::vec3 point(xz.x, loaded.altitude, xz.y);
+	const auto entity = ecs::archetypes::AnimalArchetype::Create(loaded.type, point, gutils::ConvertGameAngleTo3D(loaded.angle),
+	                                                             loaded.scale, PlayerNames::NEUTRAL);
+	auto& animal = registry.Get<Animal>(entity);
+	animal.birthTurn = loaded.birthTurn;
+	animal.life = loaded.life;
+	// It keeps its height above the land under it, and heads for the same height at its goal
+	animal.height = bird ? std::max(loaded.altitude - Ground(xz), 0.0f) : 0.0f;
+	animal.goalHeight = animal.height;
+	animal.move.position = loaded.position;
+	animal.move.goal = loaded.goal;
+	animal.move.angle = loaded.angle;
+	animal.move.speed = loaded.speed;
+	animal.move.step = loaded.step;
+	// A move that goes round a thing is not kept yet: the animal steps straight through to its goal
+	animal.move.stage = animals::MoveStageOfGame(loaded.moveState).value_or(animals::MoveStage::StepThrough);
+	// A state that openblack does not have yet becomes a new decision
+	SetTopState(animal, AnimalStateOfGame(loaded.state).value_or(AnimalState::DecideWhatToDo));
+	animal.finalState = AnimalStateOfGame(loaded.finalState).value_or(AnimalState::DecideWhatToDo);
+	SyncWorld(animal);
+	animal.previousPosition = animal.position;
+	animal.previousHeading = animal.heading;
+	registry.Assign<AnimalPose>(entity, AnimalPose {.light = bird ? AnimalLight::BrightestLand : AnimalLight::Land});
+	animal.town = loaded.town;
+	auto* flockData = registry.Valid(loaded.flock) ? registry.TryGet<Flock>(loaded.flock) : nullptr;
+	if (flockData != nullptr)
+	{
+		animal.flock = loaded.flock;
+		flockData->members.push_back(entity);
+		flockData->most = std::max(flockData->most, static_cast<uint32_t>(flockData->members.size()));
+	}
+	if (grazer)
+	{
+		// It sleeps where its herd's home is
+		auto& needs = registry.Assign<Grazer>(entity);
+		if (flockData != nullptr)
+		{
+			needs.sleepingCell = map_coords::Cell(flockData->place);
+		}
+	}
+	return entity;
+}
+
+entt::entity AnimalSystem::TempleFlock(entt::entity templeEntity)
+{
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(templeEntity) || !registry.AllOf<Temple, Transform>(templeEntity))
+	{
+		return entt::null;
+	}
+	// Its flock, made the first time, about the temple
+	auto* templeBirds = registry.TryGet<TempleBirds>(templeEntity);
+	if (templeBirds == nullptr)
+	{
+		templeBirds = &registry.Assign<TempleBirds>(templeEntity);
+	}
+	if (!registry.Valid(templeBirds->flock) || !registry.AllOf<Flock>(templeBirds->flock))
+	{
+		const auto& transform = registry.Get<const Transform>(templeEntity);
+		const glm::vec2 home {transform.position.x, transform.position.z};
+		templeBirds->flock = CreateFlock(home, animals::birds::k_TempleFlockReach, animals::birds::k_TempleFlockDistance);
+		registry.Get<Flock>(templeBirds->flock).temple = templeEntity;
+	}
+	return templeBirds->flock;
 }
 
 void AnimalSystem::JoinFlock(entt::entity entity, entt::entity flockEntity)
@@ -549,7 +626,7 @@ void AnimalSystem::SetupMoveRoundTo(entt::entity entity, Animal& animal, glm::ve
 	animal.move.goal = Fixed(goal);
 	// The walk goes from where it is, facing as it faces, at its speed, and turns as its kind turns
 	auto& walk = registry.AssignOrReplace<WallHug>(entity);
-	walk.goal = goal;
+	walk.goalPlace = animal.move.goal;
 	walk.position = animal.move.position;
 	walk.placedAt = Metres(animal.move.position);
 	walk.gameAngle = animal.move.angle;
@@ -997,18 +1074,8 @@ void AnimalSystem::ProcessTempleBirds()
 		const auto kind = animals::birds::TempleBirdKind(alignment);
 		const auto count = animals::birds::TempleBirdCount(alignment, most, true);
 
-		// Its flock, made the first time, about the temple
+		const auto flockEntity = TempleFlock(templeEntity);
 		auto* templeBirds = registry.TryGet<TempleBirds>(templeEntity);
-		if (templeBirds == nullptr)
-		{
-			templeBirds = &registry.Assign<TempleBirds>(templeEntity);
-		}
-		if (!registry.Valid(templeBirds->flock) || !registry.AllOf<Flock>(templeBirds->flock))
-		{
-			templeBirds->flock = CreateFlock(home, animals::birds::k_TempleFlockReach, animals::birds::k_TempleFlockDistance);
-			registry.Get<Flock>(templeBirds->flock).temple = templeEntity;
-		}
-		const auto flockEntity = templeBirds->flock;
 		bool changed = false;
 		// Those of the other kind go at once, as the player crosses from good to evil or back
 		for (const auto bird : std::vector(registry.Get<Flock>(flockEntity).members))
@@ -1414,7 +1481,7 @@ void AnimalSystem::BringDown([[maybe_unused]] entt::entity wolf, entt::entity pr
 		// in these states
 		if (auto* wallHug = registry.TryGet<WallHug>(prey))
 		{
-			wallHug->goal = Xz(registry.Get<const Transform>(prey).position);
+			wallHug->goalPlace = wall_hug::ToWhole(Xz(registry.Get<const Transform>(prey).position));
 		}
 		if (auto* action = registry.TryGet<LivingAction>(prey); action != nullptr && Locator::livingActionSystem::has_value())
 		{
@@ -1838,7 +1905,7 @@ void AnimalSystem::MoveFlockPlace(entt::entity flock, glm::ivec2 place)
 		}
 		else if (auto* wallHug = registry.TryGet<WallHug>(leader))
 		{
-			wallHug->goal = Metres(place);
+			wallHug->goalPlace = place;
 		}
 	}
 	flockData->place = map_coords::MapCoords {place.x, place.y, 0.0f};

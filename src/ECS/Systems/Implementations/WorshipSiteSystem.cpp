@@ -44,6 +44,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
@@ -651,20 +652,17 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	const auto templePosition = registry.Get<const Transform>(temple).position;
 	const auto templeOwner = registry.Get<const Temple>(temple).owner;
 
-	// The place is judged against the town of the tribe nearest the temple, of any player; without one, the temple
+	// The place is judged against the town of the tribe nearest the temple, of any player; without one, the temple. The
+	// towns come in the order of each player's list in turn and the neutral list last, so the first met wins a tie.
 	auto spot = Across(templePosition);
 	auto nearest = std::numeric_limits<float>::max();
-	std::vector<std::pair<uint32_t, entt::entity>> towns;
-	registry.Each<const Town, const Tribe, const Transform>(
-	    [&towns, tribe](entt::entity entity, const Town& town, const Tribe& townTribe, const Transform& /*unused*/) {
-		    if (townTribe == tribe)
-		    {
-			    towns.emplace_back(town.id, entity);
-		    }
-	    });
-	std::ranges::sort(towns);
-	for (const auto& [id, town] : towns)
+	for (const auto town : ecs::player_towns::AllInOrder(registry))
 	{
+		const auto* townTribe = registry.TryGet<const Tribe>(town);
+		if (townTribe == nullptr || *townTribe != tribe || !registry.AllOf<Transform>(town))
+		{
+			continue;
+		}
 		const auto at = Across(registry.Get<const Transform>(town).position);
 		if (const auto distance = gutils::GetDistanceInMetres(Across(templePosition), at); distance < nearest)
 		{

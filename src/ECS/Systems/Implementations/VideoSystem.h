@@ -86,6 +86,7 @@ public:
 	[[nodiscard]] bool HidesWorld() const override { return _fallingSpell; }
 	[[nodiscard]] std::optional<VideoPicture> GetPicture() const override;
 
+	void RegisterScriptFilms() override;
 	void SetFilmsEnabled(bool enabled) override { _filmsEnabled = enabled; }
 	[[nodiscard]] bool AreFilmsEnabled() const override { return _filmsEnabled; }
 	void SetFilmSurface(std::optional<graphics::film_surface::Format> surface) override { _filmSurface = surface; }

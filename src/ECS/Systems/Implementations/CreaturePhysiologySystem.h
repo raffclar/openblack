@@ -35,6 +35,7 @@ public:
 	void SitTurn(entt::entity creature) override;
 	void WakeFromFaint(entt::entity creature) override;
 	void FinishAction(entt::entity creature, std::string_view action) override;
+	void GainStrengthOf(entt::entity creature, std::string_view action) override;
 	void ModifyStrength(entt::entity creature, float amount) override;
 
 	void SetTimeScale(float scale) override;

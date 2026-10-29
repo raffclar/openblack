@@ -296,11 +296,11 @@ void PutMoveTag(ecs::Registry& registry, entt::entity entity, uint8_t moveState,
 }
 
 /// The villager keeps the walk of the file: its goal, its step, its speed, the way it faces and its move state
-void PutWalk(ecs::Registry& registry, entt::entity entity, const world_import::ImportedVillager& villager, glm::vec2 goal)
+void PutWalk(ecs::Registry& registry, entt::entity entity, const world_import::ImportedVillager& villager, glm::ivec2 goal)
 {
 	const auto& walk = villager.walk;
 	auto& wallHug = registry.Get<WallHug>(entity);
-	wallHug.goal = goal;
+	wallHug.goalPlace = goal;
 	wallHug.step = {walk.stepX, walk.stepZ};
 	wallHug.stepAltitude = walk.stepAltitude;
 	wallHug.yAngle = villager.heading;
@@ -350,6 +350,16 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		made.emplace(town.number, PutTown(registry, town));
 		townIds.emplace(town.number, town.id);
 	}
+	// Each town takes its place in the list of its player as the file keeps it. A town that no list of the file holds
+	// keeps its place before the towns of the lists.
+	for (const auto number : imported.townLists)
+	{
+		const auto town = made.find(number);
+		if (town != made.end() && townIds.contains(number))
+		{
+			registry.Get<Town>(town->second).gained = registry.Context().nextTownGained++;
+		}
+	}
 
 	for (const auto& abode : imported.abodes)
 	{
@@ -374,17 +384,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 	uint32_t present = 0;
 	for (const auto& villager : imported.villagers)
 	{
-		auto states = world_import::StartStates(villager.states, villager.moveState, villager.walk.hugsCircle);
-		const auto goalX = world_import::MetresOfWhole(villager.walk.goal.x);
-		const auto goalZ = world_import::MetresOfWhole(villager.walk.goal.z);
-		const bool keeps = states == villager.states;
-		// A villager that walks, or that goes back to a walk, to a goal that no metre value gives again decides again.
-		// A villager in another state makes a new walk before it walks again, so its goal is not used.
-		const bool exactGoal = goalX.has_value() && goalZ.has_value();
-		if (keeps && !exactGoal && world_import::UsesWalkGoal(states))
-		{
-			states = world_import::DecideAgain();
-		}
+		const auto states = world_import::StartStates(villager.states, villager.moveState, villager.walk.hugsCircle);
 		const auto entity =
 		    ecs::archetypes::VillagerArchetype::CreateLoaded({.position = GroundPosition(villager.position),
 		                                                      .heading = villager.heading,
@@ -406,9 +406,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		made.emplace(villager.number, entity);
 		if (states == villager.states)
 		{
-			PutWalk(registry, entity, villager,
-			        {goalX.value_or(map_coords::ToMetres(villager.walk.goal.x)),
-			         goalZ.value_or(map_coords::ToMetres(villager.walk.goal.z))});
+			PutWalk(registry, entity, villager, {villager.walk.goal.x, villager.walk.goal.z});
 			if (auto work = world_import::WorkOf(states[0], villager.topValues); work.has_value())
 			{
 				works.emplace_back(entity, *work);

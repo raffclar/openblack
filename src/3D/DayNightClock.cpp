@@ -105,6 +105,13 @@ void DayNightClock::SetScriptTime(float hour)
 	_visualTime = _target;
 }
 
+void DayNightClock::ForceVisualTime(float hour)
+{
+	_moveSeconds = 0.0f;
+	SetTarget(hour, 0.0f);
+	_visualTime = _target;
+}
+
 void DayNightClock::MoveScriptTime(float hour, float seconds)
 {
 	SetTarget(ScriptToVisual(hour), seconds);

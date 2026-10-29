@@ -428,8 +428,8 @@ void ReadFlock(WorldReader& r)
 	r.Refs("members");
 	r.Word();
 	r.Word();
-	r.Half();
-	r.Half();
+	r.Half("domainRadius");
+	r.Half("flockDistance");
 	r.Word();
 	r.Word();
 	r.Word();
@@ -474,10 +474,10 @@ void ReadPot(WorldReader& r)
 void ReadMobileObject(WorldReader& r)
 {
 	ReadMobile(r);
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Ref();
+	r.Ref("heldObject");
+	r.Float("xAngle");
+	r.Float("zAngle");
+	r.Ref("path");
 }
 
 void ReadForest(WorldReader& r)
@@ -670,8 +670,8 @@ void ReadMobileStatic(WorldReader& r)
 {
 	ReadMultiMapFixed(r);
 	r.Ref();
-	r.Word();
-	r.Word();
+	r.Float("xAngle");
+	r.Float("zAngle");
 }
 
 void ReadAtomCore(WorldReader& r)
@@ -745,7 +745,7 @@ void ReadRock(WorldReader& r)
 	ReadMobileStatic(r);
 	r.Word();
 	r.Word();
-	r.Ref();
+	r.Ref("rockPlayer");
 }
 
 void ReadCollectionDataEmitterRule(WorldReader& r)
@@ -795,10 +795,10 @@ void ReadMist(WorldReader& r)
 void ReadInfluenceRing(WorldReader& r)
 {
 	ReadPositioned(r);
-	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Word();
+	r.Ref("follows");
+	r.Ref("player");
+	r.Float("radius");
+	r.Word("anti");
 }
 
 void ReadScriptMarker(WorldReader& r)
@@ -809,12 +809,12 @@ void ReadScriptMarker(WorldReader& r)
 void ReadScriptHighlight(WorldReader& r)
 {
 	ReadFixed(r);
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
+	r.Word("highlightUnknown");
+	r.Word("highlightActive");
+	r.Word("highlightHeightSet");
+	r.Float("highlightHeight");
+	r.Word("highlightText");
+	r.Word("highlightCategory");
 }
 
 void ReadStream(WorldReader& r)
@@ -827,8 +827,8 @@ void ReadStream(WorldReader& r)
 void ReadDeadTree(WorldReader& r)
 {
 	ReadRock(r);
-	r.Word();
-	r.Word();
+	r.Word("treeInfo");
+	r.Float("woodMultiplier");
 }
 
 void ReadAnimatedStatic(WorldReader& r)
@@ -873,8 +873,8 @@ void ReadChallenge(WorldReader& r)
 void ReadScriptTimer(WorldReader& r)
 {
 	ReadPositioned(r);
-	r.Word();
-	r.Word();
+	r.Word("timerSetTurn");
+	r.Word("timerTurns");
 }
 
 void ReadWorshipSite(WorldReader& r)

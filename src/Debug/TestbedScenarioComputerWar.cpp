@@ -181,8 +181,8 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                   "temple, and the cow of player one stands near the town of player one. After 30 seconds, a testbed "
 	                   "tool gives the god the action AttackCreatureWithCreature, with the cow and the tiger, as a land "
 	                   "script does.",
-	    .expected = "The hand puts the evil leash on the tiger and ties the leash to the cow. The tiger walks to the cow "
-	                "to attack it.",
+	    .expected = "The hand puts the evil leash on the tiger and ties the leash to the cow. The tie gives the tiger no "
+	                "order: the leash pulls it back near the cow, and soon its anger makes it fight the cow.",
 	    .framing = BothTowns(),
 	    .creatures = {CreatureOf("player two's", CreatureType::Tiger, PlayerNames::PLAYER_TWO, {40.0f, -40.0f}),
 	                  CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {140.0f, 0.0f})},

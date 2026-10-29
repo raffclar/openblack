@@ -30,6 +30,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/VillagerAge.h"
+#include "ECS/WallHugRules.h"
 #include "Locator.h"
 #include "Temple/TemplePeople.h"
 
@@ -52,7 +53,7 @@ std::optional<Walk> WalkOf(const ecs::Registry& registry, entt::entity villager)
 	{
 		return std::nullopt;
 	}
-	Walk walk {.goal = hug->goal, .speed = hug->speed};
+	Walk walk {.goal = ecs::wall_hug::ToPoint(hug->goalPlace), .speed = hug->speed};
 	const auto tagged = [&]<typename Tag>(std::string_view name) {
 		if (const auto* tag = registry.TryGet<const Tag>(villager); tag != nullptr && walk.moveState.empty())
 		{

@@ -197,3 +197,13 @@ TEST(AnimalMove, AScriptReadsTheSpeedInMetresAndADeadAnimalGivesNone)
 	EXPECT_EQ(SpeedForScript(2621, true), 0.0f);
 	EXPECT_EQ(SpeedForScript(0, false), 0.0f);
 }
+
+// A saved move keeps its stage: arrived, the last step or a step straight through. Another move state gives no stage.
+TEST(AnimalMove, TheMoveStatesOfTheGameGiveTheStagesOfAMove)
+{
+	EXPECT_EQ(MoveStageOfGame(0x01), MoveStage::AtGoal);
+	EXPECT_EQ(MoveStageOfGame(0x04), MoveStage::FinalStep);
+	EXPECT_EQ(MoveStageOfGame(0x0B), MoveStage::StepThrough);
+	EXPECT_FALSE(MoveStageOfGame(0x00).has_value());
+	EXPECT_FALSE(MoveStageOfGame(0x0C).has_value());
+}
