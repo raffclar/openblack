@@ -391,12 +391,14 @@ struct MindInFight
 	bool won {false};
 	/// It is the other creature, and the first creature only asked it. It did not tell it to stand still yet.
 	bool onlyAsked {false};
+	/// It is the other creature, and the first creature freed its mind again after the response
+	bool mindFree {false};
 };
 /// Whether the creature can choose a new plan. A creature that lies out cold cannot. In a fight, only the creature that
 /// started the fight by a plan of its own can, while its agenda waits for the fight. A plan that it chooses ends the
 /// fight. The other creature can choose until the first creature tells it to stand still, and a plan that it chooses
-/// also ends the fight. Then it obeys. A creature that the leash, a script or a knock-out makes do something cannot
-/// choose either.
+/// also ends the fight. Then it obeys, until the first creature frees its mind again after the response. A creature
+/// that the leash, a script or a knock-out makes do something cannot choose either.
 [[nodiscard]] bool LetsChoose(const MindInFight& mind);
 /// Whether the creature obeys the creature that started its fight: its desires stand still from the order to stand
 /// still until the fight is over, or until it wins by a knock-out
@@ -883,6 +885,9 @@ constexpr uint32_t k_FaceOffOwnTurn = 4;
 /// second turn, it turns to face the other creature.
 constexpr uint32_t k_SquareOrderTurn = 1;
 constexpr uint32_t k_SquareOwnTurn = 2;
+/// The plan of the creature that started the fight ends this many game turns after its response with no fear: one turn
+/// lets the other creature think again, and on the next turn the plan is done
+constexpr uint32_t k_PlanEndTurnsAfterResponse = 2;
 /// Each creature holds its turn to face the other for this long
 constexpr float k_FaceOffHoldSeconds = 0.1f;
 /// The creature that starts the fight points at the arena for this many game turns

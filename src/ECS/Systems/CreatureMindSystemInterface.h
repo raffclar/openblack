@@ -215,6 +215,9 @@ public:
 	/// The first creature of a fight told the second creature to obey it. The second creature stops what it does, and
 	/// the fight has its mind until the fight ends.
 	virtual void FightOrdered(entt::entity /*creature*/, entt::entity /*asker*/) {}
+	/// The fight of the second creature ended. If its plan is still to obey the first creature, that plan stops as a
+	/// failure.
+	virtual void ObeyEnded(entt::entity /*creature*/, entt::entity /*asker*/) {}
 	/// What the creature does stops as a failure. The desire becomes fully dominant, and the creature plans to satisfy it
 	/// through the thing. Returns whether the creature has a plan for that desire.
 	virtual bool ForceDesireOn(entt::entity /*creature*/, creature_desires::Desire /*desire*/, entt::entity /*thing*/)

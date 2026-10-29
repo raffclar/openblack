@@ -1035,6 +1035,17 @@ TEST(CreatureFight, OnlyTheCreatureThatPlannedAFightStillChoosesInIt)
 	EXPECT_FALSE(ObeysInFight({}));
 }
 
+// After its response, the first creature frees the mind of the other creature again. The other creature thinks and
+// chooses again, while its fight continues.
+TEST(CreatureFight, TheOtherCreatureChoosesAgainWhenTheFirstCreatureFreesItsMind)
+{
+	using creature_fight::LetsChoose;
+	using creature_fight::ObeysInFight;
+	EXPECT_FALSE(LetsChoose({.fighting = true, .waitsForFight = true}));
+	EXPECT_TRUE(LetsChoose({.fighting = true, .waitsForFight = true, .mindFree = true}));
+	EXPECT_FALSE(ObeysInFight({.fighting = true, .mindFree = true}));
+}
+
 TEST(CreatureFight, TheAskedCreatureChoosesUntilItIsToldToStandStill)
 {
 	using creature_fight::LetsChoose;

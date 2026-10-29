@@ -602,6 +602,51 @@ bool OpponentStartsDuel(const ecs::Registry& registry, entt::entity creature, co
 	return other != nullptr && other->opponent == creature && other->stage == CreatureFighting::Stage::Square && other->played;
 }
 
+/// Whether a creature in its duel has a body to fight: the opponent fights on against it, or the opponent has its order to
+/// start its duel. The blows test the body of an opponent that did not start its duel yet, and can hit it.
+bool HasDuelPartner(const ecs::Registry& registry, entt::entity creature, const CreatureFighting& fighting)
+{
+	return FightsOn(registry, creature, fighting) || OpponentStartsDuel(registry, creature, fighting);
+}
+
+/// Whether a stage comes after the duel and ends with no win plan: the response, or the stop with no response
+constexpr bool IsAfterDuel(CreatureFighting::Stage stage)
+{
+	return stage == CreatureFighting::Stage::Respond || stage == CreatureFighting::Stage::Stop;
+}
+
+/// The partner of the creature, if the partner is after its duel against the creature and has no win plan
+std::optional<entt::entity> PartnerAfterDuel(const ecs::Registry& registry, entt::entity creature,
+                                             const CreatureFighting& fighting)
+{
+	const auto* other =
+	    registry.Valid(fighting.opponent) ? registry.TryGet<const CreatureFighting>(fighting.opponent) : nullptr;
+	if (other == nullptr || other->opponent != creature || !IsAfterDuel(other->stage))
+	{
+		return std::nullopt;
+	}
+	return fighting.opponent;
+}
+
+/// The plan of the creature stopped, so the plan of its partner stops as a failure too. The creature that started the
+/// fight gives up its plan. The other creature gives up its plan to obey.
+void PartnerPlanFails(entt::entity partner, entt::entity creature, bool partnerStarted)
+{
+	if (!Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	auto& minds = Locator::creatureMindSystem::value();
+	if (partnerStarted)
+	{
+		minds.AbandonAction(partner);
+	}
+	else
+	{
+		minds.ObeyEnded(partner, creature);
+	}
+}
+
 /// The result of the fight for a creature that its partner stopped: a creature that had no life left lost
 std::optional<bool> ResultWhenStopped(CreatureFighting::PartnerLeft why)
 {
@@ -1640,7 +1685,12 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 		}
 		if (side->stage == CreatureFighting::Stage::Duel)
 		{
-			// Neither wins: each finishes what it is doing and stands, and its fight is over with nothing more to it
+			// Neither wins: each finishes what it is doing and stands, and its fight is over with nothing more to it. The
+			// plan of the partner fails.
+			if (self != creature && side->opponent == creature)
+			{
+				PartnerPlanFails(self, creature, side->madeArena);
+			}
 			NoteFightOver(self, "called_off");
 			EndFightFor(self, std::nullopt);
 			NoteStage(self, side->stage, CreatureFighting::Stage::Respond);
@@ -1654,8 +1704,28 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 		{
 			Leave(self);
 		}
+		else if (IsAfterDuel(side->stage) && (self == creature || side->opponent == creature))
+		{
+			// After the duel, the creature stops with no response. Its partner after the duel also stops, and the plan
+			// of the partner fails.
+			if (self == creature)
+			{
+				StopFight(self, std::nullopt, "called_off");
+			}
+			else
+			{
+				StopPartnerAfterDuel(self, creature);
+			}
+		}
 	}
 	StopAsked(registry, asked);
+}
+
+bool CreatureFightSystem::StartedFight(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.Valid(creature) ? registry.TryGet<const CreatureFighting>(creature) : nullptr;
+	return fighting != nullptr && fighting->madeArena;
 }
 
 bool CreatureFightSystem::IsSettingUpFight(entt::entity creature) const
@@ -1676,14 +1746,15 @@ void CreatureFightSystem::Withdraw(entt::entity creature)
 	const auto opponent = fighting->opponent;
 	const auto arena = fighting->arenaEntity;
 	AbortFight(creature);
-	// It leaves at once, rather than finishing and standing, and lets go of an arena it made
-	Leave(creature);
-	// What it fought and where forget it: the opponent plays out the end of its fight alone
+	// What it fought and where forget it: the opponent plays out the end of its fight alone. The opponent forgets it
+	// first, so that its departure does not stop the opponent.
 	if (auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
 	    other != nullptr && other->opponent == creature)
 	{
 		other->opponent = entt::null;
 	}
+	// It leaves at once, rather than finishing and standing, and lets go of an arena it made
+	Leave(creature);
 	if (auto* taken = registry.Valid(arena) ? registry.TryGet<CreatureArena>(arena) : nullptr; taken != nullptr)
 	{
 		taken->first = taken->first == creature ? entt::null : taken->first;
@@ -3168,6 +3239,7 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		if (!fighting->played)
 		{
 			fighting->played = true;
+			fighting->showedResponse = true;
 			const auto life = LifeOf(registry, entity);
 			const auto otherLife = opponentHere ? LifeOf(registry, opponent) : 0.0f;
 			// The game's random numbers choose the side of the response, one time in two the left side
@@ -3176,8 +3248,42 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		}
 		else if (!creature_layers::IsPlaying(animation.body))
 		{
+			// A creature that ended its response with no fear does not look at the lives again. The plan of the first
+			// creature ends at the start of the second turn after its response. The other creature continues to obey,
+			// and waits until the plan of the first creature ends.
+			if (fighting->responded)
+			{
+				++fighting->turnsAfterResponse;
+				// On the first turn after its response, the first creature frees the mind of the other creature
+				if (fighting->madeArena && fighting->turnsAfterResponse == 1)
+				{
+					if (const auto freed = PartnerAfterDuel(registry, entity, *fighting); freed.has_value())
+					{
+						registry.Get<CreatureFighting>(*freed).mindFree = true;
+					}
+				}
+				const bool ends = fighting->madeArena ? fighting->turnsAfterResponse >= fight::k_PlanEndTurnsAfterResponse
+				                                      : !PartnerAfterDuel(registry, entity, *fighting).has_value();
+				if (ends)
+				{
+					Leave(entity);
+				}
+				break;
+			}
+			// A fight that was called off ends with its move: the plan stopped already, so nothing follows
+			if (!fighting->showedResponse)
+			{
+				Leave(entity);
+				break;
+			}
 			// The creature that has no more life than the other is made to fear the other
 			const bool fears = opponentHere && fight::FearsAfterFight(LifeOf(registry, entity), LifeOf(registry, opponent));
+			if (!fears && (fighting->madeArena || PartnerAfterDuel(registry, entity, *fighting).has_value()))
+			{
+				fighting->responded = true;
+				fighting->turnsAfterResponse = 0;
+				break;
+			}
 			Leave(entity);
 			if (fears && Locator::creatureMindSystem::has_value())
 			{
@@ -3197,6 +3303,7 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 						return fight_transcript::Fields {{"creature", fight_transcript::Id(opponent)},
 						                                 {"by", fight_transcript::Id(entity)}};
 					});
+					PartnerPlanFails(opponent, entity, other->madeArena);
 					Leave(opponent);
 				}
 			}
@@ -3640,7 +3747,7 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 		return std::nullopt;
 	}
 	const auto& body = registry.Get<const Creature>(entity);
-	const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && FightsOn(registry, entity, *fighting);
+	const bool hasOpponent = fighting->stage == CreatureFighting::Stage::Duel && HasDuelPartner(registry, entity, *fighting);
 	// While it turns on the spot in its start, the turn's own animation plays, and the start animation waits. When the
 	// turn ends, the start animation plays from its beginning in the same turn.
 	if (fighting->fighter.state == fight::State::Start && fighting->fighter.turning)
@@ -3830,7 +3937,7 @@ void CreatureFightSystem::BlowTurn(entt::entity entity, std::optional<ActionStep
 	const auto& fighter = fighting.fighter;
 	const bool striking = step.has_value() && fighter.animation == step->animation &&
 	                      fighting.stage == CreatureFighting::Stage::Duel && fighter.state == fight::State::Action &&
-	                      fight::IsAttack(fighter.animation) && FightsOn(registry, entity, fighting);
+	                      fight::IsAttack(fighter.animation) && HasDuelPartner(registry, entity, fighting);
 	if (striking)
 	{
 		// The tests start where the animation was before it moved on in this turn
@@ -3854,7 +3961,7 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	const auto opponent = fighting.opponent;
 	// An earlier blow this turn may have made it reel already
 	if (attacker.state != fight::State::Action || !fight::IsAttack(attacker.animation) ||
-	    !FightsOn(registry, creature, fighting))
+	    !HasDuelPartner(registry, creature, fighting))
 	{
 		return;
 	}
@@ -3941,7 +4048,7 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& fighting = registry.Get<CreatureFighting>(creature);
 	const auto opponent = fighting.opponent;
-	if (!FightsOn(registry, creature, fighting))
+	if (!HasDuelPartner(registry, creature, fighting))
 	{
 		return;
 	}
@@ -4310,7 +4417,8 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 	}
 	NoteFightOver(winner, "knockout");
 	EndFightFor(winner, true);
-	EndFightFor(loser, false);
+	// A loser that did not start its duel yet is in no fight state, so its life does not pay for the fight
+	EndFightFor(loser, false, InDuel(registry, loser));
 	if (auto* record = registry.TryGet<CreatureFightRecord>(winner))
 	{
 		++record->wins;
@@ -4483,12 +4591,49 @@ void CreatureFightSystem::Leave(entt::entity creature)
 		ReleaseArena(registry, fighting->arenaEntity);
 	}
 	const auto opponent = fighting->opponent;
+	const bool started = fighting->madeArena;
+	const bool obeyed = !started && fighting->part == CreatureFighting::Part::Obeys;
 	registry.Remove<CreatureFighting>(creature);
+	// The other creature obeyed the first creature until its fight ended. Its plan to obey never ends as a success.
+	if (obeyed && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ObeyEnded(creature, opponent);
+	}
+	auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
+	if (other == nullptr || other->opponent != creature)
+	{
+		return;
+	}
 	// An opponent that stayed in the duel against it stops now, with no response
-	if (auto* other = registry.Valid(opponent) ? registry.TryGet<CreatureFighting>(opponent) : nullptr;
-	    other != nullptr && other->opponent == creature && other->partnerLeft != CreatureFighting::PartnerLeft::None)
+	if (other->partnerLeft != CreatureFighting::PartnerLeft::None)
 	{
 		StopFight(opponent, ResultWhenStopped(other->partnerLeft), "partner_stopped");
+	}
+	// The plan of the first creature ends with its fight. This also stops the other creature after its duel, with no
+	// response, and its plan to obey fails.
+	else if (started && IsAfterDuel(other->stage))
+	{
+		StopPartnerAfterDuel(opponent, creature);
+	}
+}
+
+void CreatureFightSystem::StopPartnerAfterDuel(entt::entity partner, entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.TryGet<const CreatureFighting>(partner);
+	if (fighting == nullptr)
+	{
+		return;
+	}
+	const bool started = fighting->madeArena;
+	fight_transcript::Note(partner, "stopped_by_partner", [&] {
+		return fight_transcript::Fields {{"creature", fight_transcript::Id(partner)}, {"by", fight_transcript::Id(creature)}};
+	});
+	StopFight(partner, std::nullopt, "partner_stopped");
+	// The other creature that left its fight gave up its plan to obey as it left
+	if (started || registry.AllOf<CreatureFighting>(partner))
+	{
+		PartnerPlanFails(partner, creature, started);
 	}
 }
 

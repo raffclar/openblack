@@ -2169,6 +2169,7 @@ void CreatureMindSystem::DesiresTurn(entt::entity entity)
 	    .startedIt = fighting != nullptr && fighting->madeArena,
 	    .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
 	    .onlyAsked = fighting != nullptr && fighting->part == CreatureFighting::Part::Asked,
+	    .mindFree = fighting != nullptr && fighting->mindFree,
 	});
 	// How impressive it finds the other creatures, and the attention they gave it, fade each turn it thinks
 	if (!scripted && !demobilised && mind.learnt.has_value())
@@ -3454,11 +3455,36 @@ void CreatureMindSystem::FightOrdered(entt::entity creature, entt::entity asker)
 	           .suppressesOpposed = false});
 }
 
-void CreatureMindSystem::CallOffFightSetUp(entt::entity creature)
+void CreatureMindSystem::ObeyEnded(entt::entity creature, entt::entity asker)
 {
-	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsSettingUpFight(creature))
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.Valid(creature) ? registry.TryGet<const CreatureMindState>(creature) : nullptr;
+	if (mind == nullptr || !mind->planActive || !mind->planner.current.has_value() ||
+	    mind->planner.current->desire != Desire::ObeyCreature)
 	{
-		Locator::creatureFightSystem::value().CallOff(creature);
+		return;
+	}
+	// A plan to obey another creature is a plan to obey the first creature of this fight. A first creature that left the
+	// world is not known any more.
+	if (asker != entt::null && mind->planner.current->object != std::optional(entt::to_integral(asker)))
+	{
+		return;
+	}
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} stops to obey creature {}", entt::to_integral(creature),
+	                    entt::to_integral(asker));
+	AbandonAction(creature);
+}
+
+void CreatureMindSystem::EndFightForPlan(entt::entity creature)
+{
+	if (!Locator::creatureFightSystem::has_value())
+	{
+		return;
+	}
+	auto& fights = Locator::creatureFightSystem::value();
+	if (fights.IsFighting(creature) && !fights.IsDuelling(creature))
+	{
+		fights.CallOff(creature);
 	}
 }
 
@@ -3699,8 +3725,8 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	// A forced plan first stops the reaction that the creature has
 	EndReaction(creature);
 	// The current action stops as a failure. This occurs also when the creature finds no new plan. It also stops a fight
-	// that the creature sets up, for both creatures.
-	CallOffFightSetUp(creature);
+	// that the creature is in, out of its duel.
+	EndFightForPlan(creature);
 	// An action that the body started plays on, and a point plays its end
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)

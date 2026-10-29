@@ -56,6 +56,7 @@ public:
 	void HandTookHold(entt::entity creature) override;
 	void HandLetGo(entt::entity creature) override;
 	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override;
+	[[nodiscard]] bool StartedFight(entt::entity creature) const override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
 	[[nodiscard]] bool IsDuelling(entt::entity creature) const override;
 	void TakeForScript(entt::entity creature) override;
@@ -172,6 +173,9 @@ private:
 	/// The fight of the creature stops with no response, as when its partner tells it to stop. In the steps before the
 	/// duel it leaves the fight at once. Else it finishes its move and then leaves the fight.
 	void StopFight(entt::entity creature, std::optional<bool> won, std::string_view why);
+	/// The plan of the creature stopped, and its partner is after its duel: the partner stops with no response, and the
+	/// plan of the partner fails
+	void StopPartnerAfterDuel(entt::entity partner, entt::entity creature);
 	void BeginDuel(entt::entity creature);
 	void MeasureBlows(entt::entity creature);
 	/// Faints and lies out cold, to be taken home later

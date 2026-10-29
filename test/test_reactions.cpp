@@ -156,8 +156,8 @@ public:
 	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
 	void SetParticleStream(ParticleRandomStream) override {}
 };
-/// The fights of the creatures: a creature in the fighting list is in a fight, and one in the setting up list is not in
-/// its duel yet
+/// The fights of the creatures: a creature in the fighting list is in a fight, one in the setting up list is not in its
+/// duel yet, and one in the duelling list is in its duel
 class ListedFights final: public ecs::systems::CreatureFightSystemInterface
 {
 public:
@@ -172,6 +172,10 @@ public:
 	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override
 	{
 		return std::ranges::find(settingUp, creature) != settingUp.end();
+	}
+	[[nodiscard]] bool IsDuelling(entt::entity creature) const override
+	{
+		return std::ranges::find(duelling, creature) != duelling.end();
 	}
 	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity /*creature*/) const override { return std::nullopt; }
 	bool QueueMove(entt::entity /*creature*/, const creature_fight::Move& /*move*/, bool /*replace*/) override { return false; }
@@ -205,6 +209,7 @@ public:
 
 	std::vector<entt::entity> fighting;
 	std::vector<entt::entity> settingUp;
+	std::vector<entt::entity> duelling;
 };
 /// Records how the reaction system ends the reaction of an animal. It does nothing else.
 class FakeAnimals final: public ecs::systems::AnimalSystemInterface
@@ -1072,9 +1077,9 @@ TEST_F(Reactions, ACreatureToldToTakeNoNoticeOrBusyWithAForcedPlanIsNotImpressed
 	registry.Remove<CreatureMindState>(_creature);
 }
 
-// A creature that is asked to fight takes up reactions until its duel starts. The creature that started the fight takes
-// up none in the whole fight.
-TEST_F(Reactions, AnAskedCreatureTakesUpReactionsUntilItsDuelButTheStarterNever)
+// A creature that is asked to fight takes up reactions before its duel. The creature that started the fight takes up
+// none in the whole fight.
+TEST_F(Reactions, AnAskedCreatureTakesUpReactionsOutOfItsDuelButTheStarterNever)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& fights = static_cast<ListedFights&>(Locator::creatureFightSystem::emplace<ListedFights>());
@@ -1091,6 +1096,7 @@ TEST_F(Reactions, AnAskedCreatureTakesUpReactionsUntilItsDuelButTheStarterNever)
 	EXPECT_TRUE(impressed());
 	// In the duel
 	fights.settingUp.clear();
+	fights.duelling = {_creature};
 	_reactions.Create(Miracle());
 	EXPECT_FALSE(impressed());
 	// The creature that started it, before the duel
@@ -1098,6 +1104,20 @@ TEST_F(Reactions, AnAskedCreatureTakesUpReactionsUntilItsDuelButTheStarterNever)
 	registry.Get<CreatureFighting>(_creature).madeArena = true;
 	_reactions.Create(Miracle());
 	EXPECT_FALSE(impressed());
+	registry.Remove<CreatureFighting>(_creature);
+	Locator::creatureFightSystem::reset();
+}
+
+// A creature that is asked to fight takes up reactions again after its duel, while its fight continues
+TEST_F(Reactions, AnAskedCreatureTakesUpReactionsAfterItsDuel)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fights = static_cast<ListedFights&>(Locator::creatureFightSystem::emplace<ListedFights>());
+	registry.Assign<CreatureFighting>(_creature, CreatureFighting {.part = CreatureFighting::Part::Obeys});
+	fights.fighting = {_creature};
+	_reactions.Create(Miracle());
+	const auto* impression = registry.TryGet<const CreatureImpression>(_creature);
+	EXPECT_TRUE(impression != nullptr && impression->byOwnPlayer > 0.0f);
 	registry.Remove<CreatureFighting>(_creature);
 	Locator::creatureFightSystem::reset();
 }
