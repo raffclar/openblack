@@ -37,11 +37,13 @@ public:
 	[[nodiscard]] State GetState() const override;
 
 private:
-	/// The things of the launch (the boat and its five sailors) or of the sailing (the boat and its deck), which the turns
-	/// make and remove
+	/// The things of the launch (the boat and its five sailors) or of the sailing (the boat and its deck), in the drawn
+	/// registry
 	[[nodiscard]] std::vector<entt::entity> MakeParts(boat_launch::Stage stage);
+	/// The first frame of a film makes the things of both stages
+	void MakeWantedParts();
 	void FreeParts(std::vector<entt::entity>& parts);
-	/// The frames show or hide things of the film, and hide all of them at its end
+	/// The frames show or hide things of the film
 	void Show(const std::vector<entt::entity>& parts, bool shown);
 	[[nodiscard]] bool Shown(const std::vector<entt::entity>& parts) const;
 	void EndInFrame();
@@ -56,6 +58,8 @@ private:
 	void PlaceParts();
 
 	bool _playing {false};
+	/// A film started in a turn. The next frame makes its things.
+	bool _partsWanted {false};
 	Places _places;
 	boat_launch::Clocks _clocks;
 	/// The two clips, in the animation cache
