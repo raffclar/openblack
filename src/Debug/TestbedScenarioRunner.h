@@ -303,11 +303,13 @@ private:
 		float seconds;
 	};
 	std::vector<RunningParticle> _particles;
-	/// The scenario's vortices: each once made, and whether it has been told to fade out
+	/// The scenario's vortices: each once made, whether it has been told to fade out, and the crowd of its newcomers
 	struct RunningVortex
 	{
 		entt::entity vortex {entt::null};
 		bool fading {false};
+		entt::entity crowd {entt::null};
+		bool crowdBrokenUp {false};
 	};
 	std::vector<RunningVortex> _vortices;
 	/// The scenario's reward chests, each once given

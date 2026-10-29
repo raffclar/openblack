@@ -162,6 +162,7 @@
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -5205,16 +5206,31 @@ void Runner::UpdateVortices()
 				WriteCrossingFile(setup.crossingLines);
 			}
 			running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
-			if (setup.gatheringOffset.has_value())
+			if (setup.crowdForSeconds.has_value() && Locator::scriptObjects::has_value())
 			{
-				const auto gathering = MapPoint(_middle, *setup.gatheringOffset);
+				// A script makes the crowd at the vortex and keeps it in a variable, as the Land 2 arrival does
+				auto& scripts = Locator::scriptObjects::value();
+				running.crowd = ecs::script_flocks::Create(Locator::entitiesRegistry::value(), map_coords::FromMetres(point));
+				scripts.Register(running.crowd, true);
+				scripts.AddReference(running.crowd);
+			}
+			if (setup.gatheringOffset.has_value() || running.crowd != entt::null)
+			{
+				const auto gathering = MapPoint(_middle, setup.gatheringOffset.value_or(setup.offset));
 				vortices.SetArrival(running.vortex, {.town = entt::null,
 				                                     .gatheringPlace = {gathering.x, 0.0f, gathering.y},
 				                                     .flockDistance = setup.flockDistance,
 				                                     .flockRadius = setup.flockRadius,
-				                                     .flock = entt::null});
+				                                     .flock = running.crowd});
 			}
 			Log(fmt::format("Vortex {} opened at {:.0f}, {:.0f}", i, point.x, point.y));
+		}
+		if (running.crowd != entt::null && !running.crowdBrokenUp && setup.crowdForSeconds.has_value() &&
+		    _seconds >= setup.delaySeconds + *setup.crowdForSeconds && Locator::scriptObjects::has_value())
+		{
+			// The script breaks up the crowd and keeps the empty flock; its newcomers go back to the town's life
+			running.crowdBrokenUp = Locator::scriptObjects::value().Disband(running.crowd);
+			Log(fmt::format("Vortex {} crowd broken up", i));
 		}
 		if (running.vortex != entt::null && !running.fading && setup.fadeOutAfterSeconds.has_value() &&
 		    _seconds >= setup.delaySeconds + *setup.fadeOutAfterSeconds)
