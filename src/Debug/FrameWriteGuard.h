@@ -86,6 +86,10 @@ public:
 	void Forget() { _last.reset(); }
 	/// Takes the sample after the frame step and tells the parts that the step changed for the first time
 	void After(std::string_view step, uint32_t turn);
+	/// Takes the sample after a step of the tools, which can change the synced world, as the testbed runner does in the
+	/// debug windows. The guard does not tell the parts. It tells only the turn of the change, once for each turn, so
+	/// that a tool can know the changes that the next steps make from it.
+	void AfterTool(std::string_view step, uint32_t turn);
 
 	/// Each step and each part that the step changed, as the guard found them
 	[[nodiscard]] const std::set<std::pair<std::string, std::string>>& Found() const { return _found; }
@@ -99,6 +103,8 @@ private:
 	Sample _before;
 	std::optional<Sample> _last;
 	std::set<std::pair<std::string, std::string>> _found;
+	/// The turns at which a step of the tools changed the synced world
+	std::set<uint32_t> _toolTurns;
 };
 
 } // namespace openblack::frame_write_guard

@@ -1508,16 +1508,15 @@ void CreatureAnimationSystem::HoldTurnPose(entt::entity creature)
 	}
 }
 
-void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, float milliseconds)
+void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, float milliseconds, const Registry& bodies)
 {
-	const auto& land = Locator::entitiesRegistry::value();
 	const auto* self = copies.Valid(copy) ? copies.TryGet<const CreatureCopy>(copy) : nullptr;
-	if (self == nullptr || !land.Valid(self->creature))
+	if (self == nullptr || !bodies.Valid(self->creature))
 	{
 		return;
 	}
-	const auto* creature = land.TryGet<const Creature>(self->creature);
-	const auto* morph = land.TryGet<const CreatureMorph>(self->creature);
+	const auto* creature = bodies.TryGet<const Creature>(self->creature);
+	const auto* morph = bodies.TryGet<const CreatureMorph>(self->creature);
 	auto* animation = copies.TryGet<CreatureAnimation>(copy);
 	const auto* transform = copies.TryGet<const Transform>(copy);
 	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr)
@@ -1576,7 +1575,7 @@ void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, floa
 	{
 		return;
 	}
-	if (const auto* own = land.TryGet<const CreatureEyes>(self->creature))
+	if (const auto* own = bodies.TryGet<const CreatureEyes>(self->creature))
 	{
 		eyes->mode = own->mode;
 		eyes->openness = own->openness;

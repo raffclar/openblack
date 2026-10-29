@@ -220,4 +220,19 @@ void Guard::After(std::string_view step, uint32_t turn)
 	}
 }
 
+void Guard::AfterTool(std::string_view step, uint32_t turn)
+{
+	_last = Take();
+	const auto& after = *_last;
+	if (after.hash.hash == _before.hash.hash && after.syncedDraws == _before.syncedDraws)
+	{
+		return;
+	}
+	if (_toolTurns.insert(turn).second)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Frame write guard: the tool step {} changed the synced world at turn {}", step,
+		                   turn);
+	}
+}
+
 } // namespace openblack::frame_write_guard
