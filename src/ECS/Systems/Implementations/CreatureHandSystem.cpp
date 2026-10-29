@@ -38,6 +38,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSentReactions.h"
+#include "Creature/CreatureShownFace.h"
 #include "Creature/CreatureTouchStep.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -49,6 +50,7 @@
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureScars.h"
 #include "ECS/PosedModel.h"
@@ -100,6 +102,29 @@ std::optional<entt::entity> HandOf(PlayerNames player)
 	return (*hands)[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 
+/// This computer shows the face that a stroke of its hand pulls. The world does not have it, and the other computers do
+/// not show it.
+void PullShownFace(entt::entity creature, const creature_face::Request& face)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	if (animation == nullptr)
+	{
+		return;
+	}
+	if (auto* shown = registry.TryGet<ShownCreatureFace>(creature); shown != nullptr)
+	{
+		shown->face = creature_shown_face::Pull(shown->face, face);
+		return;
+	}
+	registry.Assign<ShownCreatureFace>(creature, ShownCreatureFace {
+	                                                 .face = creature_shown_face::Pull(animation->face, face),
+	                                                 .worldFace = animation->face,
+	                                                 .olderTurnPose = {},
+	                                                 .newerTurnPose = {},
+	                                             });
+}
+
 /// Whether the hand tells the mind how it treated the creature as it lets go, from how still the creature is now
 bool ReleaseGivesFeedback(entt::entity creature)
 {
@@ -111,11 +136,13 @@ bool ReleaseGivesFeedback(entt::entity creature)
 	}
 	const bool moving =
 	    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(creature);
+	// The face that this computer shows, which can be the face of a stroke
+	const auto* shown = registry.TryGet<const ShownCreatureFace>(creature);
 	return feedback::ReleaseGivesFeedback({
 	    .headStraight = animation->yaw.angle == 0.0f && animation->pitch.angle == 0.0f,
 	    .bodyBusy = creature_layers::IsPlaying(animation->body) || moving,
 	    .lyingDead = creature_layers::IsLooping(animation->body) && animation->body.holdLoop,
-	    .faceShown = animation->face.current.has_value(),
+	    .faceShown = creature_shown_face::Shown(animation->face, shown != nullptr ? &shown->face : nullptr).current.has_value(),
 	});
 }
 
@@ -493,6 +520,11 @@ void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigi
 bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mirrored,
                                std::optional<creature_face::Request> face, float interruptsAfter)
 {
+	// The face of a stroke shows at once, also when the body refuses the stroke. Only this computer shows it.
+	if (face.has_value())
+	{
+		PullShownFace(creature, *face);
+	}
 	auto& minds = Locator::creatureMindSystem::value();
 	// The reaction is a command, which the next turn plays, the same at each frame rate and on every computer. The frame
 	// only asks whether the creature can take it now, for what the hand counts.
@@ -508,26 +540,27 @@ bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mir
 		// that plays does.
 		const bool takes = creature_hand::TakesReaction(_sentReactions.Waiting(creature), interruptsAfter,
 		                                                minds.CanForceAction(creature, animation, mirrored, interruptsAfter));
-		// A refused reaction with no face does nothing in the world, so the hand does not send it
-		if (!takes && !face.has_value())
+		// A reaction that the creature refuses sends nothing
+		if (!takes)
 		{
+			if (const auto logger = spdlog::get("game"); logger != nullptr && face.has_value())
+			{
+				SPDLOG_LOGGER_INFO(logger, "Creature {} refuses reaction {}: only this computer shows its face",
+				                   entt::to_integral(creature), animation);
+			}
 			return false;
 		}
-		_sentReactions.Sent(creature, takes);
+		_sentReactions.Sent(creature, true);
 		commands.Submit(player_commands::CreatureReaction {
 		    .creature = creature,
 		    .animation = static_cast<uint32_t>(animation),
 		    .mirrored = mirrored,
-		    .pullsFace = face.has_value(),
-		    .face = face.has_value() ? static_cast<uint8_t>(face->face) : uint8_t {0},
-		    .faceMs = face.has_value() ? face->milliseconds : 0.0f,
-		    .cue = face.has_value() ? static_cast<uint8_t>(face->cue) : uint8_t {0},
 		    .interruptsAfter = interruptsAfter,
 		});
-		return takes;
+		return true;
 	}
 	// With no commands, the creature reacts at once
-	return minds.ForceAction(creature, animation, mirrored, face, interruptsAfter);
+	return minds.ForceAction(creature, animation, mirrored, interruptsAfter);
 }
 
 void CreatureHandSystem::DoReaction(PlayerNames player, const player_commands::CreatureReaction& reaction)
@@ -543,19 +576,13 @@ void CreatureHandSystem::DoReaction(PlayerNames player, const player_commands::C
 	{
 		return;
 	}
-	const auto face = reaction.pullsFace ? std::optional(creature_face::Request {
-	                                           .face = static_cast<creature_face::Face>(reaction.face),
-	                                           .milliseconds = reaction.faceMs,
-	                                           .cue = static_cast<creature_face::Cue>(reaction.cue),
-	                                       })
-	                                     : std::nullopt;
 	if (const auto logger = spdlog::get("game"))
 	{
 		SPDLOG_LOGGER_INFO(logger, "Creature {} gets reaction {} (mirrored {}) from player {}",
 		                   entt::to_integral(reaction.creature), reaction.animation, reaction.mirrored,
 		                   static_cast<int>(player));
 	}
-	Locator::creatureMindSystem::value().ForceAction(reaction.creature, reaction.animation, reaction.mirrored, face,
+	Locator::creatureMindSystem::value().ForceAction(reaction.creature, reaction.animation, reaction.mirrored,
 	                                                 reaction.interruptsAfter);
 }
 
@@ -941,8 +968,10 @@ bool CreatureHandSystem::Stroke(entt::entity creature, feedback::BodyPart part)
 	const auto index = static_cast<size_t>(part);
 	contact->lastPart = part;
 	contact->cycle = feedback::TouchCycle::Tickle;
+	// The face of the stroke shows at once on this computer, also when the body refuses the stroke
+	PullShownFace(creature, feedback::RewardFace(part));
 	if (!Locator::creatureMindSystem::value().ForceAction(creature, feedback::k_RewardAnimations.at(index),
-	                                                      feedback::k_RewardMirrored.at(index), feedback::RewardFace(part),
+	                                                      feedback::k_RewardMirrored.at(index),
 	                                                      feedback::k_StrokeInterruptsAfter))
 	{
 		return false;
@@ -972,7 +1001,7 @@ bool CreatureHandSystem::Slap(entt::entity creature, float heightShare, bool gen
 	contact->lastPart.reset();
 	contact->lastPoint = registry.Get<const Transform>(creature).position + glm::vec3(0.0f, heightShare * height, 0.0f);
 	contact->cycle = feedback::TouchCycle::Slap;
-	if (!Locator::creatureMindSystem::value().ForceAction(creature, slap->animation, slap->mirrored, std::nullopt,
+	if (!Locator::creatureMindSystem::value().ForceAction(creature, slap->animation, slap->mirrored,
 	                                                      feedback::k_SlapInterruptsAfter))
 	{
 		return false;

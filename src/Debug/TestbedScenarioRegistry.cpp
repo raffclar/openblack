@@ -6277,6 +6277,35 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = collarHand,
 	});
 
+	// The real hand on the body: a stroke on one part plays a long pleased animation, then the hand strokes another part
+	// before that animation is far enough through
+	std::vector<Command> refusedStroke {
+	    {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	    {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {-0.1f, 0.0f}, .amount = 0.3f},
+	    {.kind = Kind::PointerSweep, .delaySeconds = 0.6f, .point = {0.2f, 0.0f}, .amount = 0.6f}};
+	for (int wiggle = 0; wiggle < 16; ++wiggle)
+	{
+		const float across = wiggle % 2 == 0 ? 0.02f : -0.02f;
+		refusedStroke.push_back({.kind = Kind::PointerSweep, .delaySeconds = 0.35f, .point = {across, 0.0f}, .amount = 0.3f});
+	}
+	refusedStroke.push_back({.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3});
+	all.push_back({
+	    .id = "hand.refused_stroke_face",
+	    .name = "A stroke that the creature refuses pulls only the face",
+	    .facet = Facet::Hand,
+	    .description = "The hand holds the player's tiger, which faces the camera, by its middle. It strokes one part of "
+	                   "the body, then moves to another part and strokes it while the first pleased animation plays.",
+	    .expected =
+	        "The first stroke plays a pleased animation and its face. A stroke on the other part that comes before "
+	        "that animation is far enough through pulls only its face, at once: the tiger plays no animation for it and "
+	        "the hand sends nothing. The log shows \"only this computer shows its face\". In a network game "
+	        "the other computers do not show the face of a stroke.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.5f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = refusedStroke,
+	});
+
 	all.push_back({
 	    .id = "hand.slap_after_stroke",
 	    .name = "A slap soon after a stroke",

@@ -108,6 +108,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
+#include "ECS/ShownCreatureFaces.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
@@ -1433,14 +1434,18 @@ void Apply(entt::entity creature, const creature_mind::Commands& commands, Creat
 			            animation.gesture.animation.value_or(creature_layers::animations::k_Stand));
 		}
 	}
+	auto& registry = Locator::entitiesRegistry::value();
 	if (commands.relaxFace)
 	{
-		animation.face = creature_layers::RelaxFace(animation.face);
+		shown_creature_faces::ChangeFace(registry, creature, animation.face, [](const creature_layers::FaceLayer& face) {
+			return creature_layers::RelaxFace(face);
+		});
 	}
-	if (commands.face.has_value())
+	if (const auto& face = commands.face; face.has_value())
 	{
-		animation.face = creature_layers::PullFace(animation.face, creature_face::AnimationOf(commands.face->face),
-		                                           commands.face->milliseconds, commands.face->cue);
+		shown_creature_faces::ChangeFace(registry, creature, animation.face, [&face](const creature_layers::FaceLayer& layer) {
+			return creature_layers::PullFace(layer, creature_face::AnimationOf(face->face), face->milliseconds, face->cue);
+		});
 	}
 	ApplyEyes(eyes, commands.eyes);
 	if (eyes != nullptr && commands.blinkIntervalMs.has_value())
@@ -2840,7 +2845,9 @@ void CreatureMindSystem::PullFace(entt::entity creature, size_t animation)
 	auto& registry = Locator::entitiesRegistry::value();
 	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
 	{
-		body->face = creature_layers::PullFace(body->face, animation, k_ToldFaceMs, creature_face::Cue::Told);
+		shown_creature_faces::ChangeFace(registry, creature, body->face, [animation](const creature_layers::FaceLayer& face) {
+			return creature_layers::PullFace(face, animation, k_ToldFaceMs, creature_face::Cue::Told);
+		});
 	}
 }
 
@@ -2860,7 +2867,9 @@ std::optional<creature_face::Request> CreatureMindSystem::ShowFeeling(entt::enti
 	const auto face = creature_mind::PullFace(mind->idle, cue, senses, random, gameRandom);
 	if (face.has_value())
 	{
-		body->face = creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, cue);
+		shown_creature_faces::ChangeFace(registry, creature, body->face, [&face, cue](const creature_layers::FaceLayer& layer) {
+			return creature_layers::PullFace(layer, creature_face::AnimationOf(face->face), face->milliseconds, cue);
+		});
 	}
 	return face;
 }
@@ -3178,8 +3187,7 @@ bool CreatureMindSystem::CanForceAction(entt::entity creature, size_t animation,
 	       creature_layers::PlayOnce(creature_layers::BodyAction {}, animation, mirrored).has_value();
 }
 
-bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bool mirrored,
-                                     std::optional<creature_face::Request> face, float interruptsAfter)
+bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bool mirrored, float interruptsAfter)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* body = registry.TryGet<CreatureAnimation>(creature);
@@ -3187,12 +3195,6 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 	if (body == nullptr || mind == nullptr || creature_mind::IsUnconscious(mind->idle))
 	{
 		return false;
-	}
-	// The face is pulled even when the body is too far into something to take the action
-	if (face.has_value())
-	{
-		body->face =
-		    creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, face->cue);
 	}
 	if (!MayInterrupt(creature, *body, interruptsAfter))
 	{
