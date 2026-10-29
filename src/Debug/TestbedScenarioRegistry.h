@@ -569,6 +569,8 @@ struct ScriptArgument
 		Position,
 		/// A whole number (number, made whole towards zero), as a script gives a constant such as a resource type
 		Integer,
+		/// The first value that the last native call gave back, such as the thing that it made
+		Result,
 		/// The first value that the last native call of the scenario gave back, as an object. A script keeps such a
 		/// value in a variable, such as the visual that SPECIAL_EFFECT_OBJECT gives.
 		LastResult,

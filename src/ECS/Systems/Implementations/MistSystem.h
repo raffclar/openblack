@@ -22,6 +22,8 @@ class MistSystem final: public MistSystemInterface
 {
 public:
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void SetFade(entt::entity mist, float startSize, float endSize, float startAlpha, float endAlpha, float seconds) override;
+	void ProcessTurn() override;
 };
 
 } // namespace openblack::ecs::systems

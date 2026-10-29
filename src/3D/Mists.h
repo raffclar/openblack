@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -49,5 +51,38 @@ inline constexpr float k_Rate = 0.255f;
 /// Moves the counter on by the milliseconds of game time. The game drops the fraction each frame; it is kept here, so
 /// the animation runs at the same pace however fast the frames come.
 void Advance(int& counter, float& remainder, float milliseconds) noexcept;
+
+/// The colour, 0xAARRGGBB, of a mist that a script makes: each channel the whole part of its number (0 to 255), cut to
+/// its low byte, and the alpha the whole part of 255 times the transparency
+[[nodiscard]] uint32_t ScriptColour(float red, float green, float blue, float transparency) noexcept;
+
+/// The game turns in each second of a fade
+inline constexpr float k_FadeTurnsPerSecond = 10.0f;
+
+/// A script's fade of a mist: its size and its alpha (0 to 255) go in equal steps, one step each game turn, from a
+/// start to an end
+struct Fade
+{
+	/// How many turns the fade lasts
+	float turns;
+	/// How many turns of it have gone
+	float elapsed;
+	/// What each turn adds to the size and to the alpha
+	float sizeStep;
+	float alphaStep;
+	/// The alpha now, before it is cut to a whole number
+	float alpha;
+};
+
+/// The fade from `startSize` to `endSize` and from the alpha `startAlpha` to `endAlpha` over `seconds`. The mist takes
+/// the start size and the start alpha at once.
+[[nodiscard]] Fade StartFade(float startSize, float endSize, float startAlpha, float endAlpha, float seconds) noexcept;
+
+/// The alpha byte of a fade's alpha: its whole part
+[[nodiscard]] uint8_t AlphaByte(float alpha) noexcept;
+
+/// One game turn of a fade: when a turn of it is left, it adds a step to the size and to the alpha, keeps the alpha in 0
+/// to 255 and gives true. When no turn is left, it changes nothing and gives false: the fade is done.
+[[nodiscard]] bool StepFade(Fade& fade, float& size) noexcept;
 
 } // namespace openblack::mists

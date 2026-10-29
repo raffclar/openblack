@@ -133,4 +133,40 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	                   {.kind = 3, .offset = {1.5f, 0.0f}},
 	                   {.kind = 3, .offset = {4.5f, 0.0f}, .active = true}},
 	});
+	// A script's mist, as the Singing Stones' Twinkle tune makes it: white and a tenth opaque. Then the mist grows to
+	// twice its size and fades out over ten seconds.
+	using Argument = ScriptArgument;
+	all.push_back({
+	    .id = "effects.script_mist_fade",
+	    .name = "A script makes a mist and fades it out",
+	    .facet = Facet::Light,
+	    .description = "On bare land, a script makes a white mist 3 above the land, of size 0.8, a tenth opaque and its "
+	                   "height 0.6 of its width, as the Singing Stones' Twinkle tune on the second land does. Three seconds "
+	                   "later the script fades it: its size from 1 to 2 and its alpha from 50 to 0 over ten seconds.",
+	    .expected = "The faint white puff of mist shows at once, round seen from above and flatter seen level. When the "
+	                "fade starts it jumps to size 1 and a little more opaque, then grows steadily to twice that while it "
+	                "fades away, a step each game turn, gone after ten seconds. The log tells that CREATE_MIST gave back "
+	                "1 value and that SET_MIST_FADE ran.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 16.0f, -40.0f}, .look = {0.0f, 3.0f, 0.0f}},
+	    .commands = {{.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE_MIST",
+	                  .scriptArguments = {{.kind = Argument::Kind::Position, .point = {0.0f, 0.0f}, .height = 3.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.8f},
+	                                      {.kind = Argument::Kind::Number, .number = 255.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 255.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 255.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.1f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.6f}}},
+	                 {.kind = Command::Kind::CallNative,
+	                  .delaySeconds = 3.0f,
+	                  .script = "SET_MIST_FADE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Result},
+	                                      {.kind = Argument::Kind::Number, .number = 1.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 2.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 50.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 0.0f},
+	                                      {.kind = Argument::Kind::Number, .number = 10.0f}}}},
+	});
 }

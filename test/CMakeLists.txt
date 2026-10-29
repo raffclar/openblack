@@ -2181,3 +2181,4 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_animal_speed PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_effect_requests test_effect_requests.cpp)
+openblack_setup_and_add_test(test_script_dead_living test_script_dead_living.cpp)

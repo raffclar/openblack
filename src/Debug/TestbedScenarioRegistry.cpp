@@ -1978,6 +1978,31 @@ void AddSingingStones(std::vector<Scenario>& all)
 	                .look = {k_Circle.x, 0.0f, k_Circle.y}},
 	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SingingStoneCircle"}},
 	});
+
+	// The funeral march of the second land's singing stones brings back the dead in the ring. The script finds the dead
+	// about a fixed place of the second land, from the middle of the map here.
+	constexpr glm::vec2 k_Ring {2103.497f - 2560.0f, 3000.377f - 2560.0f};
+	all.push_back({
+	    .id = "story.singing_stones_raise_dead",
+	    .name = "The singing stones bring back the dead in their ring",
+	    .facet = Facet::Story,
+	    .description = "A cow 3 east of the ring's centre and a villager 6 west of it are killed. Four seconds in, the "
+	                   "game's BringBackTheDead script runs, as the funeral march on the second land starts it.",
+	    .expected = "A big healing glow covers the ring. The nearest dead thing comes back first: the cow puffs steam and "
+	                "comes back alive at the ring's centre, not where it lay, as in the game. About 3 seconds later the "
+	                "villager puffs steam and comes back where it lay, of the same kind and age, as a skeleton. Each "
+	                "revived thing is let go 3 seconds after it comes back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Ring.x + 4.0f, 14.0f, k_Ring.y - 22.0f},
+	                .look = {k_Ring.x, 0.0f, k_Ring.y}},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = k_Ring + glm::vec2 {3.0f, 0.0f}, .life = 0.0f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Ring + glm::vec2 {-6.0f, 0.0f}, .life = 0.0f}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 4.0f,
+	                  .script = "BringBackTheDead",
+	                  .scriptGlobals = {{"SSBringBackToLifeActive", {.number = 0.0f}}}}},
+	});
 }
 
 /// The beach temple puzzle of the second land, as its script makes it: turned a half turn, at its normal size
@@ -12613,6 +12638,7 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 		{
 		case ScriptArgument::Kind::Number:
 		case ScriptArgument::Kind::Integer:
+		case ScriptArgument::Kind::Result:
 		case ScriptArgument::Kind::LastResult:
 		case ScriptArgument::Kind::Town:
 			return true;

@@ -119,7 +119,13 @@ void openblack::ecs::reflection::RegisterFields_Components_m(entt::meta_ctx& con
 	    .Field<&components::Mist::shrinksEdgeOn>("shrinksEdgeOn")
 	    .Field<&components::Mist::edgeShrink>("edgeShrink")
 	    .Field<&components::Mist::counter>("counter")
-	    .Field<&components::Mist::counterRemainder>("counterRemainder");
+	    .Field<&components::Mist::counterRemainder>("counterRemainder")
+	    .Field<&components::Mist::fading>("fading")
+	    .Field<&components::Mist::fadeTurns>("fadeTurns")
+	    .Field<&components::Mist::fadeElapsed>("fadeElapsed")
+	    .Field<&components::Mist::fadeSizeStep>("fadeSizeStep")
+	    .Field<&components::Mist::fadeAlphaStep>("fadeAlphaStep")
+	    .Field<&components::Mist::fadeAlpha>("fadeAlpha");
 	Reflect<components::MistDome>(context)
 	    .Field<&components::MistDome::dome>("dome")
 	    .Field<&components::MistDome::uvOffset>("uvOffset")
