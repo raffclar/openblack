@@ -145,10 +145,10 @@ TEST(GameFrameOrder, TheKeysOfTheCameraActAfterTheCameraMoves)
 
 TEST(GameFrameOrder, TheCameraReadsItsKeysOnlyOutsideTheTempleWithTheInterfaceAndNoBox)
 {
-	EXPECT_TRUE(CameraReadsKeys({.inTemple = false, .interfaceActive = true, .boxShows = false}));
-	EXPECT_FALSE(CameraReadsKeys({.inTemple = true, .interfaceActive = true, .boxShows = false}));
-	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = false, .boxShows = false}));
-	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = true, .boxShows = true}));
+	EXPECT_TRUE(CameraReadsKeys({.inTemple = false, .interfaceActive = true, .boxHasKeyboard = false}));
+	EXPECT_FALSE(CameraReadsKeys({.inTemple = true, .interfaceActive = true, .boxHasKeyboard = false}));
+	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = false, .boxHasKeyboard = false}));
+	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = true, .boxHasKeyboard = true}));
 }
 
 TEST(GameFrameOrder, TheCameraShakesBeforeTheHandLooksThroughIt)

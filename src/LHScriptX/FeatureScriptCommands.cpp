@@ -815,12 +815,13 @@ void FeatureScriptCommands::CreateCreature(glm::vec3 position, int32_t param2, i
 void FeatureScriptCommands::CreateCreatureFromFile(const std::string& playerName, CreatureType creatureType,
                                                    const std::string& creatureMind, glm::vec3 position)
 {
-	// The name of a player that is not in the game gives the neutral player. The creature then belongs to the neutral
-	// player, as a creature that the challenge scripts load from a file does.
-	auto player = GetPlayerName(playerName);
-	if (!ecs::creature_from_file::PlayerInGame(player))
+	// Every god slot has a player from the start of the game, so the creature belongs to the god that the script names.
+	// This is also true in a network game, where the humans join after the land loads. A name that is no slot's gives
+	// the neutral player.
+	const auto player = GetPlayerName(playerName);
+	if (player != PlayerNames::NEUTRAL && Locator::playerSystem::has_value())
 	{
-		player = PlayerNames::NEUTRAL;
+		Locator::playerSystem::value().EnsurePlayer(player);
 	}
 	ecs::creature_from_file::Make({.owner = player,
 	                               .speciesRow = static_cast<uint32_t>(creatureType),

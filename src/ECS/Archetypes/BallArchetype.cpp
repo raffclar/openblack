@@ -21,6 +21,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -30,6 +31,8 @@ entt::entity BallArchetype::Create(const glm::vec3& position)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	const auto& info = Locator::infoConstants::value().ball;
 
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));

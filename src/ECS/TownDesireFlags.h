@@ -17,6 +17,7 @@
 #include <glm/vec4.hpp>
 
 #include "3D/FieldCrop.h"
+#include "3D/MapCoords.h"
 #include "Enums.h"
 
 /// The flags over a town's store, one for each of some of the things the town wants. Each flies higher the more its town
@@ -37,8 +38,20 @@ inline constexpr int32_t k_SnowCap = 45;
 /// The hand's tooltip over a flag ("Need"), among the game's tooltips. The words shown are the flag's own.
 inline constexpr uint32_t k_NeedToolTip = 21;
 
+/// Before its town has a store, each flag stands this far from the town, in metres
+inline constexpr float k_DistanceWithoutStore = 5.0f;
+/// The angle between the places of two flags before their town has a store, in radians, from the game's data
+inline constexpr float k_AngleWithoutStore = 0.36959913f;
+
 /// The store's special point a flag of a place in the town's info flies at; none for a desire that has no flag
 [[nodiscard]] std::optional<uint32_t> PointOf(int32_t place);
+
+/// Where a flag of a place in the town's info stands before its town has a store: at a distance from the town, in the
+/// direction of an angle that increases with the place
+[[nodiscard]] map_coords::MapCoords PlaceWithoutStore(const map_coords::MapCoords& town, uint32_t place);
+
+/// Whether a flag counts as a thing that moves: the game compares its map position with the position where it was made
+[[nodiscard]] bool MovedSinceMade(const map_coords::MapCoords& madeAt, const map_coords::MapCoords& now);
 
 /// Whether a flag shows: its store stands built and the flag is up at least as far as its desire first shows
 [[nodiscard]] bool Shows(bool storeWorking, float level, float showsAfter);

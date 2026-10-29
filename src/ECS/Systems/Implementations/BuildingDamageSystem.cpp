@@ -164,9 +164,16 @@ damage::Mesh MakeDamageMesh(const building_world::World& world, entt::entity bui
 	return mesh;
 }
 
+/// How the corners and the face normals of a broken mesh go from the world into the model's own space
+struct ModelSpace
+{
+	std::function<glm::vec3(glm::vec3)> point;
+	std::function<glm::vec3(glm::vec3)> direction;
+};
+
 /// The faces a broken mesh is drawn with: each triangle, its back face behind it and a wall on each open side, every
-/// face lit flat by its own normal. Its corners are taken into the model's own space by a function.
-std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, const std::function<glm::vec3(glm::vec3)>& toModel)
+/// face lit flat by its own normal
+std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, const ModelSpace& space)
 {
 	std::vector<building_world::DrawnPart> parts;
 	for (const auto& primitive : mesh.primitives)
@@ -176,8 +183,8 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 			continue;
 		}
 		building_world::DrawnPart made {.material = primitive.material};
-		const auto add = [&made](glm::vec3 position, glm::vec2 uv, glm::vec3 normal) {
-			made.vertices.push_back({.position = position, .uv = uv, .normal = normal});
+		const auto add = [&made](glm::vec3 position, glm::vec2 uv, glm::vec3 normal, bool back = false) {
+			made.vertices.push_back({.position = position, .uv = uv, .normal = normal, .back = back});
 			return static_cast<uint16_t>(made.vertices.size() - 1);
 		};
 		for (const auto& triangle : primitive.triangles)
@@ -190,11 +197,13 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 			std::array<glm::vec3, 3> back {};
 			for (size_t i = 0; i < 3; ++i)
 			{
-				front.at(i) = toModel(c.at(i).position);
-				back.at(i) = toModel(c.at(i).position - normal * k_BackFace);
+				front.at(i) = space.point(c.at(i).position);
+				back.at(i) = space.point(c.at(i).position - normal * k_BackFace);
 			}
-			// The light falls on each face as its own normal turns it, in the model's space
-			auto frontNormal = glm::cross(front[1] - front[0], front[2] - front[0]);
+			// Each face keeps the normal of its triangle in the world. The light and the snow use this normal. On a
+			// building that follows the land, the corners in the model's space give a different normal, because the
+			// land is not level.
+			auto frontNormal = space.direction(normal);
 			const float frontLength = glm::length(frontNormal);
 			frontNormal = frontLength > 0.0f ? frontNormal / frontLength : glm::vec3(0.0f, 1.0f, 0.0f);
 			const auto backNormal = -frontNormal;
@@ -206,7 +215,7 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 			}
 			for (size_t i = 0; i < 3; ++i)
 			{
-				b.at(i) = add(back.at(i), c.at(i).uv, backNormal);
+				b.at(i) = add(back.at(i), c.at(i).uv, backNormal, true);
 			}
 			made.indices.insert(made.indices.end(), {f[0], f[1], f[2], b[0], b[2], b[1]});
 			// A wall joins the front and back faces along each side nothing joins on to
@@ -219,8 +228,8 @@ std::vector<building_world::DrawnPart> DrawnFaces(const damage::Mesh& mesh, cons
 				const auto next = (side + 1) % 3;
 				const auto fa = add(front.at(side), c.at(side).uv, frontNormal);
 				const auto fb = add(front.at(next), c.at(next).uv, frontNormal);
-				const auto ba = add(back.at(side), c.at(side).uv, backNormal);
-				const auto bb = add(back.at(next), c.at(next).uv, backNormal);
+				const auto ba = add(back.at(side), c.at(side).uv, backNormal, true);
+				const auto bb = add(back.at(next), c.at(next).uv, backNormal, true);
 				made.indices.insert(made.indices.end(), {fa, ba, fb, fb, ba, bb});
 			}
 		}
@@ -247,14 +256,19 @@ void RedrawBuilding(building_world::World& world, entt::entity building, Buildin
 	const auto& meshComponent = registry.Get<const Mesh>(building);
 	const bool followsLand = registry.AllOf<MorphWithTerrain>(building);
 	const float baseHeight = world.LandHeight(glm::vec2(transform.position.x, transform.position.z));
-	// Into the model's own space, undoing the lowering over the land, which its drawing lays on again
-	const auto toModel = [&world, &transform, followsLand, baseHeight](glm::vec3 point) {
-		if (followsLand)
-		{
-			point.y += baseHeight - world.LandHeight(glm::vec2(point.x, point.z));
-		}
-		return (glm::transpose(transform.rotation) * (point - transform.position)) / transform.scale;
-	};
+	// Into the model's own space, undoing the lowering over the land, which its drawing lays on again. A direction
+	// goes in so that the drawing turns it back to the same direction in the world.
+	const ModelSpace toModel {
+	    .point =
+	        [&world, &transform, followsLand, baseHeight](glm::vec3 point) {
+		        if (followsLand)
+		        {
+			        point.y += baseHeight - world.LandHeight(glm::vec2(point.x, point.z));
+		        }
+		        return (glm::transpose(transform.rotation) * (point - transform.position)) / transform.scale;
+	        },
+	    .direction =
+	        [&transform](glm::vec3 direction) { return (glm::transpose(transform.rotation) * direction) / transform.scale; }};
 	world.EraseModel(broken.drawMesh);
 	if (version == ModelVersion::Next)
 	{
@@ -361,8 +375,9 @@ void DrawPiece(building_world::World& world, entt::entity piece)
 	auto& registry = world.Entities();
 	auto& part = registry.Get<BuildingPiece>(piece);
 	world.EraseModel(part.drawMesh);
-	part.drawMesh = world.MakeModel(fmt::format("piece/{}", entt::to_integral(piece)), part.sourceMesh,
-	                                DrawnFaces(part.mesh, [](glm::vec3 p) { return p; }));
+	part.drawMesh = world.MakeModel(
+	    fmt::format("piece/{}", entt::to_integral(piece)), part.sourceMesh,
+	    DrawnFaces(part.mesh, {.point = [](glm::vec3 p) { return p; }, .direction = [](glm::vec3 d) { return d; }}));
 	registry.AssignOrReplace<Mesh>(piece, part.drawMesh, static_cast<int8_t>(0), static_cast<int8_t>(1));
 	registry.SetDirty();
 }

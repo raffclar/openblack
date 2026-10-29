@@ -11,6 +11,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -977,6 +978,14 @@ TEST(SpellSeedRules, TheTurnFindsASeedThatFollowsItsMiracleAtTheMiracle)
 	const glm::vec3 spell {10.0f, 20.0f, 30.0f};
 	EXPECT_EQ(PlaceForInfluence(seed, true, spell), glm::vec3(10.0f, 2.0f, 30.0f));
 	EXPECT_EQ(PlaceForInfluence(seed, false, spell), seed);
+}
+
+TEST(SpellSeedRules, ASeedLeavesTheHandAtTheReportedPlaceOfTheHandAndNotWhereTheFramesDrewIt)
+{
+	const glm::vec3 drawn {1.0f, 2.0f, 3.0f};
+	const glm::vec3 reported {40.0f, 5.0f, 60.0f};
+	EXPECT_EQ(PlaceOutOfHand(reported, drawn), reported);
+	EXPECT_EQ(PlaceOutOfHand(std::nullopt, drawn), drawn);
 }
 
 TEST(SpellSeedRules, AShownSeedSitsOnTheTallestStillThingWhoseCircleMeetsItsOwn)

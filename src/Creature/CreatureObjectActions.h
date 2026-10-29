@@ -55,10 +55,34 @@ enum class Kind : uint8_t
 /// go, eating, keeping hold, knocking down and pointing do. Throwing, catching, taking from the hand and kicking keep
 /// their pace.
 [[nodiscard]] bool Hurries(Kind kind);
-/// Whether the body continues an action to its end when the plan that asked for it stops. A catch continues, and so
-/// does a let-go: the creature puts down or tosses away the thing at the moment of the animation. The other actions
-/// stop with the plan.
-[[nodiscard]] bool PlaysOnWhenPlanStops(Kind kind);
+/// What the stop of the plan that asked for an action does to the action
+enum class PlanStop : uint8_t
+{
+	/// The body did not start the action, so the action stops
+	Stops,
+	/// The body plays the action to its end, and the moment of the action occurs
+	PlaysOn,
+	/// The arm plays the end of its point with no hold. A turn to the point ends first.
+	EndsPoint,
+};
+/// What a plan stop does to an action of the kind. The body starts an action when it plays its animations, or when it
+/// turns on the spot for the action: to get a thing in reach, to throw or to point. Only a dance, a fight, the static
+/// loop and a point stop with the plan. Each other action that the body started plays on.
+[[nodiscard]] PlanStop OnPlanStop(Kind kind, bool playing, bool turnsForIt);
+
+/// What a plan stop does to the thing of an eat
+enum class EatStop : uint8_t
+{
+	/// The thing stays in the hand
+	Keeps,
+	/// The creature swallows the thing at once
+	Swallows,
+	/// The thing in the hand goes out of the world, uneaten. The creature keeps the food that it took in at the start.
+	Deletes,
+};
+/// What a plan stop does to the thing of an eat. After the bite, the creature swallows the thing at once. Before the
+/// bite, while the eat animation plays, the thing in the hand goes out of the world.
+[[nodiscard]] EatStop OnEatStop(bool playing, bool bitten, bool holds);
 
 /// Whether the arm that holds a thing shows the hold pose over the body, while the body plays the animation of an
 /// action, or no action (none). The animations that move the held thing themselves replace the hold pose: picking up,
@@ -254,8 +278,8 @@ struct PickUpFacts
 /// How a creature decides whether it may pick up a kind of thing
 enum class KindRule : uint8_t
 {
-	/// Never: creatures, buildings, fields, features other than magic mushrooms, lanterns, shields, vortices and teleport
-	/// stones
+	/// Never: creatures, buildings, fields, features other than magic mushrooms, lanterns, shields, vortices, teleport
+	/// stones and building pieces
 	Never,
 	/// Always, whatever else holds: the football and a creed
 	Always,
@@ -267,9 +291,11 @@ enum class KindRule : uint8_t
 	Mushroom,
 	/// A pile of food or wood: unless a script said it can't be picked up, and only a kind of pile that may fly about
 	Pile,
-	/// Anything else that can be picked up (villagers, animals, things lying about, pots, rocks, dead trees, trees):
-	/// the whole rule
+	/// Anything else that can be picked up (villagers, animals, things lying about, pots, rocks, dead trees, trees,
+	/// reward chests): the whole rule
 	Whole,
+	/// A scaffold: only when a hand can take it, and then the whole rule
+	Scaffold,
 };
 
 /// The kinds of thing that differ in how a creature picks them up
@@ -308,24 +334,34 @@ enum class Thing : uint8_t
 	/// A thing built or set into the land that stones can knock about: a building, temple, totem or worship site, a
 	/// feature other than a magic mushroom, an animated static or flowers
 	Fixture,
+	/// A piece that broke off a building. It is a rock that a creature never picks up from the land.
+	BuildingPiece,
+	/// A reward chest
+	Reward,
+	/// A scaffold of a workshop
+	Scaffold,
 };
 /// How a creature decides on picking up a kind of thing
 [[nodiscard]] KindRule RuleOf(Thing thing);
-/// Whether a hand may hold a kind of thing at all
-[[nodiscard]] bool Holdable(Thing thing);
+/// Whether the kind of a thing lets something pick it up at all. A creature that catches a thing or takes it from a
+/// hand asks only this, not the kind's rule. Buildings, features, lanterns and shields say no. Creatures say yes.
+[[nodiscard]] bool CanBePickedUp(Thing thing);
 /// Whether a kind of thing is alive: villagers, animals, birds and creatures
 [[nodiscard]] bool IsLiving(Thing thing);
 /// Whether a creature may throw things at a thing to knock it down: a living thing while it lives, and whatever is
-/// built or set into the land (shields too), but no tree, lantern, vortex or teleport stone, nor anything lying about
+/// built or set into the land (shields and building pieces too). Not a tree, lantern, vortex or teleport stone, nor
+/// anything lying about
 [[nodiscard]] bool CanBeStoned(Thing thing, bool dead);
-/// Whether a thing does damage when a creature throws it: the statics, rocks and dead trees, but not the toys
+/// Whether a thing does damage when a creature throws it: the statics, rocks, building pieces and dead trees, but not
+/// the toys
 [[nodiscard]] bool DoesThrowingDamage(Thing thing, bool toy);
 /// Whether a creature may throw a thing to impress: anything but the living, vortices and teleport stones, as long as
 /// the thing's height is less than two thirds (0.64) of the creature's weight. The game sets the thing's height against
 /// the creature's weight, so in practice any such thing a creature can pick up will do.
 [[nodiscard]] bool CanBeThrownToImpress(Thing thing, float thingHeight, float creatureWeight);
 constexpr float k_ThrowToImpressWeightShare = 0.64f;
-/// Whether a creature may throw a thing into the sea in play: what lies about, the statics, rocks, dead trees and trees
+/// Whether a creature may throw a thing into the sea in play: what lies about (reward chests and scaffolds too), the
+/// statics, rocks, building pieces, dead trees and trees
 [[nodiscard]] bool CanBeThrownInTheSea(Thing thing);
 
 /// The toys among the statics, known by their models
@@ -345,15 +381,17 @@ struct KindFacts
 {
 	Thing thing {Thing::Other};
 	KindRule rule {KindRule::Never};
-	/// A hand may hold it at all, so a hand may give it to a creature and a creature may catch it: villagers, animals,
-	/// things lying about, pots and piles, statics and rocks, dead trees and trees
-	bool holdable {false};
+	/// Its kind lets something pick it up at all, so a hand may give it to a creature and a creature may catch it:
+	/// all but buildings, features, lanterns and shields
+	bool canBePickedUp {false};
 	/// One of the toys
 	bool toy {false};
 	/// A bird low enough over the land
 	bool low {false};
 	/// A kind of pile that may fly about
 	bool mayFly {false};
+	/// A scaffold that a hand can take now
+	bool handCanTake {false};
 };
 /// Whether a creature may pick the thing up from where it is, by its kind's own rule
 [[nodiscard]] bool MayPickUpKind(const KindFacts& kind, const PickUpFacts& facts);

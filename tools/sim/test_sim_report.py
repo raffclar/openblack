@@ -198,6 +198,30 @@ class UnregisteredTests(unittest.TestCase):
 
 
 
+class LeashCommands(unittest.TestCase):
+    LINES = [
+        "[game] [info] Leash command: player 1 presses the leash key at turn 300: creature 51 wears leash 2 of player 1, "
+        "held in the hand",
+        "[game] [info] Network game: 300 turns compared with the server, 300 the same",
+        "[game] [info] Leash command: player 1 goes into the temple at turn 420: creature 51 wears no leash",
+        "[game] [info] Leash command: player 0 presses the leash key at turn 500: the player has no creature",
+    ]
+
+    def test_gives_each_command_in_its_order(self):
+        self.assertEqual(sim_report.leash_commands_in_text(self.LINES), [
+            (300, 1, "presses the leash key", "creature 51 wears leash 2 of player 1, held in the hand"),
+            (420, 1, "goes into the temple", "creature 51 wears no leash"),
+            (500, 0, "presses the leash key", "the player has no creature"),
+        ])
+
+    def test_a_command_after_the_last_common_turn_is_not_given(self):
+        self.assertEqual([command[0] for command in sim_report.leash_commands_in_text(self.LINES, 499)], [300, 420])
+
+    def test_an_observer_compares_from_the_turn_of_its_world(self):
+        commands = sim_report.leash_commands_in_text(self.LINES)
+        self.assertEqual([command[0] for command in sim_report.leash_commands_from_turn(commands, 420)], [420, 500])
+
+
 class HandDeeds(unittest.TestCase):
     LINES = [
         "[game] [info] Hand deed: the hand of player 0 scoops from thing 140",

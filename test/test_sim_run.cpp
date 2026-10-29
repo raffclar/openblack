@@ -96,6 +96,25 @@ TEST(SimRun, TimingsGiveAveragesAndTheLongest)
 	EXPECT_FLOAT_EQ(timings.FrameAverageMs(), 1.0f);
 }
 
+TEST(SimRun, TheTurnTimeDoesNotIncludeTheRecordTime)
+{
+	Timings timings;
+	// The record step of a turn ends before the time of the turn comes
+	timings.AddRecord(2.0f);
+	timings.AddTurn(5.0f);
+	timings.AddTurn(4.0f);
+	timings.AddRecord(1.0f);
+	timings.AddRecord(0.5f);
+	timings.AddTurn(1.0f);
+	EXPECT_EQ(timings.turns, 3u);
+	EXPECT_FLOAT_EQ(timings.turnLongestMs, 4.0f);
+	EXPECT_FLOAT_EQ(timings.TurnAverageMs(), 7.0f / 3.0f);
+	EXPECT_EQ(timings.records, 3u);
+	EXPECT_FLOAT_EQ(timings.recordLongestMs, 2.0f);
+	EXPECT_FLOAT_EQ(timings.RecordAverageMs(), 3.5f / 3.0f);
+	EXPECT_FLOAT_EQ(timings.recordSinceTurnMs, 0.0f);
+}
+
 TEST(SimRun, TimingsAddTheStagesOfEachFrame)
 {
 	Timings timings;

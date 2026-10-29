@@ -522,12 +522,12 @@ bool creature_fight::LetsChoose(const MindInFight& mind)
 	{
 		return false;
 	}
-	return !mind.fighting || (mind.startedIt && mind.planned && mind.waitsForFight && !mind.won);
+	return !mind.fighting || mind.onlyAsked || (mind.startedIt && mind.planned && mind.waitsForFight && !mind.won);
 }
 
 bool creature_fight::ObeysInFight(const MindInFight& mind)
 {
-	return mind.fighting && !mind.startedIt && !mind.won;
+	return mind.fighting && !mind.onlyAsked && !mind.startedIt && !mind.won;
 }
 
 bool creature_fight::HealthyEnoughToFight(float life)

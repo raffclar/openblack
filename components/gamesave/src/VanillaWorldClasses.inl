@@ -392,28 +392,28 @@ void ReadField(WorldReader& r)
 	ReadAbode(r);
 	r.Word("cropInfo");
 	r.Word();
-	r.Word();
+	r.Word("food");
 	r.Ref("fieldTown");
-	r.Word();
-	r.Byte();
-	r.Word();
-	r.Refs("crops");
+	r.Word("growthTurn");
+	r.Byte("timesSown");
+	r.Word("age");
+	r.Refs("farmers");
 	r.Byte();
 }
 
 void ReadFishFarm(WorldReader& r)
 {
 	ReadMultiMapFixed(r);
-	r.Refs();
-	r.Ref();
+	r.Refs("fishermen");
+	r.Ref("town");
 	r.Word();
-	r.Word();
+	r.Word("fish");
 }
 
 void ReadSpecialVillager(WorldReader& r)
 {
 	ReadVillager(r);
-	r.Word();
+	r.Word("specialRow");
 }
 
 void ReadFlock(WorldReader& r)
@@ -483,30 +483,30 @@ void ReadMobileObject(WorldReader& r)
 void ReadForest(WorldReader& r)
 {
 	ReadContainer(r);
-	r.Word();
+	r.Word("scenic");
 	r.Ref();
-	r.Word();
-	r.Refs();
-	r.Refs();
-	r.Ref();
-	r.Word();
-	r.Word();
+	r.Word("forestId");
+	r.Refs("grownTrees");
+	r.Refs("growingTrees");
+	r.Ref("bigForest");
+	r.Word("lastTreeAddedTurn");
+	r.Word("nextForestId");
 }
 
 void ReadBigForest(WorldReader& r)
 {
 	ReadMultiMapFixed(r);
-	r.Ref();
-	r.Word();
+	r.Ref("forest");
+	r.Word("wood");
 }
 
 void ReadTree(WorldReader& r)
 {
 	ReadFixed(r);
-	r.Half();
-	r.Word();
-	r.Ref();
-	r.Half();
+	r.Half("growthCountdown");
+	r.Word("maxSize");
+	r.Ref("forest");
+	r.Half("treeFlags");
 }
 
 void ReadTownDesireFlags(WorldReader& r)
@@ -522,21 +522,22 @@ void ReadTownDesireFlags(WorldReader& r)
 void ReadStandardBuildingSite(WorldReader& r)
 {
 	ReadBuildingSite(r);
-	r.Ref();
+	r.Ref("siteWoodPile");
 }
 
 void ReadBuildingSite(WorldReader& r)
 {
-	r.Ref();
+	r.Ref("siteBuilding");
+	r.Refs("siteWorkers");
 	r.Refs();
 	r.Refs();
-	r.Refs();
 	r.Word();
-	r.Bytes(1536);
+	// The places round the building where its builders stand: 128 points of three floats
+	r.Bytes(1536, "sitePlaces");
+	r.Word("siteWorkerCount");
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
+	r.Float("siteDesire");
+	r.Float("siteLife");
 }
 
 void ReadPileFood(WorldReader& r)
@@ -570,19 +571,19 @@ void ReadTotemStatue(WorldReader& r)
 void ReadPlannedAbode(WorldReader& r)
 {
 	ReadPlannedMultiMapFixed(r);
-	r.Ref();
+	r.Ref("town");
 }
 
 void ReadPlannedMultiMapFixed(WorldReader& r)
 {
 	ReadPositioned(r);
+	r.Float("heading");
+	r.Float("scale");
+	r.Word("wasBuilt");
 	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Ref();
-	r.Word();
+	r.Word("created");
+	r.Ref("footpathLink");
+	r.Word("info");
 }
 
 void ReadInterface(WorldReader& r)

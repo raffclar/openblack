@@ -128,6 +128,9 @@ public:
 
 	/// Whether the script of a land is one of the playground lands, which the game plays as a skirmish
 	[[nodiscard]] virtual bool IsPlaygroundLand(const std::filesystem::path& path) const = 0;
+	/// The count of the lands that started to load since the start: a map, the testbed, the map for 32 gods, a saved game
+	/// or a world state. A tool can see from a change of the count that a step loaded a land.
+	[[nodiscard]] virtual uint32_t LandLoads() const = 0;
 	/// The map script of the land that loaded last, or the path of the testbed. Empty before a land loads.
 	[[nodiscard]] virtual const std::filesystem::path& GetLandPath() const = 0;
 	/// The land is the testbed. It has no temples, so a developer tool's network game on it asks for none.

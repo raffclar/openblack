@@ -104,6 +104,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_player_system test_player_system.cpp)
 openblack_setup_and_add_test(test_sound_tags test_sound_tags.cpp)
 target_link_libraries(test_sound_tags PRIVATE pack l3d morph)
+if(MSVC)
+  target_compile_options(test_sound_tags PRIVATE /bigobj)
+endif()
 openblack_setup_and_add_test(test_interpolator test_interpolator.cpp)
 openblack_setup_and_add_test(test_set_camera_pos camera/test_set_camera_pos.cpp)
 openblack_setup_and_add_test(
@@ -2119,3 +2122,18 @@ openblack_setup_and_add_test(test_vanilla_world test_vanilla_world.cpp)
 add_test(NAME test_net_check_web
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_web.py
 )
+add_test(NAME test_net_check_hold
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_hold.py
+)
+openblack_setup_and_add_test(test_leash_report test_leash_report.cpp)
+openblack_setup_and_add_test(test_creature_catch_give_kinds test_creature_catch_give_kinds.cpp)
+openblack_setup_and_add_test(test_things_made test_things_made.cpp)
+openblack_setup_and_add_test(test_object_snow graphics/test_object_snow.cpp)
+openblack_setup_and_add_test(test_creature_turn_to_face test_creature_turn_to_face.cpp)
+openblack_setup_and_add_test(test_vanilla_world_import test_vanilla_world_import.cpp)
+add_test(NAME test_guard_sweep
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/guard_sweep.py --self-test
+)
+openblack_setup_and_add_test(test_box_keyboard input/test_box_keyboard.cpp)
+openblack_setup_and_add_test(test_creature_catch_while_busy test_creature_catch_while_busy.cpp)

@@ -222,6 +222,7 @@
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
+#include "ECS/Systems/ThingsMadeSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
@@ -375,6 +376,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"soundTagSystem", "living.sound_tags"},
     LocatorCoverage {"rainSystem", "land.precipitation"},
     LocatorCoverage {"chimneySmokeSystem", "living.chimneys"},
+    LocatorCoverage {"thingsMadeSystem", "living.things_made"},
     LocatorCoverage {"abodeKnockSystem", "view.state"},
     LocatorCoverage {"influenceSystem", "influence.hand"},
     LocatorCoverage {"townDesireSystem", "living.town_desires"},
@@ -1664,6 +1666,13 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		              });
 		              return items;
 	              }));
+	provider->Add(Query("things_made",
+	                    "The count of the things of the world made since the land was loaded: the place in the order of "
+	                    "the next thing made",
+	                    {}, ResultKind::Object),
+	              Serve<Locator::thingsMadeSystem>("thingsMadeSystem",
+	                                               [](const ecs::systems::ThingsMadeSystemInterface& count,
+	                                                  const QueryContext& /*c*/) { return Json {{"made", count.Made()}}; }));
 	provider->Add(
 	    Query("sound_tags",
 	          "The sounds tagged to things: sound, whether active, its emitter, the object it is attached to, whether it loops",

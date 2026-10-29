@@ -252,8 +252,13 @@ def ai_counts(summary):
 
 
 def max_turn_ms(summary):
-    """The longest turn of each client, in milliseconds, as the clients' records tell"""
+    """The longest turn of each client, in milliseconds, as the clients' records tell, without the record's own time"""
     return [client.get("max_turn_ms") for client in summary.get("clients", [])]
+
+
+def max_record_ms(summary):
+    """The longest time of the record step of each client, in milliseconds"""
+    return [client.get("max_record_ms") for client in summary.get("clients", [])]
 
 
 def classify(code, summary):
@@ -279,6 +284,7 @@ def summary_row(game, status, summary, started, started_clock, finished_clock, r
         row["parts"] = part_names(summary)
         row["ai"] = ai_counts(summary)
         row["max_turn_ms"] = max_turn_ms(summary)
+        row["max_record_ms"] = max_record_ms(summary)
         row["ended"] = summary.get("ended")
     if game.part_observer_at is not None:
         row["part_observer_at"] = game.part_observer_at
@@ -479,15 +485,17 @@ def queue_line(path, row):
 
 def table_lines(rows):
     """A short markdown table of the rows of games: one line for each game"""
-    lines = ["| Game | Status | Turns | First part | AI (gods / needs / hand / casts) | Longest turn ms |",
-             "|---|---|---|---|---|---|"]
+    lines = ["| Game | Status | Turns | First part | AI (gods / needs / hand / casts) | Longest turn ms | Longest record ms |",
+             "|---|---|---|---|---|---|---|"]
     for row in rows:
         ai = row.get("ai") or {}
-        longest = max((value for value in row.get("max_turn_ms") or [] if value is not None), default=None)
+        # The turn time is without the time of the record step, which has its own column
+        longest = largest(row.get("max_turn_ms"))
+        record = largest(row.get("max_record_ms"))
         part = row.get("first_part_turn")
         lines.append(f"| {row['game']} | {row['status']} | {row.get('turns_played', '-')} | {'-' if part is None else part} | "
                      f"{ai.get('gods', '-')} / {ai.get('needs', '-')} / {ai.get('hand', '-')} / {ai.get('casts', '-')} | "
-                     f"{'-' if longest is None else round(longest, 1)} |")
+                     f"{'-' if longest is None else round(longest, 1)} | {'-' if record is None else round(record, 1)} |")
     return lines
 
 
@@ -507,6 +515,11 @@ def map_lines(rows):
             line += f" observer part {planned}"
         lines.append(line)
     return lines
+
+
+def largest(values):
+    """The largest of the values that are not none, none when there is no such value"""
+    return max((value for value in values or [] if value is not None), default=None)
 
 
 def read_rows(path, since=None):

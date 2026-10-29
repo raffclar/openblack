@@ -657,6 +657,7 @@ Renderer::~Renderer() noexcept
 	_offscreenShots.reset();
 	_creatureSkins.clear();
 	_roomCreatureSkins.clear();
+	_drawnCreatureSkins.clear();
 	_spareCreatureSkins.clear();
 	_animalBoneTexture.reset();
 	_handSkins.clear();
@@ -1426,7 +1427,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				bindings.snowed = snowed;
 				// y: 1 when the submesh has bones. Then the snow is read by the normal of each vertex in its file, not by
 				// the normal of the posed vertex.
-				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, subMesh.GetFlags().hasBones ? 1.0f : 0.0f, 0.0f, 0.0f};
+				// z: 1 for the faces of a broken shape. Their snow is read by where each corner is in the world and by
+				// the normal of its face, and shows from a different alpha.
+				const glm::vec4 u_snow {snowed ? 1.0f : 0.0f, subMesh.GetFlags().hasBones ? 1.0f : 0.0f,
+				                        subMesh.IsMade() ? 1.0f : 0.0f, 0.0f};
 				setUniform(MeshUniform::Snow, &u_snow);
 				if (snowed)
 				{
@@ -1883,6 +1887,15 @@ void Renderer::DrawTempleMapPass() const
 	const auto visit = Locator::temple::value().GetVisits();
 	if (_templeMapVisit == visit)
 	{
+		// The map shows the land of this visit already. The warm-up of a new load makes the triangles of the land's
+		// blocks for the next visit.
+		if (_warmingUp)
+		{
+			for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+			{
+				[[maybe_unused]] const auto& triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+			}
+		}
 		return;
 	}
 	_templeMapVisit = visit;
@@ -6021,6 +6034,11 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		{
 			UploadCreatureSkins(Locator::temple::value().GetRooms(), _roomCreatureSkins);
 		}
+		// The creature of the tattoo menu is a thing of the drawn registry
+		if (Locator::drawnRegistry::has_value())
+		{
+			UploadCreatureSkins(Locator::drawnRegistry::value(), _drawnCreatureSkins);
+		}
 	}
 	UploadHandSkins();
 	UploadAnimalBones(drawDesc);
@@ -8077,10 +8095,9 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    modelMatrix = glm::translate(modelMatrix, placed.position);
 						    modelMatrix *= glm::mat4(placed.rotation);
 						    modelMatrix = glm::scale(modelMatrix, placed.scale);
-						    if (!_warmingUp &&
-						        !view_frustum::SeesSphere(seenBy, placed.position,
-						                                  view_frustum::QuadRadius(glm::mat3(modelMatrix)) +
-						                                      view_frustum::k_BoxMargin))
+						    if (!_warmingUp && !view_frustum::SeesSphere(seenBy, placed.position,
+						                                                 view_frustum::QuadRadius(glm::mat3(modelMatrix)) +
+						                                                     view_frustum::k_BoxMargin))
 						    {
 							    return;
 						    }

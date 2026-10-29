@@ -239,6 +239,7 @@ struct FaceLayer
 	float remainingMs {0.0f};
 	/// Why the wanted face was pulled
 	creature_face::Cue cue {creature_face::Cue::None};
+	[[nodiscard]] bool operator==(const FaceLayer&) const = default;
 };
 /// A face pulled for some milliseconds, or for an hour when none are given
 [[nodiscard]] FaceLayer PullFace(FaceLayer face, size_t animation, float milliseconds,

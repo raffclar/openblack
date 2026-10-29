@@ -176,6 +176,7 @@ class AdvisorSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
 class ChimneySmokeSystemInterface;
+class ThingsMadeSystemInterface;
 class AbodeKnockSystemInterface;
 class InfluenceSystemInterface;
 class TownDesireSystemInterface;
@@ -389,6 +390,7 @@ struct Locator
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;
 	using chimneySmokeSystem = entt::locator<ecs::systems::ChimneySmokeSystemInterface>;
+	using thingsMadeSystem = entt::locator<ecs::systems::ThingsMadeSystemInterface>;
 	using abodeKnockSystem = entt::locator<ecs::systems::AbodeKnockSystemInterface>;
 	using influenceSystem = entt::locator<ecs::systems::InfluenceSystemInterface>;
 	using townDesireSystem = entt::locator<ecs::systems::TownDesireSystemInterface>;

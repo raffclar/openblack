@@ -10,6 +10,7 @@
 #include "Statistics.h"
 
 #include <algorithm>
+#include <array>
 #include <utility>
 #include <vector>
 
@@ -222,6 +223,11 @@ void player_statistics::CountChantsUsed(ecs::Registry& registry, PlayerNames pla
 	Update(registry, player, [amount](PlayerStatistics& statistics) { statistics.chantsUsed += amount; });
 }
 
+void player_statistics::CountInfluence(ecs::Registry& registry, PlayerNames player, float power)
+{
+	Update(registry, player, [power](PlayerStatistics& statistics) { statistics.influenceHistory.Add(power); });
+}
+
 void player_statistics::ProcessTurn(uint32_t turn)
 {
 	auto& registry = Entities();
@@ -240,10 +246,6 @@ void player_statistics::ProcessTurn(uint32_t turn)
 		statistics.men.Check(men);
 		statistics.women.Check(women);
 		statistics.populationHistory.Add(static_cast<float>(men + women));
-		if (Locator::influenceSystem::has_value())
-		{
-			statistics.influenceHistory.Add(Locator::influenceSystem::value().InfluencePower(player.name));
-		}
 		if (turn % statistics::k_BeliefCheckEvery == 0)
 		{
 			statistics.belief.Check(BeliefIn(player.name));
@@ -405,19 +407,25 @@ statistics::BoxFigures player_statistics::Box()
 		global.linesOfCode += statistics::LinesOfCodeStep(global.townsAtStart,
 		                                                  [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); });
 	}
-	std::vector<std::pair<PlayerNames, entt::entity>> players;
-	registry.Each<const Player, const PlayerStatistics>(
-	    [&players](entt::entity entity, const Player& player, const PlayerStatistics&) {
-		    if (static_cast<size_t>(player.name) < statistics::k_BoxPlayers)
-		    {
-			    players.emplace_back(player.name, entity);
-		    }
-	    });
-	std::ranges::sort(players, {}, &std::pair<PlayerNames, entt::entity>::first);
-	box.playersInGame = static_cast<uint32_t>(players.size());
-	for (const auto& [name, entity] : players)
+	// The box counts the players that play among the first places, then shows that many places from the first
+	std::array<bool, statistics::k_BoxPlayers> plays {};
+	for (size_t place = 0; place < plays.size(); ++place)
 	{
-		box.players.push_back(FiguresOf(name, entity, registry.Get<const PlayerStatistics>(entity)));
+		plays.at(place) =
+		    Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(static_cast<PlayerNames>(place));
+	}
+	box.playersInGame = statistics::BoxPlayerCount(plays);
+	for (uint32_t place = 0; place < box.playersInGame; ++place)
+	{
+		const auto name = static_cast<PlayerNames>(place);
+		const auto entity = Locator::playerSystem::has_value()
+		                        ? Locator::playerSystem::value().FindPlayer(name).value_or(entt::null)
+		                        : entt::null;
+		const auto* statistics = registry.Valid(entity) ? registry.TryGet<const PlayerStatistics>(entity) : nullptr;
+		if (statistics != nullptr)
+		{
+			box.players.push_back(FiguresOf(name, entity, *statistics));
+		}
 	}
 	box.landNumber = registry.Context().mapScriptGlobals.landNumber;
 

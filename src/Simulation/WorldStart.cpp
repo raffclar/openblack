@@ -39,6 +39,7 @@
 #endif
 
 #include "3D/AllMeshes.h"
+#include "3D/CameraEdits.h"
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandLightTable.h"
@@ -52,6 +53,7 @@
 #include "Audio/ClipSounds.h"
 #include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
+#include "Camera/CameraZones.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
@@ -494,6 +496,25 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
 		}
 	});
+
+	// The scripts' cameras and the camera zone files are read with the other resources, not in the turn of the script
+	// that first asks for them
+	if (const auto edits = fileSystem.GetPath<Path::Data>() / "camera.edt"; fileSystem.Exists(edits))
+	{
+		resources.GetCameraEdits().RegisterLoad(camera_edits::k_FileId.value(), 0, resources::CameraEditLoader::FromDiskTag {},
+		                                        edits);
+	}
+	if (const auto zones = fileSystem.GetPath<Path::Data>() / "Zones"; fileSystem.Exists(zones))
+	{
+		auto& zoneManager = resources.GetCameraZones();
+		fileSystem.Iterate(zones, false, [&zoneManager](const std::filesystem::path& f) {
+			if (string_utils::LowerCase(f.extension().string()) == ".exc")
+			{
+				zoneManager.RegisterLoad(camera_zones::FileId(f.filename().string()), 0,
+				                         resources::CameraZoneLoader::FromDiskTag {}, f);
+			}
+		});
+	}
 
 	view.StartupStep("camera paths");
 	// Load loose one-off assets

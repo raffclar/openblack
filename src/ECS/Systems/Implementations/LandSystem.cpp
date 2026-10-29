@@ -70,6 +70,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -92,6 +93,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -127,6 +129,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Help/HelpProfile.h"
 #include "Help/Spirits.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
@@ -289,6 +292,12 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 		Locator::forestSystem::value().MakeScenicForests();
 		// Each town finds the forests near it with wood in them
 		Locator::forestSystem::value().AssignForestsToTowns();
+	}
+
+	// Each player with a citadel has their influence power worked out once, as the game does after the land is laid out
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().LandLaidOut();
 	}
 
 	timer.Step("forests");
@@ -489,6 +498,10 @@ bool LandSystem::LoadGodsRingMap()
 		Locator::forestSystem::value().MakeScenicForests();
 		Locator::forestSystem::value().AssignForestsToTowns();
 	}
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().LandLaidOut();
+	}
 	View().MakeSymbolSheet();
 
 	// The camera looks at the first slot's village from beyond its citadel
@@ -617,8 +630,10 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	const bool restored = restore();
 	timer.Step("saved world");
 
-	// The systems find their entities among the loaded ones, and the things go back into the map's cells
+	// The systems find their entities among the loaded ones, and the things go back into the map's cells. A world that
+	// was saved with fewer players gets the players that it did not keep.
 	Locator::playerSystem::value().RegisterPlayers();
+	Locator::playerSystem::value().EnsureAllPlayers();
 	Locator::handSystem::value().FindAfterLoad();
 	Locator::skySystem::value().FindAfterLoad();
 	Locator::cameraBookmarkSystem::value().FindAfterLoad();
@@ -723,6 +738,7 @@ void LandSystem::RemakeModelsAfterLoad()
 
 void LandSystem::PrepareNewLand(land_change::Kind change)
 {
+	++_landLoads;
 	const bool toTestbed = change == land_change::Kind::Testbed;
 	const auto rules = land_change::RulesFor(change);
 	// The start-of-game question is about the land that goes now. Close the question with no answer. Then release the
@@ -859,6 +875,16 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	}
 	Locator::guidanceSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
+	// The help's clock, which times what the player did, starts again at 0 with the land. The counts stay.
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Get().ResetClock();
+	}
+	// Nor do the camera's places to keep out of, its fence or its height limits
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		Locator::cameraZoneSystem::value().Reset();
+	}
 	// The turns of a new land start from zero, and so does the turn of the last autosave
 	if (Locator::saveGameSystem::has_value())
 	{
@@ -1076,8 +1102,12 @@ void LandSystem::SetUpLandscape()
 	sky.SetTime(sky.GetClock().GetScriptTime());
 	Locator::cloudSystem::value().Reset();
 
-	// There is always a player active
-	Locator::playerSystem::value().AddPlayer(archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE));
+	// Before the land script runs, the land has the player of each of the seven god slots and the neutral player, in the
+	// order of their numbers. A slot that nobody plays has its player too, so the scripts and the turns find it.
+	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+	{
+		Locator::playerSystem::value().AddPlayer(archetypes::PlayerArchetype::Create(static_cast<PlayerNames>(number)));
+	}
 
 	Locator::cameraBookmarkSystem::value().Initialize();
 	Locator::playerSystem::value().RegisterPlayers();

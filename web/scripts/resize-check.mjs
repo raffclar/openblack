@@ -1,6 +1,7 @@
 // Checks that the game fills the web page and follows a change of the window size, in headless Chrome. It runs
 // cdp-run.mjs once on the testbed in a 1280x720 window, changes the window to 1920x1080 and checks:
-// - at each size the game canvas fills the window, the page has no scroll bars and the log box takes no space,
+// - at each size the game canvas fills the window below the strip of the build badge (22 px), the page has no scroll
+//   bars and the log box takes no space,
 // - the game draws at the new size (its log), and its picture fills the new window,
 // - after the change, a click takes the pointer at the place of the click, and a drag moves the land,
 // - the page shows the build version with a link to its commit.
@@ -38,11 +39,16 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 const k_First = [1280, 720];
 const k_Second = [1920, 1080];
+// The height of the strip above the game, in CSS pixels (--badge-bar in page.css). The game canvas is below it.
+const k_Bar = 22;
 // The click that takes the pointer after the change, far from the first window's size
 const k_Click = [1500, 900];
-const firstPixels = pixels(k_First);
-const secondPixels = pixels(k_Second);
-const clickPixels = k_Click.map((value) => Math.floor(value * pixelRatio));
+// The size of the game canvas in a window: the window below the strip
+const gameBox = (size) => [size[0], size[1] - k_Bar];
+const firstPixels = pixels(gameBox(k_First));
+const secondPixels = pixels(gameBox(k_Second));
+// The game gets the place of the click from the top left corner of its canvas
+const clickPixels = [Math.floor(k_Click[0] * pixelRatio), Math.floor((k_Click[1] - k_Bar) * pixelRatio)];
 
 // What the page looks like: the canvas box, the scroll size, the log box and the build link. It is on one line, as
 // the log of cdp-run.mjs has one line for each value.
@@ -76,7 +82,7 @@ const steps = [
   { at: 23, do: 'wait-log', text: `The game draws at the new window size ${firstPixels[0]}x${firstPixels[1]}`, seconds: 30 },
   { at: 25, do: 'shot', name: 'back' },
 ];
-const changedPixels = k_First.map((value) => Math.trunc(value * (changedRatio ?? 1)));
+const changedPixels = gameBox(k_First).map((value) => Math.trunc(value * (changedRatio ?? 1)));
 if (changedRatio !== undefined) {
   steps.push({ at: 26, do: 'resize', width: k_First[0], height: k_First[1], dpr: changedRatio },
     { at: 27, do: 'wait-log', text: `The game draws at the new window size ${changedPixels[0]}x${changedPixels[1]}`,
@@ -108,16 +114,19 @@ const check = (name, pass, detail) => {
   results.push({ name, pass, detail });
   console.log(`${pass ? 'PASS' : 'FAIL'} ${tag} ${name}${detail ? `: ${detail}` : ''}`);
 };
-const fills = (layout, size) => layout !== undefined && JSON.stringify(layout.canvas) === JSON.stringify([0, 0, ...size]) &&
+const fills = (layout, size) => layout !== undefined &&
+  JSON.stringify(layout.canvas) === JSON.stringify([0, k_Bar, ...gameBox(size)]) &&
   layout.scroll[0] <= size[0] && layout.scroll[1] <= size[1] && layout.log === 'none';
 // The picture fills the window: each corner box of the screenshot has the game's picture in it. The screenshot has
 // the pixels of the screen, thus the CSS size times the ratio.
 const corners = (name, cssSize) => {
   const size = pixels(cssSize);
+  const game = pixels(gameBox(cssSize));
+  const top = size[1] - game[1];
   const file = path.join(folder, `${name}.png`);
   const [width, height] = pictureSize(file);
-  const box = [Math.floor(size[0] / 4), Math.floor(size[1] / 4)];
-  const shares = [[0, 0], [size[0] - box[0], 0], [0, size[1] - box[1]], [size[0] - box[0], size[1] - box[1]]]
+  const box = [Math.floor(game[0] / 4), Math.floor(game[1] / 4)];
+  const shares = [[0, top], [size[0] - box[0], top], [0, size[1] - box[1]], [size[0] - box[0], size[1] - box[1]]]
     .map(([x, y]) => (width === size[0] && height === size[1] ? litShare(file, [x, y, box[0], box[1]]) : -1));
   return { pass: shares.every((share) => share > 0.2), detail: `${width}x${height}, lit ${shares.map((s) => s.toFixed(2)).join(' ')}` };
 };

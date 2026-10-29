@@ -47,9 +47,11 @@ public:
 	void HeldThingUsedOnLand(PlayerNames player) override;
 	void SetInGameTurn(bool inGameTurn) override { _inGameTurn = inGameTurn; }
 	void FixCitadelReaches() override;
+	void LandLaidOut() override;
 
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return _circles; }
 	[[nodiscard]] bool IsBorderShown(PlayerNames player) const override;
+	void NoteInfluencePower(PlayerNames player) override;
 	[[nodiscard]] float InfluencePower(PlayerNames player) const override;
 	[[nodiscard]] float CitadelReachOf(PlayerNames player) const override;
 	[[nodiscard]] glm::vec2 GetScrollOffset() const override { return influence::ScrollOffset(_scrollClock); }

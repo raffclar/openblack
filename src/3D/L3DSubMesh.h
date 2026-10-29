@@ -90,6 +90,8 @@ public:
 		glm::vec3 position;
 		glm::vec2 uv;
 		glm::vec3 normal;
+		/// True for a corner of a broken face's back face
+		bool back {false};
 	};
 	/// A primitive of a submesh made while the game runs, drawn with the material of a primitive of another model
 	struct MadePrimitive
@@ -108,6 +110,8 @@ public:
 
 	[[nodiscard]] openblack::l3d::L3DSubmeshHeader::Flags GetFlags() const { return _flags; }
 	[[nodiscard]] bool IsPhysics() const { return _flags.isPhysics; }
+	/// True for a submesh made while the game runs from the faces of a broken shape
+	[[nodiscard]] bool IsMade() const { return _made; }
 	[[nodiscard]] graphics::Mesh& GetMesh() const;
 	[[nodiscard]] const AxisAlignedBoundingBox& GetBoundingBox() const { return _boundingBox; }
 	[[nodiscard]] const std::vector<Primitive>& GetPrimitives() const { return _primitives; }
@@ -198,6 +202,7 @@ private:
 	std::vector<Primitive> _primitives;
 	std::optional<uint32_t> _lightmapSkinID;
 	bool _hasLightmapCoordinates {false};
+	bool _made {false};
 	std::optional<Joint> _joint;
 	std::string _name;
 	Frame _frame {glm::mat4(1.0f), glm::vec3(0.0f), glm::vec3(0.0f)};

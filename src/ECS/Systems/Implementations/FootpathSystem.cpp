@@ -15,6 +15,9 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <optional>
+#include <unordered_map>
+#include <vector>
 
 #include <glm/common.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -182,6 +185,7 @@ public:
 	void MakeLive(Plan& plan) const override
 	{
 		plan.obstacles.SetGatherer(Gatherer());
+		plan.obstacles.SetBlockGatherer(BlockGatherer(_gathered));
 		// Nothing that holds either end is gone round
 		plan.obstacles.LeaveOutCirclesHolding(plan.goal, plan.start);
 		plan.live = true;
@@ -249,7 +253,30 @@ public:
 		}
 	}
 
+	void KeepGathered(bool keep) override
+	{
+		_gathered->keep = keep;
+		if (_gathered->kept)
+		{
+			std::ranges::fill(_gathered->blocks, std::nullopt);
+			_gathered->circles.clear();
+			_gathered->kept = false;
+		}
+	}
+
 private:
+	/// The circles of each block that a plan gathered, while the world keeps them
+	struct Gathered
+	{
+		bool keep {false};
+		/// Some blocks or circles are kept
+		bool kept {false};
+		/// The circles of each thing to go round
+		std::unordered_map<entt::entity, std::vector<route::Circle>> circles;
+		std::vector<std::optional<route::BlockGathering>> blocks = std::vector<std::optional<route::BlockGathering>>(
+		    static_cast<size_t>(route::Obstacles::k_BlocksPerSide * route::Obstacles::k_BlocksPerSide));
+	};
+
 	[[nodiscard]] static const ecs::Registry& Registry() { return Locator::entitiesRegistry::value(); }
 
 	[[nodiscard]] static glm::ivec2 PlaceOf(entt::entity thing)
@@ -281,6 +308,78 @@ private:
 		return obstacles::CirclesWithoutWalker(*thing, k_RouteMargin);
 	}
 
+	/// What stands in each cell of a block, in the order of the gatherer of each cell. While the world keeps what the plans
+	/// gather, a block gathered before gives its kept circles.
+	[[nodiscard]] static route::Obstacles::BlockGatherer BlockGatherer(std::shared_ptr<Gathered> gathered)
+	{
+		return [gathered = std::move(gathered)](glm::ivec2 block, route::Obstacles& into) {
+			const auto index = static_cast<size_t>((block.y * route::Obstacles::k_BlocksPerSide) + block.x);
+			if (gathered->keep && gathered->blocks[index].has_value())
+			{
+				gathered->blocks[index]->AddTo(into);
+				return;
+			}
+			route::BlockGathering gathering;
+			const auto* land = Locator::creatureLocomotionSystem::has_value()
+			                       ? &Locator::creatureLocomotionSystem::value().GetWalkableLand()
+			                       : nullptr;
+			const auto* map = Locator::entitiesMap::has_value() ? &Locator::entitiesMap::value() : nullptr;
+			for (int32_t cz = 0; cz < route::Obstacles::k_CellsPerBlock; ++cz)
+			{
+				for (int32_t cx = 0; cx < route::Obstacles::k_CellsPerBlock; ++cx)
+				{
+					GatherCell({(block.x * route::Obstacles::k_CellsPerBlock) + cx,
+					            (block.y * route::Obstacles::k_CellsPerBlock) + cz},
+					           land, map, *gathered, gathering);
+				}
+			}
+			gathering.AddTo(into);
+			if (gathered->keep)
+			{
+				gathered->blocks[index] = std::move(gathering);
+				gathered->kept = true;
+			}
+		};
+	}
+
+	/// What stands in a cell: the land that cannot be walked on and the water, then each thing to go round. While the
+	/// world keeps what the plans gather, it keeps the circles of each thing too.
+	static void GatherCell(glm::ivec2 cell, const route::WalkableLand* land, const MapInterface* map, Gathered& gathered,
+	                       route::BlockGathering& gathering)
+	{
+		if (land != nullptr)
+		{
+			route::AddLandCircles(*land, cell, gathering, true);
+		}
+		if (map == nullptr)
+		{
+			return;
+		}
+		const auto& registry = Registry();
+		for (const auto entity : map->GetAllInCell(cell))
+		{
+			if (!gathered.keep)
+			{
+				const auto circles = CirclesToGoRound(registry, entity);
+				if (!circles.empty())
+				{
+					gathering.Thing(cell, entt::to_integral(entity), circles);
+				}
+				continue;
+			}
+			auto found = gathered.circles.find(entity);
+			if (found == gathered.circles.end())
+			{
+				found = gathered.circles.emplace(entity, CirclesToGoRound(registry, entity)).first;
+				gathered.kept = true;
+			}
+			if (!found->second.empty())
+			{
+				gathering.Thing(cell, entt::to_integral(entity), found->second);
+			}
+		}
+	}
+
 	/// What stands in a cell, added the first time the search reaches the cell's block: the land that can't be walked on
 	/// and the water, then each thing to go round whose circles aren't filed in the block already
 	[[nodiscard]] static route::Obstacles::Gatherer Gatherer()
@@ -309,6 +408,8 @@ private:
 			}
 		};
 	}
+
+	std::shared_ptr<Gathered> _gathered = std::make_shared<Gathered>();
 };
 
 /// Takes the search up to a number of steps further, stopping once it ends
@@ -788,6 +889,20 @@ void FootpathSystem::CatchUpWithMap()
 void FootpathSystem::ProcessTurn()
 {
 	auto& registry = _world->Entities();
+	// The plans share what they gather in the turn. The turn changes only the paths, the links of the paths and the
+	// finders, which are not in the map's cells and are not gone round, so what each block holds stays the same.
+	struct KeepGathered
+	{
+		WorldInterface& world;
+		explicit KeepGathered(WorldInterface& keeper)
+		    : world(keeper)
+		{
+			world.KeepGathered(true);
+		}
+		KeepGathered(const KeepGathered&) = delete;
+		KeepGathered& operator=(const KeepGathered&) = delete;
+		~KeepGathered() { world.KeepGathered(false); }
+	} const keepGathered(*_world);
 	// A search that a load brought back continues. After the load of a saved game, the search starts again from its two
 	// ends, as the game does when it loads a path that it still looks for.
 	for (auto&& [entity, finder] : registry.Underlying().view<FootpathFinder>().each())

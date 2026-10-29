@@ -16,11 +16,12 @@
 #include <utility>
 #include <vector>
 
-#include "Commands/PlayerCommands.h"
 #include "3D/TempleInteriorInterface.h"
+#include "Commands/PlayerCommands.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/CreatureTattooChange.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
@@ -99,11 +100,19 @@ public:
 		_pictures.emplace(creature, std::move(pictures));
 	}
 
-	void Show(entt::entity shown, std::optional<creature_tattoo::Slots> slots) override
+	void ShowMenu(entt::entity shown, std::optional<creature_tattoo::Slots> slots) override
 	{
-		if (Locator::creatureSkinSystem::has_value())
+		if (auto* tattoos = MenuTattoos(shown); tattoos != nullptr)
 		{
-			Locator::creatureSkinSystem::value().ShowTattoos(shown, slots);
+			tattoos->shown = slots;
+		}
+	}
+
+	void PaintMenu(entt::entity shown) override
+	{
+		if (auto* tattoos = MenuTattoos(shown); tattoos != nullptr)
+		{
+			++tattoos->revision;
 		}
 	}
 
@@ -166,6 +175,17 @@ private:
 		return Locator::temple::has_value() ? &Locator::temple::value().GetRooms() : nullptr;
 	}
 
+	/// The tattoos of the menu's creature, a thing of the drawn registry
+	[[nodiscard]] static ecs::components::CreatureTattoos* MenuTattoos(entt::entity shown)
+	{
+		if (!Locator::drawnRegistry::has_value())
+		{
+			return nullptr;
+		}
+		auto& drawn = Locator::drawnRegistry::value();
+		return drawn.Valid(shown) ? drawn.TryGet<ecs::components::CreatureTattoos>(shown) : nullptr;
+	}
+
 	[[nodiscard]] static ecs::components::CreatureTattoos* CopyTattoos(entt::entity copy)
 	{
 		auto* copies = Copies();
@@ -219,12 +239,12 @@ void TattooEditorSystem::OpenFromMenu(std::optional<entt::entity> playerCreature
 	_face.reset();
 	// The creature that the menu shows wears the tattoos being edited from the start. Without a creature in the game,
 	// the masks stay as they were.
-	_skin->Show(shown, _session.slots);
+	_skin->ShowMenu(shown, _session.slots);
 	if (playerCreature.has_value())
 	{
 		_skin->RemakeMasks(*playerCreature, creature_tattoo::Sheet::OwnPictures);
 	}
-	_skin->Paint(shown);
+	_skin->PaintMenu(shown);
 }
 
 void TattooEditorSystem::Close()
@@ -340,7 +360,7 @@ void TattooEditorSystem::Remake()
 	// Without a copy in the cave or a creature of the menu, the player's creature shows its own tattoos
 	if (_shown.has_value())
 	{
-		_skin->Show(*_shown, _session.slots);
+		_skin->ShowMenu(*_shown, _session.slots);
 	}
 	else if (_caveCopy.has_value())
 	{
@@ -353,7 +373,7 @@ void TattooEditorSystem::PaintShown()
 {
 	if (_shown.has_value())
 	{
-		_skin->Paint(*_shown);
+		_skin->PaintMenu(*_shown);
 	}
 	else if (_caveCopy.has_value())
 	{
@@ -367,9 +387,6 @@ void TattooEditorSystem::PaintShown()
 
 bool TattooEditorSystem::ShowsCreature() const
 {
-	if (_shown.has_value())
-	{
-		return _shown == _creature;
-	}
-	return !_caveCopy.has_value();
+	// The menu's creature is a thing of the drawn registry, so it is never the player's creature
+	return !_shown.has_value() && !_caveCopy.has_value();
 }

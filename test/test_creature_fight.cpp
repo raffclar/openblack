@@ -1035,6 +1035,20 @@ TEST(CreatureFight, OnlyTheCreatureThatPlannedAFightStillChoosesInIt)
 	EXPECT_FALSE(ObeysInFight({}));
 }
 
+TEST(CreatureFight, TheAskedCreatureChoosesUntilItIsToldToStandStill)
+{
+	using creature_fight::LetsChoose;
+	using creature_fight::ObeysInFight;
+	// Only asked, its desires change and it chooses as before
+	EXPECT_TRUE(LetsChoose({.fighting = true, .onlyAsked = true}));
+	EXPECT_FALSE(ObeysInFight({.fighting = true, .onlyAsked = true}));
+	// Told to stand still, it chooses nothing and its desires stand still
+	EXPECT_FALSE(LetsChoose({.fighting = true}));
+	EXPECT_TRUE(ObeysInFight({.fighting = true}));
+	// A creature that lies out cold does not choose
+	EXPECT_FALSE(LetsChoose({.knockedOut = true, .fighting = true, .onlyAsked = true}));
+}
+
 TEST(CreatureFight, TheFaceOffIsTheTauntOrTheRudeGesture)
 {
 	EXPECT_EQ(FaceOffAnimation(false), animations::k_Taunt);

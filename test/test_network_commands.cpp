@@ -177,9 +177,25 @@ public:
 	void ProcessTurn() override {}
 	void FillEmptySlots(std::span<const PlayerNames> /*gods*/, std::span<const PlayerNames> /*humans*/) override {}
 	void WaitForHumans() override {}
-	void HumansJoined(std::span<const PlayerNames> humans) override { joins.emplace_back(humans.begin(), humans.end()); }
+	void HumansJoined(std::span<const PlayerNames> humans) override
+	{
+		joins.emplace_back(humans.begin(), humans.end());
+		if (particles != nullptr)
+		{
+			spotsAtJoin.push_back(particles->spotVisuals.size());
+		}
+		if (hands != nullptr)
+		{
+			handsAtJoin.push_back(hands->made.size());
+		}
+	}
 	void SetAiSeed(std::optional<uint32_t> /*seed*/) override {}
 	std::vector<std::vector<PlayerNames>> joins;
+	/// When set, each join keeps the count of spot visuals and of hands that the turn made before it
+	const FakeParticles* particles {nullptr};
+	const FakeHands* hands {nullptr};
+	std::vector<size_t> spotsAtJoin;
+	std::vector<size_t> handsAtJoin;
 };
 
 /// The leashes of the test: it keeps the players that went into their temple
@@ -375,7 +391,7 @@ TEST_F(NetworkCommands, AComputerIsBehindWhenTheNextTurnIsThereToo)
 	_commands.SetSource(nullptr);
 }
 
-TEST_F(NetworkCommands, TheHumansOfTheFirstTurnJoinTogetherAfterTheCommandsOfTheTurn)
+TEST_F(NetworkCommands, TheHumansOfTheFirstTurnJoinTogether)
 {
 	auto& minds = static_cast<FakeMinds&>(Locator::computerPlayerSystem::emplace<FakeMinds>());
 	_commands.SetSource(&_source);
@@ -389,6 +405,31 @@ TEST_F(NetworkCommands, TheHumansOfTheFirstTurnJoinTogetherAfterTheCommandsOfThe
 	EXPECT_EQ(minds.joins[0], (std::vector {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO}));
 	_commands.SetSource(nullptr);
 	Locator::computerPlayerSystem::reset();
+}
+
+TEST_F(NetworkCommands, TheHumansAndTheSlotsOfTheFirstTurnJoinBeforeTheOtherCommandsOfTheTurn)
+{
+	auto& particles = static_cast<FakeParticles&>(Locator::particleSystem::emplace<FakeParticles>());
+	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
+	auto& minds = static_cast<FakeMinds&>(Locator::computerPlayerSystem::emplace<FakeMinds>());
+	minds.particles = &particles;
+	minds.hands = &hands;
+	_commands.SetSource(&_source);
+	// A command that a player sent before the start comes in the first turn, also before the joins
+	_source.turns[0] = {{.player = PlayerNames::PLAYER_TWO, .action = GripDust {.point = {100.0f, 5.0f, 200.0f}}},
+	                    {.player = PlayerNames::PLAYER_ONE, .action = PlayerJoined {}},
+	                    {.player = PlayerNames::PLAYER_TWO, .action = PlayerJoined {}}};
+	_commands.RunSent(0);
+	// Both humans get their hands, and the slots fill, before the command of the turn
+	ASSERT_EQ(minds.joins.size(), 1u);
+	EXPECT_EQ(minds.joins[0], (std::vector {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO}));
+	EXPECT_EQ(minds.handsAtJoin, (std::vector<size_t> {2}));
+	EXPECT_EQ(minds.spotsAtJoin, (std::vector<size_t> {0}));
+	EXPECT_EQ(particles.spotVisuals.size(), 1u);
+	_commands.SetSource(nullptr);
+	Locator::computerPlayerSystem::reset();
+	Locator::handSystem::reset();
+	Locator::particleSystem::reset();
 }
 
 TEST_F(NetworkCommands, TheLeashOffOfTheTempleGoesToTheLeashOfTheSenderAtTheTurn)

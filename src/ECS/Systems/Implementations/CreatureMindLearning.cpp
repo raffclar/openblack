@@ -1829,11 +1829,9 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 			Locator::creatureFightSystem::value().CallOff(creature);
 		}
 		if (Locator::creatureObjectActionSystem::has_value() &&
-		    Locator::creatureObjectActionSystem::value().GetState(creature) ==
-		        CreatureObjectActionSystemInterface::State::Busy &&
-		    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
+		    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 		{
-			Locator::creatureObjectActionSystem::value().Cancel(creature);
+			Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 		}
 		Abandon(mind);
 		creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
@@ -1881,13 +1879,12 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	{
 		Locator::creatureFightSystem::value().CallOff(creature);
 	}
-	// Whatever its hands were doing is given up for the plan, but for a catch or a let-go, which its body carries on with
-	// by itself
+	// Whatever its hands were doing stops for the plan. An action that the body started plays on, and a point plays its
+	// end.
 	if (Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	const bool refused = mind.agendaRefused;
 	if (!Replan(creature, executor->activity, std::move(agenda)))
@@ -2395,11 +2392,16 @@ bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 	{
 		return false;
 	}
-	// A field has the data of its town's field building, and a village totem the data of its statue
+	// A field has the data of its town's field building, a village totem the data of its statue, and a town's desire
+	// flag the data of the prayer site
 	const GObjectInfo* info = nullptr;
 	if (registry.AllOf<Field>(thing))
 	{
 		info = FieldBuildingInfo(registry, thing);
+	}
+	else if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		info = Locator::infoConstants::has_value() ? &Locator::infoConstants::value().prayerSite : nullptr;
 	}
 	else if (registry.AllOf<VillageTotem>(thing))
 	{
@@ -2433,6 +2435,7 @@ bool Frightens(AnimalInfo type)
 
 /// The data that tells if a creature can act on a thing. A field has the data of its town's field building, a village
 /// totem the data of its statue, the temple the data of its heart, and the altar of a worship site the data of its site.
+/// A town's desire flag has the data of the prayer site.
 const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thing)
 {
 	if (!Locator::infoConstants::has_value())
@@ -2455,6 +2458,10 @@ const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thin
 	if (registry.AllOf<VillageTotem>(thing))
 	{
 		return TotemStatueInfo(registry, thing);
+	}
+	if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		return &info.prayerSite;
 	}
 	if (const auto* animal = registry.TryGet<const Animal>(thing))
 	{
@@ -2516,6 +2523,10 @@ creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity
 	if (registry.AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
 	{
 		return Thing::Building;
+	}
+	if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		return Thing::PlainObject;
 	}
 	return Thing::Other;
 }
@@ -2585,6 +2596,11 @@ std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::ent
 	if (const auto* farm = registry.TryGet<const FishFarm>(thing))
 	{
 		return town(farm->town);
+	}
+	// A town's desire flag is of its town
+	if (const auto* flag = registry.TryGet<const TownDesireFlag>(thing))
+	{
+		return town(flag->town);
 	}
 	if (registry.AllOf<VillageTotem>(thing))
 	{
@@ -2906,10 +2922,11 @@ CreatureMindSystem::ShownThingsWithoutWhole(entt::entity creature, CreatureMindS
 
 namespace
 {
-/// Whether a fight lets the creature choose a new plan. Only the creature that started the fight by its own plan
-/// chooses, and only while that plan is the fight: a plan that it wants much more ends the fight. The other creature
-/// obeys, a creature made to fight or made to do something after a knock-out does not choose, and a creature that lies
-/// out cold does not choose.
+/// Whether a fight lets the creature choose a new plan. The creature that started the fight by its own plan chooses,
+/// but only while that plan is the fight: a plan that it wants much more ends the fight. The other creature chooses
+/// until the first creature tells it to stand still, and a plan that it chooses ends the fight. Then it obeys. A
+/// creature made to fight or made to do something after a knock-out does not choose, and a creature that lies out cold
+/// does not choose.
 bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const CreatureMindState& mind)
 {
 	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
@@ -2921,6 +2938,7 @@ bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const
 	    .waitsForFight = mind.planActive && mind.idle.step < mind.idle.agenda.size() &&
 	                     mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Fight,
 	    .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
+	    .onlyAsked = fighting != nullptr && fighting->part == CreatureFighting::Part::Asked,
 	});
 }
 } // namespace
@@ -3408,8 +3426,13 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	{
 		return false;
 	}
-	// A forced plan first stops the reaction that the creature has
+	// A forced plan first stops the reaction that the creature has. What the creature does stops as a failure, and this
+	// also stops a fight that it sets up, for both creatures.
 	EndReaction(creature);
+	if (!plan.ownFight)
+	{
+		CallOffFightSetUp(creature);
+	}
 	// A creature told to do something as soon as it is made has a mind ready for it
 	SetUpMind(creature, *body, *mind);
 	const glm::vec2 position {transform->position.x, transform->position.z};
@@ -3577,6 +3600,13 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		                    plan.action);
 	}
 	mind->agendaRefused = refused;
+	// The forced plan stops what the hands do, as each plan stop does. A point ends only when the plan also ends the
+	// action of the body.
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	{
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, plan.endsBody);
+	}
 	if (!Replan(creature, activity, std::move(*agenda), plan.stopsWalk, plan.endsBody))
 	{
 		mind->agendaRefused = false;
@@ -3630,7 +3660,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		                   .ordered = plan.ordered,
 		               });
 	}
-	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	if (plan.suppressesOpposed)
+	{
+		creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	}
 	return true;
 }
 
@@ -5299,10 +5332,9 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 			creature_mind_model::Think(*mind->learnt, fmt::format("I saw you: {}", tables->mimics.at(deed).name));
 			if (Locator::creatureObjectActionSystem::has_value() &&
 			    Locator::creatureObjectActionSystem::value().GetState(entity) ==
-			        CreatureObjectActionSystemInterface::State::Busy &&
-			    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(entity))
+			        CreatureObjectActionSystemInterface::State::Busy)
 			{
-				Locator::creatureObjectActionSystem::value().Cancel(entity);
+				Locator::creatureObjectActionSystem::value().StopForPlan(entity, true);
 			}
 			Abandon(*mind);
 			if (Locator::magicSystem::has_value())

@@ -161,8 +161,45 @@ public:
 	TempleScrolls(const TempleScrolls&) = delete;
 	TempleScrolls& operator=(const TempleScrolls&) = delete;
 
-	/// As the rooms are set up: finds each scroll's submesh, makes its texture and writes it
-	void Create(const Facts& facts);
+	/// What a texture of a scroll was last written with. The same gives the same texels.
+	struct Drawn
+	{
+		std::optional<std::u16string> text;
+		int32_t position;
+		bool textInFront;
+		uint16_t side;
+		bool operator==(const Drawn&) const = default;
+	};
+	/// The textures of the scrolls of an earlier visit and what they show, which the next visit uses again. It destroys
+	/// the textures that no visit took back.
+	class KeptTextures
+	{
+	public:
+		KeptTextures() = default;
+		~KeptTextures();
+		KeptTextures(const KeptTextures&) = delete;
+		KeptTextures& operator=(const KeptTextures&) = delete;
+		KeptTextures(KeptTextures&& other) noexcept;
+		KeptTextures& operator=(KeptTextures&& other) noexcept;
+
+	private:
+		friend class TempleScrolls;
+		struct Entry
+		{
+			graphics::TextureHandle texture;
+			uint16_t side;
+			std::optional<Drawn> drawn;
+			uint32_t textHeight;
+		};
+		/// By the scroll's place in the rooms, none for a place with no texture
+		std::vector<std::optional<Entry>> _entries;
+	};
+
+	/// As the rooms are set up: finds each scroll's submesh, makes its texture and writes it. The textures of an earlier
+	/// visit are used again, and a scroll that shows the same as it did then is not written again.
+	void Create(const Facts& facts, KeptTextures kept = {});
+	/// Gives up the textures of the scrolls for the next visit. The scrolls then have none.
+	[[nodiscard]] KeptTextures TakeTextures();
 
 	/// Where the camera looks at a scroll from, and the point it looks at, in the temple
 	struct Focus
@@ -249,6 +286,8 @@ private:
 		Content content;
 		std::optional<uint32_t> subMesh;
 		std::optional<graphics::TextureHandle> texture;
+		/// What the texture shows now
+		std::optional<Drawn> drawn;
 		int32_t position {0};
 		uint32_t textHeight {0};
 		/// The scroll's frame and box, from its mesh
@@ -276,6 +315,9 @@ private:
 	/// ChallengeScroll.raw, 256 by 256 RGB, which the rooms of pictures read for every scroll
 	std::vector<uint8_t> _parchment;
 	std::vector<Scroll> _scrolls;
+	/// At the lowest detail levels, each scroll's texture has half the texels along each side. The text is written at
+	/// the full size and then made smaller.
+	bool _halfSize {false};
 	/// The scroll being dragged and where the mouse was
 	std::optional<size_t> _held;
 	float _heldMouseY {0.0f};

@@ -25,6 +25,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -63,6 +64,8 @@ entt::entity VillageTotemArchetype::Create(entt::entity townCentre, const GAbode
 	}
 
 	const auto totem = registry.Create();
+	// The totem takes its place in the order of the things made. The icon on it is a part of it, not a thing of its own.
+	TakeThingMadePlace();
 	registry.Assign<Transform>(totem, point, centre.rotation, centre.scale);
 	registry.Assign<Mesh>(totem, resources::HashIdentifier(statues.at(tribe).plinth), static_cast<int8_t>(0),
 	                      static_cast<int8_t>(0));

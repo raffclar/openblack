@@ -71,6 +71,7 @@ public:
 	void RegisterPlayers() override {}
 	void AddPlayer(entt::entity /*playerEntity*/) override {}
 	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames /*name*/) const override { return std::nullopt; }
+	entt::entity EnsurePlayer(PlayerNames /*name*/) override { return entt::null; }
 	void AddCreature(entt::entity /*creature*/) override {}
 	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames /*name*/) const override { return std::nullopt; }
 	void KeepForNextLand() override {}

@@ -124,6 +124,7 @@ bool creature_activity::ThingSuits(Desire desire, const ThingFacts& thing)
 		case Thing::Building:
 		case Thing::Field:
 		case Thing::FishFarm:
+		case Thing::PlainObject:
 			return thing.playable;
 		default:
 			return false;

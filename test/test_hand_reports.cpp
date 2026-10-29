@@ -24,13 +24,18 @@
 #include <spdlog/spdlog.h>
 
 #include "Commands/PlayerCommands.h"
+#include "Creature/CreatureFace.h"
+#include "Creature/CreatureFeedback.h"
+#include "Creature/CreatureLayers.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/ReportedHand.h"
+#include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -161,16 +166,13 @@ public:
 	bool SitDown(entt::entity) override { return false; }
 	void StandUp(entt::entity) override {}
 	void ReceiveFeedback(entt::entity, float) override {}
-	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	                 float interruptsAfter) override
+	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) override
 	{
-		forced.push_back({.creature = creature,
-		                  .animation = animation,
-		                  .mirrored = mirrored,
-		                  .face = face.has_value() ? std::optional(face->face) : std::nullopt,
-		                  .interruptsAfter = interruptsAfter});
+		forced.push_back(
+		    {.creature = creature, .animation = animation, .mirrored = mirrored, .interruptsAfter = interruptsAfter});
 		return true;
 	}
+	[[nodiscard]] bool CanForceAction(entt::entity, size_t, bool, double) const override { return bodyTakes; }
 	bool Sleep(entt::entity) override { return false; }
 	bool Eat(entt::entity, std::optional<entt::entity>) override { return false; }
 	bool Drink(entt::entity) override { return false; }
@@ -188,10 +190,11 @@ public:
 		entt::entity creature;
 		size_t animation;
 		bool mirrored;
-		std::optional<creature_face::Face> face;
-		float interruptsAfter;
+		double interruptsAfter;
 	};
 	std::vector<Forced> forced;
+	/// Whether the body takes a reaction now
+	bool bodyTakes {true};
 };
 
 class ReportedHands: public ::testing::Test
@@ -272,29 +275,60 @@ TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
 	Locator::creatureMindSystem::reset(&minds, [](ecs::systems::CreatureMindSystemInterface* /*unowned*/) {});
 	const auto creature = registry.Create();
 	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::CreatureAnimation>(creature);
 	ecs::systems::CreatureHandSystem creatures;
-	creatures.DoReaction(PlayerNames::PLAYER_TWO, CreatureReaction {.creature = creature,
-	                                                                .animation = 166,
-	                                                                .mirrored = true,
-	                                                                .pullsFace = true,
-	                                                                .face = 1,
-	                                                                .faceMs = 2000.0f,
-	                                                                .cue = 15,
-	                                                                .interruptsAfter = 0.35f});
+	creatures.DoReaction(PlayerNames::PLAYER_TWO,
+	                     CreatureReaction {.creature = creature,
+	                                       .animation = 166,
+	                                       .mirrored = true,
+	                                       .interruptsAfter = creature_feedback::k_SlapInterruptsAfter});
 	ASSERT_EQ(minds.forced.size(), 1u);
 	EXPECT_EQ(minds.forced[0].creature, creature);
 	EXPECT_EQ(minds.forced[0].animation, 166u);
 	EXPECT_TRUE(minds.forced[0].mirrored);
-	EXPECT_EQ(minds.forced[0].face, creature_face::Face::Grimace);
-	EXPECT_EQ(minds.forced[0].interruptsAfter, 0.35f);
-	// A slap with no face pulls none
-	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature, .animation = 167});
-	ASSERT_EQ(minds.forced.size(), 2u);
-	EXPECT_FALSE(minds.forced[1].face.has_value());
+	EXPECT_EQ(minds.forced[0].interruptsAfter, creature_feedback::k_SlapInterruptsAfter);
+	// The reaction of another computer's hand shows no face on this computer
+	EXPECT_FALSE(registry.AllOf<ecs::components::ShownCreatureFace>(creature));
+	EXPECT_EQ(registry.Get<const ecs::components::CreatureAnimation>(creature).face, creature_layers::FaceLayer {});
 	// A creature that is gone by the turn plays nothing
 	registry.Destroy(creature);
 	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature, .animation = 165});
-	EXPECT_EQ(minds.forced.size(), 2u);
+	EXPECT_EQ(minds.forced.size(), 1u);
+	Locator::creatureMindSystem::reset();
+}
+
+// The hand of this computer strokes the creature: the face shows at once on this computer only, and the world does not
+// have it. A stroke that the body refuses sends nothing.
+TEST_F(ReportedHands, AStrokeShowsItsFaceOnlyHereAndARefusedStrokeSendsNothing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactingMinds minds;
+	Locator::creatureMindSystem::reset(&minds, [](ecs::systems::CreatureMindSystemInterface* /*unowned*/) {});
+	ecs::systems::PlayerCommandSystem commands;
+	Locator::playerCommandSystem::reset(&commands, [](ecs::systems::PlayerCommandSystemInterface* /*unowned*/) {});
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::CreatureAnimation>(creature);
+	const creature_face::Request grimace {
+	    .face = creature_face::Face::Grimace, .milliseconds = 2000.0f, .cue = creature_face::Cue::Grimace};
+	ecs::systems::CreatureHandSystem creatures;
+
+	minds.bodyTakes = false;
+	EXPECT_FALSE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter));
+	EXPECT_EQ(commands.PendingCount(), 0u);
+	const auto* shown = registry.TryGet<const ecs::components::ShownCreatureFace>(creature);
+	ASSERT_NE(shown, nullptr);
+	EXPECT_EQ(shown->face.wanted, creature_face::AnimationOf(creature_face::Face::Grimace));
+	EXPECT_EQ(shown->face.remainingMs, 2000.0f);
+	EXPECT_EQ(registry.Get<const ecs::components::CreatureAnimation>(creature).face, creature_layers::FaceLayer {});
+
+	// The body takes the next stroke: the command has the body action, and the face stays on this computer
+	minds.bodyTakes = true;
+	EXPECT_TRUE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter));
+	EXPECT_EQ(commands.PendingCount(), 1u);
+	EXPECT_EQ(registry.Get<const ecs::components::CreatureAnimation>(creature).face, creature_layers::FaceLayer {});
+	EXPECT_TRUE(minds.forced.empty());
+	Locator::playerCommandSystem::reset();
 	Locator::creatureMindSystem::reset();
 }
 

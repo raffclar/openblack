@@ -58,6 +58,13 @@ inline constexpr std::string_view k_SystemPart = "system ";
 /// changed. A part that only one sample has also differs.
 [[nodiscard]] std::vector<std::string> ChangedParts(const Sample& before, const Sample& after);
 
+/// Whether the guard tells the changes of a frame step. A step that loads a land makes a new synced world. That is not a
+/// frame step that writes in the world of a game, so the guard does not look at it.
+[[nodiscard]] constexpr bool LooksAtStep(uint32_t landLoadsBefore, uint32_t landLoadsAfter)
+{
+	return landLoadsBefore == landLoadsAfter;
+}
+
 /// A tool for the frame-rate audit. It finds the frame steps that change the synced world.
 ///
 /// The synced world must change only in the game turns, so that each computer of a network game has the same world at
@@ -79,6 +86,10 @@ public:
 	void Forget() { _last.reset(); }
 	/// Takes the sample after the frame step and tells the parts that the step changed for the first time
 	void After(std::string_view step, uint32_t turn);
+	/// Takes the sample after a step of the tools, which can change the synced world, as the testbed runner does in the
+	/// debug windows. The guard does not tell the parts. It tells only the turn of the change, once for each turn, so
+	/// that a tool can know the changes that the next steps make from it.
+	void AfterTool(std::string_view step, uint32_t turn);
 
 	/// Each step and each part that the step changed, as the guard found them
 	[[nodiscard]] const std::set<std::pair<std::string, std::string>>& Found() const { return _found; }
@@ -92,6 +103,8 @@ private:
 	Sample _before;
 	std::optional<Sample> _last;
 	std::set<std::pair<std::string, std::string>> _found;
+	/// The turns at which a step of the tools changed the synced world
+	std::set<uint32_t> _toolTurns;
 };
 
 } // namespace openblack::frame_write_guard

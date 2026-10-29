@@ -238,6 +238,11 @@ public:
 	[[nodiscard]] virtual std::optional<glm::ivec2> GetCursorWarp() const { return std::nullopt; }
 	/// Actions the land's scripts don't allow now, which read as not held
 	virtual void SetBlockedActions([[maybe_unused]] BindableActionMap actions) {}
+	/// A key goes down, a repeat of a held key too: whether a box on the screen takes the keyboard now. The answer
+	/// stays until the next key goes down. While a box has the keyboard, every action reads as not held
+	virtual void BoxKeyDown([[maybe_unused]] bool boxWantsKeys) {}
+	/// Whether a box has the keyboard, as the last key that went down found it
+	[[nodiscard]] virtual bool BoxHasKeyboard() const { return false; }
 	/// Whether the camera the player has can be turned with the mouse, which holds the cursor still while it is
 	virtual void AllowCursorFreeze([[maybe_unused]] bool allowed) {}
 	/// The cursor is held still while the mouse turns the camera, and the pointer's position isn't followed

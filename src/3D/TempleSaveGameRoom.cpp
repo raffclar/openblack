@@ -10,6 +10,7 @@
 #include "TempleSaveGameRoom.h"
 
 #include <algorithm>
+#include <ranges>
 
 #include <SavePictures.h>
 #include <bgfx/bgfx.h>
@@ -166,8 +167,9 @@ void TempleSaveGameRoom::ReadLargePicture(uint32_t slot, const ReadPicture& read
 
 void TempleSaveGameRoom::Enter()
 {
-	// The large picture goes; the room does not forget that the camera was last sent to a picture
+	// The large picture goes, and the room forgets that the camera was last sent to a picture
 	_highDetail.reset();
+	_pictureLookedAt = false;
 	Destroy(_large);
 }
 
@@ -185,6 +187,13 @@ std::optional<std::u16string_view> TempleSaveGameRoom::SaveName(uint32_t slot) c
 {
 	const auto found = std::ranges::find(_saves, slot, &Save::slot);
 	return found != _saves.end() ? std::optional<std::u16string_view>(found->name) : std::nullopt;
+}
+
+const TempleSaveGameRoom::Save* TempleSaveGameRoom::LastSaveOf(uint32_t slot) const
+{
+	const auto backwards = _saves | std::views::reverse;
+	const auto found = std::ranges::find(backwards, slot, &Save::slot);
+	return found != backwards.end() ? &*found : nullptr;
 }
 
 const TempleSaveGameRoom::Part* TempleSaveGameRoom::FindPart(uint32_t subMesh) const

@@ -2739,6 +2739,16 @@ TEST_F(HandGrabSystemWithWorld, TheTurnWorkOfTheHandTakesAFlyingThingAfterTheWai
 	EXPECT_EQ(system->GetHeld(), std::optional(rock));
 }
 
+// A new land clears the hand: what it held is let go
+TEST_F(HandGrabSystemWithWorld, ANewLandLetsGoOfWhatTheHandHeld)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoTake(world->HandPlayer(), rock);
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	system->Reset();
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
 // A take that the hand no longer waits for does nothing at its turn
 // A new land clears the hand and its thing goes with the old land: the take that waits does nothing
 TEST_F(HandGrabSystemWithWorld, ATakeOfAThingThatWentWithTheLandDoesNothing)

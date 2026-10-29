@@ -20,6 +20,7 @@
 
 #include "Creature/CreatureDecisionTree.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Firefly.h"
@@ -137,4 +138,10 @@ TEST(CreatureBeliefKinds, AFireballIsOfThePlayerOfItsMiracle)
 	ASSERT_TRUE(unownedBelief.has_value());
 	EXPECT_EQ(ownedBelief->Value(creature_tree::Attribute::PlayerNumber), NumberOf(PlayerNames::PLAYER_THREE));
 	EXPECT_EQ(unownedBelief->Value(creature_tree::Attribute::PlayerNumber), NumberOf(PlayerNames::NEUTRAL));
+}
+
+TEST(CreatureBeliefKinds, APieceThatBrokeOffABuildingIsARock)
+{
+	ecs::Registry registry;
+	EXPECT_EQ(mind_detail::BeliefKindOf(registry, Make<BuildingPiece>(registry)), kinds::k_Rock);
 }

@@ -295,6 +295,11 @@ PlayerNames MostInfluentialPlayerAt(const ecs::Registry& registry, glm::vec3 poi
 {
 	std::vector<influence_rules::PlayerInfluenceAt> players;
 	registry.Each<const Player>([&players, point](entt::entity, const Player& player) {
+		// The neutral player is not asked: it is the answer when no player has influence there
+		if (player.name == PlayerNames::NEUTRAL)
+		{
+			return;
+		}
 		const float influence = Locator::influenceSystem::has_value()
 		                            ? Locator::influenceSystem::value().PlayerInfluence(player.name, point)
 		                            : 0.0f;
@@ -540,6 +545,18 @@ void ForestSystem::JoinForest(entt::entity tree, uint32_t forest)
 	const auto* transform = registry.TryGet<const Transform>(tree);
 	const bool growing = kind != nullptr && transform != nullptr && kind->madeToGrow && transform->scale.x < kind->maxSize;
 	registry.AssignOrReplace<ForestMember>(tree, ForestMember {.forest = forest, .growing = growing, .listed = _treesListed++});
+}
+
+void ForestSystem::ListInForest(entt::entity tree, uint32_t forest, bool growing)
+{
+	EntityRegistry().AssignOrReplace<ForestMember>(
+	    tree, ForestMember {.forest = forest, .growing = growing, .listed = _treesListed++});
+}
+
+void ForestSystem::ResumeCounts(uint32_t lastTreeAddedTurn, uint32_t nextLandForestId)
+{
+	_lastTreeAddedTurn = lastTreeAddedTurn;
+	_nextLandForestId = nextLandForestId;
 }
 
 void ForestSystem::GrowForests()

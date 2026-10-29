@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -35,6 +36,10 @@ struct FireflyDrift
 /// not drawn; caught in its hiding place by a hand that lifts the tree or rock, it leaves a one-shot miracle
 struct Firefly
 {
+	/// The row of the fixed things' table that has the data of a firefly: its help texts, and how it takes heat and
+	/// burns
+	static constexpr size_t k_InfoRow = 2;
+
 	/// Where it is in its night: hiding, hovering by a building, or flying between the two
 	enum class State : uint8_t
 	{

@@ -35,8 +35,11 @@ public:
 		virtual void Write(entt::entity creature, const creature_tattoo::Slots& slots) = 0;
 		/// The creature keeps the block of pictures that its tattoos use, in place of the block that it had
 		virtual void WritePictures(entt::entity creature, std::vector<uint8_t> pictures) = 0;
-		/// The tattoos that a skin shows in place of its slots, or none to show its slots again
-		virtual void Show(entt::entity shown, std::optional<creature_tattoo::Slots> slots) = 0;
+		/// The tattoos that the skin of the menu's creature shows in place of its slots, or none to show its slots
+		/// again. The menu's creature is a thing of the drawn registry, not of the land.
+		virtual void ShowMenu(entt::entity shown, std::optional<creature_tattoo::Slots> slots) = 0;
+		/// The skin of the menu's creature is painted again
+		virtual void PaintMenu(entt::entity shown) = 0;
 		/// The masks of the creature's player are made again from the creature's tattoos
 		virtual void RemakeMasks(entt::entity creature, creature_tattoo::Sheet sheet) = 0;
 		/// The skin is painted again

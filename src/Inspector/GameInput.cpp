@@ -504,6 +504,16 @@ Json GameInput::State() const
 		state["buttons"] = actions.GetPointerButtons();
 		// A double click waits here until the camera takes it
 		state["double_click"] = actions.GetUnbindable(input::UnbindableActionMap::DOUBLE_CLICK);
+		// While a box has the keyboard, no action reads as held
+		state["box_keyboard"] = actions.BoxHasKeyboard();
+		state["actions_held"] = Json::array();
+		for (const auto& binding : actions.GetKeyBindings())
+		{
+			if (actions.Get(binding.action))
+			{
+				state["actions_held"].push_back(binding.name);
+			}
+		}
 	}
 	state["keys_held"] = Json::array();
 	for (const auto key : _heldKeys)

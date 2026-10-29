@@ -35,6 +35,7 @@
 #include "Hand/HandTricons.h"
 #include "Help/SingAlong.h"
 #include "IncomingMessageStrip.h"
+#include "Input/BoxKeyboard.h"
 #include "LandInfoBox.h"
 #include "LogoEffect.h"
 #include "MenuBackdrop.h"
@@ -142,6 +143,9 @@ public:
 	[[nodiscard]] const ChatControls& GetChatControls() const noexcept { return *_chatControls; }
 	/// The keys go to the line of the chat
 	[[nodiscard]] bool ChatWantsKeys() const;
+	/// The boxes on the screen that can take the keyboard, and whether they take it now
+	[[nodiscard]] input::box_keyboard::Boxes KeyboardBoxes() const;
+	[[nodiscard]] bool BoxTakesKeyboard() const { return input::box_keyboard::WantsKeys(KeyboardBoxes()); }
 	/// The window's point on the chat's layout, and back
 	[[nodiscard]] glm::ivec2 ToChatControls(glm::ivec2 screen, glm::u16vec2 resolution);
 	[[nodiscard]] glm::ivec2 FromChatControls(glm::ivec2 layout, glm::u16vec2 resolution);
@@ -294,6 +298,9 @@ public:
 		std::vector<std::u16string> lines;
 		/// From 0 to 255
 		uint8_t alpha;
+		/// Words that start a line's height below the top line, broken into lines across the middle half of the screen.
+		/// The temple's save game room writes the name of a save here.
+		std::u16string details;
 	};
 	void SetCaption(std::optional<Caption> caption) { _caption = std::move(caption); }
 

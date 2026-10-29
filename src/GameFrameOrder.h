@@ -224,15 +224,15 @@ struct CameraKeyState
 	bool inTemple;
 	/// The interface takes the player's input, which a script can stop
 	bool interfaceActive;
-	/// A box of the menu or another dialog is on the screen
-	bool boxShows;
+	/// A box has the keyboard, as the last key that went down found it (see box_keyboard::Latch)
+	bool boxHasKeyboard;
 };
 
-/// True when the camera reads its keys after its step. In the temple, without the interface or with a box on the screen,
-/// the camera does not read its keys and does not push. Its next step then gets no key steps.
+/// True when the camera reads its keys after its step. In the temple, without the interface or while a box has the
+/// keyboard, the camera does not read its keys and does not push. Its next step then gets no key steps.
 [[nodiscard]] constexpr bool CameraReadsKeys(const CameraKeyState& state)
 {
-	return !state.inTemple && state.interfaceActive && !state.boxShows;
+	return !state.inTemple && state.interfaceActive && !state.boxHasKeyboard;
 }
 
 /// Whether a step is part of the frame's graphics: it moves the camera, starts the draw, puts the hand under the cursor

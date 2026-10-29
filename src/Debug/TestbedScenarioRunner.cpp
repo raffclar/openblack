@@ -22,6 +22,7 @@
 #include <numbers>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <tuple>
 #include <type_traits>
@@ -2714,6 +2715,28 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		return fmt::format("key {} pressed", SDL_GetScancodeName(scancode));
 	}
+	case Kind::PlainKeyDown:
+	case Kind::PlainKeyRepeat:
+	case Kind::PlainKeyUp:
+	{
+		// The key stays held after its event until the scenario lets go of it, though the keyboard does not hold it
+		const auto scancode = static_cast<SDL_Scancode>(command.value);
+		const bool down = command.kind != Kind::PlainKeyUp;
+		SDL_Event key {};
+		key.type = down ? SDL_KEYDOWN : SDL_KEYUP;
+		key.key.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
+		key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
+		key.key.repeat = command.kind == Kind::PlainKeyRepeat ? 1 : 0;
+		key.key.keysym.scancode = scancode;
+		key.key.keysym.sym = SDL_GetKeyFromScancode(scancode);
+		key.key.keysym.mod = KMOD_NONE;
+		input::MarkInjected(key);
+		Locator::gameActionSystem::value().HoldScriptedKey(static_cast<int>(scancode), down);
+		SDL_PushEvent(&key);
+		constexpr std::array<std::string_view, 3> k_Done {"down", "repeated", "let go"};
+		return fmt::format("key {} {}", SDL_GetScancodeName(scancode),
+		                   k_Done.at(static_cast<size_t>(command.kind) - static_cast<size_t>(Kind::PlainKeyDown)));
+	}
 	case Kind::BuildWorshipSites:
 	{
 		if (!Locator::worshipSiteSystem::has_value())
@@ -3242,7 +3265,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::SetReportLatency || command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey ||
+	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
+	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
 	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
 	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod ||
@@ -4125,6 +4149,9 @@ void Runner::Give(const Command& command)
 	case Kind::FillSiteIcons:
 	case Kind::BuildWorshipSites:
 	case Kind::PressPlainKey:
+	case Kind::PlainKeyDown:
+	case Kind::PlainKeyRepeat:
+	case Kind::PlainKeyUp:
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:

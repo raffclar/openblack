@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <limits>
@@ -377,7 +378,7 @@ struct TechFigures
 /// Everything the Game Statistics box shows, taken as it opens
 struct BoxFigures
 {
-	/// The first four human and computer players, in player order
+	/// The players of the first places, in player order: as many places as there are players in the game
 	std::vector<PlayerFigures> players;
 	/// The human and computer players among the first four places
 	uint32_t playersInGame {0};
@@ -387,6 +388,12 @@ struct BoxFigures
 };
 /// At most this many players are shown
 inline constexpr size_t k_BoxPlayers = 4;
+/// How many players the box shows: the human and computer players among the first four places. The box then shows that
+/// many places from the first, also a place that nobody plays when a later place has a player.
+[[nodiscard]] constexpr uint32_t BoxPlayerCount(std::span<const bool, k_BoxPlayers> plays)
+{
+	return static_cast<uint32_t>(std::ranges::count(plays, true));
+}
 /// The game time played that the box shows: game turns over 10
 [[nodiscard]] constexpr uint32_t TimePlayed(uint32_t turn)
 {

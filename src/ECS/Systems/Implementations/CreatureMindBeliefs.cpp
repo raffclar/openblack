@@ -51,6 +51,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -75,6 +76,8 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
@@ -387,9 +390,21 @@ std::optional<uint32_t> mind_detail::BeliefKindOf(const ecs::Registry& registry,
 	{
 		return kinds::k_Pot;
 	}
-	if (registry.AllOf<Rock>(thing))
+	// A piece that broke off a building is a rock
+	if (registry.AnyOf<Rock, BuildingPiece>(thing))
 	{
 		return kinds::k_Rock;
+	}
+	// A reward chest and a scaffold are loose things of the kind that their rows give
+	if (const auto* chest = registry.TryGet<const Reward>(thing); chest != nullptr && Locator::infoConstants::has_value())
+	{
+		const auto& rows = Locator::infoConstants::value().reward;
+		const auto row = static_cast<size_t>(chest->type);
+		return row < rows.size() ? KindOfLooseThing(rows.at(row).mobileType) : kinds::k_MobileObject;
+	}
+	if (registry.AllOf<Scaffold>(thing) && Locator::infoConstants::has_value())
+	{
+		return KindOfLooseThing(Locator::infoConstants::value().scaffold.mobileType);
 	}
 	if (registry.AnyOf<MobileStatic, DeadTree>(thing))
 	{

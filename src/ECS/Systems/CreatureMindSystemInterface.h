@@ -184,13 +184,11 @@ public:
 	/// Every source of a type in the creature's desires goes up or down by an amount
 	virtual void ChangeDesireSource(entt::entity /*creature*/, uint32_t /*type*/, float /*amount*/) {}
 	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through
-	/// what it plays; a face can be pulled with it, which is pulled even when the action can't play. The action plays to
-	/// its end and leaves the mind's plan as it was. Returns whether it played.
-	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	                         float interruptsAfter) = 0;
+	/// what it plays. The action plays to its end and leaves the mind's plan as it was. Returns whether it played.
+	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) = 0;
 	/// Whether ForceAction would play the action now, with no change to the creature
 	[[nodiscard]] virtual bool CanForceAction(entt::entity /*creature*/, size_t /*animation*/, bool /*mirrored*/,
-	                                          float /*interruptsAfter*/) const
+	                                          double /*interruptsAfter*/) const
 	{
 		return false;
 	}
@@ -208,9 +206,13 @@ public:
 
 	/// A fight the creature was in ended, won or lost: fighting satisfies the desire it is for, and its body pays for it
 	virtual void FoughtFight(entt::entity creature, bool won) = 0;
-	/// A fight started between the two creatures. The fight has the minds of both until it ends. When the first creature
-	/// did not plan the fight itself, it is made to fight. The second creature stops what it does and obeys the first.
+	/// A fight started: the first creature asked the second creature, and the second creature agreed. The fight has the
+	/// mind of the first creature until it ends. When the first creature did not plan the fight itself, it is made to
+	/// fight.
 	virtual void FightStarted(entt::entity /*creature*/, entt::entity /*opponent*/, bool /*planned*/) {}
+	/// The first creature of a fight told the second creature to obey it. The second creature stops what it does, and
+	/// the fight has its mind until the fight ends.
+	virtual void FightOrdered(entt::entity /*creature*/, entt::entity /*asker*/) {}
 	/// What the creature does stops as a failure. The desire becomes fully dominant, and the creature plans to satisfy it
 	/// through the thing. Returns whether the creature has a plan for that desire.
 	virtual bool ForceDesireOn(entt::entity /*creature*/, creature_desires::Desire /*desire*/, entt::entity /*thing*/)
@@ -259,10 +261,10 @@ public:
 	[[nodiscard]] virtual bool IsTakingFromHand(entt::entity /*creature*/) const { return false; }
 	/// Whether the creature lies dead, knocked out or doing one of the actions of lying dead for now or for good
 	[[nodiscard]] virtual bool IsLyingDead(entt::entity /*creature*/) { return false; }
-	/// Before a faint that does not come from its mind starts, the creature checks its hands as before any step that
-	/// needs empty hands. With a thing in the hand, it starts to let go of the thing when its body and hands are free.
-	/// This tells what the check did on this turn.
-	virtual creature_mind::HandsCheck CheckHandsBeforeFaint(entt::entity /*creature*/)
+	/// Before an action that needs empty hands and that does not come from its mind starts, the creature checks its
+	/// hands as before a step of the mind. A faint and the taunt before a fight do this check. With a thing in the hand,
+	/// it starts to let go of the thing when its body and hands are free. This tells what the check did on this turn.
+	virtual creature_mind::HandsCheck CheckHandsBeforeAction(entt::entity /*creature*/)
 	{
 		return creature_mind::HandsCheck::Free;
 	}
@@ -351,6 +353,12 @@ public:
 		/// Some orders of the leash keep one or both.
 		bool stopsWalk {true};
 		bool endsBody {true};
+		/// The plan is the part of the creature in its own fight, so the plan keeps the fight. Each other forced plan
+		/// stops a fight that the creature sets up, for both creatures.
+		bool ownFight {false};
+		/// Deciding on the plan holds back the desires that oppose its desire. An order from the other creature of a
+		/// fight does not.
+		bool suppressesOpposed {true};
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
 	/// about to already

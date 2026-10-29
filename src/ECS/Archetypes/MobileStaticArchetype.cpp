@@ -21,6 +21,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -31,6 +32,8 @@ entt::entity MobileStaticArchetype::Create(const glm::vec3& position, MobileStat
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 
 	const auto& info = Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(type));
 
