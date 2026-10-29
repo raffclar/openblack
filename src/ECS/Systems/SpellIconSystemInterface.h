@@ -67,6 +67,20 @@ public:
 	[[nodiscard]] virtual float ChantNeeded(entt::entity /*icon*/) const { return 0.0f; }
 	/// A god cast the miracle of an icon: the icon's store loses the miracle's cost, never more than it holds
 	virtual void TakeCastCharge(entt::entity /*icon*/) {}
+	/// The worship site of an icon: the site of a worship site's icon, or the site of the town of a stone hand. None for a
+	/// thing that is not an icon, and for a stone hand whose town has no site.
+	[[nodiscard]] virtual entt::entity SiteOfIcon(entt::entity icon) const = 0;
+	/// A script sets the prayer power of a site: each icon of the site loses all the prayer power that it stored
+	virtual void EmptyIconStores(entt::entity site) = 0;
+	/// A script stops the charges for the hand of a player at the worship sites of a temple. Each icon that charges for
+	/// that hand stops and gives its store back to its site.
+	virtual void CancelChargesFor(entt::entity temple, PlayerNames charger) = 0;
+	/// The icon of a seed at the worship sites of a temple. The first site in the order of the places round the temple
+	/// gives it. None when no site of the temple has an icon of the seed.
+	[[nodiscard]] virtual entt::entity IconInTemple(entt::entity temple, SpellSeedType seed) const = 0;
+	/// Whether an icon at the worship sites of a temple has prayer power in its store, as the scripts ask if a miracle
+	/// charges. With a magic type, only an icon whose plain miracle is of that type counts.
+	[[nodiscard]] virtual bool AnyIconStores(entt::entity temple, std::optional<MagicType> type) const = 0;
 	/// Whether a player has an icon for a seed at any of their worship sites
 	[[nodiscard]] virtual bool HasIconFor(PlayerNames player, SpellSeedType seed) const = 0;
 	/// Whether something is an icon or a stone hand
