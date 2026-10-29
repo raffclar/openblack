@@ -17,6 +17,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/GUtilsDistance.h"
 
 using namespace openblack;
 
@@ -74,6 +75,21 @@ bool animals::WithinStep(glm::ivec2 position, glm::ivec2 goal, uint16_t speed)
 	const auto dz = static_cast<float>(position.y - goal.y);
 	const auto r = static_cast<float>(speed);
 	return dx * dx + dz * dz <= r * r;
+}
+
+uint16_t animals::KeptSpeed(int32_t whole)
+{
+	return static_cast<uint16_t>(std::clamp<int32_t>(whole, 0, 0xFFFF));
+}
+
+uint16_t animals::SpeedFromScript(float metresPerTurn)
+{
+	return KeptSpeed(gutils::ConvertMetersToWholeDistance(metresPerTurn));
+}
+
+float animals::SpeedForScript(uint16_t speed, bool dead)
+{
+	return dead ? 0.0f : gutils::ConvertWholeDistanceToMeters(speed);
 }
 
 bool animals::AreWeThere(glm::ivec2 position, glm::ivec2 goal, uint16_t speed)

@@ -572,6 +572,9 @@ struct ScriptArgument
 	glm::vec2 point {0.0f};
 	float height {0.0f};
 	size_t index {0};
+	/// The scenario keeps the object or creature as a script variable keeps it. Then the scripts' turn does not let go of
+	/// a thing that the native takes control of.
+	bool kept {false};
 };
 
 /// The value of a command that plays custom music that stops the music

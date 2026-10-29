@@ -61,6 +61,8 @@ public:
 	entt::entity SeparateIntoOwnFlock(entt::entity animal) override;
 	void SendToSlaughter(entt::entity animal, glm::vec2 goal) override;
 	[[nodiscard]] uint16_t SpeedOf(entt::entity animal) const override;
+	void SetSpeedFromScript(entt::entity animal, float metresPerTurn) override;
+	[[nodiscard]] float SpeedForScript(entt::entity animal) const override;
 	void KillByEffect(entt::entity animal, glm::vec3 position) override;
 	void SetDying(entt::entity animal) override;
 	void StartDyingWithoutDeath(entt::entity animal) override;

@@ -175,3 +175,25 @@ TEST(AnimalMove, AScriptSeesItThereOnlyStrictlyWithinAStep)
 	// While the moves' own arrival counts one exactly a step away
 	EXPECT_TRUE(WithinStep({0, 0}, {3, 4}, 5));
 }
+
+TEST(AnimalMove, AScriptSpeedIsWholeMapUnitsATurnKeptInRange)
+{
+	// Metres a turn, at 6553.6 map units to the metre, cut towards 0
+	EXPECT_EQ(SpeedFromScript(0.4f), 2621);
+	EXPECT_EQ(SpeedFromScript(0.5f), 3276);
+	EXPECT_EQ(SpeedFromScript(0.1f), 655);
+	// A speed below 0 stops the animal, and the largest speed is 65535
+	EXPECT_EQ(SpeedFromScript(-1.0f), 0);
+	EXPECT_EQ(SpeedFromScript(20.0f), 0xFFFF);
+	EXPECT_EQ(KeptSpeed(-5), 0);
+	EXPECT_EQ(KeptSpeed(70000), 0xFFFF);
+	EXPECT_EQ(KeptSpeed(1234), 1234);
+}
+
+TEST(AnimalMove, AScriptReadsTheSpeedInMetresAndADeadAnimalGivesNone)
+{
+	EXPECT_FLOAT_EQ(SpeedForScript(2621, false), 2621.0f * 10.0f / 65536.0f);
+	EXPECT_FLOAT_EQ(SpeedForScript(6554, false), 6554.0f * 10.0f / 65536.0f);
+	EXPECT_EQ(SpeedForScript(2621, true), 0.0f);
+	EXPECT_EQ(SpeedForScript(0, false), 0.0f);
+}

@@ -66,6 +66,14 @@ struct Turn
 /// Whether a walker at a speed is already at a point it is sent to: strictly nearer than one step
 [[nodiscard]] bool AreWeThere(glm::ivec2 position, glm::ivec2 goal, uint16_t speed);
 
+/// The speed that an animal keeps from a number of map units a turn: a negative number gives 0, and the largest speed is
+/// 65535
+[[nodiscard]] uint16_t KeptSpeed(int32_t whole);
+/// The speed that a script gives an animal in metres a turn, changed to map units a turn and kept as KeptSpeed keeps it
+[[nodiscard]] uint16_t SpeedFromScript(float metresPerTurn);
+/// The speed of an animal that a script reads, in metres a turn. A dead animal gives 0
+[[nodiscard]] float SpeedForScript(uint16_t speed, bool dead);
+
 /// A move set up towards a goal: turned towards it, and arrived already if within a step. The turn made is returned too.
 [[nodiscard]] Turn SetUpMove(Move& move, glm::ivec2 goal, uint16_t turnAngle);
 /// A turn of a move: whether it has arrived, and the turn it made (none while making its last step)

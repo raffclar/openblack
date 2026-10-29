@@ -116,6 +116,11 @@ public:
 	virtual void SendToSlaughter(entt::entity animal, glm::vec2 goal) = 0;
 	/// An animal's speed now, in whole map units a turn
 	[[nodiscard]] virtual uint16_t SpeedOf(entt::entity animal) const = 0;
+	/// A script gives an animal a speed in metres a turn. The animal walks at that speed until its next state gives it a
+	/// speed of its own. A miracle wolf keeps its speed
+	virtual void SetSpeedFromScript([[maybe_unused]] entt::entity animal, [[maybe_unused]] float metresPerTurn) {}
+	/// The speed of an animal that a script reads, in metres a turn: 0 for a dead animal
+	[[nodiscard]] virtual float SpeedForScript([[maybe_unused]] entt::entity animal) const { return 0.0f; }
 	/// The flock's leader, its first animal still there, none for an empty flock
 	[[nodiscard]] virtual entt::entity LeaderOf(entt::entity flock) const = 0;
 	/// The flock's animals, oldest first

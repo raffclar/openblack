@@ -2157,3 +2157,7 @@ openblack_setup_and_add_test(
   test_script_container_properties test_script_container_properties.cpp
 )
 target_link_libraries(test_script_container_properties PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_script_animal_speed test_script_animal_speed.cpp
+)
+target_link_libraries(test_script_animal_speed PRIVATE ScriptLibrary)

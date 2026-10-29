@@ -1005,6 +1005,83 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .objects = {{.type = AnimalInfo::Cow, .offset = {8.0f, 0.0f}, .living = true}},
 	});
 
+	// A script slows one of two cows and then sends both, as Greedy Farmer slows its cow
+	all.push_back({
+	    .id = "animals.script_slows_cow",
+	    .name = "A script slows a cow",
+	    .facet = Facet::Animals,
+	    .description = "Two cows stand side by side, eight metres apart. After one second, SET_PROPERTY gives the left "
+	                   "cow a speed of 0.05 metres a turn. Then MOVE_GAME_THING sends each cow 30 metres to the north. "
+	                   "The scenario keeps each cow as a script variable does.",
+	    .expected = "The right cow walks to its point at the speed of its kind. The left cow walks slowly in its walk "
+	                "clip, and arrives a long time after the right cow. A script that reads the speed of the left cow "
+	                "gets 0.05.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -5.0f}, {15.0f, 35.0f}}, .distance = 0.6f},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {-4.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {4.0f, 0.0f}, .living = true}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 11.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.05f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-4.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 1, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {4.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
+	});
+
+	// A script slows a flock of animals and then sends each one, as The Slavers slows its animal flock
+	all.push_back({
+	    .id = "animals.script_slows_flock",
+	    .name = "A script slows a flock of animals",
+	    .facet = Facet::Animals,
+	    .description = "A horse, a sheep and a cow stand in a row, six metres apart. After one second, a script makes a "
+	                   "flock of them, and SET_PROPERTY gives the flock a speed of 0.05 metres a turn. Then "
+	                   "MOVE_GAME_THING sends each animal 30 metres to the north. The scenario keeps each animal as a "
+	                   "script variable does.",
+	    .expected = "Each animal of the flock takes the speed: the three animals walk slowly in their walk clips, side "
+	                "by side, and arrive together. A script that reads the speed of the flock gets 0.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -5.0f}, {15.0f, 35.0f}}, .distance = 0.6f},
+	    .objects = {{.type = AnimalInfo::Horse, .offset = {-6.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Sheep, .offset = {0.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {6.0f, 0.0f}, .living = true}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 11.0f},
+	                                      {.kind = ScriptArgument::Kind::Flock},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.05f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-6.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 1, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {0.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 2, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {6.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
+	});
+
 	// A free crow and a free cow, each the leader of a flock or herd of its own. Each picks its next place about its
 	// home, in map units, and goes there.
 	all.push_back({
