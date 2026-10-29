@@ -427,12 +427,7 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 
 bool openblack::InitializeHeadlessEngine() noexcept
 {
-	Locator::rendererInterface::reset(HeadlessRenderer::Create().release());
-	if (!Locator::rendererInterface::has_value())
-	{
-		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to create the renderer with no device");
-		return false;
-	}
+	Locator::rendererInterface::reset(std::make_unique<HeadlessRenderer>().release());
 	Locator::audio::emplace<AudioManagerNoOp>();
 	Locator::sounds::emplace<audio::GameSoundRequests>();
 	return true;

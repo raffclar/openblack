@@ -174,25 +174,21 @@ TEST(DedicatedServer, TheServerWritesNothingInTheProfileFolderItIsGiven)
 	EXPECT_TRUE(files.empty());
 }
 
-TEST(DedicatedServer, TheServerMakesNoGraphicsObjects)
+TEST(DedicatedServer, TheServerDoesNotStartTheGraphicsLibrary)
 {
-	// The objects that the graphics library makes for itself as it starts
-	uint32_t libraryObjects = 0;
-	{
-		const auto renderer = openblack::graphics::HeadlessRenderer::Create();
-		ASSERT_NE(renderer, nullptr);
-		libraryObjects = openblack::graphics::GraphicsObjectCount();
-	}
+	// A call to the library that did not start stops this test program, so the run also shows that no part calls it
+	ASSERT_FALSE(openblack::graphics::GraphicsLibraryStarted());
 	const openblack::test::TestTempFolder profileFolder;
-	std::vector<uint32_t> objects;
+	std::vector<bool> started;
 	const std::atomic<bool> stop {false};
 	const auto exitCode =
-	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&objects](uint32_t /*turn*/, uint64_t /*checksum*/) {
-		    objects.push_back(openblack::graphics::GraphicsObjectCount());
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&started](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    started.push_back(openblack::graphics::GraphicsLibraryStarted());
 	    });
 	EXPECT_EQ(exitCode, EXIT_SUCCESS);
-	ASSERT_FALSE(objects.empty());
-	EXPECT_TRUE(std::ranges::all_of(objects, [libraryObjects](uint32_t count) { return count == libraryObjects; }));
+	ASSERT_FALSE(started.empty());
+	EXPECT_TRUE(std::ranges::none_of(started, [](bool value) { return value; }));
+	EXPECT_FALSE(openblack::graphics::GraphicsLibraryStarted());
 }
 
 TEST(DedicatedServer, TheServerMakesTheSkysCloudsButNoSystemThatOnlyShowsTheWorld)

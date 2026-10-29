@@ -35,7 +35,6 @@
 #include <SDL_events.h>
 #include <SDL_keycode.h>
 #include <SDL_mouse.h>
-#include <bgfx/bgfx.h>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -249,6 +248,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
+#include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
@@ -6049,10 +6049,9 @@ void Runner::Measure()
 		stages.at(i) = static_cast<float>(Milliseconds(entry.stages.at(i).total));
 	}
 	// What the renderer last drew, the frame before
-	const auto* renderStats = bgfx::getStats();
+	const auto draws = Locator::rendererInterface::has_value() ? Locator::rendererInterface::value().GetDrawsOfLastFrame() : 0u;
 	_recorder->Add(static_cast<float>(Milliseconds(frame)), static_cast<float>(Milliseconds(update)),
-	               static_cast<float>(Milliseconds(frame - update)), stages,
-	               renderStats != nullptr ? static_cast<float>(renderStats->numDraw) : 0.0f);
+	               static_cast<float>(Milliseconds(frame - update)), stages, static_cast<float>(draws));
 	if (++_framesSinceSummary >= k_FramesPerSummary || _recorder->Count() == _recorder->Capacity())
 	{
 		_framesSinceSummary = 0;

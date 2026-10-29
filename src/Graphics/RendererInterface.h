@@ -327,6 +327,8 @@ public:
 	/// How many pipelines the renderer made since it started. The renderer makes a pipeline the first time that a draw
 	/// uses a new set of program, state, vertex layouts and target formats, and that frame is slower.
 	[[nodiscard]] virtual uint32_t GetPipelinesMade() const noexcept = 0;
+	/// How many draws the last frame had. A renderer that draws nothing gives 0.
+	[[nodiscard]] virtual uint32_t GetDrawsOfLastFrame() const noexcept = 0;
 	[[nodiscard]] virtual bool GetDebug() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
 	[[nodiscard]] virtual bool GetProfile() const noexcept = 0;

@@ -23,7 +23,6 @@
 #include <thread>
 #include <utility>
 
-#include <bgfx/bgfx.h>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
 #include <spdlog/spdlog.h>
@@ -91,24 +90,16 @@ namespace
 constexpr std::string_view k_TurnWord = "turn ";
 constexpr std::string_view k_ChecksumWord = " checksum ";
 
-/// Logs the number of objects that the graphics library keeps. The server makes no graphics objects: each object more
-/// than the library's own objects at its start is an error of the part that made it.
-void LogGraphicsObjects(uint32_t libraryObjects)
+/// Logs that the graphics library did not start. The server does not start the library. A part of the world that started
+/// it is an error.
+void LogGraphicsLibrary()
 {
-	const auto* stats = bgfx::getStats();
-	const auto total = graphics::GraphicsObjectCount();
-	SPDLOG_LOGGER_INFO(spdlog::get("game"),
-	                   "Graphics objects: {} textures, {} vertex buffers, {} index buffers, {} dynamic vertex buffers, {} "
-	                   "dynamic index buffers, {} frame buffers, {} shaders, {} programs, {} uniforms, {} occlusion queries; "
-	                   "{} of {} are the library's own",
-	                   stats->numTextures, stats->numVertexBuffers, stats->numIndexBuffers, stats->numDynamicVertexBuffers,
-	                   stats->numDynamicIndexBuffers, stats->numFrameBuffers, stats->numShaders, stats->numPrograms,
-	                   stats->numUniforms, stats->numOcclusionQueries, libraryObjects, total);
-	if (total > libraryObjects)
+	if (graphics::GraphicsLibraryStarted())
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The server made {} graphics objects. It must make none.",
-		                    total - libraryObjects);
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The graphics library started on the server. It must not start.");
+		return;
 	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The server ran with no graphics library");
 }
 
 /// The world of the server. It starts the services of the world, loads the land and plays the frames of the world,
@@ -172,8 +163,6 @@ public:
 		Play,
 	};
 	void SetNetwork(std::function<NetworkStep()> beforeTurns) { _beforeTurns = std::move(beforeTurns); }
-	/// The objects that the graphics library made for itself as it started
-	[[nodiscard]] uint32_t LibraryGraphicsObjects() const { return _libraryObjects; }
 
 	void StartupStep(std::string_view /*step*/) override {}
 	void LoadHandAnimation() override {}
@@ -193,7 +182,6 @@ private:
 	sim_run::Request _simulation;
 	std::filesystem::path _startMap;
 	bool _servicesStarted {false};
-	uint32_t _libraryObjects {0};
 	/// The texts of the game, which the help's dialogue reads
 	std::optional<gui::TextDatabase> _texts;
 	ecs::systems::NoLandView _landView;
@@ -218,7 +206,7 @@ bool ServerWorld::Initialize()
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	Locator::config::emplace(ServerConfig(_settings));
 
-	// The services that the server shares with the game, then the renderer with no device and no graphics objects
+	// The services that the server shares with the game, then the renderer that does not start the graphics library
 	InitializeSimulationCore();
 	_servicesStarted = true;
 	if (!InitializeHeadlessEngine())
@@ -226,7 +214,6 @@ bool ServerWorld::Initialize()
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
 	}
-	_libraryObjects = graphics::GraphicsObjectCount();
 	auto& fileSystem = Locator::filesystem::value();
 	if (!fileSystem.IsPathValid(_settings.gamePath))
 	{
@@ -892,7 +879,7 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The server stops on a signal");
 		}
-		LogGraphicsObjects(world->LibraryGraphicsObjects());
+		LogGraphicsLibrary();
 	}
 	checksums.SetTurnListener({});
 #if defined(OPENBLACK_GAME_ROLE)

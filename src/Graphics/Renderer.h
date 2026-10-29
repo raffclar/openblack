@@ -118,6 +118,7 @@ public:
 	[[nodiscard]] bool GetDebug() const noexcept final { return _bgfxDebug; }
 	void SetDebug(bool value) noexcept final { _bgfxDebug = value; }
 	[[nodiscard]] uint32_t GetPipelinesMade() const noexcept final;
+	[[nodiscard]] uint32_t GetDrawsOfLastFrame() const noexcept final;
 	[[nodiscard]] bool GetProfile() const noexcept final { return _bgfxProfile; }
 	void SetProfile(bool value) noexcept final { _bgfxProfile = value; }
 

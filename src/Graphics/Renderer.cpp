@@ -8203,6 +8203,11 @@ uint32_t Renderer::GetPipelinesMade() const noexcept
 	return _bgfxCallback->pipelinesMade.load();
 }
 
+uint32_t Renderer::GetDrawsOfLastFrame() const noexcept
+{
+	return bgfx::getStats()->numDraw;
+}
+
 void Renderer::ReleaseGpuWorkMemory() noexcept
 {
 	// The read of a texture waits until the GPU did all the work before it, and then the backend releases the memory
