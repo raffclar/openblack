@@ -21,6 +21,7 @@
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
 namespace components = openblack::ecs::components;
@@ -91,4 +92,25 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	Reflect<components::PrayerPower>(context)
 	    .Field<&components::PrayerPower::chants>("chants")
 	    .Field<&components::PrayerPower::infinite>("infinite");
+	Reflect<components::HanoiBlock>(context)
+	    .Field<&components::HanoiBlock::puzzle>("puzzle")
+	    .Field<&components::HanoiBlock::home>("home")
+	    .Field<&components::HanoiBlock::placedAt>("placedAt")
+	    .Field<&components::HanoiBlock::above>("above")
+	    .Field<&components::HanoiBlock::below>("below")
+	    .Field<&components::HanoiBlock::fixed>("fixed");
+	Reflect<components::PuzzleGame>(context)
+	    .Field<&components::PuzzleGame::type>("type")
+	    .Field<&components::PuzzleGame::place>("place")
+	    .Field<&components::PuzzleGame::angle>("angle")
+	    .Field<&components::PuzzleGame::scale>("scale")
+	    .Field<&components::PuzzleGame::cosineStep>("cosineStep")
+	    .Field<&components::PuzzleGame::sineStep>("sineStep")
+	    .Field<&components::PuzzleGame::played>("played")
+	    .Field<&components::PuzzleGame::started>("started")
+	    .Field<&components::PuzzleGame::calmTurns>("calmTurns")
+	    .Field<&components::PuzzleGame::order>("order")
+	    .Field<&components::PuzzleGame::bases>("bases")
+	    .Field<&components::PuzzleGame::rings>("rings")
+	    .Field<&components::PuzzleGame::kept>("kept");
 }

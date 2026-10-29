@@ -149,6 +149,7 @@
 #include "ECS/Systems/Implementations/PlayerProfileSystem.h"
 #include "ECS/Systems/Implementations/PlayerSystem.h"
 #include "ECS/Systems/Implementations/ProfileFolderSystem.h"
+#include "ECS/Systems/Implementations/PuzzleGameSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
@@ -316,6 +317,7 @@ using openblack::ecs::systems::PlayerCommandSystem;
 using openblack::ecs::systems::PlayerProfileSystem;
 using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::ProfileFolderSystem;
+using openblack::ecs::systems::PuzzleGameSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RealWeatherSystem;
@@ -730,6 +732,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::introSystem::emplace<IntroSystem>();
 	Locator::boatLaunchSystem::emplace<BoatLaunchSystem>();
 	Locator::walkPathSystem::emplace<WalkPathSystem>();
+	Locator::puzzleGameSystem::emplace<PuzzleGameSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
 	Locator::sharkSystem::emplace<SharkSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
@@ -976,6 +979,7 @@ void openblack::ShutDownServices()
 	Locator::introSystem::reset();
 	Locator::boatLaunchSystem::reset();
 	Locator::walkPathSystem::reset();
+	Locator::puzzleGameSystem::reset();
 	Locator::danceSystem::reset();
 	Locator::sharkSystem::reset();
 	Locator::videoSystem::reset();

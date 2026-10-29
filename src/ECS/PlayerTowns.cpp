@@ -37,4 +37,16 @@ std::vector<entt::entity> player_towns::InOrder(const Registry& registry, Player
 	return result;
 }
 
+size_t player_towns::Total(const Registry& registry, PlayerNames player)
+{
+	size_t total = 0;
+	registry.Each<const components::Town>([&](entt::entity, const components::Town& town) {
+		if (town.owner == player)
+		{
+			++total;
+		}
+	});
+	return total;
+}
+
 } // namespace openblack::ecs

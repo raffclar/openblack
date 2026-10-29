@@ -125,6 +125,7 @@ enum class Step : uint8_t
 	Fields,
 	FishFarms,
 	WalkPaths,
+	PuzzleGames,
 	Footpaths,
 	ForestGrowth,
 	/// The parts of the creatures' turns that are not for one creature, before the turn of the living
@@ -295,6 +296,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fields, .stage = Stage::Lists},
     {.step = Step::FishFarms, .stage = Stage::Lists},
     {.step = Step::WalkPaths, .stage = Stage::Lists},
+    // The puzzle games put back their pieces that moved, newest puzzle first
+    {.step = Step::PuzzleGames, .stage = Stage::Lists},
     {.step = Step::Footpaths, .stage = Stage::Lists},
     {.step = Step::ForestGrowth, .stage = Stage::Forests},
     // Each living thing takes its own turn in the order of the game's list of the living. Each creature does the steps

@@ -174,6 +174,11 @@ struct MapSources
 ///   town.spells   {id}                  a town's miracles, its centre's stone hands and its site's icons
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeTownProvider(WorldSources sources);
 
+// The puzzle games
+
+///   puzzle.list                         the puzzle games: kind, state, calm turns and the links of their pieces
+[[nodiscard]] std::unique_ptr<ProviderInterface> MakePuzzleProvider(WorldSources sources);
+
 // The worship sites
 
 ///   worship.sites                       the worship sites: temple, player, tribe, place, towns, built, prayer power

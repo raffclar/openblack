@@ -1888,6 +1888,38 @@ void AddSingingStones(std::vector<Scenario>& all)
 	});
 }
 
+/// The beach temple puzzle of the second land, as its script makes it: turned a half turn, at its normal size
+void AddBeachTemplePuzzle(std::vector<Scenario>& all)
+{
+	// The puzzle's place, from the middle of the map. The half turn puts its three bases in a row to the south.
+	constexpr glm::vec2 k_Puzzle {0.0f, -40.0f};
+	constexpr float k_PuzzleObjectType = 32.0f;
+	constexpr float k_HanoiKind = 3.0f;
+	all.push_back({
+	    .id = "story.beach_temple_puzzle",
+	    .name = "The rings of The Beach Temple Puzzle",
+	    .facet = Facet::Story,
+	    .description = "A script makes the second land's beach temple puzzle south of the middle, turned a half turn, as "
+	                   "its quest makes it on the beach.",
+	    .expected = "Three bases stand in a row from north to south, 20 apart. The four rings are stacked on the north "
+	                "base, the largest at the bottom. The hand can take only the top ring. A ring that the hand drops "
+	                "near a base or a larger ring flickers out and stands on that stack. A ring dropped far from a stack "
+	                "flickers back to its place after six turns.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 35.0f, 25.0f, k_Puzzle.y - 20.0f},
+	                .look = {k_Puzzle.x, 3.0f, k_Puzzle.y - 20.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 180.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HanoiKind},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -2008,6 +2040,7 @@ void AddStory(std::vector<Scenario>& all)
 	AddGuideStorm(all);
 	AddRivalCreatureLoads(all);
 	AddSingingStones(all);
+	AddBeachTemplePuzzle(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)

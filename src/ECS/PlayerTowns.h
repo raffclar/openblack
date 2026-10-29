@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -27,5 +29,7 @@ namespace openblack::ecs::player_towns
 
 /// The towns of a player, the first town that the player got first
 [[nodiscard]] std::vector<entt::entity> InOrder(const Registry& registry, PlayerNames player);
+/// How many towns a player has now
+[[nodiscard]] size_t Total(const Registry& registry, PlayerNames player);
 
 } // namespace openblack::ecs::player_towns
