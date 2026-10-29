@@ -199,7 +199,7 @@ void EffectRequestSystem::SetLiveHand(EffectHandle handle, glm::vec3 hand)
 	}
 }
 
-std::shared_ptr<particles::ShieldSphere> EffectRequestSystem::FindShield(glm::vec3 point, float margin) const
+std::shared_ptr<openblack::particles::ShieldSphere> EffectRequestSystem::FindShield(glm::vec3 point, float margin) const
 {
 	const auto* server = _findServer();
 	return server != nullptr ? server->FindShield(point, margin) : nullptr;
