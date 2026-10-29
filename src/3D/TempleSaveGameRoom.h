@@ -75,6 +75,9 @@ public:
 	void ReadPicturesAfterSave(uint32_t slot, const ReadPicture& read);
 	/// Coming into the room, no picture is shown in high detail, and no picture is looked at
 	void Enter();
+	/// The player leaves the temple: the room keeps its pictures, its empty picture and its list for the next visit, and
+	/// forgets the rest, as a new room
+	void Leave();
 	/// The saved games that the room lists, in its order
 	void SetSaves(std::vector<Save> saves);
 	/// The player's alignment, from -1 to 1, which chooses the empty picture's half

@@ -194,6 +194,11 @@ std::optional<save_game_room::CloseLookWords> save_game_room::CloseLookWordsOf(u
 	                       .details = openblack::fixed_format::WithNumber(label, static_cast<double>(landNumber))};
 }
 
+bool save_game_room::ReadsSavedGamesAgain(const std::optional<SavedGamesStamp>& lastRead, const SavedGamesStamp& now)
+{
+	return !lastRead.has_value() || *lastRead != now;
+}
+
 save_game_room::DetailsSpan save_game_room::DetailsSpanOf(int32_t left, int32_t width)
 {
 	const int32_t quarter = width / 4;

@@ -279,8 +279,10 @@ private:
 	void UpdateChallengeRoom();
 	/// The words that the save game room writes over the picture in high detail, if any
 	[[nodiscard]] std::optional<temple::save_game_room::CloseLookWords> SaveGameRoomWords() const;
-	/// The save game room's pictures and buttons
+	/// The save game room's pictures and buttons. The room, its list and its small pictures stay from visit to visit.
 	std::unique_ptr<TempleSaveGameRoom> _saveGameRoom;
+	/// The saved games that the room's list and small pictures were last read from
+	std::optional<temple::save_game_room::SavedGamesStamp> _savedGamesRead;
 	/// The question the save game room asks the player about a slot, until it is answered
 	struct SaveGameQuestion
 	{
@@ -292,6 +294,8 @@ private:
 	[[nodiscard]] temple::save_game_room::View SaveGameRoomView() const;
 	/// Reads the saved games that the save game room lists again
 	void ListSavedGames();
+	/// Reads the list and the small pictures of the save game room again when the saved games changed after the last read
+	void ReadSavedGamesWhenChanged();
 	/// Asks the player about a slot, as a click in the save game room asks
 	void AskAboutSlot(temple::save_game_room::Click click, uint32_t slot);
 	/// Acts on the player's answer to the save game room's question

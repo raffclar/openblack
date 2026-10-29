@@ -299,3 +299,17 @@ TEST(SaveGameRoom, TheCloseLookDetailsGoAcrossTheMiddleHalf)
 	EXPECT_FLOAT_EQ(rules::DetailsLineLeft({.left = 200.0f, .right = 600.0f}, 100.0f), 350.0f);
 	EXPECT_FLOAT_EQ(rules::DetailsLineLeft({.left = 200.0f, .right = 600.0f}, 401.0f), 199.5f);
 }
+
+// The room reads its list and its small pictures at the first visit, and again only after a save, a delete or a slot
+// picture, or for another player or another land
+TEST(SaveGameRoom, TheRoomReadsTheSavedGamesAgainOnlyWhenTheyChanged)
+{
+	using openblack::temple::save_game_room::ReadsSavedGamesAgain;
+	using openblack::temple::save_game_room::SavedGamesStamp;
+	const SavedGamesStamp read {.changes = 3, .player = "players/one", .land = 1};
+	EXPECT_TRUE(ReadsSavedGamesAgain(std::nullopt, read));
+	EXPECT_FALSE(ReadsSavedGamesAgain(read, read));
+	EXPECT_TRUE(ReadsSavedGamesAgain(read, {.changes = 4, .player = "players/one", .land = 1}));
+	EXPECT_TRUE(ReadsSavedGamesAgain(read, {.changes = 3, .player = "players/two", .land = 1}));
+	EXPECT_TRUE(ReadsSavedGamesAgain(read, {.changes = 3, .player = "players/one", .land = 2}));
+}

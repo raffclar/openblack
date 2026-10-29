@@ -999,6 +999,7 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	};
 
 	auto outcome = std::make_shared<std::atomic<ecs::save_files::SaveWrite>>(ecs::save_files::SaveWrite::NotOpened);
+	++_savedGamesChanges;
 	auto* fileSystem = &Locator::filesystem::value();
 	Writer().Queue(std::format("the files of slot {}", slot), [fileSystem,
 	                                                           files = std::make_shared<const ecs::save_files::SlotWrite>(
@@ -1672,6 +1673,7 @@ bool SaveGameSystem::Delete(uint32_t slot)
 		std::filesystem::remove(file, error);
 	}
 	std::filesystem::remove(folder, error);
+	++_savedGamesChanges;
 	SPDLOG_LOGGER_INFO(Log(), "Deleted the saved game in slot {}", slot);
 	return true;
 }
@@ -1692,6 +1694,14 @@ std::optional<std::vector<uint8_t>> SaveGameSystem::ReadPictureFile(std::string_
 		return std::nullopt;
 	}
 	return ReadFile(path);
+}
+
+temple::save_game_room::SavedGamesStamp SaveGameSystem::GetSavedGamesStamp() const
+{
+	const auto player = PlayerFolder();
+	return {.changes = _savedGamesChanges,
+	        .player = player.has_value() ? player->generic_string() : std::string {},
+	        .land = LandNumber()};
 }
 
 namespace
@@ -1993,6 +2003,7 @@ void SaveGameSystem::PutSlotPicture(uint32_t slot)
 	}
 	// The writer copies the temporary picture into the slot's cells on its own thread, after the files before it
 	auto* files = &Locator::filesystem::value();
+	++_savedGamesChanges;
 	Writer().Queue((*pictures / gamesave::LargePictureFileName(slot)).generic_string(),
 	               [files, step = SlotPictureStep(*pictures, slot)]() { return step(*files); });
 }
