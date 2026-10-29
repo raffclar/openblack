@@ -66,6 +66,15 @@ const Row& RowNamed(const Page& page, const std::string& label)
 const Row& RowNamed(Page&&, const std::string&) = delete;
 } // namespace
 
+TEST(StatisticsBoxPlayers, TheBoxCountsThePlayersThatPlayInTheFirstFourPlaces)
+{
+	EXPECT_EQ(statistics::BoxPlayerCount(std::array {true, false, false, false}), 1U);
+	// The first and third places play: the box shows two places, the first and the second
+	EXPECT_EQ(statistics::BoxPlayerCount(std::array {true, false, true, false}), 2U);
+	EXPECT_EQ(statistics::BoxPlayerCount(std::array {false, false, false, false}), 0U);
+	EXPECT_EQ(statistics::BoxPlayerCount(std::array {true, true, true, true}), 4U);
+}
+
 TEST(StatisticsBoxPages, EachTabListsItsRowsInOrder)
 {
 	const auto figures = TwoPlayers();
