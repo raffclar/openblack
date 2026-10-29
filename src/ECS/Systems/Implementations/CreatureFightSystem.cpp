@@ -1590,6 +1590,8 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 	{
 		return;
 	}
+	// The creature gives up its action as a failure
+	GainStrengthAtStop(creature, fight::StopEnd::Failure);
 	const auto opponent = fighting->opponent;
 	for (const auto self : {creature, opponent})
 	{
@@ -4176,6 +4178,39 @@ void CreatureFightSystem::DripTurn(entt::entity creature)
 	}
 }
 
+void CreatureFightSystem::GainStrengthAtStop(entt::entity stopper, fight::StopEnd end)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* fighting = registry.Valid(stopper) ? registry.TryGet<const CreatureFighting>(stopper) : nullptr;
+	if (fighting == nullptr || !Locator::creaturePhysiologySystem::has_value())
+	{
+		return;
+	}
+	const auto partner = fighting->opponent;
+	const auto* other = registry.Valid(partner) ? registry.TryGet<const CreatureFighting>(partner) : nullptr;
+	const bool together = other != nullptr && other->opponent == stopper;
+	const auto gains = fight::StrengthGainsAtStop(
+	    end, {.stopperDuels = together && InDuel(registry, stopper), .partnerDuels = together && InDuel(registry, partner)});
+	if (gains.stopper == 0 && gains.partner == 0)
+	{
+		return;
+	}
+	fight_transcript::Note(stopper, "strength_gain", [&] {
+		return fight_transcript::Fields {{"creature", fight_transcript::Id(stopper)},
+		                                 {"partner", fight_transcript::Id(partner)},
+		                                 {"creature_gains", gains.stopper},
+		                                 {"partner_gains", gains.partner}};
+	});
+	auto& physiology = Locator::creaturePhysiologySystem::value();
+	for (const auto& [creature, count] : {std::pair(stopper, gains.stopper), std::pair(partner, gains.partner)})
+	{
+		for (uint32_t gain = 0; gain < count; ++gain)
+		{
+			physiology.GainStrengthOf(creature, "Fight");
+		}
+	}
+}
+
 void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBlow)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -4186,6 +4221,8 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 		                                 {"winner_health", GetFightHealth(winner)},
 		                                 {"loser_health", GetFightHealth(loser)}};
 	});
+	// The plan that the win forces on the winner makes the winner give up its action as a failure
+	GainStrengthAtStop(winner, fight::StopEnd::Failure);
 	// The winner is made to do something to the loser at once: an evil winner has a poo on it, any other shows off. Its
 	// mind does it when the winner has left the fight. This plan counts for the feedback of the player, and it is an
 	// order. After a knock out by a blow the plan is not forced: it has the low priority of the order.
@@ -4484,6 +4521,8 @@ void CreatureFightSystem::HandLetGo(entt::entity creature)
 	}
 	fighting->held = false;
 	const auto opponent = fighting->opponent;
+	// The plan of the creature starts again: it gives up its action as a failure
+	GainStrengthAtStop(creature, fight::StopEnd::Failure);
 	fight_transcript::Note(creature, "let_go_by_hand", [&] {
 		return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)}, {"stage", Name(fighting->stage)}};
 	});

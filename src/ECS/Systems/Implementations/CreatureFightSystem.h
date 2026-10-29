@@ -159,6 +159,9 @@ private:
 	/// One creature beat the other, by a blow or otherwise: the loser faints, and the winner is made to have a poo on
 	/// the loser or to show off
 	void Win(entt::entity winner, entt::entity loser, bool byBlow);
+	/// A creature of a fight stops what it does. Each creature in its duel then gets stronger by the strength gain of the
+	/// fight action, one or two times, as the stop makes each of them stop.
+	void GainStrengthAtStop(entt::entity stopper, creature_fight::StopEnd end);
 	/// The opponent of a creature has no life left: the creature wins and leaves the duel. The loser does not faint,
 	/// and nobody forces a plan on the winner.
 	void WinByOpponentsLife(entt::entity winner, entt::entity loser);

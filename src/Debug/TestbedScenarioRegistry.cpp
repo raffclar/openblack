@@ -7854,6 +7854,19 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "combat.strength_gain_at_stop",
+	    .name = "A knock-out makes both tigers stronger",
+	    .facet = Facet::Combat,
+	    .description = "Two tigers, the red one of strength 0.6 and the blue one of strength 0.4, fight by themselves.",
+	    .expected = "At the knock-out the strength of each tiger increases two times by the strength gain of the fight "
+	                "action, 0.012 each time. The fight transcript has a record strength_gain with two gains for each "
+	                "tiger.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.4f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
 	{
 		// Each tiger holds a rock as the fight starts. It lets go of the rock before its taunt.
 		auto start = Fight(Kind::StartFight, 0, 1, 1.0f);
