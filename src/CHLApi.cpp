@@ -7288,20 +7288,42 @@ void SetLeashWorks() // 249 SET_LEASH_WORKS
 	Locator::leashSystem::value().SetWorks(*creature, enable);
 }
 
-/// Debug quickstart: the Cow is made where the creature choice makes the chosen creature (its home in the glade), and
-/// becomes the player's exactly as CREATURE_SET_PLAYER makes the one they pick
-void StartWithCow()
+/// Debug quickstart: a creature of the species is made at the place and becomes the player's exactly as
+/// CREATURE_SET_PLAYER makes the one they pick
+void StartWithCreature(CreatureType species, const glm::vec3& position, float yawRadians)
 {
-	constexpr int32_t k_CowSubtype = 1;
-	const glm::vec3 homePosition {1896.5f, 29.48f, 2520.06f};
-	const auto cow = CreateScriptObject(ObjectType::Creature, k_CowSubtype, homePosition, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-	if (cow == entt::null || cow == static_cast<entt::entity>(0) || !Locator::entitiesRegistry::value().Valid(cow))
+	const auto creature =
+	    CreateScriptObject(ObjectType::Creature, static_cast<uint32_t>(species), position, 0.0f, 0.0f, yawRadians, 0.0f, 1.0f);
+	if (creature == entt::null || creature == static_cast<entt::entity>(0) ||
+	    !Locator::entitiesRegistry::value().Valid(creature))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "The debug quickstart could not make the Cow");
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "The debug quickstart could not make the creature");
 		return;
 	}
-	RegisterCreated(cow);
-	MakePlayersCreature(cow);
+	RegisterCreated(creature);
+	MakePlayersCreature(creature);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The debug quickstart made the player's creature, species {}, at {:.1f}, {:.1f}",
+	                   static_cast<int>(species), position.x, position.z);
+}
+
+/// Debug quickstart of the first land: the Cow is made where the creature choice makes the chosen creature (its home in
+/// the glade)
+void StartWithCow()
+{
+	const glm::vec3 homePosition {1896.5f, 29.48f, 2520.06f};
+	StartWithCreature(CreatureType::Cow, homePosition, 0.0f);
+}
+
+/// Whether the player has a creature of their own now
+bool PlayerHasCreature()
+{
+	if (!Locator::leashSystem::has_value())
+	{
+		return false;
+	}
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::leashSystem::value().PlayersCreature(player).has_value();
 }
 
 void LoadMyCreature() // 250 LOAD_MY_CREATURE
@@ -7315,7 +7337,18 @@ void LoadMyCreature() // 250 LOAD_MY_CREATURE
 		StartWithCow();
 		return;
 	}
-	Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z});
+	const bool loaded = Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z}).has_value();
+	// Not in the original game: a developer's direct start of a later land has no creature that came through the
+	// vortex, so the creature of the species the developer named stands at the place instead
+	const auto& landSystem = Locator::landSystem::value();
+	if (const auto species = new_game_choice::DirectStartCreature(
+	        landSystem.GetNewGameStart(), Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, loaded,
+	        PlayerHasCreature());
+	    species.has_value())
+	{
+		constexpr float k_ArrivalYawDegrees = 180.0f;
+		StartWithCreature(*species, {position.x, position.y, position.z}, glm::radians(k_ArrivalYawDegrees));
+	}
 }
 
 void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF

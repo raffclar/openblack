@@ -142,6 +142,8 @@ public:
 
 	/// How a new game on the first land starts: the start-of-game question, or its answer at once
 	virtual void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) = 0;
+	/// For developers: how the new game was started, which says whether a direct start of a later land makes a creature
+	[[nodiscard]] virtual const std::optional<new_game_choice::NewGameStart>& GetNewGameStart() const = 0;
 	/// The humans of a land of a network game come from the network session at the start of the game. Without a session,
 	/// the player of this computer is the one human when the land loads.
 	virtual void SetHumansFromSession(bool fromSession) = 0;
