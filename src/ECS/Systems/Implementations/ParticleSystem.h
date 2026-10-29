@@ -239,6 +239,11 @@ public:
 	EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                         float magnitude, bool synced) override;
 
+	void Serve(const EffectRequest& request, EffectHandle handle) override;
+	void Move(EffectHandle handle, glm::vec3 position) override { SetOrigin(handle, position); }
+	void Stop(EffectHandle handle) override { CloseDown(handle); }
+	void Remove(EffectHandle handle) override { Delete(handle); }
+
 	void SetOrigin(EffectId id, glm::vec3 origin) override;
 	void SetPlayer(EffectId id, int player) override;
 	void SetPower(EffectId id, float power) override;
@@ -364,6 +369,8 @@ private:
 	/// Newest first, as they are stepped and drawn
 	std::deque<Running> _effects;
 	EffectId _nextId {1};
+	/// The number that the simulation gave the next effect to start, none when the particles give their own
+	EffectId _givenId {k_NoEffect};
 	bool _freshIdsAtNextReset {false};
 	bool _paused {false};
 	/// When the ribbons' textures last slid on

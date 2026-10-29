@@ -23,6 +23,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Particles/ManaPathMaths.h"
@@ -42,8 +43,9 @@ namespace openblack::ecs::systems
 {
 
 /// The running particle effects: those miracles own and step themselves, the spot visuals scripts and the game place for
-/// a time, and any other effect, stepped once a game turn. What they draw is gathered between the turns.
-class ParticleSystemInterface: public SavedStateInterface
+/// a time, and any other effect, stepped once a game turn. What they draw is gathered between the turns. It also shows
+/// the effects that the turns and the scripts ask for through the effect requests.
+class ParticleSystemInterface: public SavedStateInterface, public EffectServerInterface
 {
 public:
 	/// A running effect, by a number that is never reused

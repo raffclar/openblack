@@ -83,6 +83,7 @@
 #include "ECS/Systems/Implementations/DialogueControlSystem.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
 #include "ECS/Systems/Implementations/EditorSystem.h"
+#include "ECS/Systems/Implementations/EffectRequestSystem.h"
 #include "ECS/Systems/Implementations/ExplosionSystem.h"
 #include "ECS/Systems/Implementations/FieldSystem.h"
 #include "ECS/Systems/Implementations/FightTranscriptSystem.h"
@@ -762,6 +763,10 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::influenceSystem::emplace<InfluenceSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
 	Locator::particleSystem::emplace<ParticleSystem>();
+	// The turns and the scripts ask for effects here. The particles of this computer, if any, show them.
+	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>([]() -> ecs::systems::EffectServerInterface* {
+		return Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	});
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
@@ -1080,6 +1085,7 @@ void openblack::ShutDownServices()
 	Locator::forestSystem::reset();
 	Locator::fireflySystem::reset();
 	Locator::gestureSystem::reset();
+	Locator::effectRequestSystem::reset();
 	Locator::particleSystem::reset();
 	Locator::terrainSystem::reset();
 	Locator::filesystem::reset();

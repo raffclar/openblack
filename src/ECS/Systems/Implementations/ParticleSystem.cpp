@@ -17,6 +17,7 @@
 #include <ranges>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <EnumHeader.h>
@@ -994,7 +995,8 @@ ParticleSystemInterface::EffectId ParticleSystem::Start(std::string_view file, g
 	}
 	ResolveTextures(*effect);
 	effect->StepTwiceFirstTime();
-	const auto effectId = _nextId++;
+	// An effect that the simulation asked for takes the number that the simulation gave it
+	const auto effectId = _givenId != k_NoEffect ? std::exchange(_givenId, k_NoEffect) : _nextId++;
 	_effects.push_front({.id = effectId, .file = std::string(file), .effect = std::move(effect)});
 	return effectId;
 }
@@ -1152,6 +1154,43 @@ ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType
 		it->path = info.singleZSort == 1 ? particles::draw::DrawPath::Queued : particles::draw::DrawPath::Sorted;
 	}
 	return id;
+}
+
+void ParticleSystem::Serve(const EffectRequest& request, EffectHandle handle)
+{
+	_givenId = handle;
+	EffectId id = k_NoEffect;
+	if (const auto* spotVisual = std::get_if<SpotVisualType>(&request.type))
+	{
+		id = StartSpotVisual(*spotVisual, request.position, request.turns, request.owner, request.magnitude, request.synced);
+	}
+	else if (request.step == EffectStep::Frame)
+	{
+		id = StartByFrame(std::get<ParticleType>(request.type), request.position, request.magnitude);
+	}
+	else
+	{
+		id = Start(std::get<ParticleType>(request.type), request.position, request.magnitude, request.synced);
+	}
+	// A request that started no effect does not give its number to the next effect
+	_givenId = k_NoEffect;
+	const auto it = FindRunning(id);
+	if (it == _effects.end())
+	{
+		return;
+	}
+	if (request.direction.has_value())
+	{
+		it->effect->SetDirection(*request.direction);
+	}
+	if (request.player.has_value())
+	{
+		it->effect->SetPlayer(*request.player);
+	}
+	if (request.processInfo.has_value())
+	{
+		it->effect->SetProcessInfo(*request.processInfo);
+	}
 }
 
 void ParticleSystem::SetOrigin(EffectId id, glm::vec3 origin)
