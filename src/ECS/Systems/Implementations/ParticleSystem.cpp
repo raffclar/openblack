@@ -309,29 +309,35 @@ void GameParticleWorld::StartSound(const particles::Effect& /*effect*/,
 	Play(playing);
 }
 
+const std::map<std::string, int32_t, std::less<>>& GameParticleWorld::SoundActions() const
+{
+	if (_soundActions.has_value())
+	{
+		return *_soundActions;
+	}
+	_soundActions.emplace();
+	if (Locator::filesystem::has_value())
+	{
+		auto& fileSystem = Locator::filesystem::value();
+		const auto path = fileSystem.GetPath<filesystem::Path::Data>() / "SoundAction.h";
+		if (fileSystem.Exists(path))
+		{
+			const auto bytes = fileSystem.ReadAll(path);
+			*_soundActions = psys::ParseEnumHeader(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+		}
+	}
+	return *_soundActions;
+}
+
 void GameParticleWorld::Play(PlayingSound& sound) const
 {
 	if (!Locator::audio::has_value() || !Locator::camera::has_value())
 	{
 		return;
 	}
-	if (!_soundActions.has_value())
-	{
-		_soundActions.emplace();
-		if (Locator::filesystem::has_value())
-		{
-			auto& fileSystem = Locator::filesystem::value();
-			const auto path = fileSystem.GetPath<filesystem::Path::Data>() / "SoundAction.h";
-			if (fileSystem.Exists(path))
-			{
-				const auto bytes = fileSystem.ReadAll(path);
-				*_soundActions =
-				    psys::ParseEnumHeader(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
-			}
-		}
-	}
-	const auto action = _soundActions->find(sound.link->sound.action.sound);
-	if (action == _soundActions->end())
+	const auto& actions = SoundActions();
+	const auto action = actions.find(sound.link->sound.action.sound);
+	if (action == actions.end())
 	{
 		return;
 	}
@@ -1027,6 +1033,8 @@ void ParticleSystem::LoadAllTypes()
 		return;
 	}
 	FindTextureStems();
+	// The first sound of an effect reads the names of the game's sound actions
+	[[maybe_unused]] const auto& soundActions = _world.SoundActions();
 	for (size_t index = 0; index < particles::k_ParticleTypeCount; ++index)
 	{
 		const auto file = particles::ParticleTypeFile(static_cast<ParticleType>(index));

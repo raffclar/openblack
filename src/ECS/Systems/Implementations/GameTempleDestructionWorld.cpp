@@ -91,7 +91,8 @@ void GameTempleDestructionWorld::PlayOnce(entt::id_type sound, glm::vec3 positio
 
 void GameTempleDestructionWorld::StopSound(entt::entity emitter)
 {
-	if (Locator::sounds::has_value())
+	// The audio can end a loop before the temple stops it, as when the camera goes too far away
+	if (Locator::sounds::has_value() && Locator::sounds::value().EmitterExists(emitter))
 	{
 		Locator::sounds::value().StopEmitter(emitter);
 	}
