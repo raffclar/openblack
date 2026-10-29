@@ -213,10 +213,11 @@ void HandSystem::ReportPick(PlayerNames player, entt::entity object)
 	}
 }
 
-entt::entity HandSystem::GetReportedPick() const noexcept
+entt::entity HandSystem::GetReportedPickOf(PlayerNames player) const noexcept
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto hands = GetHandsOf(player);
+	const auto hand = hands.has_value() ? (*hands)[static_cast<size_t>(Side::Left)] : entt::null;
 	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
 	return reported != nullptr ? reported->pickedObject : entt::null;
 }
@@ -294,20 +295,13 @@ std::optional<HandSystemInterface::ReportedView> HandSystem::GetReportedView(Pla
 	};
 }
 
-uint32_t HandSystem::GetHandStillTurns() const noexcept
+uint32_t HandSystem::GetHandStillTurnsOf(PlayerNames player) const noexcept
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto hands = GetHandsOf(player);
+	const auto hand = hands.has_value() ? (*hands)[static_cast<size_t>(Side::Left)] : entt::null;
 	const auto* stillness = registry.Valid(hand) ? registry.TryGet<const HandStillness>(hand) : nullptr;
 	return stillness != nullptr ? stillness->stillTurns : 0;
-}
-
-glm::vec3 HandSystem::GetReportedHandVelocity() const noexcept
-{
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = _hands[static_cast<size_t>(Side::Left)];
-	const auto* stillness = registry.Valid(hand) ? registry.TryGet<const HandStillness>(hand) : nullptr;
-	return stillness != nullptr ? stillness->velocity : glm::vec3(0.0f);
 }
 
 std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)> HandSystem::GetPlayerHands() const noexcept

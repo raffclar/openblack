@@ -34,14 +34,15 @@ chimney_smoke::Random GameRandom()
 	return [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); };
 }
 
-/// The player's hand in the world, if it is in it, as the reports of the player put it
+/// The hand of the player at this computer in the world, if it is in it, as the reports of the player put it. Only the
+/// smoke that this computer draws moves in the air of this hand.
 std::optional<glm::vec3> HandPosition()
 {
 	if (!Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	return Locator::handSystem::value().GetOwnHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 } // namespace
 

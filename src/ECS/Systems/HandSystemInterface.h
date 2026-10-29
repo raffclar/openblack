@@ -138,8 +138,6 @@ public:
 	{
 		return GetHandsOf(GetOwnPlayer()).value_or(GetPlayerHands());
 	}
-	/// The velocity of the player's hand in units a second, from the reports of the turns (see hand_stillness::Step)
-	[[nodiscard]] virtual glm::vec3 GetReportedHandVelocity() const noexcept { return glm::vec3(0.0f); }
 	/// At the turn: a player reports where the hand and the camera are (see player_commands::HandReport)
 	virtual void Report([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report) {}
 	/// This computer sends a report of its hand (see throw_lead::ReportLatency)
@@ -153,8 +151,12 @@ public:
 	virtual void ReportView([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::ViewReport& report) {}
 	/// At the turn: a player reports the thing under the cursor (see player_commands::HandPick)
 	virtual void ReportPick([[maybe_unused]] PlayerNames player, [[maybe_unused]] entt::entity object) {}
-	/// The thing under the cursor of the player's hand from the last pick that a turn did. None before the first pick.
-	[[nodiscard]] virtual entt::entity GetReportedPick() const noexcept { return entt::null; }
+	/// The thing under the cursor of the hand of a player, from the last pick of the player that a turn did. None before
+	/// the first pick, or for a player with no hands.
+	[[nodiscard]] virtual entt::entity GetReportedPickOf([[maybe_unused]] PlayerNames player) const noexcept
+	{
+		return entt::null;
+	}
 	/// Each frame the hands of the player at this computer catch up with the alignment of that player once it has moved
 	/// far enough, and blend their skin again as they go into or out of the influence of that player, tested at the point
 	/// picked under the cursor (see hand_morph::Pick and NextPoint). The hands of the other players have no model on the
@@ -162,8 +164,9 @@ public:
 	virtual void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) = 0;
 	/// Once a game turn, before the creatures think: counts the turns that the player's hand stays in one place
 	virtual void ProcessTurn() {}
-	/// The game turns that the player's hand has stayed in one place (see hand_stillness::Step)
-	[[nodiscard]] virtual uint32_t GetHandStillTurns() const noexcept { return 0; }
+	/// The game turns since the hand of a player last moved (see hand_stillness::Step). Zero for a player with no
+	/// hands.
+	[[nodiscard]] virtual uint32_t GetHandStillTurnsOf([[maybe_unused]] PlayerNames player) const noexcept { return 0; }
 	/// The debugging trace of the player's hand frame by frame (see hand_trace::HandTrace), off unless asked for; none
 	/// where the hands keep no trace
 	[[nodiscard]] virtual hand_trace::HandTrace* GetTrace() noexcept { return nullptr; }
