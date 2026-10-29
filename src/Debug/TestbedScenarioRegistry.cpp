@@ -6295,9 +6295,42 @@ void AddObjects(std::vector<Scenario>& all)
 	}
 }
 
+/// The hand of the player and the creature of a rival god: the hand holds it only after a script makes the two gods
+/// allies
+void AddAlliedCreatureHold(std::vector<Scenario>& all)
+{
+	auto rival = Content(CreatureType::Tiger, {15.0f, 0.0f}, 270.0f, "ally's");
+	rival.owner = PlayerNames::PLAYER_TWO;
+	all.push_back({
+	    .id = "hand.allied_creature",
+	    .name = "The hand holds the creature of an allied god",
+	    .facet = Facet::Hand,
+	    .description = "The player's cow and the tiger of a rival god stand 30 apart. The hand tries to hold the tiger "
+	                   "and stroke its head. Then a script makes the two gods allies, and the hand holds the tiger and "
+	                   "strokes its head again.",
+	    .expected = "At the first try the hand does not hold the tiger, and the log shows that the hand can not hold "
+	                "it. After the alliance the hand holds the tiger, the camera turns to it, and the hand strokes its "
+	                "head. Then the hand lets go and the camera goes back.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview, .distance = 0.5f},
+	    .creatures = {Content(CreatureType::Cow, {-15.0f, 0.0f}, 90.0f, "player's"), rival},
+	    .commands = {Stroke(1, creature_feedback::BodyPart::Head, 1.0f),
+	                 Act(Kind::HandLetGo, 1, 1.0f),
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_PLAYER_ALLY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Number, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 2.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f}}},
+	                 Stroke(1, creature_feedback::BodyPart::Head, 1.0f),
+	                 Act(Kind::HandLetGo, 1, 3.0f)},
+	});
+}
+
 void AddHand(std::vector<Scenario>& all)
 {
 	using creature_feedback::BodyPart;
+	AddAlliedCreatureHold(all);
 	// Every part of the body, the head first
 	std::vector<Command> strokes;
 	for (size_t part = 0; part < creature_feedback::k_BodyPartCount; ++part)
@@ -10912,6 +10945,26 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.gods_symbols",
+	    .name = "The computer gods' pictures in the world",
+	    .facet = Facet::Particles,
+	    .description = "As on the second land, a land script switches on the computer minds of the second and third "
+	                   "players. The sheet of the players' symbols is then made again, as at the start of a land. The "
+	                   "player icon fountains of the first three players stand side by side.",
+	    .expected = "The fountain on the left throws up the symbol of the player's profile. The fountain in the middle "
+	                "throws up the picture of Lethys for the second player. The fountain on the right throws up the "
+	                "picture of Khazar for the third player. Each picture is in the colour of its player.",
+	    .environment = {.symbolsAfterLandScript = true, .landNumber = 2},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 0.0f}}, .distance = 0.35f},
+	    .particles = {{.file = "SF_PlayerIconFountain", .offset = {-15.0f, 0.0f}, .magnitude = 2.0f, .player = 0},
+	                  {.file = "SF_PlayerIconFountain", .offset = {0.0f, 0.0f}, .magnitude = 2.0f, .player = 1},
+	                  {.file = "SF_PlayerIconFountain", .offset = {15.0f, 0.0f}, .magnitude = 2.0f, .player = 2}},
+	    .landScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+TOGGLE_COMPUTER_PLAYER("PLAYER_THREE", 1)
+)",
+	});
+
+	all.push_back({
 	    .id = "particles.draw_paths",
 	    .name = "Sorted and queued sprites",
 	    .facet = Facet::Particles,
@@ -12310,7 +12363,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 196> k_Names {
+	constexpr std::array<std::string_view, 197> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -12507,6 +12560,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "put a key down",
 	    "repeat a held key",
 	    "let go of a key",
+	    "a god orders its creature",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

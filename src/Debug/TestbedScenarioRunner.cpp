@@ -1078,6 +1078,15 @@ void Runner::Start(const Scenario& scenario)
 		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
 	}
+	// The land's start makes the sheet of the players' symbols after the land's script, which switches on the computer
+	// players
+	if (scenario.environment.symbolsAfterLandScript)
+	{
+		if (auto* game = Game::Instance(); game != nullptr)
+		{
+			game->MakePlayersSymbols(scenario.environment.profileSymbol);
+		}
+	}
 	if (scenario.objectsAfterLandScript)
 	{
 		PlaceObjects(scenario, _middle);
@@ -3840,6 +3849,17 @@ void Runner::Give(const Command& command)
 		         : !target.has_value()                                   ? "no such object"
 		         : minds.ScriptDoAction(*entity, *action, *target, with) ? fmt::format("doing {}", command.action)
 		                                                                 : "can't";
+		break;
+	}
+	case Kind::GodOrder:
+	{
+		const auto* tables = minds.GetTables();
+		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
+		const auto target = command.atCreature.has_value() ? CreatureAt(*command.atCreature) : std::nullopt;
+		result = !action.has_value()                             ? "no such action"
+		         : !target.has_value()                           ? "no such creature"
+		         : minds.ObeyGodOrder(*entity, *action, *target) ? fmt::format("ordered {}", command.action)
+		                                                         : "can't";
 		break;
 	}
 	case Kind::MakeFriends:
