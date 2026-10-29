@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "3D/MapCoords.h"
+#include "ECS/DanceRules.h"
 #include "Enums.h"
 
 namespace openblack::dance
@@ -87,10 +88,10 @@ struct TurnContext
 	std::function<void(entt::entity)> finished;
 	/// A dancer of a group that starts a move plays its clip again
 	std::function<void(entt::entity)> playClipAgain;
-	/// Whether the hand is near the dance in this turn
-	std::function<bool(const components::Dance&)> handNear;
-	/// A key frame of the dance asked for its camera
-	std::function<void(entt::entity)> cameraAsked;
+	/// The gods whose hand is near the dance in this turn
+	std::function<dance_rules::HandsNear(const components::Dance&)> handsNear;
+	/// A key frame of the dance asked for the camera of a god
+	std::function<void(entt::entity, PlayerNames)> cameraAsked;
 };
 
 /// A dance's turn: it ends once what it is danced about has gone; it starts once it has dancers, stops when its time is

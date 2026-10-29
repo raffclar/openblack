@@ -2550,7 +2550,10 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		if (command.ctrl)
 		{
-			registry.Get<ecs::components::Dance>(dance).cameraWanted = true;
+			// The dance wants the camera of the god of this computer
+			const auto god =
+			    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+			registry.Get<ecs::components::Dance>(dance).hands.at(static_cast<size_t>(god)).cameraWanted = true;
 		}
 		return fmt::format("{} dancers{}", dancers, command.ctrl ? ", the dance wants its camera" : "");
 	}

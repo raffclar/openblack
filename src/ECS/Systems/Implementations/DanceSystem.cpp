@@ -14,8 +14,10 @@
 #include <cctype>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -201,29 +203,34 @@ void DanceSystem::ProcessTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	// The dances in the order of the game's list, the newest first
 	const auto all = ecs::list_order::Walk<Dance>(registry);
-	// The dances measure the distance to the player's hand, as the interface last put it on the land
+	// The hands that the dances count. A game with one player counts only the hand of the first player. A network game
+	// counts the hand of each god, from the reports that all the computers read.
+	const bool networkGame = Locator::time::value().IsNetworkGame();
+	std::array<std::optional<glm::vec3>, components::k_DanceHandGods> hands {};
 	if (Locator::handSystem::has_value())
 	{
-		const auto hand =
-		    Locator::handSystem::value().GetPlayerHandPositions().at(static_cast<size_t>(HandSystemInterface::Side::Left));
-		if (hand.has_value())
+		const auto& handSystem = Locator::handSystem::value();
+		const auto gods = networkGame ? hands.size() : 1;
+		for (std::size_t god = 0; god < gods; ++god)
 		{
-			_hand = hand;
+			hands.at(god) = handSystem.GetHandPositionsOf(static_cast<PlayerNames>(god))
+			                    .at(static_cast<size_t>(HandSystemInterface::Side::Left));
 		}
 	}
-	const auto handNear = [this](const Dance& dance) {
-		if (!_hand.has_value() || !Locator::terrainSystem::has_value())
+	const auto handsNear = [&hands](const Dance& dance) {
+		if (!Locator::terrainSystem::has_value() ||
+		    std::ranges::none_of(hands, [](const auto& hand) { return hand.has_value(); }))
 		{
-			return false;
+			return ecs::dance_rules::HandsNear {};
 		}
 		const float ground = Locator::terrainSystem::value().GetAltitude(dance.place.x, dance.place.z);
-		return ecs::dance_rules::HandNear(ecs::dance_rules::HandPoint(dance.place, ground), *_hand);
+		return ecs::dance_rules::GodsNear(ecs::dance_rules::HandPoint(dance.place, ground), hands);
 	};
 	const dances::TurnContext context {.turn = Locator::time::value().GetTurn(),
 	                                   .available = &Available,
 	                                   .finished = &FinishedDancing,
 	                                   .playClipAgain = &ecs::villager_dance::PlayClipAgain,
-	                                   .handNear = handNear,
+	                                   .handsNear = handsNear,
 	                                   .cameraAsked = &StartCamera};
 	for (const auto entity : all)
 	{
@@ -234,9 +241,10 @@ void DanceSystem::ProcessTurn()
 	}
 }
 
-void DanceSystem::StartCamera(entt::entity dance)
+void DanceSystem::StartCamera(entt::entity dance, PlayerNames god)
 {
-	if (!Locator::camera::has_value())
+	// Only the computer of the god whose hand stayed near turns its camera
+	if (!Locator::camera::has_value() || !Locator::handSystem::has_value() || !Locator::handSystem::value().IsOwnPlayer(god))
 	{
 		return;
 	}
