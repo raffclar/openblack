@@ -213,6 +213,32 @@ void testbed_scenarios::AddVortexScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "story.vortex_newcomers_wait_in_a_crowd",
+	    .name = "Newcomers from a vortex wait in a crowd",
+	    .facet = Facet::Miracles,
+	    .description = "A vortex into a land opens on the flat plane after a second, as on the Land 2 arrival. A script "
+	                   "holds an empty flock at the vortex and gives it to the vortex. A hut stands 40 m off. The vortex "
+	                   "is told to fade out 15 seconds after it opens, and the script breaks up the crowd after 70 "
+	                   "seconds.",
+	    .expected = "The vortex throws out the farmer of the file and 29 new villagers. Each one joins the hut's town as a "
+	                "disciple from the vortex and goes into the crowd. When a villager lands, it stands still where it "
+	                "came down. It stands for up to 50 seconds as a new villager, then it stands in the crowd and plays "
+	                "the crowd animations. None walks away while the crowd lasts. After 70 seconds the crowd breaks up: "
+	                "each villager stops as a disciple and goes back to the life of its town.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_OnThePlane.x - 40.0f, 50.0f, k_OnThePlane.y - 70.0f},
+	                .look = {k_OnThePlane.x, 0.0f, k_OnThePlane.y}},
+	    .objects = {{.type = AbodeInfo::NorseHut, .offset = k_OnThePlane + glm::vec2(40.0f, 0.0f), .yawDegrees = 90.0f}},
+	    .vortices = {{.type = VortexType::Out,
+	                  .offset = k_OnThePlane,
+	                  .delaySeconds = 1.0f,
+	                  .fadeOutAfterSeconds = 15.0f,
+	                  .crossingLines = {"CREATE_TOWN_VILLAGER(-1, \"-10.00,8.00\", NORSE_FARMER, 30)"},
+	                  .crowdForSeconds = 70.0f}},
+	});
+
+	all.push_back({
 	    .id = "story.vortex_throws_out_the_last_crossing",
 	    .name = "A vortex into the land throws out the last crossing",
 	    .facet = Facet::Miracles,

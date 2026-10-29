@@ -7174,7 +7174,9 @@ void LoadMyCreature() // 250 LOAD_MY_CREATURE
 {
 	// The player's creature, as kept when a land was last cleared, comes out at the place, unless they have one already
 	const auto position = PopVec();
-	if (Locator::tutorialSkipSystem::value().Get().startWithCow)
+	// The debug quickstart makes the Cow on the first land only. A later land loads the Cow that came through the vortex.
+	if (new_game_choice::MakesDebugCow(Locator::tutorialSkipSystem::value().Get(),
+	                                   Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber))
 	{
 		StartWithCow();
 		return;
