@@ -415,9 +415,11 @@ void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 		}
 	}();
 
-	// How steadily the player's hand has been over it. The turn knows the thing under the cursor from the player's
-	// last pick, so that the count is the same at each frame rate and on every computer.
-	const bool over = Locator::handSystem::has_value() && Locator::handSystem::value().GetReportedPick() == creature;
+	// The help counts how steadily the hand of the creature's player stays over it. Only that hand counts. The turn knows
+	// the thing under the cursor from the last pick of that player, so the count is the same on every computer.
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const bool over = Locator::handSystem::has_value() && body != nullptr &&
+	                  Locator::handSystem::value().GetReportedPickOf(body->owner) == creature;
 	auto& memory = MemoryOf(registry, creature);
 	memory.handOver = help::NextHandOver(memory.handOver, over);
 }

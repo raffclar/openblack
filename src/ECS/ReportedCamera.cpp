@@ -30,11 +30,11 @@ std::optional<systems::HandSystemInterface::ReportedCamera> ReportedPlayerCamera
 	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportedCamera(player) : std::nullopt;
 }
 
-std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCreatureCamera(entt::entity creature)
+std::optional<PlayerNames> ReportedCreaturePlayer(entt::entity creature)
 {
 	if (!IsNetworkGame())
 	{
-		return ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+		return PlayerNames::PLAYER_ONE;
 	}
 	if (!Locator::entitiesRegistry::has_value())
 	{
@@ -46,7 +46,13 @@ std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCreatureCame
 	{
 		return std::nullopt;
 	}
-	return ReportedPlayerCamera(body->owner);
+	return body->owner;
+}
+
+std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCreatureCamera(entt::entity creature)
+{
+	const auto player = ReportedCreaturePlayer(creature);
+	return player.has_value() ? ReportedPlayerCamera(*player) : std::nullopt;
 }
 
 std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCameraOfItsPlayer(entt::entity creature)

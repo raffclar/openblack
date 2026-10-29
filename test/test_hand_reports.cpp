@@ -246,26 +246,51 @@ TEST_F(ReportedHands, TheTurnCountsTheStillnessOfTheReportedHandNotOfTheDrawnHan
 		DrawHandAt({100.0f * static_cast<float>(turn), 0.0f, 0.0f});
 		_hands.ProcessTurn();
 	}
-	EXPECT_EQ(_hands.GetHandStillTurns(), 3u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_ONE), 3u);
 	// A report far away is a move
 	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({60.0f, 0.0f, 20.0f}));
 	_hands.ProcessTurn();
-	EXPECT_EQ(_hands.GetHandStillTurns(), 0u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_ONE), 0u);
 }
 
 // In a network game the turn keeps the thing under the cursor from the last pick, whatever the reports of the hand do
 TEST_F(ReportedHands, TheWorldHasTheThingUnderTheCursorFromTheLastPick)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	EXPECT_EQ(_hands.GetReportedPick(), entt::entity {entt::null});
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), entt::entity {entt::null});
 	const auto creature = registry.Create();
 	_hands.ReportPick(PlayerNames::PLAYER_ONE, creature);
-	EXPECT_EQ(_hands.GetReportedPick(), creature);
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), creature);
 	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 1.0f, 30.0f}));
-	EXPECT_EQ(_hands.GetReportedPick(), creature);
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), creature);
 	EXPECT_EQ(_hands.GetPlayerHandPositions()[0], glm::vec3(20.0f, 1.0f, 30.0f));
 	_hands.ReportPick(PlayerNames::PLAYER_ONE, entt::null);
-	EXPECT_EQ(_hands.GetReportedPick(), entt::entity {entt::null});
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), entt::entity {entt::null});
+}
+
+// Each god of a network game has its own pick and its own still hand. A player with no hands has neither.
+TEST_F(ReportedHands, EachGodHasItsOwnPickAndItsOwnStillHand)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = registry.Create();
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_TWO), entt::entity {entt::null});
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_TWO), 0u);
+	std::ignore = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	_hands.ReportPick(PlayerNames::PLAYER_TWO, creature);
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_TWO), creature);
+	EXPECT_EQ(_hands.GetReportedPickOf(PlayerNames::PLAYER_ONE), entt::entity {entt::null});
+
+	// The hand of the second god stays, and the hand of the first god moves each turn
+	_hands.Report(PlayerNames::PLAYER_TWO, ReportAt({20.0f, 0.0f, 20.0f}));
+	_hands.ProcessTurn();
+	for (int turn = 1; turn <= 3; ++turn)
+	{
+		_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({10.0f * static_cast<float>(turn), 0.0f, 0.0f}));
+		_hands.ProcessTurn();
+	}
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_TWO), 3u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_ONE), 0u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_THREE), 0u);
 }
 
 TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
