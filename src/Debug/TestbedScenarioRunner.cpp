@@ -1166,7 +1166,13 @@ void Runner::Start(const Scenario& scenario)
 		const auto& towns = registry.Context().towns;
 		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
 		{
-			registry.Get<ecs::components::Town>(town->second).owner = *scenario.townOwner;
+			auto& owned = registry.Get<ecs::components::Town>(town->second);
+			if (owned.owner != *scenario.townOwner)
+			{
+				// The town goes last in the list of its new player
+				owned.owner = *scenario.townOwner;
+				owned.gained = registry.Context().nextTownGained++;
+			}
 		}
 	}
 	if (scenario.townFeelingAboutCreatures.has_value())

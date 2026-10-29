@@ -151,6 +151,23 @@ bool guidance::ClockSaysNight(int hour, int minute)
 	return !day;
 }
 
+std::optional<size_t> guidance::LosingBeliefTown(std::span<const TownBeliefs> towns, size_t player, float margin)
+{
+	for (size_t town = 0; town < towns.size(); ++town)
+	{
+		const auto& belief = towns[town];
+		const float least = belief.at(player) - margin;
+		for (size_t other = 0; other < k_BeliefPlayers; ++other)
+		{
+			if (other != player && least < belief.at(other))
+			{
+				return town;
+			}
+		}
+	}
+	return std::nullopt;
+}
+
 MoonLook guidance::LookAtMoon(float phase, bool clockSaysNight)
 {
 	const float distance = phase - std::numbers::pi_v<float>;

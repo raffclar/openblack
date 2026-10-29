@@ -45,6 +45,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -95,20 +96,27 @@ uint32_t GameTurn()
 }
 
 /// What a thrown thing weighs, by its kind's table and its size; whether it is a rock, which the game's physics counts as
-/// The town nearest to a point, within the reach a shield protects
+/// The town nearest to a point, strictly within the reach a shield protects, by the game's map distance. Each player's
+/// town list in turn and the neutral list last: the first met wins a tie.
 entt::entity NearestTown(glm::vec3 point)
 {
 	auto& registry = EntityRegistry();
 	entt::entity nearest = entt::null;
 	float best = shield::k_NearestTownDistance;
-	registry.Each<const Town, const Transform>([&](entt::entity entity, const Town&, const Transform& transform) {
-		const float distance = glm::distance(glm::xz(transform.position), glm::xz(point));
+	for (const auto entity : ecs::player_towns::AllInOrder(registry))
+	{
+		const auto* transform = registry.TryGet<const Transform>(entity);
+		if (transform == nullptr)
+		{
+			continue;
+		}
+		const float distance = gutils::GetDistanceInMetres(transform->position, point);
 		if (distance < best)
 		{
 			best = distance;
 			nearest = entity;
 		}
-	});
+	}
 	return nearest;
 }
 

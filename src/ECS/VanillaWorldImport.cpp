@@ -571,6 +571,13 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 				continue;
 			}
 		}
+		else if (record.Is(VanillaType::Player))
+		{
+			// The player's list of towns, in the order that the player got them
+			const auto towns = world.Refs(record, "towns");
+			imported.townLists.insert(imported.townLists.end(), towns.begin(), towns.end());
+			continue;
+		}
 		else
 		{
 			continue;

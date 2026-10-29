@@ -1163,6 +1163,7 @@ public:
 	void WorshipperDied() override {}
 	void LosingVillager(entt::entity) override {}
 	void LowOnPeople(entt::entity) override {}
+	void LosingBeliefTurn() override {}
 	void EndWaits() override {}
 	[[nodiscard]] const std::vector<Remark>& GetRemarks() const override { return remarks; }
 	[[nodiscard]] int32_t GetMoonWait() const override { return 0; }

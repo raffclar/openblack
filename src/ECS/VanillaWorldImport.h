@@ -293,6 +293,9 @@ struct ImportedTowns
 	/// The plans and the building sites of the towns. The lists of each town give their order.
 	std::vector<ImportedPlan> plans;
 	std::vector<ImportedSite> sites;
+	/// The numbers of the objects of the towns in the order of the town lists of the players: the list of each player of
+	/// the file in turn, each list in the order that its player got the towns
+	std::vector<uint32_t> townLists;
 	/// Each record that the import does not take, and why
 	std::vector<std::string> skipped;
 };

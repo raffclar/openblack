@@ -142,6 +142,7 @@
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/LearningMarker.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -3742,19 +3743,21 @@ std::optional<glm::vec3> SacrificeAltarOf(const ecs::Registry& registry, PlayerN
 	return altar;
 }
 
-/// The storage pit of the nearest town of a player to a place, by the distance across the land. None when the player
-/// has no town, or when the nearest town has no storage pit.
+/// The storage pit of the nearest town of a player to a place, by the distance across the land. The towns come in the
+/// order of the player's list, so of two towns at the same distance the first in the list is the nearest. None when the
+/// player has no town, or when the nearest town has no storage pit.
 std::optional<uint32_t> OwnTownPitOf(const ecs::Registry& registry, PlayerNames player, glm::vec3 from)
 {
 	std::vector<entt::entity> towns;
 	std::vector<float> metres;
-	registry.Each<const Town, const Transform>([&](entt::entity town, const Town& data, const Transform& at) {
-		if (data.owner == player)
+	for (const auto town : ecs::player_towns::InOrder(registry, player))
+	{
+		if (const auto* at = registry.TryGet<const Transform>(town))
 		{
 			towns.push_back(town);
-			metres.push_back(gutils::GetDistanceInMetres(at.position, from));
+			metres.push_back(gutils::GetDistanceInMetres(at->position, from));
 		}
-	});
+	}
 	const auto nearest = creature_town_theft::NearestTown(metres);
 	const auto pit = nearest.has_value() ? ecs::construction::StoragePitOf(towns.at(*nearest)) : std::nullopt;
 	return pit.has_value() ? std::optional(entt::to_integral(*pit)) : std::nullopt;

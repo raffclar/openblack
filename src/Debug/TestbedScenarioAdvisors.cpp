@@ -248,6 +248,33 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.2f}},
 	    .throws = throws,
 	});
+	// A town of the player on the second land that believes in a rival almost as much as in the player
+	constexpr glm::vec2 k_DoubtingHut {0.0f, 20.0f};
+	all.push_back({
+	    .id = "advisors.losing_belief",
+	    .name = "The advisors warn that a town loses its belief",
+	    .facet = Facet::Advisors,
+	    .description = "On the second land, a Celtic hut and three villagers of the player's town in front of the "
+	                   "camera. The town believes 5 in the player and 4.99 in the second player. Every kind of the "
+	                   "advisors' guidance is taken as heard long ago.",
+	    .expected = "At the next tenth turn an advisor flies in and says one of the remarks on losing belief, with its "
+	                "text in the dialogue box. No second remark follows soon: the next waits at least a thousand turns. "
+	                "On the first land the advisors do not look, so no remark comes.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_DoubtingHut - glm::vec2 {30.0f}, k_DoubtingHut + glm::vec2 {30.0f}},
+	                .distance = 0.75f},
+	    .objects =
+	        {{.type = AbodeInfo::CelticHut, .offset = k_DoubtingHut},
+	         {.type = VillagerInfo::CelticFarmerMale, .offset = k_DoubtingHut + glm::vec2(-12.0f, 2.0f), .joinTown = true},
+	         {.type = VillagerInfo::CelticHousewifeFemale,
+	          .offset = k_DoubtingHut + glm::vec2(-12.0f, -2.0f),
+	          .joinTown = true},
+	         {.type = VillagerInfo::CelticFarmerMale, .offset = k_DoubtingHut + glm::vec2(-10.0f, 0.0f), .joinTown = true}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = 5.0f,
+	    .townBeliefInRival = 4.99f,
+	});
 	// One thing of each kind in a row in front of the camera, for the Help key
 	all.push_back({
 	    .id = "advisors.help_key",
