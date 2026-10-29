@@ -68,6 +68,8 @@ public:
 	[[nodiscard]] int SurfaceAt(glm::vec3 point) const override;
 	[[nodiscard]] int SoundAlignment(int player) const override;
 	[[nodiscard]] glm::vec3 LandNormal(glm::vec2 xz) const override;
+	/// The game's sound actions by name, read from the data folder the first time they are needed
+	[[nodiscard]] const std::map<std::string, int32_t, std::less<>>& SoundActions() const;
 	[[nodiscard]] bool IsRainingAt(glm::vec3 point) const override;
 	[[nodiscard]] glm::vec3 WindAt(glm::vec3 point) const override;
 	[[nodiscard]] glm::vec3 SmoothWindAt(glm::vec3 point) const override;
