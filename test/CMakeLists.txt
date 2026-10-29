@@ -2186,3 +2186,7 @@ openblack_setup_and_add_test(test_game_sound_requests audio/test_game_sound_requ
 openblack_setup_and_add_test(test_wonder_rules test_wonder_rules.cpp)
 openblack_setup_and_add_test(test_wonder_system test_wonder_system.cpp)
 target_link_libraries(test_effect_requests PRIVATE psys)
+openblack_setup_and_add_test(
+  test_script_flock_attach test_script_flock_attach.cpp
+)
+target_link_libraries(test_script_flock_attach PRIVATE ScriptLibrary)
