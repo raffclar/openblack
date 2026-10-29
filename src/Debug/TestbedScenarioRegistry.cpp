@@ -11384,6 +11384,34 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                                      {.kind = Argument::Kind::Number, .number = 3.0f}}}},
 	});
 
+	// A script gives a clip to a flock of villagers, as Idol Pyre does to its extra worshippers
+	all.push_back({
+	    .id = "script.flock_plays_clip",
+	    .name = "A script gives a flock of villagers a clip to play",
+	    .facet = Facet::Story,
+	    .description = "Three villagers stand in a row. After one second, a script makes a flock of them. SET_SCRIPT_ULONG "
+	                   "gives the flock the prayer clip once, and SET_SCRIPT_STATE tells the flock to play it. Idol Pyre "
+	                   "on Land 2 gives its extra worshippers the clip in this way.",
+	    .expected = "Each villager of the flock plays the prayer clip one time. The script then controls each villager. "
+	                "The log tells that the two natives ran and gave back no values.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 10.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-4.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {4.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_SCRIPT_ULONG",
+	                  .scriptArguments = {{.kind = Argument::Kind::Flock},
+	                                      {.kind = Argument::Kind::Integer, .number = 343.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 1.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_SCRIPT_STATE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Flock},
+	                                      {.kind = Argument::Kind::Integer, .number = 200.0f}}}},
+	});
+
 	// The leans of the three dead trees of Land 1, in degrees about x and z, and one tree with a large lean
 	all.push_back({
 	    .id = "nature.dead_tree_lean",
@@ -12103,6 +12131,11 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 			return argument.index < scenario.objects.size();
 		case ScriptArgument::Kind::Creature:
 			return argument.index < scenario.creatures.size();
+		case ScriptArgument::Kind::Flock:
+			// The flock needs a villager or an animal of the scenario
+			return std::ranges::any_of(scenario.objects, [](const ObjectSetup& object) {
+				return std::holds_alternative<VillagerInfo>(object.type) || std::holds_alternative<AnimalInfo>(object.type);
+			});
 		}
 		return false;
 	};

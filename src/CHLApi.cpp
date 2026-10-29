@@ -1538,28 +1538,49 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 	const auto plays = Pop().uintVal;
 	const auto animation = Pop().intVal;
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		ObjectNoLongerValid();
 		return;
 	}
-	if (IsDirectableVillager(object))
-	{
-		// The pair serves whichever script state it goes into next: a clip and its plays for playing, the fewest and most
-		// turns to stand at each stop for wandering round a place
+	// The two numbers serve the script state that the villager goes into next. They are a clip and its plays for a
+	// clip, or the fewest and most turns at each stop for a walk round a place.
+	const auto giveVillager = [animation, plays](entt::entity villager) {
 		auto& living = Locator::livingActionSystem::value();
-		living.VillagerSetScriptNumbers(object, static_cast<uint32_t>(animation), plays);
-		living.VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
+		living.VillagerSetScriptNumbers(villager, static_cast<uint32_t>(animation), plays);
+		living.VillagerSetScriptAnimation(villager, static_cast<AnimId>(animation), plays);
+	};
+	if (IsScriptContainer(registry, object))
+	{
+		// The script takes control of each member. Only a villager gets the two numbers. A creature or an animal in the
+		// group keeps the numbers that it had.
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (!registry.Valid(member))
+			{
+				continue;
+			}
+			registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
+			if (IsDirectableVillager(member))
+			{
+				giveVillager(member);
+			}
+		}
 		return;
 	}
-	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
+	if (IsDirectableVillager(object))
+	{
+		giveVillager(object);
+		return;
+	}
+	if (auto* mind = registry.TryGet<ecs::components::CreatureMindState>(object))
 	{
 		// Kept for the creature until the script tells it to start
 		mind->scriptPlay = {.animation = animation, .plays = plays};
 		return;
 	}
-	// TODO(opening): groups of things
-	NotImplemented();
+	ScriptMessage("setting the state of something neither a creature nor a villager");
 }
 
 /// Whether something is drowning, as the scripts ask: a villager while it is in its drowning state, anything else
@@ -1812,6 +1833,12 @@ void GetProperty() // 021 GET_PROPERTY
 	if (object == entt::null || !registry.Valid(object))
 	{
 		ObjectNoLongerValid();
+		Pushf(0.0f);
+		return;
+	}
+	// A town, a flock or a dance gives 0 for each property but its player. A script reads its members one by one.
+	if (IsScriptContainer(registry, object) && prop != script::ObjectPropertyType::Player)
+	{
 		Pushf(0.0f);
 		return;
 	}
@@ -2101,6 +2128,8 @@ void GetProperty() // 021 GET_PROPERTY
 	}
 }
 
+static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value);
+
 void SetProperty() // 022 SET_PROPERTY
 {
 	const auto value = Popf();
@@ -2112,6 +2141,27 @@ void SetProperty() // 022 SET_PROPERTY
 		ObjectNoLongerValid();
 		return;
 	}
+	// A town, a flock or a dance gives the property to each of its members. Each member takes it as if the script set it
+	// on that member. The script does not take control of the members. When a script sets a health of 0 on a town, each
+	// villager of the town has no life. Then each villager that no script controls dies at its next check.
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (registry.Valid(member))
+			{
+				SetPropertyOf(member, prop, value);
+			}
+		}
+		return;
+	}
+	SetPropertyOf(object, prop, value);
+}
+
+/// One property of one thing, as a script sets it on that thing
+static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	if (const auto need = NeedOf(prop); need.has_value())
 	{
 		auto* needs = CreatureNeedsOf(object);
