@@ -486,6 +486,9 @@ bool ServerWorld::Frame()
 	if (_scenario != nullptr && !clock.IsPaused())
 	{
 		_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
+		// Give the commands, throws and rewards that are due at the start, as each client does when it lays out the
+		// scenario
+		_scenarioRunner->Update(0.0f);
 	}
 	// The tools check that a world state loads into the same world: the server loads its own world once
 	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&
