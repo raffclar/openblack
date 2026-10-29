@@ -18,6 +18,7 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
+#include <numeric>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -90,16 +91,22 @@ namespace
 constexpr std::string_view k_TurnWord = "turn ";
 constexpr std::string_view k_ChecksumWord = " checksum ";
 
-/// Logs the number of objects that the graphics library keeps. The resources keep only their data, thus these objects
-/// are the objects of the renderer and of the parts that make their own objects.
+/// Logs the number of objects that the graphics library keeps. The server makes no graphics objects, thus each object
+/// is an error of the part that made it.
 void LogGraphicsObjects()
 {
 	const auto* stats = bgfx::getStats();
+	const auto total = GraphicsObjectCount();
 	SPDLOG_LOGGER_INFO(spdlog::get("game"),
 	                   "Graphics objects: {} textures, {} vertex buffers, {} index buffers, {} dynamic vertex buffers, {} "
-	                   "dynamic index buffers, {} frame buffers",
+	                   "dynamic index buffers, {} frame buffers, {} shaders, {} programs, {} uniforms, {} occlusion queries",
 	                   stats->numTextures, stats->numVertexBuffers, stats->numIndexBuffers, stats->numDynamicVertexBuffers,
-	                   stats->numDynamicIndexBuffers, stats->numFrameBuffers);
+	                   stats->numDynamicIndexBuffers, stats->numFrameBuffers, stats->numShaders, stats->numPrograms,
+	                   stats->numUniforms, stats->numOcclusionQueries);
+	if (total != 0)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The server made {} graphics objects. It must make none.", total);
+	}
 }
 
 /// The world of the server. It starts the services of the world, loads the land and plays the frames of the world,
@@ -206,10 +213,10 @@ bool ServerWorld::Initialize()
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	Locator::config::emplace(ServerConfig(_settings));
 
-	// The services that the server shares with the game, then the renderer with no device
+	// The services that the server shares with the game, then the renderer with no device and no graphics objects
 	InitializeSimulationCore();
 	_servicesStarted = true;
-	if (!InitializeEngine(GraphicsBackend::Noop, false))
+	if (!InitializeHeadlessEngine())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
@@ -727,6 +734,24 @@ bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, st
 #endif
 
 } // namespace
+
+uint32_t GraphicsObjectCount()
+{
+	const auto* stats = bgfx::getStats();
+	const std::array<uint32_t, 10> counts {
+	    stats->numTextures,
+	    stats->numVertexBuffers,
+	    stats->numIndexBuffers,
+	    stats->numDynamicVertexBuffers,
+	    stats->numDynamicIndexBuffers,
+	    stats->numFrameBuffers,
+	    stats->numShaders,
+	    stats->numPrograms,
+	    stats->numUniforms,
+	    stats->numOcclusionQueries,
+	};
+	return std::reduce(counts.begin(), counts.end(), 0u);
+}
 
 EngineConfig ServerConfig(const ServerSettings& settings)
 {

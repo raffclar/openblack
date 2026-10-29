@@ -189,6 +189,10 @@ enum class OwnCommands
 /// Reads the turn and the checksum from a line of the log, when the line has them
 [[nodiscard]] std::optional<std::pair<uint32_t, uint64_t>> ParseChecksumLine(std::string_view line);
 
+/// The number of objects that the graphics library keeps now: the textures, the buffers, the frame buffers, the shaders,
+/// the programs, the uniforms and the occlusion queries. The server makes none.
+[[nodiscard]] uint32_t GraphicsObjectCount();
+
 /// Runs the world of the server until it gets to its last turn, or until the stop flag goes on. The function gets the
 /// checksum of each turn. Gives the exit code of the program.
 int Run(const ServerSettings& settings, const std::atomic<bool>& stop,

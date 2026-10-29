@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -24,6 +25,7 @@
 #include "TestTempFolder.h"
 
 using openblack::server::ChecksumLine;
+using openblack::server::GraphicsObjectCount;
 using openblack::server::k_RoomSeed;
 using openblack::server::ParseChecksumLine;
 using openblack::server::RoomStart;
@@ -165,4 +167,18 @@ TEST(DedicatedServer, TheServerWritesNothingInTheProfileFolderItIsGiven)
 		files.push_back(entry.path());
 	}
 	EXPECT_TRUE(files.empty());
+}
+
+TEST(DedicatedServer, TheServerMakesNoGraphicsObjects)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	std::vector<uint32_t> objects;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&objects](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    objects.push_back(GraphicsObjectCount());
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	ASSERT_FALSE(objects.empty());
+	EXPECT_TRUE(std::ranges::all_of(objects, [](uint32_t count) { return count == 0; }));
 }
