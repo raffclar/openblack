@@ -122,6 +122,8 @@ class Game:
     until_end: bool = False
     # The turn at which the world of the last observer parts on purpose and comes back (None: no part on purpose)
     part_observer_at: object = None
+    # The time limit of the network game in minutes (None: the game's default of 30 minutes, 18000 turns)
+    time_limit: object = None
 
     @property
     def name(self):
@@ -188,6 +190,8 @@ def net_check_arguments(game, out, bin_folder=None, config="RelWithDebInfo", ext
         arguments.append("--until-end")
     if game.part_observer_at is not None:
         arguments += ["--part-client", str(game.part_client), "--part-second-at", str(game.part_observer_at)]
+    if game.time_limit is not None:
+        arguments += ["--time-limit", str(game.time_limit)]
     arguments += list(extra)
     return arguments
 
@@ -213,6 +217,8 @@ def repro_line(game, bin_folder=None, config="RelWithDebInfo", inject=None):
         parts += ["--inject-part", str(inject)]
     if game.part_observer_at is not None:
         parts += ["--part-observer-at", str(game.part_observer_at)]
+    if game.time_limit is not None:
+        parts += ["--time-limit", str(game.time_limit)]
     return " ".join(f'"{part}"' if " " in part else part for part in parts)
 
 
@@ -555,6 +561,9 @@ def build_parser():
                              "come back in step (the turn comes from --shuffle-seed and the game)")
     parser.add_argument("--part-observer-at", type=int,
                         help="as --part-observer, but at this turn in each game")
+    parser.add_argument("--time-limit", type=int,
+                        help="the time limit of each network game in minutes (net_check's --time-limit). The default "
+                             "of 30 minutes decides a game after 18000 turns")
     parser.add_argument("--config", default="RelWithDebInfo")
     parser.add_argument("--bin", help="the folder with openblack and openblack-server")
     parser.add_argument("--out", default=DEFAULT_OUT, help="the folder of the runs (a folder of the date goes in it)")
@@ -603,6 +612,8 @@ def games_of(options, parser=None):
         problems.append("--part-observer needs a desktop observer: --observers")
     if part_at is not None and not 1 <= part_at < options.turns:
         problems.append("--part-observer-at takes a turn after 0 and before --turns")
+    if getattr(options, "time_limit", None) is not None and options.time_limit < 1:
+        problems.append("--time-limit takes 1 minute or more")
     if problems:
         raise ValueError("; ".join(problems))
     games = plan(lands, parse_list(options.seeds, int), parse_list(options.ai_seeds, int), modes, options.observers,
@@ -614,6 +625,9 @@ def games_of(options, parser=None):
         # One game of the run has the web client (one Chrome), the first one that has computer gods only
         first = next((i for i, game in enumerate(games) if game.mode == "all-computer"), 0)
         games[first] = dataclasses.replace(games[first], web_client=True)
+    time_limit = getattr(options, "time_limit", None)
+    if time_limit is not None:
+        games = [dataclasses.replace(game, time_limit=time_limit) for game in games]
     if part_at is not None:
         games = [dataclasses.replace(game, part_observer_at=part_at) for game in games]
     elif parts:

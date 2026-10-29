@@ -534,6 +534,16 @@ class ObserverPart(unittest.TestCase):
         self.assertEqual(lines[1], "ring32       PART  turns 2000 first part 212 parts ComputerPlayers observer part 150")
         self.assertTrue(lines[2].startswith("mpm_4p_1     ERROR"))
 
+    def test_the_time_limit_goes_to_net_check_and_to_the_repro_line(self):
+        games = ai_soak.games_of(options(lands="mpm_2p_1", turns=20000, time_limit=40))
+        arguments = ai_soak.net_check_arguments(games[0], "out")
+        self.assertEqual(arguments[arguments.index("--time-limit") + 1], "40")
+        parsed = ai_soak.build_parser().parse_args(ai_soak.repro_line(games[0]).split()[2:])
+        self.assertEqual(ai_soak.games_of(parsed), games)
+        self.assertNotIn("--time-limit", ai_soak.net_check_arguments(ai_soak.games_of(options())[0], "out"))
+        with self.assertRaises(ValueError):
+            ai_soak.games_of(options(time_limit=0))
+
     def test_the_injected_part_does_not_go_with_the_part_of_an_observer(self):
         self.assertEqual(ai_soak.main(["--inject-part", "100", "--part-observer", "--dry-run"]), 2)
 

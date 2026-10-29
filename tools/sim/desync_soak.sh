@@ -7,7 +7,8 @@
 #   bash tools/sim/desync_soak.sh local [options]   soak on this computer (the PC or the Mac) with a build that exists
 #   bash tools/sim/desync_soak.sh maps  [options]   the soak of every map for the merge train: as mac, with every land
 #                                                   of ai_soak.py (--maps), all computer gods, 2 observers, 20000 turns,
-#                                                   seed 1, AI seed 1, the last observer parts on purpose at a random
+#                                                   seed 1, AI seed 1, a time limit of 40 minutes (so that the game
+#                                                   plays all its turns), the last observer parts on purpose at a random
 #                                                   turn and comes back, no server_check; it prints one line for each
 #                                                   land at the end (same or PART, turns, first different turn, parts)
 #   bash tools/sim/desync_soak.sh cross --out DAY --pc-bin DIR
@@ -24,6 +25,8 @@
 #   --ai-seeds A        the AI seeds (default 1,2; 0 is the built-in personalities)
 #   --modes M           all-computer, all-but-one or both, divided by commas (default all-computer; all-but-one has one
 #                       human client with a still hand)
+#   --time-limit M      the time limit of each network game in minutes (default the game's 30 minutes, which decides
+#                       the game after 18000 turns)
 #   --maps              every land of ai_soak.py (its --maps), in place of --lands
 #   --part-observer     the world of the last observer of each game parts on purpose at a random turn (from the shuffle
 #                       seed) and must come back in step from the server's world
@@ -69,6 +72,7 @@ SHUFFLE=$((10#$(date +%j)))
 OUT=""
 DATE=$(date +%Y-%m-%d)
 PART_OBSERVER=""
+TIME_LIMIT=""
 LANDS_OPTION=(--lands "$LANDS")
 if [ "$MODE" = maps ]; then
 	# The soak of every map: one game of each land, long, with a part on purpose of an observer
@@ -78,6 +82,7 @@ if [ "$MODE" = maps ]; then
 	AI_SEEDS=1
 	SERVER_TURNS=0
 	PART_OBSERVER=1
+	TIME_LIMIT=40
 	LANDS_OPTION=(--maps)
 fi
 while [ $# -gt 0 ]; do
@@ -89,6 +94,7 @@ while [ $# -gt 0 ]; do
 	--lands) LANDS=$2; LANDS_OPTION=(--lands "$LANDS"); shift 2 ;;
 	--part-observer) PART_OBSERVER=1; shift ;;
 	--maps) LANDS_OPTION=(--maps); shift ;;
+	--time-limit) TIME_LIMIT=$2; shift 2 ;;
 	--seeds) SEEDS=$2; shift 2 ;;
 	--ai-seeds) AI_SEEDS=$2; shift 2 ;;
 	--modes) MODES=$2; shift 2 ;;
@@ -108,6 +114,8 @@ PASS=(--hours "$HOURS" "${LANDS_OPTION[@]}" --seeds "$SEEDS" --ai-seeds "$AI_SEE
 [ -z "$PART_OBSERVER" ] || PASS+=(--part-observer)
 PART_ARGS=()
 [ -z "$PART_OBSERVER" ] || PART_ARGS=(--part-observer)
+[ -z "$TIME_LIMIT" ] || PASS+=(--time-limit "$TIME_LIMIT")
+[ -z "$TIME_LIMIT" ] || PART_ARGS+=(--time-limit "$TIME_LIMIT")
 MINUTES=$(awk -v h="$HOURS" 'BEGIN{printf "%d", h*60}')
 
 # The land arguments of server_check for a land of ai_soak.py
