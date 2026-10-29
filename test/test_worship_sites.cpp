@@ -51,9 +51,11 @@ namespace ws = openblack::ecs::worship_site;
 namespace
 {
 
-/// The place point and altar point of the site's model, as the game's model has them
-constexpr glm::vec3 k_PlacePoint {18.179f, 0.0f, -39.397f};
+/// The gate point and altar point of the site's model, as the game's model has them
+constexpr glm::vec3 k_GatePoint {18.179f, 0.0f, -39.397f};
 constexpr glm::vec3 k_AltarPoint {11.910f, 0.0f, -25.560f};
+/// The point of the temple's model that the places are judged by, as the game's models have it
+constexpr glm::vec3 k_TemplePoint {-2.9353f, -0.2926f, -23.9176f};
 
 class FakeWorld final: public ws::WorldInterface
 {
@@ -66,15 +68,19 @@ public:
 	[[nodiscard]] int32_t LandNumber() const override { return landNumber; }
 	[[nodiscard]] std::optional<glm::vec3> SitePoint(uint32_t index) const override
 	{
-		if (index == ws::k_PlacePoint)
+		if (index == ws::k_GatePoint)
 		{
-			return k_PlacePoint;
+			return k_GatePoint;
 		}
 		if (index == ws::k_AltarPoint)
 		{
 			return k_AltarPoint;
 		}
 		return std::nullopt;
+	}
+	[[nodiscard]] std::optional<glm::vec3> TemplePoint(entt::entity /*temple*/, uint32_t index) const override
+	{
+		return index == ws::k_TemplePlacePoint ? std::optional(k_TemplePoint) : std::nullopt;
 	}
 	[[nodiscard]] entt::id_type SiteMesh(entt::entity temple) override
 	{
@@ -245,7 +251,7 @@ TEST(WorshipSitePlaces, AVillagerAtTheGateTouchesTheSiteMeasuredFromItsMiddle)
 {
 	// The gate is about 14.4 metres from the middle, inside the reach of the site and the radius of the villager
 	const auto centre = ws::CentreOnLand({0.0f, 0.0f, 0.0f}, glm::mat3(1.0f), 1.0f);
-	EXPECT_LE(ws::EdgeGap(centre, {k_PlacePoint.x, k_PlacePoint.z}, 0.5f), 0.0f);
+	EXPECT_LE(ws::EdgeGap(centre, {k_GatePoint.x, k_GatePoint.z}, 0.5f), 0.0f);
 	// Far from the site, the gap is the distance from the middle less the reach and the radius
 	EXPECT_NEAR(ws::EdgeGap(centre, centre + glm::vec2(30.0f, 0.0f), 1.0f), 15.0f, 0.05f);
 }
@@ -258,12 +264,12 @@ TEST(WorshipSitePlaces, TheDistanceFromASiteIsFromItsMiddleNotFromWhereItStands)
 	registry.Assign<Transform>(site, glm::vec3(1000.0f, 0.0f, 1000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<WorshipSite>(site);
 	const auto villager = registry.Create();
-	registry.Assign<Transform>(villager, glm::vec3(1000.0f + k_PlacePoint.x, 0.0f, 1000.0f + k_PlacePoint.z), glm::mat3(1.0f),
+	registry.Assign<Transform>(villager, glm::vec3(1000.0f + k_GatePoint.x, 0.0f, 1000.0f + k_GatePoint.z), glm::mat3(1.0f),
 	                           glm::vec3(1.0f));
 	// A villager without a model has no radius: it stands less than half a metre from the reach of the site
 	const auto centre = ws::CentreOnLand({1000.0f, 0.0f, 1000.0f}, glm::mat3(1.0f), 1.0f);
 	const auto gap = object_measures::DistanceFromObject(registry, site, villager);
-	EXPECT_EQ(gap, ws::EdgeGap(centre, {1000.0f + k_PlacePoint.x, 1000.0f + k_PlacePoint.z}, 0.0f));
+	EXPECT_EQ(gap, ws::EdgeGap(centre, {1000.0f + k_GatePoint.x, 1000.0f + k_GatePoint.z}, 0.0f));
 	EXPECT_LT(gap, 0.5f);
 	// A thing of another kind measures from where it stands, about 43 metres away
 	const auto other = registry.Create();
@@ -284,19 +290,36 @@ TEST(WorshipSitePlaces, AFishFarmMeasuresWithItsFixedRadiusWhateverItsModel)
 	EXPECT_NEAR(object_measures::DistanceFromObject(registry, farm, villager), 15.0f, 0.05f);
 }
 
+TEST(WorshipSitePlaces, EachPlaceIsJudgedByTheTemplesPointTurnedToThePlace)
+{
+	// The share of a turn of the place is added to the temple's own turn, and the point is scaled with the temple
+	const glm::vec2 temple {100.0f, 200.0f};
+	for (uint32_t place = 0; place < ws::k_Places; ++place)
+	{
+		const auto judged = ws::PlaceJudgePoint(temple, 1.0f, 2.0f, place, k_TemplePoint);
+		const auto expected = ws::TurnedPoint(temple, ws::PlaceFacing(1.0f, place), k_TemplePoint * 2.0f);
+		EXPECT_NEAR(judged.x, expected.x, 1e-3f);
+		EXPECT_NEAR(judged.y, expected.y, 1e-3f);
+	}
+	// A temple with no turn has its first place judged by the point itself
+	const auto first = ws::PlaceJudgePoint(temple, 0.0f, 1.0f, 0, k_TemplePoint);
+	EXPECT_EQ(first, temple + glm::vec2(k_TemplePoint.x, k_TemplePoint.z));
+}
+
 TEST(WorshipSitePlaces, TheFreePlaceNearestTheSpotIsChosen)
 {
 	std::array<bool, ws::k_Places> taken {};
 	const glm::vec2 temple {0.0f, 0.0f};
-	// Right where place 2's point lies
-	const auto atPlaceTwo = ws::TurnedPoint(temple, ws::PlaceFacing(0.0f, 2), k_PlacePoint);
-	EXPECT_EQ(ws::NearestFreePlace(taken, temple, k_PlacePoint, atPlaceTwo), 2u);
+	constexpr float k_Facing = 2.0f;
+	// Far out past where place 2's point lies
+	const auto atPlaceTwo = (ws::PlaceJudgePoint(temple, k_Facing, 1.0f, 2, k_TemplePoint) - temple) * 10.0f;
+	EXPECT_EQ(ws::NearestFreePlace(taken, temple, k_Facing, 1.0f, k_TemplePoint, atPlaceTwo), 2u);
 	taken.at(2) = true;
-	const auto next = ws::NearestFreePlace(taken, temple, k_PlacePoint, atPlaceTwo);
+	const auto next = ws::NearestFreePlace(taken, temple, k_Facing, 1.0f, k_TemplePoint, atPlaceTwo);
 	ASSERT_TRUE(next.has_value());
 	EXPECT_TRUE(*next == 1u || *next == 3u);
 	taken.fill(true);
-	EXPECT_FALSE(ws::NearestFreePlace(taken, temple, k_PlacePoint, atPlaceTwo).has_value());
+	EXPECT_FALSE(ws::NearestFreePlace(taken, temple, k_Facing, 1.0f, k_TemplePoint, atPlaceTwo).has_value());
 }
 
 TEST(WorshipSitePlaces, ATownMayHaveASiteOffTheFirstLandWithPeopleAndNoScriptStoppingIt)
@@ -349,15 +372,40 @@ TEST(WorshipSiteSystem, AStandingTempleGivesItsPlayersTownsTheirTribesSitesToBui
 TEST(WorshipSiteSystem, ASiteTakesThePlaceNearestItsTribesNearestTown)
 {
 	Fixture f;
-	// The nearest Norse town to the temple stands where place 4 points
-	const auto placeFour = ws::TurnedPoint({0.0f, 0.0f}, ws::PlaceFacing(0.0f, 4), k_PlacePoint) * 3.0f;
+	// The nearest Norse town to the temple stands far out past where place 4 is judged, with the temple turned
+	const auto placeFour = ws::PlaceJudgePoint({0.0f, 0.0f}, 1.0f, 1.0f, 4, k_TemplePoint) * 10.0f;
 	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {placeFour.x, 0.0f, placeFour.y});
 	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
-	// Turned, the temple's places are still judged as if it faced the first way; the site faces round from the temple
 	f.system->AddTemple(temple, 1.0f, true);
 	const auto site = f.registry.Get<const CitadelWorship>(temple).sites.at(4);
 	ASSERT_TRUE(site != entt::null);
 	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipSite>(site).facing, ws::PlaceFacing(1.0f, 4));
+}
+
+TEST(WorshipSiteSystem, OnTheSecondLandTheNorseSiteTakesTheFirstPlaceAndTheIndianSiteTheNext)
+{
+	// The player's temple, its Norse town, and the Indian towns of the second land
+	Fixture f;
+	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {3231.53f, 0.0f, 3396.45f});
+	const auto won = f.Town(10, PlayerNames::PLAYER_ONE, Tribe::INDIAN, {2761.49f, 0.0f, 3102.94f});
+	f.Town(12, PlayerNames::NEUTRAL, Tribe::INDIAN, {2862.58f, 0.0f, 3448.27f});
+	const glm::vec2 templeAt {3361.26f, 3241.85f};
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE, {templeAt.x, 0.0f, templeAt.y});
+	f.system->AddTemple(temple, 4.254f, true);
+
+	const auto& sites = f.registry.Get<const CitadelWorship>(temple).sites;
+	ASSERT_TRUE(sites.at(0) != entt::null);
+	ASSERT_TRUE(sites.at(1) != entt::null);
+	EXPECT_EQ(f.registry.Get<const WorshipSite>(sites.at(0)).tribe, Tribe::NORSE);
+	// The Indian site is judged from the Indian town nearest the temple, of any player. The first place is the nearest,
+	// but the Norse site has it.
+	const auto& indian = f.registry.Get<const WorshipSite>(sites.at(1));
+	EXPECT_EQ(indian.tribe, Tribe::INDIAN);
+	EXPECT_EQ(f.registry.Get<const components::Town>(won).worshipSite, sites.at(1));
+	// Its altar stands where the scripts of the second land look for the site's altar
+	const auto& altar = f.registry.Get<const Transform>(indian.altar).position;
+	EXPECT_NEAR(altar.x, 3343.191f, 0.01f);
+	EXPECT_NEAR(altar.z, 3220.2014f, 0.01f);
 }
 
 TEST(WorshipSiteSystem, NoSitesOnTheFirstLandNorForEmptyTownsNorForATempleStillToBeBuilt)
@@ -660,7 +708,7 @@ TEST(WorshipSiteSystem, ATownWithAStoragePitIsLinkedToItsSiteByAFootpath)
 	ASSERT_TRUE(norse != entt::null);
 	ASSERT_TRUE(f.registry.AllOf<FootpathLink>(norse));
 	// Its end is the site's gate
-	const auto gate = ws::TurnedPoint({0.0f, 0.0f}, f.registry.Get<const WorshipSite>(norse).facing, k_PlacePoint);
+	const auto gate = ws::TurnedPoint({0.0f, 0.0f}, f.registry.Get<const WorshipSite>(norse).facing, k_GatePoint);
 	EXPECT_NEAR(f.registry.Get<const FootpathLink>(norse).position.x, gate.x, 1e-4f);
 	// The Celtic town has no pit, so its site has no link
 	for (const auto site : f.registry.Get<const CitadelWorship>(temple).sites)
