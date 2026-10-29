@@ -23,6 +23,7 @@
 #include "3D/BlockTexture.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/SharedIndexLists.h"
+#include "Graphics/UploadMode.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -141,6 +142,9 @@ private:
 
 	/// The blocks whose textures were painted again with no footprints since the footprints last caught up
 	std::vector<RepaintedBlock> _repaintedBlocks;
+	/// With data only, as on the dedicated server, the land keeps the sizes of its maps and textures, and it makes no
+	/// texture, no vertex buffer and no painted block on the graphics device
+	graphics::UploadMode _uploads {graphics::UploadMode::Device};
 	glm::mat4 _proj;
 	glm::mat4 _view;
 	glm::u16vec2 _extentIndexMin;

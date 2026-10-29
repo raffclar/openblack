@@ -21,6 +21,7 @@
 #include "Creature/BonusCreatures.h"
 #include "Graphics/DetailLevel.h"
 #include "Graphics/LandDetail.h"
+#include "Graphics/UploadMode.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack
@@ -140,6 +141,9 @@ struct EngineConfig
 	/// The dedicated server: it has no audio device, and all of its sounds go to the audio manager that plays nothing. It
 	/// runs its frames with no window.
 	bool dedicatedServer {false};
+	/// What the resource loaders make: the data and the objects on the graphics device, or the data only for a world with
+	/// no device
+	graphics::UploadMode resourceUploads {graphics::UploadMode::Device};
 
 	float timeOfDay {12.0f};
 	float smallBumpMapStrength {1.0f};

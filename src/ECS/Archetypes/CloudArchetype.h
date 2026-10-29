@@ -23,6 +23,9 @@ class CloudArchetype
 public:
 	/// One of the sky's clouds, as the clouds of a land are laid out
 	static entt::entity Create(const clouds::Layout& layout);
+	/// Removes the clouds of the last land and makes the sky's clouds of a new land. The layout comes from the numbers
+	/// of the C runtime. Every computer makes these clouds, but only the frames of a computer that draws move them.
+	static void CreateSky();
 	CloudArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

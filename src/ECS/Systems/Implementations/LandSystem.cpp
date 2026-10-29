@@ -47,6 +47,7 @@
 #include "Common/MainThreadQueue.h"
 #include "Common/StringUtils.h"
 #include "Debug/TestbedDispenserGrid.h"
+#include "ECS/Archetypes/CloudArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Mesh.h"
@@ -1100,7 +1101,11 @@ void LandSystem::SetUpLandscape()
 	auto& sky = Locator::skySystem::value();
 	sky.GetClock().Reset();
 	sky.SetTime(sky.GetClock().GetScriptTime());
-	Locator::cloudSystem::value().Reset();
+	archetypes::CloudArchetype::CreateSky();
+	if (Locator::cloudSystem::has_value())
+	{
+		Locator::cloudSystem::value().Reset();
+	}
 
 	// Before the land script runs, the land has the player of each of the seven god slots and the neutral player, in the
 	// order of their numbers. A slot that nobody plays has its player too, so the scripts and the turns find it.
