@@ -28,7 +28,9 @@ than its input expects.
 With --hold-creature the hand of that client holds its god's creature through the inspector once the client compared
 --hold-after turns: the camera looks at the creature, the pointer goes to a point of its body that the interface picks,
 the hand holds and strokes it, lets go, clicks it for the leash and leads it with a tap on the land. The creature walks,
-so a recorded input cannot find it. NET_CHECK_DEBUG=1 prints each try of the pointer.
+so a recorded input cannot find it. NET_CHECK_DEBUG=1 prints each try of the pointer. The information box of the land
+takes every press of the buttons while it shows, so the hand closes it with the Escape key first. --hold-after can be
+any turn: the log tells the hundreds, the inspector tells the last turns.
 
 With --slot-fight SECONDS the first client sends the fight cheat once it compared --hold-after turns: at the turn, the
 creature of its god fights the nearest creature. Then the fight autopilot of each client fights for its own god with the
@@ -519,11 +521,49 @@ def chat_came_to(received, god, text):
     return [any(sender == god and line == text for _, sender, line in lines) for lines in received]
 
 
+def client_turn(pid):
+    """The game turn that a client has reached, through the inspector; None when the inspector does not tell it"""
+    state = inspector_call(pid, "game.state", {})
+    turn = state.get("turn") if isinstance(state, dict) else None
+    return turn if isinstance(turn, int) else None
+
+
+def reached_turn(log, pid, turns, turn_of=None):
+    """Whether a client has reached a game turn, whatever the turn is. The log of the client tells the compared turns
+    each 100 turns, so it answers for the whole hundreds at once and the inspector tells the last turns. The turns of
+    the network game and of the client are the same count."""
+    turn_of = turn_of or client_turn
+    hundreds = turns - turns % 100
+    if hundreds > 0 and not lines_with(log, [f"Network game: {hundreds} turns compared"]):
+        return False
+    if turns == hundreds:
+        return True
+    turn = turn_of(pid)
+    return turn is not None and turn >= turns
+
+
+def close_land_info_box(pid, call=None, wait=time.sleep):
+    """Closes the information box of the land when it shows, with the Escape key as Go! does. The box takes every press
+    of the buttons while it shows, so the hand cannot hold anything before it is closed. Whether the box was open."""
+    call = call or inspector_call
+    for _ in range(3):
+        windows = items_of(call(pid, "gui.windows", {}))
+        if not any(window.get("name") == "land_info_box" and window.get("open") for window in windows):
+            return _ > 0
+        call(pid, "input.key", {"params": {"key": "Escape", "how": "press"}})
+        wait(0.5)
+        call(pid, "input.key", {"params": {"key": "Escape", "how": "release"}})
+        wait(1.0)
+    return True
+
+
 def hold_creature(pid, near, slaps=0):
     """The hand of a client holds the creature nearest a point, strokes it and lets go; then a click puts the leash on
     and a tap on the land leads the creature there. The camera looks at the creature first, and the pointer goes to a
     pixel where the interface picks the creature."""
     x, z = (float(value) for value in near.split(","))
+    if close_land_info_box(pid):
+        print("hold: closed the information box of the land")
     found = inspector_call(pid, "objects.find", {"params": {"kind": "Creature"}, "near": [x, z], "radius": 600,
                                                 "limit": 1})
     items = found.get("items", []) if isinstance(found, dict) else []
@@ -1834,19 +1874,17 @@ def main():
                     say_in_chat(clients[index].pid, text)
                     said.add(number)
             for index, near in holds.items():
-                if index not in held and clients[index].poll() is None and lines_with(
-                        os.path.join(client_dirs[index], "client.log"),
-                        [f"Network game: {options.hold_after} turns compared"]):
+                if index not in held and clients[index].poll() is None and reached_turn(
+                        os.path.join(client_dirs[index], "client.log"), clients[index].pid, options.hold_after):
                     hold_creature(clients[index].pid, near, options.hold_slaps)
                     held.add(index)
             slot = (options.slot_miracle or 0) - 1
-            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
-                    os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
+            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and reached_turn(
+                    os.path.join(client_dirs[slot], "client.log"), clients[slot].pid, options.hold_after)):
                 miracle_done = slot_miracle(clients[slot].pid, slot)
             if (options.slot_fight and fight_done is None and len(clients) == 2
-                    and all(client.poll() is None for client in clients) and lines_with(
-                        os.path.join(client_dirs[0], "client.log"),
-                        [f"Network game: {options.hold_after} turns compared"])):
+                    and all(client.poll() is None for client in clients) and reached_turn(
+                        os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
                 fight_done = slot_fight([client.pid for client in clients], options.slot_fight)
             for index, client in enumerate(clients):
                 camera = client_cameras[index]
@@ -1864,8 +1902,8 @@ def main():
                     desktop_leash_step(leashes[number], done, clients[index].pid,
                                        os.path.join(client_dirs[index], "client.log"))
             giver = (options.give or 0) - 1
-            if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None and lines_with(
-                    os.path.join(client_dirs[giver], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
+            if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None and reached_turn(
+                    os.path.join(client_dirs[giver], "client.log"), clients[giver].pid, options.hold_after)):
                 give_done = give_to_creature(clients[giver].pid, os.path.join(client_dirs[giver], "client.log"))
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
