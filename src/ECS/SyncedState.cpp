@@ -74,8 +74,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBlend", .marker = ""},
-    // The storm's swirl and the trail of a flock are effects of each computer. Each computer gives them its own
-    // numbers, which the turns use only to find the effect again.
+    // The storm's swirl and the trail of a flock are effects of each computer. The simulation gives the swirl its
+    // number, and each computer gives the trail its own number. The turns use these numbers only to find the effect.
     {.component = "Spell", .field = "castEffect", .marker = ""},
     {.component = "FlockSpell", .field = "castEffect", .marker = ""},
     // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
@@ -127,9 +127,11 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The particle effects that the frames step
     {.component = "Vortex", .field = "beforeLandEffect", .marker = ""},
     {.component = "Vortex", .field = "afterLandEffect", .marker = ""},
-    // The particle effects of a vortex and of a script's spot, by the numbers that the particles of this computer gave them
+    // The particle effects of a vortex, by the numbers that the particles of this computer gave them
     {.component = "Vortex", .field = "lightMapEffect", .marker = ""},
     {.component = "Vortex", .field = "objectMoverEffect", .marker = ""},
+    // The particle effect of a script's spot. The simulation gives the number, but a game saved before has the number
+    // of the particles.
     {.component = "ScriptSpotVisual", .field = "effect", .marker = ""},
     // The town totems ease to their shares by the computer's clock, as in the game
     {.component = "VillageTotem", .field = "ease", .marker = ""},
@@ -213,9 +215,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The number of a miracle's particle effect: each computer numbers its effects, and makes more of them for its own
     // hand
     {.component = "Spell", .field = "effect", .marker = ""},
-    // The numbers of other effects that the turns make, as the particles of this computer numbered them. The frames make
-    // effects of their own, such as the hand's gesture trails, which take numbers too. The turns use a number only to
-    // find their effect on this computer.
+    // The numbers of other effects that the turns make. The simulation gives these numbers now, and the particles of
+    // this computer show each effect under its number. A game saved before has the numbers of the particles. The turns
+    // use a number only to find their effect on this computer.
     {.component = "SpellDispenser", .field = "effect", .marker = ""},
     {.component = "TownArtefact", .field = "effect", .marker = ""},
     {.component = "MagicShield", .field = "effect", .marker = ""},
@@ -224,8 +226,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ResourcePile", .field = "speedUpVisual", .marker = ""},
     {.component = "CreatureSwap", .field = "beam", .marker = ""},
     {.component = "CreatureGestureDrawing", .field = "chain", .marker = ""},
-    // The number of the spot visual that a temple's heart fires its beams from, as the particles of this computer
-    // numbered it
+    // The number of the spot visual that a temple's heart fires its beams from
     {.component = "Temple", .field = "beamSource", .marker = ""},
     // The same for the glow and the beams of a temple that the enemy destroys, and the sound loops of its destruction,
     // which only a computer with audio plays. The turns read them only to stop the sounds and to show the glow and the
@@ -238,7 +239,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},
     {.component = "ScriptHighlight", .field = "yAngle", .marker = ""},
     {.component = "ScriptHighlight", .field = "sparks", .marker = ""},
-    // The particle effects of a highlight, by the numbers that the particles of this computer gave them
+    // The particle effects of a highlight, by their numbers
     {.component = "ScriptHighlight", .field = "glints", .marker = ""},
     {.component = "ScriptHighlight", .field = "activeEffect", .marker = ""},
     {.component = "ScriptHighlight", .field = "onScreen", .marker = ""},

@@ -27,7 +27,7 @@
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -233,18 +233,21 @@ bool MagicSystem::StartCreatureCast(entt::entity creature, MagicType type, std::
 	}
 	_creatureCasts.insert_or_assign(creature, spell);
 	// Casting from above, a beam reaches from each of its hands to the point it casts from
-	if (magic::IsCreatureCastFromAbove(info, type) && Locator::particleSystem::has_value())
+	if (magic::IsCreatureCastFromAbove(info, type) && Locator::effectRequestSystem::has_value())
 	{
 		if (const auto bones = HandBonesOf(creature))
 		{
-			auto& particles = Locator::particleSystem::value();
+			auto& effects = Locator::effectRequestSystem::value();
 			const float size = k_BeamSizeLeast + (k_BeamSizePerSize * ShownSize(body));
+			const auto beamFrom = [&](glm::vec3 bone) {
+				return effects.Start(
+				    {.type = SpotVisualType::MagicBeam, .position = bone, .magnitude = size, .owner = creature});
+			};
 			auto& beams = _creatureBeams[creature];
-			beams = {particles.StartSpotVisual(SpotVisualType::MagicBeam, bones->first, std::nullopt, creature, size),
-			         particles.StartSpotVisual(SpotVisualType::MagicBeam, bones->second, std::nullopt, creature, size)};
+			beams = {beamFrom(bones->first), beamFrom(bones->second)};
 			for (const auto beam : beams)
 			{
-				particles.AddTargetPosition(beam, hands);
+				effects.AddTargetPosition(beam, hands);
 			}
 		}
 	}
@@ -264,11 +267,11 @@ void MagicSystem::ReleaseCreatureCast(entt::entity creature)
 	// Its beams from casting from above go
 	if (const auto beams = _creatureBeams.find(creature); beams != _creatureBeams.end())
 	{
-		if (Locator::particleSystem::has_value())
+		if (Locator::effectRequestSystem::has_value())
 		{
 			for (const auto beam : beams->second)
 			{
-				Locator::particleSystem::value().CloseDown(beam);
+				Locator::effectRequestSystem::value().Stop(beam);
 			}
 		}
 		_creatureBeams.erase(beams);
@@ -299,15 +302,15 @@ void MagicSystem::UpdateCreatureCast(Spell& spell)
 
 void MagicSystem::KeepCreatureBeams()
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		_creatureBeams.clear();
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& effects = Locator::effectRequestSystem::value();
 	// Each turn the beams are moved back onto the creature's hands, until they have gone
 	std::erase_if(_creatureBeams, [&](auto& entry) {
-		const bool running = std::ranges::any_of(entry.second, [&](auto beam) { return particles.IsRunning(beam); });
+		const bool running = std::ranges::any_of(entry.second, [&](auto beam) { return effects.IsRunning(beam); });
 		if (!Entities().Valid(entry.first) || !running)
 		{
 			return true;
@@ -317,8 +320,8 @@ void MagicSystem::KeepCreatureBeams()
 		{
 			return false;
 		}
-		particles.SetOrigin(entry.second[0], bones->first);
-		particles.SetOrigin(entry.second[1], bones->second);
+		effects.Move(entry.second[0], bones->first);
+		effects.Move(entry.second[1], bones->second);
 		return false;
 	});
 }

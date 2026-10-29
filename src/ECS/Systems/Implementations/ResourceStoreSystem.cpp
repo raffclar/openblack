@@ -74,8 +74,8 @@
 #include "ECS/StoreRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -976,10 +976,10 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 	if (speedUp && type == ResourceType::Food)
 	{
 		pile.speedUp = true;
-		if (Locator::particleSystem::has_value())
+		if (Locator::effectRequestSystem::has_value())
 		{
-			pile.speedUpVisual =
-			    Locator::particleSystem::value().StartSpotVisual(SpotVisualType::PilefoodSpeedup, point, -1, created, 1.0f);
+			pile.speedUpVisual = Locator::effectRequestSystem::value().Start(
+			    {.type = SpotVisualType::PilefoodSpeedup, .position = point, .turns = -1, .owner = created});
 		}
 	}
 	// The people come to look at it: a new free pile always asks for the reaction of its kind

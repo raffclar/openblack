@@ -14,6 +14,8 @@
 
 #include <algorithm>
 #include <numbers>
+#include <optional>
+#include <span>
 #include <string>
 #include <utility>
 
@@ -201,6 +203,14 @@ Json openblack::inspector::BeliefSummary(const ecs::systems::ParticleSystemInter
 	return {{"count", seen.count}, {"recent", std::move(recent)}};
 }
 
+Json openblack::inspector::RequestSummary(std::optional<ecs::systems::EffectHandle> next,
+                                          std::span<const ParticleEffectInfo> effects)
+{
+	const auto requested = std::ranges::count_if(
+	    effects, [](const ParticleEffectInfo& effect) { return effect.id >= ecs::systems::k_FirstEffectHandle; });
+	return {{"nextNumber", next.has_value() ? Json(*next) : Json(nullptr)}, {"running", requested}};
+}
+
 ParticlesProvider::ParticlesProvider(ParticleSources sources)
     : _sources(std::move(sources))
 {
@@ -242,6 +252,12 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	     .description = "The symbols of belief that rose last from things that gained belief, the newest first: place, "
 	                    "amount (the belief by ten thousand) and the player's colour. Also the count of all symbols "
 	                    "since the land started",
+	     .parameters = {},
+	     .kind = ResultKind::Object,
+	     .needsNear = false},
+	    {.name = "requests",
+	     .description = "The effects that the turns and the scripts asked for: the number that the next one gets (null "
+	                    "without the requests) and how many running effects have a number that the simulation gave",
 	     .parameters = {},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
@@ -291,6 +307,10 @@ QueryResult ParticlesProvider::Run(std::string_view query, const QueryContext& c
 	{
 		return QueryResult::Value(
 		    BeliefSummary(_sources.belief ? _sources.belief() : ecs::systems::ParticleSystemInterface::BeliefSpritesSeen {}));
+	}
+	if (query == "requests")
+	{
+		return QueryResult::Value(RequestSummary(_sources.nextRequest ? _sources.nextRequest() : std::nullopt, effects));
 	}
 	return QueryResult::Error("no query particles." + std::string(query));
 }

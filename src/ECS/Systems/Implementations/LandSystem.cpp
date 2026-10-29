@@ -80,6 +80,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -931,6 +932,11 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	Locator::teleportSystem::value().Reset();
 	Locator::gestureEvents::value().Reset();
 	Locator::particleSystem::value().Reset();
+	// The effects that the turns and the scripts ask for take numbers from the first again, on every computer
+	if (Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Reset();
+	}
 	// Nor its bodies in the physics
 	if (Locator::dynamicsSystem::has_value())
 	{

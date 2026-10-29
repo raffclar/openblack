@@ -25,9 +25,9 @@
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -109,10 +109,10 @@ bool GameRewardOpeningWorld::HasTown() const
 void GameRewardOpeningWorld::GiveTownBelief(float belief)
 {
 	// The sparkle of a magic object made, on the chest for its time
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::MagicObjectCreated, Position(),
-		                                                 reward::k_BeliefSparkleTurns, entt::null, 1.0f);
+		Locator::effectRequestSystem::value().Show(
+		    {.type = SpotVisualType::MagicObjectCreated, .position = Position(), .turns = reward::k_BeliefSparkleTurns});
 	}
 	// Given with no thing to rise from, so no belief symbol shows
 	if (Locator::reactionSystem::has_value())

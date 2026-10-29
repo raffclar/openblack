@@ -20,10 +20,10 @@
 #include "Common/GameRandom.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -31,7 +31,6 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
-#include "Particles/ParticleEffect.h"
 #include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
@@ -101,50 +100,46 @@ void GameTempleDestructionWorld::StopSound(entt::entity emitter)
 std::optional<uint32_t> GameTempleDestructionWorld::StartSpotVisual(SpotVisualType type, glm::vec3 position, int32_t turns,
                                                                     PlayerNames player)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	auto& particles = Locator::particleSystem::value();
-	const auto id = particles.StartSpotVisual(type, position, turns, entt::null, 1.0f);
-	if (id == ParticleSystemInterface::k_NoEffect)
+	auto& effects = Locator::effectRequestSystem::value();
+	const auto handle = effects.Start({.type = type, .position = position, .turns = turns, .player = static_cast<int>(player)});
+	// The turn goes on only with a visual that started
+	if (!effects.IsRunning(handle))
 	{
 		return std::nullopt;
 	}
-	particles.SetPlayer(id, static_cast<int>(player));
-	return id;
+	return handle;
 }
 
 void GameTempleDestructionWorld::FollowWithSpotVisual(uint32_t visual, entt::entity target)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddTarget(visual, target);
+		Locator::effectRequestSystem::value().AddTarget(visual, target);
 	}
 }
 
 void GameTempleDestructionWorld::SetSpotVisualMagnitude(uint32_t visual, float magnitude)
 {
-	if (!Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		return;
-	}
-	if (auto* effect = Locator::particleSystem::value().Find(visual); effect != nullptr)
-	{
-		effect->SetMagnitude(magnitude);
+		Locator::effectRequestSystem::value().SetMagnitude(visual, magnitude);
 	}
 }
 
 bool GameTempleDestructionWorld::SpotVisualRunning(uint32_t visual) const
 {
-	return Locator::particleSystem::has_value() && Locator::particleSystem::value().IsRunning(visual);
+	return Locator::effectRequestSystem::has_value() && Locator::effectRequestSystem::value().IsRunning(visual);
 }
 
 void GameTempleDestructionWorld::AddPlasma(uint32_t source, const particles::PlasmaCommand& command)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddPlasma(source, command);
+		Locator::effectRequestSystem::value().AddPlasma(source, command);
 	}
 }
 

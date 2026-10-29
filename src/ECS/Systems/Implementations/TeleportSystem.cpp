@@ -54,6 +54,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
@@ -237,14 +238,15 @@ entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, en
 	}
 	// Its swirling pool, with its hum. Its random numbers are only this computer's: the pool does not change the world.
 	// The pool moves on in the frames that draw the stone, not in the turns.
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		component.pool = particles.StartByFrame(ParticleType::TeleportVortex, position, 1.0f);
-		if (component.pool != ParticleSystemInterface::k_NoEffect)
-		{
-			particles.SetPlayer(component.pool, static_cast<int>(player));
-		}
+		component.pool = Locator::effectRequestSystem::value().Start({
+		    .type = ParticleType::TeleportVortex,
+		    .position = position,
+		    .synced = false,
+		    .step = EffectStep::Frame,
+		    .player = static_cast<int>(player),
+		});
 	}
 	// Then it shrinks to the size it keeps, which takes it out of the map's cells and puts it back in them
 	registry.Get<Transform>(stone).scale = glm::vec3(teleport::k_StoneScale);
@@ -271,9 +273,9 @@ void TeleportSystem::RemoveStone(entt::entity stone)
 			Locator::reactionSystem::value().RemoveFrom(stone);
 		}
 		// The pool goes and its hum fades away
-		if (component->pool != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+		if (component->pool != k_NoEffectHandle && Locator::effectRequestSystem::has_value())
 		{
-			Locator::particleSystem::value().Delete(component->pool);
+			Locator::effectRequestSystem::value().Remove(component->pool);
 		}
 	}
 	// Whoever was on the way to it carries on where they were going
@@ -519,11 +521,11 @@ bool TeleportSystem::DoTeleport(entt::entity stone, entt::entity living, bool fo
 		magic.ForcePayForSpell(component.spell, teleport::JumpCost(jump->saving, costPerKilometre));
 	}
 	// A flash and a sound where it leaves and where it comes out
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		particles.StartSpotVisual(SpotVisualType::VillagerTeleport, departure, std::nullopt, entt::null);
-		particles.StartSpotVisual(SpotVisualType::VillagerTeleport, arrival, std::nullopt, entt::null);
+		auto& effects = Locator::effectRequestSystem::value();
+		effects.Show({.type = SpotVisualType::VillagerTeleport, .position = departure});
+		effects.Show({.type = SpotVisualType::VillagerTeleport, .position = arrival});
 	}
 	if (registry.AllOf<Creature>(living))
 	{
