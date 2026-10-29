@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <tuple>
+
 #include <gtest/gtest.h>
 
 #include "Gui/CinemaBars.h"
@@ -118,6 +120,26 @@ TEST(CinemaBars, TheTurnsAloneFinishTheSlide)
 		}
 		EXPECT_EQ(turns, 10) << frameMs;
 	}
+}
+
+// The frames change none of the values that a save keeps, so that each computer of a network game saves the same bars
+TEST(CinemaBars, TheFramesChangeNoSavedValue)
+{
+	const auto saved = [](const CinemaBars& bars) {
+		std::tuple<bool, float, float, float> values;
+		CinemaBars::VisitSaved(bars, [&values](bool on, float timer, float transitionSeconds, float fraction) {
+			values = {on, timer, transitionSeconds, fraction};
+		});
+		return values;
+	};
+	CinemaBars bars;
+	bars.Set(true, 1.0f);
+	bars.ProcessTurn(100.0f, 1.0f);
+	const auto before = saved(bars);
+	bars.Update(16.7f, 2.0f);
+	bars.Update(16.7f, 2.0f);
+	EXPECT_EQ(saved(bars), before);
+	EXPECT_GT(bars.GetFraction(), 0.0f);
 }
 
 // A load starts the drawn bars where the bars of the turns are
