@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <Audio/AudioManagerNoOp.h>
+#include <Audio/GameSoundRequests.h>
 #include <Audio/MusicPlayer.h>
 #include <Sound/GameMusic.h>
 #include <gtest/gtest.h>
@@ -632,6 +633,7 @@ TEST(GameMusic, AFilmLeavesTheMusicAndTheScriptMusicStartsAgainAfterIt)
 {
 	MakeAudioLog();
 	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	openblack::Locator::sounds::emplace<openblack::audio::GameSoundRequests>();
 	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
 	{
 		GameMusic music;
@@ -651,6 +653,7 @@ TEST(GameMusic, AFilmLeavesTheMusicAndTheScriptMusicStartsAgainAfterIt)
 		ASSERT_EQ(audio.played.size(), 2U);
 		EXPECT_EQ(audio.played[1], audio.played[0]);
 	}
+	openblack::Locator::sounds::reset();
 	openblack::Locator::audio::reset();
 }
 
@@ -658,6 +661,7 @@ TEST(GameMusic, TheScriptsMusicHeardStartsAtThePlaceOfTheWorldsClock)
 {
 	MakeAudioLog();
 	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	openblack::Locator::sounds::emplace<openblack::audio::GameSoundRequests>();
 	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
 	{
 		GameMusic music;
@@ -689,6 +693,7 @@ TEST(GameMusic, TheScriptsMusicHeardStartsAtThePlaceOfTheWorldsClock)
 		music.ProcessTurn(inputs);
 		EXPECT_NE(music.GetPlaying(), MusicType::ScriptMissionariesVerse1);
 	}
+	openblack::Locator::sounds::reset();
 	openblack::Locator::audio::reset();
 }
 
@@ -696,6 +701,7 @@ TEST(GameMusic, AFilmThatStartsMakesTheLandsMusicStartAgain)
 {
 	MakeAudioLog();
 	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	openblack::Locator::sounds::emplace<openblack::audio::GameSoundRequests>();
 	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
 	{
 		GameMusic music;
@@ -707,5 +713,6 @@ TEST(GameMusic, AFilmThatStartsMakesTheLandsMusicStartAgain)
 		music.ProcessTurn(inputs);
 		EXPECT_EQ(audio.played.size(), 2U);
 	}
+	openblack::Locator::sounds::reset();
 	openblack::Locator::audio::reset();
 }
