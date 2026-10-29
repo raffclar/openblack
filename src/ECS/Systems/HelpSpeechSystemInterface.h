@@ -16,7 +16,7 @@
 
 #include <glm/vec3.hpp>
 
-#include "Audio/HelpSpeech.h"
+#include "Sound/HelpSpeech.h"
 
 namespace openblack::ecs::systems
 {

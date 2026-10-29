@@ -25,8 +25,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Animals/AnimalAnimation.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
 #include "ECS/Archetypes/Utils.h"
@@ -51,6 +49,8 @@
 #include "Particles/ParticleBlast.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -224,7 +224,7 @@ bool RewardSystem::Tap(entt::entity chest, PlayerNames player)
 	{
 		return false;
 	}
-	if (player == OwnPlayer() && Locator::audio::has_value())
+	if (player == OwnPlayer() && Locator::sounds::has_value())
 	{
 		audio::PlayGameSoundEffect(k_TapSound.value(), std::nullopt);
 	}
@@ -248,7 +248,7 @@ bool RewardSystem::Tap(entt::entity chest, PlayerNames player)
 	auto& pose = registry.AssignOrReplace<AnimatedStaticPose>(chest);
 	PoseOpened(0, pose.bones);
 	registry.SetDirty();
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		// The opening sounds do not start again while they play
 		audio::StartGameSoundEffect(k_OpeningSound.value(), {.voicePlayType = pack::AudioBankLoop::Once});
@@ -370,7 +370,7 @@ void RewardSystem::ProcessTurn()
 		chest.state = Reward::State::Landed;
 		chest.goesIntoMap = true;
 		chest.drawn.reset();
-		if (Locator::audio::has_value())
+		if (Locator::sounds::has_value())
 		{
 			audio::PlayGameSoundEffect(k_LandingSound.value(), std::nullopt);
 		}

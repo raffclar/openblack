@@ -15,7 +15,7 @@
 #include <MindFile.h>
 #include <gtest/gtest.h>
 
-#include "Audio/MusicMood.h"
+#include "Sound/MusicMood.h"
 
 using namespace openblack;
 using namespace openblack::music_mood;

@@ -53,12 +53,12 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameMusic.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/ScriptSoundEffect.h"
-#include "Audio/Sound.h"
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/ScriptSoundEffect.h"
+#include "Sound/SoundId.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif

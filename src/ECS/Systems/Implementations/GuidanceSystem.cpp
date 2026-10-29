@@ -21,8 +21,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/HeaderOverrides.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
@@ -57,6 +55,8 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/HeaderOverrides.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;

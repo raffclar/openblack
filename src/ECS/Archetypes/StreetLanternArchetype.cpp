@@ -13,7 +13,6 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
-#include "Audio/Sound.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/StreetLantern.h"
@@ -28,6 +27,7 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
 #include "Utils.h"
 #include "VillageLightArchetype.h"
 

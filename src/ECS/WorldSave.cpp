@@ -34,7 +34,6 @@
 
 #include "3D/CameraEdits.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "Audio/GameMusic.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
@@ -104,6 +103,7 @@
 #include "Game.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -236,9 +236,9 @@ bool LoadCamera(std::span<const uint8_t> bytes)
 /// The sounds of a world state start again on this computer: the emitters are of the computer that made the state
 void ForgetEmitters(Registry& registry)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().ForgetSavedEmitters();
+		Locator::sounds::value().ForgetSavedEmitters();
 	}
 	registry.Each<components::SoundTag>([](entt::entity, components::SoundTag& tag) { tag.emitter = entt::null; });
 }
@@ -255,9 +255,9 @@ void ForgetTempleRooms(entt::registry& registry)
 /// gets its creed powers one by one.
 void ForgetSavedSounds(Registry& registry)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().ForgetSavedEmitters();
+		Locator::sounds::value().ForgetSavedEmitters();
 	}
 	if (!Locator::soundTagSystem::has_value())
 	{

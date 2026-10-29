@@ -33,7 +33,6 @@
 
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/MusicPlayer.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -70,6 +69,7 @@
 #include "Locator.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
 #include "Video/StillPicture.h"
 #include "Video/VideoRules.h"
 #include "Windowing/WindowingInterface.h"

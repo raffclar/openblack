@@ -22,7 +22,6 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/MusicType.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/CitadelArchetype.h"
@@ -78,6 +77,7 @@
 #include "Locator.h"
 #include "Magic/VillagerReactionRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/MusicType.h"
 
 using namespace openblack;
 using namespace openblack::ecs;

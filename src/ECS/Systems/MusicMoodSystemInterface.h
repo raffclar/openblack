@@ -12,8 +12,8 @@
 #include <optional>
 #include <vector>
 
-#include "Audio/MusicMood.h"
 #include "Commands/PlayerCommands.h"
+#include "Sound/MusicMood.h"
 
 namespace openblack::ecs::systems
 {

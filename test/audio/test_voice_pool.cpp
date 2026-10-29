@@ -9,8 +9,8 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/VoiceOwner.h"
 #include "Audio/VoicePool.h"
+#include "Sound/VoiceOwner.h"
 
 using namespace openblack::audio;
 using openblack::pack::AudioBankLoop;

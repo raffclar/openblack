@@ -12,7 +12,6 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
-#include "Audio/EmitterFollow.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
@@ -20,6 +19,7 @@
 #include "ECS/Registry.h"
 #include "ECS/SoundPoint.h"
 #include "Enums.h"
+#include "Sound/EmitterFollow.h"
 
 using namespace openblack;
 using audio::Follows;

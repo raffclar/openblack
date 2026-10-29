@@ -25,9 +25,6 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
 #include "Common/GUtilsDistance.h"
@@ -59,6 +56,9 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -624,7 +624,7 @@ const virtual_influence::State* InfluenceSystem::VirtualStateOf(PlayerNames play
 
 void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime)
 {
-	if (!Locator::playerSystem::has_value() || !Locator::audio::has_value())
+	if (!Locator::playerSystem::has_value() || !Locator::sounds::has_value())
 	{
 		return;
 	}
@@ -638,7 +638,7 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	auto& virtualInfluence = registry.Get<VirtualInfluence>(*entity);
 	const auto& state = virtualInfluence.state;
 	auto& shown = virtualInfluence.shown;
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto hand = HandPosition();
 	const auto inInfluence = [this, player](const glm::vec3& point) { return PlayerRawInfluence(player, point) > 0.0f; };
 	const bool plays = hand.has_value() && state.anchor.has_value() &&

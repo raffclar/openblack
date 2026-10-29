@@ -29,9 +29,9 @@
 #include "Audio/AudioManager.h"
 #include "Audio/AudioManagerNoOp.h"
 #include "Audio/AudioPlayerInterface.h"
-#include "Audio/SilentPlayback.h"
 #include "Help/AdvisorVoices.h"
 #include "Help/DialogueText.h"
+#include "Sound/SilentPlayback.h"
 
 using namespace openblack;
 using namespace openblack::audio;

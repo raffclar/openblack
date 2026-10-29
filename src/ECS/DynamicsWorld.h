@@ -20,11 +20,11 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-#include "Audio/AudioManagerInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "Enums.h"
 #include "Physics/BodyShapes.h"
 #include "Physics/Materials.h"
+#include "Sound/SoundRequestInterface.h"
 
 namespace openblack
 {

@@ -27,8 +27,6 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/Utils.h"
@@ -54,6 +52,8 @@
 #include "Magic/MagicTables.h"
 #include "Particles/ParticleBlast.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;

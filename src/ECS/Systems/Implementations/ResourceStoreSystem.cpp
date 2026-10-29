@@ -32,8 +32,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -94,6 +92,8 @@
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -129,7 +129,7 @@ uint32_t TickMs()
 /// A sample of the in-game bank at a place, played for what owns it
 void PlayInGame(uint32_t sample, glm::vec3 position, entt::entity owner)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
 		                            {.position = position, .owner = owner});

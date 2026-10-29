@@ -26,8 +26,6 @@
 #include "3D/LowResolutionTextures.h"
 #include "3D/TempleScroll.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/MachineClock.h"
 #include "EngineConfig.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -36,6 +34,8 @@
 #include "Input/KeyRebinding.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 

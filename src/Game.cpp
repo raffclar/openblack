@@ -73,11 +73,7 @@
 #include "3D/WaterRings.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/ClipSounds.h"
 #include "Audio/GameMusic.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/HelpSpeech.h"
-#include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
@@ -90,6 +86,10 @@
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Sound/ClipSounds.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/HelpSpeech.h"
+#include "Sound/ScriptSoundEffect.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif

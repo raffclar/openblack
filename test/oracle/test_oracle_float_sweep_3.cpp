@@ -22,9 +22,9 @@
 #include "Animals/GrazerRules.h"
 #include "Animals/Zoomer.h"
 #include "Audio/AtmosAudio.h"
-#include "Audio/LipSync.h"
 #include "Audio/SoundMap.h"
 #include "OracleData.h"
+#include "Sound/LipSync.h"
 
 // The game's own functions give the data (tools/oracle/cases/float_sweep_3_cases.py). Each test compares our result
 // with every row, bit for bit, and shows the first rows that differ.

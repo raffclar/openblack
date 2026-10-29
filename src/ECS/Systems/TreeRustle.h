@@ -17,7 +17,7 @@
 
 #include <glm/vec3.hpp>
 
-#include "Audio/AnimEffectKeys.h"
+#include "Sound/AnimEffectKeys.h"
 
 namespace openblack::ecs::systems
 {

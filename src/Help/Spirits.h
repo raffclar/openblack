@@ -27,10 +27,10 @@
 #include <glm/vec3.hpp>
 
 #include "3D/SkeletalAnimation.h"
-#include "Audio/AnimEffectKeys.h"
 #include "Common/Zoomer.h"
 #include "Help/SpiritScreen.h"
 #include "Help/SpiritVoice.h"
+#include "Sound/AnimEffectKeys.h"
 
 // The two advisor spirits as pure logic: AdvisorSpiritController, the two help spirits that hold the targets (good and evil)
 // and AdvisorSpirit's motion and anim stack. Nothing here draws, plays a sound or reads the Locator: the camera, the voice

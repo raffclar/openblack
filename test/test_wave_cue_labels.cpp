@@ -18,7 +18,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/WaveCueLabels.h"
+#include "Sound/WaveCueLabels.h"
 
 using namespace openblack::audio;
 

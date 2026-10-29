@@ -19,7 +19,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/LipSync.h"
+#include "Sound/LipSync.h"
 
 using namespace openblack::audio::lip_sync;
 
