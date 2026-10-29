@@ -24,6 +24,8 @@ namespace openblack::creature_deeds
 inline constexpr uint32_t k_PutFoodInWorshipSite = 0;
 inline constexpr uint32_t k_PutFoodInStoragePit = 2;
 inline constexpr uint32_t k_PutWoodInStoragePit = 4;
+/// A scaffold that stops after it moved, which the copy makes into wood to a building site
+inline constexpr uint32_t k_DropScaffold = 6;
 inline constexpr uint32_t k_PutWoodInBuildingSite = 7;
 inline constexpr uint32_t k_PutWoodInWorkshop = 9;
 inline constexpr uint32_t k_ThrowInTheSea = 21;
