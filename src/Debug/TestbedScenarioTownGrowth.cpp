@@ -956,7 +956,7 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                "the game draws a building going up with all of it built. The hut keeps its built amount "
 	                "(the inspector's BuildProgress built is 1).",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {k_Hut}, .distance = 0.3f},
+	    .framing = {.shot = Shot::Overview, .include = {k_Hut}, .distance = 0.12f},
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f, .built = k_HutHalfBuilt}},
 	    .commands = {{.kind = Command::Kind::FillBuiltAmount, .delaySeconds = 3.0f, .object = 0}},
 	});
