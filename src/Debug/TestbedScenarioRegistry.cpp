@@ -11829,6 +11829,43 @@ void AddStoreScenarios(std::vector<Scenario>& all)
 	});
 }
 
+void AddPoisonScenarios(std::vector<Scenario>& all)
+{
+	// What the Plague's script does first: it enables the poison of the town and then of its storage pit, and later cures
+	// the town. The scenario runs those calls.
+	constexpr glm::vec2 k_Pit {-30.0f, 30.0f};
+	using Argument = ScriptArgument;
+	const auto poison = [](float delay, Argument thing, int flag) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "SET_POISONED",
+		                .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(flag)}, thing}};
+	};
+	all.push_back({
+	    .id = "objects.script_poisons_town_and_store",
+	    .name = "A script poisons a town and its storage pit",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre, a storage pit with 2000 food and 1000 wood, "
+	                   "and four villagers of the town. After one second a script poisons the town. After three seconds it "
+	                   "poisons the storage pit. After ten seconds it cures the town.",
+	    .expected = "At one second each of the four villagers is poisoned, as the inspector shows. At three seconds the "
+	                "food pile of the storage pit is poisoned and shows a pale green tint. Its wood piles keep their usual "
+	                "colour. At ten seconds the villagers are cured, but the food pile stays poisoned. Villagers who take "
+	                "food from the pit become poisoned again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit - glm::vec2 {12.0f}, k_Pit + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = 2000, .storedWood = 1000},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Pit + glm::vec2 {-6.0f, -8.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Pit + glm::vec2 {-3.0f, -9.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = k_Pit + glm::vec2 {3.0f, -9.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = k_Pit + glm::vec2 {6.0f, -8.0f}, .joinTown = true}},
+	    .commands = {poison(1.0f, {.kind = Argument::Kind::Town}, 1),
+	                 poison(2.0f, {.kind = Argument::Kind::Object, .index = 1}, 1),
+	                 poison(7.0f, {.kind = Argument::Kind::Town}, 0)},
+	});
+}
+
 void AddWorkshopScenarios(std::vector<Scenario>& all)
 {
 	constexpr glm::vec2 k_Workshop {-30.0f, 30.0f};
@@ -12035,6 +12072,7 @@ std::vector<Scenario> Build()
 	AddVillagerSizeAndReachScenarios(all);
 	AddSwayAndFrightScenarios(all);
 	AddStoreScenarios(all);
+	AddPoisonScenarios(all);
 	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
 	return all;
@@ -12095,6 +12133,7 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 		{
 		case ScriptArgument::Kind::Number:
 		case ScriptArgument::Kind::Integer:
+		case ScriptArgument::Kind::Town:
 			return true;
 		case ScriptArgument::Kind::Marker:
 		case ScriptArgument::Kind::Position:

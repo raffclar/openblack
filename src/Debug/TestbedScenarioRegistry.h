@@ -561,6 +561,8 @@ struct ScriptArgument
 		Position,
 		/// A whole number (number, made whole towards zero), as a script gives a constant such as a resource type
 		Integer,
+		/// The scenario's town of the player, as a script names a town
+		Town,
 	};
 	Kind kind {Kind::Number};
 	float number {0.0f};

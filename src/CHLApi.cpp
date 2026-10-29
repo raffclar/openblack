@@ -162,6 +162,7 @@
 #include "ECS/ReportedCamera.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
+#include "ECS/ScriptPoison.h"
 #include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
 #include "ECS/ScriptWeatherRules.h"
@@ -5639,40 +5640,97 @@ void GetObjectHandIsOver() // 160 GET_OBJECT_HAND_IS_OVER
 
 void IdPoisonedSize() // 161 ID_POISONED_SIZE
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto container = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (container == entt::null || !registry.Valid(container))
+	{
+		ScriptMessage("Thing not valid");
+		Pushf(0.0f);
+		return;
+	}
+	if (!IsScriptContainer(registry, container))
+	{
+		ScriptMessage("No Loop funtion for type");
+		Pushf(0.0f);
+		return;
+	}
+	// How many of its members are poisoned
+	const auto members = ContainerMembers(registry, container);
+	Pushf(static_cast<float>(std::ranges::count_if(
+	    members, [&registry](entt::entity member) { return ecs::script_poison::IsPoisoned(registry, member); })));
 }
 
 void IsPoisoned() // 162 IS_POISONED
 {
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		Pushb(false);
+		return;
+	}
+	Pushb(ecs::script_poison::IsPoisoned(registry, object));
+}
+
+/// The first member of a script container that is of the type and subtype, and poisoned or else not poisoned, as the scripts
+/// ask. It is none when there is none, and the script is told of it.
+static void CallPoisonedStateIn(bool poisoned, std::string_view notFound)
+{
+	const auto excludingScripted = Pop().intVal != 0;
+	const auto container = PopObject();
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto fail = [&notFound]() {
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "{}", notFound);
+		Pusho(0);
+	};
+	if (container == entt::null || !registry.Valid(container))
+	{
+		fail();
+		return;
+	}
+	if (!IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Cannot look in object");
+		fail();
+		return;
+	}
+	const auto objectType = static_cast<ObjectType>(type);
+	if (registry.AllOf<ecs::components::Town>(container) && objectType != ObjectType::Villager &&
+	    objectType != ObjectType::VillagerChild)
+	{
+		ScriptMessage("Looking for strange type in Town");
+		fail();
+		return;
+	}
+	for (const auto member : ContainerMembers(registry, container))
+	{
+		if (!registry.Valid(member) || (excludingScripted && registry.AllOf<ecs::components::InScript>(member)) ||
+		    ecs::script_poison::IsPoisoned(registry, member) != poisoned)
+		{
+			continue;
+		}
+		const auto kind = ecs::script_find::KindOf(registry, member);
+		if (kind.has_value() && ecs::script_find::Matches(*kind, objectType, subtype))
+		{
+			Locator::scriptObjects::value().Register(member, false);
+			Pusho(static_cast<uint32_t>(member));
+			return;
+		}
+	}
+	fail();
 }
 
 void CallPoisonedIn() // 163 CALL_POISONED_IN
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	CallPoisonedStateIn(true, "Cannot find poisoned in");
 }
 
 void CallNotPoisonedIn() // 164 CALL_NOT_POISONED_IN
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	CallPoisonedStateIn(false, "Cannot find not poisoned in");
 }
 
 void SpiritPlayed() // 165 SPIRIT_PLAYED
@@ -5773,10 +5831,29 @@ void StopScriptsInFiles() // 172 STOP_SCRIPTS_IN_FILES
 
 void SetPoisoned() // 173 SET_POISONED
 {
-	// const auto obj = Pop().uintVal;
-	// const auto poisoned = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto value = Pop().uintVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		return;
+	}
+	// A group poisons or cures each of its members
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			ecs::script_poison::SetPoisoned(registry, member, value);
+		}
+		return;
+	}
+	if (!registry.AllOf<Transform>(object) || registry.AllOf<ecs::components::ScriptMarker>(object))
+	{
+		ScriptMessage("Thing not object");
+		return;
+	}
+	ecs::script_poison::SetPoisoned(registry, object, value);
 }
 
 void SetTemperature() // 174 SET_TEMPERATURE
