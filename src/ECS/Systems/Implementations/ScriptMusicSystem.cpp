@@ -13,7 +13,10 @@
 
 #include <chrono>
 #include <exception>
+#include <filesystem>
 #include <string>
+#include <string_view>
+#include <system_error>
 
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
@@ -37,6 +40,33 @@ void ScriptMusicSystem::ProcessTurn()
 	const auto turnTime =
 	    std::chrono::microseconds(static_cast<int64_t>(static_cast<float>(turnMicroseconds) / (speed > 0.0f ? speed : 1.0f)));
 	_music.Turn(turnTime, [this](audio::MusicType type) { return Timing(type); });
+}
+
+void ScriptMusicSystem::RegisterTimings()
+{
+	if (!_banksLoaded || !HasMusic() || !Locator::resources::has_value())
+	{
+		return;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	auto& timings = Locator::resources::value().GetMusicTimings();
+	// The pieces of the scripts. The music of the towns and the chants stays to be read when it is first wanted.
+	constexpr std::string_view k_ScriptPrefix = "MUSIC_TYPE_SCRIPT_";
+	for (int32_t i = 0; i < static_cast<int32_t>(audio::MusicType::_COUNT); ++i)
+	{
+		const auto type = static_cast<audio::MusicType>(i);
+		const auto path = std::string(audio::GetMusicBankPath(type));
+		if (path.empty() || !audio::GetMusicTypeName(type).starts_with(k_ScriptPrefix) || !fileSystem.Exists(path))
+		{
+			continue;
+		}
+		std::error_code error;
+		const auto bytes = std::filesystem::file_size(fileSystem.FindPath(path), error);
+		const auto id = entt::hashed_string(path.c_str()).value();
+		timings.RegisterLoad(id, error ? 0 : static_cast<size_t>(bytes), resources::MusicTimingLoader::FromDiskTag {},
+		                     std::filesystem::path(path));
+		timings.Prefetch(id);
+	}
 }
 
 void ScriptMusicSystem::Reset()

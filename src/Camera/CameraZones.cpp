@@ -11,7 +11,12 @@
 
 #include <cmath>
 
+#include <string>
 #include <utility>
+
+#include <entt/core/hashed_string.hpp>
+
+#include "Common/StringUtils.h"
 
 using namespace openblack;
 using namespace openblack::camera_zones;
@@ -209,4 +214,10 @@ bool camera_zones::FlightWooshes(const glm::vec3& from, const glm::vec3& to)
 bool camera_zones::ScriptInfluenceCounts(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& point)
 {
 	return CrossFence(fence, fenceOn, point, glm::vec3(1.0f, 0.0f, 0.0f)).inside;
+}
+
+entt::id_type camera_zones::FileId(std::string_view fileName)
+{
+	const auto name = "camera/zones/" + string_utils::LowerCase(std::string(fileName));
+	return entt::hashed_string::value(name.c_str());
 }
