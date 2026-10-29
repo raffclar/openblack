@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <vector>
 
 #include <glm/vec3.hpp>
 
@@ -79,4 +80,32 @@ entt::entity VillageLightArchetype::Create(const glm::vec3& position, VillageLig
 		                           glm::vec3(size, size, 1.0f));
 	}
 	return light;
+}
+
+void VillageLightArchetype::DestroyOwnerless()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// A lantern's light, flames and glow go when the lantern has gone
+	std::vector<entt::entity> gone;
+	registry.Each<const VillageLight>([&registry, &gone](entt::entity entity, const VillageLight& light) {
+		if (light.owner != entt::null && !registry.Valid(light.owner))
+		{
+			gone.push_back(entity);
+		}
+	});
+	if (gone.empty())
+	{
+		return;
+	}
+	registry.Each<const VillageLightSprite>([&gone](entt::entity entity, const VillageLightSprite& sprite) {
+		if (std::ranges::find(gone, sprite.light) != gone.end())
+		{
+			gone.push_back(entity);
+		}
+	});
+	for (const auto entity : gone)
+	{
+		registry.Destroy(entity);
+	}
+	registry.SetDirty();
 }

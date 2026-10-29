@@ -424,15 +424,17 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 	if (Locator::drawnRegistry::has_value())
 	{
 		const auto& drawn = Locator::drawnRegistry::value();
-		drawn.Each<const Mesh, const Transform>([&drawn, &prepMesh, &fadingCounts, &instanceCount](
-		                                            entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) {
-			prepMesh(drawn, entity, mesh.id, mesh, false);
-			if (openblack::ecs::object_detail::Banded(drawn, entity))
-			{
-				++fadingCounts[mesh.id];
-				++instanceCount;
-			}
-		});
+		drawn.Each<const Mesh, const Transform>(
+		    [&drawn, &prepMesh, &fadingCounts, &instanceCount](entt::entity entity, const Mesh& mesh,
+		                                                       const Transform& /*unused*/) {
+			    prepMesh(drawn, entity, mesh.id, mesh, false);
+			    if (openblack::ecs::object_detail::Banded(drawn, entity))
+			    {
+				    ++fadingCounts[mesh.id];
+				    ++instanceCount;
+			    }
+		    },
+		    entt::exclude<HiddenByState>);
 	}
 	// The marks on the land, which only the frames draw, are drawn as the things of their model are. Each one has room
 	// among those fading out too.
@@ -697,23 +699,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	// The things that only the frames make are in the first segment, before the things of the land. The gate stones that
 	// the cursor finds come after the things of the land.
 	std::vector<RenderContext::DrawnObject> drawnPicks;
-	UploadDrawnThings(drawBoundingBox, fits, drawnPicks);
+	UploadDrawnThings(drawBoundingBox, fits, drawnPicks, lastFilmLevels);
 	// The instances of each mesh go in the order of their segments. Each pass places the things of one segment.
 	uint32_t segmentPlaced = 0;
 	uint32_t lastSegment = 0;
-	// The matrix of the explorers' boat, if its film plays. The parts on its deck take the land's light of its place.
-	std::optional<glm::mat4> filmBoat;
-	registry.Each<const BoatFilmPart, const DrawnMatrix>([&filmBoat](const BoatFilmPart& part, const DrawnMatrix& drawn) {
-		if (part.role == BoatFilmPart::Role::Boat)
-		{
-			filmBoat = drawn.model;
-		}
-	});
 	const auto drawnHand = DrawnHand();
 	EachBySegment(
-	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, &fizzOrder, &segmentPlaced, &lastSegment, &filmBoat,
-	     drawBoundingBox, camera, &view, modelDetail, drawList,
-	     drawnHand](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	    [this, &registry, &vegetation, &meshes, &fits, &fizzOrder, &segmentPlaced, &lastSegment, drawBoundingBox, camera, &view,
+	     modelDetail, drawList, drawnHand](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    // The hands of the other gods and the right hands have no model on the screen
 		    if (!graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
 		    {
@@ -744,30 +737,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto* drawnScale = registry.TryGet<const ScaffoldDrawnScale>(entity);
 		    auto modelMatrix =
 		        PlacedMatrix(drawnAt, rotation, drawnScale != nullptr ? glm::vec3(drawnScale->scale) : transform.scale);
-		    // A thing a film moves by a whole matrix is drawn by it
-		    if (const auto* exact = registry.TryGet<const DrawnMatrix>(entity); exact != nullptr)
-		    {
-			    modelMatrix = exact->model;
-		    }
 		    // A body moving in the physics is drawn between its last two turns, and not at all once sunk under the sea
 		    const auto* drawn = registry.TryGet<const PhysicsDrawPose>(entity);
 		    const auto placed = physics_draw::ModelMatrix(modelMatrix, drawn);
 		    modelMatrix = placed.value_or(glm::mat4(0.0f));
-
-		    // The sea mirrors the explorers' boat, and no other part of its film, wherever it is and however far off, at the
-		    // detail it was drawn at the frame before
-		    const auto* filmPart = registry.TryGet<const BoatFilmPart>(entity);
-		    const bool mirroredBoat = filmPart != nullptr && filmPart->role == BoatFilmPart::Role::Boat;
-		    if (mirroredBoat)
-		    {
-			    const auto last = lastFilmLevels.find(entity);
-			    const auto lastLevel = last != lastFilmLevels.end()
-			                               ? last->second
-			                               : graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High);
-			    _filmReflectionLevels[entity] = lastLevel;
-			    _renderContext.filmReflections.push_back(
-			        {.mesh = DrawnMeshOf(entity, mesh), .model = modelMatrix, .detailLevel = lastLevel});
-		    }
 
 		    // A thing on the land is drawn in less detail the further off it is, fades out, then isn't drawn; a villager
 		    // then shows only as a smudge on a blob while it stands above the sea. One flying in the physics or one that
@@ -877,11 +850,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (noteKept && !noted)
 		    {
 			    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, keptBox, false);
-		    }
-
-		    if (mirroredBoat && !gone)
-		    {
-			    _filmReflectionLevels[entity] = graphics::mesh_detail::LevelBit(level);
 		    }
 
 		    // A thing too far off to be drawn keeps a place at the back of its mesh's instances, only for what it leaves on
@@ -1120,13 +1088,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 		    }
 
-		    // A part on the deck of the explorers' boat takes the land's light of the boat's place, and no colour of the land
-		    if (filmPart != nullptr && filmPart->role == BoatFilmPart::Role::DeckPart && filmBoat.has_value())
-		    {
-			    lightOffset = openblack::ecs::boat_launch::DeckLightOffset(*filmBoat, modelMatrix);
-			    look.y = graphics::instance_light::k_NoLandColour;
-		    }
-
 		    // A body sunk wholly under the sea isn't drawn in any pass, its shadow included
 		    if (!placed.has_value())
 		    {
@@ -1253,12 +1214,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 			    _renderContext.highDetailDraws.push_back(
 			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = castModel});
-		    }
-		    if (const auto* film = registry.TryGet<const BoatFilmPart>(entity);
-		        film != nullptr && film->castsShadow && look.z != 1.0f)
-		    {
-			    _renderContext.filmShadowDraws.push_back(
-			        {.entity = entity, .mesh = drawnMesh, .model = modelMatrix, .castModel = modelMatrix});
 		    }
 		    if (registry.AllOf<InHand>(entity) && look.z != 1.0f)
 		    {
@@ -1427,7 +1382,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	return fits;
 }
 
-void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::vector<RenderContext::DrawnObject>& picks)
+void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::vector<RenderContext::DrawnObject>& picks,
+                                        const std::unordered_map<entt::entity, uint8_t>& lastFilmLevels)
 {
 	if (!Locator::drawnRegistry::has_value())
 	{
@@ -1439,100 +1395,145 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 	const auto view = camera != nullptr ? std::optional(ViewPoint::Of(*camera)) : std::nullopt;
 	const float modelDetail = Locator::config::value().detail.modelDetail;
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
+	// The matrix of the explorers' boat, if its film plays. The parts on its deck take the land's light of its place.
+	// While the boat sails, the hidden boat of the launch can give this matrix.
+	std::optional<glm::mat4> filmBoat;
+	drawn.Each<const BoatFilmPart, const DrawnMatrix>([&filmBoat](const BoatFilmPart& part, const DrawnMatrix& matrix) {
+		if (part.role == BoatFilmPart::Role::Boat)
+		{
+			filmBoat = matrix.model;
+		}
+	});
 	// A thing of the drawn registry has only its model, its place and its look: the systems of the land know nothing of
 	// it, so it takes nothing from them
-	drawn.Each<const Mesh, const Transform>([&](entt::entity entity, const Mesh& mesh, const Transform& transform) {
-		if (!fits)
-		{
-			return;
-		}
-		const auto modelMatrix = PlacedMatrix(transform.position, transform.rotation, transform.scale);
-		auto* slotMap = &_instanceSlots;
-		std::optional<uint8_t> fade;
-		auto level = graphics::mesh_detail::Mesh::High;
-		bool gone = false;
-		// It is drawn in less detail the further off it is, fades out, then is not drawn, as a thing of the land is
-		if (camera != nullptr && object_detail::Banded(drawn, entity) && object_detail::BandedNow(drawn, entity))
-		{
-			if (const auto& box = MeshBox(mesh.id); box.has_value())
-			{
-				const auto choice = ChooseDetail(
-				    *box, object_detail::Importance(drawn, entity), modelMatrix, transform.scale.x,
-				    [&drawn, entity] { return object_detail::Disappears(drawn, entity, false); }, *view, modelDetail);
-				if (!choice.mesh.has_value())
-				{
-					gone = true;
-				}
-				else
-				{
-					level = *choice.mesh;
-					if (choice.alpha.has_value())
-					{
-						slotMap = &_fadingSlots;
-						fade = choice.alpha;
-					}
-				}
-			}
-		}
-		// One too far off to be drawn keeps a place at the back of its model's instances
-		const auto slots = (gone ? &_instanceSlots : slotMap)->find(mesh.id);
-		if (slots == (gone ? &_instanceSlots : slotMap)->end() ||
-		    slots->second.filled + slots->second.gone >= slots->second.count)
-		{
-			fits = false;
-			return;
-		}
-		if (gone)
-		{
-			const uint32_t idx = slots->second.offset + slots->second.count - 1 - slots->second.gone;
-			_renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
-			if (drawBoundingBox)
-			{
-				_renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model =
-				                                                                                           glm::mat4(0.0f)};
-			}
-			++slots->second.gone;
-			return;
-		}
-		graphics::fizz_draw_order::NoteSegment(slots->second.segmentStarts, slots->second.filled, 0);
-		// The w is the snow that the thing shows
-		glm::vec4 look {graphics::object_tint::PackAdded(0, 0.0f), 0.0f, 0.0f,
-		                static_cast<float>(openblack::ecs::snow_levels::LevelOf(drawn, entity))};
-		if (fade.has_value())
-		{
-			look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
-		}
-		const uint32_t idx = slots->second.offset + slots->second.filled;
-		// The worm on the apple barrel takes the land's light of the point where the barrel stands
-		auto instanceModel = modelMatrix;
-		if (const auto* worm = drawn.TryGet<const AppleBarrelWorm>(entity); worm != nullptr && drawn.Valid(worm->barrel))
-		{
-			if (const auto* barrelTransform = drawn.TryGet<const Transform>(worm->barrel); barrelTransform != nullptr)
-			{
-				graphics::instance_light::SetLightOffset(
-				    instanceModel, apple_barrel::WormLightOffset(barrelTransform->position, transform.position));
-			}
-		}
-		_renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
-		_renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
-		// One posed by its own clip, as the worm, is drawn by itself
-		if (slots->second.perEntity)
-		{
-			_renderContext.drawnEntityDraws.push_back({.entity = entity, .instance = idx});
-		}
-		// A gate stone that the cursor can find is the plinth that holds it to the cursor
-		if (const auto* stone = drawn.TryGet<const PlinthStone>(entity); stone != nullptr && stone->pickable)
-		{
-			picks.push_back({.entity = stone->plinth, .model = modelMatrix, .mesh = mesh.id});
-		}
-		if (drawBoundingBox)
-		{
-			const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
-			const auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
-			_renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model = boxMatrix};
-		}
-		++slots->second.filled;
-	});
+	drawn.Each<const Mesh, const Transform>(
+	    [&](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+		    if (!fits)
+		    {
+			    return;
+		    }
+		    // A thing that a film moves by a whole matrix uses that matrix
+		    const auto* exact = drawn.TryGet<const DrawnMatrix>(entity);
+		    const auto modelMatrix =
+		        exact != nullptr ? exact->model : PlacedMatrix(transform.position, transform.rotation, transform.scale);
+		    // The sea mirrors the explorers' boat, and no other part of its film, wherever it is and however far off. It
+		    // mirrors the boat at the detail of the frame before.
+		    const auto* filmPart = drawn.TryGet<const BoatFilmPart>(entity);
+		    const bool mirroredBoat = filmPart != nullptr && filmPart->role == BoatFilmPart::Role::Boat;
+		    if (mirroredBoat)
+		    {
+			    const auto last = lastFilmLevels.find(entity);
+			    const auto lastLevel = last != lastFilmLevels.end()
+			                               ? last->second
+			                               : graphics::mesh_detail::LevelBit(graphics::mesh_detail::Mesh::High);
+			    _filmReflectionLevels[entity] = lastLevel;
+			    _renderContext.filmReflections.push_back({.mesh = mesh.id, .model = modelMatrix, .detailLevel = lastLevel});
+		    }
+		    auto* slotMap = &_instanceSlots;
+		    std::optional<uint8_t> fade;
+		    auto level = graphics::mesh_detail::Mesh::High;
+		    bool gone = false;
+		    // It is drawn in less detail the further off it is, fades out, then is not drawn, as a thing of the land is
+		    if (camera != nullptr && object_detail::Banded(drawn, entity) && object_detail::BandedNow(drawn, entity))
+		    {
+			    if (const auto& box = MeshBox(mesh.id); box.has_value())
+			    {
+				    const auto choice = ChooseDetail(
+				        *box, object_detail::Importance(drawn, entity), modelMatrix, transform.scale.x,
+				        [&drawn, entity] { return object_detail::Disappears(drawn, entity, false); }, *view, modelDetail);
+				    if (!choice.mesh.has_value())
+				    {
+					    gone = true;
+				    }
+				    else
+				    {
+					    level = *choice.mesh;
+					    if (choice.alpha.has_value())
+					    {
+						    slotMap = &_fadingSlots;
+						    fade = choice.alpha;
+					    }
+				    }
+			    }
+		    }
+		    if (mirroredBoat && !gone)
+		    {
+			    _filmReflectionLevels[entity] = graphics::mesh_detail::LevelBit(level);
+		    }
+		    // One too far off to be drawn keeps a place at the back of its model's instances
+		    const auto slots = (gone ? &_instanceSlots : slotMap)->find(mesh.id);
+		    if (slots == (gone ? &_instanceSlots : slotMap)->end() ||
+		        slots->second.filled + slots->second.gone >= slots->second.count)
+		    {
+			    fits = false;
+			    return;
+		    }
+		    if (gone)
+		    {
+			    const uint32_t idx = slots->second.offset + slots->second.count - 1 - slots->second.gone;
+			    _renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f)};
+			    if (drawBoundingBox)
+			    {
+				    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model =
+				                                                                                               glm::mat4(0.0f)};
+			    }
+			    ++slots->second.gone;
+			    return;
+		    }
+		    graphics::fizz_draw_order::NoteSegment(slots->second.segmentStarts, slots->second.filled, 0);
+		    // The w is the snow that the thing shows
+		    glm::vec4 look {graphics::object_tint::PackAdded(0, 0.0f), 0.0f, 0.0f,
+		                    static_cast<float>(openblack::ecs::snow_levels::LevelOf(drawn, entity))};
+		    if (fade.has_value())
+		    {
+			    look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
+		    }
+		    const uint32_t idx = slots->second.offset + slots->second.filled;
+		    // The worm on the apple barrel takes the land's light of the point where the barrel stands
+		    auto instanceModel = modelMatrix;
+		    if (const auto* worm = drawn.TryGet<const AppleBarrelWorm>(entity); worm != nullptr && drawn.Valid(worm->barrel))
+		    {
+			    if (const auto* barrelTransform = drawn.TryGet<const Transform>(worm->barrel); barrelTransform != nullptr)
+			    {
+				    graphics::instance_light::SetLightOffset(
+				        instanceModel, apple_barrel::WormLightOffset(barrelTransform->position, transform.position));
+			    }
+		    }
+		    // A part on the deck of the explorers' boat takes the land's light of the boat's place, and no colour of the land
+		    if (filmPart != nullptr && filmPart->role == BoatFilmPart::Role::DeckPart && filmBoat.has_value())
+		    {
+			    graphics::instance_light::SetLightOffset(instanceModel,
+			                                             openblack::ecs::boat_launch::DeckLightOffset(*filmBoat, modelMatrix));
+			    look.y = graphics::instance_light::k_NoLandColour;
+		    }
+		    _renderContext.instanceUniforms[idx] = {.model = instanceModel, .look = look};
+		    _renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
+		    // The boat casts its shadow from the far sun while the sailors push it down the beach. It has no entity of the
+		    // land.
+		    if (filmPart != nullptr && filmPart->castsShadow)
+		    {
+			    _renderContext.filmShadowDraws.push_back(
+			        {.entity = entt::null, .mesh = mesh.id, .model = modelMatrix, .castModel = modelMatrix});
+		    }
+		    // One posed by its own clip, as the worm, is drawn by itself
+		    if (slots->second.perEntity)
+		    {
+			    _renderContext.drawnEntityDraws.push_back({.entity = entity, .instance = idx});
+		    }
+		    // A gate stone that the cursor can find is the plinth that holds it to the cursor
+		    if (const auto* stone = drawn.TryGet<const PlinthStone>(entity); stone != nullptr && stone->pickable)
+		    {
+			    picks.push_back({.entity = stone->plinth, .model = modelMatrix, .mesh = mesh.id});
+		    }
+		    if (drawBoundingBox)
+		    {
+			    const auto box = meshes.Handle(mesh.id)->GetBoundingBox();
+			    const auto boxMatrix = modelMatrix * glm::translate(box.Center()) * glm::scale(box.Size());
+			    _renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model = boxMatrix};
+		    }
+		    ++slots->second.filled;
+	    },
+	    entt::exclude<HiddenByState>);
 }
 
 void RenderingSystem::UploadSouls()

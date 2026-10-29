@@ -15,6 +15,7 @@ namespace openblack::ecs::systems
 {
 
 /// Animates the puffs of mist (components::Mist)
+/// The frames of the mists. Only a computer that draws the world has this system.
 class MistSystemInterface
 {
 public:

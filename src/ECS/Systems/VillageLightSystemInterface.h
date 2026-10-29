@@ -14,7 +14,8 @@
 namespace openblack::ecs::systems
 {
 
-/// The lights villages keep at night (components::VillageLight)
+/// The frames of the lights that villages keep at night (components::VillageLight). Only a computer that draws the world
+/// has this system. VillageLightArchetype removes the lights whose owners have gone.
 class VillageLightSystemInterface
 {
 public:

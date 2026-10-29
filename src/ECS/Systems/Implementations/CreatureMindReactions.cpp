@@ -330,7 +330,8 @@ bool CreatureMindSystem::NoticeCreatureToInspect(entt::entity creature, entt::en
 
 namespace
 {
-/// The names of the actions in the action table that show a dead creature
+/// The names of the actions in the action table that show a dead creature. Dying for good as a script orders is not
+/// one of them: such a creature lies as a dead one does, but it does not count as dead.
 constexpr std::string_view k_DieAction = "Die";
 constexpr std::string_view k_DeadForeverAction = "DeadForever";
 

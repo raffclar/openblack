@@ -23,7 +23,8 @@ namespace openblack::ecs::archetypes
 class CameraBookmarkArchetype
 {
 public:
-	/// The marker of the bookmark of a slot (0 for the key 1), not set
+	/// The marker of the bookmark of a slot (0 for the key 1), not set, in the registry of the things that only the frames
+	/// make
 	static entt::entity Create(uint8_t number);
 	/// The markers of the bookmarks of the number keys, none of them set
 	static std::array<entt::entity, camera_bookmarks::k_KeySlots> CreateAll();

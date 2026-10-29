@@ -778,6 +778,7 @@ openblack_setup_and_add_test(test_force_field camera/test_force_field.cpp)
 openblack_setup_and_add_test(test_intro_rules test_intro_rules.cpp)
 openblack_setup_and_add_test(test_boat_launch_rules test_boat_launch_rules.cpp)
 openblack_setup_and_add_test(test_grazer_rules test_grazer_rules.cpp)
+openblack_setup_and_add_test(test_hunter_rules test_hunter_rules.cpp)
 openblack_setup_and_add_test(test_temple_help test_temple_help.cpp)
 openblack_setup_and_add_test(test_script_create test_script_create.cpp)
 openblack_setup_and_add_test(test_creature_training test_creature_training.cpp)
@@ -2146,6 +2147,10 @@ add_test(NAME test_guard_sweep
                  ${CMAKE_SOURCE_DIR}/tools/sim/guard_sweep.py --self-test
 )
 openblack_setup_and_add_test(test_box_keyboard input/test_box_keyboard.cpp)
+openblack_setup_and_add_test(
+  test_resource_data_only test_resource_data_only.cpp
+)
+target_link_libraries(test_resource_data_only PRIVATE l3d)
 openblack_setup_and_add_test(test_creature_catch_while_busy test_creature_catch_while_busy.cpp)
 openblack_setup_and_add_test(test_puzzle_game_rules test_puzzle_game_rules.cpp)
 openblack_setup_and_add_test(
@@ -2159,3 +2164,4 @@ target_link_libraries(test_vanilla_script_import PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_creature_stop_plays_rest test_creature_stop_plays_rest.cpp)
 openblack_setup_and_add_test(test_hand_start test_hand_start.cpp)
 openblack_setup_and_add_test(test_hanoi_rules test_hanoi_rules.cpp)
+openblack_setup_and_add_test(test_headless_renderer test_headless_renderer.cpp)
