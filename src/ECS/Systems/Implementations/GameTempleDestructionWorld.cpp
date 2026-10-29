@@ -142,7 +142,6 @@ void GameTempleDestructionWorld::AddPlasma(uint32_t source, const particles::Pla
 		Locator::effectRequestSystem::value().AddPlasma(source, command);
 	}
 }
-}
 
 std::vector<model_surface::Triangle> GameTempleDestructionWorld::DrawnTrianglesOf(entt::entity object) const
 {
