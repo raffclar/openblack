@@ -64,6 +64,25 @@ TEST(WorkshopRules, ValueOfScaleRoundsToTheNearestWorth)
 	EXPECT_EQ(workshop::ValueOfScale(0.81f), 2u);
 }
 
+// A script's size is cut towards nought and taken as a worth; a negative size wraps round to a very large worth
+TEST(WorkshopRules, AScriptSizeIsCutToAWholeWorth)
+{
+	EXPECT_EQ(BitsOf(workshop::ScaleOfScriptSize(5.0f)), BitsOf(workshop::ScaleOfValue(5)));
+	EXPECT_EQ(BitsOf(workshop::ScaleOfScriptSize(3.9f)), BitsOf(workshop::ScaleOfValue(3)));
+	EXPECT_EQ(BitsOf(workshop::ScaleOfScriptSize(0.5f)), BitsOf(workshop::ScaleOfValue(0)));
+	EXPECT_EQ(BitsOf(workshop::ScaleOfScriptSize(-0.5f)), BitsOf(workshop::ScaleOfValue(0)));
+	EXPECT_EQ(BitsOf(workshop::ScaleOfScriptSize(-1.0f)), BitsOf(workshop::ScaleOfValue(0xFFFFFFFFu)));
+	EXPECT_EQ(workshop::ValueOfScale(workshop::ScaleOfScriptSize(5.0f)), 5u);
+}
+
+// The abode number -1 gives a scaffold no building of a script
+TEST(WorkshopRules, AScriptBuildingIsAnAbodeNumber)
+{
+	EXPECT_EQ(workshop::ScriptBuildingOf(12), openblack::AbodeNumber::TownCentre);
+	EXPECT_EQ(workshop::ScriptBuildingOf(7), openblack::AbodeNumber::StoragePit);
+	EXPECT_FALSE(workshop::ScriptBuildingOf(-1).has_value());
+}
+
 // The game cuts the fraction off the time to make a scaffold
 TEST(WorkshopRules, MakingTurnsCutsTheFractionOff)
 {

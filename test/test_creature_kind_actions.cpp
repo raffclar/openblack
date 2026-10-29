@@ -527,6 +527,15 @@ TEST(CreatureKindActions, GivingWoodToABuildingSiteIsGivingWoodToAStore)
 	EXPECT_EQ(site->build, plan_actions::Build::GiveWoodToStore);
 }
 
+TEST(CreatureKindActions, GivingWoodToAWorkshopIsGivingWoodToAStore)
+{
+	const auto* workshop = plan_actions::For("GiveWoodFromTreeToWorkshop");
+	ASSERT_NE(workshop, nullptr);
+	EXPECT_EQ(workshop->target, plan_actions::Target::Workshop);
+	EXPECT_EQ(workshop->use, plan_actions::Target::PickableTree);
+	EXPECT_EQ(workshop->build, plan_actions::Build::GiveWoodToStore);
+}
+
 TEST(CreatureKindActions, HelpingRepairAHouseBringsATreeAndUsesItUp)
 {
 	const auto agenda = HelpRepairHouse(8u, 3, 8);

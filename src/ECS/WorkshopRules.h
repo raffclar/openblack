@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 
 #include <entt/entity/entity.hpp>
 #include <glm/mat4x4.hpp>
@@ -20,6 +21,7 @@
 
 #include "3D/MapCoords.h"
 #include "ECS/Components/Workshop.h"
+#include "Enums.h"
 
 namespace openblack::ecs
 {
@@ -63,6 +65,12 @@ struct SpecialPlace
 /// The number of scaffolds that a scaffold of a scale is worth: the scale less a half, times five, rounded to the nearest
 /// whole number
 [[nodiscard]] uint32_t ValueOfScale(float scale);
+
+/// The scale of a scaffold that a script makes worth a size: the size cut to a whole number towards nought, then taken
+/// as a number of scaffolds. A negative size wraps round to a very large number of scaffolds, as the game takes it.
+[[nodiscard]] float ScaleOfScriptSize(float size);
+/// The abode number of the building that a script gives a scaffold: none for -1, which is no building
+[[nodiscard]] std::optional<AbodeNumber> ScriptBuildingOf(int32_t number);
 
 /// The game turns that a workshop takes to make a scaffold, from the time in its row of the buildings' table. The game
 /// cuts the fraction off.

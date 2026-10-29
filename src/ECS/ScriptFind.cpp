@@ -28,6 +28,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
@@ -37,6 +38,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
@@ -152,6 +154,16 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	{
 		return Kind {.type = ScriptType::Citadel};
 	}
+	// A worship site's subtype is its tribe, which is the row of the tribes' table
+	if (const auto* site = registry.TryGet<const WorshipSite>(entity))
+	{
+		return Kind {.type = ScriptType::WorshipSite, .subtype = Row(site->tribe)};
+	}
+	// A scaffold has a type but no subtype: it matches only any subtype
+	if (registry.AllOf<Scaffold>(entity))
+	{
+		return Kind {.type = ScriptType::Scaffold};
+	}
 	if (const auto* abode = registry.TryGet<const Abode>(entity))
 	{
 		return Kind {.type = ScriptType::Abode, .subtype = Row(abode->info)};
@@ -196,9 +208,11 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	{
 		return Kind {.type = ScriptType::MobileStatic};
 	}
+	// A lump of poo is a thing of its own type to the scripts, with its row of the mobile objects' table as its subtype
 	if (const auto* mobile = registry.TryGet<const MobileObject>(entity))
 	{
-		return Kind {.type = ScriptType::MobileObject, .subtype = Row(mobile->type)};
+		return Kind {.type = mobile->type == MobileObjectInfo::LumpOfPoo ? ScriptType::Poo : ScriptType::MobileObject,
+		             .subtype = Row(mobile->type)};
 	}
 	if (registry.AllOf<OneOffSpellSeed>(entity))
 	{

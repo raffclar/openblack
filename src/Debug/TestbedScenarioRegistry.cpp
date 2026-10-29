@@ -5146,6 +5146,43 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.give_wood_workshop",
+	    .name = "Giving a tree to a workshop as wood",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, a birch to its left and its town's workshop off to the east, with no wood. A script "
+	                   "tells it to give wood from the birch to the workshop, as its copy of the player's gift of wood "
+	                   "to a workshop does.",
+	    .expected = "It walks to the birch and pulls it up, carries it towards the workshop until it is near enough to "
+	                "throw, turns to face the workshop with a look of compassion and throws the tree in. The tree is gone "
+	                "and the workshop's pile of logs shows the wood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {90.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-20.0f, -15.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = {90.0f, 0.0f}, .storedFood = 0, .storedWood = 0}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "GiveWoodFromTreeToWorkshop", .with = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.steal_scaffold_to_town",
+	    .name = "Creature steals a scaffold and takes it to a town",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with a scaffold of no workshop in front of it, and the storage pit of the player's town "
+	                   "behind it. A script tells it to steal the scaffold and take it to the town.",
+	    .expected = "It picks the scaffold up, looking at it. It goes near the storage pit of the town, to within three "
+	                "times its height, looking at the pit, and puts the scaffold down there. The scaffold makes no "
+	                "building site: only a scaffold that a hand puts down starts a building.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 90.0f}, .storedFood = 0, .storedWood = 0},
+	                {.type = ScaffoldInfo::Normal, .offset = {0.0f, -20.0f}, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "StealObjectAndTakeToTown"}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	all.push_back({
 	    .id = "objects.repair_house",
 	    .name = "Helping repair a house",
 	    .facet = Facet::Objects,
@@ -12069,6 +12106,52 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                 .joinTown = true,
 	                 .homeIn = 2}},
 	});
+
+	// The abode number of a house and the size, as a land script gives Khazar's scaffold for a house
+	constexpr float k_HouseNumber = 4.0f;
+	constexpr float k_ScriptSize = 2.0f;
+	all.push_back({
+	    .id = "objects.script_gives_scaffold",
+	    .name = "A script makes a scaffold, gives it a building and a size, and locks it",
+	    .facet = Facet::Objects,
+	    .description = "The town of objects.scaffold_starts_building with no loose scaffold. After one second, the "
+	                   "script lines of a land give a scaffold: CREATE makes a scaffold (type 39) where the loose "
+	                   "scaffold was, and SET_SCAFFOLD_PROPERTIES gives it the house of abode number 4 and the size 2. "
+	                   "The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the scaffold, holds "
+	                   "it still near the village centre, and puts it down. After ten more seconds, SET_ID_PICKUPABLE "
+	                   "and SET_ID_MOVEABLE lock the scaffold.",
+	    .expected = "A scaffold appears on the land. It has the size of a scaffold of the value of two scaffolds. While "
+	                "the hand holds it still, the phantom shows only a house of abode number 4. When the hand puts it "
+	                "down, a building site of that house opens. After the lock, the hand can not take the scaffold, and "
+	                "the inspector shows CannotBePickedUp and Immovable on it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+	                                       .number = static_cast<float>(script::ObjectType::Scaffold)},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 5000.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_LooseScaffold}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_SCAFFOLD_PROPERTIES",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HouseNumber},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = k_ScriptSize},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 10.0f,
+	                  .script = "SET_ID_PICKUPABLE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_ID_MOVEABLE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}}},
+	});
 }
 
 std::vector<Scenario> Build()
@@ -12196,10 +12279,15 @@ bool ValidOffset(glm::vec2 offset)
 	return std::abs(offset.x) <= k_MaxOffset && std::abs(offset.y) <= k_MaxOffset;
 }
 
-/// A script run names a script, and every object, creature and marker it hands over is the scenario's and on the map
+/// A script run names a script, and every object, creature and marker it hands over is the scenario's and on the map.
+/// An object that a native call gave back must come from a native call before this command.
 bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 {
-	const auto fits = [&scenario](const ScriptArgument& argument) {
+	const auto before =
+	    std::ranges::find_if(scenario.commands, [&command](const Command& other) { return &other == &command; });
+	const auto earlierCalls = static_cast<size_t>(
+	    std::count_if(scenario.commands.begin(), before, [](const Command& other) { return other.kind == Kind::CallNative; }));
+	const auto fits = [&scenario, earlierCalls](const ScriptArgument& argument) {
 		switch (argument.kind)
 		{
 		case ScriptArgument::Kind::Number:
@@ -12212,6 +12300,8 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 			return argument.index < scenario.objects.size();
 		case ScriptArgument::Kind::Creature:
 			return argument.index < scenario.creatures.size();
+		case ScriptArgument::Kind::Made:
+			return argument.index < earlierCalls;
 		}
 		return false;
 	};

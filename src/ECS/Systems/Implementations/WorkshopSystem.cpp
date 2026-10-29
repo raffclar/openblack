@@ -526,11 +526,11 @@ void WorkshopSystem::CameToRest(entt::entity scaffold, bool fromHand, bool inMap
 			snapped = SnapToPlace(workshopEntity, scaffold) || snapped;
 		}
 		// A scaffold that the hand put down gently starts the building that it offers. Else a puff shows that it starts
-		// no building.
+		// no building. A scaffold that destroys the things in its way does not check that the building fits.
 		if (fromHand && !snapped)
 		{
 			const auto& data = registry.Get<const Scaffold>(scaffold);
-			if (!data.gentle || !BuildBuilding(scaffold, data.handPlayer))
+			if (!data.gentle || !BuildBuilding(scaffold, data.handPlayer, data.destroysThingsInWay))
 			{
 				Puff(registry.Get<const Transform>(scaffold).position);
 			}
@@ -755,13 +755,9 @@ std::optional<scaffold_offer::Found> WorkshopSystem::SearchOffer(entt::entity sc
 		}
 		return scaffold_offer::Found {.offer = *offer, .foundsTown = true};
 	}
-	// A scaffold that a script gave a building offers only a building of that abode number
-	std::optional<AbodeNumber> only;
-	if (data.scriptBuilding.has_value())
-	{
-		only = rows.at(static_cast<size_t>(*data.scriptBuilding)).abodeNumber;
-	}
-	const auto offer = SearchTownAt(town, place, value, only, ignored);
+	// A scaffold that a script gave a building offers only a building of that abode number. A scaffold that destroys
+	// the things in its way does not check that the building fits.
+	const auto offer = SearchTownAt(town, place, value, data.scriptBuilding, ignored, data.destroysThingsInWay);
 	if (!offer.has_value())
 	{
 		return std::nullopt;
@@ -770,15 +766,15 @@ std::optional<scaffold_offer::Found> WorkshopSystem::SearchOffer(entt::entity sc
 }
 
 std::optional<ScaffoldOffer> WorkshopSystem::SearchTownAt(entt::entity town, glm::vec3 place, uint32_t value,
-                                                          std::optional<AbodeNumber> only, entt::entity ignored)
+                                                          std::optional<AbodeNumber> only, entt::entity ignored, bool skipFit)
 {
 	const auto tribe = TribeOf(town);
 	if (!tribe.has_value())
 	{
 		return std::nullopt;
 	}
-	const auto fits = [place, ignored](const ScaffoldOffer& offer, float yAngle) {
-		return ecs::town_planning::FitsForScaffold(place, offer.mesh, yAngle, offer.scale, ignored);
+	const auto fits = [place, ignored, skipFit](const ScaffoldOffer& offer, float yAngle) {
+		return skipFit || ecs::town_planning::FitsForScaffold(place, offer.mesh, yAngle, offer.scale, ignored);
 	};
 	const auto candidates = ecs::town_planning::ScaffoldCandidates(town, *tribe, value, only);
 	const float startYAngle = Locator::gameRandom::value().GameFloatRand(scaffold_offer::k_FullTurn);
@@ -995,7 +991,7 @@ void WorkshopSystem::ProcessHeld(entt::entity scaffold)
 	}
 }
 
-bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNames> player)
+bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNames> player, bool skipFit)
 {
 	auto& registry = Entities();
 	const auto place = registry.Get<const Transform>(scaffold).position;
@@ -1028,13 +1024,13 @@ bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNa
 	// The building takes the turn of the phantom first, then the turn of the offer
 	const float offerYAngle = phantom.shown->yAngle;
 	phantom.shown->yAngle = phantom.yAngle;
-	if (!TryToBuild(scaffold, town))
+	if (!TryToBuild(scaffold, town, skipFit))
 	{
 		if (auto& again = registry.Get<Scaffold>(scaffold).phantom; again.shown.has_value())
 		{
 			again.shown->yAngle = offerYAngle;
 		}
-		if (!TryToBuild(scaffold, town))
+		if (!TryToBuild(scaffold, town, skipFit))
 		{
 			return false;
 		}
@@ -1123,7 +1119,7 @@ void WorkshopSystem::ImpressNearTowns(entt::entity scaffold, PlayerNames player)
 	}
 }
 
-bool WorkshopSystem::TryToBuild(entt::entity scaffold, entt::entity town)
+bool WorkshopSystem::TryToBuild(entt::entity scaffold, entt::entity town, bool skipFit)
 {
 	auto& registry = Entities();
 	auto& phantom = registry.Get<Scaffold>(scaffold).phantom;
@@ -1142,8 +1138,7 @@ bool WorkshopSystem::TryToBuild(entt::entity scaffold, entt::entity town)
 		return false;
 	}
 	const auto offer = *phantom.shown;
-	// TODO(scaffolds): a script can let a scaffold build without the check of the land
-	if (!ecs::town_planning::FitsForScaffold(place, offer.mesh, offer.yAngle, offer.scale))
+	if (!skipFit && !ecs::town_planning::FitsForScaffold(place, offer.mesh, offer.yAngle, offer.scale))
 	{
 		return false;
 	}

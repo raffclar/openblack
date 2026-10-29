@@ -74,8 +74,10 @@ struct Scaffold
 	/// The game turn when the scaffold came to rest after a hand let it go. It is 0 when no hand let it go since it was
 	/// made or since a hand last took it.
 	uint32_t putDownTurn {0};
-	/// The building that a script gave the scaffold, none when no script gave one
-	std::optional<AbodeInfo> scriptBuilding;
+	/// The abode number of the building that a script gave the scaffold, none when no script gave one
+	std::optional<AbodeNumber> scriptBuilding;
+	/// A script marked the scaffold to destroy the things in its way when a hand lets it go
+	bool destroysThingsInWay {false};
 	/// The hand let the scaffold go onto the land, not by force: the scaffold comes down gently
 	bool gentle {false};
 	/// The player whose hand holds the scaffold or let it go last, until it comes to rest
