@@ -136,3 +136,51 @@ TEST(PlayersSymbols, WithNoProfileTheSheetIsTheFilesSheet)
 	EXPECT_EQ(sheet.colours, file.colours);
 	EXPECT_EQ(sheet.alpha, file.alpha);
 }
+
+TEST(PlayersSymbols, EachComputerPlayerTakesTheGodBeforeItsNumber)
+{
+	// The second player takes Lethys and the third player takes Khazar, as on the second land
+	EXPECT_EQ(k_GodPictures.at(GodPictureOf(1, 2)), "Lethis");
+	EXPECT_EQ(k_GodPictures.at(GodPictureOf(2, 2)), "Kazarr");
+	EXPECT_EQ(k_GodPictures.at(GodPictureOf(3, 4)), "nemesis");
+	// The first player and the players after Nemesis take the nearest picture
+	EXPECT_EQ(GodPictureOf(0, 2), 0u);
+	EXPECT_EQ(GodPictureOf(6, 2), 2u);
+}
+
+TEST(PlayersSymbols, OnTheThirdAndFifthLandsTheSecondPlayerTakesKhazarAndNemesis)
+{
+	EXPECT_EQ(k_GodPictures.at(GodPictureOf(1, 3)), "Kazarr");
+	EXPECT_EQ(k_GodPictures.at(GodPictureOf(1, 5)), "nemesis");
+	// Only the second player changes on these lands
+	EXPECT_EQ(GodPictureOf(2, 3), 1u);
+	EXPECT_EQ(GodPictureOf(2, 5), 1u);
+	EXPECT_EQ(GodPictureOf(1, 4), 0u);
+}
+
+TEST(PlayersSymbols, AGodsPictureOfHalfSizeGoesToTheSquareOfASheetAtHalfSize)
+{
+	constexpr uint32_t k_HalfSheet = k_SheetSide / 2;
+	constexpr uint32_t k_HalfSquare = k_SquareSide / 2;
+	Sheet half {.colours = std::vector<uint8_t>(static_cast<size_t>(k_HalfSheet) * k_HalfSheet * 3, 9),
+	            .alpha = std::vector<uint8_t>(static_cast<size_t>(k_HalfSheet) * k_HalfSheet, 9)};
+	std::vector<uint8_t> picture(static_cast<size_t>(k_HalfSquare) * k_HalfSquare, 0x80);
+	picture.back() = 0x11;
+	// The sixth square is the second square of the second row
+	PutPicture(half, picture, 5);
+	const auto texel = [](uint32_t square, uint32_t x, uint32_t y) {
+		return static_cast<size_t>((square / k_SquaresInARow) * k_HalfSquare + y) * k_HalfSheet +
+		       (square % k_SquaresInARow) * k_HalfSquare + x;
+	};
+	EXPECT_EQ(half.alpha[texel(5, 0, 0)], 0x80);
+	EXPECT_EQ(half.colours[texel(5, 31, 31) * 3 + 2], 0x11);
+	EXPECT_EQ(half.alpha[texel(5, 31, 31)], 0x11);
+	// The squares about it keep what they had
+	EXPECT_EQ(half.alpha[texel(4, 31, 0)], 9);
+	EXPECT_EQ(half.alpha[texel(6, 0, 0)], 9);
+	EXPECT_EQ(half.alpha[texel(1, 0, 31)], 9);
+	// A picture of full size does not go into a sheet at half size
+	const std::vector<uint8_t> full(static_cast<size_t>(k_SquareSide) * k_SquareSide, 0x22);
+	PutPicture(half, full, 0);
+	EXPECT_EQ(half.alpha[texel(0, 0, 0)], 9);
+}

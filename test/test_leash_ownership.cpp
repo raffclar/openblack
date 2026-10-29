@@ -247,6 +247,20 @@ TEST(CreatureHand, TheHandHoldsOnlyItsOwnPlayersCreature)
 	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_ONE, .species = CreatureType::Tiger, .fainting = true}, k_Hand));
 }
 
+TEST(CreatureHand, TheHandHoldsTheCreatureOfAnAlliedGodAsItsOwn)
+{
+	using creature_hand::MayHold;
+	constexpr auto k_Hand = PlayerNames::PLAYER_ONE;
+	const creature_hand::Holdable lethys {.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Cow};
+	EXPECT_TRUE(MayHold(lethys, k_Hand, true));
+	EXPECT_FALSE(MayHold(lethys, k_Hand, false));
+	// An ally's creature that does not take hold is not held
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Cow, .asleep = true}, k_Hand, true));
+	EXPECT_FALSE(
+	    MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Cow, .scriptControlled = true}, k_Hand, true));
+	EXPECT_FALSE(MayHold({.owner = PlayerNames::PLAYER_TWO, .species = CreatureType::Ogre}, k_Hand, true));
+}
+
 TEST(CreatureHand, TheInteractTipIsForTheOwnCreatureAnywhereAndOthersInTheInfluence)
 {
 	using creature_hand::Holdable;

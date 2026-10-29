@@ -9,7 +9,8 @@
 
 // The testbed's scenarios of the joint actions of two friends, each staged close up: a kiss, a talk, a joke, a dance,
 // an argument, a mope, a show of its home, a call for attention, an order to go away, a look at another creature, a sit
-// on a hill, a meal at a field, a throwing game, a gift of a toy and a visit to the citadel
+// on a hill, a meal at a field, a throwing game, a gift of a toy and a visit to the citadel. Two scenarios show the
+// player's creature as it refuses the request of a rival god's creature.
 
 #include <optional>
 #include <string_view>
@@ -66,6 +67,50 @@ Command Smile(size_t creature, size_t at)
 }
 
 /// A scenario of two friends: a script tells the lion to smile at the tiger, then tells the tiger to do the action
+/// The player's creature wants nothing of another creature: not to play, to be friends or to see things, and it does
+/// not fear another creature or feel anger. The desires stay so every frame.
+CreatureSetup Unwilling()
+{
+	using creature_desires::Desire;
+	return {.label = "player's",
+	        .species = CreatureType::Cow,
+	        .offset = {k_Apart * 0.5f, 0.0f},
+	        .facingDegrees = 270.0f,
+	        .needs = {.energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f},
+	        .desires = {{.desire = Desire::Play, .fraction = 0.0f},
+	                    {.desire = Desire::BeFriends, .fraction = 0.0f},
+	                    {.desire = Desire::Curiosity, .fraction = 0.0f},
+	                    {.desire = Desire::Fear, .fraction = 0.0f},
+	                    {.desire = Desire::Anger, .fraction = 0.0f}},
+	        .hold = true};
+}
+
+/// A rival god's tiger, which its god orders to ask the player's creature for a joint action
+CreatureSetup RivalAsker()
+{
+	auto asker = Asker();
+	asker.label = "rival's";
+	asker.owner = PlayerNames::PLAYER_TWO;
+	return asker;
+}
+
+/// A scenario in which the player's creature refuses: the god of the tiger orders it to do the action with the
+/// player's cow, and no script gives an order
+Scenario Refusal(std::string_view id, std::string_view name, std::string_view action, std::string_view expected)
+{
+	return {.id = id,
+	        .name = name,
+	        .facet = Facet::Mind,
+	        .description = "The player's cow and the tiger of a rival god stand 30 apart and face each other. The cow "
+	                       "wants nothing of another creature. The god of the tiger orders it to do the action with the "
+	                       "cow, as the hand of a computer god does. No script gives an order.",
+	        .expected = expected,
+	        .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	        .framing = {.shot = Shot::Overview, .distance = k_CloseUp},
+	        .creatures = {Unwilling(), RivalAsker()},
+	        .commands = {{.kind = Kind::GodOrder, .creature = 1, .delaySeconds = 2.0f, .action = action, .atCreature = 0}}};
+}
+
 Scenario TwoFriends(std::string_view id, std::string_view name, std::string_view action, std::string_view expected)
 {
 	return {.id = id,
@@ -83,6 +128,12 @@ Scenario TwoFriends(std::string_view id, std::string_view name, std::string_view
 
 void testbed_scenarios::AddFriendActionScenarios(std::vector<Scenario>& all)
 {
+	all.push_back(Refusal("friends.refused_play", "The player's creature refuses to play", "WaveAtFriend",
+	                      "The tiger asks the cow to play, with a playful face. The cow refuses, so the tiger stops. The "
+	                      "advisor says that the creature of the player refused to play."));
+	all.push_back(Refusal("friends.refused_friends", "The player's creature refuses to be friends", "KissFriend",
+	                      "The tiger asks the cow to be its friend. The cow refuses, so the tiger stops. The advisor says "
+	                      "that the creature of the player refused to be friends."));
 	all.push_back(TwoFriends("friends.wave_at_creature", "Wave at another creature", "WaveAtObject",
 	                         "The tiger walks with a smile until it is within three and a half times its height of the "
 	                         "lion. It faces the lion for 1.4 seconds and waves at it. Only a creature can be the thing of "

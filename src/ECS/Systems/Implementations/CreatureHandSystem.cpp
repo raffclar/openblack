@@ -53,6 +53,7 @@
 #include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureScars.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -273,6 +274,20 @@ std::optional<creature_hand::Holdable> HoldableOf(const ecs::Registry& registry,
 	                creature_mind::IsUnconscious(mind->idle),
 	};
 }
+
+/// The hand that holds the creature, none when no hand holds it. The hand of the creature's player can hold it, and
+/// the hand of an allied god can hold it too.
+std::optional<entt::entity> HandThatHolds(const ecs::Registry& registry, entt::entity creature)
+{
+	std::optional<entt::entity> holder;
+	registry.Each<const HandLockedCreature>([&holder, creature](entt::entity hand, const HandLockedCreature& locked) {
+		if (locked.creature == creature)
+		{
+			holder = hand;
+		}
+	});
+	return holder;
+}
 } // namespace
 
 bool CreatureHandSystem::Grab()
@@ -321,10 +336,9 @@ std::optional<entt::entity> CreatureHandSystem::GetLockedCreature(PlayerNames pl
 
 bool CreatureHandSystem::IsLocked(entt::entity creature) const
 {
-	// Only the hand of the creature's own player can hold it
+	// The hand of the creature's own player, or the hand of an allied god, holds it
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
-	return body != nullptr && GetLockedCreature(body->owner) == creature;
+	return registry.Valid(creature) && registry.AllOf<Creature>(creature) && HandThatHolds(registry, creature).has_value();
 }
 
 void CreatureHandSystem::DoLock(PlayerNames player, entt::entity creature)
@@ -451,16 +465,23 @@ bool CreatureHandSystem::MayHold(entt::entity creature) const
 
 bool CreatureHandSystem::MayHoldFor(PlayerNames player, entt::entity creature)
 {
-	const auto holdable = HoldableOf(Locator::entitiesRegistry::value(), creature);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto holdable = HoldableOf(registry, creature);
 	if (!holdable.has_value())
 	{
 		return false;
 	}
-	if (!creature_hand::MayHold(*holdable, player))
+	// The god that has the creature must be the ally of the player for the hand of the player to hold it
+	const bool allied = holdable->owner != PlayerNames::NEUTRAL && Locator::playerSystem::has_value() &&
+	                    player_relations::IsAlly(Locator::playerSystem::value().AllyStrength(holdable->owner, player));
+	// The hand of one player only holds the creature at a time
+	const auto holder = HandThatHolds(registry, creature);
+	const bool heldByOther = holder.has_value() && holder != HandOf(player);
+	if (heldByOther || !creature_hand::MayHold(*holdable, player, allied))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
-		                   "The hand can't hold creature {}: it isn't the player's own, is an ogre, or is asleep, frozen "
-		                   "or under a script's control",
+		                   "The hand can't hold creature {}: it isn't the player's own or an ally's, another hand holds it, "
+		                   "it is an ogre, or it is asleep, frozen or under a script's control",
 		                   entt::to_integral(creature));
 		return false;
 	}
