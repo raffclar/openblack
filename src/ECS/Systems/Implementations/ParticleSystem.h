@@ -260,6 +260,10 @@ public:
 	void AddBeliefSprite(const particles::BeliefSprite& sprite) override;
 	void AddHandManaPathSpark(const particles::mana_path::Spark& spark) override;
 	void AddStormBolt(glm::vec3 cloudPoint) override;
+	void ExplodeObject(entt::entity object, glm::vec3 origin, float speed) override
+	{
+		_world.ObjectEffects()->ExplodeObject(object, origin, speed);
+	}
 	void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) override;
 	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override { _world.AddOwnedSheet(sheet); }
 	void UpdateFrame(float gameSeconds, const HandFrame& hand) override;

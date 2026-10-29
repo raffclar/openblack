@@ -2818,6 +2818,12 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	case ScriptArgument::Kind::Creature:
 		object = CreatureAt(argument.index);
 		break;
+	case ScriptArgument::Kind::Temple:
+		if (argument.index < _temples.size())
+		{
+			object = _temples.at(argument.index);
+		}
+		break;
 	case ScriptArgument::Kind::Position:
 		// A position is three values, which only a native call gives
 		return std::nullopt;

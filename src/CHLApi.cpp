@@ -165,6 +165,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
+#include "ECS/ScriptDelete.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/ScriptPopulate.h"
@@ -3601,6 +3602,7 @@ static void DeleteNow(entt::entity object)
 
 void ObjectDelete() // 048 OBJECT_DELETE
 {
+	namespace script_delete = ecs::script_delete;
 	const auto mode = Pop().intVal;
 	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
@@ -3608,48 +3610,51 @@ void ObjectDelete() // 048 OBJECT_DELETE
 	{
 		return;
 	}
-	// TODO(opening): a puzzle game is only let go of by the script
-	switch (mode)
+	const auto* temple = registry.TryGet<const ecs::components::Temple>(object);
+	const auto step = script_delete::Choose(mode, {.puzzleGame = registry.AllOf<ecs::components::PuzzleGame>(object),
+	                                               .object = IsScriptObject(registry, object),
+	                                               .creature = registry.AllOf<ecs::components::Creature>(object),
+	                                               .temple = temple != nullptr,
+	                                               .templeDestroying = temple != nullptr && temple->destroying});
+	const auto* transform = registry.TryGet<const Transform>(object);
+	const auto position = transform != nullptr ? transform->position : glm::vec3(0.0f);
+	switch (step)
 	{
-	case 0:
-		// It goes at once
+	case script_delete::Step::Remove:
 		DeleteNow(object);
 		return;
-	case 1:
-		// Only one of the world's objects goes this way
-		if (!IsScriptObject(registry, object))
-		{
-			return;
-		}
-		if (registry.AllOf<ecs::components::Creature>(object))
-		{
-			// A creature fizzes right out over two seconds and goes for good
-			Locator::creatureFizzSystem::value().SetFizz(object, 1.0f, 2.0f, true);
-			return;
-		}
-		// A ghost of it flickers out where it stood
+	case script_delete::Step::Fizz:
+		Locator::creatureFizzSystem::value().SetFizz(object, 1.0f, 2.0f, true);
+		break;
+	case script_delete::Step::GhostThenRemove:
 		ecs::world_objects::LeaveGhost(object);
 		DeleteNow(object);
 		return;
-	case 2:
-		if (!IsScriptObject(registry, object))
-		{
-			return;
-		}
-		// TODO(opening): its model breaks up where it stood (15 and 3 to the 3D engine's break-up)
+	case script_delete::Step::BreakUpThenRemove:
+		// The pieces fly out from the place where it stood
+		Locator::particleSystem::value().ExplodeObject(object, position, script_delete::k_ExplodeSpeed);
 		DeleteNow(object);
 		return;
-	case 3:
-		// A temple starts its destruction
-		// TODO(opening): a heart already flagged breaks up instead (80 and 3 to the 3D engine's break-up), and is let go
-		if (registry.AllOf<ecs::components::Temple>(object) && Locator::templeDestructionSystem::has_value())
+	case script_delete::Step::StartTempleDestruction:
+		if (Locator::templeDestructionSystem::has_value())
 		{
 			Locator::templeDestructionSystem::value().Start(object);
 		}
-		return;
-	default:
-		// Any other mode only lets it go
-		return;
+		break;
+	case script_delete::Step::BreakUpTemple:
+		// The temple stays until its destruction ends
+		Locator::particleSystem::value().ExplodeObject(object, position, script_delete::k_TempleExplodeSpeed);
+		break;
+	case script_delete::Step::ClearPuzzle:
+		// TODO(puzzle-games): the puzzle game removes its pieces. The stand-in puzzle game has no pieces
+		break;
+	case script_delete::Step::LetGo:
+		break;
+	}
+	// The script lets go of the thing. A flock or a dance that stays loses its members
+	if (registry.Valid(object))
+	{
+		static_cast<void>(Locator::scriptObjects::value().Disband(object));
 	}
 }
 
