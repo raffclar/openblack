@@ -28,15 +28,12 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/Sound.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
-#include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -75,6 +72,7 @@
 #include "Physics/ObjectRules.h"
 #include "Physics/PairRules.h"
 #include "Resources/ResourceManager.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs;

@@ -22,8 +22,8 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/Systems/SavedStateInterface.h"
-#include "MusicType.h"
-#include "ScriptMusic.h"
+#include "Sound/MusicType.h"
+#include "Sound/ScriptMusic.h"
 
 namespace openblack::audio
 {

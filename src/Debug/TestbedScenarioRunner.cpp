@@ -56,8 +56,6 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/CustomMusicPlayerInterface.h"
 #include "Audio/GameMusic.h"
-#include "Audio/HeaderOverrides.h"
-#include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
@@ -272,6 +270,8 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
+#include "Sound/HeaderOverrides.h"
+#include "Sound/MusicMood.h"
 #include "TestbedDispenserGrid.h"
 #include "Windowing/WindowingInterface.h"
 

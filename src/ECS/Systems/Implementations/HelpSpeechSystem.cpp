@@ -15,10 +15,10 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Audio/AudioManagerInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -26,7 +26,7 @@ using namespace openblack::ecs::systems;
 namespace
 {
 /// Whether the length of its sample times a spoken line, not the sound device
-bool TimedByLength(const audio::AudioManagerInterface& audio)
+bool TimedByLength(const audio::SoundRequestInterface& audio)
 {
 	return audio::TimedByLength(audio.IsDeviceLost(), Locator::time::value().GetFixedFrameTime().has_value());
 }
@@ -50,7 +50,7 @@ void HelpSpeechSystem::Say(uint32_t text, audio::SpeechVoice voice, std::optiona
 		return;
 	}
 	// Placed only when the script gives a position, and it stays there. The voice rules know the line by its voice.
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto emitter = audio.StartSoundEffect(
 	    sample->sound,
 	    {.position = position, .voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::OwnerNumberOf(voice)});
@@ -86,7 +86,7 @@ size_t HelpSpeechSystem::GetSpokenTextCount() const
 
 void HelpSpeechSystem::Stop(audio::SpeechVoice voice, audio::SpeechBank bank)
 {
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	_voices.Stop(voice, bank, [&audio](entt::entity emitter) {
 		if (audio.EmitterExists(emitter))
 		{

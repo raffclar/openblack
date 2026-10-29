@@ -25,7 +25,6 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
@@ -54,6 +53,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

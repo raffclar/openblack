@@ -20,9 +20,6 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -77,6 +74,9 @@
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
 #include "Physics/ObjectRules.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -101,7 +101,7 @@ constexpr std::array<audio::SoundId, 3> k_TreePlantings = {audio::SoundId::G_Pla
 /// A sound at a point, played for what owns it
 void PlaySound(audio::SoundId sound, glm::vec3 point, entt::entity owner)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(sound), {.position = point, .owner = owner});
 	}

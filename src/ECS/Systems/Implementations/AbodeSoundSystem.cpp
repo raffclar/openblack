@@ -17,8 +17,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Vector.h"
@@ -31,6 +29,8 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -38,7 +38,7 @@ using namespace openblack::ecs::systems;
 
 void AbodeSoundSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
-	if (!Locator::audio::has_value() || !Locator::objectDrawListSystem::has_value() || !Locator::skySystem::has_value() ||
+	if (!Locator::sounds::has_value() || !Locator::objectDrawListSystem::has_value() || !Locator::skySystem::has_value() ||
 	    !Locator::camera::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
@@ -66,7 +66,7 @@ void AbodeSoundSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 	const auto keys = abode_sounds::KeysAt(abode_sounds::Darkness(hour, sky.GetDayNightTimes()), hour).ToArray();
 	const auto camera = Locator::camera::value().GetOrigin();
 	auto& random = Locator::gameRandom::value();
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto bank = std::string(abode_sounds::k_Bank);
 
 	for (const auto entity : drawList.GetList())

@@ -15,7 +15,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Audio/AudioManagerInterface.h"
 #include "Creature/PrimaryCreature.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -39,6 +38,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -108,9 +108,9 @@ public:
 		{
 			Locator::magicSystem::value().ReleaseCreatureCast(creature);
 		}
-		if (Locator::audio::has_value())
+		if (Locator::sounds::has_value())
 		{
-			Locator::audio::value().StopOwnedSounds(creature);
+			Locator::sounds::value().StopOwnedSounds(creature);
 		}
 	}
 

@@ -13,10 +13,10 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "Locator.h"
+#include "Sound/ScriptSoundEffect.h"
 
 using namespace openblack;
 using namespace openblack::audio;

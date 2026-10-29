@@ -16,9 +16,7 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Audio/AudioManagerInterface.h"
 #include "Audio/SoundDecoder.h"
-#include "Audio/WaveCueLabels.h"
 #include "Common/GameLanguage.h"
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -32,6 +30,8 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundRequestInterface.h"
+#include "Sound/WaveCueLabels.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -49,7 +49,7 @@ bool Sounding(entt::entity emitter)
 	{
 		return false;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	return audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
 }
 
@@ -62,7 +62,8 @@ uint32_t NowMs()
 /// Whether the length of its sample times the advisor's line, not the sound device
 bool TimedByLength()
 {
-	return audio::TimedByLength(Locator::audio::value().IsDeviceLost(), Locator::time::value().GetFixedFrameTime().has_value());
+	return audio::TimedByLength(Locator::sounds::value().IsDeviceLost(),
+	                            Locator::time::value().GetFixedFrameTime().has_value());
 }
 
 /// A line's recording decoded once more, as the sound plays it, with the cue labels its gestures are read from
@@ -112,7 +113,7 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 			return false;
 		}
 		// Heard everywhere, wherever the advisor is. The voice rules know the advisors' lines by their own number.
-		auto& sounds = Locator::audio::value();
+		auto& sounds = Locator::sounds::value();
 		_advisorLine = sounds.StartSoundEffect(
 		    *sound, {.voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::k_AdvisorOwnerNumber});
 		// Its length is known once it has been made ready to play
@@ -129,12 +130,12 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		{
 			return _advisorPlayback.Progress(NowMs());
 		}
-		return Sounding(_advisorLine) ? Locator::audio::value().GetProgress(_advisorLine) : 1.0f;
+		return Sounding(_advisorLine) ? Locator::sounds::value().GetProgress(_advisorLine) : 1.0f;
 	};
 	audio.stop = [this](uint32_t) {
-		if (_advisorLine != entt::null && Locator::audio::value().EmitterExists(_advisorLine))
+		if (_advisorLine != entt::null && Locator::sounds::value().EmitterExists(_advisorLine))
 		{
-			Locator::audio::value().StopEmitter(_advisorLine);
+			Locator::sounds::value().StopEmitter(_advisorLine);
 		}
 		_advisorLine = entt::null;
 		_advisorPlayback = {};
@@ -165,7 +166,7 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		{
 			return static_cast<int64_t>(NowMs() - _advisorPlayback.startMs);
 		}
-		return static_cast<int64_t>(Locator::audio::value().GetProgress(_advisorLine) * _advisorPlayback.lengthMs);
+		return static_cast<int64_t>(Locator::sounds::value().GetProgress(_advisorLine) * _advisorPlayback.lengthMs);
 	};
 	audio.tickMs = []() { return NowMs(); };
 	audio.localRand = [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); };
@@ -205,7 +206,7 @@ help::DialogueText::Queries HelpTextSystem::DialogueQueries()
 	queries.voice = [](uint32_t number) -> std::optional<help::DialogueVoice> {
 		const auto sample = Locator::helpSpeechSystem::value().GetTable().Find(number);
 		const bool known = sample && Locator::resources::value().GetSounds().Contains(sample->sound);
-		const bool deviceWorks = Locator::audio::has_value() && Locator::audio::value().IsInstalled();
+		const bool deviceWorks = Locator::sounds::has_value() && Locator::sounds::value().IsInstalled();
 		return help::VoiceFor(known, known && sample->bank == audio::SpeechBank::HelpSprites, deviceWorks);
 	};
 	queries.turn = []() { return Locator::time::value().GetTurn(); };

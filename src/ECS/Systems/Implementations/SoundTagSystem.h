@@ -18,8 +18,8 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
-#include "Audio/ScriptSoundEffect.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "Sound/ScriptSoundEffect.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"

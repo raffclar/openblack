@@ -38,8 +38,6 @@
 #include "3D/LandAvoid.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Camera/CreatureInteractCameraModel.h"
@@ -136,6 +134,8 @@
 #include "Particles/LightSheet.h"
 #include "Physics/TurnRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -517,7 +517,7 @@ constexpr auto k_DirectSound = entt::hashed_string("InGame.sad/1");
 
 void PlayDirectSound()
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		// Each click is a sound of its own to the voice rules
 		audio::StartGameSoundEffect(k_DirectSound.value(), {.voiceOwner = audio::VoiceOwner::OwnSound});
@@ -846,7 +846,7 @@ void StartArenaFight(ecs::Registry& registry, entt::entity entity, entt::entity 
 	{
 		taken.ring->SetHidden(false);
 	}
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(k_ArenaDrawnSound.value(),
 		                            {.position = registry.Get<const Transform>(entity).position, .owner = entity});

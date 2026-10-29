@@ -18,8 +18,8 @@
 #include <string_view>
 #include <vector>
 
-#include "Audio/AnimEffectKeys.h"
 #include "Enums.h"
+#include "Sound/AnimEffectKeys.h"
 
 /// What a creature sounds like. Almost every sound a creature makes is placed on a moment of one of its animations: a
 /// footstep as a foot lands, a roar as the mouth opens, a snore as it breathes in. When the animation plays past that

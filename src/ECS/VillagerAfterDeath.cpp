@@ -23,8 +23,6 @@
 #include "3D/L3DMesh.h"
 #include "Animals/AnimalAnimation.h"
 #include "Animals/AnimalRules.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/GuidanceHeard.h"
@@ -54,6 +52,8 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/HelpSpeech.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -149,7 +149,7 @@ bool MayHearGuidance(PlayerNames here, GuidanceSound sound, const villager_death
 /// The guidance's line of a death in the village, one of its five at random
 void PlayDeathLine(PlayerNames here)
 {
-	if (!Locator::helpSpeechSystem::has_value() || !Locator::audio::has_value() || !Locator::resources::has_value() ||
+	if (!Locator::helpSpeechSystem::has_value() || !Locator::sounds::has_value() || !Locator::resources::has_value() ||
 	    !MayHearGuidance(here, GuidanceSound::DeathInVillage, villager_death::k_DeathLineKind))
 	{
 		return;
@@ -161,9 +161,9 @@ void PlayDeathLine(PlayerNames here)
 	                    sound.has_value() ? "found" : "missing");
 	if (sound.has_value() && Locator::resources::value().GetSounds().Contains(*sound))
 	{
-		Locator::audio::value().StartSoundEffect(*sound, {.pitchPercent = villager_death::k_DeathLinePitch,
-		                                                  .volume = villager_death::k_DeathLineVolume,
-		                                                  .voicePlayType = pack::AudioBankLoop::Once});
+		Locator::sounds::value().StartSoundEffect(*sound, {.pitchPercent = villager_death::k_DeathLinePitch,
+		                                                   .volume = villager_death::k_DeathLineVolume,
+		                                                   .voicePlayType = pack::AudioBankLoop::Once});
 	}
 }
 } // namespace

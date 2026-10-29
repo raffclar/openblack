@@ -15,7 +15,7 @@
 #include <gtest/gtest.h>
 
 #include "Audio/AxisLocks.h"
-#include "Audio/HelpSpeech.h"
+#include "Sound/HelpSpeech.h"
 
 using namespace openblack::audio;
 

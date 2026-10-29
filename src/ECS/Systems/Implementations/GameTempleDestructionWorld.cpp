@@ -15,8 +15,6 @@
 
 #include <LHVM.h>
 
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Registry.h"
@@ -33,6 +31,8 @@
 #include "Locator.h"
 #include "Particles/ParticleEffect.h"
 #include "ScriptHeaders/ScriptStart.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -69,7 +69,7 @@ bool GameTempleDestructionWorld::NetworkGame() const
 
 entt::entity GameTempleDestructionWorld::StartLoop(entt::id_type sound, glm::vec3 position, entt::entity owner)
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return entt::null;
 	}
@@ -83,7 +83,7 @@ entt::entity GameTempleDestructionWorld::StartLoop(entt::id_type sound, glm::vec
 
 void GameTempleDestructionWorld::PlayOnce(entt::id_type sound, glm::vec3 position, entt::entity owner, audio::Follows follows)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(
 		    sound, {.position = position, .owner = owner, .voiceOwner = audio::VoiceOwner::OwnSound, .follows = follows});
@@ -92,9 +92,9 @@ void GameTempleDestructionWorld::PlayOnce(entt::id_type sound, glm::vec3 positio
 
 void GameTempleDestructionWorld::StopSound(entt::entity emitter)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().StopEmitter(emitter);
+		Locator::sounds::value().StopEmitter(emitter);
 	}
 }
 

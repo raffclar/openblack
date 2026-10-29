@@ -41,13 +41,13 @@
 #include "ECS/Registry.h"
 #include "ECS/SoundPoint.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "EmitterFollow.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "HeaderOverrides.h"
-#include "HearingRange.h"
-#include "ListenerFrame.h"
 #include "Locator.h"
 #include "Resources/Resources.h"
+#include "Sound/EmitterFollow.h"
+#include "Sound/HeaderOverrides.h"
+#include "Sound/HearingRange.h"
+#include "Sound/ListenerFrame.h"
 #include "SoundDecoder.h"
 
 using namespace openblack::ecs::components;

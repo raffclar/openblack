@@ -22,8 +22,6 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/HelpSpeech.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
@@ -43,6 +41,8 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/HelpSpeech.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -140,7 +140,7 @@ void MakeAgain(entt::entity puzzle, PuzzleGame& game, size_t slot, const HanoiBl
 	PieceAt(game, slot) = piece;
 	game.kept.at(slot) = block;
 	registry.Assign<ScriptControlled>(piece);
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		const auto sample = k_PieceSound + LocalRandom(k_PieceSounds);
 		audio::StartGameSoundEffect(entt::hashed_string(fmt::format("{}/{}", k_PieceBank, sample).c_str()).value(), {});

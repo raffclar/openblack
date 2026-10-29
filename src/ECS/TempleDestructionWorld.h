@@ -21,10 +21,10 @@
 #include <glm/vec3.hpp>
 
 #include "3D/ModelSurface.h"
-#include "Audio/EmitterFollow.h"
 #include "Enums.h"
 #include "Particles/PlasmaCommand.h"
 #include "Physics/TempleHeart.h"
+#include "Sound/EmitterFollow.h"
 
 namespace openblack
 {

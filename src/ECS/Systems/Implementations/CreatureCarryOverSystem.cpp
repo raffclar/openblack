@@ -24,7 +24,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/Sound.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -46,6 +45,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "Locator.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

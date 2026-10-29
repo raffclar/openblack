@@ -19,12 +19,12 @@
 #include <SASFile.h>
 #include <gtest/gtest.h>
 
-#include "Audio/AnimEffectKeys.h"
-#include "Audio/ClipSounds.h"
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "Sound/AnimEffectKeys.h"
+#include "Sound/ClipSounds.h"
 
 using namespace openblack;
 using namespace openblack::ecs;

@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundRequests.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/SoundTag.h"
@@ -176,6 +177,7 @@ protected:
 	{
 		Locator::entitiesRegistry::emplace<ecs::Registry>();
 		Locator::audio::emplace<FakeAudio>();
+		Locator::sounds::emplace<audio::GameSoundRequests>();
 		Locator::resources::emplace<resources::Resources>();
 		Locator::camera::emplace(glm::vec3(0.0f));
 		Locator::camera::value().SetOrigin(glm::vec3(0.0f));
@@ -193,6 +195,7 @@ protected:
 	{
 		Locator::camera::reset();
 		Locator::resources::reset();
+		Locator::sounds::reset();
 		Locator::audio::reset();
 		Locator::entitiesRegistry::reset();
 	}

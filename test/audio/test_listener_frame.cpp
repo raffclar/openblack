@@ -14,8 +14,8 @@
 #include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
-#include "Audio/ListenerFrame.h"
 #include "Camera/Camera.h"
+#include "Sound/ListenerFrame.h"
 
 using namespace openblack;
 

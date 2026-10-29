@@ -19,11 +19,11 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/GameRandom.h"
+#include "Sound/SoundRequestInterface.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
@@ -954,7 +954,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::SoundTags:
 		// The objects' looping sounds start again where they stopped, within reach of where the game hears them from
-		Locator::soundTagSystem::value().ProcessTurn(Locator::audio::value().GetListener().origin);
+		Locator::soundTagSystem::value().ProcessTurn(Locator::sounds::value().GetListener().origin);
 		break;
 	case Step::Ambience:
 		// The view does this step

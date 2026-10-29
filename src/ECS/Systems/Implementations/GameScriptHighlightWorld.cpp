@@ -19,7 +19,6 @@
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Animal.h"
@@ -44,6 +43,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;

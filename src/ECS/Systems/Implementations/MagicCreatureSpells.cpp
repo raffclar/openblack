@@ -22,9 +22,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/CreatureBody.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureHelp.h"
@@ -52,6 +49,9 @@
 #include "Magic/MagicTables.h"
 #include "MagicSystem.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -379,14 +379,14 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 		// The spell's own sound starts on the creature as the spell takes hold, from the spells' bank: the growing
 		// creature's as it grows, the shrinking one's as it shrinks. It plays only as its sample allows, and never while
 		// the camera is inside the temple.
-		if (effect.soundAction != 0 && Locator::audio::has_value() &&
+		if (effect.soundAction != 0 && Locator::sounds::has_value() &&
 		    !openblack::audio::CurrentSoundEffectConditions().insideTemple)
 		{
 			const std::array<int32_t, 5> keys {0, 0, 0, 0, effect.soundAction};
 			if (const auto* transform = registry.TryGet<const Transform>(entity))
 			{
 				// The sound counts as at the camera, so the distance never stops it
-				auto& audio = Locator::audio::value();
+				auto& audio = Locator::sounds::value();
 				const auto played = audio.PlayAnimEffect(std::string(k_SpellSoundBank), keys, entity, transform->position,
 				                                         openblack::audio::CurrentSoundEffectConditions(),
 				                                         openblack::audio::AnimEffectMeasure::AtCamera);
@@ -496,12 +496,12 @@ void MagicSystem::ApplyCreatureSpell(entt::entity entity, const creature_spells:
 
 void MagicSystem::KeepCreatureSpellSounds()
 {
-	if (!Locator::audio::has_value() || !Locator::camera::has_value() || !Locator::resources::has_value())
+	if (!Locator::sounds::has_value() || !Locator::camera::has_value() || !Locator::resources::has_value())
 	{
 		_creatureSpellSounds.clear();
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	auto& registry = EntityRegistry();
 	auto& sounds = Locator::resources::value().GetSounds();
 	const auto eye = Locator::camera::value().GetOrigin();

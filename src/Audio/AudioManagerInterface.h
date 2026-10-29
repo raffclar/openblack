@@ -21,14 +21,15 @@
 #include "AudioDecoderInterface.h"
 #include "AudioPlayerInterface.h"
 #include "ECS/Components/AudioEmitter.h"
-#include "EmitterFollow.h"
-#include "HearingRange.h"
-#include "ListenerFrame.h"
 #include "MusicPlayer.h"
-#include "ScriptSoundEffect.h"
 #include "Sound.h"
+#include "Sound/EmitterFollow.h"
+#include "Sound/HearingRange.h"
+#include "Sound/ListenerFrame.h"
+#include "Sound/ScriptSoundEffect.h"
+#include "Sound/SoundRequestInterface.h"
+#include "Sound/VoiceOwner.h"
 #include "SoundGroup.h"
-#include "VoiceOwner.h"
 
 namespace openblack
 {
@@ -48,64 +49,6 @@ namespace audio
 
 class AtmosPlayer;
 class CustomMusicPlayerInterface;
-
-/// What became of an animation effect asked for
-struct AnimEffectPlay
-{
-	enum class Outcome : uint8_t
-	{
-		Played,
-		/// The bank is not loaded or has no effect for the keys
-		NoEffect,
-		/// The sample the effect picked is not loaded
-		NotLoaded,
-		/// The listener is beyond the sample's maximum distance
-		TooFar,
-		/// The bank header plays the sample once and the owner is playing it or another of its voice group
-		AlreadyPlaying,
-		/// The sample the effect picked may not be heard in the conditions it was asked under
-		NotHeard,
-		/// All the voices play samples of the same or a higher priority
-		NoVoice,
-	};
-	Outcome outcome {Outcome::NoEffect};
-	/// The emitter playing it, null when nothing plays
-	entt::entity emitter {entt::null};
-	/// The sample the effect picked, none when the bank has no effect for the keys
-	std::optional<int32_t> sample;
-};
-
-/// How a sound effect is played, beyond what its bank header says
-struct SoundEffectOptions
-{
-	/// A 3D sound anchored there, otherwise centred on the listener
-	std::optional<glm::vec3> position;
-	/// Its playback rate in percent, before the bank header's random deviation. The bank header's rate wins, if it has
-	/// one.
-	std::optional<uint32_t> pitchPercent;
-	/// Its volume, 0 to 127. The bank header's volume wins, if it has one.
-	std::optional<uint32_t> volume;
-	/// Repeat loops it until it is stopped or released; Once plays it the bank header's number of times
-	PlayType playType {PlayType::Once};
-	/// What it does about the voices that play already, unless its bank header gives another play type. Empty uses
-	/// restart, the play type of a sound effect when its caller gives no other.
-	std::optional<pack::AudioBankLoop> voicePlayType;
-	/// What it is played for: a loop tied to its owner is moved with SetEmitterPosition and stopped with
-	/// StopOwnedSounds
-	entt::entity owner {entt::null};
-	/// Whose sound it is to the voice rules
-	VoiceOwner voiceOwner {VoiceOwner::Entity};
-	/// The owner number when the voice owner is a number
-	uint32_t ownerNumber {0};
-	/// The distances it is heard at fully and no further. The bank header's distances win, if it has them, unless
-	/// callerWins has them.
-	std::optional<float> minDistance;
-	std::optional<float> maxDistance;
-	/// The settings (bits of pack::AudioBankOverride) for which the values above win over the bank header
-	uint32_t callerWins {0};
-	/// What a 3D sound does in each audio turn: it follows its owner or the listener, or it stays where it started
-	Follows follows {Follows::Nothing};
-};
 
 /// A music bank's group, its number of samples and how far it carries
 struct MusicBankInfo

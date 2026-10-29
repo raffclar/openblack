@@ -14,9 +14,6 @@
 #include <array>
 #include <utility>
 
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "ECS/AbodeKnock.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Physics.h"
@@ -27,6 +24,9 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -99,7 +99,7 @@ bool AbodeKnockSystem::Knock(entt::entity building, AbodeType type, float built,
 		_handKnock = true;
 	}
 	// Every player hears it, at the hand
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(k_KnockSounds.at(_knockSound)),
 		                            {.position = handPoint, .owner = building});
