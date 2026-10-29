@@ -542,6 +542,18 @@ void ForestSystem::JoinForest(entt::entity tree, uint32_t forest)
 	registry.AssignOrReplace<ForestMember>(tree, ForestMember {.forest = forest, .growing = growing, .listed = _treesListed++});
 }
 
+void ForestSystem::ListInForest(entt::entity tree, uint32_t forest, bool growing)
+{
+	EntityRegistry().AssignOrReplace<ForestMember>(
+	    tree, ForestMember {.forest = forest, .growing = growing, .listed = _treesListed++});
+}
+
+void ForestSystem::ResumeCounts(uint32_t lastTreeAddedTurn, uint32_t nextLandForestId)
+{
+	_lastTreeAddedTurn = lastTreeAddedTurn;
+	_nextLandForestId = nextLandForestId;
+}
+
 void ForestSystem::GrowForests()
 {
 	if (!Locator::infoConstants::has_value() || !Locator::entitiesRegistry::has_value() || !Locator::time::has_value() ||
