@@ -114,6 +114,7 @@ std::vector<Action> EachCommand()
 	    QuickLoad {},
 	    MusicMood {.creature = Entity(29), .track = 0x89ABCDEF, .mood = -0.75f},
 	    IconChargeStop {},
+	    DialogueClick {.click = true, .skipKey = true},
 	};
 }
 
@@ -138,7 +139,7 @@ Action RandomAction(std::mt19937& random)
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto wide = [&]() { return (static_cast<uint64_t>(bits(random)) << 32U) | bits(random); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 46)
+	switch (bits(random) % 47)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -308,6 +309,8 @@ Action RandomAction(std::mt19937& random)
 		return MusicMood {.creature = entity(), .track = bits(random), .mood = number()};
 	case 44:
 		return IconChargeStop {};
+	case 45:
+		return DialogueClick {.click = bits(random) % 2 == 0, .skipKey = bits(random) % 2 == 0};
 	default:
 		return PlayerLeft {};
 	}
@@ -968,4 +971,23 @@ TEST(TurnCodec, ALineOfTheChatKeepsToItsLimits)
 	// A line that says more characters than it has stops early
 	const std::vector<uint8_t> shortLine {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 41, 0, 2, 0, 'a', 0};
 	EXPECT_EQ(Decode(shortLine).error, DecodeError::Truncated);
+}
+
+TEST(TurnCodec, AClickOfTheDialogueIsOneByteOfFlags)
+{
+	const CommandBlock block {
+	    .sequence = 0, .turn = 0, .actions = {DialogueClick {.click = true}, DialogueClick {.skipKey = true}}};
+	const std::vector<uint8_t> expected {k_Version, 1, 0, 0, 0, 0, 0, 0, 2, 47, 1, 47, 2};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
+	ASSERT_EQ(actions.size(), 2);
+	EXPECT_EQ(std::get<DialogueClick>(actions[0]), (DialogueClick {.click = true}));
+	EXPECT_EQ(std::get<DialogueClick>(actions[1]), (DialogueClick {.skipKey = true}));
+
+	// A flag after the second is refused
+	auto wrong = expected;
+	wrong.back() = 4;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }

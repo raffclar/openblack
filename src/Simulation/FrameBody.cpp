@@ -40,7 +40,6 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
-#include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -292,18 +291,13 @@ void PlayFrameEffects(FrameViewInterface& view)
 	{
 		Locator::advisorVoiceSystem::value().Update();
 	}
-	// The scripts' dialogue: the player's click and the newest text sliding in
+	// The scripts' dialogue: the newest text slides in. The player's click goes to the turn as a command.
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-		const bool clicked = view.TakeDialogueClick();
-		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying();
 		Locator::helpTextSystem::value().Update({
 		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
 		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
 		    .inTemple = inTemple,
-		    // Nor can the player click or key through the advisors' lines while a hand demonstration plays
-		    .click = clicked && !demoPlaying,
-		    .skipKey = !demoPlaying && view.DialogueSkipKeyDown(),
 		});
 		// While a script plays a sung verse, the newest text's word that the song has reached gets the glow
 		view.UpdateSingAlong(inTemple);
