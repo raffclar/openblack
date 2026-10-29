@@ -23,6 +23,7 @@
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/Shark.h"
+#include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/SnowLevel.h"
 #include "ECS/Components/SoundTag.h"
@@ -123,6 +124,11 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Shark::heading>("heading")
 	    .Field<&components::Shark::clipPlace>("clipPlace")
 	    .Field<&components::Shark::drawn>("drawn");
+	Reflect<components::ShownCreatureFace>(context)
+	    .Field<&components::ShownCreatureFace::face>("face")
+	    .Field<&components::ShownCreatureFace::worldFace>("worldFace")
+	    .Field<&components::ShownCreatureFace::olderTurnPose>("olderTurnPose")
+	    .Field<&components::ShownCreatureFace::newerTurnPose>("newerTurnPose");
 	Reflect<components::SkyDome>(context)
 	    .Field<&components::SkyDome::meshId>("meshId")
 	    .Field<&components::SkyDome::textureId>("textureId")

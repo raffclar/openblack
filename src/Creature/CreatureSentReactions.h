@@ -14,6 +14,8 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Creature/CreatureFeedback.h"
+
 /// The reactions to strokes and slaps that the hand of this computer sent, which the world did not do yet. The hand
 /// counts a stroke or a slap only when the creature takes the reaction. A reaction that waits for its turn plays at the
 /// start of that turn, so the hand counts it as a reaction that plays from its start.
@@ -59,10 +61,10 @@ private:
 
 /// Whether the creature takes a new reaction now. `bodyTakes` tells whether its body takes the reaction now. A reaction
 /// that waits plays from its start. The new reaction interrupts it only if the new reaction interrupts an action at its
-/// start, as a reaction with no limit does.
-[[nodiscard]] constexpr bool TakesReaction(bool reactionWaiting, float interruptsAfter, bool bodyTakes)
+/// start.
+[[nodiscard]] constexpr bool TakesReaction(bool reactionWaiting, double interruptsAfter, bool bodyTakes)
 {
-	return bodyTakes && (!reactionWaiting || interruptsAfter <= 0.0f);
+	return bodyTakes && (!reactionWaiting || !creature_feedback::RefusesInterrupt(0.0f, interruptsAfter));
 }
 
 } // namespace openblack::creature_hand

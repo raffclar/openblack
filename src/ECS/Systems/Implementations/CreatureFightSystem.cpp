@@ -100,6 +100,7 @@
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/ShownCreatureFaces.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -2415,7 +2416,8 @@ void CreatureFightSystem::StartFaint(entt::entity creature)
 	    .mirrored = mirrored,
 	    .holdLoop = true,
 	};
-	animation.face = creature_layers::RelaxFace(animation.face);
+	shown_creature_faces::ChangeFace(registry, creature, animation.face,
+	                                 [](const creature_layers::FaceLayer& face) { return creature_layers::RelaxFace(face); });
 	SetEyes(registry, creature, creature_eyes::Mode::Closed);
 	// The people and the creatures near it react to the faint as to a death. The reaction belongs to no player.
 	if (Locator::reactionSystem::has_value())
@@ -4295,7 +4297,9 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 		fighting->played = false;
 		fight::Enter(fighting->fighter, fight::State::Finish);
 		auto& won = registry.Get<CreatureAnimation>(winner);
-		won.face = creature_layers::RelaxFace(won.face);
+		shown_creature_faces::ChangeFace(registry, winner, won.face, [](const creature_layers::FaceLayer& face) {
+			return creature_layers::RelaxFace(face);
+		});
 	}
 	// A fight won by a blow is seen by the living around the winner, if the winner has a player. The reaction runs at
 	// once: the villagers' towns move the player's alignment by what the reaction table says of a fight won.
@@ -4434,7 +4438,9 @@ void CreatureFightSystem::Leave(entt::entity creature)
 		{
 			animation->body = {};
 		}
-		animation->face = creature_layers::RelaxFace(animation->face);
+		shown_creature_faces::ChangeFace(registry, creature, animation->face, [](const creature_layers::FaceLayer& face) {
+			return creature_layers::RelaxFace(face);
+		});
 	}
 	if (_pressed.has_value() && _pressed->creature == creature)
 	{
