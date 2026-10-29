@@ -295,7 +295,7 @@ void GameSoundRequests::PlaceOwnedEmitters(const std::function<std::optional<glm
 	{
 		return;
 	}
-	emitters->Each<AudioEmitter>([&placeOf](AudioEmitter& emitter) {
+	emitters->Each<ecs::components::AudioEmitter>([&placeOf](ecs::components::AudioEmitter& emitter) {
 		if (emitter.owner == entt::null)
 		{
 			return;
