@@ -223,6 +223,11 @@ void player_statistics::CountChantsUsed(ecs::Registry& registry, PlayerNames pla
 	Update(registry, player, [amount](PlayerStatistics& statistics) { statistics.chantsUsed += amount; });
 }
 
+void player_statistics::CountInfluence(ecs::Registry& registry, PlayerNames player, float power)
+{
+	Update(registry, player, [power](PlayerStatistics& statistics) { statistics.influenceHistory.Add(power); });
+}
+
 void player_statistics::ProcessTurn(uint32_t turn)
 {
 	auto& registry = Entities();
