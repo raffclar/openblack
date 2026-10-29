@@ -268,8 +268,9 @@ class Game:
     public simulation::PlayStartViewInterface
 {
 public:
-	/// Makes the sheet of the players' symbols that the world shows, with the symbol of the player's profile. A
-	/// testbed scenario can give another symbol in place of the profile's.
+	/// Makes the sheet of the players' symbols that the world shows, with the symbol of the player's profile. Each
+	/// computer player shows the picture of its god. A testbed scenario can give another symbol in place of the
+	/// profile's.
 	void MakePlayersSymbols(std::optional<uint32_t> symbol = std::nullopt);
 	static constexpr auto k_TurnDuration = std::chrono::milliseconds(100);
 	/// About how many bytes of files the loading threads read at a time, and how much of what they make may reach the
