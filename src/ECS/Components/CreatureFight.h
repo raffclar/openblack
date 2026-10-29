@@ -123,6 +123,16 @@ struct CreatureFighting
 		Held,
 	};
 	PartnerLeft partnerLeft {PartnerLeft::None};
+	/// Whether the creature ended its response with no fear, and the game turns after that. The plan of the first
+	/// creature then ends after a set number of turns. The other creature waits until the fight of the first creature
+	/// ends.
+	bool responded {false};
+	uint32_t turnsAfterResponse {0};
+	/// Whether the creature started its response after the duel. A fight that was called off has no response.
+	bool showedResponse {false};
+	/// Whether the first creature, on the turn after its response, freed the mind of the other creature again. The other
+	/// creature then thinks and can choose a new plan, which stops the fight for both.
+	bool mindFree {false};
 };
 /// Whether a fighter is in one of the steps before the duel
 [[nodiscard]] constexpr bool IsLeadIn(CreatureFighting::Stage stage)

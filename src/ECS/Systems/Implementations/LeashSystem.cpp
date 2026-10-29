@@ -2192,10 +2192,11 @@ bool LeashSystem::TakeOutOfFight(entt::entity creature)
 		return true;
 	}
 	auto& fights = Locator::creatureFightSystem::value();
-	// On its way to a fight it takes no orders; once duelling, an order calls the fight off
-	if (fights.IsSettingUpFight(creature))
+	// The creature that started a fight takes no orders out of its duel. In its duel, an order calls the fight off. The
+	// other creature takes orders before its duel and after it: the order stops the fight, as a new plan does.
+	if (fights.StartedFight(creature) && !fights.IsDuelling(creature))
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders on its way to a fight",
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} takes no orders while it leads a fight",
 		                   entt::to_integral(creature));
 		return false;
 	}

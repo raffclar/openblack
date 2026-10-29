@@ -8030,6 +8030,36 @@ void AddCombat(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// The needs of the blue tiger are not set again each frame, so the script can take its life
+		auto asked = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		asked.hold = false;
+		all.push_back({
+		    .id = "combat.asked_stops_after_duel",
+		    .name = "The end of the first tiger stops the asked tiger after the duel",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger asks the blue tiger to fight, and both fight by themselves. The creatures do not "
+		                   "faint. When the duel is on, a script sets the life of the blue tiger to one half. Two seconds "
+		                   "later the fight of the red tiger stops.",
+		    .expected = "The duel stops, and both tigers finish their moves and play their responses. The red tiger has "
+		                "more life, and its response ends first. Two turns later its fight ends. The blue tiger then "
+		                "stops at once with no fear, and it does not obey the red tiger again.",
+		    .environment = {.fainting = false},
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), asked},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 0.5f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 {.kind = Kind::CallNative,
+		                  .delaySeconds = 12.0f,
+		                  .script = "SET_PROPERTY",
+		                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+		                                       .number = static_cast<float>(script::ObjectPropertyType::Health)},
+		                                      {.kind = ScriptArgument::Kind::Creature, .index = 1},
+		                                      {.kind = ScriptArgument::Kind::Number, .number = 0.5f}}},
+		                 Fight(Kind::FightAbort, 0, 0, 2.0f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "saves.arena_ring_back",
 	    .name = "Save and load: the ring of the arena shows again",

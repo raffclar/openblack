@@ -2939,6 +2939,7 @@ bool FightLetsChoose(const ecs::Registry& registry, entt::entity creature, const
 	                     mind.idle.agenda[mind.idle.step].kind == creature_mind::Step::Kind::Fight,
 	    .won = fighting != nullptr && fighting->stage == CreatureFighting::Stage::Celebrate,
 	    .onlyAsked = fighting != nullptr && fighting->part == CreatureFighting::Part::Asked,
+	    .mindFree = fighting != nullptr && fighting->mindFree,
 	});
 }
 } // namespace
@@ -3423,12 +3424,12 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	{
 		return false;
 	}
-	// A forced plan first stops the reaction that the creature has. What the creature does stops as a failure, and this
-	// also stops a fight that it sets up, for both creatures.
+	// A forced plan first stops the reaction that the creature has. What the creature does stops as a failure. This also
+	// stops a fight that the creature is in, out of its duel.
 	EndReaction(creature);
 	if (!plan.ownFight)
 	{
-		CallOffFightSetUp(creature);
+		EndFightForPlan(creature);
 	}
 	// A creature told to do something as soon as it is made has a mind ready for it
 	SetUpMind(creature, *body, *mind);
