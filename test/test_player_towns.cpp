@@ -45,3 +45,15 @@ TEST(PlayerTowns, ThePlayersTownsComeInTheOrderThePlayerGotThem)
 	          (std::vector<entt::entity> {first, second, won}));
 	EXPECT_TRUE(openblack::ecs::player_towns::InOrder(registry, PlayerNames::PLAYER_TWO).empty());
 }
+
+TEST(PlayerTowns, TheTotalCountsOnlyThePlayersOwnTowns)
+{
+	Registry registry;
+	MakeTown(registry, 1, PlayerNames::PLAYER_ONE, 0);
+	MakeTown(registry, 2, PlayerNames::PLAYER_TWO, 0);
+	MakeTown(registry, 3, PlayerNames::PLAYER_ONE, 1);
+	MakeTown(registry, 4, PlayerNames::NEUTRAL, 0);
+	EXPECT_EQ(openblack::ecs::player_towns::Total(registry, PlayerNames::PLAYER_ONE), 2U);
+	EXPECT_EQ(openblack::ecs::player_towns::Total(registry, PlayerNames::PLAYER_TWO), 1U);
+	EXPECT_EQ(openblack::ecs::player_towns::Total(registry, PlayerNames::PLAYER_THREE), 0U);
+}

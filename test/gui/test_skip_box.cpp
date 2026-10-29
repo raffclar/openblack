@@ -29,6 +29,7 @@ using openblack::new_game_choice::Choice;
 using openblack::new_game_choice::ClampChoice;
 using openblack::new_game_choice::FirstLandStartsStory;
 using openblack::new_game_choice::IsAvailable;
+using openblack::new_game_choice::LandStartsStoryScript;
 using openblack::new_game_choice::NewGameStart;
 using openblack::new_game_choice::ParseNewGameStart;
 using openblack::new_game_choice::SkipFor;
@@ -138,6 +139,16 @@ TEST(NewGameChoice, APlaygroundStartsNoStory)
 	// A network game starts no story, on any land
 	EXPECT_FALSE(FirstLandStartsStory(false, true));
 	EXPECT_FALSE(FirstLandStartsStory(true, true));
+}
+
+// Only a new game on the first land of the story starts the story's top script
+TEST(NewGameChoice, OnlyTheFirstLandStartsTheStoryScript)
+{
+	EXPECT_TRUE(LandStartsStoryScript(1));
+	EXPECT_FALSE(LandStartsStoryScript(2));
+	EXPECT_FALSE(LandStartsStoryScript(5));
+	// A land outside the story has the number 0
+	EXPECT_FALSE(LandStartsStoryScript(0));
 }
 
 TEST(NewGameChoice, SelectionsAreBroughtIntoRange)
