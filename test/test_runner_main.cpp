@@ -12,14 +12,20 @@
 // in that source. Without the option it runs every test, as a test program with Google Test's own main would.
 
 #include <cstdio>
+#include <cstdlib>
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <string_view>
 
 #include <gtest/gtest.h>
 #include <spdlog/spdlog.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "Locator.h"
 
@@ -79,10 +85,60 @@ private:
 	std::filesystem::path _folder;
 };
 
+/// The folder of this program. A program started by hand may have any working directory.
+std::filesystem::path ProgramFolder(const char* argv0)
+{
+#ifdef _WIN32
+	std::wstring buffer(32768, L'\0');
+	const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+	if (length > 0 && length < buffer.size())
+	{
+		buffer.resize(length);
+		return std::filesystem::path(buffer).parent_path();
+	}
+#endif
+	return std::filesystem::path(argv0).parent_path();
+}
+
+/// Sets the folders that depend on the checkout (the pinned data files and the source tree) for a program that
+/// ctest did not start. ctest sets them itself, and a variable that is already set stays. The values are in a file
+/// that the build writes next to the program, so no object that a compiler cache shares between checkouts holds them.
+void ReadCheckoutFolders(const std::filesystem::path& folder)
+{
+	std::ifstream stream(folder / "openblack_test_paths.txt");
+	std::string line;
+	while (std::getline(stream, line))
+	{
+		while (!line.empty() && (line.back() == '' || line.back() == '
+'))
+		{
+			line.pop_back();
+		}
+		const auto split = line.find('=');
+		if (split == std::string::npos || split == 0)
+		{
+			continue;
+		}
+		const std::string name = line.substr(0, split);
+		// NOLINTNEXTLINE(concurrency-mt-unsafe): read only, and no other thread changes the environment
+		const char* const old = std::getenv(name.c_str());
+		if (old != nullptr && *old != '\0')
+		{
+			continue;
+		}
+#ifdef _WIN32
+		_putenv_s(name.c_str(), line.c_str() + split + 1);
+#else
+		setenv(name.c_str(), line.c_str() + split + 1, 1);
+#endif
+	}
+}
+
 } // namespace
 
 int main(int argc, char** argv)
 {
+	ReadCheckoutFolders(ProgramFolder(argv[0]));
 	testing::InitGoogleTest(&argc, argv);
 	testing::UnitTest::GetInstance()->listeners().Append(new FreshStateListener);
 	std::string source;
