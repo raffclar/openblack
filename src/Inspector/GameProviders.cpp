@@ -2897,7 +2897,8 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 	                    {}, ResultKind::List),
 	              Serve<Locator::cameraBookmarkSystem>(
 	                  "the bookmarks", [](const ecs::systems::CameraBookmarkSystemInterface& bookmarks, const QueryContext&) {
-		                  const auto* registry = Registry();
+		                  // The markers are things that only the frames make
+		                  const auto* registry = DrawnRegistry();
 		                  Json items = Json::array();
 		                  for (size_t i = 0; i < bookmarks.GetBookmarks().size(); ++i)
 		                  {

@@ -13,6 +13,7 @@
 #include <chrono>
 #include <optional>
 
+#include "ECS/Components/CameraBookmark.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -62,7 +63,14 @@ private:
 	[[nodiscard]] std::optional<View> ViewOf(size_t slot) const;
 	/// The Tab keys look at the slots of the number keys
 	[[nodiscard]] std::array<bool, camera_bookmarks::k_SteppedSlots> SteppedSet() const;
+	/// Each slot gets its number and is not set
+	void ResetSlots();
+	/// The marker of a slot shows the slot, and shows on the land only while the slot is set
+	void ShowMarker(size_t slot);
 
+	/// The bookmark of each number key. They are a part of the camera of this computer, not of the land.
+	std::array<components::CameraBookmark, camera_bookmarks::k_KeySlots> _slots {};
+	/// The marker of each slot, in the registry of the things that only the frames make
 	std::array<entt::entity, camera_bookmarks::k_KeySlots> _bookmarks {};
 	/// The view before the last jump, for the go-back key
 	std::optional<View> _back;

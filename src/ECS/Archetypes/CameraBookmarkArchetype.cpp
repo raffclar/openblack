@@ -11,6 +11,7 @@
 
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/Sprite.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
@@ -22,7 +23,8 @@ using namespace openblack::ecs::components;
 
 entt::entity CameraBookmarkArchetype::Create(uint8_t number)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	// The bookmarks are this computer's camera keys, so the frames keep their markers out of the land's registry
+	auto& registry = Locator::drawnRegistry::value();
 	constexpr auto k_Sheet = entt::hashed_string("raw/misc0a");
 	if (!Locator::resources::value().GetTextures().Contains(k_Sheet.value()))
 	{

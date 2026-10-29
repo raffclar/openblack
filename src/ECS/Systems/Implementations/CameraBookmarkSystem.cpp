@@ -31,6 +31,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -91,6 +92,7 @@ std::optional<glm::vec3> TownPlace(entt::entity town)
 
 bool CameraBookmarkSystem::Initialize()
 {
+	ResetSlots();
 	_bookmarks = archetypes::CameraBookmarkArchetype::CreateAll();
 	_back.reset();
 	_townKey.reset();
@@ -101,26 +103,64 @@ bool CameraBookmarkSystem::Initialize()
 	return true;
 }
 
+void CameraBookmarkSystem::ResetSlots()
+{
+	for (uint8_t number = 0; number < _slots.size(); ++number)
+	{
+		_slots.at(number) = CameraBookmark {.number = number};
+	}
+}
+
 void CameraBookmarkSystem::FindAfterLoad()
 {
-	_bookmarks.fill(entt::null);
-	Locator::entitiesRegistry::value().Each<const CameraBookmark>([this](entt::entity entity, const CameraBookmark& bookmark) {
-		if (bookmark.number < _bookmarks.size())
+	// The load removed the markers with the other things that only the frames make. Thus the slots get new markers.
+	ResetSlots();
+	_bookmarks = archetypes::CameraBookmarkArchetype::CreateAll();
+	// A world that an older version of the game saved keeps the bookmarks in the registry of the land. The slots take
+	// them, and the old entities go. The saved state of the system can then replace the slots.
+	auto& world = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> old;
+	world.Each<const CameraBookmark>([this, &old](entt::entity entity, const CameraBookmark& bookmark) {
+		old.push_back(entity);
+		if (bookmark.number < _slots.size())
 		{
-			_bookmarks.at(bookmark.number) = entity;
+			_slots.at(bookmark.number) = bookmark;
 		}
 	});
-	// A saved world from before the seven slots can lack a slot: the slot gets a new bookmark, not set
-	for (uint8_t number = 0; number < _bookmarks.size(); ++number)
+	world.Destroy(old.begin(), old.end());
+	for (size_t slot = 0; slot < _slots.size(); ++slot)
 	{
-		if (_bookmarks.at(number) == entt::null)
-		{
-			_bookmarks.at(number) = archetypes::CameraBookmarkArchetype::Create(number);
-		}
+		ShowMarker(slot);
 	}
 	_back.reset();
 	_lastTown.reset();
 	_followed.reset();
+}
+
+void CameraBookmarkSystem::ShowMarker(size_t slot)
+{
+	if (!Locator::drawnRegistry::has_value() || slot >= _slots.size())
+	{
+		return;
+	}
+	auto& registry = Locator::drawnRegistry::value();
+	const auto entity = _bookmarks.at(slot);
+	if (!registry.Valid(entity) || !registry.AllOf<CameraBookmark>(entity))
+	{
+		return;
+	}
+	const auto& bookmark = _slots.at(slot);
+	registry.Get<CameraBookmark>(entity) = bookmark;
+	// The marker shows only while its bookmark is set
+	if (bookmark.set)
+	{
+		registry.AssignOrReplace<Transform>(entity, camera_bookmarks::MarkerPlace(bookmark.point), glm::mat3(1.0f),
+		                                    glm::vec3(GetMarkerHalfSize(), 1.0f));
+	}
+	else if (registry.AllOf<Transform>(entity))
+	{
+		registry.Remove<Transform>(entity);
+	}
 }
 
 void CameraBookmarkSystem::SaveState(reflection::BinaryWriter& out) const
@@ -136,6 +176,14 @@ void CameraBookmarkSystem::SaveState(reflection::BinaryWriter& out) const
 	const auto townOffset = _townKey.has_value() ? std::optional(_townKey->cameraOffset) : std::nullopt;
 	reflection::Save(out, townPoint);
 	reflection::Save(out, townOffset);
+	// The saved game keeps the bookmark of each number key, as the game keeps it with the camera
+	for (const auto& bookmark : _slots)
+	{
+		reflection::Save(out, bookmark.set);
+		reflection::Save(out, bookmark.point);
+		reflection::Save(out, bookmark.thing);
+		reflection::Save(out, bookmark.cameraOffset);
+	}
 }
 
 bool CameraBookmarkSystem::LoadState(reflection::BinaryReader& in)
@@ -158,6 +206,20 @@ bool CameraBookmarkSystem::LoadState(reflection::BinaryReader& in)
 		reflection::Load(in, townPoint);
 		reflection::Load(in, townOffset);
 	}
+	// A save made while the land kept the bookmarks has no slots here. The slots that the load found in the land stay.
+	auto slots = _slots;
+	if (in.Remaining() > 0)
+	{
+		for (uint8_t number = 0; number < slots.size(); ++number)
+		{
+			auto& bookmark = slots.at(number);
+			bookmark = CameraBookmark {.number = number};
+			reflection::Load(in, bookmark.set);
+			reflection::Load(in, bookmark.point);
+			reflection::Load(in, bookmark.thing);
+			reflection::Load(in, bookmark.cameraOffset);
+		}
+	}
 	if (in.Failed())
 	{
 		return false;
@@ -171,6 +233,11 @@ bool CameraBookmarkSystem::LoadState(reflection::BinaryReader& in)
 	_current = current;
 	_followed = followed;
 	_enabled = enabled;
+	_slots = slots;
+	for (size_t slot = 0; slot < _slots.size(); ++slot)
+	{
+		ShowMarker(slot);
+	}
 	return true;
 }
 
@@ -181,41 +248,59 @@ void CameraBookmarkSystem::Update(std::chrono::milliseconds frameGameTime, bool 
 	{
 		_pulseClockMs = camera_bookmarks::StepPulseClock(_pulseClockMs, static_cast<int32_t>(frameGameTime.count()));
 	}
+	if (!Locator::drawnRegistry::has_value())
+	{
+		return;
+	}
 	const auto size = glm::vec3(GetMarkerHalfSize(), 1.0f);
-	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const CameraBookmark, Transform>([&registry, size](const CameraBookmark& bookmark, Transform& transform) {
+	const auto& world = Locator::entitiesRegistry::value();
+	auto& markers = Locator::drawnRegistry::value();
+	for (size_t slot = 0; slot < _slots.size(); ++slot)
+	{
+		const auto& bookmark = _slots.at(slot);
+		const auto entity = _bookmarks.at(slot);
+		if (!bookmark.set || !markers.Valid(entity) || !markers.AllOf<CameraBookmark>(entity))
+		{
+			continue;
+		}
+		auto* transform = markers.TryGet<Transform>(entity);
+		if (transform == nullptr)
+		{
+			continue;
+		}
+		// The marker keeps the bookmark as the turns last moved it
+		markers.Get<CameraBookmark>(entity) = bookmark;
 		// A marker on a thing goes where the frame draws the thing
 		auto point = bookmark.point;
-		if (bookmark.thing != entt::null && registry.Valid(bookmark.thing))
+		if (bookmark.thing != entt::null && world.Valid(bookmark.thing))
 		{
-			if (const auto* at = registry.TryGet<const Transform>(bookmark.thing); at != nullptr)
+			if (const auto* at = world.TryGet<const Transform>(bookmark.thing); at != nullptr)
 			{
-				point = physics_draw::Position(at->position, registry.TryGet<const PhysicsDrawPose>(bookmark.thing));
+				point = physics_draw::Position(at->position, world.TryGet<const PhysicsDrawPose>(bookmark.thing));
 			}
 		}
-		transform.position = camera_bookmarks::MarkerPlace(point);
-		transform.scale = size;
-	});
+		transform->position = camera_bookmarks::MarkerPlace(point);
+		transform->scale = size;
+	}
 }
 
 void CameraBookmarkSystem::ProcessTurn()
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	for (const auto entity : _bookmarks)
+	const auto& registry = Locator::entitiesRegistry::value();
+	for (auto& bookmark : _slots)
 	{
-		auto* bookmark = registry.TryGet<CameraBookmark>(entity);
-		if (bookmark == nullptr || !bookmark->set || bookmark->thing == entt::null)
+		if (!bookmark.set || bookmark.thing == entt::null)
 		{
 			continue;
 		}
 		// A bookmark forgets a thing that has gone, and stays at its last place
-		const auto* at = registry.Valid(bookmark->thing) ? registry.TryGet<const Transform>(bookmark->thing) : nullptr;
+		const auto* at = registry.Valid(bookmark.thing) ? registry.TryGet<const Transform>(bookmark.thing) : nullptr;
 		if (at == nullptr)
 		{
-			bookmark->thing = entt::null;
+			bookmark.thing = entt::null;
 			continue;
 		}
-		bookmark->point = at->position;
+		bookmark.point = at->position;
 	}
 
 	// The world camera flies to the bookmark that it follows, each turn. Another camera stops the follow. A move of the
@@ -241,15 +326,14 @@ void CameraBookmarkSystem::ProcessTurn()
 
 void CameraBookmarkSystem::SetBookmark(size_t slot, glm::vec3 point, std::optional<entt::entity> thing, glm::vec3 cameraOrigin)
 {
-	if (slot >= _bookmarks.size())
+	if (slot >= _slots.size())
 	{
 		return;
 	}
 	_followed.reset();
 	_current = slot;
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto entity = _bookmarks.at(slot);
-	auto& bookmark = registry.Get<CameraBookmark>(entity);
+	const auto& registry = Locator::entitiesRegistry::value();
+	auto& bookmark = _slots.at(slot);
 	bookmark.set = true;
 	bookmark.thing = entt::null;
 	bookmark.point = point;
@@ -263,32 +347,24 @@ void CameraBookmarkSystem::SetBookmark(size_t slot, glm::vec3 point, std::option
 		}
 	}
 	bookmark.cameraOffset = cameraOrigin - bookmark.point;
-	registry.AssignOrReplace<Transform>(entity, camera_bookmarks::MarkerPlace(bookmark.point), glm::mat3(1.0f),
-	                                    glm::vec3(GetMarkerHalfSize(), 1.0f));
+	ShowMarker(slot);
 }
 
 void CameraBookmarkSystem::ClearBookmark(size_t slot)
 {
-	if (slot >= _bookmarks.size())
+	if (slot >= _slots.size())
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto entity = _bookmarks.at(slot);
-	auto& bookmark = registry.Get<CameraBookmark>(entity);
+	auto& bookmark = _slots.at(slot);
 	bookmark.set = false;
 	bookmark.thing = entt::null;
-	registry.Remove<Transform>(entity);
+	ShowMarker(slot);
 }
 
 bool CameraBookmarkSystem::IsSet(size_t slot) const
 {
-	if (slot >= _bookmarks.size())
-	{
-		return false;
-	}
-	const auto* bookmark = Locator::entitiesRegistry::value().TryGet<const CameraBookmark>(_bookmarks.at(slot));
-	return bookmark != nullptr && bookmark->set;
+	return slot < _slots.size() && _slots.at(slot).set;
 }
 
 std::optional<CameraBookmarkSystem::View> CameraBookmarkSystem::ViewOf(size_t slot) const
@@ -301,7 +377,7 @@ std::optional<CameraBookmarkSystem::View> CameraBookmarkSystem::ViewOf(size_t sl
 	{
 		return std::nullopt;
 	}
-	const auto& bookmark = Locator::entitiesRegistry::value().Get<const CameraBookmark>(_bookmarks.at(slot));
+	const auto& bookmark = _slots.at(slot);
 	return View {.point = bookmark.point, .cameraOffset = bookmark.cameraOffset};
 }
 
@@ -437,7 +513,7 @@ void CameraBookmarkSystem::ToggleFollow(size_t slot)
 	{
 		return;
 	}
-	const auto& bookmark = Locator::entitiesRegistry::value().Get<const CameraBookmark>(_bookmarks.at(slot));
+	const auto& bookmark = _slots.at(slot);
 	switch (camera_bookmarks::ShiftKey(bookmark.thing != entt::null, _followed, slot))
 	{
 	case camera_bookmarks::FollowKey::Jump:

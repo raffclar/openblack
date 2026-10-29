@@ -8792,12 +8792,11 @@ void IsActive() // 361 IS_ACTIVE
 
 void SetBookmarkPosition() // 362 SET_BOOKMARK_POSITION
 {
-	// const auto unk3 = Pop().intVal;
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The game takes the four values and does nothing with them. The bookmarks do not change.
+	for (int i = 0; i < 4; ++i)
+	{
+		static_cast<void>(Pop());
+	}
 }
 
 void SetScaffoldProperties() // 363 SET_SCAFFOLD_PROPERTIES
