@@ -204,8 +204,8 @@ TEST(DedicatedServer, TheServerMakesTheSkysCloudsButNoSystemThatOnlyShowsTheWorl
 	const auto exitCode = openblack::server::Run(
 	    MockSettings(profileFolder.Path()), stop, [&shown, &clouds](uint32_t /*turn*/, uint64_t /*checksum*/) {
 		    using openblack::Locator;
-		    shown = shown || Locator::oceanSystem::has_value() || Locator::mistSystem::has_value() ||
-		            Locator::cloudSystem::has_value() || Locator::villageLightSystem::has_value();
+		    shown = shown || Locator::oceanSystem::has_value() || Locator::cloudSystem::has_value() ||
+		            Locator::villageLightSystem::has_value();
 		    // The clouds of the sky are entities of the world on every computer, so that each entity has the same id
 		    clouds = std::as_const(Locator::entitiesRegistry::value()).Size<const openblack::ecs::components::Cloud>();
 	    });
@@ -235,4 +235,18 @@ TEST(DedicatedServer, TheServerMovesTheSkysClockButDoesNotShowTheSky)
 	EXPECT_GT(turns, 0u);
 	EXPECT_FALSE(shown);
 	EXPECT_TRUE(clock);
+}
+
+// The scripts fade the mists and the turns step the fades, thus the server has the mist system too
+TEST(DedicatedServer, TheServerHasTheMistSystemThatTheScriptsAndTheTurnsUse)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool mists = true;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&mists](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    mists = mists && openblack::Locator::mistSystem::has_value();
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_TRUE(mists);
 }
