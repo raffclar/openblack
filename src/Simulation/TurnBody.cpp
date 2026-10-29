@@ -116,6 +116,7 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAfterDeath.h"
@@ -576,6 +577,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::computerPlayerSystem::has_value())
 		{
 			Locator::computerPlayerSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::TribalPowers:
+		// Each player's tribes give the player the most power that they gave it, at least 1
+		if (Locator::wonderSystem::has_value())
+		{
+			Locator::wonderSystem::value().ProcessTurn();
 		}
 		break;
 	case Step::Influence:

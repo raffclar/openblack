@@ -40,10 +40,11 @@
 #include "ECS/ShepherdRules.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
-#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TownCentreParts.h"
 #include "InfoConstants.h"
@@ -283,6 +284,13 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	case AbodeType::Creche:
 		// A crèche standing built works at once, its town sending its children there
 		creches::Made(entity);
+		break;
+	case AbodeType::Wonder:
+		// A wonder gets the power of its size. A wonder that stands finished adds its power to its player at once.
+		if (Locator::wonderSystem::has_value())
+		{
+			Locator::wonderSystem::value().Made(entity, scale);
+		}
 		break;
 	default:
 		break;

@@ -65,6 +65,7 @@
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleHeartOf.h"
@@ -397,6 +398,11 @@ void Finish(entt::entity building)
 			if (Locator::gameEndSystem::has_value())
 			{
 				Locator::gameEndSystem::value().BuildingWorks(building);
+			}
+			// A finished wonder adds its power to the power that its tribe gives its player
+			if (Locator::wonderSystem::has_value())
+			{
+				Locator::wonderSystem::value().Built(building);
 			}
 		}
 		// A finished building of a town gets its footpath from the town's storage pit

@@ -76,6 +76,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
@@ -1140,9 +1141,19 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 	}
 	// Its people living in its homes give up the work the old player set them to
 	villager_disciple::TownClaimed(town);
+	// Its finished wonders remove their power from the old player
+	if (Locator::wonderSystem::has_value())
+	{
+		Locator::wonderSystem::value().TownLeavesPlayer(town);
+	}
 	// It becomes the player's, gained after the towns they have already
 	component->owner = player;
 	component->gained = registry.Context().nextTownGained++;
+	// Its finished wonders add their power to the new player
+	if (Locator::wonderSystem::has_value())
+	{
+		Locator::wonderSystem::value().TownJoinsPlayer(town);
+	}
 	// Its people count as converted to the player
 	if (const auto* stats = registry.TryGet<const TownStats>(town))
 	{
