@@ -70,4 +70,23 @@ struct DecodeResult
 /// them. None when the decoder does not accept the data.
 [[nodiscard]] std::optional<uint64_t> CountMpegFrames(std::span<const uint8_t> data);
 
+/// The frames and the rate of one sample
+struct SoundLength
+{
+	uint64_t frames {0};
+	int sampleRate {0};
+	[[nodiscard]] float Seconds() const
+	{
+		return sampleRate != 0 ? static_cast<float>(frames) / static_cast<float>(sampleRate) : 0.0f;
+	}
+};
+
+/// The length of one sample as DecodeSound gives it, from the headers of its container, without the work to decode it.
+/// None when DecodeSound cannot decode the data.
+[[nodiscard]] std::optional<SoundLength> MeasureSound(std::span<const uint8_t> data);
+
+/// The length in seconds of a sample made of parts, as the parts are put together to play: the frames of each part that
+/// can be decoded, at the rate of the last of them. The length is the same before and after the sample is first played.
+[[nodiscard]] float MeasureSoundParts(std::span<const std::vector<uint8_t>> parts);
+
 } // namespace openblack::audio

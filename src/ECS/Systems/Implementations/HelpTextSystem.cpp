@@ -370,7 +370,7 @@ void HelpTextSystem::AdvisorSays(int32_t narrator, uint32_t text)
 	{
 		_scriptAdvisorLine = audio::SilentPlayback {
 		    .startMs = Locator::helpSpeechSystem::value().GetClockMs() + help::AdvisorVoices::SayDelayMs(hoverX),
-		    .lengthMs = sounds.Handle(*sound)->duration * 1000.0f,
+		    .lengthMs = audio::MeasureSoundParts(sounds.Handle(*sound)->buffer) * 1000.0f,
 		};
 	}
 }
