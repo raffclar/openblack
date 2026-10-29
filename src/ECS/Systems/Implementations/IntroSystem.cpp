@@ -122,7 +122,12 @@ void IntroSystem::Play(int32_t special)
 		_light = light::Make(rules::k_BoySpot, rules::k_LightWay, CrtRandom);
 		_liftClock = rules::LiftClock {};
 		_holdingBoy = false;
-		// The frames show the hand that lifts the boy when the light lands
+		// The hand's model loads now, when the light starts to fall. The frames show the hand that lifts the boy when
+		// the light lands.
+		if (Locator::resources::has_value())
+		{
+			static_cast<void>(LoadMisc(Locator::resources::value().GetMeshes(), k_HandModel));
+		}
 		return;
 	case 1:
 		if (_stage != Stage::Falling)
