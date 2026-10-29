@@ -57,23 +57,26 @@ private:
 	/// from a random angle.
 	std::optional<scaffold_offer::Found> SearchOffer(entt::entity scaffold, entt::entity town);
 	/// The building that a town offers at a place for scaffolds of a value, only of the abode number when one is given.
-	/// The fit check ignores the building `ignored`, when it is given.
+	/// The fit check ignores the building `ignored`, when it is given. With `skipFit`, every building fits.
 	std::optional<components::ScaffoldOffer> SearchTownAt(entt::entity town, glm::vec3 place, uint32_t value,
-	                                                      std::optional<AbodeNumber> only, entt::entity ignored = entt::null);
+	                                                      std::optional<AbodeNumber> only, entt::entity ignored = entt::null,
+	                                                      bool skipFit = false);
 	/// The scaffold under a scaffold that a hand holds or let go, which the held scaffold can join, none when there is
 	/// none. See the definition for the conditions.
 	[[nodiscard]] entt::entity ScaffoldUnder(entt::entity scaffold) const;
 	/// The search for an offer, then the phantom takes the offer
 	bool SearchAndTakeOffer(entt::entity scaffold, entt::entity town);
-	/// A scaffold that a hand put down gently starts the building that it offers. Whether it started the building.
-	bool BuildBuilding(entt::entity scaffold, std::optional<PlayerNames> player);
+	/// A scaffold that a hand put down gently starts the building that it offers. Whether it started the building. With
+	/// `skipFit`, the building does not have to fit on the land.
+	bool BuildBuilding(entt::entity scaffold, std::optional<PlayerNames> player, bool skipFit = false);
 	/// The scaffold makes its reaction for the player who put it down. The first people of the near towns are impressed
 	/// by the reaction at once.
 	void ImpressNearTowns(entt::entity scaffold, PlayerNames player);
 	/// Makes the wood flag of a workshop
 	entt::entity MakeFlag(entt::entity workshop);
-	/// The town starts the building that the scaffold offers, at the place of the scaffold. Whether it started it.
-	bool TryToBuild(entt::entity scaffold, entt::entity town);
+	/// The town starts the building that the scaffold offers, at the place of the scaffold. Whether it started it. With
+	/// `skipFit`, the building does not have to fit on the land.
+	bool TryToBuild(entt::entity scaffold, entt::entity town, bool skipFit);
 	/// The scaffold leaves the building site that it is on, and the building of the site goes
 	void LeaveSite(entt::entity scaffold);
 	/// The game turn makes the see-through copy that shows the phantom of the scaffold, if the scaffold has none

@@ -128,6 +128,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptRemind.h"
@@ -163,8 +164,10 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
+#include "ECS/ScriptContainerWalk.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
+#include "ECS/ScriptPoison.h"
 #include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
 #include "ECS/ScriptWeatherRules.h"
@@ -228,7 +231,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -241,11 +244,13 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingOnScreen.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/TownPlaythings.h"
 #include "ECS/VillagerAfterDeath.h"
@@ -254,6 +259,7 @@
 #include "ECS/VillagerSkeletons.h"
 #include "ECS/WalkerPlacement.h"
 #include "ECS/WallHugRules.h"
+#include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -756,6 +762,14 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for puzzle game kind {}", subtype);
 		return entt::null;
 	}
+	// A scaffold of no town and no workshop, worth what its scale gives, on the land under the place asked for
+	case ObjectType::Scaffold:
+		if (!Locator::workshopSystem::has_value())
+		{
+			break;
+		}
+		return Locator::workshopSystem::value().CreateScaffold(OnGround(position), entt::null, entt::null, yAngleRadians,
+		                                                       scale);
 	case ObjectType::Villager:
 	case ObjectType::VillagerChild:
 		// Made standing on the land under the place asked for, whatever height the script gave
@@ -1559,28 +1573,49 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 	const auto plays = Pop().uintVal;
 	const auto animation = Pop().intVal;
 	const auto object = PopObject();
-	if (!Locator::entitiesRegistry::value().Valid(object))
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
 	{
 		ObjectNoLongerValid();
 		return;
 	}
-	if (IsDirectableVillager(object))
-	{
-		// The pair serves whichever script state it goes into next: a clip and its plays for playing, the fewest and most
-		// turns to stand at each stop for wandering round a place
+	// The two numbers serve the script state that the villager goes into next. They are a clip and its plays for a
+	// clip, or the fewest and most turns at each stop for a walk round a place.
+	const auto giveVillager = [animation, plays](entt::entity villager) {
 		auto& living = Locator::livingActionSystem::value();
-		living.VillagerSetScriptNumbers(object, static_cast<uint32_t>(animation), plays);
-		living.VillagerSetScriptAnimation(object, static_cast<AnimId>(animation), plays);
+		living.VillagerSetScriptNumbers(villager, static_cast<uint32_t>(animation), plays);
+		living.VillagerSetScriptAnimation(villager, static_cast<AnimId>(animation), plays);
+	};
+	if (IsScriptContainer(registry, object))
+	{
+		// The script takes control of each member. Only a villager gets the two numbers. A creature or an animal in the
+		// group keeps the numbers that it had.
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (!registry.Valid(member))
+			{
+				continue;
+			}
+			registry.AssignOrReplace<ecs::components::ScriptControlled>(member);
+			if (IsDirectableVillager(member))
+			{
+				giveVillager(member);
+			}
+		}
 		return;
 	}
-	if (auto* mind = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureMindState>(object))
+	if (IsDirectableVillager(object))
+	{
+		giveVillager(object);
+		return;
+	}
+	if (auto* mind = registry.TryGet<ecs::components::CreatureMindState>(object))
 	{
 		// Kept for the creature until the script tells it to start
 		mind->scriptPlay = {.animation = animation, .plays = plays};
 		return;
 	}
-	// TODO(opening): groups of things
-	NotImplemented();
+	ScriptMessage("setting the state of something neither a creature nor a villager");
 }
 
 /// Whether something is drowning, as the scripts ask: a villager while it is in its drowning state, anything else
@@ -1833,6 +1868,12 @@ void GetProperty() // 021 GET_PROPERTY
 	if (object == entt::null || !registry.Valid(object))
 	{
 		ObjectNoLongerValid();
+		Pushf(0.0f);
+		return;
+	}
+	// A town, a flock or a dance gives 0 for each property but its player. A script reads its members one by one.
+	if (IsScriptContainer(registry, object) && prop != script::ObjectPropertyType::Player)
+	{
 		Pushf(0.0f);
 		return;
 	}
@@ -2122,6 +2163,8 @@ void GetProperty() // 021 GET_PROPERTY
 	}
 }
 
+static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value);
+
 void SetProperty() // 022 SET_PROPERTY
 {
 	const auto value = Popf();
@@ -2133,6 +2176,27 @@ void SetProperty() // 022 SET_PROPERTY
 		ObjectNoLongerValid();
 		return;
 	}
+	// A town, a flock or a dance gives the property to each of its members. Each member takes it as if the script set it
+	// on that member. The script does not take control of the members. When a script sets a health of 0 on a town, each
+	// villager of the town has no life. Then each villager that no script controls dies at its next check.
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			if (registry.Valid(member))
+			{
+				SetPropertyOf(member, prop, value);
+			}
+		}
+		return;
+	}
+	SetPropertyOf(object, prop, value);
+}
+
+/// One property of one thing, as a script sets it on that thing
+static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, float value)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	if (const auto need = NeedOf(prop); need.has_value())
 	{
 		auto* needs = CreatureNeedsOf(object);
@@ -4102,7 +4166,9 @@ void SetGamespeed() // 066 SET_GAMESPEED
 	}
 }
 
-void CallInNear() // 067 CALL_IN_NEAR
+/// The first thing of a type and subtype in a container, inside the radius of a place or outside it. The game uses
+/// the same search for a town or a flock in the two cases, and only the distance test changes.
+static void CallInByDistance(bool near)
 {
 	const auto excludingScripted = Pop().intVal != 0;
 	const auto radius = Popf();
@@ -4144,8 +4210,8 @@ void CallInNear() // 067 CALL_IN_NEAR
 			return;
 		}
 	}
-	// The first of its things of the type and subtype within the radius of the place, passing over those a script holds
-	// when asked to
+	// The first of its things of the type and subtype on the correct side of the radius, passing over those a script
+	// holds when asked to
 	const auto at = map_coords::FromMetres({position.x, position.z});
 	for (const auto member : ContainerMembers(registry, container))
 	{
@@ -4155,8 +4221,12 @@ void CallInNear() // 067 CALL_IN_NEAR
 			continue;
 		}
 		const auto kind = ecs::script_find::KindOf(registry, member);
-		if (!kind.has_value() || !ecs::script_find::Matches(*kind, objectType, subtype) ||
-		    gutils::GetDistanceInMetres(at, ScriptFindPosition(registry, member)) > radius)
+		if (!kind.has_value() || !ecs::script_find::Matches(*kind, objectType, subtype))
+		{
+			continue;
+		}
+		const float distance = gutils::GetDistanceInMetres(at, ScriptFindPosition(registry, member));
+		if (near ? distance > radius : !ecs::script_containers::IsNotNear(distance, radius))
 		{
 			continue;
 		}
@@ -4165,6 +4235,11 @@ void CallInNear() // 067 CALL_IN_NEAR
 		return;
 	}
 	notFound();
+}
+
+void CallInNear() // 067 CALL_IN_NEAR
+{
+	CallInByDistance(true);
 }
 
 void OverrideStateAnimation() // 068 OVERRIDE_STATE_ANIMATION
@@ -4941,7 +5016,8 @@ void MoveCameraToFaceObject() // 107 MOVE_CAMERA_TO_FACE_OBJECT
 void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 {
 	// How full the moon was the last time it showed: 0 at the full moon, 1 at a new moon
-	const auto* moon = Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+	const auto* moon =
+	    Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skyClockSystem::value().GetEntities().moon);
 	Pushf(graphics::moon::ScriptPercentage(moon != nullptr ? moon->phase : 0.0f));
 }
 
@@ -5029,12 +5105,12 @@ void RemoveReference() // 111 REMOVE_REFERENCE
 void SetGameTime() // 112 SET_GAME_TIME
 {
 	const auto time = Popf();
-	Locator::skySystem::value().SetTime(time);
+	Locator::skyClockSystem::value().SetTime(time);
 }
 
 void GetGameTime() // 113 GET_GAME_TIME
 {
-	Pushf(Locator::skySystem::value().GetClock().GetScriptTime());
+	Pushf(Locator::skyClockSystem::value().GetClock().GetScriptTime());
 }
 
 /// The local time of the player's computer now. In a game for more than one player, the game tells the script that
@@ -5416,15 +5492,8 @@ void PlaySpiritAnim() // 140 PLAY_SPIRIT_ANIM
 
 void CallInNotNear() // 141 CALL_IN_NOT_NEAR
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto radius = Popf();
-	// const auto pos = PopVec();
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The first thing of the type and subtype in the container that is farther from the place than the radius
+	CallInByDistance(false);
 }
 
 void SetCameraZone() // 142 SET_CAMERA_ZONE
@@ -5674,40 +5743,97 @@ void GetObjectHandIsOver() // 160 GET_OBJECT_HAND_IS_OVER
 
 void IdPoisonedSize() // 161 ID_POISONED_SIZE
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto container = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (container == entt::null || !registry.Valid(container))
+	{
+		ScriptMessage("Thing not valid");
+		Pushf(0.0f);
+		return;
+	}
+	if (!IsScriptContainer(registry, container))
+	{
+		ScriptMessage("No Loop funtion for type");
+		Pushf(0.0f);
+		return;
+	}
+	// How many of its members are poisoned
+	const auto members = ContainerMembers(registry, container);
+	Pushf(static_cast<float>(std::ranges::count_if(
+	    members, [&registry](entt::entity member) { return ecs::script_poison::IsPoisoned(registry, member); })));
 }
 
 void IsPoisoned() // 162 IS_POISONED
 {
-	// const auto obj = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		Pushb(false);
+		return;
+	}
+	Pushb(ecs::script_poison::IsPoisoned(registry, object));
+}
+
+/// The first member of a script container that is of the type and subtype, and poisoned or else not poisoned, as the scripts
+/// ask. It is none when there is none, and the script is told of it.
+static void CallPoisonedStateIn(bool poisoned, std::string_view notFound)
+{
+	const auto excludingScripted = Pop().intVal != 0;
+	const auto container = PopObject();
+	const auto subtype = Pop().uintVal;
+	const auto type = Pop().intVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto fail = [&notFound]() {
+		SPDLOG_LOGGER_WARN(spdlog::get("scripting"), "{}", notFound);
+		Pusho(0);
+	};
+	if (container == entt::null || !registry.Valid(container))
+	{
+		fail();
+		return;
+	}
+	if (!IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Cannot look in object");
+		fail();
+		return;
+	}
+	const auto objectType = static_cast<ObjectType>(type);
+	if (registry.AllOf<ecs::components::Town>(container) && objectType != ObjectType::Villager &&
+	    objectType != ObjectType::VillagerChild)
+	{
+		ScriptMessage("Looking for strange type in Town");
+		fail();
+		return;
+	}
+	for (const auto member : ContainerMembers(registry, container))
+	{
+		if (!registry.Valid(member) || (excludingScripted && registry.AllOf<ecs::components::InScript>(member)) ||
+		    ecs::script_poison::IsPoisoned(registry, member) != poisoned)
+		{
+			continue;
+		}
+		const auto kind = ecs::script_find::KindOf(registry, member);
+		if (kind.has_value() && ecs::script_find::Matches(*kind, objectType, subtype))
+		{
+			Locator::scriptObjects::value().Register(member, false);
+			Pusho(static_cast<uint32_t>(member));
+			return;
+		}
+	}
+	fail();
 }
 
 void CallPoisonedIn() // 163 CALL_POISONED_IN
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	CallPoisonedStateIn(true, "Cannot find poisoned in");
 }
 
 void CallNotPoisonedIn() // 164 CALL_NOT_POISONED_IN
 {
-	// const auto excludingScripted = static_cast<bool>(Pop().intVal);
-	// const auto container = Pop().uintVal;
-	// const auto subtype = Pop().intVal;
-	// const auto type = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	CallPoisonedStateIn(false, "Cannot find not poisoned in");
 }
 
 void SpiritPlayed() // 165 SPIRIT_PLAYED
@@ -5808,10 +5934,29 @@ void StopScriptsInFiles() // 172 STOP_SCRIPTS_IN_FILES
 
 void SetPoisoned() // 173 SET_POISONED
 {
-	// const auto obj = Pop().uintVal;
-	// const auto poisoned = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto object = PopObject();
+	const auto value = Pop().uintVal;
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Thing not valid");
+		return;
+	}
+	// A group poisons or cures each of its members
+	if (IsScriptContainer(registry, object))
+	{
+		for (const auto member : ContainerMembers(registry, object))
+		{
+			ecs::script_poison::SetPoisoned(registry, member, value);
+		}
+		return;
+	}
+	if (!registry.AllOf<Transform>(object) || registry.AllOf<ecs::components::ScriptMarker>(object))
+	{
+		ScriptMessage("Thing not object");
+		return;
+	}
+	ecs::script_poison::SetPoisoned(registry, object, value);
 }
 
 void SetTemperature() // 174 SET_TEMPERATURE
@@ -7155,20 +7300,42 @@ void SetLeashWorks() // 249 SET_LEASH_WORKS
 	Locator::leashSystem::value().SetWorks(*creature, enable);
 }
 
-/// Debug quickstart: the Cow is made where the creature choice makes the chosen creature (its home in the glade), and
-/// becomes the player's exactly as CREATURE_SET_PLAYER makes the one they pick
-void StartWithCow()
+/// Debug quickstart: a creature of the species is made at the place and becomes the player's exactly as
+/// CREATURE_SET_PLAYER makes the one they pick
+void StartWithCreature(CreatureType species, const glm::vec3& position, float yawRadians)
 {
-	constexpr int32_t k_CowSubtype = 1;
-	const glm::vec3 homePosition {1896.5f, 29.48f, 2520.06f};
-	const auto cow = CreateScriptObject(ObjectType::Creature, k_CowSubtype, homePosition, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
-	if (cow == entt::null || cow == static_cast<entt::entity>(0) || !Locator::entitiesRegistry::value().Valid(cow))
+	const auto creature =
+	    CreateScriptObject(ObjectType::Creature, static_cast<uint32_t>(species), position, 0.0f, 0.0f, yawRadians, 0.0f, 1.0f);
+	if (creature == entt::null || creature == static_cast<entt::entity>(0) ||
+	    !Locator::entitiesRegistry::value().Valid(creature))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "The debug quickstart could not make the Cow");
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "The debug quickstart could not make the creature");
 		return;
 	}
-	RegisterCreated(cow);
-	MakePlayersCreature(cow);
+	RegisterCreated(creature);
+	MakePlayersCreature(creature);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The debug quickstart made the player's creature, species {}, at {:.1f}, {:.1f}",
+	                   static_cast<int>(species), position.x, position.z);
+}
+
+/// Debug quickstart of the first land: the Cow is made where the creature choice makes the chosen creature (its home in
+/// the glade)
+void StartWithCow()
+{
+	const glm::vec3 homePosition {1896.5f, 29.48f, 2520.06f};
+	StartWithCreature(CreatureType::Cow, homePosition, 0.0f);
+}
+
+/// Whether the player has a creature of their own now
+bool PlayerHasCreature()
+{
+	if (!Locator::leashSystem::has_value())
+	{
+		return false;
+	}
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::leashSystem::value().PlayersCreature(player).has_value();
 }
 
 void LoadMyCreature() // 250 LOAD_MY_CREATURE
@@ -7182,7 +7349,18 @@ void LoadMyCreature() // 250 LOAD_MY_CREATURE
 		StartWithCow();
 		return;
 	}
-	Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z});
+	const bool loaded = Locator::creatureCarryOverSystem::value().LoadPlayersCreature({position.x, position.z}).has_value();
+	// Not in the original game: a developer's direct start of a later land has no creature that came through the
+	// vortex, so the creature of the species the developer named stands at the place instead
+	const auto& landSystem = Locator::landSystem::value();
+	if (const auto species = new_game_choice::DirectStartCreature(
+	        landSystem.GetNewGameStart(), Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, loaded,
+	        PlayerHasCreature());
+	    species.has_value())
+	{
+		constexpr float k_ArrivalYawDegrees = 180.0f;
+		StartWithCreature(*species, {position.x, position.y, position.z}, glm::radians(k_ArrivalYawDegrees));
+	}
 }
 
 void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
@@ -7766,14 +7944,14 @@ void MoveCameraPosFocLens() // 287 MOVE_CAMERA_POS_FOC_LENS
 void GameTimeOnOff() // 288 GAME_TIME_ON_OFF
 {
 	const auto enable = Pop().intVal != 0;
-	Locator::skySystem::value().GetClock().SetRunning(enable);
+	Locator::skyClockSystem::value().GetClock().SetRunning(enable);
 }
 
 void MoveGameTime() // 289 MOVE_GAME_TIME
 {
 	const auto duration = Popf();
 	const auto hourOfTheDay = Popf();
-	Locator::skySystem::value().GetClock().MoveScriptTime(hourOfTheDay, duration);
+	Locator::skyClockSystem::value().GetClock().MoveScriptTime(hourOfTheDay, duration);
 }
 
 void SetHighGraphicsDetail() // 290 SET_HIGH_GRAPHICS_DETAIL
@@ -8847,12 +9025,27 @@ void SetBookmarkPosition() // 362 SET_BOOKMARK_POSITION
 
 void SetScaffoldProperties() // 363 SET_SCAFFOLD_PROPERTIES
 {
-	// const auto destroy = static_cast<bool>(Pop().intVal);
-	// const auto size = Popf();
-	// const auto type = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const bool destroys = (Pop().intVal & 1) != 0;
+	const auto size = Popf();
+	const auto building = Pop().intVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ObjectNoLongerValid();
+		return;
+	}
+	auto* scaffold = registry.TryGet<ecs::components::Scaffold>(object);
+	if (scaffold == nullptr)
+	{
+		ScriptMessage("Thing must be scaffold");
+		return;
+	}
+	// The scaffold offers only a building of the abode number, and it becomes worth the size
+	scaffold->scriptBuilding = ecs::workshop::ScriptBuildingOf(building);
+	registry.Get<Transform>(object).scale = glm::vec3(ecs::workshop::ScaleOfScriptSize(size));
+	scaffold->destroysThingsInWay = destroys;
+	registry.SetDirty();
 }
 
 void SetComputerPlayerPersonality() // 364 SET_COMPUTER_PLAYER_PERSONALITY
@@ -8978,10 +9171,19 @@ void SetPositionFollowComputerPlayer() // 373 SET_POSITION_FOLLOW_COMPUTER_PLAYE
 
 void CallComputerPlayer() // 374 CALL_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// Each player has a computer player from its start. The script gets the player's entity, which keeps the state of
+	// the computer player.
+	const auto name = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().FindPlayer(name) : std::optional<entt::entity> {};
+	if (!player.has_value() || !Locator::entitiesRegistry::value().Valid(*player))
+	{
+		ScriptMessage("Could not get computer player!");
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(*player, false);
+	Pusho(static_cast<uint32_t>(*player));
 }
 
 void CallBuildingInTown() // 375 CALL_BUILDING_IN_TOWN
@@ -9151,12 +9353,96 @@ void SetMagicInObject() // 386 SET_MAGIC_IN_OBJECT
 	}
 }
 
+/// Whether a thing is a building of the buildings' table for the adult counts of the scripts: an abode or a miracle
+/// dispenser
+static bool IsAdultHolderBuilding(const ecs::Registry& registry, entt::entity object)
+{
+	return registry.AnyOf<ecs::components::Abode, ecs::components::SpellDispenser>(object);
+}
+
+/// The grown villagers of a town now
+static uint32_t TownAdultsNow(const ecs::Registry& registry, entt::entity town)
+{
+	uint32_t adults = 0;
+	registry.Each<const ecs::components::Villager>([town, &adults](const ecs::components::Villager& villager) {
+		if (villager.town == town && villager.lifeStage != ecs::components::Villager::LifeStage::Child)
+		{
+			++adults;
+		}
+	});
+	return adults;
+}
+
+/// The room for adults in the built buildings of a town now: the adult places of each building of its tribe's table that
+/// has a place for anyone, as the town stats count them
+static int32_t TownAdultRoomNow(const ecs::Registry& registry, entt::entity townEntity, const ecs::components::Town& town)
+{
+	const auto* tribe = registry.TryGet<const Tribe>(townEntity);
+	if (tribe == nullptr || !Locator::infoConstants::has_value())
+	{
+		return 0;
+	}
+	const auto& rows = Locator::infoConstants::value().abode;
+	int32_t room = 0;
+	registry.Each<const ecs::components::Abode>([&](entt::entity entity, const ecs::components::Abode& abode) {
+		if (abode.townId != town.id)
+		{
+			return;
+		}
+		const auto* progress = registry.TryGet<const ecs::components::BuildProgress>(entity);
+		if (progress != nullptr && progress->built < 1.0f)
+		{
+			return;
+		}
+		const auto row = std::ranges::find_if(
+		    rows, [&](const GAbodeInfo& info) { return info.tribeType == *tribe && info.abodeNumber == abode.type; });
+		if (row != rows.end() && row->maxVillagersInAbode + row->maxChildrenInAbode != 0)
+		{
+			room += static_cast<int32_t>(row->maxVillagersInAbode);
+		}
+	});
+	return room;
+}
+
+/// The adults of a town or a building, or the room for them, as ID_ADULT_SIZE and OBJECT_ADULT_CAPACITY give it. Any
+/// other thing gives 0 and a message.
+static void PushAdultCount(bool room)
+{
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ScriptMessage("Object should be alive!");
+		Pushf(0.0f);
+		return;
+	}
+	if (const auto* town = registry.TryGet<const ecs::components::Town>(object); town != nullptr)
+	{
+		// The town keeps these counts up to date at all times, so they are counted now and not taken from the turn's
+		// town stats
+		Pushf(room ? ecs::script_containers::TownAdultRoom(TownAdultRoomNow(registry, object, *town))
+		           : ecs::script_containers::TownAdults(TownAdultsNow(registry, object)));
+		return;
+	}
+	if (!IsAdultHolderBuilding(registry, object))
+	{
+		ScriptMessage("Object should be town, or abode");
+		Pushf(0.0f);
+		return;
+	}
+	if (room)
+	{
+		const auto* info = ecs::world_objects::AbodeInfoOf(object);
+		Pushf(ecs::script_containers::AbodeAdultRoom(info != nullptr ? info->maxVillagersInAbode : 0));
+		return;
+	}
+	const bool lived = registry.AllOf<ecs::components::Abode>(object);
+	Pushf(ecs::script_containers::AbodeAdults(lived ? ecs::town_homes::HouseholdOf(registry, object).adults : 0));
+}
+
 void IdAdultSize() // 387 ID_ADULT_SIZE
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	PushAdultCount(false);
 }
 
 void ObjectCapacity() // 388 OBJECT_CAPACITY
@@ -9169,10 +9455,7 @@ void ObjectCapacity() // 388 OBJECT_CAPACITY
 
 void ObjectAdultCapacity() // 389 OBJECT_ADULT_CAPACITY
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	PushAdultCount(true);
 }
 
 void SetCreatureAutoFighting() // 390 SET_CREATURE_AUTO_FIGHTING
@@ -9366,13 +9649,13 @@ void SetGameTimeProperties() // 407 SET_GAME_TIME_PROPERTIES
 	const auto percentageChange = Popf();
 	const auto percentageNight = Popf();
 	const auto duration = Popf();
-	Locator::skySystem::value().GetClock().SetCycle(duration, percentageNight, percentageChange);
+	Locator::skyClockSystem::value().GetClock().SetCycle(duration, percentageNight, percentageChange);
 }
 
 void ResetGameTimeProperties() // 408 RESET_GAME_TIME_PROPERTIES
 {
-	Locator::skySystem::value().GetClock().SetCycle(DayNightClock::k_DefaultDuration, DayNightClock::k_DefaultNight,
-	                                                DayNightClock::k_DefaultChange);
+	Locator::skyClockSystem::value().GetClock().SetCycle(DayNightClock::k_DefaultDuration, DayNightClock::k_DefaultNight,
+	                                                     DayNightClock::k_DefaultChange);
 }
 
 void SoundExists() // 409 SOUND_EXISTS
@@ -9559,10 +9842,27 @@ void StopSoundEffect() // 424 STOP_SOUND_EFFECT
 
 void GetTotemStatue() // 425 GET_TOTEM_STATUE
 {
-	// const auto town = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// A town centre gives the totem that stands on it. Any other thing, or a centre with no totem, gives nothing.
+	const auto centre = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	entt::entity found = entt::null;
+	if (centre != entt::null && registry.Valid(centre))
+	{
+		registry.Each<const ecs::components::VillageTotem>(
+		    [centre, &found](entt::entity totem, const ecs::components::VillageTotem& component) {
+			    if (component.townCentre == centre && found == entt::null)
+			    {
+				    found = totem;
+			    }
+		    });
+	}
+	if (found == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	Pusho(static_cast<uint32_t>(found));
 }
 
 void SetSetOnFire() // 426 SET_SET_ON_FIRE
@@ -9703,10 +10003,19 @@ void SaveGameInSlot() // 439 SAVE_GAME_IN_SLOT
 
 void SetObjectCarrying() // 440 SET_OBJECT_CARRYING
 {
-	// const auto carriedObj = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A villager holds the object the script gives. The next change of its state animation can replace it, but not
+	// while the villager is under the script.
+	const auto carried = ecs::script_containers::CarriedObjectFromScript(Pop().uintVal);
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* villager =
+	    object != entt::null && registry.Valid(object) ? registry.TryGet<ecs::components::Villager>(object) : nullptr;
+	if (villager == nullptr)
+	{
+		ScriptMessage("Villager invalid!");
+		return;
+	}
+	villager->carried = static_cast<CarriedObject>(carried);
 }
 
 void PosValidForCreature() // 441 POS_VALID_FOR_CREATURE
@@ -9920,21 +10229,85 @@ void GameClearComputerPlayerActions() // 454 GAME_CLEAR_COMPUTER_PLAYER_ACTIONS
 	}
 }
 
+/// The first thing in a town or a flock for a script, or nothing. A dance is a container too, but its order is not
+/// known yet, so it gives nothing and tells of it.
+static entt::entity FirstInContainer(const ecs::Registry& registry, entt::entity container)
+{
+	if (const auto* town = registry.TryGet<const ecs::components::Town>(container); town != nullptr)
+	{
+		const auto* building = !town->abodes.empty() && registry.Valid(town->abodes.front())
+		                           ? registry.TryGet<const ecs::components::Abode>(town->abodes.front())
+		                           : nullptr;
+		return ecs::script_containers::FirstInTown(building != nullptr ? std::span<const entt::entity>(building->inhabitants)
+		                                                               : std::span<const entt::entity> {},
+		                                           town->homelessVillagers);
+	}
+	if (ecs::script_flocks::IsFlock(registry, container))
+	{
+		const auto& members = registry.Get<const ecs::components::Flock>(container).members;
+		return members.empty() ? entt::entity {entt::null} : members.front();
+	}
+	// TODO(lesson-natives): the order in which a script walks through a dance
+	NotImplemented();
+	return entt::null;
+}
+
+/// Pushes a thing that a container gave, or nothing
+static void PushContainerThing(entt::entity thing)
+{
+	if (thing == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(thing, false);
+	Pusho(static_cast<uint32_t>(thing));
+}
+
+/// Takes the container from the stack and pushes its first thing
+static void PushFirstInContainer()
+{
+	const auto container = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (container == entt::null || !IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Invalid container");
+		Pusho(0);
+		return;
+	}
+	PushContainerThing(FirstInContainer(registry, container));
+}
+
 void GetFirstInContainer() // 455 GET_FIRST_IN_CONTAINER
 {
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	PushFirstInContainer();
 }
 
 void GetNextInContainer() // 456 GET_NEXT_IN_CONTAINER
 {
-	// const auto after = Pop().uintVal;
-	// const auto container = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// With no thing to start after, or one that is gone, the script gets the first thing of the container
+	const auto after = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (after == entt::null || !registry.Valid(after))
+	{
+		PushFirstInContainer();
+		return;
+	}
+	const auto container = PopObject();
+	if (container == entt::null || !IsScriptContainer(registry, container))
+	{
+		ScriptMessage("Invalid container");
+		Pusho(0);
+		return;
+	}
+	if (ecs::dances::IsDance(registry, container))
+	{
+		// TODO(lesson-natives): the order in which a script walks through a dance
+		NotImplemented();
+		Pusho(0);
+		return;
+	}
+	PushContainerThing(ecs::script_containers::NextAfter(ContainerMembers(registry, container), after));
 }
 
 void GetTempleEntrancePosition() // 457 GET_TEMPLE_ENTRANCE_POSITION

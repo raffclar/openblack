@@ -188,6 +188,8 @@ private:
 	[[nodiscard]] std::string CallNative(const Command& command);
 	/// The value that a script gets for an argument: a number, or an object that the scripts' table knows
 	[[nodiscard]] std::optional<lhvm::VMValue> ScriptValueOf(const ScriptArgument& argument);
+	/// The script flock of the scenario's villagers and animals. The first call makes it. None without an object.
+	[[nodiscard]] std::optional<entt::entity> ScriptFlock();
 	[[nodiscard]] std::string StopScript(const Command& command);
 	/// The hand goes over a fireball in flight to take hold of it; what came of that
 	std::string HandTakeFireBall();
@@ -277,6 +279,10 @@ private:
 	uint32_t _startTurn {0};
 	std::vector<bool> _computerActionsDone;
 	std::vector<entt::entity> _objects;
+	/// The script flock of the scenario's villagers and animals, after a command gave it
+	entt::entity _scriptFlock {entt::null};
+	/// The objects that the native calls of the scenario gave back, in order
+	std::vector<uint32_t> _madeByNatives;
 	/// The globes that the scenario puts down on their own, in the order of its list
 	std::vector<entt::entity> _globes;
 	/// The scenario's temples, in its order

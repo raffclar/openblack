@@ -1935,6 +1935,37 @@ void AddBeachTemplePuzzle(std::vector<Scenario>& all)
 	});
 }
 
+/// The tree puzzle of the second land, as a script makes it: not turned, at its normal size
+void AddTreePuzzle(std::vector<Scenario>& all)
+{
+	// The puzzle's place, from the middle of the map. The spots of the grid are about ten metres apart.
+	constexpr glm::vec2 k_Puzzle {0.0f, -40.0f};
+	constexpr float k_PuzzleObjectType = 32.0f;
+	constexpr float k_TreeKind = 1.0f;
+	all.push_back({
+	    .id = "story.tree_puzzle",
+	    .name = "The trees of the second land's tree puzzle",
+	    .facet = Facet::Story,
+	    .description = "A script makes the second land's tree puzzle south of the middle: nine trees on a grid of three "
+	                   "by three spots, with a lantern at each corner, mist over the spots and bats over the middle.",
+	    .expected = "Nine small trees, conifers and oaks, grow to full size in about two seconds. A lantern stands one "
+	                "step out from each corner. Bats fly over the middle spot. When the hand pulls a tree, that tree and "
+	                "the trees of the spots next to it change kind and grow again from small.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 45.0f, 30.0f, k_Puzzle.y - 25.0f},
+	                .look = {k_Puzzle.x + 10.0f, 3.0f, k_Puzzle.y + 10.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 0.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_TreeKind},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -2056,6 +2087,7 @@ void AddStory(std::vector<Scenario>& all)
 	AddRivalCreatureLoads(all);
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
+	AddTreePuzzle(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)
@@ -2972,6 +3004,21 @@ void AddLight(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed,
 	                .eye = {k_Lake.x, 6.0f, k_NearShallows - 30.0f},
 	                .look = {k_Lake.x, 0.0f, k_NearShallows + 10.0f}},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {k_Lake.x + 8.0f, k_NearShallows - 14.0f}}},
+	});
+
+	all.push_back({
+	    .id = "light.sky_dawn",
+	    .name = "The sky at dawn",
+	    .facet = Facet::Light,
+	    .description = "Six in the morning, and the clock does not move. The camera looks low over the testbed's lake to "
+	                   "the sky, past a birch on the shore.",
+	    .expected = "The dome blends the night sky into the sky of dawn. The land and the water take the dim light of "
+	                "dawn, and the moon or the sun shows where the hour puts it.",
+	    .environment = {.hour = 6.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x, 6.0f, k_NearShallows - 30.0f},
+	                .look = {k_Lake.x, 12.0f, k_NearShallows + 10.0f}},
 	    .objects = {{.type = TreeInfo::Birch, .offset = {k_Lake.x + 8.0f, k_NearShallows - 14.0f}}},
 	});
 
@@ -11493,6 +11540,34 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                                      {.kind = Argument::Kind::Number, .number = 3.0f}}}},
 	});
 
+	// A script gives a clip to a flock of villagers, as Idol Pyre does to its extra worshippers
+	all.push_back({
+	    .id = "script.flock_plays_clip",
+	    .name = "A script gives a flock of villagers a clip to play",
+	    .facet = Facet::Story,
+	    .description = "Three villagers stand in a row. After one second, a script makes a flock of them. SET_SCRIPT_ULONG "
+	                   "gives the flock the prayer clip once, and SET_SCRIPT_STATE tells the flock to play it. Idol Pyre "
+	                   "on Land 2 gives its extra worshippers the clip in this way.",
+	    .expected = "Each villager of the flock plays the prayer clip one time. The script then controls each villager. "
+	                "The log tells that the two natives ran and gave back no values.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -12.0f}, .look = {0.0f, 1.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-4.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {4.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_SCRIPT_ULONG",
+	                  .scriptArguments = {{.kind = Argument::Kind::Flock},
+	                                      {.kind = Argument::Kind::Integer, .number = 343.0f},
+	                                      {.kind = Argument::Kind::Integer, .number = 1.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_SCRIPT_STATE",
+	                  .scriptArguments = {{.kind = Argument::Kind::Flock},
+	                                      {.kind = Argument::Kind::Integer, .number = 200.0f}}}},
+	});
+
 	// The leans of the three dead trees of Land 1, in degrees about x and z, and one tree with a large lean
 	all.push_back({
 	    .id = "nature.dead_tree_lean",
@@ -11938,6 +12013,43 @@ void AddStoreScenarios(std::vector<Scenario>& all)
 	});
 }
 
+void AddPoisonScenarios(std::vector<Scenario>& all)
+{
+	// What the Plague's script does first: it enables the poison of the town and then of its storage pit, and later cures
+	// the town. The scenario runs those calls.
+	constexpr glm::vec2 k_Pit {-30.0f, 30.0f};
+	using Argument = ScriptArgument;
+	const auto poison = [](float delay, Argument thing, int flag) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "SET_POISONED",
+		                .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(flag)}, thing}};
+	};
+	all.push_back({
+	    .id = "objects.script_poisons_town_and_store",
+	    .name = "A script poisons a town and its storage pit",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre, a storage pit with 2000 food and 1000 wood, "
+	                   "and four villagers of the town. After one second a script poisons the town. After three seconds it "
+	                   "poisons the storage pit. After ten seconds it cures the town.",
+	    .expected = "At one second each of the four villagers is poisoned, as the inspector shows. At three seconds the "
+	                "food pile of the storage pit is poisoned and shows a pale green tint. Its wood piles keep their usual "
+	                "colour. At ten seconds the villagers are cured, but the food pile stays poisoned. Villagers who take "
+	                "food from the pit become poisoned again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit - glm::vec2 {12.0f}, k_Pit + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = 2000, .storedWood = 1000},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Pit + glm::vec2 {-6.0f, -8.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Pit + glm::vec2 {-3.0f, -9.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = k_Pit + glm::vec2 {3.0f, -9.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = k_Pit + glm::vec2 {6.0f, -8.0f}, .joinTown = true}},
+	    .commands = {poison(1.0f, {.kind = Argument::Kind::Town}, 1),
+	                 poison(2.0f, {.kind = Argument::Kind::Object, .index = 1}, 1),
+	                 poison(7.0f, {.kind = Argument::Kind::Town}, 0)},
+	});
+}
+
 void AddWorkshopScenarios(std::vector<Scenario>& all)
 {
 	constexpr glm::vec2 k_Workshop {-30.0f, 30.0f};
@@ -12069,6 +12181,52 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                 .joinTown = true,
 	                 .homeIn = 2}},
 	});
+
+	// The abode number of a house and the size, as a land script gives Khazar's scaffold for a house
+	constexpr float k_HouseNumber = 4.0f;
+	constexpr float k_ScriptSize = 2.0f;
+	all.push_back({
+	    .id = "objects.script_gives_scaffold",
+	    .name = "A script makes a scaffold, gives it a building and a size, and locks it",
+	    .facet = Facet::Objects,
+	    .description = "The town of objects.scaffold_starts_building with no loose scaffold. After one second, the "
+	                   "script lines of a land give a scaffold: CREATE makes a scaffold (type 39) where the loose "
+	                   "scaffold was, and SET_SCAFFOLD_PROPERTIES gives it the house of abode number 4 and the size 2. "
+	                   "The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the scaffold, holds "
+	                   "it still near the village centre, and puts it down. After ten more seconds, SET_ID_PICKUPABLE "
+	                   "and SET_ID_MOVEABLE lock the scaffold.",
+	    .expected = "A scaffold appears on the land. It has the size of a scaffold of the value of two scaffolds. While "
+	                "the hand holds it still, the phantom shows only a house of abode number 4. When the hand puts it "
+	                "down, a building site of that house opens. After the lock, the hand can not take the scaffold, and "
+	                "the inspector shows CannotBePickedUp and Immovable on it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+	                                       .number = static_cast<float>(script::ObjectType::Scaffold)},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 5000.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_LooseScaffold}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_SCAFFOLD_PROPERTIES",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Made, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HouseNumber},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = k_ScriptSize},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 10.0f,
+	                  .script = "SET_ID_PICKUPABLE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_ID_MOVEABLE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f},
+	                                      {.kind = ScriptArgument::Kind::Made, .index = 0}}}},
+	});
 }
 
 std::vector<Scenario> Build()
@@ -12144,6 +12302,7 @@ std::vector<Scenario> Build()
 	AddVillagerSizeAndReachScenarios(all);
 	AddSwayAndFrightScenarios(all);
 	AddStoreScenarios(all);
+	AddPoisonScenarios(all);
 	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
 	return all;
@@ -12196,14 +12355,20 @@ bool ValidOffset(glm::vec2 offset)
 	return std::abs(offset.x) <= k_MaxOffset && std::abs(offset.y) <= k_MaxOffset;
 }
 
-/// A script run names a script, and every object, creature and marker it hands over is the scenario's and on the map
+/// A script run names a script, and every object, creature and marker it hands over is the scenario's and on the map.
+/// An object that a native call gave back must come from a native call before this command.
 bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 {
-	const auto fits = [&scenario](const ScriptArgument& argument) {
+	const auto before =
+	    std::ranges::find_if(scenario.commands, [&command](const Command& other) { return &other == &command; });
+	const auto earlierCalls = static_cast<size_t>(
+	    std::count_if(scenario.commands.begin(), before, [](const Command& other) { return other.kind == Kind::CallNative; }));
+	const auto fits = [&scenario, earlierCalls](const ScriptArgument& argument) {
 		switch (argument.kind)
 		{
 		case ScriptArgument::Kind::Number:
 		case ScriptArgument::Kind::Integer:
+		case ScriptArgument::Kind::Town:
 			return true;
 		case ScriptArgument::Kind::Marker:
 		case ScriptArgument::Kind::Position:
@@ -12212,6 +12377,13 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 			return argument.index < scenario.objects.size();
 		case ScriptArgument::Kind::Creature:
 			return argument.index < scenario.creatures.size();
+		case ScriptArgument::Kind::Flock:
+			// The flock needs a villager or an animal of the scenario
+			return std::ranges::any_of(scenario.objects, [](const ObjectSetup& object) {
+				return std::holds_alternative<VillagerInfo>(object.type) || std::holds_alternative<AnimalInfo>(object.type);
+			});
+		case ScriptArgument::Kind::Made:
+			return argument.index < earlierCalls;
 		}
 		return false;
 	};

@@ -50,6 +50,7 @@ public:
 	[[nodiscard]] std::filesystem::path ChallengePath() override;
 
 	void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) override { _newGameStart = start; }
+	[[nodiscard]] const std::optional<new_game_choice::NewGameStart>& GetNewGameStart() const override { return _newGameStart; }
 	void SetHumansFromSession(bool fromSession) override { _humansFromSession = fromSession; }
 	[[nodiscard]] bool RunsNetworkMapScript() const override { return _runsNetworkMapScript; }
 	void SetAllComputerGods(bool allComputer) override { _allComputerGods = allComputer; }

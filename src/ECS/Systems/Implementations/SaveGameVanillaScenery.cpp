@@ -46,7 +46,7 @@
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ForestSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/WorldObjects.h"
@@ -473,9 +473,9 @@ void SaveGameSystem::ImportVanillaGameValues(const gamesave::VanillaWorld& world
 		registry.Context().thingsMade = data->thingsMade;
 	}
 	// The clock of day and night: the hour that shows, the cycle, and whether it runs
-	if (const auto cycle = world_import::ReadDayCycle(world); cycle.has_value() && Locator::skySystem::has_value())
+	if (const auto cycle = world_import::ReadDayCycle(world); cycle.has_value() && Locator::skyClockSystem::has_value())
 	{
-		auto& clock = Locator::skySystem::value().GetClock();
+		auto& clock = Locator::skyClockSystem::value().GetClock();
 		clock.ForceVisualTime(cycle->visualTime);
 		clock.SetScale(cycle->scale);
 		clock.SetCycle(cycle->duration, cycle->night, cycle->change);

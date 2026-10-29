@@ -16,7 +16,7 @@
 #include "3D/LandLightTable.h"
 #include "Camera/Camera.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Locator.h"
@@ -28,7 +28,7 @@ using namespace openblack::ecs;
 
 std::optional<uint32_t> snow_dust::CurrentLandColour()
 {
-	if (!Locator::resources::has_value() || !Locator::skySystem::has_value())
+	if (!Locator::resources::has_value() || !Locator::skyClockSystem::has_value())
 	{
 		return std::nullopt;
 	}
@@ -37,7 +37,7 @@ std::optional<uint32_t> snow_dust::CurrentLandColour()
 	{
 		return std::nullopt;
 	}
-	const auto skyType = Locator::skySystem::value().GetCurrentSkyType();
+	const auto skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
 	const auto alignment = Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetSkyAlignment() : 0.0f;
 	float overcast = 0.0f;
 	if (Locator::weatherSystem::has_value() && Locator::camera::has_value())

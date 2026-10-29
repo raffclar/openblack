@@ -22,7 +22,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Systems/ForestSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 
@@ -51,7 +51,7 @@ grazers::NeedLimits LimitsOf(const GAnimalInfo& info)
 /// The hour of the day as the sky shows it
 float VisualHours()
 {
-	return Locator::skySystem::has_value() ? Locator::skySystem::value().GetClock().GetVisualTime() : 0.0f;
+	return Locator::skyClockSystem::has_value() ? Locator::skyClockSystem::value().GetClock().GetVisualTime() : 0.0f;
 }
 
 /// Whether a sleeping cell is one: the cell at the corner of the map counts as none

@@ -17,7 +17,9 @@
 #include "3D/LandLightTable.h"
 #include "3D/SkyFrame.h"
 #include "Common/MachineClock.h"
+#include "ECS/Components/Sky.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/DetailLevel.h"
 #include "Locator.h"
@@ -27,61 +29,13 @@ using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 
-SkySystem::SkySystem()
-{
-	Initialize();
-}
-
-void SkySystem::Initialize()
-{
-	_entities = archetypes::SkyArchetype::Create();
-	if (!_kept.has_value())
-	{
-		return;
-	}
-	auto& registry = Locator::entitiesRegistry::value();
-	registry.Get<SkyDome>(_entities.dome) = _kept->dome;
-	registry.Get<DayNightCycle>(_entities.dome) = _kept->cycle;
-	registry.Get<Sun>(_entities.sun) = _kept->sun;
-	registry.Get<Moon>(_entities.moon) = _kept->moon;
-	_kept.reset();
-}
-
-void SkySystem::KeepForNextLand()
-{
-	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(_entities.dome) || !registry.Valid(_entities.sun) || !registry.Valid(_entities.moon))
-	{
-		return;
-	}
-	_kept = Kept {
-	    .dome = registry.Get<SkyDome>(_entities.dome),
-	    .cycle = registry.Get<DayNightCycle>(_entities.dome),
-	    .sun = registry.Get<Sun>(_entities.sun),
-	    .moon = registry.Get<Moon>(_entities.moon),
-	};
-}
-
-void SkySystem::FindAfterLoad()
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	_entities = {};
-	_kept.reset();
-	registry.Each<const SkyDome>([this](entt::entity entity, const SkyDome& /*dome*/) { _entities.dome = entity; });
-	registry.Each<const Sun>([this](entt::entity entity, const Sun& /*sun*/) { _entities.sun = entity; });
-	registry.Each<const Moon>([this](entt::entity entity, const Moon& /*moon*/) { _entities.moon = entity; });
-}
-
-void SkySystem::ProcessTurn()
-{
-	GetClock().ProcessTurn();
-}
-
 void SkySystem::UpdateFrame(bool skyDrawn)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto& dome = registry.Get<SkyDome>(_entities.dome);
-	const auto& clock = GetClock();
+	const auto& skyClock = Locator::skyClockSystem::value();
+	const auto& entities = skyClock.GetEntities();
+	auto& dome = registry.Get<SkyDome>(entities.dome);
+	const auto& clock = skyClock.GetClock();
 
 	// The land's light of the frame, which the renderer builds its light table from, and its palette, which gives the
 	// moon its colour
@@ -102,29 +56,27 @@ void SkySystem::UpdateFrame(bool skyDrawn)
 	        .palette = palette,
 	        .fog = Locator::config::value().detail.fog,
 	    },
-	    dome, registry.Get<Sun>(_entities.sun), registry.Get<Moon>(_entities.moon));
-	sky_frame::AdvanceDome(dome, GetCurrentSkyType(), skyDrawn);
+	    dome, registry.Get<Sun>(entities.sun), registry.Get<Moon>(entities.moon));
+	sky_frame::AdvanceDome(dome, skyClock.GetCurrentSkyType(), skyDrawn);
 }
 
-void SkySystem::SetTime(float time)
+void SkySystem::JumpToClock()
 {
-	GetClock().SetScriptTime(time);
-	Locator::entitiesRegistry::value().Get<SkyDome>(_entities.dome).follow.Jump(GetCurrentSkyType());
+	const auto& skyClock = Locator::skyClockSystem::value();
+	Locator::entitiesRegistry::value().Get<SkyDome>(skyClock.GetEntities().dome).follow.Jump(skyClock.GetCurrentSkyType());
 }
 
-float SkySystem::GetCurrentSkyType() const
+entt::entity SkySystem::GetDome() const
 {
-	const auto& clock = GetClock();
-	return clock.SkyType(clock.GetVisualTime());
+	return Locator::skyClockSystem::value().GetEntities().dome;
 }
 
-DayNightClock& SkySystem::GetClock()
+entt::entity SkySystem::GetSun() const
 {
-	return Locator::entitiesRegistry::value().Get<DayNightCycle>(_entities.dome).clock;
+	return Locator::skyClockSystem::value().GetEntities().sun;
 }
 
-const DayNightClock& SkySystem::GetClock() const
+entt::entity SkySystem::GetMoon() const
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	return registry.Get<DayNightCycle>(_entities.dome).clock;
+	return Locator::skyClockSystem::value().GetEntities().moon;
 }

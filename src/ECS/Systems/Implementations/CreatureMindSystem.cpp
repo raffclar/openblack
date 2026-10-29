@@ -132,7 +132,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -1502,7 +1502,7 @@ void Communicated(CreatureMindState& mind)
 
 bool IsNight()
 {
-	return Locator::skySystem::has_value() && Locator::skySystem::value().GetClock().IsVisualNight();
+	return Locator::skyClockSystem::has_value() && Locator::skyClockSystem::value().GetClock().IsVisualNight();
 }
 
 float DesireValue(const creature_desires::Desires& desires, Desire desire)

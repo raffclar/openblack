@@ -26,8 +26,12 @@
 #include "Audio/HelpSpeech.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileObjectArchetype.h"
 #include "ECS/Archetypes/PuzzleGameArchetype.h"
+#include "ECS/Archetypes/StreetLanternArchetype.h"
+#include "ECS/Archetypes/TreeArchetype.h"
+#include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Mobile.h"
@@ -35,12 +39,16 @@
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
 #include "ECS/HanoiRules.h"
 #include "ECS/Map.h"
 #include "ECS/PuzzleGameRules.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TreePuzzleRules.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
 
@@ -51,6 +59,7 @@ using openblack::ecs::Registry;
 namespace archetypes = openblack::ecs::archetypes;
 namespace world_objects = openblack::ecs::world_objects;
 namespace hanoi = openblack::ecs::hanoi;
+namespace tree_puzzle = openblack::ecs::tree_puzzle;
 
 namespace
 {
@@ -279,9 +288,246 @@ void StartHanoi(entt::entity puzzle, PuzzleGame& game)
 	}
 }
 
+/// The steps of the puzzle's grid
+hanoi::Steps GridSteps(const PuzzleGame& game)
+{
+	return {.cosine = game.cosineStep, .sine = game.sineStep};
+}
+
+/// A new thing goes into the map's cells at once, as the game puts each new thing in the map when it makes it
+void FileInMap(entt::entity thing)
+{
+	if (thing != entt::null && Entities().Valid(thing) && Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Refile(thing);
+	}
+}
+
+/// A new small tree on a spot, of the kind that the state of the spot shows. The scripts hold it.
+void MakeTree(PuzzleGame& game, int32_t across, int32_t along)
+{
+	auto& registry = Entities();
+	const auto spot = tree_puzzle::SpotIndex(across, along);
+	const auto place = hanoi::GridPlace(game.place, GridSteps(game), across, along);
+	const auto world = map_coords::ToWorld(Locator::terrainSystem::value(), place);
+	const auto count = game.treeCounts.at(spot);
+	const auto tree = archetypes::TreeArchetype::Create(0, world, tree_puzzle::TreeKindOf(game.type, count), false, 0.0f,
+	                                                    tree_puzzle::FullSizeOf(game.type, count), tree_puzzle::k_StartSize);
+	ecs::thing_map_place::Keep(registry, tree, place);
+	FileInMap(tree);
+	registry.Assign<ScriptControlled>(tree);
+	game.trees.at(spot) = tree;
+	game.treesPlacedAt.at(spot) = world;
+}
+
+/// A spot on the grid changes its state. Its old tree goes and leaves a ghost, and a new small tree grows on the spot.
+void ChangeSpot(PuzzleGame& game, int32_t across, int32_t along)
+{
+	if (!tree_puzzle::OnGrid(across, along))
+	{
+		return;
+	}
+	const auto spot = tree_puzzle::SpotIndex(across, along);
+	game.treeCounts.at(spot) = tree_puzzle::Changed(game.treeCounts.at(spot));
+	if (const auto old = game.trees.at(spot); old != entt::null && Entities().Valid(old))
+	{
+		world_objects::LeaveGhost(old);
+		world_objects::Remove(old);
+	}
+	MakeTree(game, across, along);
+}
+
+/// A pull of the tree on a spot changes the spot and the four spots next to it
+void Pull(PuzzleGame& game, int32_t across, int32_t along)
+{
+	for (const auto& [changedAcross, changedAlong] : tree_puzzle::PulledSpots(across, along))
+	{
+		ChangeSpot(game, changedAcross, changedAlong);
+	}
+}
+
+/// A tree of the puzzle grows one step towards its full size. The map's cells take it out and put it in again.
+void GrowTree(entt::entity tree)
+{
+	auto& registry = Entities();
+	auto& transform = registry.Get<Transform>(tree);
+	const auto fullSize = registry.Get<const Tree>(tree).maxSize;
+	const float size = transform.scale.y;
+	if (!(size < fullSize))
+	{
+		return;
+	}
+	const float grown = tree_puzzle::Grown(size, fullSize);
+	const float ratio = grown / std::max(size, 1e-4f);
+	transform.scale = glm::vec3(grown);
+	if (auto* fixed = registry.TryGet<Fixed>(tree))
+	{
+		fixed->boundingRadius *= ratio;
+	}
+	registry.SetDirty();
+	ecs::thing_map_place::Reinsert(tree);
+}
+
+/// The tree puzzle at its start:
+/// - a small tree on each spot of the grid
+/// - seven pulls of random spots, which mix the states
+/// - a lantern one step out from each corner
+/// - a puff of mist over each spot, and a flock of nine bats over the middle spot.
+void StartTrees(PuzzleGame& game)
+{
+	auto& registry = Entities();
+	for (int32_t across = 0; across < tree_puzzle::k_Side; ++across)
+	{
+		for (int32_t along = 0; along < tree_puzzle::k_Side; ++along)
+		{
+			MakeTree(game, across, along);
+		}
+	}
+	auto& random = Locator::gameRandom::value();
+	for (int32_t move = 0; move < tree_puzzle::k_StartMoves; ++move)
+	{
+		// The first random number gives the spot along, the second gives the spot across
+		const auto along = static_cast<int32_t>(random.GameRand(tree_puzzle::k_Side));
+		const auto across = static_cast<int32_t>(random.GameRand(tree_puzzle::k_Side));
+		Pull(game, across, along);
+	}
+	const auto steps = GridSteps(game);
+	const auto& terrain = Locator::terrainSystem::value();
+	for (size_t corner = 0; corner < tree_puzzle::k_LanternSpots.size(); ++corner)
+	{
+		const auto& [across, along] = tree_puzzle::k_LanternSpots.at(corner);
+		const auto place = hanoi::GridPlace(game.place, steps, across, along);
+		const auto lantern =
+		    archetypes::StreetLanternArchetype::Create(map_coords::ToWorld(terrain, place), MobileStaticInfo::StreetLantern);
+		ecs::thing_map_place::Keep(registry, lantern, place);
+		FileInMap(lantern);
+		game.lanterns.at(corner) = lantern;
+	}
+	const auto middle = map_coords::ToMetres(
+	    hanoi::GridPlace(game.place, steps, tree_puzzle::k_MiddleSpot.front(), tree_puzzle::k_MiddleSpot.back()));
+	auto* animals = Locator::animalSystem::has_value() ? &Locator::animalSystem::value() : nullptr;
+	const auto flock = animals != nullptr ? animals->CreateScriptFlock(tree_puzzle::k_FlockNumber, middle, middle,
+	                                                                   tree_puzzle::k_FlockReach, tree_puzzle::k_FlockDistance)
+	                                      : entt::null;
+	for (int32_t across = 0; across < tree_puzzle::k_Side; ++across)
+	{
+		for (int32_t along = 0; along < tree_puzzle::k_Side; ++along)
+		{
+			const auto spot = tree_puzzle::SpotIndex(across, along);
+			const auto place = hanoi::GridPlace(game.place, steps, across, along);
+			game.mists.at(spot) = archetypes::MistArchetype::Create(map_coords::ToWorld(terrain, place), place.altitude,
+			                                                        tree_puzzle::k_MistColour, tree_puzzle::k_MistSize,
+			                                                        tree_puzzle::k_MistEdgeShrink);
+			if (animals == nullptr)
+			{
+				continue;
+			}
+			const auto bat = animals->CreateBird(tree_puzzle::k_BatKind, middle, tree_puzzle::k_BatAge, flock);
+			if (bat != entt::null)
+			{
+				animals->SetScriptState(bat, static_cast<LivingStates>(tree_puzzle::k_BatStartState));
+			}
+			game.bats.at(spot) = bat;
+		}
+	}
+}
+
+/// Whether the tree puzzle shows a solution: a tree on each spot at its full size, and all spots in the same state
+bool TreesSolved(const Registry& registry, const PuzzleGame& game)
+{
+	for (const auto tree : game.trees)
+	{
+		if (tree == entt::null || !registry.Valid(tree))
+		{
+			return false;
+		}
+		if (registry.Get<const Transform>(tree).scale.y < registry.Get<const Tree>(tree).maxSize)
+		{
+			return false;
+		}
+	}
+	return tree_puzzle::SameState(game.type, game.treeCounts);
+}
+
+/// The player solved the tree puzzle. The trees lose half their life, catch fire and stop being part of the puzzle. The
+/// mist goes, and the bats start to die.
+void SolveTrees(PuzzleGame& game)
+{
+	auto& registry = Entities();
+	for (size_t spot = 0; spot < tree_puzzle::k_Spots; ++spot)
+	{
+		const auto tree = std::exchange(game.trees.at(spot), entt::null);
+		world_objects::SetLife(tree, tree_puzzle::k_SolvedTreeLife);
+		if (Locator::fireSystem::has_value())
+		{
+			Locator::fireSystem::value().SetOnFire(tree, tree_puzzle::k_SolvedTreeFireSpeed);
+		}
+		if (const auto mist = std::exchange(game.mists.at(spot), entt::null); mist != entt::null && registry.Valid(mist))
+		{
+			world_objects::Remove(mist);
+		}
+		const auto bat = std::exchange(game.bats.at(spot), entt::null);
+		if (bat != entt::null && registry.Valid(bat) && Locator::animalSystem::has_value())
+		{
+			Locator::animalSystem::value().SetScriptState(bat, static_cast<LivingStates>(tree_puzzle::k_BatSolvedState));
+		}
+	}
+	game.played = true;
+}
+
+/// One turn of the tree puzzle, spot by spot. A tree on its spot grows. A tree that went or moved off its spot counts
+/// as a pull of that spot, which changes the spot and the spots next to it.
+void ProcessTrees(PuzzleGame& game)
+{
+	auto& registry = Entities();
+	for (int32_t across = 0; across < tree_puzzle::k_Side; ++across)
+	{
+		for (int32_t along = 0; along < tree_puzzle::k_Side; ++along)
+		{
+			const auto spot = tree_puzzle::SpotIndex(across, along);
+			for (auto* thing : {&game.mists.at(spot), &game.bats.at(spot)})
+			{
+				if (*thing != entt::null && !registry.Valid(*thing))
+				{
+					*thing = entt::null;
+				}
+			}
+			const auto tree = game.trees.at(spot);
+			if (tree == entt::null)
+			{
+				continue;
+			}
+			const auto* transform = registry.Valid(tree) ? registry.TryGet<const Transform>(tree) : nullptr;
+			if (transform != nullptr && transform->position == game.treesPlacedAt.at(spot))
+			{
+				GrowTree(tree);
+				continue;
+			}
+			game.started = true;
+			Pull(game, across, along);
+		}
+	}
+}
+
+/// Whether the puzzle is one of the tree puzzles
+bool IsTreePuzzle(script::PuzzleGameType type)
+{
+	return type == script::PuzzleGameType::Tree1 || type == script::PuzzleGameType::Tree2;
+}
+
 /// The test of a solution. A solved beach temple puzzle fixes its rings, which the hand can then not take.
 bool TestSolution(entt::entity puzzle, PuzzleGame& game)
 {
+	if (IsTreePuzzle(game.type))
+	{
+		// The test looks only at the trees of the puzzle. After the solution the puzzle has no trees, so the test gives no.
+		if (!TreesSolved(Entities(), game))
+		{
+			return false;
+		}
+		SolveTrees(game);
+		return true;
+	}
 	if (game.type != script::PuzzleGameType::Hanoi)
 	{
 		return ecs::puzzle_game::PlayedBeforeSolved(game.type).value_or(false);
@@ -413,6 +659,10 @@ void Process(entt::entity puzzle, PuzzleGame& game)
 		ProcessHanoi(puzzle, game);
 		UpdatePickUp(puzzle, game);
 	}
+	else if (IsTreePuzzle(game.type))
+	{
+		ProcessTrees(game);
+	}
 }
 } // namespace
 
@@ -443,6 +693,10 @@ entt::entity PuzzleGameSystem::Create(script::PuzzleGameType type, glm::vec3 poi
 		auto& made = registry.Get<PuzzleGame>(puzzle);
 		StartHanoi(puzzle, made);
 		UpdatePickUp(puzzle, made);
+	}
+	else if (IsTreePuzzle(type))
+	{
+		StartTrees(registry.Get<PuzzleGame>(puzzle));
 	}
 	return puzzle;
 }

@@ -39,8 +39,17 @@ struct HanoiBlock
 	bool fixed {false};
 };
 
-/// A puzzle game that a script made. Each kind has its own pieces; only the beach temple puzzle has pieces now. The
-/// player cannot solve a kind that has none.
+/// A list of a count of things, none of them there
+template <size_t Count>
+[[nodiscard]] constexpr std::array<entt::entity, Count> NoThings() noexcept
+{
+	std::array<entt::entity, Count> things {};
+	things.fill(entt::null);
+	return things;
+}
+
+/// A puzzle game that a script made. Each kind has its own pieces; the beach temple puzzle and the tree puzzles have
+/// pieces now. The player cannot solve a kind that has none.
 struct PuzzleGame
 {
 	script::PuzzleGameType type {script::PuzzleGameType::None};
@@ -65,6 +74,16 @@ struct PuzzleGame
 	std::array<entt::entity, 4> rings {entt::null, entt::null, entt::null, entt::null};
 	/// The last state of each piece, the bases first, from which the puzzle makes a piece again that went
 	std::array<HanoiBlock, 7> kept {};
+	/// The tree puzzle's count of changes of each spot, the rows across first. The count gives the state of the spot.
+	std::array<int8_t, 9> treeCounts {};
+	/// The tree on each spot, and where the puzzle put it in the world. The tree is off its spot once it is anywhere else.
+	std::array<entt::entity, 9> trees {NoThings<9>()};
+	std::array<glm::vec3, 9> treesPlacedAt {};
+	/// The puff of mist over each spot and the bat for each spot, until the solution
+	std::array<entt::entity, 9> mists {NoThings<9>()};
+	std::array<entt::entity, 9> bats {NoThings<9>()};
+	/// The lantern at each corner of the tree puzzle
+	std::array<entt::entity, 4> lanterns {NoThings<4>()};
 };
 
 } // namespace openblack::ecs::components

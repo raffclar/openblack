@@ -268,6 +268,7 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -5089,7 +5090,10 @@ bool Game::RunFrame() noexcept
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
 			const auto drawDesc = SceneDrawDesc(config, drawMs, IsHandDrawn());
 			// The sun, the moon and the dome's blend of this frame, for drawing it
-			Locator::skySystem::value().UpdateFrame(config.drawSky);
+			if (Locator::skySystem::has_value())
+			{
+				Locator::skySystem::value().UpdateFrame(config.drawSky);
+			}
 			// Nothing of the world shows under a video that covers the screen, nor behind the falling spell's film
 			const auto& videos = Locator::videoSystem::value();
 			if (videos.CoversScreen() || videos.HidesWorld())
@@ -6569,7 +6573,7 @@ void Game::LoadLandscape(const std::filesystem::path& path)
 
 void Game::SetTime(float time) noexcept
 {
-	Locator::skySystem::value().SetTime(time);
+	Locator::skyClockSystem::value().SetTime(time);
 }
 
 void Game::SizeSceneToWindow()

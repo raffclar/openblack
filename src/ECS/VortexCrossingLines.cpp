@@ -27,6 +27,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
@@ -185,6 +186,19 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 		                         .row = static_cast<int32_t>(mobile->type),
 		                         .yAngle = YAngleOf(transform->rotation),
 		                         .scale = scale};
+	}
+	if (const auto* scaffold = registry.TryGet<const Scaffold>(thing))
+	{
+		// A scaffold that a workshop counts as its own writes no line, and the next land does not get it
+		if (registry.Valid(scaffold->workshop))
+		{
+			return std::nullopt;
+		}
+		return ScaffoldLine {.town = TownNumber(registry, scaffold->town),
+		                     .offset = offset,
+		                     .row = 0,
+		                     .yAngle = YAngleOf(transform->rotation),
+		                     .scale = scale};
 	}
 	if (const auto* dead = registry.TryGet<const DeadTree>(thing))
 	{

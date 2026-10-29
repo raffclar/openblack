@@ -33,7 +33,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ScriptWeatherRules.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "InfoConstants.h"
@@ -404,7 +404,7 @@ void WeatherSystem::InitialiseClimate(Climate& climate) const
 	climate.rainDesire = RainMax(info, _season);
 
 	// The temperature starts at the time of day's target
-	const auto& sky = Locator::skySystem::value();
+	const auto& sky = Locator::skyClockSystem::value();
 	const auto hour = RelativeHour(static_cast<float>(Ftol(sky.GetTime())), sky.GetDayNightTimes());
 	const auto hourFactor = k_TemperatureByHour.at(std::clamp(Ftol(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
@@ -845,7 +845,7 @@ void WeatherSystem::ProcessClimate(entt::entity entity, bool newDay)
 void WeatherSystem::ProcessTemperature(Climate& climate) const
 {
 	const auto& info = GetInfo(climate);
-	const auto& sky = Locator::skySystem::value();
+	const auto& sky = Locator::skyClockSystem::value();
 	const auto hour = RelativeHour(static_cast<float>(Ftol(sky.GetTime())), sky.GetDayNightTimes());
 	const auto hourFactor = k_TemperatureByHour.at(std::clamp(Ftol(hour), 0, 23));
 	const auto monthFactor = k_TemperatureByMonth.at(GetMonth(_turn));
