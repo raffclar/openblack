@@ -21,6 +21,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/TempleInteriorInterface.h"
+#include "3D/TempleSubMeshTexture.h"
 #include "Camera/Camera.h"
 #include "Creature/CaveCreature.h"
 #include "ECS/Components/CreatureCopy.h"
