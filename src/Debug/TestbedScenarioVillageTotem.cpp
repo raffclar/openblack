@@ -170,6 +170,42 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	                 {.kind = Command::Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	// The creature starts away from the totem, so that it walks to it first
+	const glm::vec2 mover = k_Centre + glm::vec2(-30.0f, -30.0f);
+	const auto moveTotem = [&all, mover](std::string_view id, std::string_view name, std::string_view action, float share,
+	                                     std::string_view description, std::string_view expected) {
+		all.push_back({
+		    .id = id,
+		    .name = name,
+		    .facet = Facet::Mind,
+		    .description = description,
+		    .expected = expected,
+		    .framing = {.shot = Shot::Overview,
+		                .include = {mover - glm::vec2(5.0f), k_Centre + glm::vec2(15.0f)},
+		                .distance = 0.5f},
+		    .creatures = {{.species = CreatureType::Tiger, .offset = mover}},
+		    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+		                {.type = VillagerInfo::NorseHousewifeFemale,
+		                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
+		                 .joinTown = true}},
+		    .temples = {{.offset = k_Temple}},
+		    .commands =
+		        {{.kind = Command::Kind::DoAction, .delaySeconds = 2.0f, .object = 0, .action = action, .onTotem = true}},
+		    .townBeliefInPlayer = k_TownBelief,
+		    .worshipShare = share,
+		});
+	};
+	moveTotem("mind.creature_raises_totem", "The creature raises the totem of its player's town", "RaiseTotemPole", 0.0f,
+	          "The player's Norse town centre with the player's temple and the town's worship site built, no one at "
+	          "worship. The player's tiger stands away to the south west. A script tells it to raise the totem.",
+	          "The tiger walks to within 12 m of the totem, looking at it, turns to face it and plays its summon clip with a "
+	          "playful face. Then the totem rises: each game turn the share of the town at worship goes up by 0.02, so the "
+	          "totem is all the way up after 50 turns.");
+	moveTotem("mind.creature_lowers_totem", "The creature lowers the totem of its player's town", "LowerTotemPole", 1.0f,
+	          "The town of mind.creature_raises_totem with all its people at worship, the totem all the way up. A script "
+	          "tells the tiger to lower the totem.",
+	          "The tiger walks to the totem, faces it and plays its summon clip with a playful face. Then the totem goes "
+	          "down by 0.02 of the town a game turn until no one is at worship.");
 
 	for (const auto& carving : k_Carvings)
 	{

@@ -236,6 +236,10 @@ private:
 	/// The scenario's objects by their place in it, while they are still about
 	[[nodiscard]] std::optional<entt::entity> ObjectAt(size_t index) const;
 	[[nodiscard]] std::optional<entt::entity> GlobeAt(size_t index) const;
+	/// The totem of a scenario's object, a town centre
+	[[nodiscard]] std::optional<entt::entity> TotemAt(size_t index) const;
+	/// Builds the worship site of the town of a town centre at once
+	void BuildWorshipSiteOf(entt::entity centre) const;
 	void Log(std::string line);
 	/// Every miracle's position and the land's height under it, for a scenario that logs them
 	void LogMiracles();

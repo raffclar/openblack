@@ -2175,6 +2175,40 @@ std::optional<entt::entity> Runner::ObjectAt(size_t index) const
 	return _objects[index];
 }
 
+std::optional<entt::entity> Runner::TotemAt(size_t index) const
+{
+	const auto centre = ObjectAt(index);
+	if (!centre.has_value())
+	{
+		return std::nullopt;
+	}
+	std::optional<entt::entity> totem;
+	Locator::entitiesRegistry::value().Each<const ecs::components::VillageTotem>(
+	    [&totem, &centre](entt::entity entity, const ecs::components::VillageTotem& component) {
+		    if (component.townCentre == *centre)
+		    {
+			    totem = entity;
+		    }
+	    });
+	return totem;
+}
+
+void Runner::BuildWorshipSiteOf(entt::entity centre) const
+{
+	// The scenario does not wait for the villagers to build the worship site: it stands built at once
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* abode = registry.TryGet<const ecs::components::Abode>(centre);
+	const auto& towns = registry.Context().towns;
+	const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
+	const auto* town = found != towns.end() && registry.Valid(found->second)
+	                       ? registry.TryGet<const ecs::components::Town>(found->second)
+	                       : nullptr;
+	if (town != nullptr && registry.Valid(town->worshipSite))
+	{
+		ecs::construction::BuildBy(town->worshipSite, k_BuildWholeSite);
+	}
+}
+
 std::string Runner::GiveObjectCommand(entt::entity creature, const Command& command)
 {
 	if (!Locator::creatureObjectActionSystem::has_value())
@@ -2576,37 +2610,12 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::HandGripTotem:
 	{
-		const auto centre = ObjectAt(command.object);
-		if (!centre.has_value() || !Locator::villageTotemSystem::has_value())
+		const auto totem = TotemAt(command.object);
+		if (!totem.has_value() || !Locator::villageTotemSystem::has_value())
 		{
 			return "no totem";
 		}
-		std::optional<entt::entity> totem;
-		Locator::entitiesRegistry::value().Each<const ecs::components::VillageTotem>(
-		    [&totem, &centre](entt::entity entity, const ecs::components::VillageTotem& component) {
-			    if (component.townCentre == *centre)
-			    {
-				    totem = entity;
-			    }
-		    });
-		if (!totem.has_value())
-		{
-			return "no totem";
-		}
-		// The scenario does not wait for the villagers to build the worship site: it stands built at once
-		{
-			auto& registry = Locator::entitiesRegistry::value();
-			const auto* abode = registry.TryGet<const ecs::components::Abode>(*centre);
-			const auto& towns = registry.Context().towns;
-			const auto found = abode != nullptr ? towns.find(abode->townId) : towns.end();
-			const auto* town = found != towns.end() && registry.Valid(found->second)
-			                       ? registry.TryGet<const ecs::components::Town>(found->second)
-			                       : nullptr;
-			if (town != nullptr && registry.Valid(town->worshipSite))
-			{
-				ecs::construction::BuildBy(town->worshipSite, k_BuildWholeSite);
-			}
-		}
+		BuildWorshipSiteOf(*ObjectAt(command.object));
 		auto& totems = Locator::villageTotemSystem::value();
 		if (!totems.Grip(*totem, command.player))
 		{
@@ -3852,12 +3861,17 @@ void Runner::Give(const Command& command)
 	}
 	case Kind::DoAction:
 	{
+		// A creature moves a totem only when its town has a worship site built
+		if (const auto centre = ObjectAt(command.object); command.onTotem && centre.has_value())
+		{
+			BuildWorshipSiteOf(*centre);
+		}
 		const auto* tables = minds.GetTables();
 		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
 		const auto target = command.atCreature.has_value()                 ? CreatureAt(*command.atCreature)
 		                    : command.onTemple && !_temples.empty()        ? std::optional(_temples.front())
 		                    : command.onGlobe && command.globe.has_value() ? GlobeAt(*command.globe)
-		                    : command.atCreature.has_value()               ? CreatureAt(*command.atCreature)
+		                    : command.onTotem                              ? TotemAt(command.object)
 		                                                                   : ObjectAt(command.object);
 		const auto with = command.globe.has_value() && !command.onGlobe ? GlobeAt(*command.globe)
 		                  : command.usesCreature.has_value()            ? CreatureAt(*command.usesCreature)
