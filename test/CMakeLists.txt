@@ -2153,3 +2153,7 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_prayer_natives PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_audio_library_log audio/test_audio_library_log.cpp)
+openblack_setup_and_add_test(
+  test_script_lesson_natives test_script_lesson_natives.cpp
+)
+target_link_libraries(test_script_lesson_natives PRIVATE ScriptLibrary)
