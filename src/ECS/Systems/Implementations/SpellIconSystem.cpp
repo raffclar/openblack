@@ -44,6 +44,7 @@
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MiracleVisuals.h"
+#include "Magic/PrayerRules.h"
 #include "Magic/SpellSeedRules.h"
 #include "Magic/WorshipBattery.h"
 #include "Sound/GameSoundEffects.h"
@@ -621,7 +622,8 @@ float SpellIconSystem::RequiredNow(const WorshipIcon& icon, entt::entity heldSee
 	{
 		return Required(icon);
 	}
-	return magic::ChantNeeded(Required(icon), Entities().Get<const SpellSeed>(heldSeed).chantStore);
+	const auto& seed = Entities().Get<const SpellSeed>(heldSeed);
+	return magic::ChantNeeded(Required(icon), magic::SeedChantStore(seed.chantStore, seed.storedChants, seed.hasCast));
 }
 
 icons::IconCharge SpellIconSystem::ChargeOf(const WorshipIcon& icon, PlayerNames tapping) const
@@ -1171,7 +1173,8 @@ std::optional<float> SpellIconSystem::ShownCharge(entt::entity icon) const
 	std::optional<float> heldSeedCharge;
 	if (const auto held = HeldSeedOf(*component); held != entt::null)
 	{
-		heldSeedCharge = registry.Get<const SpellSeed>(held).chantStore;
+		const auto& seed = registry.Get<const SpellSeed>(held);
+		heldSeedCharge = magic::SeedChantStore(seed.chantStore, seed.storedChants, seed.hasCast);
 	}
 	return icons::ShownCharge(component->store, icons::ShownRequired(Required(*component), heldSeedCharge));
 }
