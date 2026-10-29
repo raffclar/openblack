@@ -1236,7 +1236,19 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		        // A spell wolf's prey that it hunts, and its target: the prey that it brought down and eats
 		        if (const auto* run = registry->TryGet<const SpellWolf>(*entity))
 		        {
-			        result["spell_wolf"] = {{"prey", Id(run->prey)}, {"food", Id(run->food)}};
+			        result["spell_wolf"] = {{"prey", Id(run->hunt.prey)}, {"food", Id(run->hunt.food)}};
+		        }
+		        // A wild hunter's needs, the prey that it hunts, its target and the cell where its flock sleeps
+		        if (const auto* hunter = registry->TryGet<const Hunter>(*entity))
+		        {
+			        result["hunter"] = {{"hunger", hunter->needs.hunger},
+			                            {"sleep", hunter->needs.sleep},
+			                            {"breed", hunter->needs.breed},
+			                            {"prey", Id(hunter->hunt.prey)},
+			                            {"food", Id(hunter->hunt.food)},
+			                            {"sleeping_cell", hunter->sleepingCell.has_value()
+			                                                  ? Json::array({hunter->sleepingCell->x, hunter->sleepingCell->y})
+			                                                  : Json()}};
 		        }
 		        return QueryResult::Value(std::move(result));
 	        }));

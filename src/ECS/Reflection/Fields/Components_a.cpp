@@ -91,13 +91,19 @@ void openblack::ecs::reflection::RegisterFields_Components_a(entt::meta_ctx& con
 	    .Field<&components::SpellAnimal::spell>("spell")
 	    .Field<&components::SpellAnimal::fade>("fade")
 	    .Field<&components::SpellAnimal::previous>("previous");
+	Reflect<components::HuntState>(context)
+	    .Field<&components::HuntState::prey>("prey")
+	    .Field<&components::HuntState::huntStart>("huntStart")
+	    .Field<&components::HuntState::remembered>("remembered")
+	    .Field<&components::HuntState::food>("food");
 	Reflect<components::SpellWolf>(context)
 	    .Field<&components::SpellWolf::finalDestination>("finalDestination")
 	    .Field<&components::SpellWolf::corridor>("corridor")
-	    .Field<&components::SpellWolf::prey>("prey")
-	    .Field<&components::SpellWolf::huntStart>("huntStart")
-	    .Field<&components::SpellWolf::remembered>("remembered")
-	    .Field<&components::SpellWolf::food>("food");
+	    .Field<&components::SpellWolf::hunt>("hunt");
+	Reflect<components::Hunter>(context)
+	    .Field<&components::Hunter::needs>("needs")
+	    .Field<&components::Hunter::sleepingCell>("sleepingCell")
+	    .Field<&components::Hunter::hunt>("hunt");
 	Reflect<components::AnimalPose>(context)
 	    .Field<&components::AnimalPose::bones>("bones")
 	    .Field<&components::AnimalPose::light>("light")

@@ -52,6 +52,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
+#include "Animals/HunterRules.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/CustomMusicPlayerInterface.h"
 #include "Audio/GameMusic.h"
@@ -537,6 +538,18 @@ entt::entity PlaceAnimal(AnimalInfo type, const ObjectSetup& object, glm::vec3 p
 	else if (object.living && animals::birds::IsLandBird(type))
 	{
 		animal = animalSystem.CreateBird(type, point, 0, entt::null);
+	}
+	else if (object.living && animals::hunters::IsWildHunter(type))
+	{
+		animal = animalSystem.CreateHunter(type, point, 0, entt::null);
+		// A hungry hunter starts with its need to eat full
+		auto& registry = Locator::entitiesRegistry::value();
+		if (auto* hunter = animal != entt::null ? registry.TryGet<ecs::components::Hunter>(animal) : nullptr;
+		    hunter != nullptr && object.hungry)
+		{
+			hunter->needs.hunger =
+			    static_cast<int16_t>(Locator::infoConstants::value().animal.at(static_cast<size_t>(type)).hunger);
+		}
 	}
 	if (animal != entt::null)
 	{

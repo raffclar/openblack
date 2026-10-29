@@ -25,6 +25,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Animals/GrazerRules.h"
+#include "Animals/HunterRules.h"
 #include "Camera/Camera.h"
 #include "Camera/StartCamera.h"
 #include "Camera/ZoomToPlaces.h"
@@ -611,7 +612,8 @@ void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, in
 		return;
 	}
 	// The type is the row of the animals' table; the animal joins the latest flock made with the number, or is a flock
-	// of its own when there is none. A grazer belongs to the town with the number, if any; a bird never belongs to one.
+	// of its own when there is none. A grazer belongs to the town with the number, if any; a bird or a hunter never
+	// belongs to one.
 	auto& animals = Locator::animalSystem::value();
 	const auto kind = static_cast<AnimalInfo>(type);
 	const auto xz = glm::vec2(position.x, position.z);
@@ -622,6 +624,14 @@ void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, in
 		LastObject() = animals.CreateGrazer(kind, xz, years, flock, TownWithId(townId));
 		return;
 	}
+	if (animals::hunters::IsWildHunter(kind))
+	{
+		if (const auto hunter = animals.CreateHunter(kind, xz, years, flock); hunter != entt::null)
+		{
+			LastObject() = hunter;
+		}
+		return;
+	}
 	const auto bird = animals.CreateBird(kind, xz, years, flock);
 	if (bird != entt::null)
 	{
@@ -629,7 +639,6 @@ void FeatureScriptCommands::CreateNewAnimal(glm::vec3 position, int32_t type, in
 	}
 	else
 	{
-		// TODO(land-animals): the hunters (lions, tigers, leopards, wolves), which openblack doesn't make yet
 		SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "LHScriptX: animal kind {} isn't made yet", type);
 	}
 }

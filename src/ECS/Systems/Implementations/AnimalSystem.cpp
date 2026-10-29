@@ -245,8 +245,19 @@ entt::entity AnimalSystem::CreateBird(AnimalInfo type, glm::vec2 position, uint3
 entt::entity AnimalSystem::CreateScriptAnimal(AnimalInfo type, glm::vec2 position)
 {
 	// Made as a land script makes an animal with no flock, at a random age
-	const auto entity = animals::grazers::IsGrazer(type) ? CreateGrazer(type, position, 0, entt::null, entt::null)
-	                                                     : CreateBird(type, position, 0, entt::null);
+	auto entity = entt::entity {entt::null};
+	if (animals::grazers::IsGrazer(type))
+	{
+		entity = CreateGrazer(type, position, 0, entt::null, entt::null);
+	}
+	else if (animals::hunters::IsWildHunter(type))
+	{
+		entity = CreateHunter(type, position, 0, entt::null);
+	}
+	else
+	{
+		entity = CreateBird(type, position, 0, entt::null);
+	}
 	if (entity == entt::null)
 	{
 		return entt::null;
@@ -700,6 +711,11 @@ void AnimalSystem::AnimalTurn(entt::entity entity)
 		GrazerTurn(entity, animal, *grazer);
 		return;
 	}
+	if (auto* hunter = registry.TryGet<Hunter>(entity))
+	{
+		HunterTurn(entity, animal, *hunter);
+		return;
+	}
 	// Its reaction comes before its own ways
 	if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
 	{
@@ -1075,23 +1091,22 @@ void AnimalSystem::RunToFinalDestination(entt::entity wolf, Animal& animal)
 
 bool AnimalSystem::DropTarget(entt::entity entity, Animal& animal)
 {
-	// Only a hunter has a target: the prey that it brought down and eats. Of the hunters, openblack makes only the
-	// spell wolves.
+	// Only a hunter has a target: the prey that it brought down and eats
 	auto& registry = EntityRegistry();
-	auto* run = registry.TryGet<SpellWolf>(entity);
-	if (run == nullptr || run->food == entt::null)
+	auto* hunt = HuntOf(entity);
+	if (hunt == nullptr || hunt->food == entt::null)
 	{
 		return false;
 	}
-	const bool gone = !registry.Valid(run->food);
+	const bool gone = !registry.Valid(hunt->food);
 	const auto drop = animals::DropOfTarget({.gone = gone,
-	                                         .inPlayersHand = !gone && registry.AllOf<InHand>(run->food),
+	                                         .inPlayersHand = !gone && registry.AllOf<InHand>(hunt->food),
 	                                         .inHand = animal.state == AnimalState::InHand});
 	if (drop == animals::TargetDrop::Keeps)
 	{
 		return false;
 	}
-	run->food = entt::null;
+	hunt->food = entt::null;
 	animal.turnsUntilStateChange = 0;
 	if (drop == animals::TargetDrop::DropsAndDecides)
 	{
@@ -1168,36 +1183,62 @@ void AnimalSystem::WolfMoveToPos(entt::entity entity, Animal& animal)
 	}
 }
 
-void AnimalSystem::ReactToFoodNeeds(entt::entity entity, Animal& animal)
+bool AnimalSystem::ReactToFoodNeeds(entt::entity entity, Animal& animal)
+{
+	auto& hunt = *HuntOf(entity);
+	// The prey it found last turn, still there to hunt, is chased at its hunting speed; one brought down since is eaten
+	if (PreyStillValid(entity, animal))
+	{
+		SetHunterSpeed(entity, animal, animals::hunters::k_HuntSpeed);
+		hunt.huntStart = _turn;
+		SetupMoveToTarget(entity, animal, hunt.prey);
+		return true;
+	}
+	hunt.prey = FindPrey(entity, animal);
+	if (hunt.prey == entt::null && hunt.remembered.has_value())
+	{
+		// None now: it goes at its hunting speed to where it last found some
+		SetHunterSpeed(entity, animal, animals::hunters::k_HuntSpeed);
+		SetupMoveTo(animal, *hunt.remembered, 0.0f, AnimalState::StartWander);
+		hunt.remembered.reset();
+		return true;
+	}
+	return false;
+}
+
+bool AnimalSystem::PreyStillValid(entt::entity entity, const Animal& animal)
 {
 	auto& registry = EntityRegistry();
-	auto& run = registry.Get<SpellWolf>(entity);
-	const auto& info = InfoOf(animal.type);
-	// The prey it found last turn, still there to hunt, is chased; one brought down since is eaten. (The game also
-	// passes over prey it cannot reach, such as a villager indoors; openblack's villagers are never out of reach.)
-	if (run.prey != entt::null && registry.Valid(run.prey))
+	auto& hunt = *HuntOf(entity);
+	if (hunt.prey == entt::null)
 	{
-		const auto& transform = registry.Get<const Transform>(run.prey);
-		const auto* action = registry.TryGet<const LivingAction>(run.prey);
+		return false;
+	}
+	// The prey must be there, alive, low enough, within its hunting distance, and not under a script's control unless a
+	// script also holds the hunter. Else the hunter forgets it
+	bool valid = registry.Valid(hunt.prey);
+	if (valid)
+	{
+		const auto& transform = registry.Get<const Transform>(hunt.prey);
+		const auto* action = registry.TryGet<const LivingAction>(hunt.prey);
 		const bool dying =
-		    registry.AllOf<Villager>(run.prey) && action != nullptr &&
+		    registry.AllOf<Villager>(hunt.prey) && action != nullptr &&
 		    action->states[static_cast<size_t>(LivingAction::Index::Top)] == static_cast<uint8_t>(VillagerStates::Dying);
-		const bool valid = !dying && transform.position.y - Ground(Xz(transform.position)) <= flock_rules::k_PreyMaxHeight &&
-		                   glm::distance(Metres(animal.move.position), Xz(transform.position)) < info.huntingDistance;
-		if (valid)
-		{
-			run.huntStart = _turn;
-			SetupMoveToTarget(entity, animal, run.prey);
-			return;
-		}
+		valid = !dying && transform.position.y - Ground(Xz(transform.position)) <= flock_rules::k_PreyMaxHeight &&
+		        ScriptAllowsHunt(entity, hunt.prey) &&
+		        glm::distance(Metres(animal.move.position), Xz(transform.position)) < InfoOf(animal.type).huntingDistance;
 	}
-	run.prey = FindPrey(entity, animal);
-	if (run.prey == entt::null && run.remembered.has_value())
+	if (!valid)
 	{
-		// None now: it goes where it last found some
-		SetupMoveTo(animal, *run.remembered, 0.0f, AnimalState::StartWander);
-		run.remembered.reset();
+		hunt.prey = entt::null;
 	}
+	return valid;
+}
+
+bool AnimalSystem::ScriptAllowsHunt(entt::entity hunter, entt::entity prey) const
+{
+	const auto& registry = EntityRegistry();
+	return !registry.AllOf<ScriptControlled>(prey) || registry.AllOf<InScript>(hunter);
 }
 
 void AnimalSystem::WolfStartWander(entt::entity /*entity*/, Animal& animal)
@@ -1219,17 +1260,18 @@ void AnimalSystem::WolfStartWander(entt::entity /*entity*/, Animal& animal)
 void AnimalSystem::SetupMoveToTarget(entt::entity wolf, Animal& animal, entt::entity prey)
 {
 	auto& registry = EntityRegistry();
-	auto& run = registry.Get<SpellWolf>(wolf);
-	run.prey = prey;
+	HuntOf(wolf)->prey = prey;
 	// It makes for where it can reach the prey
 	const auto preyPoint = Xz(registry.Get<const Transform>(prey).position);
 	const auto goal = animals::WorkingPosition(preyPoint, RadiusOf(prey), Metres(animal.move.position), RadiusOf(wolf));
 	Banked(animal, animals::SetUpMove(animal.move, Fixed(goal), TurnAngleOf(animal)));
 	animal.goalHeight = 0.0f;
-	// The hunter eats prey that a hunter brought down before. It chases all other prey, in the clip that the prey has
+	// The hunter eats prey that a hunter brought down before, and goes to it at its hunting speed. It chases all other
+	// prey, in the clip that it has
 	if (registry.AllOf<BroughtDown>(prey))
 	{
 		FinishPouncing(wolf, animal, prey);
+		SetHunterSpeed(wolf, animal, animals::hunters::k_HuntSpeed);
 		return;
 	}
 	SetState(animal, AnimalState::Chase);
@@ -1237,10 +1279,17 @@ void AnimalSystem::SetupMoveToTarget(entt::entity wolf, Animal& animal, entt::en
 
 void AnimalSystem::Abandon(entt::entity wolf, Animal& animal)
 {
-	auto& run = EntityRegistry().Get<SpellWolf>(wolf);
-	run.prey = entt::null;
-	run.remembered.reset();
-	RunToFinalDestination(wolf, animal);
+	auto& hunt = *HuntOf(wolf);
+	hunt.prey = entt::null;
+	hunt.remembered.reset();
+	// A spell wolf runs on. A wild hunter wanders off at its usual speed
+	if (EntityRegistry().AllOf<SpellWolf>(wolf))
+	{
+		RunToFinalDestination(wolf, animal);
+		return;
+	}
+	SetHunterSpeed(wolf, animal, animals::hunters::k_UsualSpeed);
+	SetTopState(animal, AnimalState::StartWander);
 }
 
 bool AnimalSystem::OutOfTheHunt(entt::entity prey) const
@@ -1263,14 +1312,19 @@ bool AnimalSystem::OutOfTheHunt(entt::entity prey) const
 bool AnimalSystem::IsHuntingTargetValid(entt::entity wolf, const Animal& animal, entt::entity prey) const
 {
 	const auto& registry = EntityRegistry();
-	const auto& run = registry.Get<const SpellWolf>(wolf);
+	const auto* run = registry.TryGet<const SpellWolf>(wolf);
+	if (run == nullptr)
+	{
+		// A wild hunter takes any prey that is there
+		return registry.Valid(prey);
+	}
 	const auto* spellAnimal = registry.TryGet<const SpellAnimal>(wolf);
 	if ((spellAnimal != nullptr && spellAnimal->Fading()) || !registry.Valid(prey) || OutOfTheHunt(prey))
 	{
 		return false;
 	}
 	const auto point = Xz(registry.Get<const Transform>(prey).position);
-	return flock_rules::IsOnCorridor(run.corridor, point, Metres(animal.move.position)) &&
+	return flock_rules::IsOnCorridor(run->corridor, point, Metres(animal.move.position)) &&
 	       animals::OutsideTurningCircles(Metres(animal.move.position), animal.move.angle, animal.move.speed,
 	                                      TurnAngleOf(animal), point);
 }
@@ -1304,41 +1358,48 @@ bool PreyReachable(entt::entity prey)
 void AnimalSystem::Chase(entt::entity wolf, Animal& animal)
 {
 	auto& registry = EntityRegistry();
-	auto& run = registry.Get<SpellWolf>(wolf);
-	if (run.prey == entt::null || !registry.Valid(run.prey) || !PreyReachable(run.prey))
+	auto& hunt = *HuntOf(wolf);
+	if (hunt.prey == entt::null || !registry.Valid(hunt.prey) || !PreyReachable(hunt.prey) ||
+	    !ScriptAllowsHunt(wolf, hunt.prey))
 	{
 		Abandon(wolf, animal);
 		return;
 	}
 	const auto& info = InfoOf(animal.type);
 	// It heads straight for the prey, unless within a step of it already
-	const auto preyPoint = Xz(registry.Get<const Transform>(run.prey).position);
+	const auto prey = hunt.prey;
+	const auto preyPoint = Xz(registry.Get<const Transform>(prey).position);
 	if (!(glm::distance(Metres(animal.move.position), preyPoint) < map_coords::ToMetres(animal.move.speed)))
 	{
 		animal.move.goal = Fixed(preyPoint);
 		MoveTo3D(animal);
 	}
-	if (_turn - run.huntStart >= info.chaseTime || !IsHuntingTargetValid(wolf, animal, run.prey))
+	if (_turn - hunt.huntStart >= info.chaseTime || !IsHuntingTargetValid(wolf, animal, prey))
 	{
 		Abandon(wolf, animal);
 		return;
 	}
-	// Close enough and facing it, it leaps
+	// Close enough and facing it, it leaps. Not facing it, it gives up the prey
 	const float distance = glm::distance(Metres(animal.move.position), preyPoint);
 	const float scale = registry.Get<const Transform>(wolf).scale.x;
-	const float reach = distance < info.attackDistance ? scale * StrideOf(AnimId::AWolfPounce) * 0.5f : k_PounceFromFar;
+	const auto pounceClip = animals::hunters::ClipsOf(animal.type).transform([](const auto& clips) { return clips.pounce; });
+	const float reach =
+	    distance < info.attackDistance ? scale * StrideOf(pounceClip.value_or(AnimId::AWolfPounce)) * 0.5f : k_PounceFromFar;
 	if (distance <= reach)
 	{
 		const auto toPrey = gutils::GetAngleFromXZ(Metres(animal.move.position), preyPoint);
 		if (gutils::GetAngleDifference(animal.move.angle, toPrey) <= k_PounceAngle)
 		{
 			SetTopState(animal, AnimalState::Pounce);
+			return;
 		}
-		else
-		{
-			Abandon(wolf, animal);
-		}
-		return;
+		Abandon(wolf, animal);
+	}
+	// Its speed comes from its distance from the prey. Too far away, it gives up the prey
+	if (const auto speed =
+	        animals::hunters::ChaseSpeed(distance, info.attackDistance, info.stalkingDistance, info.huntingDistance, _turn))
+	{
+		SetHunterSpeed(wolf, animal, *speed);
 	}
 	if (!(distance < info.huntingDistance))
 	{
@@ -1349,39 +1410,48 @@ void AnimalSystem::Chase(entt::entity wolf, Animal& animal)
 void AnimalSystem::Pounce(entt::entity wolf, Animal& animal)
 {
 	auto& registry = EntityRegistry();
-	auto& run = registry.Get<SpellWolf>(wolf);
+	auto& hunt = *HuntOf(wolf);
 	const float scale = registry.Get<const Transform>(wolf).scale.x;
 	// The ground leapt so far, and the whole leap: its clip's stride, scaled
 	const float leapt = static_cast<float>(animal.move.speed) * k_SpeedStateToMetresPerSecond * k_TurnSeconds *
 	                    static_cast<float>(animal.turnsInState);
 	const float leap = scale * StrideOf(animal.animation);
-	if (run.prey != entt::null && !registry.Valid(run.prey))
+	if (hunt.prey != entt::null && !registry.Valid(hunt.prey))
 	{
-		run.prey = entt::null;
-		run.remembered.reset();
+		hunt.prey = entt::null;
+		hunt.remembered.reset();
 	}
-	// The leap carries on along its last step
+	// The leap continues along its last step
 	animal.move.position += animal.move.step;
 	SyncWorld(animal);
-	if (run.prey == entt::null)
+	if (hunt.prey == entt::null)
 	{
-		WolfStartWander(wolf, animal);
-		return;
-	}
-	if (glm::distance(Metres(animal.move.position), Xz(registry.Get<const Transform>(run.prey).position)) <=
-	    flock_rules::k_PounceReach)
-	{
-		BringDown(wolf, run.prey);
-	}
-	if (leap <= leapt)
-	{
-		if (registry.AllOf<BroughtDown>(run.prey))
+		// With no prey it wanders off
+		if (registry.AllOf<SpellWolf>(wolf))
 		{
-			FinishPouncing(wolf, animal, run.prey);
+			WolfStartWander(wolf, animal);
 		}
 		else
 		{
-			SetupMoveToTarget(wolf, animal, run.prey);
+			GrazerStartWander(wolf, animal);
+		}
+		return;
+	}
+	const auto prey = hunt.prey;
+	if (glm::distance(Metres(animal.move.position), Xz(registry.Get<const Transform>(prey).position)) <=
+	    flock_rules::k_PounceReach)
+	{
+		BringDown(wolf, prey);
+	}
+	if (leap <= leapt)
+	{
+		if (registry.AllOf<BroughtDown>(prey))
+		{
+			FinishPouncing(wolf, animal, prey);
+		}
+		else
+		{
+			SetupMoveToTarget(wolf, animal, prey);
 		}
 	}
 }
@@ -1484,44 +1554,8 @@ void AnimalSystem::BeingEatenTurn(entt::entity entity, Animal& animal)
 
 void AnimalSystem::Landed(entt::entity entity, Animal& animal)
 {
-	auto& registry = EntityRegistry();
 	// Its flock's home moves by its kind's rule
-	if (registry.AllOf<Flock>(animal.flock))
-	{
-		const bool leader = LeaderOf(animal.flock) == entity;
-		const auto position = registry.Get<const Transform>(entity).position;
-		switch (physics::living::LairOnLanding(animal.type, leader))
-		{
-		case physics::living::LandedLair::WhereItLanded:
-			SetFlockCentre(animal.flock, Xz(position));
-			break;
-		case physics::living::LandedLair::ForestOfItsKind:
-		{
-			// Tigers and wolves choose a forest. A wolf chooses only when it leads its flock, and it keeps to where it is
-			// while a script holds it. (A flag of the wolf's flock that stops the choice is not known in openblack.)
-			if (animal.type == AnimalInfo::Wolf && !leader)
-			{
-				break;
-			}
-			std::optional<glm::vec3> lair;
-			if (animal.type == AnimalInfo::Wolf && registry.AllOf<InScript>(entity))
-			{
-				lair = position;
-			}
-			else if (Locator::forestSystem::has_value())
-			{
-				lair = Locator::forestSystem::value().ForestLair(animal.type, position);
-			}
-			if (lair.has_value())
-			{
-				SetFlockCentre(animal.flock, Xz(*lair));
-			}
-			break;
-		}
-		case physics::living::LandedLair::Unchanged:
-			break;
-		}
-	}
+	ChooseLair(entity, animal);
 	// It plays its landing clip to the end. Then it joins a flock near it if it can, and it wanders off
 	WaitForClipOfState(animal, physics::living::JoinsAFlockAfterLanding(animal.type) ? AnimalState::InteractDecideWhatToDo
 	                                                                                 : AnimalState::DecideWhatToDo);
@@ -1530,10 +1564,10 @@ void AnimalSystem::Landed(entt::entity entity, Animal& animal)
 void AnimalSystem::FinishPouncing(entt::entity wolf, Animal& animal, entt::entity prey)
 {
 	auto& registry = EntityRegistry();
-	auto& run = registry.Get<SpellWolf>(wolf);
-	animal.hunger = 0;
-	run.prey = entt::null;
-	run.remembered.reset();
+	auto& hunt = *HuntOf(wolf);
+	Fed(wolf, animal);
+	hunt.prey = entt::null;
+	hunt.remembered.reset();
 	// It goes its scale short of the prey to eat it
 	const auto& preyTransform = registry.Get<const Transform>(prey);
 	const auto preyPoint = Xz(preyTransform.position);
@@ -1542,12 +1576,12 @@ void AnimalSystem::FinishPouncing(entt::entity wolf, Animal& animal, entt::entit
 	const glm::vec3 wolf3(wolfPoint.x, animal.height, wolfPoint.y);
 	const auto goal = flock_rules::EatingPosition(prey3, wolf3, registry.Get<const Transform>(wolf).scale.x);
 	SetupMoveTo(animal, glm::vec2(goal.x, goal.z), 0.0f, AnimalState::StartToEat);
-	run.food = prey;
+	hunt.food = prey;
 }
 
 void AnimalSystem::Eat(entt::entity wolf, Animal& animal)
 {
-	auto& run = EntityRegistry().Get<SpellWolf>(wolf);
+	auto& hunt = *HuntOf(wolf);
 	if (--animal.turnsUntilStateChange != 0)
 	{
 		// Another mouthful, for as long as its eating plays
@@ -1555,15 +1589,15 @@ void AnimalSystem::Eat(entt::entity wolf, Animal& animal)
 		return;
 	}
 	// Fed, it decides again, which for a spell wolf is running on
-	animal.hunger = 0;
-	run.food = entt::null;
+	Fed(wolf, animal);
+	hunt.food = entt::null;
 	SetTopState(animal, AnimalState::DecideWhatToDo);
 }
 
 entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 {
 	auto& registry = EntityRegistry();
-	auto& run = registry.Get<SpellWolf>(wolf);
+	auto& hunt = *HuntOf(wolf);
 	// What lives in each map cell
 	std::map<std::pair<int32_t, int32_t>, std::vector<std::pair<entt::entity, flock_rules::PreyFacts>>> cells;
 	const auto add = [&](entt::entity entity, const Transform& transform, flock_rules::PreyFacts facts) {
@@ -1594,13 +1628,16 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 		        entity,
 		        {.isVillager = true, .skeleton = registry.AllOf<WalkingSkeleton>(entity), .helpless = OutOfTheHunt(entity)}));
 	});
+	// An animal has food for the hunter when its kind's food is of a type that the hunter eats and is worth something
+	const auto eats = static_cast<uint32_t>(InfoOf(animal.type).needsFoodTypes);
 	registry.Each<const Animal, const Transform>([&](entt::entity entity, const Animal& other, const Transform& t) {
 		if (entity != wolf)
 		{
+			const auto& otherInfo = InfoOf(other.type);
+			const bool food = (eats & static_cast<uint32_t>(otherInfo.foodType)) != 0 && otherInfo.foodValue != 0.0f;
 			add(entity, t,
-			    withCommonFacts(entity, {.isOtherAnimal = other.type != animal.type,
-			                             .hasMeat = InfoOf(other.type).foodValue > 0.0f,
-			                             .helpless = OutOfTheHunt(entity)}));
+			    withCommonFacts(
+			        entity, {.isOtherAnimal = other.type != animal.type, .hasMeat = food, .helpless = OutOfTheHunt(entity)}));
 		}
 	});
 	// So many cells spiralling out from its own, and the first prey met there is its prey
@@ -1620,12 +1657,12 @@ entt::entity AnimalSystem::FindPrey(entt::entity wolf, const Animal& animal)
 				// Once it remembers where it found prey, the game's mixed measure decides whether this one is near
 				// enough to take instead
 				const auto preyPoint = Xz(registry.Get<const Transform>(entity).position);
-				if (run.remembered.has_value() &&
-				    !flock_rules::CloserThanRemembered(animal.move.position, Fixed(preyPoint), Fixed(*run.remembered)))
+				if (hunt.remembered.has_value() &&
+				    !flock_rules::CloserThanRemembered(animal.move.position, Fixed(preyPoint), Fixed(*hunt.remembered)))
 				{
 					continue;
 				}
-				run.remembered = preyPoint;
+				hunt.remembered = preyPoint;
 				return entity;
 			}
 		}

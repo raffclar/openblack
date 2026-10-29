@@ -829,7 +829,7 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		                                                           scale, entt::null);
 	case ObjectType::Animal:
 	case ObjectType::Bird:
-		// Made on its own and held still for the script: the land's birds and grazers (not yet the hunters)
+		// Made on its own and held still for the script: the land's birds, grazers and hunters
 		if (Locator::animalSystem::has_value())
 		{
 			const auto animal = Locator::animalSystem::value().CreateScriptAnimal(static_cast<AnimalInfo>(subtype),

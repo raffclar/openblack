@@ -227,6 +227,7 @@ public:
 	entt::entity CreateBird(AnimalInfo, glm::vec2, uint32_t, entt::entity) override { return entt::null; }
 	void SetFlockTown(entt::entity, entt::entity) override {}
 	entt::entity CreateGrazer(AnimalInfo, glm::vec2, uint32_t, entt::entity, entt::entity) override { return entt::null; }
+	entt::entity CreateHunter(AnimalInfo, glm::vec2, uint32_t, entt::entity) override { return entt::null; }
 	entt::entity CreateScriptAnimal(AnimalInfo, glm::vec2) override { return entt::null; }
 	entt::entity CreateStillAnimal(AnimalInfo, glm::vec3, float, float) override { return entt::null; }
 	void JoinFlock(entt::entity, entt::entity) override {}
