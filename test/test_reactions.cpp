@@ -25,6 +25,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
@@ -54,6 +55,7 @@
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/WallHugRules.h"
@@ -153,6 +155,56 @@ public:
 	void SetSeeds(GameRandomSeeds) override {}
 	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return ParticleRandomStream::None; }
 	void SetParticleStream(ParticleRandomStream) override {}
+};
+/// The fights of the creatures: a creature in the fighting list is in a fight, and one in the setting up list is not in
+/// its duel yet
+class ListedFights final: public ecs::systems::CreatureFightSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void Update(std::chrono::duration<float, std::milli> /*gameTime*/) override {}
+	StartResult StartFight(entt::entity /*creature*/, entt::entity /*opponent*/) override { return StartResult::Busy; }
+	void AbortFight(entt::entity /*creature*/) override {}
+	[[nodiscard]] bool IsFighting(entt::entity creature) const override
+	{
+		return std::ranges::find(fighting, creature) != fighting.end();
+	}
+	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override
+	{
+		return std::ranges::find(settingUp, creature) != settingUp.end();
+	}
+	[[nodiscard]] std::optional<entt::entity> OpponentOf(entt::entity /*creature*/) const override { return std::nullopt; }
+	bool QueueMove(entt::entity /*creature*/, const creature_fight::Move& /*move*/, bool /*replace*/) override { return false; }
+	void ReleaseCharge(entt::entity /*creature*/, float /*heldMs*/) override {}
+	void SetAutoFighting(entt::entity /*creature*/, bool /*autoFight*/) override {}
+	[[nodiscard]] bool IsAutoFighting(entt::entity /*creature*/) const override { return false; }
+	void Reset() override {}
+	[[nodiscard]] std::optional<entt::entity> PlayersFighter() const override { return std::nullopt; }
+	bool Press(const glm::vec3& /*rayOrigin*/, const glm::vec3& /*rayDirection*/, creature_fight::Button /*button*/,
+	           uint32_t /*milliseconds*/, uint32_t /*turn*/) override
+	{
+		return false;
+	}
+	void Release(uint32_t /*milliseconds*/, uint32_t /*turn*/) override {}
+	[[nodiscard]] bool IsPressed() const override { return false; }
+	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> /*under*/) const override
+	{
+		return std::nullopt;
+	}
+	bool GestureSpecialMove() override { return false; }
+	bool GestureSpell(MagicType /*type*/) override { return false; }
+	void KnockOut(entt::entity /*creature*/) override {}
+	void ForceFaint(entt::entity /*creature*/) override {}
+	void KillPermanently(entt::entity /*creature*/) override {}
+	void Resurrect(entt::entity /*creature*/) override {}
+	[[nodiscard]] bool IsKnockedOut(entt::entity /*creature*/) const override { return false; }
+	[[nodiscard]] std::optional<creature_fight_hud::Values> GetPanel() const override { return std::nullopt; }
+	void SetCameraWatches(bool /*enabled*/) override {}
+	[[nodiscard]] bool GetCameraWatches() const override { return false; }
+	[[nodiscard]] bool IsCameraOnFight() const override { return false; }
+
+	std::vector<entt::entity> fighting;
+	std::vector<entt::entity> settingUp;
 };
 /// Records how the reaction system ends the reaction of an animal. It does nothing else.
 class FakeAnimals final: public ecs::systems::AnimalSystemInterface
@@ -1018,6 +1070,36 @@ TEST_F(Reactions, ACreatureToldToTakeNoNoticeOrBusyWithAForcedPlanIsNotImpressed
 	_reactions.Create(Miracle());
 	EXPECT_TRUE(impressed());
 	registry.Remove<CreatureMindState>(_creature);
+}
+
+// A creature that is asked to fight takes up reactions until its duel starts. The creature that started the fight takes
+// up none in the whole fight.
+TEST_F(Reactions, AnAskedCreatureTakesUpReactionsUntilItsDuelButTheStarterNever)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fights = static_cast<ListedFights&>(Locator::creatureFightSystem::emplace<ListedFights>());
+	const auto impressed = [&]() {
+		const auto* impression = registry.TryGet<const CreatureImpression>(_creature);
+		const bool was = impression != nullptr && impression->byOwnPlayer > 0.0f;
+		registry.Remove<CreatureImpression>(_creature);
+		return was;
+	};
+	registry.Assign<CreatureFighting>(_creature, CreatureFighting {.part = CreatureFighting::Part::Asked});
+	fights.fighting = {_creature};
+	fights.settingUp = {_creature};
+	_reactions.Create(Miracle());
+	EXPECT_TRUE(impressed());
+	// In the duel
+	fights.settingUp.clear();
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	// The creature that started it, before the duel
+	fights.settingUp = {_creature};
+	registry.Get<CreatureFighting>(_creature).madeArena = true;
+	_reactions.Create(Miracle());
+	EXPECT_FALSE(impressed());
+	registry.Remove<CreatureFighting>(_creature);
+	Locator::creatureFightSystem::reset();
 }
 
 TEST_F(Reactions, ACreatureWithNoLifeOrCarriedByATeleportIsNotImpressed)

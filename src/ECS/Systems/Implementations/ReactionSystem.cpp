@@ -505,10 +505,11 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	{
 		return false;
 	}
+	// A creature that sets up a fight is not yet in it. The creature that started the fight is refused below.
 	if (Locator::creatureFightSystem::has_value())
 	{
 		const auto& fights = Locator::creatureFightSystem::value();
-		if (fights.IsFighting(entity) || fights.IsKnockedOut(entity))
+		if ((fights.IsFighting(entity) && !fights.IsSettingUpFight(entity)) || fights.IsKnockedOut(entity))
 		{
 			return false;
 		}
@@ -547,7 +548,9 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	{
 		return false;
 	}
-	if (PlanIs(registry, entity, "Fight"))
+	// Nor does one whose plan is a fight, or the creature that started a fight, whatever its plan
+	const auto* fight = registry.TryGet<const CreatureFighting>(entity);
+	if (PlanIs(registry, entity, "Fight") || (fight != nullptr && fight->madeArena))
 	{
 		return false;
 	}

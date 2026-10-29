@@ -78,6 +78,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
@@ -1042,7 +1043,7 @@ bool BodyBusy(const ecs::Registry& registry, entt::entity creature, const Creatu
 
 /// Whether the creature can start its duel on this turn. Its body refuses while it is busy, and a body with no clips for
 /// the start, the stance and the finish of a fight refuses always. With no bodies loaded, nothing plays and the duel
-/// starts.
+/// starts. A creature that the hand of another creature holds also refuses.
 bool CanStartDuel(const ecs::Registry& registry, entt::entity creature, const CreatureLocomotionSystemInterface* locomotion)
 {
 	if (BodyBusy(registry, creature, locomotion))
@@ -1050,8 +1051,9 @@ bool CanStartDuel(const ecs::Registry& registry, entt::entity creature, const Cr
 		return false;
 	}
 	using namespace fight::animations;
-	return !Locator::creatureAnimationSystem::has_value() ||
-	       (Has(creature, k_Start) && Has(creature, k_Stance) && Has(creature, k_Finish));
+	const bool clips = !Locator::creatureAnimationSystem::has_value() ||
+	                   (Has(creature, k_Start) && Has(creature, k_Stance) && Has(creature, k_Finish));
+	return clips && !registry.AllOf<HeldByCreature>(creature);
 }
 
 /// Does one game turn of the creature's turn to face its opponent in the face-off or in the arena. It turns from its map
@@ -1083,18 +1085,19 @@ void FaceOpponentTurn(const ecs::Registry& registry, entt::entity creature, Crea
 	});
 }
 /// The creature stops what it does, as when its plan stops or when the first creature of its fight gives it an order. A
-/// walk slows to a stand, and a loop of the body continues to its end. An action that the body plays continues. The work
-/// of its hands stops, but a let-go or a catch that the body started continues. It keeps what it holds.
+/// walk slows to a stand, and a loop of the body continues to its end. An action that the body plays continues. The plan
+/// of its hands stops and also stops the body: each action that the body started plays on to its end, and a point plays
+/// its end. It keeps what it holds.
 void StopWhatItDoes(ecs::Registry& registry, entt::entity creature)
 {
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
-	if (Locator::creatureObjectActionSystem::has_value() &&
-	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
+	if (Locator::creatureObjectActionSystem::has_value())
 	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
+		constexpr bool k_StopsBody = true;
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, k_StopsBody);
 	}
 	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
 	{
@@ -1550,6 +1553,40 @@ void CreatureFightSystem::EndView(std::string_view why)
 	}
 }
 
+namespace
+{
+/// The other creature of a fight that its first creature sets up, while the other creature has no order yet. None when
+/// the creature did not start the fight, or the other creature obeys already.
+std::optional<entt::entity> AskedOnly(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+	if (fighting == nullptr || !fighting->madeArena || !IsLeadIn(fighting->stage) || !registry.Valid(fighting->opponent))
+	{
+		return std::nullopt;
+	}
+	const auto* other = registry.TryGet<const CreatureFighting>(fighting->opponent);
+	if (other == nullptr || other->opponent != creature || other->part == CreatureFighting::Part::Obeys)
+	{
+		return std::nullopt;
+	}
+	return fighting->opponent;
+}
+
+/// The first creature stopped the fight before its first order: what the other creature does stops as a failure
+void StopAsked(ecs::Registry& registry, std::optional<entt::entity> asked)
+{
+	if (!asked.has_value() || !registry.Valid(*asked))
+	{
+		return;
+	}
+	StopWhatItDoes(registry, *asked);
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().AbandonAction(*asked);
+	}
+}
+} // namespace
+
 void CreatureFightSystem::AbortFight(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -1559,6 +1596,7 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 		return;
 	}
 	const auto opponent = fighting->opponent;
+	const auto asked = AskedOnly(registry, creature);
 	for (const auto self : {creature, opponent})
 	{
 		auto* side = registry.Valid(self) ? registry.TryGet<CreatureFighting>(self) : nullptr;
@@ -1581,6 +1619,7 @@ void CreatureFightSystem::AbortFight(entt::entity creature)
 			Leave(self);
 		}
 	}
+	StopAsked(registry, asked);
 }
 
 void CreatureFightSystem::CallOff(entt::entity creature)
@@ -1592,6 +1631,7 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 		return;
 	}
 	const auto opponent = fighting->opponent;
+	const auto asked = AskedOnly(registry, creature);
 	for (const auto self : {creature, opponent})
 	{
 		auto* side = registry.Valid(self) ? registry.TryGet<CreatureFighting>(self) : nullptr;
@@ -1616,6 +1656,7 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 			Leave(self);
 		}
 	}
+	StopAsked(registry, asked);
 }
 
 bool CreatureFightSystem::IsSettingUpFight(entt::entity creature) const
@@ -2845,8 +2886,8 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 	const auto* partner = opponentHere ? registry.TryGet<const CreatureFighting>(opponent) : nullptr;
 	const bool together = partner != nullptr && partner->opponent == entity;
 	const bool starter = fighting->madeArena;
-	// Each order stops what the other creature does. The first order also makes the other creature obey. The mind can
-	// change the components of the creature, so the fight of the creature is found again after it.
+	// Each order stops what the other creature does, makes the other creature obey and gives it the plan to obey again.
+	// The mind can change the components of the creature, so the fight of the creature is found again after it.
 	const auto obey = [&registry](entt::entity who) -> CreatureFighting* {
 		auto* side = registry.TryGet<CreatureFighting>(who);
 		if (side == nullptr)
@@ -2854,13 +2895,10 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 			return nullptr;
 		}
 		StopWhatItDoes(registry, who);
-		if (side->part != CreatureFighting::Part::Obeys)
+		side->part = CreatureFighting::Part::Obeys;
+		if (Locator::creatureMindSystem::has_value())
 		{
-			side->part = CreatureFighting::Part::Obeys;
-			if (Locator::creatureMindSystem::has_value())
-			{
-				Locator::creatureMindSystem::value().FightOrdered(who, side->opponent);
-			}
+			Locator::creatureMindSystem::value().FightOrdered(who, side->opponent);
 		}
 		return registry.TryGet<CreatureFighting>(who);
 	};
