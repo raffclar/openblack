@@ -61,6 +61,11 @@ constexpr glm::vec2 k_FarCentre {0.0f, 90.0f};
 /// The first of the town's people, by its place in the scenario's objects
 constexpr size_t k_FirstVillager = 3;
 
+/// Three birches west of the storage pit of the leash scenario, by the town centre. The creature can pull them up and
+/// give them to the pit as wood.
+constexpr std::array<glm::vec2, 3> k_WoodBirches {glm::vec2 {-35.0f, 30.0f}, glm::vec2 {-40.0f, 38.0f},
+                                                  glm::vec2 {-33.0f, 46.0f}};
+
 /// A Celtic town centre of the player's, two huts and eight of its people about it
 std::vector<ObjectSetup> Town(glm::vec2 centre = k_Centre)
 {
@@ -671,10 +676,13 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .facet = Facet::Leash,
 	    .description = "The Celtic town of the temple scenarios with an empty storage pit north of it. A grown tiger "
 	                   "of the player that only wants to be nice stands south of the town. Its leash is put on and tied "
-	                   "to the town's wood flag over the pit. The town wants food most.",
-	    .expected = "The rope runs from the wood flag. The town wants food most, but the tiger helps it with wood only "
-	                "(the wood actions), and does not move on to the next desire of the town. The inspector shows the "
-	                "creature's town desire as 1 (wood) and choosesFreely as false.",
+	                   "to the town's wood flag over the pit. The town wants food most. Three birches stand west of "
+	                   "the pit, and the town has no field and no cow.",
+	    .expected = "The rope runs from the wood flag. The town wants food most, but the tiger helps it with wood only. "
+	                "In about a minute it pulls up a birch and throws it into the pit, then the next birch, until no "
+	                "birch is left. Each tree goes into the pit with no lost-thing help. It does not move on to the "
+	                "next desire of the town. The inspector shows the creature's town desire as 1 (wood) and "
+	                "choosesFreely as false.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Centre - glm::vec2(25.0f, 60.0f), k_Centre + glm::vec2(25.0f, 50.0f)},
@@ -690,6 +698,10 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 		                           .offset = k_Centre + glm::vec2(0.0f, 40.0f),
 		                           .storedFood = 0,
 		                           .storedWood = 0});
+		        for (const auto at : k_WoodBirches)
+		        {
+			        objects.push_back({.type = TreeInfo::Birch, .offset = k_Centre + at});
+		        }
 		        return objects;
 	        }(),
 	    .commands = {{.kind = Command::Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
