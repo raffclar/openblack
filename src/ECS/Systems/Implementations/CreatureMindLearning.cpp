@@ -1829,11 +1829,9 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 			Locator::creatureFightSystem::value().CallOff(creature);
 		}
 		if (Locator::creatureObjectActionSystem::has_value() &&
-		    Locator::creatureObjectActionSystem::value().GetState(creature) ==
-		        CreatureObjectActionSystemInterface::State::Busy &&
-		    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
+		    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 		{
-			Locator::creatureObjectActionSystem::value().Cancel(creature);
+			Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 		}
 		Abandon(mind);
 		creature_mind::Plan(mind.idle, creature_mind::Activity::None, {});
@@ -1881,13 +1879,12 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	{
 		Locator::creatureFightSystem::value().CallOff(creature);
 	}
-	// Whatever its hands were doing is given up for the plan, but for a catch or a let-go, which its body carries on with
-	// by itself
+	// Whatever its hands were doing stops for the plan. An action that the body started plays on, and a point plays its
+	// end.
 	if (Locator::creatureObjectActionSystem::has_value() &&
-	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy &&
-	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
 	{
-		Locator::creatureObjectActionSystem::value().Cancel(creature);
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, true);
 	}
 	const bool refused = mind.agendaRefused;
 	if (!Replan(creature, executor->activity, std::move(agenda)))
@@ -3429,8 +3426,13 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	{
 		return false;
 	}
-	// A forced plan first stops the reaction that the creature has
+	// A forced plan first stops the reaction that the creature has. What the creature does stops as a failure, and this
+	// also stops a fight that it sets up, for both creatures.
 	EndReaction(creature);
+	if (!plan.ownFight)
+	{
+		CallOffFightSetUp(creature);
+	}
 	// A creature told to do something as soon as it is made has a mind ready for it
 	SetUpMind(creature, *body, *mind);
 	const glm::vec2 position {transform->position.x, transform->position.z};
@@ -3598,6 +3600,13 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		                    plan.action);
 	}
 	mind->agendaRefused = refused;
+	// The forced plan stops what the hands do, as each plan stop does. A point ends only when the plan also ends the
+	// action of the body.
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)
+	{
+		Locator::creatureObjectActionSystem::value().StopForPlan(creature, plan.endsBody);
+	}
 	if (!Replan(creature, activity, std::move(*agenda), plan.stopsWalk, plan.endsBody))
 	{
 		mind->agendaRefused = false;
@@ -3651,7 +3660,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		                   .ordered = plan.ordered,
 		               });
 	}
-	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	if (plan.suppressesOpposed)
+	{
+		creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	}
 	return true;
 }
 
@@ -5320,10 +5332,9 @@ void CreatureMindSystem::NoticeDeed(size_t deed, const glm::vec3& point, std::op
 			creature_mind_model::Think(*mind->learnt, fmt::format("I saw you: {}", tables->mimics.at(deed).name));
 			if (Locator::creatureObjectActionSystem::has_value() &&
 			    Locator::creatureObjectActionSystem::value().GetState(entity) ==
-			        CreatureObjectActionSystemInterface::State::Busy &&
-			    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(entity))
+			        CreatureObjectActionSystemInterface::State::Busy)
 			{
-				Locator::creatureObjectActionSystem::value().Cancel(entity);
+				Locator::creatureObjectActionSystem::value().StopForPlan(entity, true);
 			}
 			Abandon(*mind);
 			if (Locator::magicSystem::has_value())

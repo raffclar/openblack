@@ -91,6 +91,7 @@ public:
 		_zones.fence = {{1000.0f, 0.0f, 1000.0f}, {2000.0f, 0.0f, 1000.0f}, {2000.0f, 0.0f, 2000.0f}, {1000.0f, 0.0f, 2000.0f}};
 	}
 	bool SetZones(std::string_view /*fileName*/) override { return true; }
+	void Reset() override {}
 	[[nodiscard]] const camera_zones::Zones& GetZones() const override { return _zones; }
 	[[nodiscard]] const std::string& GetFileName() const override { return _name; }
 	void FenceHit(const glm::vec3& /*origin*/, const glm::vec3& /*listener*/) override {}

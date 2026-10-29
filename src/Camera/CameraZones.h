@@ -13,8 +13,10 @@
 
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
+#include <entt/core/fwd.hpp>
 #include <glm/vec3.hpp>
 
 /// The camera zones a land's scripts set: a fence the world camera is kept inside, limits on its height and places it
@@ -127,5 +129,9 @@ inline constexpr float k_FlightWooshDistance = k_FlightSoundDistance * 1.5f;
 /// Whether the influence the scripts give the player counts at a point: only inside the fence, tested along the
 /// ground's first axis. The player's temple and towns give influence on both sides of it.
 [[nodiscard]] bool ScriptInfluenceCounts(std::span<const glm::vec3> fence, bool fenceOn, const glm::vec3& point);
+
+/// The id of a zone file in the resource cache, from its name in Data/Zones. Names that differ only in case give the
+/// same id, as the file system finds the same file for them.
+[[nodiscard]] entt::id_type FileId(std::string_view fileName);
 
 } // namespace openblack::camera_zones

@@ -55,10 +55,34 @@ enum class Kind : uint8_t
 /// go, eating, keeping hold, knocking down and pointing do. Throwing, catching, taking from the hand and kicking keep
 /// their pace.
 [[nodiscard]] bool Hurries(Kind kind);
-/// Whether the body continues an action to its end when the plan that asked for it stops. A catch continues, and so
-/// does a let-go: the creature puts down or tosses away the thing at the moment of the animation. The other actions
-/// stop with the plan.
-[[nodiscard]] bool PlaysOnWhenPlanStops(Kind kind);
+/// What the stop of the plan that asked for an action does to the action
+enum class PlanStop : uint8_t
+{
+	/// The body did not start the action, so the action stops
+	Stops,
+	/// The body plays the action to its end, and the moment of the action occurs
+	PlaysOn,
+	/// The arm plays the end of its point with no hold. A turn to the point ends first.
+	EndsPoint,
+};
+/// What a plan stop does to an action of the kind. The body starts an action when it plays its animations, or when it
+/// turns on the spot for the action: to get a thing in reach, to throw or to point. Only a dance, a fight, the static
+/// loop and a point stop with the plan. Each other action that the body started plays on.
+[[nodiscard]] PlanStop OnPlanStop(Kind kind, bool playing, bool turnsForIt);
+
+/// What a plan stop does to the thing of an eat
+enum class EatStop : uint8_t
+{
+	/// The thing stays in the hand
+	Keeps,
+	/// The creature swallows the thing at once
+	Swallows,
+	/// The thing in the hand goes out of the world, uneaten. The creature keeps the food that it took in at the start.
+	Deletes,
+};
+/// What a plan stop does to the thing of an eat. After the bite, the creature swallows the thing at once. Before the
+/// bite, while the eat animation plays, the thing in the hand goes out of the world.
+[[nodiscard]] EatStop OnEatStop(bool playing, bool bitten, bool holds);
 
 /// Whether the arm that holds a thing shows the hold pose over the body, while the body plays the animation of an
 /// action, or no action (none). The animations that move the held thing themselves replace the hold pose: picking up,

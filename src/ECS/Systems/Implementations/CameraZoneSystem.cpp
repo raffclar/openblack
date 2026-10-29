@@ -117,6 +117,14 @@ camera_zones::Zones CameraZoneSystem::FromFile(const exc::EXCZones& file)
 	return zones;
 }
 
+void CameraZoneSystem::Reset()
+{
+	_zones = {};
+	_fileName.clear();
+	_fenceHits = 0;
+	PlaceForceField();
+}
+
 bool CameraZoneSystem::SetZones(std::string_view fileName)
 {
 	// The zones set before go first, so a file that can't be read leaves none
@@ -128,7 +136,7 @@ bool CameraZoneSystem::SetZones(std::string_view fileName)
 		return false;
 	}
 	const auto name = std::string(fileName);
-	const auto id = entt::hashed_string::value(("camera/zones/" + name).c_str());
+	const auto id = camera_zones::FileId(name);
 	auto& cache = Locator::resources::value().GetCameraZones();
 	if (!cache.Contains(id))
 	{
@@ -143,7 +151,13 @@ bool CameraZoneSystem::SetZones(std::string_view fileName)
 			return false;
 		}
 	}
-	_zones = FromFile(cache.Handle(id)->GetZones());
+	// A file registered at the start that did not read is not in the cache
+	const auto* file = cache.Find(id);
+	if (file == nullptr)
+	{
+		return false;
+	}
+	_zones = FromFile(file->GetZones());
 	_fileName = name;
 	PlaceForceField();
 	return true;

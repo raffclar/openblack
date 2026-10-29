@@ -70,6 +70,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -92,6 +93,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -127,6 +129,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Help/HelpProfile.h"
 #include "Help/Spirits.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
@@ -289,6 +292,12 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 		Locator::forestSystem::value().MakeScenicForests();
 		// Each town finds the forests near it with wood in them
 		Locator::forestSystem::value().AssignForestsToTowns();
+	}
+
+	// Each player with a citadel has their influence power worked out once, as the game does after the land is laid out
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().LandLaidOut();
 	}
 
 	timer.Step("forests");
@@ -488,6 +497,10 @@ bool LandSystem::LoadGodsRingMap()
 	{
 		Locator::forestSystem::value().MakeScenicForests();
 		Locator::forestSystem::value().AssignForestsToTowns();
+	}
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().LandLaidOut();
 	}
 	View().MakeSymbolSheet();
 
@@ -862,6 +875,16 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	}
 	Locator::guidanceSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
+	// The help's clock, which times what the player did, starts again at 0 with the land. The counts stay.
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Get().ResetClock();
+	}
+	// Nor do the camera's places to keep out of, its fence or its height limits
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		Locator::cameraZoneSystem::value().Reset();
+	}
 	// The turns of a new land start from zero, and so does the turn of the last autosave
 	if (Locator::saveGameSystem::has_value())
 	{
@@ -1181,7 +1204,10 @@ bool LandSystem::StartChallengeScripts(bool startStory)
 
 void LandSystem::StartStoryScripts()
 {
-	const bool started = Locator::vm::value().StartScript("LandControlAll", script::start::StartableScripts()) != 0;
+	// Only the first land of the story starts the story. On another land the scripts stay ready, but none runs.
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const bool started = new_game_choice::LandStartsStoryScript(landNumber) &&
+	                     Locator::vm::value().StartScript("LandControlAll", script::start::StartableScripts()) != 0;
 	// The question comes whether or not the story started
 	const bool asked = AskNewGameChoice();
 	// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the opening

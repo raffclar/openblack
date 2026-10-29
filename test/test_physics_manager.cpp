@@ -17,6 +17,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Ball.h"
+#include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
@@ -400,6 +401,19 @@ TEST_F(PhysicsClassesTest, FieldsAreNeverInThePhysics)
 	_registry.Assign<Field>(field);
 	EXPECT_EQ(Classify(field).body, BodyKind::None);
 	EXPECT_FALSE(Classify(field).interacts);
+}
+
+// A piece broken off a building takes no info row. Its body comes from its triangles, and its material is the material
+// of building pieces, which also gives the sounds of its hits.
+TEST_F(PhysicsClassesTest, ABuildingPieceHasTheMaterialOfPieces)
+{
+	const auto piece = _registry.Create();
+	_registry.Assign<BuildingPiece>(piece);
+	const auto facts = Classify(piece);
+	EXPECT_EQ(facts.body, BodyKind::BuildingPiece);
+	EXPECT_EQ(facts.row, MaterialRow::Fragment);
+	EXPECT_FALSE(facts.fixedMass.has_value());
+	EXPECT_TRUE(facts.dynamic);
 }
 
 TEST(PhysicsClasses, WeightGrowsWithTheCubeOfTheScaleAndNeverReachesNothing)
