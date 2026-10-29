@@ -617,8 +617,10 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	const bool restored = restore();
 	timer.Step("saved world");
 
-	// The systems find their entities among the loaded ones, and the things go back into the map's cells
+	// The systems find their entities among the loaded ones, and the things go back into the map's cells. A world that
+	// was saved with fewer players gets the players that it did not keep.
 	Locator::playerSystem::value().RegisterPlayers();
+	Locator::playerSystem::value().EnsureAllPlayers();
 	Locator::handSystem::value().FindAfterLoad();
 	Locator::skySystem::value().FindAfterLoad();
 	Locator::cameraBookmarkSystem::value().FindAfterLoad();
@@ -1077,8 +1079,12 @@ void LandSystem::SetUpLandscape()
 	sky.SetTime(sky.GetClock().GetScriptTime());
 	Locator::cloudSystem::value().Reset();
 
-	// There is always a player active
-	Locator::playerSystem::value().AddPlayer(archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE));
+	// Before the land script runs, the land has the player of each of the seven god slots and the neutral player, in the
+	// order of their numbers. A slot that nobody plays has its player too, so the scripts and the turns find it.
+	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+	{
+		Locator::playerSystem::value().AddPlayer(archetypes::PlayerArchetype::Create(static_cast<PlayerNames>(number)));
+	}
 
 	Locator::cameraBookmarkSystem::value().Initialize();
 	Locator::playerSystem::value().RegisterPlayers();

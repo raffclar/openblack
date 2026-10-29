@@ -133,14 +133,13 @@ struct CopiedBody
 	float strength;
 };
 [[nodiscard]] CopiedBody CopyBody(float size, float strength, float scale);
-/// One of the seven places for a player: whether a player plays in that place, and whether that player has a creature
+/// One of the seven places for a player: whether the player of that place has a creature
 struct PlayerPlace
 {
-	bool plays;
 	bool hasCreature;
 };
-/// Who a creature a script makes from another belongs to: the first of the seven players that play, in order, who has no
-/// creature of their own. It is none when each player that plays has a creature. An empty place gets no creature.
+/// Who a creature a script makes from another belongs to: the first of the seven players, in order, who has no creature
+/// of their own. A place that nobody plays also gets the copy. It is none when each of the seven players has a creature.
 [[nodiscard]] std::optional<PlayerNames> OwnerOfCopy(std::span<const PlayerPlace> places);
 
 /// The velocity a script sets a thing off at towards a place: its speed along the line from the thing to the place, and

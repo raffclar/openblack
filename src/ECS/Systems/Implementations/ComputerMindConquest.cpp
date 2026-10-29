@@ -133,6 +133,12 @@ entt::entity PlayerEntity(PlayerNames player)
 	return Is<Player>(entity) ? entity : entt::null;
 }
 
+/// Whether a person or a computer mind plays the player
+bool PlaysInGame(PlayerNames player)
+{
+	return Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(player);
+}
+
 /// The player keeps the other player as an ally
 bool KeepsAsAlly(entt::entity player, PlayerNames other)
 {
@@ -315,7 +321,8 @@ float FeedFactorOf(const RuleContext& context, entt::entity town)
 	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::NEUTRAL); ++number)
 	{
 		const auto name = static_cast<PlayerNames>(number);
-		if (name == context.player || PlayerEntity(name) == entt::null || KeepsAsAlly(god, name))
+		// Only the players that play are rivals
+		if (name == context.player || PlayerEntity(name) == entt::null || !PlaysInGame(name) || KeepsAsAlly(god, name))
 		{
 			continue;
 		}

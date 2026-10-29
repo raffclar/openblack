@@ -182,7 +182,7 @@ std::optional<PlayerNames> OwnerOfCopy(std::span<const PlayerPlace> places)
 	constexpr size_t k_Players = 7;
 	for (size_t i = 0; i < k_Players && i < places.size(); ++i)
 	{
-		if (places[i].plays && !places[i].hasCreature)
+		if (!places[i].hasCreature)
 		{
 			return static_cast<PlayerNames>(i);
 		}

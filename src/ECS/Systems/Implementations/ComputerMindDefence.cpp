@@ -207,6 +207,11 @@ PlayerNames MostInfluentialAt(const map_coords::MapCoords& place)
 {
 	std::vector<influence_rules::PlayerInfluenceAt> players;
 	Entities().Each<const Player>([&players, &place](const Player& player) {
+		// The neutral player is not asked: it is the answer when no player has influence there
+		if (player.name == PlayerNames::NEUTRAL)
+		{
+			return;
+		}
 		const float influence = Locator::influenceSystem::has_value()
 		                            ? Locator::influenceSystem::value().PlayerInfluence(player.name, place)
 		                            : 0.0f;
