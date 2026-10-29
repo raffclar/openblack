@@ -70,9 +70,25 @@ bool creature_object_actions::Hurries(Kind kind)
 	return false;
 }
 
-bool creature_object_actions::PlaysOnWhenPlanStops(Kind kind)
+creature_object_actions::PlanStop creature_object_actions::OnPlanStop(Kind kind, bool playing, bool turnsForIt)
 {
-	return kind == Kind::Catch || kind == Kind::PutDown || kind == Kind::Discard;
+	// Only these actions turn on the spot as a part of the body action
+	const bool turnBelongs = kind == Kind::PickUp || kind == Kind::Destroy || kind == Kind::Throw || kind == Kind::Point;
+	const bool started = playing || (turnsForIt && turnBelongs);
+	if (!started)
+	{
+		return PlanStop::Stops;
+	}
+	return kind == Kind::Point ? PlanStop::EndsPoint : PlanStop::PlaysOn;
+}
+
+creature_object_actions::EatStop creature_object_actions::OnEatStop(bool playing, bool bitten, bool holds)
+{
+	if (bitten)
+	{
+		return EatStop::Swallows;
+	}
+	return playing && holds ? EatStop::Deletes : EatStop::Keeps;
 }
 
 bool creature_object_actions::ShowsHoldPose(std::optional<Kind> playing)
