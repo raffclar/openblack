@@ -191,7 +191,9 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Graphics/HeadlessRenderer.h"
 #include "Graphics/RendererInterface.h"
+#include "Graphics/UploadMode.h"
 #include "Gui/TextDatabase.h"
 #include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
@@ -354,6 +356,7 @@ using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
 using openblack::ecs::systems::WorkshopSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
+using openblack::graphics::HeadlessRenderer;
 using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
 using openblack::lhvm::LHVM;
@@ -394,12 +397,6 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	}
 	Locator::debugGui::reset(DebugGuiInterface::Create(graphics::RenderPass::ImGui).release());
 
-	// The dedicated server has no audio device
-	if (Locator::config::has_value() && Locator::config::value().dedicatedServer)
-	{
-		Locator::audio::emplace<AudioManagerNoOp>();
-		return true;
-	}
 	std::unique_ptr<audio::AudioManagerInterface> machineAudio;
 	try
 	{
@@ -421,6 +418,18 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	}
 	// The game's calls go to the audio through the queue of the main thread
 	Locator::audio::emplace<audio::QueuedAudioManager>(std::move(machineAudio), Locator::mainThreadQueue::value());
+	return true;
+}
+
+bool openblack::InitializeHeadlessEngine() noexcept
+{
+	Locator::rendererInterface::reset(HeadlessRenderer::Create().release());
+	if (!Locator::rendererInterface::has_value())
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to create the renderer with no device");
+		return false;
+	}
+	Locator::audio::emplace<AudioManagerNoOp>();
 	return true;
 }
 
@@ -674,7 +683,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
-	Locator::oceanSystem::emplace<Ocean>();
+	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
 	Locator::skySystem::emplace<ecs::systems::SkySystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();

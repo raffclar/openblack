@@ -24,4 +24,7 @@ enum class UploadMode : uint8_t
 	DataOnly,
 };
 
+/// The upload mode of the engine's configuration. With no configuration, as in the tests, the resources use the device.
+[[nodiscard]] UploadMode ConfiguredUploads();
+
 } // namespace openblack::graphics

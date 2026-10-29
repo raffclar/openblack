@@ -70,7 +70,7 @@ namespace
 /// device.
 [[nodiscard]] graphics::UploadMode Uploads()
 {
-	return Locator::config::has_value() ? Locator::config::value().resourceUploads : graphics::UploadMode::Device;
+	return graphics::ConfiguredUploads();
 }
 
 [[nodiscard]] bool KeepsDataOnly()
