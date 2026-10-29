@@ -198,6 +198,27 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .framing = AdvisorsFraming(),
 	    .commands = {{.kind = Kind::RunHelpMessage, .delaySeconds = 0.5f, .value = k_TwoTextsMessage}},
 	});
+	// Two lines of The Idol, each said for the first time in the run, by the help script of a challenge's reminder
+	const auto reminder = [](float delay, float text) {
+		return Command {.kind = Kind::RunScript,
+		                .delaySeconds = delay,
+		                .script = "StandardReminder",
+		                .scriptArguments = {{.kind = ScriptArgument::Kind::Number, .number = text}}};
+	};
+	all.push_back({
+	    .id = "advisors.first_line_length",
+	    .name = "A line said for the first time lasts as long as its voice",
+	    .facet = Facet::Advisors,
+	    .description = "After half a second, two scripts tell the advisors to say a line of The Idol. Each line is said "
+	                   "for the first time in the run. The second script waits for the dialogue that the first script "
+	                   "holds.",
+	    .expected = "The good advisor comes out and says \"It's rather sad that we lost a follower. And he lost his "
+	                "life.\" The evil advisor comes out and starts \"We still gotta get rid of the idol. It'll attract "
+	                "people!\" only after the good advisor's voice stops, about five seconds later.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = AdvisorsFraming(),
+	    .commands = {reminder(0.5f, 1684.0f), reminder(0.0f, 1683.0f)},
+	});
 	all.push_back({
 	    .id = "advisors.profile_help_record",
 	    .name = "The help record in the profile folder",
