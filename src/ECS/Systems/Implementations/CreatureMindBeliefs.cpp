@@ -228,9 +228,35 @@ bool IsTownCentre(const Abode& abode)
 	return row < infos.size() && infos.at(row).abodeType == AbodeType::TownCentre;
 }
 
-/// How much a thing catches a creature's eye, by what it is. The temple, fields, features and the other things that
-/// stand on the land are fixed things.
-creature_look::Interest LookInterestOf(const ecs::Registry& registry, entt::entity thing)
+/// The temple nearest a point, of every player's in turn and then the neutral one's; the first of equals
+entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapCoords& from)
+{
+	if (!Locator::worshipSiteSystem::has_value())
+	{
+		return entt::null;
+	}
+	entt::entity nearest = entt::null;
+	auto within = std::numeric_limits<float>::max();
+	for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+	{
+		const auto temple = Locator::worshipSiteSystem::value().TempleOf(static_cast<PlayerNames>(player));
+		const auto* at = temple != entt::null ? registry.TryGet<const Transform>(temple) : nullptr;
+		if (at == nullptr)
+		{
+			continue;
+		}
+		const auto distance = gutils::GetDistanceInMetres(from, map_coords::FromMetres(glm::xz(at->position)));
+		if (distance < within)
+		{
+			nearest = temple;
+			within = distance;
+		}
+	}
+	return nearest;
+}
+} // namespace
+
+creature_look::Interest mind_detail::LookInterestOf(const ecs::Registry& registry, entt::entity thing)
 {
 	using Interest = creature_look::Interest;
 	if (registry.AllOf<Creature>(thing))
@@ -260,40 +286,13 @@ creature_look::Interest LookInterestOf(const ecs::Registry& registry, entt::enti
 		           ? Interest::Toy
 		           : Interest::Static;
 	}
-	if (registry.AllOf<MobileObject>(thing))
+	// A scaffold is a loose object
+	if (registry.AnyOf<MobileObject, Scaffold>(thing))
 	{
 		return Interest::None;
 	}
 	return Interest::Fixed;
 }
-
-/// The temple nearest a point, of every player's in turn and then the neutral one's; the first of equals
-entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapCoords& from)
-{
-	if (!Locator::worshipSiteSystem::has_value())
-	{
-		return entt::null;
-	}
-	entt::entity nearest = entt::null;
-	auto within = std::numeric_limits<float>::max();
-	for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
-	{
-		const auto temple = Locator::worshipSiteSystem::value().TempleOf(static_cast<PlayerNames>(player));
-		const auto* at = temple != entt::null ? registry.TryGet<const Transform>(temple) : nullptr;
-		if (at == nullptr)
-		{
-			continue;
-		}
-		const auto distance = gutils::GetDistanceInMetres(from, map_coords::FromMetres(glm::xz(at->position)));
-		if (distance < within)
-		{
-			nearest = temple;
-			within = distance;
-		}
-	}
-	return nearest;
-}
-} // namespace
 
 uint16_t mind_detail::LookingAngle(const Transform& transform, const std::optional<glm::vec3>& lookAt)
 {
@@ -614,8 +613,7 @@ bool CreatureMindSystem::CanSteal(entt::entity creature, entt::entity thing)
 	}
 	return creature_steal::IsStealable({
 	    .toy = ecs::physics_classes::IsToy(registry, thing, Locator::infoConstants::value()),
-	    // openblack has no scaffolds yet
-	    .scaffold = false,
+	    .scaffold = registry.AllOf<Scaffold>(thing),
 	    .oneShot = registry.AllOf<OneOffSpellSeed>(thing),
 	    .canPickUp = Locator::creatureObjectActionSystem::value().CanPickUp(creature, thing),
 	    .ownInfluence = Locator::influenceSystem::value().PlayerRawInfluence(body->owner, transform->position),
@@ -859,7 +857,8 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 			const auto watched = WatchedPlace(registry, mind.look);
 			const auto watchedDistance = watched.has_value() ? viewOf(*watched).second : 0.0f;
 			creature_look::Consider(
-			    mind.look, {.id = entt::to_integral(seen), .kind = LookInterestOf(registry, seen), .distance = distance},
+			    mind.look,
+			    {.id = entt::to_integral(seen), .kind = mind_detail::LookInterestOf(registry, seen), .distance = distance},
 			    watchedDistance, range, weights, k_TurnsPerSecond);
 		}
 	}

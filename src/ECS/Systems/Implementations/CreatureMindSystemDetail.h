@@ -21,11 +21,13 @@
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesireSources.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDrink.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureLook.h"
 #include "Enums.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -69,6 +71,11 @@ namespace openblack::ecs::systems::mind_detail
 /// The kind of belief a creature keeps about a thing, by the game's belief types; none for the things it does not yet
 /// know the kind of here
 [[nodiscard]] std::optional<uint32_t> BeliefKindOf(const ecs::Registry& registry, entt::entity thing);
+/// The kind of a thing, by how the desires examine it. A scaffold is a loose object.
+[[nodiscard]] creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity thing);
+/// How much a thing catches the eye of a creature, by what it is. The temple, fields, features and the other
+/// things that stand on the land are fixed things. A scaffold is a loose object.
+[[nodiscard]] creature_look::Interest LookInterestOf(const ecs::Registry& registry, entt::entity thing);
 /// The data of a worship site's altar: the data of the worship site of its site's tribe. None for another thing.
 [[nodiscard]] const GWorshipSiteInfo* AltarInfoOf(const ecs::Registry& registry, entt::entity altar);
 /// What a creature knows of a thing. When the creature has a belief about the thing, these are the attributes that it

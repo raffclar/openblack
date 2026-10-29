@@ -5131,6 +5131,43 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.give_wood_workshop",
+	    .name = "Giving a tree to a workshop as wood",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, a birch to its left and its town's workshop off to the east, with no wood. A script "
+	                   "tells it to give wood from the birch to the workshop, as its copy of the player's gift of wood "
+	                   "to a workshop does.",
+	    .expected = "It walks to the birch and pulls it up, carries it towards the workshop until it is near enough to "
+	                "throw, turns to face the workshop with a look of compassion and throws the tree in. The tree is gone "
+	                "and the workshop's pile of logs shows the wood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {90.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-20.0f, -15.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = {90.0f, 0.0f}, .storedFood = 0, .storedWood = 0}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "GiveWoodFromTreeToWorkshop", .with = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.steal_scaffold_to_town",
+	    .name = "Creature steals a scaffold and takes it to a town",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with a scaffold of no workshop in front of it, and the storage pit of the player's town "
+	                   "behind it. A script tells it to steal the scaffold and take it to the town.",
+	    .expected = "It picks the scaffold up, looking at it. It goes near the storage pit of the town, to within three "
+	                "times its height, looking at the pit, and puts the scaffold down there. The scaffold makes no "
+	                "building site: only a scaffold that a hand puts down starts a building.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 90.0f}, .storedFood = 0, .storedWood = 0},
+	                {.type = ScaffoldInfo::Normal, .offset = {0.0f, -20.0f}, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "StealObjectAndTakeToTown"}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	all.push_back({
 	    .id = "objects.repair_house",
 	    .name = "Helping repair a house",
 	    .facet = Facet::Objects,
