@@ -6219,7 +6219,7 @@ void AddHand(std::vector<Scenario>& all)
 	    {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
 	    {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {-0.1f, 0.0f}, .amount = 0.3f},
 	    {.kind = Kind::PointerSweep, .delaySeconds = 0.6f, .point = {0.2f, 0.0f}, .amount = 0.6f}};
-	for (int wiggle = 0; wiggle < 6; ++wiggle)
+	for (int wiggle = 0; wiggle < 16; ++wiggle)
 	{
 		const float across = wiggle % 2 == 0 ? 0.02f : -0.02f;
 		refusedStroke.push_back({.kind = Kind::PointerSweep, .delaySeconds = 0.35f, .point = {across, 0.0f}, .amount = 0.3f});
