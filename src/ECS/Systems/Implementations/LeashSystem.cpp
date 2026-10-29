@@ -92,11 +92,11 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -2607,11 +2607,15 @@ void LeashSystem::MarkOrder(entt::entity creature, std::optional<entt::entity> o
 	    .point = point,
 	};
 	// The sparkles, which every player sees, stay where they were made. Only the computers that draw have them.
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		registry.AssignOrReplace<LeashOrderSparkles>(
-		    creature, LeashOrderSparkles {.effect = Locator::particleSystem::value().StartSpotVisual(
-		                                      SpotVisualType::CreatureTarget, point, orders::k_SparkleTurns, creature, 1.0f)});
+		registry.AssignOrReplace<LeashOrderSparkles>(creature,
+		                                             LeashOrderSparkles {.effect = Locator::effectRequestSystem::value().Start({
+		                                                                     .type = SpotVisualType::CreatureTarget,
+		                                                                     .position = point,
+		                                                                     .turns = orders::k_SparkleTurns,
+		                                                                     .owner = creature,
+		                                                                 })});
 	}
 	// The ring of the player who holds the leash. Every computer makes it, and only the computer of that player draws it.
 	if (leashes.worn.has_value())
@@ -2648,10 +2652,9 @@ void LeashSystem::EndOrder(entt::entity creature)
 		target->has = false;
 	}
 	if (const auto* sparkles = registry.TryGet<const LeashOrderSparkles>(creature);
-	    sparkles != nullptr && sparkles->effect != ParticleSystemInterface::k_NoEffect &&
-	    Locator::particleSystem::has_value() && Locator::particleSystem::value().IsRunning(sparkles->effect))
+	    sparkles != nullptr && Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().CloseDown(sparkles->effect);
+		Locator::effectRequestSystem::value().Stop(sparkles->effect);
 	}
 	registry.Remove<LeashOrderSparkles>(creature);
 	for (const auto sprite : {order.ring, order.footprint})

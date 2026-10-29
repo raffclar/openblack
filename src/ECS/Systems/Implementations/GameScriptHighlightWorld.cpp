@@ -31,6 +31,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -208,18 +209,19 @@ bool GameScriptHighlightWorld::OnScreen(glm::vec3 origin, glm::vec3 centre, floa
 
 uint32_t GameScriptHighlightWorld::StartEffect(ParticleType type, glm::vec3 at)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
-		return ParticleSystemInterface::k_NoEffect;
+		return k_NoEffectHandle;
 	}
-	return Locator::particleSystem::value().Start(type, at, 1.0f);
+	// The effect draws on the random numbers of this computer, and the frames that draw the highlight step it
+	return Locator::effectRequestSystem::value().Start({.type = type, .position = at, .synced = false});
 }
 
 void GameScriptHighlightWorld::TargetEffect(uint32_t effect, entt::entity target)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddTarget(effect, target);
+		Locator::effectRequestSystem::value().AddTarget(effect, target);
 	}
 }
 
@@ -233,17 +235,17 @@ void GameScriptHighlightWorld::StepEffect(uint32_t effect, float seconds)
 
 void GameScriptHighlightWorld::MoveEffect(uint32_t effect, glm::vec3 to)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().SetOrigin(effect, to);
+		Locator::effectRequestSystem::value().Move(effect, to);
 	}
 }
 
 void GameScriptHighlightWorld::DeleteEffect(uint32_t effect)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().Delete(effect);
+		Locator::effectRequestSystem::value().Remove(effect);
 	}
 }
 

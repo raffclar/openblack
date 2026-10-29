@@ -41,9 +41,20 @@ void EffectRequestSystem::Show(const EffectRequest& request)
 	}
 }
 
+EffectHandle EffectRequestSystem::StartHere(const EffectRequest& request)
+{
+	auto* server = _findServer();
+	return server != nullptr ? server->Serve(request, k_NoEffectHandle) : k_NoEffectHandle;
+}
+
+EffectServerInterface* EffectRequestSystem::ServerFor(EffectHandle handle) const
+{
+	return handle != k_NoEffectHandle ? _findServer() : nullptr;
+}
+
 void EffectRequestSystem::Move(EffectHandle handle, glm::vec3 position)
 {
-	if (auto* server = _findServer(); server != nullptr && handle != k_NoEffectHandle)
+	if (auto* server = ServerFor(handle))
 	{
 		server->Move(handle, position);
 	}
@@ -51,7 +62,7 @@ void EffectRequestSystem::Move(EffectHandle handle, glm::vec3 position)
 
 void EffectRequestSystem::Stop(EffectHandle handle)
 {
-	if (auto* server = _findServer(); server != nullptr && handle != k_NoEffectHandle)
+	if (auto* server = ServerFor(handle))
 	{
 		server->Stop(handle);
 	}
@@ -59,9 +70,87 @@ void EffectRequestSystem::Stop(EffectHandle handle)
 
 void EffectRequestSystem::Remove(EffectHandle handle)
 {
-	if (auto* server = _findServer(); server != nullptr && handle != k_NoEffectHandle)
+	if (auto* server = ServerFor(handle))
 	{
 		server->Remove(handle);
+	}
+}
+
+bool EffectRequestSystem::IsRunning(EffectHandle handle) const
+{
+	const auto* server = ServerFor(handle);
+	return server != nullptr && server->IsRunning(handle);
+}
+
+void EffectRequestSystem::SetPlayer(EffectHandle handle, int player)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetPlayer(handle, player);
+	}
+}
+
+void EffectRequestSystem::SetPower(EffectHandle handle, float power)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetPower(handle, power);
+	}
+}
+
+void EffectRequestSystem::SetMagnitude(EffectHandle handle, float magnitude)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetMagnitude(handle, magnitude);
+	}
+}
+
+void EffectRequestSystem::SetAlpha(EffectHandle handle, float alpha)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetAlpha(handle, alpha);
+	}
+}
+
+void EffectRequestSystem::SetProcessInfo(EffectHandle handle, const particles::ProcessInfo& info)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetProcessInfo(handle, info);
+	}
+}
+
+void EffectRequestSystem::SetEnabled(EffectHandle handle, bool enabled)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetEnabled(handle, enabled);
+	}
+}
+
+void EffectRequestSystem::AddTarget(EffectHandle handle, entt::entity target)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->AddTarget(handle, target);
+	}
+}
+
+void EffectRequestSystem::AddTargetPosition(EffectHandle handle, glm::vec3 position)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->AddTargetPosition(handle, position);
+	}
+}
+
+void EffectRequestSystem::AddPlasma(EffectHandle handle, const particles::PlasmaCommand& command)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->AddPlasma(handle, command);
 	}
 }
 
