@@ -172,7 +172,7 @@ public:
 		    {.creature = creature, .animation = animation, .mirrored = mirrored, .interruptsAfter = interruptsAfter});
 		return true;
 	}
-	[[nodiscard]] bool CanForceAction(entt::entity, size_t, bool, float) const override { return bodyTakes; }
+	[[nodiscard]] bool CanForceAction(entt::entity, size_t, bool, double) const override { return bodyTakes; }
 	bool Sleep(entt::entity) override { return false; }
 	bool Eat(entt::entity, std::optional<entt::entity>) override { return false; }
 	bool Drink(entt::entity) override { return false; }
