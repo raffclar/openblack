@@ -88,3 +88,10 @@ TEST(FrameWriteGuard, TheChangedValuesOfASystemAreFoundByTheirNumber)
 	EXPECT_TRUE(frame_write_guard::ChangedValues(before, before, "system fire").empty());
 	EXPECT_TRUE(frame_write_guard::ChangedValues(before, after, "system snow").empty());
 }
+
+TEST(FrameWriteGuard, AStepThatLoadsALandIsNotAWriteOfTheFrame)
+{
+	EXPECT_TRUE(frame_write_guard::LooksAtStep(3, 3));
+	EXPECT_FALSE(frame_write_guard::LooksAtStep(3, 4));
+	EXPECT_FALSE(frame_write_guard::LooksAtStep(0, 1));
+}

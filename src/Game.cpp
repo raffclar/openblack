@@ -2386,8 +2386,18 @@ bool Game::Update() noexcept
 			    }
 			    return PlayFrameStep(step, frame);
 		    }
+		    const auto landLoads = [] {
+			    return Locator::landSystem::has_value() ? Locator::landSystem::value().LandLoads() : 0U;
+		    };
+		    const auto loadsBefore = landLoads();
 		    _frameGuard->Before();
 		    const bool played = PlayFrameStep(step, frame);
+		    if (!frame_write_guard::LooksAtStep(loadsBefore, landLoads()))
+		    {
+			    // The step loaded a land, which makes a new synced world: the next step takes a new sample
+			    _frameGuard->Forget();
+			    return played;
+		    }
 		    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn());
 		    return played;
 	    }))

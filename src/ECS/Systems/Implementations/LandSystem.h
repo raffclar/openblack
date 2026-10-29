@@ -44,6 +44,7 @@ public:
 	void ShowLandMessage(const land_message::Message& message) override { View().ShowLandMessage(message); }
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;
+	[[nodiscard]] uint32_t LandLoads() const override { return _landLoads; }
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const override { return _landPath; }
 	[[nodiscard]] const std::filesystem::path& GetLandscapePath() const override { return _landscapePath; }
 	[[nodiscard]] std::filesystem::path ChallengePath() override;
@@ -98,6 +99,8 @@ private:
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The humans of a land of a network game come from the network session
 	bool _humansFromSession {false};
+	/// The count of the lands that started to load
+	uint32_t _landLoads {0};
 	/// The map script of a land of a network game runs now
 	bool _runsNetworkMapScript {false};
 	bool _allComputerGods {false};
