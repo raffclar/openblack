@@ -128,6 +128,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/ScriptRemind.h"
@@ -237,6 +238,7 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingMapPlace.h"
@@ -249,6 +251,7 @@
 #include "ECS/VillagerScriptRules.h"
 #include "ECS/VillagerSkeletons.h"
 #include "ECS/WalkerPlacement.h"
+#include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -735,6 +738,14 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return CreateScriptBall(OnGround(position));
 	case ObjectType::Marker:
 		return ScriptMarkerArchetype::Create(position);
+	// A scaffold of no town and no workshop, worth what its scale gives, on the land under the place asked for
+	case ObjectType::Scaffold:
+		if (!Locator::workshopSystem::has_value())
+		{
+			break;
+		}
+		return Locator::workshopSystem::value().CreateScaffold(OnGround(position), entt::null, entt::null, yAngleRadians,
+		                                                       scale);
 	case ObjectType::Villager:
 	case ObjectType::VillagerChild:
 		// Made standing on the land under the place asked for, whatever height the script gave
@@ -8778,12 +8789,27 @@ void SetBookmarkPosition() // 362 SET_BOOKMARK_POSITION
 
 void SetScaffoldProperties() // 363 SET_SCAFFOLD_PROPERTIES
 {
-	// const auto destroy = static_cast<bool>(Pop().intVal);
-	// const auto size = Popf();
-	// const auto type = Pop().intVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const bool destroys = (Pop().intVal & 1) != 0;
+	const auto size = Popf();
+	const auto building = Pop().intVal;
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		ObjectNoLongerValid();
+		return;
+	}
+	auto* scaffold = registry.TryGet<ecs::components::Scaffold>(object);
+	if (scaffold == nullptr)
+	{
+		ScriptMessage("Thing must be scaffold");
+		return;
+	}
+	// The scaffold offers only a building of the abode number, and it becomes worth the size
+	scaffold->scriptBuilding = ecs::workshop::ScriptBuildingOf(building);
+	registry.Get<Transform>(object).scale = glm::vec3(ecs::workshop::ScaleOfScriptSize(size));
+	scaffold->destroysThingsInWay = destroys;
+	registry.SetDirty();
 }
 
 void SetComputerPlayerPersonality() // 364 SET_COMPUTER_PLAYER_PERSONALITY

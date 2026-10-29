@@ -277,6 +277,8 @@ private:
 	uint32_t _startTurn {0};
 	std::vector<bool> _computerActionsDone;
 	std::vector<entt::entity> _objects;
+	/// The objects that the native calls of the scenario gave back, in order
+	std::vector<uint32_t> _madeByNatives;
 	/// The globes that the scenario puts down on their own, in the order of its list
 	std::vector<entt::entity> _globes;
 	/// The scenario's temples, in its order
