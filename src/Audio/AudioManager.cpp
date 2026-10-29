@@ -48,7 +48,7 @@
 #include "Sound/HeaderOverrides.h"
 #include "Sound/HearingRange.h"
 #include "Sound/ListenerFrame.h"
-#include "SoundDecoder.h"
+#include "Sound/SoundDecoder.h"
 
 using namespace openblack::ecs::components;
 

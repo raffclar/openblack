@@ -11,18 +11,24 @@
 
 #include <cstdint>
 
+#include <functional>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
 #include <glm/vec3.hpp>
 
+#include "Sound/AnimEffectTable.h"
 #include "Sound/EmitterFollow.h"
 #include "Sound/HearingRange.h"
 #include "Sound/ListenerFrame.h"
+#include "Sound/MusicRequest.h"
 #include "Sound/ScriptSoundEffect.h"
+#include "Sound/SoundGroup.h"
 #include "Sound/SoundId.h"
 #include "Sound/VoiceOwner.h"
 
@@ -33,6 +39,8 @@ enum class AudioBankLoop : uint16_t;
 
 namespace openblack::audio
 {
+
+class CustomMusicPlayerInterface;
 
 /// What became of an animation effect asked for
 struct AnimEffectPlay
@@ -179,8 +187,42 @@ public:
 	/// A saved game loaded. Each emitter that the save kept goes (see AudioManagerInterface::ForgetSavedEmitters).
 	virtual void ForgetSavedEmitters() = 0;
 
+	/// Each emitter that has an owner goes to the point that placeOf gives for the owner. An emitter stays where it is
+	/// when placeOf gives no point.
+	virtual void PlaceOwnedEmitters(const std::function<std::optional<glm::vec3>(entt::entity owner)>& placeOf) = 0;
+
 	/// The place from which the player hears the placed sounds
 	[[nodiscard]] virtual Listener GetListener() const = 0;
+
+	/// Stops every sound: the music at once, with no fade, the atmosphere, and each sound and voice that plays
+	virtual void StopAllSounds() = 0;
+	/// One step of the atmosphere sounds. When active is false, the atmosphere is silent.
+	virtual void ProcessAtmosphere(bool active) = 0;
+
+	/// Plays the music bank at a path. The bank loads if it does not play already.
+	virtual bool MusicPlay(const std::string& bankPath, const MusicRequest& request) = 0;
+	/// Stops the music, with a fade if fadeOut is true
+	virtual void MusicStop(bool fadeOut) = 0;
+	/// Stops the music bank at a path (see AudioManagerInterface::MusicStopBank)
+	virtual void MusicStopBank(const std::string& bankPath, bool fadeOut) = 0;
+	/// The music group and the length of a bank, none if the bank is not there
+	[[nodiscard]] virtual std::optional<MusicBankInfo> GetMusicBankInfo(const std::string& bankPath) = 0;
+	/// The music channels that play now, in the order of the channels. Empty when there is no music player.
+	[[nodiscard]] virtual std::vector<MusicChannelPlace> GetPlayingMusicChannels() const = 0;
+	/// The player of the custom music folder, null when there is no audio device
+	[[nodiscard]] virtual CustomMusicPlayerInterface* GetCustomMusic() = 0;
+
+	/// The music banks, the sound groups and the animation effects that the world loads at its start
+	virtual void AddMusicEntry(const std::string& name) = 0;
+	virtual void CreateSoundGroup(const std::string& name) = 0;
+	virtual void AddToSoundGroup(const std::string& name, entt::id_type id) = 0;
+	virtual void AddAnimEffects(const std::string& bankName, AnimEffectTable table) = 0;
+	/// The loaded sound groups by name. Empty when there is no audio.
+	[[nodiscard]] virtual const std::map<std::string, SoundGroup>& GetSoundGroups() = 0;
+
+	/// The volumes of the sound effects and of the music, as the audio keeps them
+	[[nodiscard]] virtual float GetSfxVolume() = 0;
+	[[nodiscard]] virtual float GetMusicVolume() = 0;
 };
 
 } // namespace openblack::audio

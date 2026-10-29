@@ -20,7 +20,6 @@
 
 #include "Audio/AtmosAudio.h"
 #include "Audio/AtmosPlayer.h"
-#include "Audio/GameMusic.h"
 #include "Audio/MusicPlayer.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Weather.h"
@@ -32,6 +31,7 @@
 #include "Game.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameMusic.h"
 
 using namespace openblack;
 using namespace openblack::audio;

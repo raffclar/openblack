@@ -16,7 +16,6 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
-#include "Audio/GameMusic.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -30,6 +29,7 @@
 #include "Gui/GameInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameMusic.h"
 #include "Video/FallingSpellAudio.h"
 
 using namespace openblack;

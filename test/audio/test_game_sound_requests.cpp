@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,9 @@
 #define LOCATOR_IMPLEMENTATIONS
 #include "Audio/AudioManagerNoOp.h"
 #include "Audio/GameSoundRequests.h"
+#include "Audio/MusicPlayer.h"
+#include "ECS/Components/AudioEmitter.h"
+#include "ECS/Registry.h"
 #include "Locator.h"
 #include "Sound/GameSoundEffects.h"
 
@@ -28,6 +32,8 @@ namespace
 {
 constexpr auto k_Emitter = static_cast<entt::entity>(7);
 constexpr entt::id_type k_Sound = 42;
+constexpr auto k_Placed = static_cast<entt::entity>(3);
+constexpr auto k_NotPlaced = static_cast<entt::entity>(4);
 
 /// An audio manager that keeps a record of the requests that reach it
 class RecordingAudio final: public AudioManagerNoOp
@@ -53,6 +59,18 @@ public:
 		calls.push_back("anim " + bankName + " " + std::to_string(keys.size()) + (heardUnder.has_value() ? " heard" : ""));
 		return {.outcome = AnimEffectPlay::Outcome::Played, .emitter = k_Emitter, .sample = 3};
 	}
+	bool MusicPlay(const std::string& bankPath, const MusicPlayOptions& options) override
+	{
+		calls.push_back("music " + bankPath + " " + std::to_string(options.startChunk) + (options.fadeIn ? " fade" : ""));
+		return true;
+	}
+	void MusicStop(bool fadeOut) override { calls.push_back(fadeOut ? "music stop fade" : "music stop"); }
+	void MusicStopBank(const std::string& bankPath, bool /*fadeOut*/) override { calls.push_back("music stop " + bankPath); }
+	void Stop() override { calls.push_back("stop all"); }
+	void AtmosProcess(bool active) override { calls.push_back(active ? "atmosphere" : "atmosphere silent"); }
+	[[nodiscard]] ecs::Registry* Emitters() override { return &emitters; }
+
+	ecs::Registry emitters;
 };
 
 class GameSoundRequestsTest: public ::testing::Test
@@ -112,4 +130,95 @@ TEST_F(GameSoundRequestsTest, WithNoSoundRequestsTheWorldsSoundsDoNothing)
 	EXPECT_TRUE(StartGameSoundEffect(k_Sound, {}) == entt::null);
 	EXPECT_FALSE(GameSoundEffectHeard({}, k_Sound));
 	EXPECT_TRUE(audio.calls.empty());
+}
+
+// With no audio manager, the music, the banks and the atmosphere ask for nothing and get empty answers
+TEST_F(GameSoundRequestsTest, WithNoAudioManagerTheMusicAndTheBanksAreEmpty)
+{
+	GameSoundRequests requests;
+	EXPECT_FALSE(requests.MusicPlay("bank.sad", {}));
+	requests.MusicStop(true);
+	requests.MusicStopBank("bank.sad", false);
+	requests.StopAllSounds();
+	requests.ProcessAtmosphere(false);
+	requests.CreateSoundGroup("group");
+	requests.AddToSoundGroup("group", k_Sound);
+	EXPECT_FALSE(requests.GetMusicBankInfo("bank.sad").has_value());
+	EXPECT_TRUE(requests.GetPlayingMusicChannels().empty());
+	EXPECT_EQ(requests.GetCustomMusic(), nullptr);
+	EXPECT_TRUE(requests.GetSoundGroups().empty());
+	EXPECT_FLOAT_EQ(requests.GetMusicVolume(), 0.0f);
+	requests.PlaceOwnedEmitters([](entt::entity /*owner*/) { return std::optional(glm::vec3(1.0f)); });
+}
+
+// The music, stop and atmosphere requests go to the audio manager at once, in the order of the requests
+TEST_F(GameSoundRequestsTest, TheMusicRequestsGoToTheAudioManagerInOrder)
+{
+	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
+	GameSoundRequests requests;
+	EXPECT_TRUE(requests.MusicPlay("land.sad", {.startChunk = 4, .fadeIn = true}));
+	requests.MusicStopBank("land.sad", false);
+	requests.ProcessAtmosphere(false);
+	requests.MusicStop(true);
+	requests.StopAllSounds();
+	EXPECT_EQ(audio.calls, (std::vector<std::string> {"music land.sad 4 fade", "music stop land.sad", "atmosphere silent",
+	                                                  "music stop fade", "stop all"}));
+}
+
+// The music player gets each value of a music request, and no bank
+TEST(MusicRequest, TheMusicPlayerGetsEachValue)
+{
+	bool finished = false;
+	const auto options = ToMusicPlayOptions({
+	    .volume = 90,
+	    .startChunk = 3,
+	    .startFrame = 11,
+	    .loops = -1,
+	    .sync = true,
+	    .fadeIn = true,
+	    .pitchPercent = 120,
+	    .position = glm::vec3(1.0f, 2.0f, 3.0f),
+	    .minDistance = 5.0f,
+	    .maxDistance = 50.0f,
+	    .distanceScale = 2.0f,
+	    .onFinished = [&finished]() { finished = true; },
+	});
+	EXPECT_EQ(options.bank, nullptr);
+	EXPECT_EQ(options.volume, 90);
+	EXPECT_EQ(options.startChunk, 3u);
+	EXPECT_EQ(options.startFrame, 11u);
+	EXPECT_EQ(options.loops, -1);
+	EXPECT_TRUE(options.sync);
+	EXPECT_TRUE(options.fadeIn);
+	EXPECT_EQ(options.pitchPercent, 120);
+	EXPECT_EQ(options.position, std::optional(glm::vec3(1.0f, 2.0f, 3.0f)));
+	EXPECT_FLOAT_EQ(options.minDistance, 5.0f);
+	EXPECT_FLOAT_EQ(options.maxDistance, 50.0f);
+	EXPECT_FLOAT_EQ(options.distanceScale, 2.0f);
+	ASSERT_TRUE(options.onFinished);
+	options.onFinished();
+	EXPECT_TRUE(finished);
+}
+
+// An emitter with an owner goes to the place of its owner. An emitter with no owner, or with an owner that has no
+// place, stays where it is.
+TEST_F(GameSoundRequestsTest, TheOwnedEmittersGoToThePlaceOfTheirOwner)
+{
+	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
+	const auto follows = audio.emitters.Create();
+	audio.emitters.Assign<ecs::components::AudioEmitter>(follows).owner = k_Placed;
+	const auto stays = audio.emitters.Create();
+	audio.emitters.Assign<ecs::components::AudioEmitter>(stays).owner = k_NotPlaced;
+	const auto ownerless = audio.emitters.Create();
+	audio.emitters.Assign<ecs::components::AudioEmitter>(ownerless);
+	std::vector<entt::entity> asked;
+	GameSoundRequests requests;
+	requests.PlaceOwnedEmitters([&asked](entt::entity owner) -> std::optional<glm::vec3> {
+		asked.push_back(owner);
+		return owner == k_Placed ? std::optional(glm::vec3(4.0f, 5.0f, 6.0f)) : std::nullopt;
+	});
+	EXPECT_EQ(asked.size(), 2u);
+	EXPECT_EQ(audio.emitters.Get<ecs::components::AudioEmitter>(follows).position, glm::vec3(4.0f, 5.0f, 6.0f));
+	EXPECT_EQ(audio.emitters.Get<ecs::components::AudioEmitter>(stays).position, glm::vec3(0.0f));
+	EXPECT_EQ(audio.emitters.Get<ecs::components::AudioEmitter>(ownerless).position, glm::vec3(0.0f));
 }

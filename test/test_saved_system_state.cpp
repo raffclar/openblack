@@ -27,7 +27,6 @@
 
 #include "3D/CameraTrack.h"
 #include "3D/WaterRings.h"
-#include "Audio/GameMusic.h"
 #include "Camera/CameraBookmarks.h"
 #include "Camera/ScriptCameraModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -63,6 +62,7 @@
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Help/StoryHistory.h"
+#include "Sound/GameMusic.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

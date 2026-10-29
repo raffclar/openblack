@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/CustomMusicPlaylist.h"
+#include "Sound/CustomMusicPlaylist.h"
 
 using namespace openblack::audio::custom_music;
 

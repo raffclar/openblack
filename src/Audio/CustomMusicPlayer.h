@@ -19,8 +19,8 @@
 #include <vector>
 
 #include "AudioPlayerInterface.h"
-#include "CustomMusicPlayerInterface.h"
-#include "CustomMusicPlaylist.h"
+#include "Sound/CustomMusicPlayerInterface.h"
+#include "Sound/CustomMusicPlaylist.h"
 
 namespace openblack::audio
 {

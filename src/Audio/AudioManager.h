@@ -33,7 +33,7 @@
 #include "MusicPlayer.h"
 #include "MusicStreamBackend.h"
 #include "Sound/HeaderOverrides.h"
-#include "SoundGroup.h"
+#include "Sound/SoundGroup.h"
 #include "VoicePool.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)

@@ -14,6 +14,8 @@
 namespace openblack::audio
 {
 
+struct MusicPlayOptions;
+
 /// The audio library's answer to the sound requests of the world. Each request goes at once to the audio manager
 /// (Locator::audio), so the sounds play as they did before the world used the requests. With no audio manager, nothing
 /// plays and each question gets the answer of a computer without sound.
@@ -59,7 +61,32 @@ public:
 	void StopOwnedSounds(entt::entity owner) override;
 	void ForgetSavedEmitters() override;
 
+	void PlaceOwnedEmitters(const std::function<std::optional<glm::vec3>(entt::entity owner)>& placeOf) override;
+
 	[[nodiscard]] Listener GetListener() const override;
+
+	void StopAllSounds() override;
+	void ProcessAtmosphere(bool active) override;
+
+	bool MusicPlay(const std::string& bankPath, const MusicRequest& request) override;
+	void MusicStop(bool fadeOut) override;
+	void MusicStopBank(const std::string& bankPath, bool fadeOut) override;
+	[[nodiscard]] std::optional<MusicBankInfo> GetMusicBankInfo(const std::string& bankPath) override;
+	[[nodiscard]] std::vector<MusicChannelPlace> GetPlayingMusicChannels() const override;
+	[[nodiscard]] CustomMusicPlayerInterface* GetCustomMusic() override;
+
+	void AddMusicEntry(const std::string& name) override;
+	void CreateSoundGroup(const std::string& name) override;
+	void AddToSoundGroup(const std::string& name, entt::id_type id) override;
+	void AddAnimEffects(const std::string& bankName, AnimEffectTable table) override;
+	[[nodiscard]] const std::map<std::string, SoundGroup>& GetSoundGroups() override;
+
+	[[nodiscard]] float GetSfxVolume() override;
+	[[nodiscard]] float GetMusicVolume() override;
 };
+
+/// The options of the music player for a music request of the world. The bank stays empty: the player finds the bank
+/// from its path.
+[[nodiscard]] MusicPlayOptions ToMusicPlayOptions(const MusicRequest& request);
 
 } // namespace openblack::audio

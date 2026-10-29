@@ -16,7 +16,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Audio/SoundDecoder.h"
 #include "Common/GameLanguage.h"
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -30,6 +29,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundDecoder.h"
 #include "Sound/SoundRequestInterface.h"
 #include "Sound/WaveCueLabels.h"
 

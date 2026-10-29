@@ -38,7 +38,6 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/LandReuse.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/StartCamera.h"
@@ -143,6 +142,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptStart.h"
 #include "Serializer/FotFile.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Temple/TempleHelp.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -954,9 +954,9 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 
 	// Every sound stops as the land goes, however it changes: the music at once, without fading, the atmosphere, and
 	// every sound and voice still playing. They go before their entities do, which would leave them playing on
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().Stop();
+		Locator::sounds::value().StopAllSounds();
 	}
 
 	// The sky goes on as it was: it is kept while every entity goes, and made again after
@@ -1286,7 +1286,7 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	if (clock.IsPaused())
 	{
 		// The ambience is silent while the game is paused
-		Locator::audio::value().AtmosProcess(false);
+		Locator::sounds::value().ProcessAtmosphere(false);
 		return;
 	}
 

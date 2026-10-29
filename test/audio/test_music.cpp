@@ -22,8 +22,8 @@
 #include <vector>
 
 #include <Audio/AudioManagerNoOp.h>
-#include <Audio/GameMusic.h>
 #include <Audio/MusicPlayer.h>
+#include <Sound/GameMusic.h>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
