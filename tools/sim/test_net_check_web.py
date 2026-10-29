@@ -34,7 +34,7 @@ class WebChatSteps(unittest.TestCase):
                                     "seconds": 900})
         clicks = [step for step in steps if step["do"] == "mouse"]
         self.assertEqual([step["type"] for step in clicks], ["mouseMoved", "mousePressed", "mouseReleased"])
-        self.assertTrue(all(step["x"] == 1264 and step["y"] == 24 for step in clicks))
+        self.assertTrue(all(step["x"] == 1264 and step["y"] == 34 for step in clicks))
         self.assertEqual(clicks[0]["button"], "none")
         self.assertEqual(clicks[1]["button"], "left")
         keys = [step["key"] for step in steps if step["do"] == "key"]
