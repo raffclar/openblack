@@ -32,4 +32,8 @@ namespace openblack::ecs::player_towns
 /// How many towns a player has now
 [[nodiscard]] size_t Total(const Registry& registry, PlayerNames player);
 
+/// The towns of all players: the list of each player in turn, from the first player, and the list of the neutral
+/// player last
+[[nodiscard]] std::vector<entt::entity> AllInOrder(const Registry& registry);
+
 } // namespace openblack::ecs::player_towns

@@ -106,6 +106,7 @@
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
@@ -1662,15 +1663,22 @@ entt::entity NearestTown(const ecs::Registry& registry, glm::vec3 point)
 {
 	entt::entity nearest = entt::null;
 	auto best = std::numeric_limits<float>::max();
-	registry.Each<const Town, const Transform>([&](entt::entity entity, const Town&, const Transform& at) {
+	// Each player's town list in turn and the neutral list last: the first met wins a tie
+	for (const auto entity : ecs::player_towns::AllInOrder(registry))
+	{
+		const auto* at = registry.TryGet<const Transform>(entity);
+		if (at == nullptr)
+		{
+			continue;
+		}
 		// The table distance between the two map positions
-		const float distance = gutils::GetDistanceInMetres(point, at.position);
+		const float distance = gutils::GetDistanceInMetres(point, at->position);
 		if (distance < best)
 		{
 			best = distance;
 			nearest = entity;
 		}
-	});
+	}
 	return nearest;
 }
 

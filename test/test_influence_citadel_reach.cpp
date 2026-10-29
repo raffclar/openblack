@@ -281,6 +281,23 @@ TEST_F(StoredPower, TheCitadelTheTownsAndTheSourcesAddUp)
 	EXPECT_FLOAT_EQ(PowerOf(_players.at(1)).power, k_HeartReach + (2.0f * k_TownReach) + k_SourceReach + k_AntiReach);
 }
 
+TEST_F(StoredPower, TheTownsAddUpInTheOrderOfThePlayersTownList)
+{
+	// A small reach after a large one is lost, so only the list order gives this sum. The large town is made between
+	// the two small ones but comes last in the list.
+	constexpr float k_Large = 16777216.0f;
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<components::TownInfluence>(_town).radius = 1.0f;
+	const auto large = MakeTown(PlayerNames::PLAYER_FOUR);
+	registry.Get<components::Town>(large).gained = 2;
+	registry.Assign<components::TownInfluence>(large, components::TownInfluence {.radius = k_Large});
+	const auto small = MakeTown(PlayerNames::PLAYER_FOUR);
+	registry.Get<components::Town>(small).gained = 1;
+	registry.Assign<components::TownInfluence>(small, components::TownInfluence {.radius = 1.0f});
+	_influence.NoteInfluencePower(PlayerNames::PLAYER_FOUR);
+	EXPECT_EQ(PowerOf(_player).power, k_Large + 2.0f);
+}
+
 TEST(InfluencePowerOf, AddsTheCitadelThenEachTownThenEachSourceInTurn)
 {
 	// Each sum is a float, so a small reach after a large one is lost, as in the game
