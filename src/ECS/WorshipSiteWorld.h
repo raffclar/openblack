@@ -43,6 +43,8 @@ public:
 	[[nodiscard]] virtual int32_t LandNumber() const = 0;
 	/// One of the points laid out in the worship site's model, about the temple it stands at; none without the model
 	[[nodiscard]] virtual std::optional<glm::vec3> SitePoint(uint32_t index) const = 0;
+	/// One of the points laid out in a temple's model, about the temple; none without the model or the point
+	[[nodiscard]] virtual std::optional<glm::vec3> TemplePoint(entt::entity temple, uint32_t index) const = 0;
 	/// The door laid out in the worship site's model, about the temple it stands at; none without the model
 	[[nodiscard]] virtual std::optional<glm::vec3> SiteDoor() const { return std::nullopt; }
 	/// The worship site's model as it stands at a temple: wearing the temple's own skin once the temple has one, which

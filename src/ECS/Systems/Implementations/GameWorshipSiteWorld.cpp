@@ -88,6 +88,27 @@ std::optional<glm::vec3> GameWorshipSiteWorld::SitePoint(uint32_t index) const
 	return glm::vec3(points.at(index)[3]);
 }
 
+std::optional<glm::vec3> GameWorshipSiteWorld::TemplePoint(entt::entity temple, uint32_t index) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mesh = registry.Valid(temple) ? registry.TryGet<const Mesh>(temple) : nullptr;
+	if (mesh == nullptr || !Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (!meshes.Contains(mesh->id))
+	{
+		return std::nullopt;
+	}
+	const auto& points = meshes.Handle(mesh->id)->GetExtraMetrics();
+	if (index >= points.size())
+	{
+		return std::nullopt;
+	}
+	return glm::vec3(points.at(index)[3]);
+}
+
 std::optional<glm::vec3> GameWorshipSiteWorld::SiteDoor() const
 {
 	if (!Locator::resources::has_value())
