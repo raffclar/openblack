@@ -657,6 +657,7 @@ Renderer::~Renderer() noexcept
 	_offscreenShots.reset();
 	_creatureSkins.clear();
 	_roomCreatureSkins.clear();
+	_drawnCreatureSkins.clear();
 	_spareCreatureSkins.clear();
 	_animalBoneTexture.reset();
 	_handSkins.clear();
@@ -1886,6 +1887,15 @@ void Renderer::DrawTempleMapPass() const
 	const auto visit = Locator::temple::value().GetVisits();
 	if (_templeMapVisit == visit)
 	{
+		// The map shows the land of this visit already. The warm-up of a new load makes the triangles of the land's
+		// blocks for the next visit.
+		if (_warmingUp)
+		{
+			for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+			{
+				[[maybe_unused]] const auto& triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+			}
+		}
 		return;
 	}
 	_templeMapVisit = visit;
@@ -6023,6 +6033,11 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 		if (Locator::temple::has_value())
 		{
 			UploadCreatureSkins(Locator::temple::value().GetRooms(), _roomCreatureSkins);
+		}
+		// The creature of the tattoo menu is a thing of the drawn registry
+		if (Locator::drawnRegistry::has_value())
+		{
+			UploadCreatureSkins(Locator::drawnRegistry::value(), _drawnCreatureSkins);
 		}
 	}
 	UploadHandSkins();

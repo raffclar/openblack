@@ -439,6 +439,37 @@ TEST(SavedSystemState, TheCameraZonesComeBack)
 	EXPECT_EQ(zones.GetZones().exclusions.front().kind, camera_zones::Exclusion::Kind::Cylinder);
 }
 
+TEST(SavedSystemState, ANewLandHasNoCameraZones)
+{
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, std::string("land1.exc"));
+	reflection::Save(out, false);
+	reflection::Save(out, true);
+	reflection::Save(out, true);
+	reflection::Save(out, false);
+	reflection::Save(out, 700.0f);
+	reflection::Save(out, 200.0f);
+	reflection::Save(out, std::vector<glm::vec3> {{1.0f, 0.0f, 2.0f}, {3.0f, 0.0f, 4.0f}, {5.0f, 0.0f, 1.0f}});
+	reflection::Save(out, size_t {1});
+	reflection::Save(out, glm::vec3 {10.0f, 2.0f, 20.0f});
+	reflection::Save(out, 30.0f);
+	reflection::Save(out, 40.0f);
+	reflection::Save(out, camera_zones::Exclusion::Kind::Cylinder);
+	CameraZoneSystem zones;
+	LoadInto(zones, out.Bytes());
+	ASSERT_TRUE(zones.GetZones().fenceOn);
+	zones.Reset();
+	const camera_zones::Zones fresh;
+	EXPECT_TRUE(zones.GetFileName().empty());
+	EXPECT_EQ(zones.GetZones().exclusionsOn, fresh.exclusionsOn);
+	EXPECT_FALSE(zones.GetZones().fenceOn);
+	EXPECT_FALSE(zones.GetZones().useMaxAltitude);
+	EXPECT_FLOAT_EQ(zones.GetZones().maxAltitude, camera_zones::k_DefaultLimit);
+	EXPECT_FLOAT_EQ(zones.GetZones().heightAboveLand, camera_zones::k_DefaultLimit);
+	EXPECT_TRUE(zones.GetZones().fence.empty());
+	EXPECT_TRUE(zones.GetZones().exclusions.empty());
+}
+
 TEST(SavedSystemState, TheGoBackViewTheFollowAndTheBookmarkSwitchComeBack)
 {
 	reflection::BinaryWriter out(Context());

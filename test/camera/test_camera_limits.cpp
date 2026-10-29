@@ -208,3 +208,11 @@ TEST(CameraLimits, TheEaseDoublesForEachWayTheLimitsMovedTheCamera)
 	EXPECT_NEAR(EaseSeconds(0.75f, true, true), 1.35f, 1e-6f);
 	EXPECT_FLOAT_EQ(EaseSeconds(1.5f, false, false), 0.3f);
 }
+
+TEST(CameraZoneFiles, NamesThatDifferOnlyInCaseHaveOneId)
+{
+	using openblack::camera_zones::FileId;
+	EXPECT_EQ(FileId("Land1Zone1.exc"), FileId("land1zone1.EXC"));
+	EXPECT_EQ(FileId("land1begin.exc"), FileId("Land1Begin.exc"));
+	EXPECT_NE(FileId("Land1Zone1.exc"), FileId("Land1Zone2.exc"));
+}

@@ -32,8 +32,9 @@ public:
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
 	/// Moves the hair of a copy of a creature, after the copy is posed. The copy has hair of its own, which hangs from
 	/// its own pose and moves by the time of the frame. The copy is a thing of the registry of copies, and its creature
-	/// is a thing of the land.
-	virtual void StepCopy(Registry& copies, entt::entity copy, std::chrono::duration<float, std::milli> frameTime) = 0;
+	/// is a thing of the registry of bodies.
+	virtual void StepCopy(Registry& copies, entt::entity copy, std::chrono::duration<float, std::milli> frameTime,
+	                      const Registry& bodies) = 0;
 	/// Whether the hair is moved and drawn at all; shown again, it starts afresh from the roots
 	[[nodiscard]] virtual bool IsShown() const = 0;
 	virtual void SetShown(bool shown) = 0;

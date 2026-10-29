@@ -28,7 +28,9 @@ than its input expects.
 With --hold-creature the hand of that client holds its god's creature through the inspector once the client compared
 --hold-after turns: the camera looks at the creature, the pointer goes to a point of its body that the interface picks,
 the hand holds and strokes it, lets go, clicks it for the leash and leads it with a tap on the land. The creature walks,
-so a recorded input cannot find it. NET_CHECK_DEBUG=1 prints each try of the pointer.
+so a recorded input cannot find it. NET_CHECK_DEBUG=1 prints each try of the pointer. The information box of the land
+takes every press of the buttons while it shows, so the hand closes it with the Escape key first. --hold-after can be
+any turn: the log tells the hundreds, the inspector tells the last turns.
 
 With --slot-fight SECONDS the first client sends the fight cheat once it compared --hold-after turns: at the turn, the
 creature of its god fights the nearest creature. Then the fight autopilot of each client fights for its own god with the
@@ -505,6 +507,46 @@ def say_in_chat(pid, text):
     print(f"chat: client with pid {pid} says {text!r} (click: {clicked})")
 
 
+# The points of the menu's buttons on a window of 1280 by 1024: Options on the first page, the Players tab, and Edit
+# Tattoo on the Players page
+TATTOO_MENU_CLICKS = (("Options", (640, 704)), ("Players", (640, 80)), ("Edit Tattoo", (773, 772)))
+
+
+def menu_page(pid):
+    """The page that the game's menu of a client shows, or none when the menu is shut"""
+    windows = inspector_call(pid, "gui.windows", {}) or {}
+    for item in windows.get("items", []):
+        if isinstance(item, dict) and item.get("name") == "menu":
+            if not item.get("open"):
+                return None
+            # The Edit Tattoo button shows only while the profile keeps its creature
+            tattoo = " with Edit Tattoo" if "Edit Tattoo" in item.get("buttons", []) else ""
+            return f"{item.get('page')}{tattoo}"
+    return None
+
+
+def open_tattoo_menu(pid):
+    """A client opens the tattoo editor from the game's menu as the player does, with the input of the player only:
+    Escape opens the menu, then clicks on Options, the Players tab and Edit Tattoo. The editor shows a creature of its
+    own over the menu. True when the editor is open."""
+    frame = inspector_call(pid, "engine.frame", {}) or {}
+    width, height = frame.get("window") or [1280, 1024]
+    inspector_call(pid, "input.key", {"params": {"key": "Escape"}})
+    time.sleep(1.5)
+    pages = [menu_page(pid)]
+    for _, (x, y) in TATTOO_MENU_CLICKS:
+        inspector_call(pid, "input.pointer", {"params": {"screen": [round(x * width / 1280), round(y * height / 1024)]}})
+        time.sleep(0.5)
+        inspector_call(pid, "input.button", {"params": {"button": "left", "action": "click"}})
+        time.sleep(1.5)
+        pages.append(menu_page(pid))
+    windows = inspector_call(pid, "gui.windows", {}) or {}
+    shown = any(item.get("name") == "tattoo_editor" and item.get("open") for item in windows.get("items", [])
+                if isinstance(item, dict))
+    print(f"tattoo menu: client with pid {pid} opened the tattoo editor: {shown} (menu pages {pages})")
+    return shown
+
+
 def chat_lines(log_path):
     """The lines of the chat that came to a client, as (turn, god, text)"""
     found = []
@@ -525,11 +567,56 @@ def chat_came_to(received, god, text):
     return [any(sender == god and line == text for _, sender, line in lines) for lines in received]
 
 
+def client_turn(pid):
+    """The game turn that a client has reached, through the inspector; None when the inspector does not tell it"""
+    state = inspector_call(pid, "game.state", {})
+    turn = state.get("turn") if isinstance(state, dict) else None
+    return turn if isinstance(turn, int) else None
+
+
+def reached_turn(log, pid, turns, turn_of=None):
+    """Whether a client has reached a game turn, whatever the turn is. The log of the client tells the compared turns
+    each 100 turns, so it answers for the whole hundreds at once and the inspector tells the last turns. The turns of
+    the network game and of the client are the same count."""
+    turn_of = turn_of or client_turn
+    hundreds = turns - turns % 100
+    if hundreds > 0 and not lines_with(log, [f"Network game: {hundreds} turns compared"]):
+        return False
+    if turns == hundreds:
+        return True
+    turn = turn_of(pid)
+    return turn is not None and turn >= turns
+
+
+def close_land_info_box(pid, call=None, wait=time.sleep):
+    """Closes the information box of the land when it shows, with the Escape key as Go! does. The box takes every press
+    of the buttons while it shows, so the hand cannot hold anything before it is closed. Whether the box was open."""
+    call = call or inspector_call
+    for _ in range(3):
+        windows = items_of(call(pid, "gui.windows", {}))
+        if not any(window.get("name") == "land_info_box" and window.get("open") for window in windows):
+            return _ > 0
+        call(pid, "input.key", {"params": {"key": "Escape", "how": "press"}})
+        wait(0.5)
+        call(pid, "input.key", {"params": {"key": "Escape", "how": "release"}})
+        wait(1.0)
+    return True
+
+
+def hand_holds(pid):
+    """The creature that the hand of a client holds to stroke or slap it, through the inspector; None for none"""
+    systems = inspector_call(pid, "creatures.systems", {})
+    hand = systems.get("hand") if isinstance(systems, dict) else None
+    return hand.get("creature") if isinstance(hand, dict) else None
+
+
 def hold_creature(pid, near, slaps=0):
     """The hand of a client holds the creature nearest a point, strokes it and lets go; then a click puts the leash on
     and a tap on the land leads the creature there. The camera looks at the creature first, and the pointer goes to a
     pixel where the interface picks the creature."""
     x, z = (float(value) for value in near.split(","))
+    if close_land_info_box(pid):
+        print("hold: closed the information box of the land")
     found = inspector_call(pid, "objects.find", {"params": {"kind": "Creature"}, "near": [x, z], "radius": 600,
                                                 "limit": 1})
     items = found.get("items", []) if isinstance(found, dict) else []
@@ -537,42 +624,52 @@ def hold_creature(pid, near, slaps=0):
         print("hold: no creature near", near)
         return
     creature = items[0]["id"]
-    def pixel_on_creature():
+    def pixel_on_creature(action=None):
         """Looks at the creature from each side in turn, and gives a pixel where the interface picks it: the pointer goes
-        to points of the creature's body, from its feet up"""
+        to points of the creature's body, from its feet up. The creature walks, so the button action (press or click)
+        follows the pick at once: a later press would find the creature a step away from the pointer."""
         for yaw in (0, 90, 180, 270):
             inspector_call(pid, "camera.frame", {"params": {"id": creature, "yaw": yaw, "pitch": 40, "distance": 18}})
             time.sleep(1.0)
             for height in (1.0, 2.0, 0.5, 3.0, 1.5, 4.0, 2.5):
-                found = inspector_call(pid, "objects.find", {"params": {"kind": "Creature"}, "near": [x, z],
-                                                             "radius": 600, "limit": 1})
-                items = found.get("items", []) if isinstance(found, dict) else []
-                if not items:
+                # The creature walks: its place is asked again for each try
+                found = inspector_call(pid, "ecs.entity", {"params": {"id": creature}})
+                at = found.get("position") if isinstance(found, dict) else None
+                if not isinstance(at, list):
                     return None
-                at = items[0]["position"]
                 moved = inspector_call(pid, "input.pointer", {"params": {"world": [at[0], at[1] + height, at[2]],
                                                                          "timing": "immediate"}})
-                time.sleep(0.2)
+                # The hand takes the pick of the last frame that was drawn, so a frame must draw with the pointer there
+                time.sleep(0.15)
                 pick = inspector_call(pid, "players.pick", {})
                 pointer = moved.get("pointer") if isinstance(moved, dict) else None
                 if os.environ.get("NET_CHECK_DEBUG"):
                     print("hold debug", yaw, height, json.dumps(moved)[:160], pick.get("object") if isinstance(pick, dict) else pick)
                 if isinstance(pick, dict) and pick.get("object") == creature and isinstance(pointer, list):
+                    if action:
+                        inspector_call(pid, "input.button", {"params": {"button": "right", "action": action}})
                     return [int(value) for value in pointer]
         return None
 
     # The creature walks among the houses and the people: the search tries again a while later
+    # The hand takes the pick of the last frame that was drawn, and the creature walks: a press can come when the pick
+    # has left the creature. The hand holds the creature when the creature systems say so, else the press is let go and
+    # tried again.
     pixel = None
     for _ in range(8):
-        pixel = pixel_on_creature()
+        pixel = pixel_on_creature("press")
         if pixel is not None:
-            break
+            time.sleep(1.0)
+            if hand_holds(pid) == creature:
+                break
+            inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
+            time.sleep(1.0)
+            pixel = None
+            continue
         time.sleep(4.0)
     if pixel is None:
-        print("hold: the pointer found no pixel on creature", creature)
+        print("hold: the hand did not hold creature", creature)
         return
-    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
-    time.sleep(1.0)
     # The hand goes round a little on the body while it holds the creature
     for dx, dy in ((10, 0), (0, 10), (-10, 0), (0, -10), (0, 0)):
         inspector_call(pid, "input.pointer", {"params": {"screen": [pixel[0] + dx, pixel[1] + dy]}})
@@ -591,11 +688,10 @@ def hold_creature(pid, near, slaps=0):
     # The camera flies back to where it was before the hold
     time.sleep(8.0)
     # A click on the creature puts the leash on
-    pixel = pixel_on_creature()
+    pixel = pixel_on_creature("click")
     if pixel is None:
         print("hold: the pointer found no pixel on creature", creature, "for the leash")
         return
-    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "click"}})
     time.sleep(2.0)
     # A tap on the land below leads the creature there
     inspector_call(pid, "input.pointer", {"params": {"screen": [pixel[0], min(pixel[1] + 300, 1000)], "timing": "immediate"}})
@@ -1493,6 +1589,11 @@ def main():
                              "this many times before it lets go")
     parser.add_argument("--chat", action="append", default=[],
                         help="TURNS:CLIENT:TEXT, the client (from 1) says the line in the chat after that many turns")
+    parser.add_argument("--tattoo-menu", action="append", default=[], metavar="TURNS:CLIENT",
+                        help="the client (from 1) opens the tattoo editor from the game's menu after that many turns")
+    parser.add_argument("--profile-creature", action="append", default=[], metavar="CLIENT:FOLDER",
+                        help="the profile of the client (from 1) keeps the creature files of the folder (Player.erc and "
+                             "PhysiquePlayer.erc, as a game alone keeps them), so its menu shows Edit Tattoo")
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
                              "through the inspector, once it compared --hold-after turns")
@@ -1765,6 +1866,11 @@ def main():
         for index in join_order(options.clients, desktop_clients, bool(options.scenario)):
             client_dir = client_dirs[index]
             os.makedirs(client_dir, exist_ok=True)
+            for value in options.profile_creature:
+                client, folder = value.split(":", 1)
+                if int(client) == index + 1:
+                    kept = os.path.join(client_dir, "Profiles", "developer", "Scripts", "CreatureMind")
+                    shutil.copytree(folder, kept, dirs_exist_ok=True)
             is_observer = index >= options.clients
             # The observers of a scenario are in the room before the start; other observers join the game as it turns
             if (is_observer and not options.all_computer_gods and not options.scenario
@@ -1811,6 +1917,7 @@ def main():
             camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
             chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
+            chatting = chatting or any(value.split(":", 1)[1] == str(index + 1) for value in options.tattoo_menu)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
                     or options.give == index + 1 or any(leash["client"] == index for leash in leashes)):
                 command += ["--inspect-port", "0"]
@@ -1863,6 +1970,9 @@ def main():
         chats = [(int(turns), int(client) - 1, text) for turns, client, text in
                  (value.split(":", 2) for value in options.chat)]
         said = set()
+        tattoo_menus = [(int(turns), int(client) - 1) for turns, client in
+                        (value.split(":", 1) for value in options.tattoo_menu)]
+        tattooed = set()
         cameras_again = set()
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
@@ -1874,20 +1984,23 @@ def main():
                         os.path.join(client_dirs[index], "client.log"), [f"Network game: {turns} turns compared"])):
                     say_in_chat(clients[index].pid, text)
                     said.add(number)
+            for number, (turns, index) in enumerate(tattoo_menus):
+                if (number not in tattooed and 0 <= index < len(clients) and clients[index].poll() is None and lines_with(
+                        os.path.join(client_dirs[index], "client.log"), [f"Network game: {turns} turns compared"])):
+                    open_tattoo_menu(clients[index].pid)
+                    tattooed.add(number)
             for index, near in holds.items():
-                if index not in held and clients[index].poll() is None and lines_with(
-                        os.path.join(client_dirs[index], "client.log"),
-                        [f"Network game: {options.hold_after} turns compared"]):
+                if index not in held and clients[index].poll() is None and reached_turn(
+                        os.path.join(client_dirs[index], "client.log"), clients[index].pid, options.hold_after):
                     hold_creature(clients[index].pid, near, options.hold_slaps)
                     held.add(index)
             slot = (options.slot_miracle or 0) - 1
-            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
-                    os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
+            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and reached_turn(
+                    os.path.join(client_dirs[slot], "client.log"), clients[slot].pid, options.hold_after)):
                 miracle_done = slot_miracle(clients[slot].pid, slot)
             if (options.slot_fight and fight_done is None and len(clients) == 2
-                    and all(client.poll() is None for client in clients) and lines_with(
-                        os.path.join(client_dirs[0], "client.log"),
-                        [f"Network game: {options.hold_after} turns compared"])):
+                    and all(client.poll() is None for client in clients) and reached_turn(
+                        os.path.join(client_dirs[0], "client.log"), clients[0].pid, options.hold_after)):
                 fight_done = slot_fight([client.pid for client in clients], options.slot_fight)
             for index, client in enumerate(clients):
                 camera = client_cameras[index]
@@ -1905,8 +2018,8 @@ def main():
                     desktop_leash_step(leashes[number], done, clients[index].pid,
                                        os.path.join(client_dirs[index], "client.log"))
             giver = (options.give or 0) - 1
-            if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None and lines_with(
-                    os.path.join(client_dirs[giver], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
+            if (give_done is None and 0 <= giver < len(clients) and clients[giver].poll() is None and reached_turn(
+                    os.path.join(client_dirs[giver], "client.log"), clients[giver].pid, options.hold_after)):
                 give_done = give_to_creature(clients[giver].pid, os.path.join(client_dirs[giver], "client.log"))
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):

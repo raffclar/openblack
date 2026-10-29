@@ -65,6 +65,25 @@ TEST(HelpProfile, TheClockRunsATenthOfASecondATurn)
 	EXPECT_EQ(profile.Clock(), 200u);
 }
 
+TEST(HelpProfile, ANewLandStartsTheClockAgainAndKeepsTheCounts)
+{
+	HelpProfile profile;
+	profile.Trigger(k_TapWithText);
+	for (int turn = 0; turn < 30; ++turn)
+	{
+		profile.EndTurn();
+	}
+	EXPECT_EQ(profile.Clock(), 3000u);
+	profile.ResetClock();
+	EXPECT_EQ(profile.Clock(), 0u);
+	EXPECT_EQ(profile.Count(k_TapWithText).Total(), 1u);
+	// The time of the tap is ahead of the new clock: nothing has passed since it, and it is pulled back
+	EXPECT_FLOAT_EQ(profile.Count(k_TapWithText).SecondsSince(profile.Clock()), 0.0f);
+	profile.EndTurn();
+	EXPECT_EQ(profile.Clock(), 100u);
+	EXPECT_FLOAT_EQ(profile.Count(k_TapWithText).SecondsSince(profile.Clock()), 0.1f);
+}
+
 TEST(HelpProfile, SecondsSinceTheLastTime)
 {
 	HelpProfile profile;
