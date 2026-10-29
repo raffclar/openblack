@@ -190,7 +190,9 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Graphics/HeadlessRenderer.h"
 #include "Graphics/RendererInterface.h"
+#include "Graphics/UploadMode.h"
 #include "Gui/TextDatabase.h"
 #include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
@@ -352,6 +354,7 @@ using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
 using openblack::ecs::systems::WorkshopSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
+using openblack::graphics::HeadlessRenderer;
 using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
 using openblack::lhvm::LHVM;
@@ -392,12 +395,6 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	}
 	Locator::debugGui::reset(DebugGuiInterface::Create(graphics::RenderPass::ImGui).release());
 
-	// The dedicated server has no audio device
-	if (Locator::config::has_value() && Locator::config::value().dedicatedServer)
-	{
-		Locator::audio::emplace<AudioManagerNoOp>();
-		return true;
-	}
 	std::unique_ptr<audio::AudioManagerInterface> machineAudio;
 	try
 	{
@@ -419,6 +416,18 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	}
 	// The game's calls go to the audio through the queue of the main thread
 	Locator::audio::emplace<audio::QueuedAudioManager>(std::move(machineAudio), Locator::mainThreadQueue::value());
+	return true;
+}
+
+bool openblack::InitializeHeadlessEngine() noexcept
+{
+	Locator::rendererInterface::reset(HeadlessRenderer::Create().release());
+	if (!Locator::rendererInterface::has_value())
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to create the renderer with no device");
+		return false;
+	}
+	Locator::audio::emplace<AudioManagerNoOp>();
 	return true;
 }
 
@@ -672,7 +681,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
-	Locator::oceanSystem::emplace<Ocean>();
 	Locator::skySystem::emplace<ecs::systems::SkySystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
@@ -688,9 +696,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::time::emplace<TimeSystem>();
 	Locator::simulation::emplace<ecs::systems::SimulationSystem>();
 	Locator::vegetation::emplace<VegetationSystem>();
-	Locator::mistSystem::emplace<MistSystem>();
-	Locator::cloudSystem::emplace<CloudSystem>();
-	Locator::villageLightSystem::emplace<VillageLightSystem>();
 	Locator::abodeSoundSystem::emplace<AbodeSoundSystem>();
 	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
@@ -797,6 +802,15 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	return true;
 }
 
+void openblack::InitializePresentation()
+{
+	// The sea, the mists, the clouds and the village lights, which the turns and the scripts do not read
+	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
+	Locator::mistSystem::emplace<MistSystem>();
+	Locator::cloudSystem::emplace<CloudSystem>();
+	Locator::villageLightSystem::emplace<VillageLightSystem>();
+}
+
 void openblack::InitializeClient(const player_profiles::Store& profiles)
 {
 	// The input of the player, the drawing of the world, the editor, the videos and the online services
@@ -816,6 +830,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	{
 		return false;
 	}
+	InitializePresentation();
 	InitializeClient(profiles);
 	return true;
 }

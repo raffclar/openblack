@@ -9,6 +9,8 @@
 
 #include "CloudArchetype.h"
 
+#include <vector>
+
 #include "3D/Clouds.h"
 #include "3D/Mists.h"
 #include "Common/GameRandom.h"
@@ -41,4 +43,21 @@ entt::entity CloudArchetype::Create(const clouds::Layout& layout)
 	                                  .counterRemainder = 0.0f,
 	                              });
 	return entity;
+}
+
+void CloudArchetype::CreateSky()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> old;
+	registry.Each<const Cloud>([&old](entt::entity entity, const Cloud& /*unused*/) { old.push_back(entity); });
+	for (const auto entity : old)
+	{
+		registry.Destroy(entity);
+	}
+	// The game lays them out from the C runtime's numbers
+	auto& random = Locator::gameRandom::value();
+	for (const auto& layout : clouds::MakeLayout([&random](float low, float high) { return random.CrtRandom(low, high); }))
+	{
+		Create(layout);
+	}
 }

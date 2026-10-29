@@ -21,7 +21,6 @@
 #include "3D/Mists.h"
 #include "3D/StormClouds.h"
 #include "Common/GameRandom.h"
-#include "ECS/Archetypes/CloudArchetype.h"
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Transform.h"
@@ -35,21 +34,8 @@ using namespace openblack::ecs::components;
 
 void CloudSystem::Reset()
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> old;
-	registry.Each<const Cloud>([&old](entt::entity entity, const Cloud& /*unused*/) { old.push_back(entity); });
-	for (const auto entity : old)
-	{
-		registry.Destroy(entity);
-	}
 	// The storms of the last land took their clouds with them
 	_stormClouds.clear();
-	// The game lays them out from the C runtime's numbers
-	auto& random = Locator::gameRandom::value();
-	for (const auto& layout : clouds::MakeLayout([&random](float low, float high) { return random.CrtRandom(low, high); }))
-	{
-		archetypes::CloudArchetype::Create(layout);
-	}
 }
 
 void CloudSystem::Update(std::chrono::duration<float, std::milli> gameTime)

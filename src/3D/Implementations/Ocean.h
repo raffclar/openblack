@@ -15,6 +15,7 @@
 
 #include "3D/OceanInterface.h"
 #include "3D/SeaTexture.h"
+#include "Graphics/UploadMode.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -32,7 +33,8 @@ class Mesh;
 class Ocean final: public OceanInterface
 {
 public:
-	Ocean() noexcept;
+	/// The sea of the game. With data only, as on the dedicated server, the sea makes no mesh and no frame buffer.
+	explicit Ocean(graphics::UploadMode uploads = graphics::UploadMode::Device) noexcept;
 	~Ocean() noexcept;
 
 	[[nodiscard]] graphics::FrameBuffer& GetReflectionFramebuffer() const noexcept override { return *_reflectionFrameBuffer; }
