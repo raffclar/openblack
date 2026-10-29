@@ -25,6 +25,10 @@ The object can also have an "expect", the least count of each deed of the hand (
 gives the deeds of the hand of each player that the server did ("Hand deed" lines of the logs: takes, scoops, throws,
 puts_down, pours, uses), and a run whose hand did fewer than its input expects is not the same.
 
+A testbed scenario can make the game load a saved world. The server keeps no saves and never loads, so the turns are
+compared only up to the game's last turn before its first load (the summary gives that turn as
+compared_until_load_at_turn).
+
 Both play as the profile of a tool's run, in their own working folders. Both programs start with no console window of their
 own. The game starts with --background. The script stops only the
 processes that it started, by their own process ids.
@@ -98,9 +102,10 @@ def server_checksums(log):
     return turns
 
 
-def game_checksums(record):
-    """The checksum of each turn in the run record of the game"""
-    turns = {}
+def records_before_first_load(record):
+    """The synced part of each turn's record up to the game's first load, as (turn, synced) pairs. A load of a saved world
+    takes the turn back. The server never loads, so the turns after the load cannot be compared with it."""
+    last = None
     with open(record, encoding="utf-8") as file:
         for line in file:
             line = line.strip()
@@ -108,24 +113,23 @@ def game_checksums(record):
                 continue
             value = json.loads(line)
             synced = value.get("synced")
-            if isinstance(synced, dict) and "checksum" in synced and "turn" in value:
-                turns[int(value["turn"])] = synced["checksum"]
-    return turns
+            if not isinstance(synced, dict) or "turn" not in value:
+                continue
+            turn = int(value["turn"])
+            if last is not None and turn <= last:
+                return
+            last = turn
+            yield turn, synced
+
+
+def game_checksums(record):
+    """The checksum of each turn in the run record of the game, up to its first load"""
+    return {turn: synced["checksum"] for turn, synced in records_before_first_load(record) if "checksum" in synced}
 
 
 def synced_records(record):
-    """The synced part of each turn's record: the hash of each component, the seed and the draws"""
-    turns = {}
-    with open(record, encoding="utf-8") as file:
-        for line in file:
-            line = line.strip()
-            if not line:
-                continue
-            value = json.loads(line)
-            synced = value.get("synced")
-            if isinstance(synced, dict) and "turn" in value:
-                turns[int(value["turn"])] = synced
-    return turns
+    """The synced part of each turn's record up to the first load: the hash of each component, the seed and the draws"""
+    return dict(records_before_first_load(record))
 
 
 def compare_parts(server, game, turns, ignored):
@@ -354,6 +358,12 @@ def main():
     if options.game_frames and game and max(game) < options.turns:
         ended_by_frames_at_turn = max(game)
         compared_turns = ended_by_frames_at_turn
+    # A game that loaded a saved world is compared up to its last turn before the first load: the server never loads
+    game_loads = turns_gone_back(commands) if relay else []
+    compared_until_load_at_turn = None
+    if game_loads and game and max(game) < compared_turns:
+        compared_until_load_at_turn = max(game)
+        compared_turns = compared_until_load_at_turn
     different, compared = compare(server, game, compared_turns)
     summary = {
         "turns": options.turns,
@@ -368,18 +378,20 @@ def main():
         "same_until": (different[0] - 1) if different else (compared[-1] if compared else 0),
         "same": not different and len(compared) >= compared_turns,
         "ended_by_frames_at_turn": ended_by_frames_at_turn,
-        "game_loads": turns_gone_back(commands) if relay else [],
+        "game_loads": game_loads,
+        "compared_until_load_at_turn": compared_until_load_at_turn,
     }
-    if summary["game_loads"]:
-        print(f"the game loaded a saved world (turn before and after): {summary['game_loads']}; the server does not")
+    if game_loads:
+        print(f"the game loaded a saved world (turn before and after): {game_loads}; the server does not, so the turns "
+              f"up to {compared_turns} are compared")
     ignored = {name for name in options.ignore_parts.split(",") if name}
     if ignored and (options.hash_parts or options.hash_fields):
         others, parts = compare_parts(synced_records(os.path.join(server_dir, "record.jsonl")), synced_records(record),
-                                      options.turns, ignored)
+                                      compared_turns, ignored)
         summary["ignored"] = sorted(ignored)
         summary["different_without_ignored"] = others[:20]
         summary["parts_without_ignored"] = dict(sorted(parts.items(), key=lambda item: item[1])[:20])
-        summary["same_without_ignored"] = not others and len(compared) >= options.turns
+        summary["same_without_ignored"] = not others and len(compared) >= compared_turns
     # What the turns did with the hand: the game and the server do the same commands, so each must count the same deeds.
     # An input that expects deeds of its hand (its "expect") fails the run when the hand did fewer: the checksums are
     # then the same only because the hand did nothing.

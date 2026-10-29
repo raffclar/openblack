@@ -2191,3 +2191,7 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_flock_attach PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_worship_site_looks test_worship_site_looks.cpp)
+add_test(NAME test_server_check
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_server_check.py
+)
