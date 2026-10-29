@@ -32,6 +32,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/FixedOutline.h"
 #include "ECS/Components/Flowers.h"
@@ -52,6 +53,7 @@
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
@@ -105,8 +107,9 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<ScriptHighlight>();
 	// Fish farms, each in the cell it stands in, before the cell's other fixed things
 	func.template operator()<FishFarm>();
-	// Street lanterns, each in the cell it stands in, after the cell's other fixed things
+	// Street lanterns and the flags of the towns' wants, each in the cell it stands in, after the cell's other fixed things
 	func.template operator()<StreetLantern>();
+	func.template operator()<TownDesireFlag>();
 	// Things that count as staying put but can be carried
 	func.template operator()<Pot>();
 	func.template operator()<OneOffSpellSeed>();
@@ -118,6 +121,8 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<Scaffold>();
 	func.template operator()<Ball>();
 	func.template operator()<RewardOnLand>();
+	// Fireflies, each in the cell of its place, before the cell's other things that move
+	func.template operator()<Firefly>();
 }
 
 /// A building's outline on the ground, from its model's box as it is placed
@@ -223,11 +228,16 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 	{
 		return Kind {.placement = Placement::FixedBack, .coversOutline = false, .moves = false};
 	}
+	// A town's flag goes to the store that its town builds
+	if (registry.AnyOf<TownDesireFlag>(entity))
+	{
+		return Kind {.placement = Placement::FixedBack, .coversOutline = false, .moves = true};
+	}
 	if (registry.AnyOf<Pot, OneOffSpellSeed>(entity))
 	{
 		return Kind {.placement = Placement::FixedBack, .coversOutline = false, .moves = true};
 	}
-	if (registry.AnyOf<Villager, Creature, Animal, MobileObject, Scaffold, Ball, RewardOnLand>(entity))
+	if (registry.AnyOf<Villager, Creature, Animal, MobileObject, Scaffold, Ball, RewardOnLand, Firefly>(entity))
 	{
 		return Kind {.placement = Placement::MobileFront, .coversOutline = false, .moves = true};
 	}

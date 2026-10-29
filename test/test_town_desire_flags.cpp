@@ -116,3 +116,31 @@ TEST(TownDesireFlags, TheNeedShownIsTheDesireInHundredthsHeldToWhole)
 	EXPECT_FLOAT_EQ(flags::NeedPercent(1.7f), 100.0f);
 	EXPECT_FLOAT_EQ(flags::NeedPercent(-0.2f), -20.0f);
 }
+
+TEST(TownDesireFlags, BeforeItsTownHasAStoreAFlagStandsFiveMetresFromTheTownAtTheAngleOfItsPlace)
+{
+	const openblack::map_coords::MapCoords town {.x = 1000000, .z = 2000000, .altitude = 0.0f};
+	// The first place is straight along x
+	const auto first = flags::PlaceWithoutStore(town, 0);
+	EXPECT_EQ(first.x, town.x + openblack::map_coords::ToFixedGUtils(5.0f));
+	EXPECT_EQ(first.z, town.z);
+	// Each place after it turns a little more round the town, at the same distance
+	for (uint32_t place = 1; place <= 5; ++place)
+	{
+		const auto at = flags::PlaceWithoutStore(town, place);
+		const float dx = openblack::map_coords::ToMetres(at.x - town.x);
+		const float dz = openblack::map_coords::ToMetres(at.z - town.z);
+		EXPECT_NEAR(std::hypot(dx, dz), 5.0f, 0.001f);
+		EXPECT_NEAR(std::atan2(dz, dx), static_cast<float>(place) * 0.36959913f, 0.001f);
+	}
+}
+
+TEST(TownDesireFlags, AFlagMovesOnceItIsNotWhereTheGameMadeIt)
+{
+	const openblack::map_coords::MapCoords made {.x = 1000, .z = 2000, .altitude = 0.0f};
+	EXPECT_FALSE(flags::MovedSinceMade(made, made));
+	// Only x and z count
+	EXPECT_FALSE(flags::MovedSinceMade(made, {.x = 1000, .z = 2000, .altitude = 3.0f}));
+	EXPECT_TRUE(flags::MovedSinceMade(made, {.x = 1001, .z = 2000, .altitude = 0.0f}));
+	EXPECT_TRUE(flags::MovedSinceMade(made, {.x = 1000, .z = 1999, .altitude = 0.0f}));
+}

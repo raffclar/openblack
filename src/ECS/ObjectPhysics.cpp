@@ -49,6 +49,7 @@
 #include "ECS/Components/TempleExterior.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/WorshipSite.h"
@@ -115,13 +116,17 @@ audio::SoundId NextInTurn(const std::array<audio::SoundId, N>& sounds, uint8_t& 
 	return sound;
 }
 
-/// Whether a fixed thing belongs to a town or is part of a temple: a building or a field only when it has a town, a
-/// building standing outside any town not counting
+/// Whether a fixed thing belongs to a town or is part of a temple: a building, a field or a flag of a town's wants only
+/// when it has a town, a building standing outside any town not counting
 bool OfTown(const Registry& registry, entt::entity thing)
 {
 	if (registry.AnyOf<Temple, TempleExterior, TempleEntrance>(thing))
 	{
 		return true;
+	}
+	if (const auto* flag = registry.TryGet<const TownDesireFlag>(thing))
+	{
+		return registry.Valid(flag->town) && registry.AllOf<Town>(flag->town);
 	}
 	bool found = false;
 	if (const auto* abode = registry.TryGet<const Abode>(thing))
@@ -141,6 +146,11 @@ bool OfTown(const Registry& registry, entt::entity thing)
 std::optional<uint32_t> TownScenicForest(const Registry& registry, entt::entity thing)
 {
 	std::optional<int64_t> townId;
+	if (const auto* flag = registry.TryGet<const TownDesireFlag>(thing))
+	{
+		const auto* town = registry.Valid(flag->town) ? registry.TryGet<const Town>(flag->town) : nullptr;
+		return town != nullptr ? town->scenicForest : std::nullopt;
+	}
 	if (const auto* abode = registry.TryGet<const Abode>(thing))
 	{
 		townId = abode->townId;
