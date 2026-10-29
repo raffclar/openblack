@@ -2375,9 +2375,10 @@ bool Game::Update() noexcept
 	FrameState frame;
 	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) {
 		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world. The guard
-		    // also does not look at the debug windows. The timeline of the testbed runner acts in them by the game time of
-		    // the frame. It is a tool for the debug builds and is not part of the game.
-		    if (!_frameGuard || step == game_frame::Step::Turns || step == game_frame::Step::DebugGui ||
+		    // does not tell the changes of the debug windows. The timeline of the testbed runner acts in them by the game
+		    // time of the frame. It is a tool for the debug builds and is not part of the game. The guard tells only the
+		    // turns of these changes, because the next steps can file the runner's new things in the map.
+		    if (!_frameGuard || step == game_frame::Step::Turns ||
 		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
 		    {
 			    if (_frameGuard)
@@ -2398,7 +2399,14 @@ bool Game::Update() noexcept
 			    _frameGuard->Forget();
 			    return played;
 		    }
-		    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn());
+		    if (step == game_frame::Step::DebugGui)
+		    {
+			    _frameGuard->AfterTool(game_frame::Name(step), Locator::time::value().GetTurn());
+		    }
+		    else
+		    {
+			    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn());
+		    }
 		    return played;
 	    }))
 	{
@@ -5313,6 +5321,7 @@ void Game::StartLandAudio()
 		if (Locator::scriptMusicSystem::has_value())
 		{
 			Locator::scriptMusicSystem::value().SetBanksLoaded(!_launchSwitches.noLoadMusic);
+			Locator::scriptMusicSystem::value().RegisterTimings();
 		}
 		if (!_launchSwitches.noLoadMusic)
 		{

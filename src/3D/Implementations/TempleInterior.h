@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <SaveSlots.h>
+#include <entt/locator/locator.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/CreatureCaveTrophies.h"
@@ -27,6 +28,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
 #include "3D/TempleMapSpells.h"
+#include "3D/TempleScrolls.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
 #include "Common/FramePace.h"
@@ -40,6 +42,11 @@
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
 #endif
 
+namespace openblack::ecs::systems
+{
+class RenderingSystemInterface;
+}
+
 namespace openblack
 {
 class CameraModel;
@@ -47,7 +54,6 @@ class CreatureCaveEffects;
 class TempleCameraModel;
 class TempleChallengeRoom;
 class TempleSaveGameRoom;
-class TempleScrolls;
 class TempleSigns;
 
 class TempleInterior final: public TempleInteriorInterface
@@ -134,6 +140,14 @@ public:
 private:
 	/// Takes down what the temple made for the visit and gives the camera and drawing back to the island
 	void Close();
+	/// Reads the parchment of the scrolls and the save game room's empty picture, the first time only
+	void ReadRoomPictures();
+	/// Makes and writes the textures of the scrolls ahead of the first visit, which then uses them again
+	void PrepareScrolls();
+	/// Puts the temple's draw in the place of the island's, and makes the temple's draw at the first time
+	void DrawTemple();
+	/// Puts the island's draw back in the place of the temple's
+	void DrawIsland();
 	/// Looks through the camera model's lens, or the configured one without
 	void ApplyLens() const;
 	/// The temple gives back the dialogue that it kept when the player entered
@@ -144,6 +158,19 @@ private:
 	bool _warmUpVisit {false};
 	/// The things of the rooms, made as the player goes in and taken down as the player leaves
 	std::unique_ptr<ecs::Registry> _rooms;
+	/// The draw of the island, kept while the player is inside the temple
+	entt::locator<ecs::systems::RenderingSystemInterface>::node_type _islandDraw;
+	/// The draw of the temple's rooms. The first visit or warm-up makes it, and the next visits use it again.
+	entt::locator<ecs::systems::RenderingSystemInterface>::node_type _templeDraw;
+	/// The pictures of the rooms that the game's files give, read once
+	struct RoomPictures
+	{
+		std::vector<uint8_t> parchment;
+		std::optional<std::vector<uint8_t>> emptyPicture;
+	};
+	std::optional<RoomPictures> _roomPictures;
+	/// The textures of the scrolls between visits
+	TempleScrolls::KeptTextures _keptScrolls;
 	/// The room that the player goes into after the frame that is drawn now
 	std::optional<TempleRoom> _activateAfterFrame;
 	/// The room the player last came into on this visit, whose help was asked for then

@@ -29,6 +29,7 @@ public:
 	void ProcessTurn() override;
 	void Reset() override;
 	void SetBanksLoaded(bool loaded) override { _banksLoaded = loaded; }
+	void RegisterTimings() override;
 	[[nodiscard]] const audio::ScriptMusic& GetMusic() const override { return _music; }
 	[[nodiscard]] bool HasMusic() const override;
 

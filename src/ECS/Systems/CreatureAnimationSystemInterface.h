@@ -69,8 +69,9 @@ public:
 	/// Poses a copy of a creature's body some milliseconds on (see components::CreatureCopy): shaped as its creature is,
 	/// by its own animations, its eyes looking where its head does and blinking. Nothing happens to an entity that isn't
 	/// a copy, or whose creature is gone. The copy is a thing of the registry of copies, which can be another registry
-	/// than the land's, as the temple's rooms have. Its creature is a thing of the land.
-	virtual void PoseCopy(Registry& copies, entt::entity copy, float milliseconds) = 0;
+	/// than the land's, as the temple's rooms have. Its creature is a thing of the registry of bodies: the land, or the
+	/// drawn registry for the creature of the tattoo menu.
+	virtual void PoseCopy(Registry& copies, entt::entity copy, float milliseconds, const Registry& bodies) = 0;
 
 	/// Where a bone of a creature is in one of its animations at a time, played left to right or not, in its mesh's space,
 	/// the animation blended as the body is drawn; nothing when the creature has no such animation or bone, or hasn't been

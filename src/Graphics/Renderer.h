@@ -676,6 +676,8 @@ private:
 	void UploadCreatureSkins(const ecs::Registry& entities, std::unordered_map<entt::entity, CreatureSkins>& skins) const;
 	/// The painted skins of the copies of creatures in the temple's rooms, as the copy in the creature room has
 	mutable std::unordered_map<entt::entity, CreatureSkins> _roomCreatureSkins;
+	/// The painted skins of the things of the drawn registry, as the creature of the tattoo menu has
+	mutable std::unordered_map<entt::entity, CreatureSkins> _drawnCreatureSkins;
 	/// Textures for painted skins that no creature uses now. The game makes them behind the loading screen, so that the
 	/// first frame of a creature does not make them.
 	mutable std::vector<std::unique_ptr<Texture2D>> _spareCreatureSkins;

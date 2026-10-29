@@ -112,7 +112,8 @@ private:
 		           std::tie(self._meshes, self._l3dFiles, self._bitmaps, self._landLightPalettes, self._physicsMaterials,
 		                    self._clipSounds, self._musicTimings, self._textures, self._animations, self._levels,
 		                    self._creatureMinds, self._creatureRigs, self._creatureSkinArt, self._sounds, self._glows,
-		                    self._cameraPaths, self._particleFiles, self._particleBitmaps, self._gestureTemplates));
+		                    self._cameraPaths, self._cameraEdits, self._cameraZones, self._particleFiles, self._particleBitmaps,
+		                    self._gestureTemplates));
 	}
 
 	MeshManager _meshes;
