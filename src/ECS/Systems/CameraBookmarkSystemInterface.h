@@ -24,12 +24,14 @@ namespace openblack::ecs::systems
 {
 
 /// The camera's bookmarks: the number keys keep places on the land or on things, and the camera jumps back to them. A
-/// marker on the land shows each set bookmark.
+/// marker on the land shows each set bookmark. The bookmarks are a part of the camera of this computer, so the synced
+/// world does not keep them. The saved game keeps them.
 class CameraBookmarkSystemInterface: public SavedStateInterface
 {
 public:
 	virtual bool Initialize() = 0;
-	/// After the load of a saved world: the system finds the bookmarks among the loaded entities, by their numbers
+	/// After the load of a saved world: the slots get new markers. The slots take the bookmarks that an older saved world
+	/// keeps among its entities, and these entities go.
 	virtual void FindAfterLoad() = 0;
 	/// Each frame: the markers throb by the frame's game time, only on a frame that draws the land. Each marker goes
 	/// above its place, or above the place where the frame draws its thing.
@@ -37,6 +39,7 @@ public:
 	/// Each turn: a bookmark on a thing moves to the thing, or forgets the thing if it has gone. The bookmark that the
 	/// camera follows flies the camera to it again.
 	virtual void ProcessTurn() = 0;
+	/// The marker of each slot, in the registry of the things that only the frames make
 	[[nodiscard]] virtual const std::array<entt::entity, camera_bookmarks::k_KeySlots>& GetBookmarks() const = 0;
 	/// The player keeps the place of the hand, or the thing under the hand, in a slot. The camera's position is kept
 	/// from the place. Any follow stops.

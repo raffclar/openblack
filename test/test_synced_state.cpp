@@ -229,14 +229,6 @@ TEST(SyncedState, TheDustOfARewardChestIsNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "madeAt"));
 }
 
-TEST(SyncedState, TheCameraPlaceOfABookmarkIsNotSynced)
-{
-	// Only the camera of the computer whose player set the bookmark flies to that place
-	const auto parts = synced_state::PresentationParts();
-	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CameraBookmark", "cameraOffset"));
-	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CameraBookmark", "point"));
-}
-
 TEST(SyncedState, TheNumbersOfTheEffectsOfTeleportStonesAndShieldsAreNotSynced)
 {
 	// Each computer gives its particle effects its own numbers

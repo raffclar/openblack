@@ -224,8 +224,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ResourcePile", .field = "speedUpVisual", .marker = ""},
     {.component = "CreatureSwap", .field = "beam", .marker = ""},
     {.component = "CreatureGestureDrawing", .field = "chain", .marker = ""},
-    // Where the camera of this computer was when its player set a bookmark. Only the camera of this computer flies there.
-    {.component = "CameraBookmark", .field = "cameraOffset", .marker = ""},
     // The number of the spot visual that a temple's heart fires its beams from, as the particles of this computer
     // numbered it
     {.component = "Temple", .field = "beamSource", .marker = ""},

@@ -19,13 +19,16 @@
 #include <unordered_map>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <entt/meta/context.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/CameraTrack.h"
 #include "3D/WaterRings.h"
 #include "Audio/GameMusic.h"
+#include "Camera/CameraBookmarks.h"
 #include "Camera/ScriptCameraModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -481,10 +484,42 @@ TEST(SavedSystemState, TheGoBackViewTheFollowAndTheBookmarkSwitchComeBack)
 	// The place that the town key keeps
 	reflection::Save(out, std::optional(glm::vec3 {300.0f, 8.0f, 400.0f}));
 	reflection::Save(out, std::optional(glm::vec3 {-24.0f, 28.0f, 47.0f}));
+	// The bookmark of each number key: only the key 4 has one
+	for (size_t slot = 0; slot < camera_bookmarks::k_KeySlots; ++slot)
+	{
+		reflection::Save(out, slot == 3);
+		reflection::Save(out, glm::vec3 {static_cast<float>(slot), 1.0f, 2.0f});
+		reflection::Save(out, entt::entity {entt::null});
+		reflection::Save(out, glm::vec3 {0.0f, 50.0f, -80.0f});
+	}
 	CameraBookmarkSystem bookmarks;
 	LoadInto(bookmarks, out.Bytes());
 	EXPECT_EQ(bookmarks.GetFollowed(), std::optional(size_t {3}));
 	EXPECT_FALSE(bookmarks.IsEnabled());
+	EXPECT_TRUE(bookmarks.IsSet(3));
+	EXPECT_FALSE(bookmarks.IsSet(0));
+}
+
+TEST(SavedSystemState, BookmarksSavedWithTheLandHaveNoSlotsInTheSystem)
+{
+	// A world that the land kept the bookmarks of has the slots among its entities, not in the state of the system
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, std::optional<glm::vec3>());
+	reflection::Save(out, std::optional<glm::vec3>());
+	reflection::Save(out, size_t {0});
+	reflection::Save(out, std::optional<size_t>());
+	reflection::Save(out, true);
+	reflection::Save(out, std::optional<glm::vec3>());
+	reflection::Save(out, std::optional<glm::vec3>());
+	CameraBookmarkSystem bookmarks;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), out.Bytes(), identity);
+	ASSERT_TRUE(bookmarks.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	for (size_t slot = 0; slot < camera_bookmarks::k_KeySlots; ++slot)
+	{
+		EXPECT_FALSE(bookmarks.IsSet(slot));
+	}
 }
 
 TEST(SavedSystemState, BookmarksSavedBeforeTheTownKeyComeBack)
