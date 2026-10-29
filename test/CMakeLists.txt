@@ -2176,3 +2176,4 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_lesson_natives PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_effect_requests test_effect_requests.cpp)
+target_link_libraries(test_effect_requests PRIVATE psys)
