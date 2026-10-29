@@ -1702,6 +1702,12 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 		}
 		else if (IsLeadIn(side->stage))
 		{
+			// Both creatures are partners from the request. Thus the plan of the creature that started the fight fails
+			// also before the duel. The departure of the other creature ends its plan.
+			if (self != creature && side->opponent == creature && side->madeArena)
+			{
+				PartnerPlanFails(self, creature, true);
+			}
 			Leave(self);
 		}
 		else if (IsAfterDuel(side->stage) && (self == creature || side->opponent == creature))

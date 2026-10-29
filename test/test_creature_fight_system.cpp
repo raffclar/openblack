@@ -1899,6 +1899,7 @@ TEST_F(CreatureFightSystemTest, AnEarlyEndByTheFirstCreatureStopsWhatTheAskedCre
 	const auto start = [&]() {
 		registry.Remove<CreatureFighting>(first);
 		registry.Remove<CreatureFighting>(second);
+		minds.obeyEnded.clear();
 		ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
 		fights.ProcessTurn();
 	};
@@ -1919,10 +1920,11 @@ TEST_F(CreatureFightSystemTest, AnEarlyEndByTheFirstCreatureStopsWhatTheAskedCre
 	ASSERT_EQ(minds.abandoned.size(), 2u);
 	EXPECT_EQ(minds.abandoned.back(), second);
 
-	// The other creature stops the fight by its own new plan
+	// The other creature stops the fight by its own new plan. The plan of the first creature fails.
 	start();
 	fights.CallOff(second);
-	EXPECT_EQ(minds.abandoned.size(), 2u);
+	ASSERT_EQ(minds.abandoned.size(), 3u);
+	EXPECT_EQ(minds.abandoned.back(), first);
 
 	// The other creature obeys from the third turn
 	start();
@@ -1931,7 +1933,7 @@ TEST_F(CreatureFightSystemTest, AnEarlyEndByTheFirstCreatureStopsWhatTheAskedCre
 	ASSERT_EQ(registry.Get<const CreatureFighting>(second).part, CreatureFighting::Part::Obeys);
 	EXPECT_TRUE(minds.obeyEnded.empty());
 	fights.CallOff(first);
-	EXPECT_EQ(minds.abandoned.size(), 2u);
+	EXPECT_EQ(minds.abandoned.size(), 3u);
 	// The plan of the other creature to obey fails
 	ASSERT_EQ(minds.obeyEnded.size(), 1u);
 	EXPECT_EQ(minds.obeyEnded.front(), std::pair(second, first));
