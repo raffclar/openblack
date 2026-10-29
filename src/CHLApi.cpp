@@ -226,6 +226,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
@@ -8129,9 +8130,9 @@ void AddSpotVisualTargetPos() // 296 ADD_SPOT_VISUAL_TARGET_POS
 	}
 	// A thing that holds no visual of a script takes no target
 	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
-	    effect.has_value() && Locator::particleSystem::has_value())
+	    effect.has_value() && Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddTargetPosition(*effect, position);
+		Locator::effectRequestSystem::value().AddTargetPosition(*effect, position);
 	}
 }
 
@@ -8152,9 +8153,9 @@ void AddSpotVisualTargetObject() // 297 ADD_SPOT_VISUAL_TARGET_OBJECT
 		return;
 	}
 	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
-	    effect.has_value() && Locator::particleSystem::has_value())
+	    effect.has_value() && Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddTarget(*effect, target);
+		Locator::effectRequestSystem::value().AddTarget(*effect, target);
 	}
 }
 
