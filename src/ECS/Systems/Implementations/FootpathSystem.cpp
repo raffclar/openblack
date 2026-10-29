@@ -43,6 +43,7 @@
 #include "ECS/FootpathRules.h"
 #include "ECS/ListOrder.h"
 #include "ECS/Map.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -437,10 +438,17 @@ entt::entity NearestTown(const Registry& registry, glm::ivec2 place)
 	const map_coords::MapCoords from {.x = place.x, .z = place.y, .altitude = 0.0f};
 	entt::entity nearest = entt::null;
 	float best = std::numeric_limits<float>::max();
-	registry.Each<const Town, const Transform>([&](entt::entity town, const Town&, const Transform& transform) {
+	// Each player's town list in turn and the neutral list last: the first met wins a tie
+	for (const auto town : player_towns::AllInOrder(registry))
+	{
+		const auto* transform = registry.TryGet<const Transform>(town);
+		if (transform == nullptr)
+		{
+			continue;
+		}
 		const float distance = gutils::GetDistanceInMetres(from, map_coords::MapCoords {
-		                                                             .x = map_coords::ToFixed(transform.position.x),
-		                                                             .z = map_coords::ToFixed(transform.position.z),
+		                                                             .x = map_coords::ToFixed(transform->position.x),
+		                                                             .z = map_coords::ToFixed(transform->position.z),
 		                                                             .altitude = 0.0f,
 		                                                         });
 		if (distance < best)
@@ -448,7 +456,7 @@ entt::entity NearestTown(const Registry& registry, glm::ivec2 place)
 			best = distance;
 			nearest = town;
 		}
-	});
+	}
 	return nearest;
 }
 

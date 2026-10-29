@@ -115,6 +115,13 @@ struct NewGameStart
 	return !playground && !networkGame;
 }
 
+/// The story's top script starts only when the new game opens on the first land of the story. A new game on another
+/// land starts none of the story, and the start-of-game question comes all the same.
+[[nodiscard]] constexpr bool LandStartsStoryScript(int32_t landNumber) noexcept
+{
+	return landNumber == 1;
+}
+
 /// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)
 /// or "old" (keep the old creature) or "cow" (debug: start with the Cow); nothing for anything else
 [[nodiscard]] constexpr std::optional<NewGameStart> ParseNewGameStart(std::string_view text) noexcept

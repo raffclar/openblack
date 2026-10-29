@@ -45,6 +45,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/InfluenceRules.h"
 #include "ECS/PlayerRelations.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -517,13 +518,15 @@ void InfluenceSystem::NoteInfluencePower(PlayerNames player)
 	{
 		citadelReach = CitadelReach(citadel);
 	}
+	// The towns add their reaches in the order of the player's town list
 	std::vector<float> towns;
-	registry.Each<const Town, const TownInfluence>([&](const Town& town, const TownInfluence& influence) {
-		if (town.owner == player)
+	for (const auto town : player_towns::InOrder(registry, player))
+	{
+		if (const auto* influence = registry.TryGet<const TownInfluence>(town))
 		{
-			towns.push_back(influence.radius);
+			towns.push_back(influence->radius);
 		}
-	});
+	}
 	noted->power = influence_rules::InfluencePowerOf(citadelReach, towns, SourceReaches(player));
 	noted->average = player_relations::NextAverageInfluence(noted->average, noted->power);
 	player_statistics::CountInfluence(registry, player, noted->power);
@@ -851,14 +854,16 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 			sum = reach;
 		}
 	}
-	// And each of the player's towns', where it reaches
-	registry.Each<const Town, const TownInfluence, const Transform>(
-	    [&](const Town& town, const TownInfluence& influence, const Transform& transform) {
-		    if (town.owner == player && distanceTo(transform.position) < influence.radius)
-		    {
-			    sum += influence.radius;
-		    }
-	    });
+	// And each of the player's towns', where it reaches, in the order of the player's town list
+	for (const auto town : player_towns::InOrder(registry, player))
+	{
+		const auto* influence = registry.TryGet<const TownInfluence>(town);
+		const auto* transform = registry.TryGet<const Transform>(town);
+		if (influence != nullptr && transform != nullptr && distanceTo(transform->position) < influence->radius)
+		{
+			sum += influence->radius;
+		}
+	}
 	// And any other source of the player's, where it reaches
 	registry.Each<const InfluenceSource, const Transform>([&](const InfluenceSource& source, const Transform& transform) {
 		if (scriptsCount && source.player == player && !source.anti &&

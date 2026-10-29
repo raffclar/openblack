@@ -32,6 +32,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -65,14 +66,22 @@ std::vector<TownSeen> SeeTowns(const ecs::Registry& registry)
 			++people[villager.town];
 		}
 	});
+	// The town list of each player in turn and the neutral list last, so that the first of two towns as near is the first
+	// met in these lists
 	std::vector<TownSeen> towns;
-	registry.Each<const Town, const Transform>([&](entt::entity entity, const Town& town, const Transform& transform) {
+	for (const auto entity : ecs::player_towns::AllInOrder(registry))
+	{
+		const auto* transform = registry.TryGet<const Transform>(entity);
+		if (transform == nullptr)
+		{
+			continue;
+		}
 		const auto found = people.find(entity);
 		towns.push_back({.entity = entity,
-		                 .owner = town.owner,
-		                 .cell = map_coords::CellOf(transform.position),
+		                 .owner = registry.Get<const Town>(entity).owner,
+		                 .cell = map_coords::CellOf(transform->position),
 		                 .people = found != people.end() ? found->second : 0});
-	});
+	}
 	return towns;
 }
 
