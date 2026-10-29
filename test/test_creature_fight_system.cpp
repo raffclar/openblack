@@ -25,6 +25,7 @@
 
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureTurnToFace.h"
@@ -35,6 +36,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreaturePartner.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
@@ -122,6 +124,8 @@ public:
 	bool Faint(entt::entity) override { return false; }
 	void Wake(entt::entity) override {}
 	void FoughtFight(entt::entity, bool) override {}
+	void FightOrdered(entt::entity creature, entt::entity asker) override { ordered.emplace_back(creature, asker); }
+	void AbandonAction(entt::entity creature) override { abandoned.push_back(creature); }
 	void ChangeDesires(entt::entity, const std::function<void(creature_desires::Desires&)>&) override {}
 	void SetAgendaPriority(entt::entity, float) override {}
 	bool ForceActivity(entt::entity creature, const ForcedActivity& plan) override
@@ -168,6 +172,10 @@ public:
 		return creature_mind::HandsCheck::Free;
 	}
 	std::vector<Forced> forced;
+	/// Each creature told to obey in a fight, with the creature that told it
+	std::vector<std::pair<entt::entity, entt::entity>> ordered;
+	/// Each creature whose action stopped as a failure
+	std::vector<entt::entity> abandoned;
 	std::optional<entt::entity> pooedDirectly;
 	/// What the checks of the hands before a faint do in turn, then Free
 	std::vector<creature_mind::HandsCheck> hands;
@@ -827,6 +835,7 @@ public:
 	bool PointAt(entt::entity, const glm::vec3&) override { return false; }
 	bool Catch(entt::entity, entt::entity) override { return false; }
 	void Cancel(entt::entity) override {}
+	void StopForPlan(entt::entity creature, bool stopsBody) override { planStops.emplace_back(creature, stopsBody); }
 	void Drop(entt::entity creature) override { dropped.push_back(creature); }
 	[[nodiscard]] State GetState(entt::entity creature) const override
 	{
@@ -843,6 +852,8 @@ public:
 
 	std::vector<entt::entity> dropped;
 	std::vector<entt::entity> busy;
+	/// Each creature whose plan stopped the work of its hands, and whether the stop also stopped its body
+	std::vector<std::pair<entt::entity, bool>> planStops;
 };
 } // namespace
 
@@ -864,8 +875,10 @@ TEST_F(CreatureFightSystemTest, EachCreatureLetsGoOfWhatItHoldsBeforeItsTaunt)
 	using creature_mind::HandsCheck;
 	minds.handsOf[first] = {{HandsCheck::Wait, HandsCheck::LetGo}, 0};
 	minds.handsOf[second] = {{}, 0};
+	// Both taunt, so the other creature obeys already
 	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Taunt;
 	registry.Get<CreatureFighting>(second).stage = CreatureFighting::Stage::Taunt;
+	registry.Get<CreatureFighting>(second).part = CreatureFighting::Part::Obeys;
 	const auto& fighter = registry.Get<const CreatureFighting>(first);
 	game.ranges.clear();
 
@@ -967,9 +980,9 @@ TEST_F(CreatureFightSystemTest, TheFaceOffTurnWaitsForTheBodyThatPlaysAnAction)
 	using Body = creature_layers::BodyAction;
 	registry.Get<CreatureAnimation>(first).body = Body {.kind = Body::Kind::Once, .animations = {5, 0, 0}};
 	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
-	// Both stop as a plan stops, and the action of the body plays on
+	// The first creature stops as a plan stops, and the action of the body plays on. The other creature continues.
 	EXPECT_EQ(legs.stopped[first], 1u);
-	EXPECT_EQ(legs.stopped[second], 1u);
+	EXPECT_EQ(legs.stopped[second], 0u);
 	EXPECT_TRUE(legs.stoppedAtOnce.empty());
 	EXPECT_TRUE(creature_layers::IsPlaying(registry.Get<const CreatureAnimation>(first).body));
 
@@ -977,12 +990,14 @@ TEST_F(CreatureFightSystemTest, TheFaceOffTurnWaitsForTheBodyThatPlaysAnAction)
 	fights.ProcessTurn();
 	fights.ProcessTurn();
 	EXPECT_TRUE(legs.asked.empty());
+	EXPECT_EQ(legs.stopped[second], 0u);
 	// The other creature turns from the third turn, the first creature from the fourth. Its body refuses the turn while
 	// it plays the action.
 	fights.ProcessTurn();
 	fights.ProcessTurn();
 	fights.ProcessTurn();
 	EXPECT_GE(legs.asked[second], 1u);
+	EXPECT_EQ(legs.stopped[second], 1u);
 	EXPECT_EQ(legs.asked[first], 2u);
 	EXPECT_EQ(registry.Get<const CreatureFighting>(first).faceTurn.phase, creature_turn_to_face::Turn::Phase::Start);
 
@@ -999,6 +1014,130 @@ TEST_F(CreatureFightSystemTest, TheFaceOffTurnWaitsForTheBodyThatPlaysAnAction)
 	EXPECT_EQ(legs.asked[first], 3u);
 	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Taunt);
 	EXPECT_EQ(registry.Get<const CreatureFighting>(second).faceTurn.phase, creature_turn_to_face::Turn::Phase::Done);
+	Locator::creatureLocomotionSystem::reset();
+}
+
+// The other creature continues with what it did on the turn of the question. On the second turn, its mind stands
+// still. On the third turn, it stops and obeys the first creature.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheAskedCreatureStandsStillOnTheSecondTurnAndObeysOnTheThird)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	auto& legs = static_cast<TurningLegs&>(Locator::creatureLocomotionSystem::emplace<TurningLegs>());
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	using Part = CreatureFighting::Part;
+	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).part, Part::Obeys);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).part, Part::Asked);
+
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).part, Part::Asked);
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).part, Part::StandsStill);
+	EXPECT_TRUE(minds.ordered.empty());
+	EXPECT_EQ(legs.stopped[second], 0u);
+
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).part, Part::Obeys);
+	ASSERT_EQ(minds.ordered.size(), 1u);
+	EXPECT_EQ(minds.ordered.front().first, second);
+	EXPECT_EQ(minds.ordered.front().second, first);
+	EXPECT_EQ(legs.stopped[second], 1u);
+	EXPECT_NE(registry.Get<const CreatureFighting>(second).faceTurn.phase, creature_turn_to_face::Turn::Phase::Idle);
+
+	// The order to taunt stops the other creature again and gives it the plan to obey again
+	for (int turn = 0; turn < 20 && registry.Get<const CreatureFighting>(second).stage == CreatureFighting::Stage::FaceOff;
+	     ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, CreatureFighting::Stage::Taunt);
+	ASSERT_EQ(minds.ordered.size(), 2u);
+	EXPECT_EQ(minds.ordered.back().first, second);
+	EXPECT_EQ(legs.stopped[second], 2u);
+	EXPECT_EQ(legs.stopped[first], 1u);
+	Locator::creatureMindSystem::reset();
+	Locator::creatureLocomotionSystem::reset();
+}
+
+// In the arena, the first creature tells the other creature to turn to face it on the turn after the other creature is
+// ready, and it turns from the turn after that. On the turn after its own turn is done, it tells the other creature to
+// start its duel. It starts its own duel on the next turn.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, InTheArenaBothTurnToFaceAndTheOtherCreatureStartsItsDuelFirst)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& legs = static_cast<TurningLegs&>(Locator::creatureLocomotionSystem::emplace<TurningLegs>());
+	using Stage = CreatureFighting::Stage;
+	using Phase = creature_turn_to_face::Turn::Phase;
+	for (const auto self : {first, second})
+	{
+		registry.Get<CreatureFighting>(self).stage = Stage::Ready;
+	}
+
+	// The first creature finds the other creature ready
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, Stage::Square);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Ready);
+	EXPECT_TRUE(legs.asked.empty());
+	// It tells the other creature to stop and turn to face it
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Square);
+	EXPECT_NE(registry.Get<const CreatureFighting>(second).faceTurn.phase, Phase::Idle);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).faceTurn.phase, Phase::Idle);
+	EXPECT_EQ(legs.stopped[second], 1u);
+	EXPECT_EQ(legs.stopped[first], 0u);
+	// It turns from the next turn
+	fights.ProcessTurn();
+	EXPECT_EQ(legs.asked[first], 1u);
+
+	// It faces the other creature, holds for a turn, and is done. On the next turn it tells the other creature to
+	// start its duel.
+	int turns = 0;
+	while (!registry.Get<const CreatureFighting>(first).played && turns < 20)
+	{
+		fights.ProcessTurn();
+		++turns;
+	}
+	EXPECT_EQ(turns, 4);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, Stage::Square);
+	EXPECT_EQ(legs.stopped[second], 2u);
+	// The other creature can start its duel before the first creature. It stays in its duel and waits for the first
+	// creature. The first creature starts its duel on the next turn.
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, Stage::Duel);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Duel);
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, Stage::Duel);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Duel);
+	Locator::creatureLocomotionSystem::reset();
+}
+
+// The other creature keeps its duel for the turns that the first creature needs to start its own duel
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AFighterWaitsInItsDuelForTheOpponentThatIsAboutToStart)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::creatureLocomotionSystem::emplace<TurningLegs>();
+	using Stage = CreatureFighting::Stage;
+	auto& starter = registry.Get<CreatureFighting>(first);
+	starter.stage = Stage::Square;
+	starter.played = true;
+	// The body of the first creature plays an action, so it cannot start its duel
+	using Body = creature_layers::BodyAction;
+	registry.Get<CreatureAnimation>(first).body = Body {.kind = Body::Kind::Once, .animations = {5, 0, 0}};
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, Stage::Square);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Duel);
+	registry.Get<CreatureAnimation>(first).body = {};
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(first).stage, Stage::Duel);
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Duel);
 	Locator::creatureLocomotionSystem::reset();
 }
 
@@ -1459,8 +1598,10 @@ TEST_F(CreatureFightSystemTest, TheGameChoosesTheTauntsAndEachTryDrawsASide)
 	EXPECT_TRUE(registry.Get<const CreatureFighting>(second).rude);
 	EXPECT_FALSE(registry.Get<const CreatureFighting>(first).rude);
 
+	// Both taunt, so the other creature obeys already
 	registry.Get<CreatureFighting>(first).stage = CreatureFighting::Stage::Taunt;
 	registry.Get<CreatureFighting>(second).stage = CreatureFighting::Stage::Taunt;
+	registry.Get<CreatureFighting>(second).part = CreatureFighting::Part::Obeys;
 	auto& body = registry.Get<CreatureAnimation>(first).body;
 	body.kind = creature_layers::BodyAction::Kind::Once;
 	for (int turn = 0; turn < 3; ++turn)
@@ -1702,4 +1843,150 @@ TEST_F(CreatureFightSystemTest, AFrozenFighterMovesOnByItsOwnShorterTurn)
 	fights.ProcessTurn();
 	EXPECT_EQ(fighter.timeMs, before);
 	Locator::creatureAnimationSystem::reset();
+}
+
+// The start of a fight stops the plan of the first creature, and each order stops the plan of the other creature. Each
+// stop also stops the body: an action that the body started plays on, and a point plays its end.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheStartAndEachOrderStopTheHandsAsAPlanStopDoes)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Remove<CreatureFighting>(first);
+	registry.Remove<CreatureFighting>(second);
+	auto& hands = static_cast<RecordedHands&>(Locator::creatureObjectActionSystem::emplace<RecordedHands>());
+	Locator::creatureLocomotionSystem::emplace<TurningLegs>();
+	Locator::creatureMindSystem::emplace<ForcedMinds>();
+	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+	ASSERT_EQ(hands.planStops.size(), 1u);
+	EXPECT_EQ(hands.planStops.front(), std::make_pair(first, true));
+
+	// The first order comes on the third turn of the face-off
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		fights.ProcessTurn();
+	}
+	ASSERT_EQ(hands.planStops.size(), 2u);
+	EXPECT_EQ(hands.planStops.back(), std::make_pair(second, true));
+	Locator::creatureMindSystem::reset();
+	Locator::creatureLocomotionSystem::reset();
+	Locator::creatureObjectActionSystem::reset();
+}
+
+// When the first creature stops the fight before its first order, what the other creature does stops as a failure.
+// When the other creature stops the fight itself, or obeys already, the first creature does not stop it.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AnEarlyEndByTheFirstCreatureStopsWhatTheAskedCreatureDoes)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& legs = static_cast<TurningLegs&>(Locator::creatureLocomotionSystem::emplace<TurningLegs>());
+	auto& minds = static_cast<ForcedMinds&>(Locator::creatureMindSystem::emplace<ForcedMinds>());
+	const auto start = [&]() {
+		registry.Remove<CreatureFighting>(first);
+		registry.Remove<CreatureFighting>(second);
+		ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+		fights.ProcessTurn();
+	};
+
+	start();
+	fights.CallOff(first);
+	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(first));
+	EXPECT_FALSE(registry.AnyOf<CreatureFighting>(second));
+	ASSERT_EQ(minds.abandoned.size(), 1u);
+	EXPECT_EQ(minds.abandoned.front(), second);
+	EXPECT_EQ(legs.stopped[second], 1u);
+
+	// The second turn tells the other creature to stand still. A spell or the hand stops the fight of the first
+	// creature.
+	start();
+	fights.ProcessTurn();
+	fights.AbortFight(first);
+	ASSERT_EQ(minds.abandoned.size(), 2u);
+	EXPECT_EQ(minds.abandoned.back(), second);
+
+	// The other creature stops the fight by its own new plan
+	start();
+	fights.CallOff(second);
+	EXPECT_EQ(minds.abandoned.size(), 2u);
+
+	// The other creature obeys from the third turn
+	start();
+	fights.ProcessTurn();
+	fights.ProcessTurn();
+	ASSERT_EQ(registry.Get<const CreatureFighting>(second).part, CreatureFighting::Part::Obeys);
+	fights.CallOff(first);
+	EXPECT_EQ(minds.abandoned.size(), 2u);
+	Locator::creatureMindSystem::reset();
+	Locator::creatureLocomotionSystem::reset();
+}
+
+// A creature that the hand of another creature holds does not start its duel. It starts it on the first turn after the
+// other creature lets go of it.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, ACreatureHeldByAnotherCreatureDoesNotStartItsDuel)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::creatureLocomotionSystem::emplace<TurningLegs>();
+	using Stage = CreatureFighting::Stage;
+	auto& other = registry.Get<CreatureFighting>(second);
+	other.stage = Stage::Square;
+	other.played = true;
+	registry.Assign<HeldByCreature>(second, HeldByCreature {.creature = first});
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		fights.ProcessTurn();
+		EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Square);
+	}
+	registry.Remove<HeldByCreature>(second);
+	fights.ProcessTurn();
+	EXPECT_EQ(registry.Get<const CreatureFighting>(second).stage, Stage::Duel);
+	Locator::creatureLocomotionSystem::reset();
+}
+
+// Each creature thinks and then does its own fight step, one creature after the other in the order of the list of the
+// living. After the first creature in the list, the asked creature thinks on the turn of the request and stands still
+// from the next turn. Before the first creature, it thinks also on the next turn, and stands still from the turn after
+// that.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, TheAskedCreatureThinksAsItsPlaceInTheListOfTheLivingLets)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::creatureLocomotionSystem::emplace<TurningLegs>();
+	Locator::creatureMindSystem::emplace<ForcedMinds>();
+	const auto thinks = [&registry](entt::entity creature) {
+		const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
+		return !creature_fight::ObeysInFight({
+		    .fighting = fighting != nullptr,
+		    .startedIt = fighting != nullptr && fighting->madeArena,
+		    .onlyAsked = fighting != nullptr && fighting->part == CreatureFighting::Part::Asked,
+		});
+	};
+	// In each turn, each creature in the list thinks, then does its fight step. The first creature asks for the fight
+	// in its own turn of the first turn.
+	const auto play = [&](bool askedFirst) {
+		registry.Remove<CreatureFighting>(first);
+		registry.Remove<CreatureFighting>(second);
+		const std::vector<entt::entity> list = askedFirst ? std::vector {second, first} : std::vector {first, second};
+		std::vector<bool> thought;
+		for (int turn = 0; turn < 4; ++turn)
+		{
+			for (const auto creature : list)
+			{
+				if (creature == second)
+				{
+					thought.push_back(thinks(second));
+				}
+				else if (turn == 0)
+				{
+					EXPECT_EQ(fights.StartFight(first, second),
+					          ecs::systems::CreatureFightSystemInterface::StartResult::Started);
+				}
+				fights.FightTurn(creature);
+			}
+		}
+		return thought;
+	};
+	EXPECT_EQ(play(false), (std::vector {true, false, false, false}));
+	EXPECT_EQ(play(true), (std::vector {true, true, false, false}));
+	Locator::creatureMindSystem::reset();
+	Locator::creatureLocomotionSystem::reset();
 }

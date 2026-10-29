@@ -30,11 +30,15 @@ namespace openblack::ecs::components
 /// wants much more. The other creature obeys it and does not think for itself until the fight is over.
 ///
 /// The creature that starts the fight leads the steps before the duel, and tells the other creature when to do each one:
-/// 1. Both stop and turn to face each other.
-/// 2. Both taunt or make the rude gesture.
-/// 3. The arena appears and the first creature points at it.
-/// 4. Both walk to their places, and the first creature waits for the other.
-/// 5. Both turn to face each other again, then the duel starts.
+/// 1. The first creature asks the other creature. On the next turn, it tells the mind of the other creature to stand
+///    still. On the turn after, it tells the other creature to stop and obey it. Until then, the other creature
+///    continues with what it did.
+/// 2. Both turn to face each other.
+/// 3. Both taunt or make the rude gesture.
+/// 4. The arena appears and the first creature points at it.
+/// 5. Both walk to their places, and the first creature waits for the other.
+/// 6. Both turn to face each other again. Then the other creature starts its duel, and the first creature starts its
+///    duel on the next turn.
 struct CreatureFighting
 {
 	enum class Stage : uint8_t
@@ -60,6 +64,19 @@ struct CreatureFighting
 		Stop,
 	};
 	Stage stage {Stage::FaceOff};
+	/// How far the creature takes part in the fight. The first creature takes part from the start.
+	enum class Part : uint8_t
+	{
+		/// The other creature is asked. Its mind continues with what it did, and it can still choose a new plan, which
+		/// stops the fight.
+		Asked,
+		/// The mind of the other creature stands still: its desires do not change and it chooses nothing. It continues
+		/// with what it did.
+		StandsStill,
+		/// The creature stopped what it did, and the steps of the fight move its body
+		Obeys,
+	};
+	Part part {Part::Obeys};
 	entt::entity opponent {entt::null};
 	creature_fight::Arena arena {};
 	/// Whether this creature started the fight, takes the arena and takes its place to the east of the middle; the arena
@@ -83,7 +100,7 @@ struct CreatureFighting
 	/// Whether it has been told what to do in this stage yet, and has taunted its opponent
 	bool played {false};
 	bool taunted {false};
-	/// Its turn to face the opponent in the face-off, and the game turns of the face-off so far
+	/// Its turn to face the opponent in the face-off or in the arena, and the game turns of that stage so far
 	creature_turn_to_face::Turn faceTurn {};
 	uint32_t faceOffTurns {0};
 	/// Whether its taunt before the fight is the rude gesture, chosen as the fight starts

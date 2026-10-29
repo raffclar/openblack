@@ -30,6 +30,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturef(entt::meta_
 {
 	Reflect<components::CreatureFighting>(context)
 	    .Field<&components::CreatureFighting::stage>("stage")
+	    .Field<&components::CreatureFighting::part>("part")
 	    .Field<&components::CreatureFighting::opponent>("opponent")
 	    .Field<&components::CreatureFighting::arena>("arena")
 	    .Field<&components::CreatureFighting::madeArena>("madeArena")

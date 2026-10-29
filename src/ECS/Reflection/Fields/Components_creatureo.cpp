@@ -65,6 +65,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	    .Field<&components::CreatureObjectAction::swallows>("swallows")
 	    .Field<&components::CreatureObjectAction::eaten>("eaten")
 	    .Field<&components::CreatureObjectAction::mealEnergy>("mealEnergy")
+	    .Field<&components::CreatureObjectAction::planStopped>("planStopped")
 	    .Field<&components::CreatureObjectAction::failure>("failure")
 	    .Field<&components::CreatureObjectAction::failureKind>("failureKind");
 	Reflect<components::CreatureDroppedObject>(context).Field<&components::CreatureDroppedObject::object>("object");
