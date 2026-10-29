@@ -78,6 +78,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // numbers, which the turns use only to find the effect again.
     {.component = "Spell", .field = "castEffect", .marker = ""},
     {.component = "FlockSpell", .field = "castEffect", .marker = ""},
+    // The motes of a worship site are an effect of each computer too, found again by the number of this computer
+    {.component = "WorshipSite", .field = "manaPath", .marker = ""},
     // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
     {.component = "LearningMarker", .field = "", .marker = ""},
     // The frames move the hair of a creature. Only the draw reads it.
