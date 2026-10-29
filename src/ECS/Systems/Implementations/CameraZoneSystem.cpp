@@ -117,6 +117,14 @@ camera_zones::Zones CameraZoneSystem::FromFile(const exc::EXCZones& file)
 	return zones;
 }
 
+void CameraZoneSystem::Reset()
+{
+	_zones = {};
+	_fileName.clear();
+	_fenceHits = 0;
+	PlaceForceField();
+}
+
 bool CameraZoneSystem::SetZones(std::string_view fileName)
 {
 	// The zones set before go first, so a file that can't be read leaves none
