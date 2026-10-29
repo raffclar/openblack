@@ -671,16 +671,18 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 		}
 	}
 
-	const auto placePoint = _world->SitePoint(ws::k_PlacePoint);
-	if (!placePoint.has_value())
+	// Each place is judged by a point of the temple's model, turned to the place and set down with the temple
+	const auto templePoint = _world->TemplePoint(temple, ws::k_TemplePlacePoint);
+	if (!templePoint.has_value())
 	{
-		Log(spdlog::level::err, "game", "The worship site's model has no point to place it by");
+		Log(spdlog::level::err, "game", "The temple's model has no point to place a worship site by");
 		return entt::null;
 	}
 	auto& worship = registry.Get<CitadelWorship>(temple);
 	std::array<bool, ws::k_Places> taken {};
 	std::ranges::transform(worship.sites, taken.begin(), [](entt::entity site) { return site != entt::null; });
-	const auto place = ws::NearestFreePlace(taken, Across(templePosition), *placePoint, spot);
+	const auto templeScale = registry.Get<const Transform>(temple).scale.x;
+	const auto place = ws::NearestFreePlace(taken, Across(templePosition), worship.facing, templeScale, *templePoint, spot);
 	if (!place.has_value())
 	{
 		return entt::null;
@@ -793,7 +795,7 @@ void WorshipSiteSystem::AddTown(entt::entity site, entt::entity town)
 	{
 		const auto gate =
 		    ws::TurnedPoint(Across(registry.Get<const Transform>(site).position), registry.Get<const WorshipSite>(site).facing,
-		                    _world->SitePoint(ws::k_PlacePoint).value_or(glm::vec3(0.0f)));
+		                    _world->SitePoint(ws::k_GatePoint).value_or(glm::vec3(0.0f)));
 		registry.Assign<FootpathLink>(site, glm::vec3(gate.x, _world->LandHeightAt(gate), gate.y),
 		                              std::vector<Footpath::Id> {});
 	}
@@ -864,7 +866,7 @@ std::optional<glm::vec2> WorshipSiteSystem::PlaceAt(entt::entity site, SitePlace
 	switch (place)
 	{
 	case SitePlace::Gate:
-		point = _world->SitePoint(ws::k_PlacePoint);
+		point = _world->SitePoint(ws::k_GatePoint);
 		break;
 	case SitePlace::Rest:
 		point = _world->SitePoint(ws::k_RestPoint);
