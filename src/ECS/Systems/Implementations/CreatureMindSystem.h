@@ -389,6 +389,8 @@ private:
 	                                                            creature_desires::Desire desire, entt::entity thing);
 	/// Gives the creature a plan for its fight with the other creature, unless a script controls the creature
 	void FightWith(entt::entity creature, entt::entity other, const ForcedPlan& plan);
+	/// A fight that the creature sets up stops for both creatures, with no winner. A fight in its duel continues.
+	static void CallOffFightSetUp(entt::entity creature);
 	/// The whole thing that a desire is about when the leash shows the creature a thing: the whole thing that the shown
 	/// thing is part of, when the desire can be about it
 	[[nodiscard]] std::optional<ChosenActivity> ShownActivity(entt::entity creature, components::CreatureMindState& mind,

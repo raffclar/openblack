@@ -7849,6 +7849,27 @@ void AddCombat(std::vector<Scenario>& all)
 		});
 	}
 
+	{
+		// The first tiger stops the fight on the turn after the request, before it tells the other tiger to obey
+		auto asker = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto asked = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		asker.pauseMind = true;
+		asked.pauseMind = true;
+		all.push_back({
+		    .id = "combat.asked_stops_on_early_end",
+		    .name = "An early end of a fight stops the tiger that was asked",
+		    .facet = Facet::Combat,
+		    .description = "The blue tiger starts to walk away from the red tiger. One second later, the red tiger asks the "
+		                   "blue tiger to fight. One turn after that, the fight of the red tiger stops.",
+		    .expected = "The red tiger stops at once. On the turn that the fight stops, the blue tiger also stops its walk "
+		                "and slows to a stand. No arena appears.",
+		    .framing = ringside,
+		    .creatures = {asker, asked},
+		    .commands = {Go(Kind::WalkTo, 1, {25.0f, 0.0f}, 1.0f, false), Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAbort, 0, 1, 0.1f)},
+		});
+	}
+
 	all.push_back({
 	    .id = "saves.arena_ring_back",
 	    .name = "Save and load: the ring of the arena shows again",

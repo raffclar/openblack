@@ -3429,14 +3429,19 @@ void CreatureMindSystem::FightStarted(entt::entity creature, entt::entity oppone
 		// now on
 		Locator::entitiesRegistry::value().Context().partnersAlwaysAgree = true;
 		FightWith(creature, opponent,
-		          {.desire = Desire::ObeyPlayer, .action = k_FightAction, .object = opponent, .agenda = FightAgenda(opponent)});
+		          {.desire = Desire::ObeyPlayer,
+		           .action = k_FightAction,
+		           .object = opponent,
+		           .agenda = FightAgenda(opponent),
+		           .ownFight = true});
 	}
 }
 
 void CreatureMindSystem::FightOrdered(entt::entity creature, entt::entity asker)
 {
 	// The other creature stops what it does and obeys the first creature until the fight ends. Its plan is an order
-	// that is not forced, with a low priority: it does not decide while it obeys.
+	// that is not forced, with a low priority: it does not decide while it obeys. Each order gives the plan again, and
+	// the creature remembers each one for the feedback of the player. The order holds back no desire.
 	FightWith(creature, asker,
 	          {.desire = Desire::ObeyCreature,
 	           .action = k_ObeyCreatureAction,
@@ -3444,7 +3449,17 @@ void CreatureMindSystem::FightOrdered(entt::entity creature, entt::entity asker)
 	           .agenda = FightAgenda(asker),
 	           .ordered = true,
 	           .forced = false,
-	           .priority = creature_fight::k_ObeyPlanPriority * creature_planner::k_PriorityScale});
+	           .priority = creature_fight::k_ObeyPlanPriority * creature_planner::k_PriorityScale,
+	           .ownFight = true,
+	           .suppressesOpposed = false});
+}
+
+void CreatureMindSystem::CallOffFightSetUp(entt::entity creature)
+{
+	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsSettingUpFight(creature))
+	{
+		Locator::creatureFightSystem::value().CallOff(creature);
+	}
 }
 
 void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
@@ -3683,7 +3698,9 @@ bool CreatureMindSystem::ForceActivity(entt::entity creature, const ForcedActivi
 	}
 	// A forced plan first stops the reaction that the creature has
 	EndReaction(creature);
-	// The current action stops as a failure. This occurs also when the creature finds no new plan.
+	// The current action stops as a failure. This occurs also when the creature finds no new plan. It also stops a fight
+	// that the creature sets up, for both creatures.
+	CallOffFightSetUp(creature);
 	// An action that the body started plays on, and a point plays its end
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetState(creature) == CreatureObjectActionSystemInterface::State::Busy)

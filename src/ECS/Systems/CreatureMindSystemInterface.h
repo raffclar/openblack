@@ -355,6 +355,12 @@ public:
 		/// Some orders of the leash keep one or both.
 		bool stopsWalk {true};
 		bool endsBody {true};
+		/// The plan is the part of the creature in its own fight, so the plan keeps the fight. Each other forced plan
+		/// stops a fight that the creature sets up, for both creatures.
+		bool ownFight {false};
+		/// Deciding on the plan holds back the desires that oppose its desire. An order from the other creature of a
+		/// fight does not.
+		bool suppressesOpposed {true};
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
 	/// about to already

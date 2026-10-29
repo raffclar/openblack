@@ -33,6 +33,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -105,11 +106,14 @@ std::optional<entt::entity> BurningBuildingOf(const ecs::Registry& registry, con
 void CreatureMindSystem::StepEmergencies(entt::entity creature, const Creature& body, CreatureMindState& mind, bool scripted)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// A creature that sets up a fight still sees to its emergencies. It stops when its duel starts.
+	const bool settingUpFight =
+	    Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsSettingUpFight(creature);
 	if (!mind.desires.has_value() ||
 	    !creature_emergencies::LooksAtEmergencies({.emergencyRunning = mind.emergencyRunning,
 	                                               .scripted = scripted,
 	                                               .planForced = mind.planForced,
-	                                               .fighting = registry.AllOf<CreatureFighting>(creature),
+	                                               .fighting = registry.AllOf<CreatureFighting>(creature) && !settingUpFight,
 	                                               .knockedOut = registry.AllOf<CreatureKnockedOut>(creature)}))
 	{
 		return;

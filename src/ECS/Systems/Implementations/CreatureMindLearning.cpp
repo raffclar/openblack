@@ -3407,8 +3407,13 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	{
 		return false;
 	}
-	// A forced plan first stops the reaction that the creature has
+	// A forced plan first stops the reaction that the creature has. What the creature does stops as a failure, and this
+	// also stops a fight that it sets up, for both creatures.
 	EndReaction(creature);
+	if (!plan.ownFight)
+	{
+		CallOffFightSetUp(creature);
+	}
 	// A creature told to do something as soon as it is made has a mind ready for it
 	SetUpMind(creature, *body, *mind);
 	const glm::vec2 position {transform->position.x, transform->position.z};
@@ -3636,7 +3641,10 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		                   .ordered = plan.ordered,
 		               });
 	}
-	creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	if (plan.suppressesOpposed)
+	{
+		creature_learning::SuppressOpposed(*mind->desires, plan.desire, tables->dependencies, k_TurnsPerSecond);
+	}
 	return true;
 }
 
