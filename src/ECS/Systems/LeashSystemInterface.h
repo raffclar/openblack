@@ -102,8 +102,18 @@ public:
 	/// The player picks a leash for their creature with a gesture or a key. The player cannot do this while a nice or
 	/// nasty spell is on the creature.
 	virtual bool PickType(PlayerNames player, LeashType type) = 0;
-	/// Ties the worn leash to something, or puts the picked leash on tied to it
+	/// Ties the worn leash to something, or puts the picked leash on tied to it. A script and a computer god tie the leash
+	/// in this way. The creature continues with what it does.
 	virtual bool TieTo(entt::entity creature, entt::entity object) = 0;
+	/// The hand of the player ties the leash to something. What the creature does stops as a failure, and the creature
+	/// then acts on the thing, as for an order on the thing.
+	virtual bool HandTie(entt::entity creature, entt::entity object) { return TieTo(creature, object); }
+	/// A loaded game ties the leash again as it was at the turn of the tie. No sound plays and the creature learns
+	/// nothing.
+	virtual bool RestoreTie(entt::entity creature, entt::entity object, [[maybe_unused]] uint32_t tiedTurn)
+	{
+		return TieTo(creature, object);
+	}
 	virtual void UntieToHand(entt::entity creature) = 0;
 	/// Plays the next leash-attach sound when the leash goes back on in the hand. Only the local player hears it, and only
 	/// for their own creature.

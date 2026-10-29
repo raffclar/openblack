@@ -227,6 +227,29 @@ TEST(LeashRules, OnlyTheLeashOfAnotherPlayersCreatureMakesItsTieSoundAtTheThing)
 	EXPECT_TRUE(TieSoundIsPlaced(PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO));
 }
 
+TEST(LeashRules, OnlyTheHandsTieStopsWhatTheCreatureDoesAndMakesItActOnTheThing)
+{
+	const auto hand = EffectsOf(TieSource::Hand);
+	EXPECT_TRUE(hand.sound);
+	EXPECT_TRUE(hand.lessons);
+	EXPECT_TRUE(hand.failsAction);
+	EXPECT_TRUE(hand.actsOnThing);
+	for (const auto source : {TieSource::Script, TieSource::ComputerGod})
+	{
+		const auto only = EffectsOf(source);
+		EXPECT_TRUE(only.sound);
+		EXPECT_TRUE(only.lessons);
+		EXPECT_FALSE(only.failsAction);
+		EXPECT_FALSE(only.actsOnThing);
+	}
+	// A loaded game puts the tie back with no sound, no lesson and no order
+	const auto loaded = EffectsOf(TieSource::LoadedGame);
+	EXPECT_FALSE(loaded.sound);
+	EXPECT_FALSE(loaded.lessons);
+	EXPECT_FALSE(loaded.failsAction);
+	EXPECT_FALSE(loaded.actsOnThing);
+}
+
 TEST(LeashRules, TheAttachSoundsPlayInTurnFromTheFirst)
 {
 	AttachSoundTurns turns;

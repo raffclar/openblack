@@ -2482,7 +2482,6 @@ std::optional<creature_fight_hud::Values> CreatureFightSystem::GetPanel() const
 
 void CreatureFightSystem::ProcessTurn()
 {
-	StartFightsFromMinds();
 	ProcessStages();
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> fighters;
@@ -2502,7 +2501,6 @@ void CreatureFightSystem::ProcessTurn()
 
 void CreatureFightSystem::FightTurn(entt::entity creature)
 {
-	StartFightFromMind(creature);
 	StageTurn(creature);
 	KnockedOutTurn(creature);
 }
@@ -2688,52 +2686,6 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartPlannedFight
 	const auto result = Start(creature, opponent, !agreed);
 	_startReason = "request";
 	return result;
-}
-
-void CreatureFightSystem::StartFightsFromMinds()
-{
-	std::vector<entt::entity> minds;
-	Locator::entitiesRegistry::value().Each<CreatureMindState>(
-	    [&minds](entt::entity entity, CreatureMindState& /*mind*/) { minds.push_back(entity); });
-	for (const auto entity : minds)
-	{
-		StartFightFromMind(entity);
-	}
-}
-
-void CreatureFightSystem::StartFightFromMind(entt::entity entity)
-{
-	auto& registry = Locator::entitiesRegistry::value();
-	auto* mind = registry.Valid(entity) ? registry.TryGet<CreatureMindState>(entity) : nullptr;
-	if (mind == nullptr)
-	{
-		return;
-	}
-	const auto isCreature = [&registry](entt::entity thing) {
-		return registry.Valid(thing) && registry.AllOf<Creature, Transform>(thing);
-	};
-	// Leashed to another creature, the player wants it fought
-	std::vector<entt::entity> wanted;
-	auto& actOn = mind->leash.actOn;
-	for (auto it = actOn.begin(); it != actOn.end();)
-	{
-		const auto target = static_cast<entt::entity>(*it);
-		if (target != entity && isCreature(target))
-		{
-			wanted.push_back(target);
-			it = actOn.erase(it);
-		}
-		else
-		{
-			++it;
-		}
-	}
-	for (const auto opponent : wanted)
-	{
-		_startReason = "leash";
-		StartFight(entity, opponent);
-	}
-	_startReason = "request";
 }
 
 void CreatureFightSystem::ProcessStages()

@@ -219,6 +219,9 @@ public:
 	}
 	/// Something stops what the creature is doing, which it gives up as a failure, as a spell freezing it does
 	virtual void AbandonAction(entt::entity /*creature*/) {}
+	/// What the creature does stops as a failure, as for AbandonAction. Also its walk stops, the pose of its body ends,
+	/// and a joint action stops for its partner too.
+	virtual void FailAction(entt::entity creature) { AbandonAction(creature); }
 	/// The creature is made to catch a thing flying at it: what it was doing fails, and it plays with the thing by catching
 	/// it, wanting to play less for a while
 	virtual void ForceCatch(entt::entity /*creature*/, entt::entity /*object*/) {}
