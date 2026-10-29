@@ -22,14 +22,12 @@
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/ScriptControl.h"
-#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ReactionSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -40,8 +38,6 @@ using creature_desires::Desire;
 namespace
 {
 constexpr std::string_view k_FightAction = "Fight";
-/// The action of lying dead for good
-constexpr std::string_view k_DeadForeverAction = "DeadForever";
 } // namespace
 
 bool CreatureMindSystem::ObeyGodOrder(entt::entity creature, uint32_t action, entt::entity object)
@@ -118,15 +114,7 @@ bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, 
 	}
 	// The order of a script counts at the end of the plan, as the creature's own plans do
 	mind.forcedPlanCounts = true;
-	// Falling dead, those about it react to the death
-	if (name == k_DeadForeverAction && Locator::reactionSystem::has_value())
-	{
-		if (const auto* transform = registry.TryGet<const Transform>(creature))
-		{
-			Locator::reactionSystem::value().Create(
-			    {.initiator = creature, .type = Reaction::ReactToDeath, .position = transform->position});
-		}
-	}
+	// When it falls dead, the faint step itself makes the reaction to the death. The order makes no other reaction.
 	return true;
 }
 

@@ -400,14 +400,28 @@ std::vector<Step> creature_mind::PutDown()
 	    {.kind = Step::Kind::Object, .order = {.kind = ObjectOrder::Kind::Discard, .animation = creature_throw::k_PutDown}}};
 }
 
-std::vector<Step> creature_mind::DeadForever()
+namespace
 {
-	return {{.kind = Step::Kind::Static,
-	         .seconds = k_DeadForeverSeconds,
+/// A faint that the creature does not get up from for the given time
+std::vector<creature_mind::Step> LieDeadFor(float seconds)
+{
+	return {{.kind = creature_mind::Step::Kind::Static,
+	         .seconds = seconds,
 	         .sequence = {animations::k_Faint, animations::k_Faint, animations::k_GetUp},
 	         .holdLoop = true,
 	         .closedEyes = true,
 	         .faint = true}};
+}
+} // namespace
+
+std::vector<Step> creature_mind::DeadForever()
+{
+	return LieDeadFor(k_DeadForeverSeconds);
+}
+
+std::vector<Step> creature_mind::DiePermanently()
+{
+	return LieDeadFor(k_DiePermanentlySeconds);
 }
 
 std::vector<Step> creature_mind::PointOutHighlight(uint32_t highlight, float cameraDistance)
