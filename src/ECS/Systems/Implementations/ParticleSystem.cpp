@@ -1183,13 +1183,33 @@ EffectHandle ParticleSystem::Serve(const EffectRequest& request, EffectHandle ha
 	{
 		it->effect->SetDirection(*request.direction);
 	}
+	// The miracle owns the effect and steps it. The effect tells the miracle that it started.
+	if (request.sink != nullptr)
+	{
+		it->ownedBySpell = true;
+		it->effect->SetSink(request.sink);
+	}
+	// The event can start other effects, so find the effect again
+	const auto started = FindRunning(id);
+	if (started == _effects.end())
+	{
+		return k_NoEffect;
+	}
 	if (request.player.has_value())
 	{
-		it->effect->SetPlayer(*request.player);
+		started->effect->SetPlayer(*request.player);
 	}
 	if (request.processInfo.has_value())
 	{
-		it->effect->SetProcessInfo(*request.processInfo);
+		started->effect->SetProcessInfo(*request.processInfo);
+	}
+	if (request.drawnWithHand)
+	{
+		started->path = particles::draw::DrawPath::Immediate;
+	}
+	if (request.hidden)
+	{
+		started->effect->SetHidden(true);
 	}
 	return id;
 }
@@ -1288,6 +1308,14 @@ void ParticleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
 	if (const auto it = FindRunning(id); it != _effects.end())
 	{
 		it->drawOffset = offset;
+	}
+}
+
+void ParticleSystem::SetHidden(EffectId id, bool hidden)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->effect->SetHidden(hidden);
 	}
 }
 

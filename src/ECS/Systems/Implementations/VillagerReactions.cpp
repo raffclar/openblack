@@ -51,9 +51,9 @@
 #include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -70,6 +70,7 @@
 #include "Magic/VillagerReactionRules.h"
 #include "MagicLiving.h"
 #include "ObjectMeasures.h"
+#include "Particles/ParticleEffect.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerAnimate.h"
@@ -994,12 +995,12 @@ void villager_reactions::SetSpeed(entt::entity villager, int32_t speed)
 void villager_reactions::ShowTownBelief(const glm::vec3& centre, PlayerNames player, float belief)
 {
 	const auto amount = static_cast<int32_t>(belief * k_BeliefSpriteScale);
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
 	const auto colour = influence::k_PlayerColours.at(static_cast<size_t>(player) & (influence::k_PlayerColours.size() - 1));
-	Locator::particleSystem::value().AddBeliefSprite({.position = centre, .amount = amount, .colour = colour});
+	Locator::effectRequestSystem::value().AddBeliefSprite({.position = centre, .amount = amount, .colour = colour});
 }
 
 void villager_reactions::ShowBelief(entt::entity villager, PlayerNames player, float belief, GuidanceAlignment alignment)
@@ -1014,7 +1015,7 @@ void villager_reactions::ShowObjectBelief(entt::entity object, entt::entity town
 	const auto& transform = registry.Get<const Transform>(object);
 	// A symbol worth at least one ten thousandth rises from the top of the thing, in the player's colour
 	const auto amount = static_cast<int32_t>(belief * k_BeliefSpriteScale);
-	if (amount >= 1 && Locator::particleSystem::has_value())
+	if (amount >= 1 && Locator::effectRequestSystem::has_value())
 	{
 		float height = 0.0f;
 		if (const auto* mesh = registry.TryGet<const Mesh>(object);
@@ -1024,7 +1025,7 @@ void villager_reactions::ShowObjectBelief(entt::entity object, entt::entity town
 		}
 		const auto colour =
 		    influence::k_PlayerColours.at(static_cast<size_t>(player) & (influence::k_PlayerColours.size() - 1));
-		Locator::particleSystem::value().AddBeliefSprite(
+		Locator::effectRequestSystem::value().AddBeliefSprite(
 		    {.position = transform.position + glm::vec3(0.0f, height, 0.0f), .amount = amount, .colour = colour});
 	}
 	BeliefVoiceOf(object, town, player, alignment);

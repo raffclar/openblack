@@ -32,7 +32,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptWeatherRules.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -738,10 +738,11 @@ void WeatherSystem::UpdateStorms()
 					storm.boltTimer = random.GameFloatRange(storm.boltWait.x, storm.boltWait.y);
 					storm.flash = lightning::Strike(strikeAt, storm.outerRadius, lightning::k_BoltStrength);
 					// Its forked bolt comes down from under the cloud
-					if (Locator::particleSystem::has_value())
+					if (Locator::effectRequestSystem::has_value())
 					{
 						const auto ground = Locator::terrainSystem::value().GetHeightAt({strikeAt.x, strikeAt.z});
-						Locator::particleSystem::value().AddStormBolt({strikeAt.x, ground + storm.cloudHeight, strikeAt.z});
+						Locator::effectRequestSystem::value().AddStormBolt(
+						    {strikeAt.x, ground + storm.cloudHeight, strikeAt.z});
 					}
 				}
 			}

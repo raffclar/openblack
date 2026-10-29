@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <utility>
 #include <variant>
@@ -18,6 +19,8 @@
 
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
+#include "Particles/ParticleDrawFrame.h"
+#include "Particles/ParticleEffect.h"
 
 #define LOCATOR_IMPLEMENTATIONS
 
@@ -76,6 +79,56 @@ public:
 	{
 		changes.emplace_back("plasma", handle);
 	}
+	bool ProcessForSpell(EffectHandle handle, const particles::ProcessInfo& /*info*/, float /*seconds*/) override
+	{
+		changes.emplace_back("step", handle);
+		// The effect ends at this step: it goes
+		if (endsAtNextStep == handle)
+		{
+			std::erase(running, handle);
+			return false;
+		}
+		return IsRunning(handle);
+	}
+	void RestoreSink(EffectHandle handle, particles::SpellSink* sink) override
+	{
+		changes.emplace_back("sink", handle);
+		restoredSink = sink;
+	}
+	void SetHidden(EffectHandle handle, bool /*hidden*/) override { changes.emplace_back("hidden", handle); }
+	void SetDrawOffset(EffectHandle handle, glm::vec3 /*offset*/) override { changes.emplace_back("drawOffset", handle); }
+	void SetLiveHand(EffectHandle handle, glm::vec3 /*hand*/) override { changes.emplace_back("liveHand", handle); }
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 /*point*/, float /*margin*/) const override
+	{
+		return shield;
+	}
+	void AddBeliefSprite(const particles::BeliefSprite& /*sprite*/) override { shared.emplace_back("belief"); }
+	void AddHandManaPathSpark(const particles::mana_path::Spark& /*spark*/) override { shared.emplace_back("manaPath"); }
+	void AddStormBolt(glm::vec3 /*cloudPoint*/) override { shared.emplace_back("stormBolt"); }
+	void SetFightMarks(std::vector<particles::draw::FightMark> marks) override
+	{
+		shared.emplace_back("fightMarks " + std::to_string(marks.size()));
+	}
+	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& /*sheet*/) override { shared.emplace_back("lightSheet"); }
+	void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> symbols) override
+	{
+		shared.emplace_back("playerSymbols " + std::to_string(symbols.size()));
+	}
+
+	/// The effect that ends at its next step
+	EffectHandle endsAtNextStep {k_NoEffectHandle};
+	particles::SpellSink* restoredSink {nullptr};
+	std::shared_ptr<particles::ShieldSphere> shield;
+	/// The adds to the effects that run all the time, by name
+	std::vector<std::string> shared;
+};
+
+/// A miracle for the test: it keeps the events of its effect
+class FakeMiracle final: public particles::SpellSink
+{
+public:
+	bool SpellEvent(const particles::SpellEventInfo& /*event*/) override { return true; }
+	[[nodiscard]] int PowerUpLevel() const override { return 0; }
 };
 
 } // namespace
@@ -227,4 +280,74 @@ TEST(EffectRequests, NoEffectAndAComputerThatShowsNothingChangeNothingAndRunNoth
 	EXPECT_FALSE(unshown.IsRunning(handle));
 	unshown.SetMagnitude(handle, 2.0f);
 	unshown.SetEnabled(handle, true);
+}
+
+TEST(EffectRequests, AMiracleStepsItsOwnEffectAndGetsItsEvents)
+{
+	FakeServer server;
+	FakeMiracle miracle;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	EXPECT_TRUE(effects.ShowsEffects());
+	const auto handle = effects.Start({.type = ParticleType::StormCast, .sink = &miracle});
+	EXPECT_EQ(handle, k_FirstEffectHandle);
+	ASSERT_EQ(server.served.size(), 1u);
+	EXPECT_EQ(server.served[0].first.sink, &miracle);
+	EXPECT_TRUE(effects.Step(handle, {}, 0.1f));
+	effects.SetHidden(handle, true);
+	effects.SetDrawOffset(handle, glm::vec3(1.0f));
+	effects.SetLiveHand(handle, glm::vec3(2.0f));
+	effects.RestoreSink(handle, &miracle);
+	EXPECT_EQ(server.restoredSink, &miracle);
+	// The effect ends at its step, and is gone after it
+	server.endsAtNextStep = handle;
+	EXPECT_FALSE(effects.Step(handle, {}, 0.1f));
+	EXPECT_FALSE(effects.IsRunning(handle));
+	const std::vector<std::string> expected {"step", "hidden", "drawOffset", "liveHand", "sink", "step"};
+	ASSERT_EQ(server.changes.size(), expected.size());
+	for (size_t i = 0; i < expected.size(); ++i)
+	{
+		EXPECT_EQ(server.changes[i].first, expected[i]);
+		EXPECT_EQ(server.changes[i].second, handle);
+	}
+	// No effect: no step
+	EXPECT_FALSE(effects.Step(k_NoEffectHandle, {}, 0.1f));
+	EXPECT_EQ(server.changes.size(), expected.size());
+}
+
+TEST(EffectRequests, TheWorldFindsAShieldOnlyOnAComputerThatShowsTheEffects)
+{
+	FakeServer server;
+	server.shield = std::make_shared<particles::ShieldSphere>();
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	EXPECT_EQ(effects.FindShield(glm::vec3(0.0f), 1.0f), server.shield);
+
+	EffectRequestSystem unshown([]() -> EffectServerInterface* { return nullptr; });
+	EXPECT_FALSE(unshown.ShowsEffects());
+	EXPECT_EQ(unshown.FindShield(glm::vec3(0.0f), 1.0f), nullptr);
+	FakeMiracle miracle;
+	const auto handle = unshown.Start({.type = ParticleType::StormCast, .sink = &miracle});
+	EXPECT_FALSE(unshown.Step(handle, {}, 0.1f));
+	unshown.RestoreSink(handle, &miracle);
+}
+
+TEST(EffectRequests, TheAddsToTheEffectsThatRunAllTheTimeGoToThePresentation)
+{
+	FakeServer server;
+	EffectRequestSystem shown([&server]() -> EffectServerInterface* { return &server; });
+	EffectRequestSystem unshown([]() -> EffectServerInterface* { return nullptr; });
+	for (auto* effects : {&shown, &unshown})
+	{
+		effects->AddBeliefSprite({});
+		effects->AddHandManaPathSpark({});
+		effects->AddStormBolt(glm::vec3(1.0f));
+		effects->SetFightMarks(std::vector<particles::draw::FightMark>(2));
+		effects->AddLightSheet(std::make_shared<particles::LightSheet>());
+		effects->SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol>(3));
+	}
+	// Only the computer that shows the effects adds to them, and an add takes no number
+	const std::vector<std::string> expected {"belief",       "manaPath",   "stormBolt",
+	                                         "fightMarks 2", "lightSheet", "playerSymbols 3"};
+	EXPECT_EQ(server.shared, expected);
+	EXPECT_TRUE(server.served.empty());
+	EXPECT_EQ(shown.NextHandle(), k_FirstEffectHandle);
 }

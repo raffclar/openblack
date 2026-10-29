@@ -43,7 +43,6 @@
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -51,6 +50,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Particles/ParticleDrawFrame.h"
 #include "Physics/ObjectRules.h"
 #include "Resources/ResourcesInterface.h"
 #include "VillagerDance.h"
@@ -668,7 +668,9 @@ void ArtefactSystem::PowerUpSite(entt::entity site, uint32_t dancers)
 
 void ArtefactSystem::UpdateFrame(float gameMilliseconds)
 {
-	if (!Locator::particleSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	// Only a computer that shows the effects counts the time of the symbols
+	if (!Locator::effectRequestSystem::has_value() || !Locator::effectRequestSystem::value().ShowsEffects() ||
+	    !Locator::entitiesRegistry::has_value())
 	{
 		return;
 	}
@@ -696,7 +698,7 @@ void ArtefactSystem::UpdateFrame(float gameMilliseconds)
 		                   .milliseconds = artefact.symbolMilliseconds,
 		                   .player = static_cast<int>(*artefact.player)});
 	});
-	Locator::particleSystem::value().SetPlayerSymbols(std::move(symbols));
+	Locator::effectRequestSystem::value().SetPlayerSymbols(std::move(symbols));
 }
 
 uint32_t ArtefactSystem::CountFor(PlayerNames player) const

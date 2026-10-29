@@ -44,6 +44,19 @@ public:
 	void AddTarget(EffectHandle handle, entt::entity target) override;
 	void AddTargetPosition(EffectHandle handle, glm::vec3 position) override;
 	void AddPlasma(EffectHandle handle, const particles::PlasmaCommand& command) override;
+	[[nodiscard]] bool ShowsEffects() const override;
+	bool Step(EffectHandle handle, const particles::ProcessInfo& info, float seconds) override;
+	void RestoreSink(EffectHandle handle, particles::SpellSink* sink) override;
+	void SetHidden(EffectHandle handle, bool hidden) override;
+	void SetDrawOffset(EffectHandle handle, glm::vec3 offset) override;
+	void SetLiveHand(EffectHandle handle, glm::vec3 hand) override;
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
+	void AddBeliefSprite(const particles::BeliefSprite& sprite) override;
+	void AddHandManaPathSpark(const particles::mana_path::Spark& spark) override;
+	void AddStormBolt(glm::vec3 cloudPoint) override;
+	void SetFightMarks(std::vector<particles::draw::FightMark> marks) override;
+	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override;
+	void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> symbols) override;
 	void Reset() override;
 	[[nodiscard]] EffectHandle NextHandle() const override { return _next; }
 
