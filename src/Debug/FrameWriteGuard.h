@@ -58,6 +58,13 @@ inline constexpr std::string_view k_SystemPart = "system ";
 /// changed. A part that only one sample has also differs.
 [[nodiscard]] std::vector<std::string> ChangedParts(const Sample& before, const Sample& after);
 
+/// Whether the guard tells the changes of a frame step. A step that loads a land makes a new synced world. That is not a
+/// frame step that writes in the world of a game, so the guard does not look at it.
+[[nodiscard]] constexpr bool LooksAtStep(uint32_t landLoadsBefore, uint32_t landLoadsAfter)
+{
+	return landLoadsBefore == landLoadsAfter;
+}
+
 /// A tool for the frame-rate audit. It finds the frame steps that change the synced world.
 ///
 /// The synced world must change only in the game turns, so that each computer of a network game has the same world at

@@ -592,6 +592,15 @@ bool FightsOn(const ecs::Registry& registry, entt::entity creature, const Creatu
 	return fighting.partnerLeft != CreatureFighting::PartnerLeft::None && other != nullptr && other->opponent == creature;
 }
 
+/// Whether the opponent of the creature has its order to start its duel against the creature, but its body did not let
+/// it start yet. The creature that started the fight starts its duel at least one turn after the other creature.
+bool OpponentStartsDuel(const ecs::Registry& registry, entt::entity creature, const CreatureFighting& fighting)
+{
+	const auto* other =
+	    registry.Valid(fighting.opponent) ? registry.TryGet<const CreatureFighting>(fighting.opponent) : nullptr;
+	return other != nullptr && other->opponent == creature && other->stage == CreatureFighting::Stage::Square && other->played;
+}
+
 /// The result of the fight for a creature that its partner stopped: a creature that had no life left lost
 std::optional<bool> ResultWhenStopped(CreatureFighting::PartnerLeft why)
 {
@@ -1007,6 +1016,90 @@ bool KeepInArena(ecs::Registry& registry, entt::entity creature, CreatureFightin
 	});
 	return true;
 }
+
+/// The heading of the creature, as its legs keep it, or from its turn in the world before its legs start
+GameHeading HeadingOf(const ecs::Registry& registry, entt::entity creature)
+{
+	if (const auto* moving = registry.TryGet<const CreatureLocomotion>(creature); moving != nullptr && moving->started)
+	{
+		return moving->heading;
+	}
+	const auto ahead = -(registry.Get<const Transform>(creature).rotation * glm::vec3(0.0f, 0.0f, 1.0f));
+	return GameHeading::Of(ahead.x, ahead.z);
+}
+
+/// Whether the body of the creature is busy: it moves or turns, it plays an action, or it lets go of a thing or catches a
+/// thing
+bool BodyBusy(const ecs::Registry& registry, entt::entity creature, const CreatureLocomotionSystemInterface* locomotion)
+{
+	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
+	const bool lettingGo =
+	    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature);
+	return (locomotion != nullptr && locomotion->IsMoving(creature)) || lettingGo ||
+	       (animation != nullptr && creature_layers::IsPlaying(animation->body));
+}
+
+/// Whether the creature can start its duel on this turn. Its body refuses while it is busy, and a body with no clips for
+/// the start, the stance and the finish of a fight refuses always. With no bodies loaded, nothing plays and the duel
+/// starts.
+bool CanStartDuel(const ecs::Registry& registry, entt::entity creature, const CreatureLocomotionSystemInterface* locomotion)
+{
+	if (BodyBusy(registry, creature, locomotion))
+	{
+		return false;
+	}
+	using namespace fight::animations;
+	return !Locator::creatureAnimationSystem::has_value() ||
+	       (Has(creature, k_Start) && Has(creature, k_Stance) && Has(creature, k_Finish));
+}
+
+/// Does one game turn of the creature's turn to face its opponent in the face-off or in the arena. It turns from its map
+/// position to the map position of the opponent where the opponent is now.
+void FaceOpponentTurn(const ecs::Registry& registry, entt::entity creature, CreatureFighting& fighting,
+                      CreatureLocomotionSystemInterface* locomotion)
+{
+	using Phase = creature_turn_to_face::Turn::Phase;
+	if (fighting.faceTurn.phase == Phase::Idle || fighting.faceTurn.phase == Phase::Done)
+	{
+		return;
+	}
+	// With no legs, nothing turns
+	if (locomotion == nullptr)
+	{
+		fighting.faceTurn.phase = Phase::Done;
+		return;
+	}
+	const auto here = Flat(registry.Get<const Transform>(creature).position);
+	const auto there = Flat(registry.Get<const Transform>(fighting.opponent).position);
+	const creature_turn_to_face::Senses senses {
+	    .onTop = creature_cast_moves::MapPointDistance(there, here) < creature_cast_moves::k_OnTopDistance,
+	    .facing = creature_cast_moves::Facing(here, HeadingOf(registry, creature), there),
+	    .bodyBusy = BodyBusy(registry, creature, locomotion),
+	};
+	const auto hold = creature_turn_to_face::HoldTurns(fight::k_FaceOffHoldSeconds, 1000 / k_TurnMilliseconds);
+	creature_turn_to_face::Step(fighting.faceTurn, senses, hold, [&] {
+		return locomotion->TurnToHeading(creature, creature_cast_moves::HeadingTo(here, there));
+	});
+}
+/// The creature stops what it does, as when its plan stops or when the first creature of its fight gives it an order. A
+/// walk slows to a stand, and a loop of the body continues to its end. An action that the body plays continues. The work
+/// of its hands stops, but a let-go or a catch that the body started continues. It keeps what it holds.
+void StopWhatItDoes(ecs::Registry& registry, entt::entity creature)
+{
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		Locator::creatureLocomotionSystem::value().Stop(creature);
+	}
+	if (Locator::creatureObjectActionSystem::has_value() &&
+	    !Locator::creatureObjectActionSystem::value().PlaysOnAlone(creature))
+	{
+		Locator::creatureObjectActionSystem::value().Cancel(creature);
+	}
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+	{
+		animation->body = creature_layers::EndLoop(animation->body);
+	}
+}
 } // namespace
 
 CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::entity creature, entt::entity opponent)
@@ -1069,17 +1162,13 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entit
 	for (const auto& [self, other] : {std::pair(creature, opponent), std::pair(opponent, creature)})
 	{
 		const auto& body = registry.Get<const Creature>(self);
-		if (Locator::creatureLocomotionSystem::has_value())
+		// The first creature stops what it does, as its plan stops. The other creature continues with what it did
+		// until the first creature gives it its first order. The turn to face waits for an action that the body plays.
+		// Each creature lets go of what it holds before its taunt.
+		if (self == creature)
 		{
-			Locator::creatureLocomotionSystem::value().StopAtOnce(self);
+			StopWhatItDoes(registry, self);
 		}
-		if (Locator::creatureObjectActionSystem::has_value())
-		{
-			// A fight needs free hands, thus each creature puts down what it holds, as at the end of a put-down clip
-			Locator::creatureObjectActionSystem::value().Cancel(self);
-			Locator::creatureObjectActionSystem::value().PutDownAtOnce(self);
-		}
-		registry.Get<CreatureAnimation>(self).body = {};
 
 		auto& record = registry.AllOf<CreatureFightRecord>(self) ? registry.Get<CreatureFightRecord>(self)
 		                                                         : registry.Assign<CreatureFightRecord>(self);
@@ -1088,6 +1177,7 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entit
 
 		CreatureFighting fighting {
 		    .stage = CreatureFighting::Stage::FaceOff,
+		    .part = self == creature ? CreatureFighting::Part::Obeys : CreatureFighting::Part::Asked,
 		    .opponent = other,
 		    .madeArena = self == creature,
 		};
@@ -1117,7 +1207,7 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::Start(entt::entit
 	}
 	const bool planned = _startReason == "plan" || _startReason == "anger";
 	registry.Get<CreatureFighting>(creature).planned = planned;
-	// The fight has the minds of both creatures
+	// The fight has the mind of the first creature. The other creature obeys from its first order.
 	if (Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().FightStarted(creature, opponent, planned);
@@ -2523,9 +2613,11 @@ void CreatureFightSystem::StaminaTurn(entt::entity entity)
 	{
 		return;
 	}
-	// At the end of its turn, a fighter in a duel with its opponent gets back a little stamina
+	// At the end of its turn, a fighter in a duel with its opponent gets back a little stamina. It also does so while its
+	// opponent is about to start its duel.
 	const auto opponent = fighting->opponent;
-	if (!FightsOn(registry, entity, *fighting) || registry.Get<const CreatureFighting>(opponent).opponent != entity)
+	if (!OpponentStartsDuel(registry, entity, *fighting) &&
+	    (!FightsOn(registry, entity, *fighting) || registry.Get<const CreatureFighting>(opponent).opponent != entity))
 	{
 		return;
 	}
@@ -2724,8 +2816,10 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		return;
 	}
 	fighting->stageSeconds += k_TurnSeconds;
-	// Squaring up to the opponent and fighting it, it shows its anger as it starts and every few seconds after
-	if (fighting->stage <= CreatureFighting::Stage::Duel && Locator::creatureMindSystem::has_value())
+	// Squaring up to the opponent and fighting it, it shows its anger as it starts and every few seconds after. The
+	// other creature starts when it obeys.
+	if (fighting->stage <= CreatureFighting::Stage::Duel && fighting->part == CreatureFighting::Part::Obeys &&
+	    Locator::creatureMindSystem::has_value())
 	{
 		fighting->faceSeconds -= k_TurnSeconds;
 		if (fighting->faceSeconds < k_FaceDue)
@@ -2749,59 +2843,165 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 	const auto* partner = opponentHere ? registry.TryGet<const CreatureFighting>(opponent) : nullptr;
 	const bool together = partner != nullptr && partner->opponent == entity;
 	const bool starter = fighting->madeArena;
-	const auto order = [this, &registry](entt::entity who, CreatureFighting::Stage stage) {
-		if (auto* side = registry.TryGet<CreatureFighting>(who))
+	// Each order stops what the other creature does. The first order also makes the other creature obey. The mind can
+	// change the components of the creature, so the fight of the creature is found again after it.
+	const auto obey = [&registry](entt::entity who) -> CreatureFighting* {
+		auto* side = registry.TryGet<CreatureFighting>(who);
+		if (side == nullptr)
 		{
-			NoteStage(who, side->stage, stage);
-			side->stage = stage;
-			side->stageSeconds = 0.0f;
-			side->played = false;
+			return nullptr;
 		}
+		StopWhatItDoes(registry, who);
+		if (side->part != CreatureFighting::Part::Obeys)
+		{
+			side->part = CreatureFighting::Part::Obeys;
+			if (Locator::creatureMindSystem::has_value())
+			{
+				Locator::creatureMindSystem::value().FightOrdered(who, side->opponent);
+			}
+		}
+		return registry.TryGet<CreatureFighting>(who);
+	};
+	const auto order = [this, &obey](entt::entity who, CreatureFighting::Stage stage) {
+		auto* side = obey(who);
+		if (side == nullptr)
+		{
+			return;
+		}
+		NoteStage(who, side->stage, stage);
+		side->stage = stage;
+		side->stageSeconds = 0.0f;
+		side->played = false;
 	};
 	if (IsLeadIn(fighting->stage) && !together)
 	{
 		Leave(entity);
 		return;
 	}
+	// The other creature continues with what it did until its first order
+	if (fighting->part != CreatureFighting::Part::Obeys)
+	{
+		return;
+	}
 
 	switch (fighting->stage)
 	{
 	case CreatureFighting::Stage::FaceOff:
-	case CreatureFighting::Stage::Square:
-		if (!fighting->played)
+	{
+		using Phase = creature_turn_to_face::Turn::Phase;
+		++fighting->faceOffTurns;
+		// The creature that started the fight tells the mind of the other creature to stand still. Then it tells the
+		// other creature to stop and turn to face it, and it turns to face the other creature. It does not wait for the
+		// turn of the other creature. On the turn after its own turn is done, it tells the other creature to taunt. It
+		// tries its own taunt from the next turn.
+		if (starter)
 		{
-			fighting->played = true;
-			if (locomotion != nullptr)
+			auto* other = &registry.Get<CreatureFighting>(opponent);
+			if (fighting->faceOffTurns == fight::k_FaceOffStillTurn && other->part == CreatureFighting::Part::Asked)
 			{
-				locomotion->StopAtOnce(entity);
-				locomotion->TurnToFaceAtOnce(entity, Flat(registry.Get<const Transform>(opponent).position));
+				other->part = CreatureFighting::Part::StandsStill;
 			}
-		}
-		else if (starter && (!moving(entity) || fighting->stageSeconds > k_ApproachSeconds))
-		{
-			if (fighting->stage == CreatureFighting::Stage::FaceOff)
+			if (fighting->faceOffTurns == fight::k_FaceOffOrderTurn && other->stage == CreatureFighting::Stage::FaceOff &&
+			    other->faceTurn.phase == Phase::Idle)
+			{
+				other = obey(opponent);
+				fighting = registry.TryGet<CreatureFighting>(entity);
+				if (other == nullptr || fighting == nullptr)
+				{
+					return;
+				}
+				other->faceTurn.phase = Phase::Start;
+			}
+			if (fighting->faceOffTurns == fight::k_FaceOffOwnTurn)
+			{
+				fighting->faceTurn.phase = Phase::Start;
+			}
+			else if (fighting->faceTurn.phase == Phase::Done)
 			{
 				order(opponent, CreatureFighting::Stage::Taunt);
 				next(CreatureFighting::Stage::Taunt);
-			}
-			else
-			{
-				// Both start together, so neither finds the other not yet duelling
-				BeginDuel(entity);
-				BeginDuel(opponent);
+				break;
 			}
 		}
+		FaceOpponentTurn(registry, entity, *fighting, locomotion);
 		break;
+	}
+	case CreatureFighting::Stage::Square:
+	{
+		using Phase = creature_turn_to_face::Turn::Phase;
+		// The creature that started the fight tells the other creature to stop and turn to face it, then turns to face
+		// the other creature. It does not wait for the turn of the other creature. On the turn after its own turn is
+		// done, it tells the other creature to start its duel. It tries to start its own duel from the next turn. In
+		// this stage, the played flag shows that the creature has its order to start its duel.
+		if (starter)
+		{
+			++fighting->faceOffTurns;
+			if (fighting->faceOffTurns == fight::k_SquareOrderTurn &&
+			    registry.Get<const CreatureFighting>(opponent).stage == CreatureFighting::Stage::Ready)
+			{
+				order(opponent, CreatureFighting::Stage::Square);
+				auto* other = registry.TryGet<CreatureFighting>(opponent);
+				fighting = registry.TryGet<CreatureFighting>(entity);
+				if (other == nullptr || fighting == nullptr)
+				{
+					return;
+				}
+				other->faceTurn = {.phase = Phase::Start};
+			}
+			if (fighting->faceOffTurns == fight::k_SquareOwnTurn)
+			{
+				fighting->faceTurn = {.phase = Phase::Start};
+			}
+			else if (!fighting->played && fighting->faceTurn.phase == Phase::Done)
+			{
+				auto* other = obey(opponent);
+				fighting = registry.TryGet<CreatureFighting>(entity);
+				if (other == nullptr || fighting == nullptr)
+				{
+					return;
+				}
+				other->played = true;
+				fighting->played = true;
+				break;
+			}
+		}
+		// Told to start its duel, it starts it when its body lets it
+		if (fighting->played)
+		{
+			if (CanStartDuel(registry, entity, locomotion))
+			{
+				BeginDuel(entity);
+			}
+			break;
+		}
+		FaceOpponentTurn(registry, entity, *fighting, locomotion);
+		break;
+	}
 	case CreatureFighting::Stage::Taunt:
 		if (!fighting->played)
 		{
+			// The taunt needs empty hands. A creature that holds a thing first starts to let go of it with its let-go
+			// clip, and it tries the taunt from the next turn with no new check. While its body or hands are busy, it
+			// cannot start to let go, and it checks again on the next turn.
+			if (!fighting->handsChecked && Locator::creatureMindSystem::has_value())
+			{
+				const auto check = Locator::creatureMindSystem::value().CheckHandsBeforeAction(entity);
+				fighting->handsChecked = check == creature_mind::HandsCheck::LetGo;
+				if (check != creature_mind::HandsCheck::Free)
+				{
+					break;
+				}
+			}
 			// Each try to start the taunt picks a side from the game's random numbers first. A body that plays an
 			// action or moves, or that does not have the clip, refuses the start, and the creature tries again on
-			// the next turn. With no bodies loaded, nothing plays.
+			// the next turn. The hands that let go keep the body busy. With no bodies loaded, nothing plays.
 			const auto clip = fight::FaceOffAnimation(fighting->rude);
 			const bool mirrored = Locator::gameRandom::has_value() && Locator::gameRandom::value().GameRand(2) == 1;
 			const bool loaded = Locator::creatureAnimationSystem::has_value();
-			if (creature_layers::IsPlaying(animation.body) || moving(entity) || (loaded && !Has(entity, clip)))
+			const bool lettingGo = fighting->handsChecked && Locator::creatureObjectActionSystem::has_value() &&
+			                       Locator::creatureObjectActionSystem::value().GetState(entity) ==
+			                           CreatureObjectActionSystemInterface::State::Busy;
+			if (creature_layers::IsPlaying(animation.body) || moving(entity) || lettingGo || (loaded && !Has(entity, clip)))
 			{
 				break;
 			}
@@ -2889,10 +3089,12 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		{
 			break;
 		}
+		// When the other creature is ready, the first creature turns to face it in the arena from the next turn
 		if (partner->stage == CreatureFighting::Stage::Ready)
 		{
-			order(opponent, CreatureFighting::Stage::Square);
 			next(CreatureFighting::Stage::Square);
+			fighting->faceOffTurns = 0;
+			fighting->faceTurn = {};
 		}
 		else if (fighting->stageSeconds > k_ApproachSeconds)
 		{
@@ -3064,9 +3266,10 @@ void CreatureFightSystem::DuelTurn(entt::entity entity)
 		{
 			return;
 		}
-		// Its opponent gone or out of the fight, it finishes
+		// Its opponent gone or out of the fight, it finishes. An opponent that is about to start its duel is in the fight.
 		const auto opponent = fighting->opponent;
-		if (!FightsOn(registry, entity, *fighting) || registry.Get<const CreatureFighting>(opponent).opponent != entity)
+		if (!OpponentStartsDuel(registry, entity, *fighting) &&
+		    (!FightsOn(registry, entity, *fighting) || registry.Get<const CreatureFighting>(opponent).opponent != entity))
 		{
 			// The opponent left the duel before it, and the fight of the opponent ended: it stops with no response
 			if (fighting->partnerLeft != CreatureFighting::PartnerLeft::None)
@@ -4368,7 +4571,7 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 	{
 		const auto check = knockedOut.handsChecked || !Locator::creatureMindSystem::has_value()
 		                       ? creature_mind::HandsCheck::Free
-		                       : Locator::creatureMindSystem::value().CheckHandsBeforeFaint(entity);
+		                       : Locator::creatureMindSystem::value().CheckHandsBeforeAction(entity);
 		knockedOut.handsChecked = check == creature_mind::HandsCheck::LetGo;
 		if (check == creature_mind::HandsCheck::Free)
 		{

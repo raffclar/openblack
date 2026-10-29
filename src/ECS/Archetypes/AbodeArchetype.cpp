@@ -72,12 +72,13 @@ void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAb
 
 	auto& pit = registry.Assign<StoragePit>(entity);
 
-	// The pit is made with all its piles, empty: five of wood and one of food where its model says
+	// The pit is made with all its piles, empty: one of food, then five of wood, where its model says
 	const auto makePile = [&](size_t place, PotInfo type) {
 		const auto& m = extraMetrics.at(place);
 		const auto translation = static_cast<glm::vec3>(portable_math::EulerAngleY(-yAngleRadians) * m[3]);
 		return PotArchetype::CreateEmpty(position + translation, yAngleRadians, type);
 	};
+	pit.foodPile = makePile(5, info.potForResourceFood);
 	std::array<magic::piles::PileRoom, std::tuple_size_v<decltype(StoragePit::woodPiles)>> woodRoom {};
 	size_t i = 0;
 	for (auto type = info.potForResourceWood; type != PotInfo::_COUNT;
@@ -89,7 +90,6 @@ void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAb
 		++i;
 	}
 	assert(i == pit.woodPiles.size());
-	pit.foodPile = makePile(5, info.potForResourceFood);
 
 	// Then it is given its food and wood, which fill its piles in turn: each pile that leads on to another takes no
 	// more than it is drawn full at, the last takes the rest
@@ -152,6 +152,8 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	}
 
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made, before the things it makes for itself
+	TakeThingMadePlace();
 
 	const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(type));
 	bool morphsWithTerrain = false;

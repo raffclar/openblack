@@ -24,6 +24,7 @@
 #include "Audio/Sound.h"
 #include "Creature/CreatureTeleportAgendas.h"
 #include "Creature/LeashRules.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Creature.h"
@@ -215,6 +216,8 @@ entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, en
 	auto& registry = EntityRegistry();
 	const auto position = OnLand({point.x, point.z});
 	const auto stone = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	registry.Assign<Transform>(stone, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	auto& component = registry.Assign<TeleportStone>(stone);
 	component.player = player;

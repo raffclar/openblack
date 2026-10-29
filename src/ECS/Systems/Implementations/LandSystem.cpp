@@ -723,6 +723,7 @@ void LandSystem::RemakeModelsAfterLoad()
 
 void LandSystem::PrepareNewLand(land_change::Kind change)
 {
+	++_landLoads;
 	const bool toTestbed = change == land_change::Kind::Testbed;
 	const auto rules = land_change::RulesFor(change);
 	// The start-of-game question is about the land that goes now. Close the question with no answer. Then release the

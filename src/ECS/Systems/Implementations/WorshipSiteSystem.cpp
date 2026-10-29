@@ -27,6 +27,7 @@
 
 #include "Common/GUtilsDistance.h"
 #include "Common/PortableRotations.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Footpath.h"
@@ -674,6 +675,8 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	// The site stands at the temple's own place, turned to face out from its place around it
 	const auto facing = ws::PlaceFacing(worship.facing, *place);
 	const auto site = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	const auto ground = glm::vec3(templePosition.x, _world->LandHeightAt(Across(templePosition)), templePosition.z);
 	registry.Assign<Transform>(site, ground, glm::mat3(portable_math::EulerAngleY(-facing)), glm::vec3(1.0f));
 	registry.Assign<Mesh>(site, _world->SiteMesh(temple), static_cast<int8_t>(0), static_cast<int8_t>(0));
@@ -703,6 +706,8 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	const auto altarAt = ws::TurnedPoint(Across(templePosition), facing, altarPoint);
 	// The altar has its model's size and shape on the map from now on, but the model shows only when the town builds the site
 	const auto altar = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	const auto& placed = registry.Assign<Transform>(altar, glm::vec3(altarAt.x, _world->LandHeightAt(altarAt), altarAt.y),
 	                                                glm::mat3(portable_math::EulerAngleY(-facing)), glm::vec3(1.0f));
 	const auto altarModel = _world->AltarMesh(tribe);

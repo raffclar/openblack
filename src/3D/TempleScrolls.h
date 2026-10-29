@@ -276,6 +276,9 @@ private:
 	/// ChallengeScroll.raw, 256 by 256 RGB, which the rooms of pictures read for every scroll
 	std::vector<uint8_t> _parchment;
 	std::vector<Scroll> _scrolls;
+	/// At the lowest detail levels, each scroll's texture has half the texels along each side. The text is written at
+	/// the full size and then made smaller.
+	bool _halfSize {false};
 	/// The scroll being dragged and where the mouse was
 	std::optional<size_t> _held;
 	float _heldMouseY {0.0f};

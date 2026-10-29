@@ -20,6 +20,7 @@
 #include <SDL_mouse.h>
 #include <glm/vec3.hpp>
 
+#include "BoxKeyboard.h"
 #include "CursorFreeze.h"
 #include "GameActionMapInterface.h"
 #include "Help/MouseMoves.h"
@@ -86,6 +87,8 @@ public:
 	void WarpCursor(glm::ivec2 position) final;
 	[[nodiscard]] std::optional<glm::ivec2> GetCursorWarp() const final;
 	void SetBlockedActions(BindableActionMap actions) final { _blocked = actions; }
+	void BoxKeyDown(bool boxWantsKeys) final { _boxKeyboard.KeyDown(boxWantsKeys); }
+	[[nodiscard]] bool BoxHasKeyboard() const final { return _boxKeyboard.Taken(); }
 	void AllowCursorFreeze(bool allowed) final;
 	void PinCursor(bool pinned) final;
 	[[nodiscard]] glm::ivec2 GetCursorImagePosition() const final;
@@ -155,6 +158,10 @@ private:
 	bool _playerMouseBlocked {false};
 	std::optional<glm::ivec2> _cursorWarp;
 	BindableActionMap _blocked = BindableActionMap::NONE;
+	/// While a box has the keyboard, no action reads as held
+	box_keyboard::Latch _boxKeyboard;
+	/// The actions that read as not held now: the ones that the scripts block, or all while a box has the keyboard
+	[[nodiscard]] uint64_t HiddenActions() const;
 	/// Keeps the player's mouse and keyboard out while an agent drives the game
 	InputLock _lock;
 	/// Logs the lock opening or closing

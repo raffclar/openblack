@@ -31,6 +31,7 @@
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "ECS/Archetypes/Utils.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
@@ -83,6 +84,8 @@ std::optional<entt::entity> GameObjectEffects::AttachFireBall(glm::vec3 position
 	auto& registry = Entities();
 	const auto row = magic::FireBallInfoRow(powerUpLevel);
 	const auto ball = registry.Create();
+	// It takes its place in the order of the things made
+	openblack::ecs::archetypes::TakeThingMadePlace();
 	registry.Assign<Transform>(ball, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	registry.Assign<MagicFireBall>(ball, MagicFireBall {
 	                                         .strength = strength,

@@ -41,6 +41,8 @@ entt::entity MakeBigForest(const glm::vec3& position, BigForestInfo type, float 
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 
 	const auto& info = Locator::infoConstants::value().bigForest.at(static_cast<size_t>(type));
 

@@ -62,6 +62,8 @@ struct DrawnVertex
 	glm::vec3 position {0.0f};
 	glm::vec2 uv {0.0f};
 	glm::vec3 normal {0.0f, 1.0f, 0.0f};
+	/// True for a corner of the back face. The snow on a back corner reads the snow texture by its front corner.
+	bool back {false};
 };
 
 /// The faces of one part of a broken shape, drawn with the material of a part of the building's own model

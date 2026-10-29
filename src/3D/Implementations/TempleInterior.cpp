@@ -469,7 +469,7 @@ void TempleInterior::ListSavedGames()
 	{
 		for (const auto& saved : Locator::saveGameSystem::value().Slots())
 		{
-			saves.push_back({.slot = saved.slot % 100, .name = saved.name});
+			saves.push_back({.slot = saved.slot % 100, .name = saved.name, .date = saved.date});
 		}
 	}
 	_saveGameRoom->SetSaves(std::move(saves));
@@ -906,13 +906,56 @@ void TempleInterior::UpdateChallengeRoom()
 			                                 texts.Get("HELP_TEXT_ROOM_CITADEL_CHALLENGE_ROOM_PERCENTCOMPLETE"),
 			                                 challenge.success)},
 			    .alpha = rules::TextAlpha(closeness),
+			    .details = {},
 			};
+		}
+	}
+	// While the camera is any way close to the picture in high detail of the save game room, the save's date and name
+	// are written on the screen, showing more the closer the camera is
+	if (const auto words = SaveGameRoomWords(); !caption.has_value() && words.has_value())
+	{
+		caption = gui::GameInterface::Caption {
+		    .lines = {},
+		    .alpha = temple::challenge_room::TextAlpha(_cameraModel->GetSubMeshZoom()),
+		    .details = words->details,
+		};
+		if (words->title.has_value())
+		{
+			caption->lines.push_back(*words->title);
 		}
 	}
 	if (_interface != nullptr)
 	{
 		_interface->SetCaption(std::move(caption));
 	}
+}
+
+std::optional<temple::save_game_room::CloseLookWords> TempleInterior::SaveGameRoomWords() const
+{
+	if (_saveGameRoom == nullptr || _interface == nullptr || _cameraModel == nullptr || !IsRoomDrawn(TempleRoom::SaveGame) ||
+	    !_saveGameRoom->IsPictureLookedAt() || _cameraModel->GetSubMeshZoom() == 0.0f)
+	{
+		return std::nullopt;
+	}
+	const auto slot = _saveGameRoom->GetHighDetailSlot();
+	if (!slot.has_value())
+	{
+		return std::nullopt;
+	}
+	namespace rules = temple::save_game_room;
+	std::optional<rules::SaveWords> save;
+	if (const auto* found = _saveGameRoom->LastSaveOf(*slot); found != nullptr)
+	{
+		save = rules::SaveWords {.date = found->date, .name = found->name};
+	}
+	const auto& texts = _interface->GetTexts();
+	const rules::HelpTextFn helpText = [&texts](uint32_t number) {
+		const auto names = texts.GetHelpNames();
+		return number < names.size() ? std::u16string(texts.Get(names[number])) : std::u16string();
+	};
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto land = static_cast<uint32_t>(std::max(registry.Context().mapScriptGlobals.landNumber, 0));
+	return rules::CloseLookWordsOf(*slot, save, land, helpText);
 }
 
 void TempleInterior::UpdateToolTips(float milliseconds)

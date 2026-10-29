@@ -248,8 +248,10 @@ private:
 	void ReplayChallenge(entt::entity record);
 	/// Leaves the temple, the camera put back where the challenge's picture was taken, and starts its reminder
 	void LeaveToReplayChallenge();
-	/// Moves on the challenge room's pictures and its close look's words
+	/// Moves on the challenge room's pictures and its close look's words, or the close look's words of the save game room
 	void UpdateChallengeRoom();
+	/// The words that the save game room writes over the picture in high detail, if any
+	[[nodiscard]] std::optional<temple::save_game_room::CloseLookWords> SaveGameRoomWords() const;
 	/// The save game room's pictures and buttons
 	std::unique_ptr<TempleSaveGameRoom> _saveGameRoom;
 	/// The question the save game room asks the player about a slot, until it is answered

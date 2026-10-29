@@ -32,6 +32,7 @@
 #include "Locator.h"
 #include "Magic/SpellIcons.h"
 #include "Resources/ResourcesInterface.h"
+#include "Utils.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -77,6 +78,8 @@ entt::entity MakeIcon(glm::vec3 position, const glm::mat3& rotation, float scale
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 	registry.Assign<Transform>(entity, position, rotation, glm::vec3(scale));
 	const auto meshId = resources::HashIdentifier(IconMesh(kind));
 	registry.Assign<Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));

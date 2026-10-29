@@ -148,7 +148,8 @@ entt::id_type GameBuildingDamageWorld::MakeModel(const std::string& name, entt::
 		made.vertices.reserve(part.vertices.size());
 		for (const auto& vertex : part.vertices)
 		{
-			made.vertices.push_back({.position = vertex.position, .uv = vertex.uv, .normal = vertex.normal});
+			made.vertices.push_back(
+			    {.position = vertex.position, .uv = vertex.uv, .normal = vertex.normal, .back = vertex.back});
 		}
 		if (vertices + made.vertices.size() > std::numeric_limits<uint16_t>::max())
 		{

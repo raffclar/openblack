@@ -59,6 +59,8 @@ entt::entity DeadTreeArchetype::Create(const glm::vec3& position, TreeInfo type,
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 
 	const auto& transform = registry.Assign<Transform>(entity, position, rotation, glm::vec3(scale));
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(model, transform);

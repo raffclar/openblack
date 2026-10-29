@@ -303,6 +303,16 @@ void main()
 			vec3 snowNormal = u_snow.y > 0.5f ? normal : normalize(TO_WORLD(vec4(normal, 0.0f)).xyz);
 			v_snow = vec4(SnowUv(position, snowNormal), snowLevel / 255.0f, 0.0f);
 			v_snowLight = ModelLightColour(SnowColour(colour), ModelLightFactor(normal, localLight));
+			// The faces of a broken shape read the snow by where the corner is in the world and by the normal of its
+			// face. A back corner reads by its front corner, but from the first column of the snow texture.
+			if (u_snow.z > 0.5f)
+			{
+				bool backCorner = a_indices.z == 1;
+				vec3 frontNormal = backCorner ? -snowNormal : snowNormal;
+				vec3 frontCorner = backCorner ? v_position.xyz + frontNormal * BROKEN_FACE_DEPTH : v_position.xyz;
+				vec2 frontUv = SnowUv(frontCorner, frontNormal);
+				v_snow.xy = backCorner ? vec2(0.0f, frontUv.y) : frontUv;
+			}
 		}
 	}
 #endif // USE_INSTANCING
@@ -334,6 +344,11 @@ void main()
 		v_color0 = vec4(colour / 255.0f, 1.0f);
 	}
 #endif // USE_LIGHTMAP
+	// The snow on the faces of a broken shape takes the light of the faces
+	if (u_snow.z > 0.5f)
+	{
+		v_snowLight = v_color0.rgb;
+	}
 #ifdef USE_LIGHTMAP
 	// The temple's lightmapped walls are drawn unlit, in the temple's light with its colour or a glow added, and fogged
 	// at each vertex

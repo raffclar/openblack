@@ -22,7 +22,7 @@
   "query": "ecs.entities"
  },
  {
-  "description": "One entity: its kind, label, place and component names; their fields on request. A component can be larger than max_bytes (a creature's animation is): the answer then gives sizes, the bytes of each field, to choose fields from",
+  "description": "One entity: its kind, label, place and component names; their fields on request. A component can be larger than max_bytes (a creature's animation is): the answer then keeps its small fields and lists the others by their bytes under omitted_fields, to ask for by their paths in fields",
   "kind": "object",
   "parameters": [
    {
@@ -109,7 +109,7 @@
   "query": "drawn.entities"
  },
  {
-  "description": "One entity: its kind, label, place and component names; their fields on request. A component can be larger than max_bytes (a creature's animation is): the answer then gives sizes, the bytes of each field, to choose fields from",
+  "description": "One entity: its kind, label, place and component names; their fields on request. A component can be larger than max_bytes (a creature's animation is): the answer then keeps its small fields and lists the others by their bytes under omitted_fields, to ask for by their paths in fields",
   "kind": "object",
   "parameters": [
    {
@@ -1506,6 +1506,12 @@
   "query": "living.chimneys"
  },
  {
+  "description": "The count of the things of the world made since the land was loaded: the place in the order of the next thing made",
+  "kind": "object",
+  "parameters": [],
+  "query": "living.things_made"
+ },
+ {
   "description": "The sounds tagged to things: sound, whether active, its emitter, the object it is attached to, whether it loops",
   "kind": "list",
   "parameters": [],
@@ -2425,7 +2431,7 @@
   "query": "screenshot.pending"
  },
  {
-  "description": "The pointer, the buttons held, the hand, what the cursor picks (with whether the Action button takes it into the hand, or takes hold of a town's totem under it, and why not), and the input still to come",
+  "description": "The pointer, the buttons held, the actions held and whether a box has the keyboard, the hand, what the cursor picks (with whether the Action button takes it into the hand, or takes hold of a town's totem under it, and why not), and the input still to come",
   "kind": "object",
   "parameters": [],
   "query": "input.state"

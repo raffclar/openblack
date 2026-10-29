@@ -141,8 +141,7 @@ Texts KindTexts(entt::entity thing)
 	}
 	if (registry.AllOf<Firefly>(thing))
 	{
-		constexpr size_t k_FireflyRow = 2;
-		return TextsOfRow(info.singleMapFixed.at(k_FireflyRow));
+		return TextsOfRow(info.singleMapFixed.at(Firefly::k_InfoRow));
 	}
 	if (const auto* fireball = registry.TryGet<const MagicFireBall>(thing))
 	{

@@ -3,8 +3,11 @@
 
 // The snow lying on the island: how deep it is in each 40 unit cell of a 128 by 128 grid, point sampled
 SAMPLER2D(s_snowDepth, 11);
-// x: 1 when snow is drawn on what is drawn. y: 1 when an object's submesh has bones.
+// x: 1 when snow is drawn on what is drawn. y: 1 when an object's submesh has bones. z: 1 for the faces of a broken
+// shape, which read the snow by where they are in the world.
 uniform vec4 u_snow;
+// The distance from the front face of a broken shape to its back face
+#define BROKEN_FACE_DEPTH 0.45f
 
 // How deep the snow lies at a grid point; none off the grid
 float SnowDepthCell(vec2 cell)

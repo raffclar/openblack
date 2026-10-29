@@ -18,12 +18,15 @@
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/Firefly.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
+#include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
@@ -523,4 +526,69 @@ TEST_F(MapProductionFiling, ATotemCoversItsOutlineAndGoesToTheFrontOfItsCellsWhe
 	// It goes out of the cells with its town centre
 	registry.Destroy(totem);
 	EXPECT_EQ(map.GetAllInCell(middle), std::vector {building});
+}
+
+TEST_F(MapProductionFiling, AFireflyIsAtTheFrontOfTheThingsThatMoveInItsCellAndMovesWithIt)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 here {500.0f, 0.0f, 500.0f};
+	const glm::vec3 there {520.0f, 0.0f, 500.0f};
+	const auto villager = MakeVillager(registry, here);
+	map.FileNew();
+	// It goes into the cell of its map position, in front of the things that move, and not in the fixed things
+	const auto firefly = registry.Create();
+	auto& fly = registry.Assign<Firefly>(firefly);
+	fly.at = map_coords::FromMetres({here.x, here.z});
+	registry.Assign<Transform>(firefly, here, glm::mat3(1.0f), glm::vec3(1.0f));
+	map.FileNew();
+	EXPECT_EQ(MobileIn(map, here), (std::vector {firefly, villager}));
+	EXPECT_TRUE(map.GetFixedInGridCell(here).empty());
+	const auto* resident = registry.TryGet<const MapCellResident>(firefly);
+	ASSERT_NE(resident, nullptr);
+	EXPECT_EQ(resident->placement, map_cells::Placement::MobileFront);
+	EXPECT_FALSE(resident->coversOutline);
+	// Its map position, not its metres, gives its cell: it flies into the next cell
+	registry.Get<Firefly>(firefly).at = map_coords::FromMetres({there.x, there.z});
+	map.Moved(firefly);
+	EXPECT_EQ(MobileIn(map, here), std::vector {villager});
+	EXPECT_EQ(MobileIn(map, there), std::vector {firefly});
+	// It leaves the cells when it is caught
+	registry.Destroy(firefly);
+	EXPECT_TRUE(MobileIn(map, there).empty());
+}
+
+TEST_F(MapProductionFiling, ATownsFlagIsAtTheBackOfTheFixedThingsInItsCellAndGoesThereAgainWhenItMoves)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 place {505.0f, 0.0f, 505.0f};
+	Locator::entitiesMap::reset();
+	Locator::entitiesMap::emplace<MapProduction>([place](const Registry& /*registry*/, entt::entity /*entity*/) {
+		return std::optional(map_cells::OutlineOfBox(place, glm::mat3(1.0f), 1.0f, glm::vec3(0.0f), {1.0f, 1.0f, 1.0f}));
+	});
+	auto& map = Locator::entitiesMap::value();
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, 0u);
+	const auto flag = registry.Create();
+	registry.Assign<TownDesireFlag>(flag, TownDesireFlag {.town = town, .desire = TownDesireInfo::ForFood, .point = 12});
+	registry.Assign<Transform>(flag, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	map.FileNew();
+	const auto* resident = registry.TryGet<const MapCellResident>(flag);
+	ASSERT_NE(resident, nullptr);
+	EXPECT_EQ(resident->placement, map_cells::Placement::FixedBack);
+	// It stands in one cell only, and it does not cover an outline
+	EXPECT_FALSE(resident->coversOutline);
+	EXPECT_EQ(resident->cells.size(), 1u);
+	// A building filed after it goes in front of it
+	const auto building = registry.Create();
+	registry.Assign<Transform>(building, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Abode>(building, AbodeNumber::Field, 0u, 0u, 0u);
+	map.FileNew();
+	const auto fixed = map.GetFixedInGridCell(place);
+	ASSERT_EQ(fixed.size(), 2u);
+	EXPECT_EQ(fixed.front(), building);
+	EXPECT_EQ(fixed.back(), flag);
+	// A new store takes it to its place in the same cell: it goes to the back of the cell's fixed things again
+	map.Refile(flag);
+	EXPECT_EQ(map.GetFixedInGridCell(place).back(), flag);
 }

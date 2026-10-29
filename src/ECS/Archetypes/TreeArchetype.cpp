@@ -43,6 +43,8 @@ entt::entity MakeTree(const glm::vec3& position, TreeInfo type, float yAngleRadi
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
+	// It takes its place in the order of the things made
+	TakeThingMadePlace();
 
 	const auto& info = Locator::infoConstants::value().tree.at(static_cast<size_t>(type));
 

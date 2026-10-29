@@ -93,6 +93,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "Temple/ChallengeRoomRules.h"
+#include "Temple/SaveGameRoomRules.h"
 #include "Temple/ScrollPictures.h"
 
 using namespace openblack::gui;
@@ -1174,6 +1175,24 @@ bool GameInterface::ChatWantsKeys() const
 	const bool wideScreen =
 	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
 	return !_menu->IsOpen() && _chatControls->WantsKeys(wideScreen);
+}
+
+openblack::input::box_keyboard::Boxes GameInterface::KeyboardBoxes() const
+{
+	return {
+	    .menu = _menu->IsOpen(),
+	    .skipBox = _skipBox->IsActive(),
+	    .newPlayerBox = _newPlayerBox->IsActive(),
+	    .skirmishBox = _skirmishBox->IsActive(),
+	    .landInfoBox = _landInfoBox->IsActive(),
+	    .saveGameBoxes = _saveGameBoxes->IsActive(),
+	    .endGameBox = _endGameBox->IsOpen(),
+	    .multiplayerBoxes = _multiplayerBoxes->IsActive(),
+	    .tattooEditor = _tattooEditor->IsOpen(),
+	    .chatTyping = ChatWantsKeys(),
+	    .storyHistory = _storyHistoryBox->IsActive(),
+	    .musicControls = _musicControls->IsActive(),
+	};
 }
 
 glm::ivec2 GameInterface::ToChatControls(glm::ivec2 screen, glm::u16vec2 resolution)
@@ -2844,6 +2863,34 @@ void GameInterface::DrawCaption(glm::u16vec2 resolution)
 		_painter.DrawString({x, top}, line, size, glm::vec4(0.0f, 0.0f, 0.0f, alpha), scale > 1.0f);
 		_painter.DrawString({x + shadow, top + shadow}, line, size, glm::vec4(1.0f, 1.0f, 0.0f, alpha), scale > 1.0f);
 		top += size;
+	}
+	if (_caption->details.empty())
+	{
+		return;
+	}
+	// The details start a line's height below the top line, across the middle half of the screen's 4:3 middle. All the
+	// lines go in black a little down first, then all the lines go in yellow.
+	namespace save_rules = temple::save_game_room;
+	const auto middle = FitInside(k_FourByThree, resolution.x, resolution.y);
+	const auto span = save_rules::DetailsSpanOf(middle.x, middle.width);
+	const auto lines = _font.Wrap(_caption->details, size, span.right - span.left);
+	const float detailsTop = (rules::k_TextTop + rules::TextSize(DialogPainter::NeedsBiggerText())) * scale;
+	const float drop = save_rules::k_DetailsShadowDrop * scale;
+	for (const auto& [colour, down] :
+	     {std::pair {glm::vec4(0.0f, 0.0f, 0.0f, alpha), drop}, std::pair {glm::vec4(1.0f, 1.0f, 0.0f, alpha), 0.0f}})
+	{
+		float y = detailsTop + down;
+		for (const auto& line : lines)
+		{
+			// No line starts below the bottom of the screen
+			if (y > static_cast<float>(resolution.y))
+			{
+				break;
+			}
+			const float x = save_rules::DetailsLineLeft(span, _font.GetWidth(line, size));
+			_painter.DrawString({x, y}, line, size, colour, scale > 1.0f);
+			y += size;
+		}
 	}
 }
 

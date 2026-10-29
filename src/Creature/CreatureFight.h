@@ -389,14 +389,17 @@ struct MindInFight
 	bool waitsForFight {false};
 	/// It won by a knock-out, and is made to do something to the loser
 	bool won {false};
+	/// It is the other creature, and the first creature only asked it. It did not tell it to stand still yet.
+	bool onlyAsked {false};
 };
 /// Whether the creature can choose a new plan. A creature that lies out cold cannot. In a fight, only the creature that
 /// started the fight by a plan of its own can, while its agenda waits for the fight. A plan that it chooses ends the
-/// fight. The other creature obeys, and a creature that the leash, a script or a knock-out makes do something cannot
+/// fight. The other creature can choose until the first creature tells it to stand still, and a plan that it chooses
+/// also ends the fight. Then it obeys. A creature that the leash, a script or a knock-out makes do something cannot
 /// choose either.
 [[nodiscard]] bool LetsChoose(const MindInFight& mind);
-/// Whether the creature obeys the creature that started its fight: its desires stand still until the fight is over, or
-/// until it wins by a knock-out
+/// Whether the creature obeys the creature that started its fight: its desires stand still from the order to stand
+/// still until the fight is over, or until it wins by a knock-out
 [[nodiscard]] bool ObeysInFight(const MindInFight& mind);
 /// The priority of the plan of the creature that obeys in a fight, before the planner's scale. The plan is an order, but
 /// it is not forced.
@@ -867,6 +870,21 @@ constexpr float k_WinPlanPriority = 1.0f;
 [[nodiscard]] bool FearsAfterFight(float life, float otherLife);
 /// Before a fight, each creature plays the taunt or the rude gesture, by a random choice
 [[nodiscard]] size_t FaceOffAnimation(bool rude);
+/// The steps of the face-off, in the game turns of the creature that starts the fight:
+/// 1. On the first turn, it asks the other creature.
+/// 2. On the second turn, it tells the other creature not to think for itself.
+/// 3. On the third turn, it tells the other creature to stop and turn to face it.
+/// 4. From the fourth turn, it turns to face the other creature.
+constexpr uint32_t k_FaceOffStillTurn = 2;
+constexpr uint32_t k_FaceOffOrderTurn = 3;
+constexpr uint32_t k_FaceOffOwnTurn = 4;
+/// The steps of the turn to face in the arena, in the game turns of the creature that started the fight after the turn
+/// on which the other creature is ready. On the first turn, it tells the other creature to turn to face it. From the
+/// second turn, it turns to face the other creature.
+constexpr uint32_t k_SquareOrderTurn = 1;
+constexpr uint32_t k_SquareOwnTurn = 2;
+/// Each creature holds its turn to face the other for this long
+constexpr float k_FaceOffHoldSeconds = 0.1f;
 /// The creature that starts the fight points at the arena for this many game turns
 constexpr uint32_t k_PointAtArenaTurns = 20;
 

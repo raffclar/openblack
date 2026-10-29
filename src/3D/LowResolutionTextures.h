@@ -36,4 +36,10 @@ inline constexpr uint16_t k_HalfSide = 128;
 /// by two square. Nothing for a picture of another size.
 [[nodiscard]] std::optional<std::vector<uint8_t>> Halve(std::span<const uint8_t> picture, uint16_t side = k_FullSide);
 
+/// A picture that the game makes in memory, such as the text of a temple scroll, at half its size. Its texels have 16
+/// bits, four for each channel. Each texel of the half picture is the mean of a two by two square, each channel rounded
+/// down. Nothing for a picture of another size.
+[[nodiscard]] std::optional<std::vector<uint16_t>> HalveByMean4444(std::span<const uint16_t> picture,
+                                                                   uint16_t side = k_FullSide);
+
 } // namespace openblack::low_resolution_textures

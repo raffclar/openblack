@@ -30,6 +30,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturef(entt::meta_
 {
 	Reflect<components::CreatureFighting>(context)
 	    .Field<&components::CreatureFighting::stage>("stage")
+	    .Field<&components::CreatureFighting::part>("part")
 	    .Field<&components::CreatureFighting::opponent>("opponent")
 	    .Field<&components::CreatureFighting::arena>("arena")
 	    .Field<&components::CreatureFighting::madeArena>("madeArena")
@@ -44,7 +45,10 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturef(entt::meta_
 	    .Field<&components::CreatureFighting::faceSeconds>("faceSeconds")
 	    .Field<&components::CreatureFighting::played>("played")
 	    .Field<&components::CreatureFighting::taunted>("taunted")
+	    .Field<&components::CreatureFighting::faceTurn>("faceTurn")
+	    .Field<&components::CreatureFighting::faceOffTurns>("faceOffTurns")
 	    .Field<&components::CreatureFighting::rude>("rude")
+	    .Field<&components::CreatureFighting::handsChecked>("handsChecked")
 	    .Field<&components::CreatureFighting::ended>("ended")
 	    .Field<&components::CreatureFighting::held>("held")
 	    .Field<&components::CreatureFighting::partnerLeft>("partnerLeft");
