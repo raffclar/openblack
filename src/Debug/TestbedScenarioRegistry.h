@@ -433,6 +433,9 @@ struct VortexSetup
 	std::optional<glm::vec2> gatheringOffset;
 	float flockDistance {0.0f};
 	float flockRadius {0.0f};
+	/// For a vortex into the land: the villagers that come out stand in a crowd that a script holds, as on the Land 2
+	/// arrival. The script breaks up the crowd this many seconds after the vortex opens. None gives no crowd.
+	std::optional<float> crowdForSeconds;
 };
 
 /// A reward chest given to the player as a challenge's script gives one: dropped from the sky or put on the land

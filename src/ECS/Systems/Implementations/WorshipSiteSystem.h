@@ -53,6 +53,8 @@ public:
 	float UseCreateChants(entt::entity site, float amount) override;
 	float MaintainSpell(entt::entity site, float amount) override;
 	void ReturnChants(entt::entity site, float amount) override;
+	[[nodiscard]] float StoredChants(entt::entity site) const override;
+	void SetStoredChants(entt::entity site, float chants) override;
 	[[nodiscard]] float ChantsAvailable(entt::entity site) const override;
 	[[nodiscard]] float TotalChantsAvailable(entt::entity site) const override;
 	float TakeChantsForVirtualInfluence(PlayerNames player, uint32_t interfaces) override;

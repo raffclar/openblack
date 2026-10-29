@@ -148,6 +148,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipChants.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/CreatureReactionNotice.h"
@@ -7164,7 +7165,9 @@ void LoadMyCreature() // 250 LOAD_MY_CREATURE
 {
 	// The player's creature, as kept when a land was last cleared, comes out at the place, unless they have one already
 	const auto position = PopVec();
-	if (Locator::tutorialSkipSystem::value().Get().startWithCow)
+	// The debug quickstart makes the Cow on the first land only. A later land loads the Cow that came through the vortex.
+	if (new_game_choice::MakesDebugCow(Locator::tutorialSkipSystem::value().Get(),
+	                                   Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber))
 	{
 		StartWithCow();
 		return;
@@ -8341,21 +8344,30 @@ void LoadCreature() // 329 LOAD_CREATURE
 	    {.owner = player, .speciesRow = speciesRow, .fileName = fileName, .place = glm::vec2(position.x, position.z)});
 }
 
+/// Whether an icon at the sites of a player's temple has prayer power in its store, for one magic type or for any
+bool PlayersIconStores(PlayerNames player, std::optional<MagicType> type)
+{
+	if (!Locator::worshipSiteSystem::has_value() || !Locator::spellIconSystem::has_value())
+	{
+		return false;
+	}
+	const auto temple = Locator::worshipSiteSystem::value().TempleOf(player);
+	return temple != entt::null && Locator::spellIconSystem::value().AnyIconStores(temple, type);
+}
+
 void IsSpellCharging() // 330 IS_SPELL_CHARGING
 {
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// A miracle charges when an icon of the player has prayer power in its store, whatever hand asked for it
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	Pushb(PlayersIconStores(player, std::nullopt));
 }
 
 void IsThatSpellCharging() // 331 IS_THAT_SPELL_CHARGING
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	// As IS_SPELL_CHARGING, for the icons whose plain miracle is of the magic type
+	const auto type = static_cast<MagicType>(Pop().intVal);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	Pushb(PlayersIconStores(player, type));
 }
 
 void OpposingCreature() // 332 OPPOSING_CREATURE
@@ -8691,12 +8703,36 @@ void ToggleLeash() // 354 TOGGLE_LEASH
 	Locator::leashSystem::value().PressKey(player, creature_leash::LeashKey::Leash);
 }
 
+/// Whether a thing is a worship site
+bool IsWorshipSite(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	return registry.Valid(object) && registry.AllOf<ecs::components::WorshipSite>(object);
+}
+
 void GameSetMana() // 355 GAME_SET_MANA
 {
-	// const auto mana = Popf();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// A worship site, or the site of a spell icon, gets this prayer power in its battery. Its icons lose their stores.
+	const auto mana = Popf();
+	const auto object = PopObject();
+	const bool icon = Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsIcon(object);
+	if (!IsWorshipSite(object) && !icon)
+	{
+		ScriptMessage("Thing not valid!");
+		return;
+	}
+	if (!Locator::spellIconSystem::has_value() || !Locator::worshipSiteSystem::has_value())
+	{
+		return;
+	}
+	auto& icons = Locator::spellIconSystem::value();
+	const auto site = IsWorshipSite(object) ? object : icons.SiteOfIcon(object);
+	if (site == entt::null)
+	{
+		return;
+	}
+	icons.EmptyIconStores(site);
+	Locator::worshipSiteSystem::value().SetStoredChants(site, mana);
 }
 
 void SetMagicProperties() // 356 SET_MAGIC_PROPERTIES
@@ -9283,10 +9319,14 @@ void PauseUnpauseStormCreationInClimateSystem() // 402 PAUSE_UNPAUSE_STORM_CREAT
 
 void GetManaForSpell() // 403 GET_MANA_FOR_SPELL
 {
-	// const auto spell = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The prayer power that a miracle of the magic type costs to create
+	const auto spell = Pop().intVal;
+	if (spell < 0 || static_cast<size_t>(spell) >= magic::k_MagicTypeCount || !Locator::infoConstants::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(magic::GetChantsRequiredToCreate(Locator::infoConstants::value(), static_cast<MagicType>(spell)));
 }
 
 void KillStormsInArea() // 404 KILL_STORMS_IN_AREA
@@ -9462,17 +9502,32 @@ void GetObjectClicked() // 421 GET_OBJECT_CLICKED
 
 void GetMana() // 422 GET_MANA
 {
-	// const auto worshipSite = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The prayer power in the battery of a worship site. Only a site has it, not a spell icon.
+	const auto object = PopObject();
+	if (!IsWorshipSite(object))
+	{
+		ScriptMessage("Thing not valid!");
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().StoredChants(object) : 0.0f);
 }
 
 void ClearPlayerSpellCharging() // 423 CLEAR_PLAYER_SPELL_CHARGING
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// At the sites of the player's temple, each icon that charges for the hand at this computer stops its charge
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (!Locator::playerSystem::has_value() || !Locator::worshipSiteSystem::has_value() ||
+	    !Locator::spellIconSystem::has_value())
+	{
+		return;
+	}
+	const auto temple = Locator::worshipSiteSystem::value().TempleOf(player);
+	if (temple == entt::null)
+	{
+		return;
+	}
+	Locator::spellIconSystem::value().CancelChargesFor(temple, Locator::playerSystem::value().GetLocalPlayer());
 }
 
 void StopSoundEffect() // 424 STOP_SOUND_EFFECT
@@ -9820,11 +9875,31 @@ void CreatureAutoscale() // 452 CREATURE_AUTOSCALE
 
 void GetSpellIconInTemple() // 453 GET_SPELL_ICON_IN_TEMPLE
 {
-	// const auto temple = Pop().uintVal;
-	// const auto spell = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The icon of a magic type's first seed at the worship sites of a temple
+	const auto temple = PopObject();
+	const auto type = static_cast<MagicType>(Pop().intVal);
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(temple) || !registry.AllOf<ecs::components::Temple>(temple))
+	{
+		ScriptMessage("Invalid Temple");
+		Pusho(0);
+		return;
+	}
+	if (!Locator::spellIconSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		Pusho(0);
+		return;
+	}
+	const auto seed = magic::FindFirstSpellSeedForMagicType(Locator::infoConstants::value(), type);
+	const auto icon = seed.has_value() ? Locator::spellIconSystem::value().IconInTemple(temple, *seed) : entt::null;
+	if (icon == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	// The icon takes a place in the scripts' table, not as a thing that a script made
+	Locator::scriptObjects::value().Register(icon, false);
+	Pusho(static_cast<uint32_t>(icon));
 }
 
 void GameClearComputerPlayerActions() // 454 GAME_CLEAR_COMPUTER_PLAYER_ACTIONS

@@ -9,11 +9,15 @@ to summary.jsonl there.
 
     python tools/sim/ai_soak.py --short
     python tools/sim/ai_soak.py --lands TwoGods,ring32 --seeds 1,2 --ai-seeds 0,1 --modes all-computer --turns 2000
+    python tools/sim/ai_soak.py --lands TwoGods,mpm_2p_1 --turns 20000 --part-observer
+    python tools/sim/ai_soak.py --lines <day>/summary.jsonl
     python tools/sim/ai_soak.py --self-test
 
 The modes: all-computer (the room has no human god; every client is an observer) and all-but-one (client 0 is the human
 god with a still hand, the other gods are computer gods, and the observers watch). An AI seed of 0 means the built-in
-personalities of the gods. The games need a build with the developer tools and the AI soak modes (--bin, or the build
+personalities of the gods. With --part-observer, the world of the last observer of each game parts on purpose at a
+random turn of that game (the same turn for the same shuffle seed) and must come back in step from the server's world;
+any other part of that observer still fails the game. The games need a build with the developer tools and the AI soak modes (--bin, or the build
 folder of this tree).
 
 The runner checks the processor, the memory and the disk before each game and waits until they allow a game. On the PC:
@@ -98,6 +102,8 @@ LANDS = {
 }
 # The lands of a night's soak. "Death Comes To Those That Wait" joins after the script fix of the plan (package S2).
 NIGHT_LANDS = ["TwoGods", "ThreeGods", "FourGods", "IslandWars", "Firestorm", "mpm_2p_1", "mpm_3p_1", "mpm_4p_1", "ring32"]
+# The lands of the soak of every map: every land of the soak, one game each (desync_soak.sh maps)
+MAP_LANDS = list(LANDS)
 MODES = ("all-computer", "all-but-one")
 # The most desktop observers (the plan: up to 4 desktop clients and one web client)
 MOST_OBSERVERS = 4
@@ -114,13 +120,36 @@ class Game:
     turns: int
     web_client: bool = False
     until_end: bool = False
+    # The turn at which the world of the last observer parts on purpose and comes back (None: no part on purpose)
+    part_observer_at: object = None
+    # The time limit of the network game in minutes (None: the game's default of 30 minutes, 18000 turns)
+    time_limit: object = None
 
     @property
     def name(self):
         ai = f"ai{self.ai_seed}" if self.ai_seed else "ai-none"
         web = "-web" if self.web_client else ""
         end = "-end" if self.until_end else ""
-        return f"{self.land}-s{self.seed}-{ai}-{self.mode}-o{self.observers}{web}-t{self.turns}{end}"
+        part = "" if self.part_observer_at is None else f"-p{self.part_observer_at}"
+        return f"{self.land}-s{self.seed}-{ai}-{self.mode}-o{self.observers}{web}-t{self.turns}{end}{part}"
+
+    @property
+    def part_client(self):
+        """The client (from 1) whose world parts on purpose: the last desktop observer"""
+        return (0 if self.mode == "all-computer" else 1) + self.observers
+
+
+def part_turn_range(turns):
+    """The first and the last turn at which an observer can part on purpose in a game of these turns: after the start of
+    the game, and early enough that the observer comes back before the end"""
+    first = max(1, min(100, turns // 4))
+    return first, max(first, turns - max(200, turns // 10))
+
+
+def random_part_turn(game, seed):
+    """The turn of the part on purpose of a game: random, but the same for the same game and seed"""
+    first, last = part_turn_range(game.turns)
+    return random.Random(f"{seed}:{game.name}").randint(first, last)
 
 
 def plan(lands, seeds, ai_seeds, modes, observers, turns, web_client=False, until_end=False):
@@ -159,6 +188,10 @@ def net_check_arguments(game, out, bin_folder=None, config="RelWithDebInfo", ext
         arguments.append("--web-client")
     if game.until_end:
         arguments.append("--until-end")
+    if game.part_observer_at is not None:
+        arguments += ["--part-client", str(game.part_client), "--part-second-at", str(game.part_observer_at)]
+    if game.time_limit is not None:
+        arguments += ["--time-limit", str(game.time_limit)]
     arguments += list(extra)
     return arguments
 
@@ -182,6 +215,10 @@ def repro_line(game, bin_folder=None, config="RelWithDebInfo", inject=None):
         parts.append("--until-end")
     if inject is not None:
         parts += ["--inject-part", str(inject)]
+    if game.part_observer_at is not None:
+        parts += ["--part-observer-at", str(game.part_observer_at)]
+    if game.time_limit is not None:
+        parts += ["--time-limit", str(game.time_limit)]
     return " ".join(f'"{part}"' if " " in part else part for part in parts)
 
 
@@ -249,6 +286,8 @@ def summary_row(game, status, summary, started, started_clock, finished_clock, r
         row["max_turn_ms"] = max_turn_ms(summary)
         row["max_record_ms"] = max_record_ms(summary)
         row["ended"] = summary.get("ended")
+    if game.part_observer_at is not None:
+        row["part_observer_at"] = game.part_observer_at
     if repro:
         row["repro"] = repro
     if replay:
@@ -460,6 +499,24 @@ def table_lines(rows):
     return lines
 
 
+def map_lines(rows):
+    """One line for each game, for the merge train: the land, same or PART, the turns played, the first different turn and
+    the parts that differ, and the turn of the part on purpose of the observer"""
+    lines = []
+    for row in rows:
+        status = {"same": "same", "part": "PART"}.get(row["status"], "ERROR")
+        part = row.get("first_part_turn")
+        planned = row.get("part_observer_at")
+        # A game in step names no parts: the parts of the row then come from the part on purpose
+        parts = ", ".join(row.get("parts") or []) if status == "PART" else ""
+        line = (f"{row['land']:<12} {status:<5} turns {row.get('turns_played', '-')}"
+                f" first part {'-' if part is None else part} parts {parts or '-'}")
+        if planned is not None:
+            line += f" observer part {planned}"
+        lines.append(line)
+    return lines
+
+
 def largest(values):
     """The largest of the values that are not none, none when there is no such value"""
     return max((value for value in values or [] if value is not None), default=None)
@@ -511,6 +568,15 @@ def build_parser():
     parser.add_argument("--queue-handover", help="a part adds an AI soak part line with the repro line to this file")
     parser.add_argument("--short", action="store_true", help="the short soak of a merge-train car (see short_plan)")
     parser.add_argument("--night", action="store_true", help="every land of the night's list")
+    parser.add_argument("--maps", action="store_true", help="every land of the soak (" + ", ".join(MAP_LANDS) + ")")
+    parser.add_argument("--part-observer", action="store_true",
+                        help="the world of the last observer of each game parts on purpose at a random turn and must "
+                             "come back in step (the turn comes from --shuffle-seed and the game)")
+    parser.add_argument("--part-observer-at", type=int,
+                        help="as --part-observer, but at this turn in each game")
+    parser.add_argument("--time-limit", type=int,
+                        help="the time limit of each network game in minutes (net_check's --time-limit). The default "
+                             "of 30 minutes decides a game after 18000 turns")
     parser.add_argument("--config", default="RelWithDebInfo")
     parser.add_argument("--bin", help="the folder with openblack and openblack-server")
     parser.add_argument("--out", default=DEFAULT_OUT, help="the folder of the runs (a folder of the date goes in it)")
@@ -527,7 +593,8 @@ def build_parser():
                         help="start a game only when the game programs of all lanes with its own are not more (0: no limit)")
     parser.add_argument("--inject-part", type=int, help="tests: a client's world parts at this turn and stays apart")
     parser.add_argument("--table", help="write a short markdown table of the rows of this summary.jsonl and exit")
-    parser.add_argument("--since", help="with --table, only the games that started on or after this date (YYYY-MM-DD)")
+    parser.add_argument("--lines", help="write one line for each game of this summary.jsonl and exit (see map_lines)")
+    parser.add_argument("--since", help="with --table or --lines, only the games that started on or after this date (YYYY-MM-DD)")
     parser.add_argument("--self-test", action="store_true",
                         help="play a game with a known part and check that the runner finds the part, its turn and the rows")
     return parser
@@ -537,7 +604,7 @@ def games_of(options, parser=None):
     """The games that the command line asks for"""
     if options.short:
         return short_plan()
-    lands = NIGHT_LANDS if options.night else parse_list(options.lands)
+    lands = MAP_LANDS if getattr(options, "maps", False) else NIGHT_LANDS if options.night else parse_list(options.lands)
     unknown = [land for land in lands if land not in LANDS]
     modes = parse_list(options.modes)
     bad_modes = [mode for mode in modes if mode not in MODES]
@@ -552,6 +619,14 @@ def games_of(options, parser=None):
         problems.append(f"--turns takes 1 to {MOST_TURNS}")
     if "all-computer" in modes and options.observers + (1 if options.web_client else 0) == 0:
         problems.append("the mode all-computer needs an observer: --observers or --web-client")
+    part_at = getattr(options, "part_observer_at", None)
+    parts = getattr(options, "part_observer", False) or part_at is not None
+    if parts and options.observers == 0:
+        problems.append("--part-observer needs a desktop observer: --observers")
+    if part_at is not None and not 1 <= part_at < options.turns:
+        problems.append("--part-observer-at takes a turn after 0 and before --turns")
+    if getattr(options, "time_limit", None) is not None and options.time_limit < 1:
+        problems.append("--time-limit takes 1 minute or more")
     if problems:
         raise ValueError("; ".join(problems))
     games = plan(lands, parse_list(options.seeds, int), parse_list(options.ai_seeds, int), modes, options.observers,
@@ -563,6 +638,14 @@ def games_of(options, parser=None):
         # One game of the run has the web client (one Chrome), the first one that has computer gods only
         first = next((i for i, game in enumerate(games) if game.mode == "all-computer"), 0)
         games[first] = dataclasses.replace(games[first], web_client=True)
+    time_limit = getattr(options, "time_limit", None)
+    if time_limit is not None:
+        games = [dataclasses.replace(game, time_limit=time_limit) for game in games]
+    if part_at is not None:
+        games = [dataclasses.replace(game, part_observer_at=part_at) for game in games]
+    elif parts:
+        seed = options.shuffle_seed or 0
+        games = [dataclasses.replace(game, part_observer_at=random_part_turn(game, seed)) for game in games]
     return games
 
 
@@ -617,6 +700,12 @@ def main(argv=None):
     if options.table:
         print("\n".join(table_lines(read_rows(options.table, options.since))))
         return 0
+    if options.lines:
+        print("\n".join(map_lines(read_rows(options.lines, options.since))))
+        return 0
+    if options.inject_part is not None and (options.part_observer or options.part_observer_at is not None):
+        print("ai_soak: --inject-part does not go with --part-observer")
+        return 2
     try:
         games = games_of(options, parser)
     except ValueError as error:

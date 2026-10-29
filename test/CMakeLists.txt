@@ -6,6 +6,16 @@ include(CTest)
 add_executable(openblack_tests test_runner_main.cpp)
 target_link_libraries(openblack_tests PRIVATE GTest::gtest openblack_lib)
 set_property(TARGET openblack_tests PROPERTY FOLDER "tests")
+# A program started by hand reads the folders that depend on the checkout from this file, next to the program (see
+# test_runner_main.cpp). It is written at generate time, so no object that the compiler cache shares between worktrees
+# holds a path of a checkout.
+file(
+  GENERATE
+  OUTPUT $<TARGET_FILE_DIR:openblack_tests>/openblack_test_paths.txt
+  CONTENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data
+OPENBLACK_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+"
+)
 
 # The test program resets each service of the locator after each test suite. A suite then never sees what an earlier
 # suite left. The list comes from the declarations in the locator, so a new service is in it with no change here.
@@ -2138,3 +2148,8 @@ add_test(NAME test_guard_sweep
 openblack_setup_and_add_test(test_box_keyboard input/test_box_keyboard.cpp)
 openblack_setup_and_add_test(test_creature_catch_while_busy test_creature_catch_while_busy.cpp)
 openblack_setup_and_add_test(test_puzzle_game_rules test_puzzle_game_rules.cpp)
+openblack_setup_and_add_test(
+  test_script_prayer_natives test_script_prayer_natives.cpp
+)
+target_link_libraries(test_script_prayer_natives PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_audio_library_log audio/test_audio_library_log.cpp)

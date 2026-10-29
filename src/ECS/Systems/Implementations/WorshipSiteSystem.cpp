@@ -479,6 +479,22 @@ void WorshipSiteSystem::ReturnChants(entt::entity site, float amount)
 	_world->Entities().Get<WorshipChants>(site).battery += amount;
 }
 
+float WorshipSiteSystem::StoredChants(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	const auto* chants = registry.Valid(site) ? registry.TryGet<const WorshipChants>(site) : nullptr;
+	return chants != nullptr ? chants->battery : 0.0f;
+}
+
+void WorshipSiteSystem::SetStoredChants(entt::entity site, float chants)
+{
+	auto& registry = _world->Entities();
+	if (auto* battery = registry.Valid(site) ? registry.TryGet<WorshipChants>(site) : nullptr; battery != nullptr)
+	{
+		battery->battery = chants;
+	}
+}
+
 float WorshipSiteSystem::ChantsAvailable(entt::entity site) const
 {
 	return magic::WorshipAvailable(_world->Entities().Get<const WorshipChants>(site));

@@ -30,6 +30,7 @@ using openblack::new_game_choice::ClampChoice;
 using openblack::new_game_choice::FirstLandStartsStory;
 using openblack::new_game_choice::IsAvailable;
 using openblack::new_game_choice::LandStartsStoryScript;
+using openblack::new_game_choice::MakesDebugCow;
 using openblack::new_game_choice::NewGameStart;
 using openblack::new_game_choice::ParseNewGameStart;
 using openblack::new_game_choice::SkipFor;
@@ -149,6 +150,19 @@ TEST(NewGameChoice, OnlyTheFirstLandStartsTheStoryScript)
 	EXPECT_FALSE(LandStartsStoryScript(5));
 	// A land outside the story has the number 0
 	EXPECT_FALSE(LandStartsStoryScript(0));
+}
+
+// The debug quickstart makes the Cow on the first land only; a later land loads the Cow that crossed
+TEST(NewGameChoice, TheDebugCowIsMadeOnlyOnTheFirstLand)
+{
+	const auto cow = SkipFor(Choice::DebugStartWithCow);
+	EXPECT_TRUE(MakesDebugCow(cow, 1));
+	EXPECT_FALSE(MakesDebugCow(cow, 2));
+	EXPECT_FALSE(MakesDebugCow(cow, 5));
+	EXPECT_FALSE(MakesDebugCow(cow, 0));
+	// Without the debug answer no land makes the Cow
+	EXPECT_FALSE(MakesDebugCow(SkipFor(Choice::KeepOldCreature), 1));
+	EXPECT_FALSE(MakesDebugCow(SkipFor(Choice::StartNormally), 1));
 }
 
 TEST(NewGameChoice, SelectionsAreBroughtIntoRange)

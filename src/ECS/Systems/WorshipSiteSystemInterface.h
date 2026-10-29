@@ -79,6 +79,11 @@ public:
 	virtual float MaintainSpell(entt::entity site, float amount) = 0;
 	/// Prayer power goes back into a site's battery, as a dropped seed's does
 	virtual void ReturnChants(entt::entity site, float amount) = 0;
+	/// The prayer power stored in the battery of a site. A site without prayer power has none.
+	[[nodiscard]] virtual float StoredChants(entt::entity site) const = 0;
+	/// A script sets the prayer power in the battery of a site. What the site can give this turn stays the same until
+	/// the end of the turn of the site.
+	virtual void SetStoredChants(entt::entity site, float chants) = 0;
 	/// What can still be drawn from a site this turn
 	[[nodiscard]] virtual float ChantsAvailable(entt::entity site) const = 0;
 	/// All the prayer power of a site this turn, with what it gave already: a request for a miracle by gesture asks

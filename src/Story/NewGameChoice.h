@@ -122,6 +122,13 @@ struct NewGameStart
 	return landNumber == 1;
 }
 
+/// Whether the debug quickstart makes the Cow when a land loads the kept creature. Only the first land makes it. On a
+/// later land the Cow came through the vortex as the kept creature, and the land loads it at the given place.
+[[nodiscard]] constexpr bool MakesDebugCow(const TutorialSkip& skip, int32_t landNumber) noexcept
+{
+	return skip.startWithCow && landNumber == 1;
+}
+
 /// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)
 /// or "old" (keep the old creature) or "cow" (debug: start with the Cow); nothing for anything else
 [[nodiscard]] constexpr std::optional<NewGameStart> ParseNewGameStart(std::string_view text) noexcept
