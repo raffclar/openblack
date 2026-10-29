@@ -564,6 +564,8 @@ struct ScriptArgument
 		Position,
 		/// A whole number (number, made whole towards zero), as a script gives a constant such as a resource type
 		Integer,
+		/// The first value that the last native call gave back, such as the thing that it made
+		Result,
 	};
 	Kind kind {Kind::Number};
 	float number {0.0f};

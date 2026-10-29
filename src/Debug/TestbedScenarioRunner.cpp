@@ -1250,6 +1250,7 @@ void Runner::Stop()
 		Game::Instance()->SetDemoRoundTrip(std::nullopt);
 	}
 	_demoPingSince.reset();
+	_lastNativeResult.reset();
 	// The debug option's bonus creatures are as they were
 	if (_unlockedBefore.has_value() && Locator::config::has_value())
 	{
@@ -2821,6 +2822,8 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	case ScriptArgument::Kind::Position:
 		// A position is three values, which only a native call gives
 		return std::nullopt;
+	case ScriptArgument::Kind::Result:
+		return _lastNativeResult;
 	}
 	if (!object.has_value())
 	{
@@ -2875,6 +2878,7 @@ std::string Runner::CallNative(const Command& command)
 	{
 		return fmt::format("{} could not run now", command.script);
 	}
+	_lastNativeResult = results.empty() ? std::nullopt : std::optional(results.front().first);
 	return fmt::format("{} ran and gave back {} values", command.script, results.size());
 }
 

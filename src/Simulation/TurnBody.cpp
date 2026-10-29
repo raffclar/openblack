@@ -84,6 +84,7 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -646,6 +647,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::WalkPaths:
 		// The things that the scripts walk along tracks move on
 		Locator::walkPathSystem::value().ProcessTurn();
+		break;
+	case Step::Mists:
+		// The mists that a script fades take a step of their size and their alpha
+		if (Locator::mistSystem::has_value())
+		{
+			Locator::mistSystem::value().ProcessTurn();
+		}
 		break;
 	case Step::Footpaths:
 		// The footpaths that the game finds between things take a few more steps, and it lays those that it found

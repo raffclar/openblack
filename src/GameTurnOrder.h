@@ -125,6 +125,8 @@ enum class Step : uint8_t
 	Fields,
 	FishFarms,
 	WalkPaths,
+	/// The mists that a script fades take a step of their fades
+	Mists,
 	Footpaths,
 	ForestGrowth,
 	/// The parts of the creatures' turns that are not for one creature, before the turn of the living
@@ -295,6 +297,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fields, .stage = Stage::Lists},
     {.step = Step::FishFarms, .stage = Stage::Lists},
     {.step = Step::WalkPaths, .stage = Stage::Lists},
+    // The game steps the fades of the mists in its lists of things, after the things that walk along tracks
+    {.step = Step::Mists, .stage = Stage::Lists},
     {.step = Step::Footpaths, .stage = Stage::Lists},
     {.step = Step::ForestGrowth, .stage = Stage::Forests},
     // Each living thing takes its own turn in the order of the game's list of the living. Each creature does the steps

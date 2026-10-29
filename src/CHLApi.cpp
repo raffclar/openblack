@@ -48,6 +48,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "3D/Mists.h"
 #include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
@@ -82,6 +83,7 @@
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
+#include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/PuzzleGameArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
@@ -122,6 +124,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/NeverFades.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -217,6 +220,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
@@ -282,6 +286,7 @@
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptCreateRules.h"
 #include "ScriptHeaders/ScriptCreatureRules.h"
+#include "ScriptHeaders/ScriptDeadLiving.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
@@ -2453,6 +2458,15 @@ void SetPosition() // 024 SET_POSITION
 		}
 		if (inHand || flying)
 		{
+			return;
+		}
+		// A marker is not in the map. It goes to the map position of the point and keeps the height of the point above
+		// the land.
+		if (registry.Valid(object) && registry.AllOf<ecs::components::ScriptMarker>(object))
+		{
+			const auto& island = Locator::terrainSystem::value();
+			registry.Get<Transform>(object).position = map_coords::ToWorld(island, map_coords::FromWorld(island, position));
+			registry.SetDirty();
 			return;
 		}
 		// A thing out of the map's cells stays where it is, as a thing that a creature holds
@@ -6641,10 +6655,17 @@ void GameTeamSize() // 219 GAME_TEAM_SIZE
 
 void GameType() // 220 GAME_TYPE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// The script type of the thing, as a find or an is-of-type test matches it. A thing that has no script type gives 0.
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ObjectNoLongerValid();
+		Pushi(0);
+		return;
+	}
+	const auto kind = ecs::script_find::KindOf(registry, object);
+	Pushi(kind.has_value() ? static_cast<int32_t>(kind->type) : 0);
 }
 
 void GameSubType() // 221 GAME_SUB_TYPE
@@ -7363,28 +7384,48 @@ void IsWindMagicAtPos() // 262 IS_WIND_MAGIC_AT_POS
 
 void CreateMist() // 263 CREATE_MIST
 {
-	// const auto heightRatio = Popf();
-	// const auto transparency = Popf();
-	// const auto b = Popf();
-	// const auto g = Popf();
-	// const auto r = Popf();
-	// const auto scale = Popf();
-	// const auto pos = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// A puff of mist at the point given, in the colour given, one over the height ratio times wider than tall seen level
+	const auto heightRatio = Popf();
+	const auto transparency = Popf();
+	const auto blue = Popf();
+	const auto green = Popf();
+	const auto red = Popf();
+	const auto scale = Popf();
+	const auto position = PopVec();
+	const float ground = Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z));
+	const auto mist = ecs::archetypes::MistArchetype::Create(
+	    position, position.y - ground, mists::ScriptColour(red, green, blue, transparency), scale, 1.0f / heightRatio);
+	if (mist == entt::null)
+	{
+		ScriptMessage("Thing not created");
+		PushObject(entt::null);
+		return;
+	}
+	RegisterCreated(mist);
+	PushObject(mist);
 }
 
 void SetMistFade() // 264 SET_MIST_FADE
 {
-	// const auto duration = Popf();
-	// const auto endTransparency = Popf();
-	// const auto startTransparency = Popf();
-	// const auto endScale = Popf();
-	// const auto startScale = Popf();
-	// const auto mist = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The mist's size and alpha (0 to 255) go from their starts to their ends over the seconds given, a step each turn
+	const auto duration = Popf();
+	const auto endTransparency = Popf();
+	const auto startTransparency = Popf();
+	const auto endScale = Popf();
+	const auto startScale = Popf();
+	const auto mist = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (mist == entt::null || !registry.Valid(mist))
+	{
+		ScriptMessage("Thing deleted");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Mist>(mist))
+	{
+		ScriptMessage("Must be mist object!");
+		return;
+	}
+	Locator::mistSystem::value().SetFade(mist, startScale, endScale, startTransparency, endTransparency, duration);
 }
 
 void GetObjectFade() // 265 GET_OBJECT_FADE
@@ -9760,13 +9801,61 @@ void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC
 	}
 }
 
+/// What the search for the dead looks at in a thing
+static script::dead_living::LivingFacts DeadLivingFactsOf(const ecs::Registry& registry, entt::entity thing)
+{
+	using script::dead_living::LivingFacts;
+	if (registry.AllOf<ecs::components::Villager>(thing))
+	{
+		const auto* action = registry.TryGet<const ecs::components::LivingAction>(thing);
+		if (action == nullptr || !Locator::livingActionSystem::has_value())
+		{
+			return {};
+		}
+		return {.kind = LivingFacts::Kind::Villager,
+		        .deathMark = registry.AllOf<ecs::components::VillagerDeath>(thing),
+		        .topState = action->states.at(static_cast<size_t>(ecs::components::LivingAction::Index::Top)),
+		        .finalState = static_cast<uint8_t>(Locator::livingActionSystem::value().VillagerGetFinalState(*action))};
+	}
+	if (const auto* animal = registry.TryGet<const ecs::components::Animal>(thing))
+	{
+		// Of the animal states, only the dead state has the game's number of the dead state
+		return {.kind = LivingFacts::Kind::Animal,
+		        .deathMark = animal->dying,
+		        .topState =
+		            animal->state == ecs::components::AnimalState::Dead ? script::dead_living::k_DeadState : uint8_t {0},
+		        .life = animal->life};
+	}
+	return {};
+}
+
 void GetDeadLiving() // 446 GET_DEAD_LIVING
 {
-	// const auto radius = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The nearest dead villager or animal in the cells within the radius of the point. A thing farther than the radius
+	// in these cells also counts. The script then holds the thing.
+	const auto radius = Popf();
+	const auto position = PopVec();
+	const auto at = map_coords::FromMetres({position.x, position.z});
+	const auto found = ecs::script_find::FindNearest(at, radius, [](glm::ivec2 cell) {
+		const auto& registry = Locator::entitiesRegistry::value();
+		std::vector<ecs::script_find::Candidate> dead;
+		for (const auto thing : Locator::entitiesMap::value().GetAllInCell(cell))
+		{
+			if (registry.Valid(thing) && registry.AllOf<Transform>(thing) &&
+			    script::dead_living::IsDead(DeadLivingFactsOf(registry, thing)))
+			{
+				dead.push_back({.entity = thing, .at = ScriptFindPosition(registry, thing)});
+			}
+		}
+		return dead;
+	});
+	if (found == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	Pusho(static_cast<uint32_t>(found));
 }
 
 void AttachSoundTag() // 447 ATTACH_SOUND_TAG

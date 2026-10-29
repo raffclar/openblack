@@ -266,6 +266,8 @@ private:
 	entt::entity _fireBallTaken {entt::null};
 	/// When the miracles' positions are next logged, for a scenario that logs them
 	float _nextMiracleLog {0.0f};
+	/// The first value that the last native call gave back
+	std::optional<lhvm::VMValue> _lastNativeResult;
 	Timeline _timeline;
 	GiveObserver _giveObserver;
 	std::optional<std::map<uint32_t, std::vector<size_t>>> _followedGives;
