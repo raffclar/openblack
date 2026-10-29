@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -108,8 +109,10 @@ bool IsBuilt(const building_world::World& world, entt::entity building)
 /// Whether something not yet wholly built is drawn going up: any building, but of the features only those drawn as one
 bool DrawnGoingUp(const building_world::World& world, entt::entity building)
 {
+	const auto* progress = world.Entities().TryGet<const BuildProgress>(building);
 	const auto* feature = world.Entities().TryGet<const Feature>(building);
-	return !IsBuilt(world, building) && (feature == nullptr || building_construction::FeatureDrawnGoingUp(feature->type));
+	return building_construction::DrawnGoingUp(progress != nullptr ? std::optional(progress->built) : std::nullopt,
+	                                           feature != nullptr ? std::optional(feature->type) : std::nullopt);
 }
 
 /// How much of a building is drawn standing

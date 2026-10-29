@@ -69,6 +69,7 @@
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Swayable.h"
@@ -96,6 +97,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TreeRoots.h"
@@ -131,6 +133,9 @@ using openblack::physics::objects::TreePlace;
 namespace
 {
 static_assert(openblack::graphics::object_tint::k_MostGrainFlow == openblack::magic::piles::k_GrainFlowSpan);
+
+/// An icon at a worship site that shines is lit through this colour: all the light, with a little loss
+constexpr uint32_t k_IconLitColour = 0xFFFFFFu;
 
 /// Whether an object is drawn whole with the others: a building drawn as far up as it stands is drawn by itself
 bool DrawnWhole(entt::entity entity)
@@ -1013,6 +1018,15 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    }
 			    }
 		    }
+		    // An icon at a worship site that shows its charge is lit through white, and it shines in its player's colour
+		    if (Locator::spellIconSystem::has_value() && registry.AllOf<WorshipIcon>(entity))
+		    {
+			    if (const auto shine = Locator::spellIconSystem::value().ShownTint(entity); shine != 0)
+			    {
+				    look.y = static_cast<float>(k_IconLitColour);
+				    added = graphics::object_tint::SumAdded(added, shine);
+			    }
+		    }
 		    // The heart of a temple is lit through white. In its destruction it glows in its player's colour, then fades
 		    // out, and it is not drawn just before the temple goes.
 		    if (const auto* temple = registry.TryGet<const Temple>(entity); temple != nullptr)
@@ -1100,12 +1114,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 
 		    // A building going up is drawn only as far up as it stands, with the broken and the unfinished ones, though
-		    // what of it stands can still be pointed at
-		    // (a feature is drawn going up only if it is the ark's dry dock)
+		    // what of it stands can still be pointed at. A building with all of it built is drawn whole, also before it
+		    // is finished.
 		    const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		    const auto* feature = registry.TryGet<const Feature>(entity);
-		    const bool goingUp = progress != nullptr && DrawnMeshOf(entity, mesh) == mesh.id &&
-		                         (feature == nullptr || building_construction::FeatureDrawnGoingUp(feature->type));
+		    const bool goingUp =
+		        DrawnMeshOf(entity, mesh) == mesh.id &&
+		        building_construction::DrawnGoingUp(progress != nullptr ? std::optional(progress->built) : std::nullopt,
+		                                            feature != nullptr ? std::optional(feature->type) : std::nullopt);
 		    if (goingUp)
 		    {
 			    look.z = 1.0f;

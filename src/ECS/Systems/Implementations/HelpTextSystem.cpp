@@ -11,15 +11,12 @@
 
 #include "HelpTextSystem.h"
 
-#include <chrono>
 #include <utility>
 
-#include <spdlog/spdlog.h>
-
 #include "Common/GameLanguage.h"
-#include "Common/GameRandom.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -29,172 +26,22 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
-#include "Sound/SoundDecoder.h"
 #include "Sound/SoundRequestInterface.h"
-#include "Sound/WaveCueLabels.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The good advisor and the evil one, as the voices number them
-constexpr int k_GoodAdvisor = 0;
-constexpr int k_EvilAdvisor = 1;
+constexpr int k_GoodAdvisor = AdvisorVoiceSystemInterface::k_GoodAdvisor;
+constexpr int k_EvilAdvisor = AdvisorVoiceSystemInterface::k_EvilAdvisor;
 
-/// The playing sound of an emitter, which has not finished
-bool Sounding(entt::entity emitter)
+/// The advisors' voices that this computer plays. A computer that shows nothing has none.
+AdvisorVoiceSystemInterface* Voices()
 {
-	if (emitter == entt::null)
-	{
-		return false;
-	}
-	auto& audio = Locator::sounds::value();
-	return audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
-}
-
-/// The real time since the game started, in milliseconds
-uint32_t NowMs()
-{
-	return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count());
-}
-
-/// Whether the length of its sample times the advisor's line, not the sound device
-bool TimedByLength()
-{
-	return audio::TimedByLength(Locator::sounds::value().IsDeviceLost(),
-	                            Locator::time::value().GetFixedFrameTime().has_value());
-}
-
-/// A line's recording decoded once more, as the sound plays it, with the cue labels its gestures are read from
-help::AdvisorVoices::Recording LineRecording(const audio::Sound& sound)
-{
-	help::AdvisorVoices::Recording recording;
-	for (const auto& part : sound.buffer)
-	{
-		auto decoded = audio::DecodeSound(part, sound.sampleRate);
-		if (!decoded.sound)
-		{
-			continue;
-		}
-		recording.channels = decoded.sound->channelLayout == audio::ChannelLayout::Stereo ? 2 : 1;
-		recording.sampleRate = decoded.sound->sampleRate;
-		recording.samples.insert(recording.samples.end(), decoded.sound->samples.begin(), decoded.sound->samples.end());
-	}
-	if (!sound.buffer.empty())
-	{
-		std::vector<help::spirits::TagLabel> labels;
-		for (auto& label : audio::ReadWaveCueLabels(sound.buffer.front()))
-		{
-			labels.push_back({.text = std::move(label.text), .time = label.time});
-		}
-		recording.labels = std::move(labels);
-	}
-	return recording;
+	return Locator::advisorVoiceSystem::has_value() ? &Locator::advisorVoiceSystem::value() : nullptr;
 }
 } // namespace
-
-HelpTextSystem::HelpTextSystem()
-    : _voices(VoiceAudio(), VoiceHooks())
-{
-}
-
-help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
-{
-	help::AdvisorVoices::Audio audio;
-	audio.lineCount = []() {
-		return static_cast<uint32_t>(
-		    Locator::helpSpeechSystem::value().GetTable().GetBankCount(audio::SpeechBank::HelpSprites));
-	};
-	audio.start = [this](uint32_t line) {
-		const auto sound = Locator::helpSpeechSystem::value().GetTable().FindSound(audio::SpeechBank::HelpSprites, line);
-		if (!sound || !Locator::resources::value().GetSounds().Contains(*sound))
-		{
-			return false;
-		}
-		// Heard everywhere, wherever the advisor is. The voice rules know the advisors' lines by their own number.
-		auto& sounds = Locator::sounds::value();
-		_advisorLine = sounds.StartSoundEffect(
-		    *sound, {.voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::k_AdvisorOwnerNumber});
-		// Its length is known once it has been made ready to play
-		_advisorPlayback = {
-		    .startMs = NowMs(),
-		    .lengthMs = Locator::resources::value().GetSounds().Handle(*sound)->duration * 1000.0f,
-		};
-		// With the sound device lost, or with a fixed frame time, the line starts and lasts the length of its sample
-		return _advisorLine != entt::null || TimedByLength();
-	};
-	audio.isPlaying = [this](uint32_t) { return AdvisorLinePlays(); };
-	audio.percentageDone = [this](uint32_t) {
-		if (TimedByLength())
-		{
-			return _advisorPlayback.Progress(NowMs());
-		}
-		return Sounding(_advisorLine) ? Locator::sounds::value().GetProgress(_advisorLine) : 1.0f;
-	};
-	audio.stop = [this](uint32_t) {
-		if (_advisorLine != entt::null && Locator::sounds::value().EmitterExists(_advisorLine))
-		{
-			Locator::sounds::value().StopEmitter(_advisorLine);
-		}
-		_advisorLine = entt::null;
-		_advisorPlayback = {};
-	};
-	audio.recording = [](uint32_t line) -> std::optional<help::AdvisorVoices::Recording> {
-		const auto sound = Locator::helpSpeechSystem::value().GetTable().FindSound(audio::SpeechBank::HelpSprites, line);
-		if (!sound || !Locator::resources::value().GetSounds().Contains(*sound))
-		{
-			return std::nullopt;
-		}
-		const auto begin = std::chrono::steady_clock::now();
-		auto recording = LineRecording(*Locator::resources::value().GetSounds().Handle(*sound));
-		if (const auto logger = spdlog::get("audio"); logger != nullptr)
-		{
-			const std::chrono::duration<float, std::milli> took = std::chrono::steady_clock::now() - begin;
-			SPDLOG_LOGGER_DEBUG(logger, "Advisor line {}: {} samples at {} Hz, {} cue labels, read in {:.2f} ms", line,
-			                    recording.samples.size(), recording.sampleRate, recording.labels ? recording.labels->size() : 0,
-			                    took.count());
-		}
-		return recording;
-	};
-	audio.playPositionMs = [this](uint32_t) -> int64_t {
-		if (!AdvisorLinePlays())
-		{
-			return -1;
-		}
-		if (TimedByLength())
-		{
-			return static_cast<int64_t>(NowMs() - _advisorPlayback.startMs);
-		}
-		return static_cast<int64_t>(Locator::sounds::value().GetProgress(_advisorLine) * _advisorPlayback.lengthMs);
-	};
-	audio.tickMs = []() { return NowMs(); };
-	audio.localRand = [](int32_t n) { return Locator::gameRandom::value().LocalRand(n); };
-	return audio;
-}
-
-bool HelpTextSystem::AdvisorLinePlays() const
-{
-	return audio::PlaysOn(Sounding(_advisorLine), TimedByLength(), _advisorPlayback, NowMs());
-}
-
-help::AdvisorVoices::Hooks HelpTextSystem::VoiceHooks()
-{
-	help::AdvisorVoices::Hooks hooks;
-	hooks.setTags = [](int advisor, std::vector<help::spirits::AudioTag> tags) {
-		if (Locator::advisorSystem::has_value() && Locator::advisorSystem::value().IsLoaded())
-		{
-			Locator::advisorSystem::value().GetController().SetSentenceTags(advisor, std::move(tags));
-		}
-	};
-	hooks.stopTags = [](int advisor, float before) {
-		if (Locator::advisorSystem::has_value() && Locator::advisorSystem::value().IsLoaded())
-		{
-			Locator::advisorSystem::value().GetController().StopSentence(advisor, before);
-		}
-	};
-	return hooks;
-}
 
 help::DialogueText::Queries HelpTextSystem::DialogueQueries()
 {
@@ -339,8 +186,11 @@ void HelpTextSystem::Reset()
 
 void HelpTextSystem::StopVoices()
 {
-	_voices.Stop(k_GoodAdvisor);
-	_voices.Stop(k_EvilAdvisor);
+	if (auto* voices = Voices(); voices != nullptr)
+	{
+		voices->Stop(k_GoodAdvisor);
+		voices->Stop(k_EvilAdvisor);
+	}
 	_scriptAdvisorLine.reset();
 }
 
@@ -352,15 +202,22 @@ void HelpTextSystem::AdvisorSays(int32_t narrator, uint32_t text)
 		return;
 	}
 	// The evil advisor stops first, then the good one
-	_voices.Stop(k_EvilAdvisor);
-	_voices.Stop(k_GoodAdvisor);
+	auto* voices = Voices();
+	if (voices != nullptr)
+	{
+		voices->Stop(k_EvilAdvisor);
+		voices->Stop(k_GoodAdvisor);
+	}
 	const int advisor = narrator == help::k_NarratorGoodAdvisor ? k_GoodAdvisor : k_EvilAdvisor;
 	float hoverX = 0.0f;
 	if (Locator::advisorSystem::has_value() && Locator::advisorSystem::value().IsLoaded())
 	{
 		hoverX = Locator::advisorSystem::value().GetController().Dude(advisor).HoverX().GetValue();
 	}
-	_voices.Say(advisor, sample->sample, false, hoverX);
+	if (voices != nullptr)
+	{
+		voices->Say(advisor, sample->sample, hoverX);
+	}
 	// The scripts time the line on their clock: after the same delay, for the length of its sample. A line with no sound
 	// is not said.
 	_scriptAdvisorLine.reset();
@@ -377,15 +234,21 @@ void HelpTextSystem::AdvisorSays(int32_t narrator, uint32_t text)
 
 void HelpTextSystem::InterruptAdvisors()
 {
-	_voices.Interrupt(k_GoodAdvisor);
-	_voices.Interrupt(k_EvilAdvisor);
+	if (auto* voices = Voices(); voices != nullptr)
+	{
+		voices->Interrupt(k_GoodAdvisor, help::AdvisorVoices::InterruptedBy::Text);
+		voices->Interrupt(k_EvilAdvisor, help::AdvisorVoices::InterruptedBy::Text);
+	}
 	_scriptAdvisorLine.reset();
 }
 
 void HelpTextSystem::InterruptAdvisorsByEscape()
 {
-	_voices.Interrupt(k_GoodAdvisor, help::AdvisorVoices::InterruptedBy::Escape);
-	_voices.Interrupt(k_EvilAdvisor, help::AdvisorVoices::InterruptedBy::Escape);
+	if (auto* voices = Voices(); voices != nullptr)
+	{
+		voices->Interrupt(k_GoodAdvisor, help::AdvisorVoices::InterruptedBy::Escape);
+		voices->Interrupt(k_EvilAdvisor, help::AdvisorVoices::InterruptedBy::Escape);
+	}
 	_scriptAdvisorLine.reset();
 }
 
@@ -402,7 +265,6 @@ std::u16string HelpTextSystem::GetWords(uint32_t text) const
 void HelpTextSystem::Update(const Frame& frame)
 {
 	_inTemple = frame.inTemple;
-	_voices.Update();
 	if (!_dialogue)
 	{
 		return;
