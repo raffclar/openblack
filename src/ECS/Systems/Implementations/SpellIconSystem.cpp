@@ -1290,5 +1290,8 @@ void SpellIconSystem::Update(float seconds)
 
 void SpellIconSystem::Reset()
 {
-	// The icons are entities of the land and go with it
+	// The icons are entities of the land and go with it, and so do their looks. The clock of the shines and the pulses
+	// continues from one land to the next.
+	_looks.clear();
+	_pulses.clear();
 }

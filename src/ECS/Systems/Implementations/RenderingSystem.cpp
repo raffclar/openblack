@@ -69,6 +69,7 @@
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Swayable.h"
@@ -96,6 +97,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/TreeRoots.h"
@@ -131,6 +133,9 @@ using openblack::physics::objects::TreePlace;
 namespace
 {
 static_assert(openblack::graphics::object_tint::k_MostGrainFlow == openblack::magic::piles::k_GrainFlowSpan);
+
+/// An icon at a worship site that shines is lit through this colour: all the light, with a little loss
+constexpr uint32_t k_IconLitColour = 0xFFFFFFu;
 
 /// Whether an object is drawn whole with the others: a building drawn as far up as it stands is drawn by itself
 bool DrawnWhole(entt::entity entity)
@@ -1011,6 +1016,15 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    {
 					    added = graphics::object_tint::SumAdded(added, *heat);
 				    }
+			    }
+		    }
+		    // An icon at a worship site that shows its charge is lit through white, and it shines in its player's colour
+		    if (Locator::spellIconSystem::has_value() && registry.AllOf<WorshipIcon>(entity))
+		    {
+			    if (const auto shine = Locator::spellIconSystem::value().ShownTint(entity); shine != 0)
+			    {
+				    look.y = static_cast<float>(k_IconLitColour);
+				    added = graphics::object_tint::SumAdded(added, shine);
 			    }
 		    }
 		    // The heart of a temple is lit through white. In its destruction it glows in its player's colour, then fades

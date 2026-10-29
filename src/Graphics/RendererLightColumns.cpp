@@ -31,6 +31,7 @@
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/LightColumn.h"
 #include "Graphics/ShaderManager.h"
@@ -49,6 +50,11 @@ namespace
 /// only from the front: the game draws the column's faces one-sided, whatever its model's material says
 constexpr uint64_t k_AddedState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
                                   BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | BGFX_STATE_CULL_CCW;
+
+/// Added over what is behind by its texture's alpha times its alpha, tested against the depth but leaving none. The
+/// model's material draws both sides of its faces.
+constexpr uint64_t k_PulseState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_MSAA |
+                                  BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
 
 uint32_t ColourOf(PlayerNames player)
 {
@@ -172,4 +178,41 @@ void Renderer::DrawScrollBeams(const DrawSceneDesc& desc) const
 		DrawLightShaft(desc, beam, highlight.centre,
 		               light_column::Tint(colour & 0xFFFFFFu, static_cast<uint8_t>(colour >> 24u)));
 	});
+}
+
+void Renderer::DrawIconPulses(const DrawSceneDesc& desc) const
+{
+	if (desc.viewId != RenderPass::Main || !Locator::spellIconSystem::has_value())
+	{
+		return;
+	}
+	const auto pulses = Locator::spellIconSystem::value().ChargePulses();
+	if (pulses.empty())
+	{
+		return;
+	}
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	const auto pulseId = resources::HashIdentifier(MeshId::SpellPulseIn);
+	if (!meshes.Contains(pulseId))
+	{
+		return;
+	}
+	const auto& mesh = *meshes.Handle(pulseId);
+	const auto eye = desc.camera->GetOrigin();
+	for (const auto& pulse : pulses)
+	{
+		L3DMeshSubmitDesc submitDesc = {};
+		submitDesc.viewId = TranslucentPassOf(desc.viewId);
+		submitDesc.program = _shaderManager->GetShader("Object");
+		submitDesc.modelMatrices = &pulse.model;
+		submitDesc.matrixCount = 1;
+		submitDesc.state = k_PulseState;
+		submitDesc.alphaThreshold = 0.0f;
+		submitDesc.tint = light_column::Tint(pulse.argb & 0xFFFFFFu, static_cast<uint8_t>(pulse.argb >> 24u));
+		// The pulse is its colour alone, as the light shafts are: no light, colour or haze of the land, and no shadows
+		submitDesc.landLightAndHaze = false;
+		submitDesc.groundShadows = false;
+		submitDesc.sortDepth = zsort::Depth(glm::vec3(pulse.model[3]), eye);
+		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+	}
 }

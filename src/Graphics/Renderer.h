@@ -489,6 +489,9 @@ private:
 	void DrawLightColumns(const DrawSceneDesc& desc) const;
 	/// The beams of light the started scrolls stand in
 	void DrawScrollBeams(const DrawSceneDesc& desc) const;
+	/// The pulse models that shrink into the charging icons at the worship sites, added over the scene in their players'
+	/// colours
+	void DrawIconPulses(const DrawSceneDesc& desc) const;
 	/// A tall shaft of light standing at a point and turned to face the eye, added over the scene in a colour: the
 	/// columns over villages and temples, and the scrolls' beams
 	void DrawLightShaft(const DrawSceneDesc& desc, const L3DMesh& mesh, const glm::vec3& position, const glm::vec4& tint) const;
