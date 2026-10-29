@@ -54,6 +54,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
@@ -519,11 +520,11 @@ bool TeleportSystem::DoTeleport(entt::entity stone, entt::entity living, bool fo
 		magic.ForcePayForSpell(component.spell, teleport::JumpCost(jump->saving, costPerKilometre));
 	}
 	// A flash and a sound where it leaves and where it comes out
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		particles.StartSpotVisual(SpotVisualType::VillagerTeleport, departure, std::nullopt, entt::null);
-		particles.StartSpotVisual(SpotVisualType::VillagerTeleport, arrival, std::nullopt, entt::null);
+		auto& effects = Locator::effectRequestSystem::value();
+		effects.Show({.type = SpotVisualType::VillagerTeleport, .position = departure});
+		effects.Show({.type = SpotVisualType::VillagerTeleport, .position = arrival});
 	}
 	if (registry.AllOf<Creature>(living))
 	{

@@ -21,6 +21,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -272,11 +273,11 @@ void FlockMiracle::Emit(SpellServicesInterface& services, Spell& spell)
 		}
 		animals.SetScale(animal, flock::SpawnScale(wolf, services.GameRandom(maxExtra)));
 		services.AddEffectTarget(spell, animal);
-		if (wolf && Locator::particleSystem::has_value())
+		if (wolf && Locator::effectRequestSystem::has_value())
 		{
 			// Each wolf appears with a puff
 			const glm::vec3 at(created.x, world.LandHeight(created), created.y);
-			Locator::particleSystem::value().StartSpotVisual(SpotVisualType::MagicObjectCreated, at, std::nullopt, entt::null);
+			Locator::effectRequestSystem::value().Show({.type = SpotVisualType::MagicObjectCreated, .position = at});
 		}
 		const auto leader = animals.LeaderOf(data.flock);
 		if (animal == leader)

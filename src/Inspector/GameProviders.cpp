@@ -155,6 +155,7 @@
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FilmCreatureSystemInterface.h"
@@ -384,6 +385,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"influenceSystem", "influence.hand"},
     LocatorCoverage {"townDesireSystem", "living.town_desires"},
     LocatorCoverage {"particleSystem", "particles.effects"},
+    LocatorCoverage {"effectRequestSystem", "particles.requests"},
     LocatorCoverage {"magicSystem", "magic.state"},
     LocatorCoverage {"gestureEvents", "players.gestures"},
     LocatorCoverage {"reactionSystem", "magic.reactions"},
@@ -4384,6 +4386,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return {};
 		    }
 		    return Locator::particleSystem::value().GetBeliefSpritesSeen();
+	    },
+	    .nextRequest = []() -> std::optional<ecs::systems::EffectHandle> {
+		    if (!Locator::effectRequestSystem::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    return Locator::effectRequestSystem::value().NextHandle();
 	    },
 	}));
 

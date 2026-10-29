@@ -40,6 +40,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
@@ -47,7 +48,6 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -263,10 +263,10 @@ void Run(const Command& command, uint32_t turn)
 		    {
 			    // The puff of dust is the spot visual of a grip of the land. Each computer and the game server make it at the
 			    // same turn, so its random numbers come from the shared seed.
-			    if (openblack::Locator::particleSystem::has_value())
+			    if (openblack::Locator::effectRequestSystem::has_value())
 			    {
-				    openblack::Locator::particleSystem::value().StartSpotVisual(openblack::SpotVisualType::GripLandscape,
-				                                                                action.point, std::nullopt, entt::null, 1.0f);
+				    openblack::Locator::effectRequestSystem::value().Show(
+				        {.type = openblack::SpotVisualType::GripLandscape, .position = action.point});
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)

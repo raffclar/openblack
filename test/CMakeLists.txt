@@ -2164,3 +2164,4 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_resource_data_only PRIVATE l3d)
 openblack_setup_and_add_test(test_headless_renderer test_headless_renderer.cpp)
+openblack_setup_and_add_test(test_effect_requests test_effect_requests.cpp)

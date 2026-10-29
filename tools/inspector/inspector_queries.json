@@ -438,6 +438,12 @@
   "query": "particles.belief"
  },
  {
+  "description": "The effects that the turns and the scripts asked for: the number that the next one gets (null without the requests) and how many running effects have a number that the simulation gave",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.requests"
+ },
+ {
   "description": "How many bodies the physics has: flying, resting and in water",
   "kind": "object",
   "parameters": [],
