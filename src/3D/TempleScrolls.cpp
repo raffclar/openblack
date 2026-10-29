@@ -149,7 +149,51 @@ TempleScrolls::~TempleScrolls()
 	}
 }
 
-void TempleScrolls::Create(const Facts& facts)
+TempleScrolls::KeptTextures::~KeptTextures()
+{
+	for (const auto& entry : _entries)
+	{
+		if (entry.has_value())
+		{
+			bgfx::destroy(graphics::toBgfx(entry->texture));
+		}
+	}
+}
+
+TempleScrolls::KeptTextures::KeptTextures(KeptTextures&& other) noexcept
+    : _entries(std::exchange(other._entries, {}))
+{
+}
+
+TempleScrolls::KeptTextures& TempleScrolls::KeptTextures::operator=(KeptTextures&& other) noexcept
+{
+	if (this != &other)
+	{
+		[[maybe_unused]] const KeptTextures old(std::move(*this));
+		_entries = std::exchange(other._entries, {});
+	}
+	return *this;
+}
+
+TempleScrolls::KeptTextures TempleScrolls::TakeTextures()
+{
+	KeptTextures kept;
+	const uint16_t side = _halfSize ? low_resolution_textures::k_HalfSide : TempleScrollTexture::k_Size;
+	for (auto& scroll : _scrolls)
+	{
+		auto& entry = kept._entries.emplace_back();
+		if (scroll.texture.has_value())
+		{
+			entry = KeptTextures::Entry {
+			    .texture = *scroll.texture, .side = side, .drawn = scroll.drawn, .textHeight = scroll.textHeight};
+			scroll.texture.reset();
+			scroll.drawn.reset();
+		}
+	}
+	return kept;
+}
+
+void TempleScrolls::Create(const Facts& facts, KeptTextures kept)
 {
 	auto& meshes = Locator::resources::value().GetMeshes();
 	_halfSize = Locator::config::has_value() && Locator::config::value().detail.lowResTextures;
@@ -174,7 +218,21 @@ void TempleScrolls::Create(const Facts& facts)
 				}
 			}
 		}
-		if (scroll.subMesh.has_value())
+		// The texture of an earlier visit, when it has the size the scroll needs now
+		const auto index = _scrolls.size();
+		if (scroll.subMesh.has_value() && index < kept._entries.size() && kept._entries[index].has_value() &&
+		    kept._entries[index]->side == side)
+		{
+			scroll.texture = kept._entries[index]->texture;
+			scroll.drawn = kept._entries[index]->drawn;
+			// The height of the text it shows, as the write of that text gave it
+			if (scroll.drawn.has_value() && scroll.drawn->text.has_value())
+			{
+				scroll.textHeight = kept._entries[index]->textHeight;
+			}
+			kept._entries[index].reset();
+		}
+		else if (scroll.subMesh.has_value())
 		{
 			// A texture in memory, 256 texels square, or 128 at the lowest detail levels, 16 bits a texel
 			scroll.texture =
@@ -207,11 +265,21 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 		return;
 	}
 	const bool textInFront = _focusedText && _focused.has_value() && &_scrolls[*_focused] == &scroll;
-	std::vector<uint16_t> texels(static_cast<size_t>(TempleScrollTexture::k_Size) * TempleScrollTexture::k_Size);
-	if (const auto text = Write(scroll.content, _texts, _font, facts, _historyStart); text.has_value())
+	constexpr uint16_t k_FullSide = TempleScrollTexture::k_Size;
+	// The texture already shows what the scroll is written with now, so the same texels are not made again
+	Drawn drawn {.text = Write(scroll.content, _texts, _font, facts, _historyStart),
+	             .position = scroll.position,
+	             .textInFront = textInFront,
+	             .side = _halfSize ? low_resolution_textures::k_HalfSide : k_FullSide};
+	if (scroll.drawn == drawn)
 	{
-		scroll.textHeight =
-		    TempleScrollTexture::Draw(texels, _parchment, *text, static_cast<uint32_t>(scroll.position), _font, !textInFront);
+		return;
+	}
+	std::vector<uint16_t> texels(static_cast<size_t>(k_FullSide) * k_FullSide);
+	if (const auto& written = drawn.text; written.has_value())
+	{
+		scroll.textHeight = TempleScrollTexture::Draw(texels, _parchment, *written, static_cast<uint32_t>(scroll.position),
+		                                              _font, !textInFront);
 	}
 	else
 	{
@@ -231,6 +299,7 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 	}
 	bgfx::updateTexture2D(graphics::toBgfx(*scroll.texture), 0, 0, 0, 0, side, side,
 	                      bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+	scroll.drawn = std::move(drawn);
 }
 
 TempleScrolls::Focus TempleScrolls::LookAt(size_t index, const Facts& facts)
