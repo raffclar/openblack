@@ -26,10 +26,10 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/LightBeams.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/LightBeams.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;

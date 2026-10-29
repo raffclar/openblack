@@ -55,7 +55,6 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Graphics/LogoEffectView.h"
-#include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
@@ -72,6 +71,7 @@
 #include "Sound/SoundId.h"
 #include "Video/StillPicture.h"
 #include "Video/VideoRules.h"
+#include "Visual/RenderPass.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;

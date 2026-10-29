@@ -25,7 +25,7 @@
 
 #include "ECS/Components/Transform.h"
 #include "ECS/LandShadowCasters.h"
-#include "Graphics/TreeShadows.h"
+#include "Visual/TreeShadows.h"
 
 namespace openblack::graphics
 {

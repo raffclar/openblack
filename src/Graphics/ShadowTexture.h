@@ -18,7 +18,7 @@
 #include <glm/vec3.hpp>
 
 #include "Graphics/GroundShadow.h"
-#include "Graphics/TreeShadows.h"
+#include "Visual/TreeShadows.h"
 
 /// The moving shadow of a thing that the physics moves: a tree, a pot, a villager, a rock or another thing that flies
 /// or falls. The game casts it from a light straight above the thing, flattens it onto the level of the thing, and lays

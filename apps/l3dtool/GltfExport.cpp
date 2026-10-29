@@ -41,7 +41,7 @@
 
 #include "3D/SkeletalAnimation.h"
 #include "3D/VertexBlend.h"
-#include "Graphics/RenderModes.h"
+#include "Visual/RenderModes.h"
 
 #define TINYGLTF_USE_CPP14
 #define TINYGLTF_NO_STB_IMAGE

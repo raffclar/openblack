@@ -306,7 +306,6 @@
 #include "Gestures/GestureTrailBuilder.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
-#include "Graphics/TexelDepth.h"
 #include "Gui/Canvas.h"
 #include "Gui/DialogPainter.h"
 #include "Gui/EscapeKeyRules.h"
@@ -366,6 +365,7 @@
 #include "Temple/TempleHelp.h"
 #include "Video/VideoRules.h"
 #include "Visual/DetailLevel.h"
+#include "Visual/TexelDepth.h"
 
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>

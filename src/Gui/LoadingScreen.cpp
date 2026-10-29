@@ -18,13 +18,13 @@
 #include <spdlog/spdlog.h>
 
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/RenderPass.h"
-#include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Gui/GlyphTexture.h"
 #include "Gui/ScreenFit.h"
 #include "Locator.h"
+#include "Visual/RenderPass.h"
+#include "Visual/TexelDepth.h"
 
 using namespace openblack;
 using namespace openblack::gui;

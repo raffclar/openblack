@@ -170,7 +170,6 @@
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/LandFootprints.h"
 #include "Graphics/LandShadowBake.h"
-#include "Graphics/LightBeams.h"
 #include "Graphics/LightShine.h"
 #include "Graphics/MaterialStages.h"
 #include "Graphics/MeshDetail.h"
@@ -201,6 +200,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/ObjectDrawList.h"
 #include "Visual/DetailLevel.h"
+#include "Visual/LightBeams.h"
 #include "Windowing/WindowingInterface.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/WebPlatform.h"

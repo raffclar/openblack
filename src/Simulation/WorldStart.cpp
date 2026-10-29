@@ -88,7 +88,6 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/RendererInterface.h"
-#include "Graphics/TexelDepth.h"
 #include "Gui/TextDatabase.h"
 #include "Level.h"
 #include "Locator.h"
@@ -101,6 +100,7 @@
 #include "Sound/HelpSpeech.h"
 #include "Sound/SoundRequestInterface.h"
 #include "Visual/DetailLevel.h"
+#include "Visual/TexelDepth.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::simulation

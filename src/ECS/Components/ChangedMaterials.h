@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "Graphics/RenderModes.h"
+#include "Visual/RenderModes.h"
 
 namespace openblack::ecs::components
 {

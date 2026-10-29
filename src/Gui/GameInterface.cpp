@@ -61,7 +61,6 @@
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
 #include "Graphics/ZSort.h"
@@ -95,6 +94,7 @@
 #include "Temple/ChallengeRoomRules.h"
 #include "Temple/SaveGameRoomRules.h"
 #include "Temple/ScrollPictures.h"
+#include "Visual/TexelDepth.h"
 
 using namespace openblack::gui;
 using openblack::Locator;

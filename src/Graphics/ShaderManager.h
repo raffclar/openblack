@@ -18,8 +18,8 @@
 #include <vector>
 
 #include "DrawWindow.h"
-#include "RenderPass.h"
 #include "ShaderProgram.h"
+#include "Visual/RenderPass.h"
 
 namespace openblack
 {

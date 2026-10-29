@@ -18,7 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "Graphics/DrawOrder.h"
-#include "Graphics/RenderPass.h"
+#include "Visual/RenderPass.h"
 
 using namespace openblack::graphics;
 

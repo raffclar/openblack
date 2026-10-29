@@ -24,13 +24,13 @@
 
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/MeshDetail.h"
-#include "Graphics/RenderModes.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
 #include "L3DMesh.h"
 #include "MeshBounds.h"
 #include "VertexBlend.h"
+#include "Visual/RenderModes.h"
 
 using namespace openblack::graphics;
 
