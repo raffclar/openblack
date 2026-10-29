@@ -685,6 +685,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::temple::emplace<TempleInterior>();
 	// The clock of day and night, and the entities of the sky, which every computer makes at this place in the order
 	Locator::skyClockSystem::emplace<ecs::systems::SkyClockSystem>();
+	// The mists that the scripts make and fade, whose size the turns change on every computer
+	Locator::mistSystem::emplace<MistSystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
@@ -812,10 +814,9 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 
 void openblack::InitializePresentation()
 {
-	// The sea, the sky, the mists, the clouds and the village lights, which the turns and the scripts do not read
+	// The sea, the sky, the clouds and the village lights, which the turns and the scripts do not read
 	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
 	Locator::skySystem::emplace<ecs::systems::SkySystem>();
-	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
 }
