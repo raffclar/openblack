@@ -2840,6 +2840,17 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	case ScriptArgument::Kind::Position:
 		// A position is three values, which only a native call gives
 		return std::nullopt;
+	case ScriptArgument::Kind::Town:
+	{
+		const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+		const auto found = towns.find(ScenarioTown(_middle));
+		if (found == towns.end())
+		{
+			return std::nullopt;
+		}
+		object = found->second;
+		break;
+	}
 	}
 	if (!object.has_value())
 	{
