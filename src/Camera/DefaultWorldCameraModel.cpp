@@ -42,10 +42,10 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "EngineConfig.h"
 #include "FightView.h"
 #include "Help/HelpProfile.h"
-#include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Sound/GameSoundEffects.h"
@@ -1118,10 +1118,9 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	SendHelpEvents(_helpEvents);
 	// The measure of how fast the player turns the camera, which the advisors' cheering of the turning lesson goes by,
 	// takes in this step's turn, or slows towards still
-	if (const auto seconds = std::chrono::duration<float>(dt).count(); seconds > 0.0f && Locator::cameraHelpSystem::has_value())
+	if (const auto seconds = std::chrono::duration<float>(dt).count(); seconds > 0.0f && Locator::turnCheerSystem::has_value())
 	{
-		auto& turnSpeed = Locator::cameraHelpSystem::value().Get().turnSpeed;
-		turnSpeed = help::turn_cheer::SmoothSpeed(turnSpeed, _turnedThisFrame.value_or(0.0f), seconds);
+		Locator::turnCheerSystem::value().MeasureTurn(_turnedThisFrame, seconds);
 	}
 	UpdateIconFrame(onFight);
 }

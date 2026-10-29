@@ -1849,7 +1849,7 @@
   "query": "view.video"
  },
  {
-  "description": "Whether a camera path holds the camera, the camera's help, and the knock readout",
+  "description": "Whether a camera path holds the camera, the camera's help, the advisors' cheers as the camera turns, and the knock readout",
   "kind": "object",
   "parameters": [],
   "query": "view.state"

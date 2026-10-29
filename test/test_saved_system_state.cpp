@@ -31,6 +31,7 @@
 #include "Camera/ScriptCameraModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
@@ -62,6 +63,7 @@
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Help/StoryHistory.h"
+#include "Locator.h"
 #include "Sound/GameMusic.h"
 
 using namespace openblack;
@@ -252,6 +254,17 @@ TEST(SavedSystemState, TheStoryHistoryComesBack)
 	HelpTextSystem texts;
 	HelpTextSystem loadedTexts;
 	LoadInto(loadedTexts, StateOf(texts));
+}
+
+TEST(SavedSystemState, TheHelpTextsStopTheAdvisorsWithNoVoicesOnTheComputer)
+{
+	// A computer that shows nothing, such as the dedicated server, has no advisors' voices
+	ASSERT_FALSE(Locator::advisorVoiceSystem::has_value());
+	HelpTextSystem texts;
+	texts.StopVoices();
+	texts.InterruptAdvisors();
+	texts.InterruptAdvisorsByEscape();
+	EXPECT_TRUE(texts.IsTextRead());
 }
 
 TEST(SavedSystemState, TheScriptsCameraComesBackAsItWas)

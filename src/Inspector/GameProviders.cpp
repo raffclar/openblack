@@ -114,6 +114,7 @@
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AbodeSoundSystemInterface.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
@@ -227,6 +228,7 @@
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -331,6 +333,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"playerSystem", "players.list"},
     LocatorCoverage {"alignmentSystem", "players.list"},
     LocatorCoverage {"cameraHelpSystem", "view.state"},
+    LocatorCoverage {"turnCheerSystem", "view.state"},
     LocatorCoverage {"templeExteriorSystem", "temple.state"},
     LocatorCoverage {"templeDestructionSystem", "temple.state"},
     LocatorCoverage {"computerPlayerSystem", "players.list"},
@@ -449,6 +452,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"scriptMusicSystem", "audio.state"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
+    LocatorCoverage {"advisorVoiceSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
     LocatorCoverage {"helpProfileSystem", "help.profile"},
     LocatorCoverage {"creatureHelpSystem", "help.creature"},
@@ -2887,7 +2891,8 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
-	provider->Add(Query("state", "Whether a camera path holds the camera, the camera's help, and the knock readout"),
+	provider->Add(Query("state", "Whether a camera path holds the camera, the camera's help, the advisors' cheers as the "
+	                             "camera turns, and the knock readout"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
 		              if (Locator::cameraPathSystem::has_value())
@@ -2905,6 +2910,15 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 			                                {"hand_reach", help.handReach},
 			                                {"interface_level",
 			                                 help.interfaceLevel.has_value() ? Json(*help.interfaceLevel) : Json(nullptr)}};
+		              }
+		              if (Locator::turnCheerSystem::has_value())
+		              {
+			              const auto& cheer = Locator::turnCheerSystem::value();
+			              const auto& cheering = cheer.GetCheering();
+			              result["turn_cheer"] = {{"turn_speed", cheer.GetTurnSpeed()},
+			                                      {"on", cheering.on},
+			                                      {"last_cheer_turn", cheering.lastCheerTurn},
+			                                      {"last_best_praise_turn", cheering.lastBestPraiseTurn}};
 		              }
 		              if (Locator::abodeKnockSystem::has_value())
 		              {
@@ -4064,7 +4078,7 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		        }
 		        const auto& controller = advisors.GetController();
 		        const auto* voices =
-		            Locator::helpTextSystem::has_value() ? &Locator::helpTextSystem::value().GetVoices() : nullptr;
+		            Locator::advisorVoiceSystem::has_value() ? &Locator::advisorVoiceSystem::value().GetVoices() : nullptr;
 		        Json items = Json::array();
 		        for (int dude = 0; dude < 2; ++dude)
 		        {
@@ -4102,38 +4116,40 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 		        }
 		        return items;
 	        }));
-	provider->Add(Query("dialogue",
-	                    "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the "
-	                    "dialogue and the line being said"),
-	              Serve<Locator::helpTextSystem>(
-	                  "the dialogue", [](const ecs::systems::HelpTextSystemInterface& help, const QueryContext& /*c*/) -> Json {
-		                  const auto& voices = help.GetVoices();
-		                  Json result {{"started", help.IsStarted()},
-		                               {"text_read", help.IsTextRead()},
-		                               {"speaker", voices.GetSpeaker()},
-		                               {"sentence", voices.GetSentence()},
-		                               {"owner", Locator::dialogueControlSystem::has_value()
-		                                             ? Json(Locator::dialogueControlSystem::value().GetOwner())
-		                                             : Json(nullptr)},
-		                               {"speech_banks", Locator::helpSpeechSystem::has_value()
-		                                                    ? Json(Locator::helpSpeechSystem::value().GetTable().GetBankCount(
-		                                                          audio::SpeechBank::HelpSprites))
-		                                                    : Json(nullptr)}};
-		                  if (const auto* dialogue = help.GetDialogue(); dialogue != nullptr)
-		                  {
-			                  result["text"] = dialogue->GetCurrentText();
-			                  result["narrator"] = help.GetNarrator(dialogue->GetCurrentText());
-			                  result["waiting_for_click"] = dialogue->IsWaitingForClick();
-			                  result["end_turn"] = dialogue->GetEndTurn();
-			                  result["end_ms"] = dialogue->GetEndMs();
-			                  result["start_turn"] = dialogue->GetStartTurn();
-			                  result["takes_click"] = dialogue->TakesClick();
-			                  result["last_click_turn"] = dialogue->GetLastClickTurn();
-			                  result["drawn"] = dialogue->IsDrawn();
-			                  result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
-		                  }
-		                  return result;
-	                  }));
+	provider->Add(
+	    Query("dialogue", "The scripts' dialogue: the text shown, whether it is read or waits for a click, who holds the "
+	                      "dialogue and the line being said"),
+	    Serve<Locator::helpTextSystem>(
+	        "the dialogue", [](const ecs::systems::HelpTextSystemInterface& help, const QueryContext& /*c*/) -> Json {
+		        // A computer that shows nothing plays no voices: no speaker and no line
+		        const auto* voices =
+		            Locator::advisorVoiceSystem::has_value() ? &Locator::advisorVoiceSystem::value().GetVoices() : nullptr;
+		        Json result {{"started", help.IsStarted()},
+		                     {"text_read", help.IsTextRead()},
+		                     {"speaker", voices != nullptr ? voices->GetSpeaker() : -1},
+		                     {"sentence", voices != nullptr ? voices->GetSentence() : 0u},
+		                     {"owner", Locator::dialogueControlSystem::has_value()
+		                                   ? Json(Locator::dialogueControlSystem::value().GetOwner())
+		                                   : Json(nullptr)},
+		                     {"speech_banks", Locator::helpSpeechSystem::has_value()
+		                                          ? Json(Locator::helpSpeechSystem::value().GetTable().GetBankCount(
+		                                                audio::SpeechBank::HelpSprites))
+		                                          : Json(nullptr)}};
+		        if (const auto* dialogue = help.GetDialogue(); dialogue != nullptr)
+		        {
+			        result["text"] = dialogue->GetCurrentText();
+			        result["narrator"] = help.GetNarrator(dialogue->GetCurrentText());
+			        result["waiting_for_click"] = dialogue->IsWaitingForClick();
+			        result["end_turn"] = dialogue->GetEndTurn();
+			        result["end_ms"] = dialogue->GetEndMs();
+			        result["start_turn"] = dialogue->GetStartTurn();
+			        result["takes_click"] = dialogue->TakesClick();
+			        result["last_click_turn"] = dialogue->GetLastClickTurn();
+			        result["drawn"] = dialogue->IsDrawn();
+			        result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
+		        }
+		        return result;
+	        }));
 	provider->Add(
 	    Query("profile",
 	          "The help's count of what the player has done: its clock, and each event's total, seconds since "
