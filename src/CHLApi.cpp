@@ -83,6 +83,7 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Archetypes/PuzzleGameArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
@@ -127,6 +128,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -157,6 +159,8 @@
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlacedTurn.h"
+#include "ECS/PlayerTowns.h"
+#include "ECS/PuzzleGameRules.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
@@ -735,6 +739,19 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return CreateScriptBall(OnGround(position));
 	case ObjectType::Marker:
 		return ScriptMarkerArchetype::Create(position);
+	case ObjectType::PuzzleGame:
+	{
+		// The puzzle game has no pieces yet, so the player cannot solve it. It is made only for the kinds whose answer
+		// before a solution is known.
+		const auto kind = static_cast<script::PuzzleGameType>(subtype);
+		if (subtype < static_cast<uint32_t>(script::PuzzleGameType::Last) &&
+		    ecs::puzzle_game::PlayedBeforeSolved(kind).has_value())
+		{
+			return PuzzleGameArchetype::Create(position, yAngleRadians, scale, kind);
+		}
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for puzzle game kind {}", subtype);
+		return entt::null;
+	}
 	case ObjectType::Villager:
 	case ObjectType::VillagerChild:
 		// Made standing on the land under the place asked for, whatever height the script gave
@@ -2731,10 +2748,14 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 	{
 		Locator::creatureModeSystem::value().Leave();
 	}
-	CountCameraOrder();
 	const bool taken = Locator::scriptControlSystem::value().StartCameraControl(
 	    Locator::camera::value(), {.task = task, .templeScript = templeScript, .insideTemple = insideTemple},
 	    [](float x, float z) { return Locator::terrainSystem::value().GetHeightAt(glm::vec2(x, z)); });
+	// A script that retries a refused take each turn does not stop the arrival of the camera for the other scripts
+	if (script_camera::TakeIsCameraOrder(taken, insideTemple))
+	{
+		CountCameraOrder();
+	}
 	if (taken)
 	{
 		ApplySwitchChanges(script::switches::CameraTaken(insideTemple));
@@ -2744,9 +2765,10 @@ void StartCameraControl() // 030 START_CAMERA_CONTROL
 
 void EndCameraControl() // 031 END_CAMERA_CONTROL
 {
-	CountCameraOrder();
+	// Only the task that has the camera gives it back. For any other task the camera does not change.
 	if (Locator::scriptControlSystem::value().EndCameraControl(Locator::camera::value(), CurrentTask()))
 	{
+		CountCameraOrder();
 		ApplySwitchChanges(script::switches::CameraReleased());
 	}
 }
@@ -4045,6 +4067,12 @@ void Played() // 064 PLAYED
 			minds.ClearAfterPlayed(object);
 		}
 		Pushb(played);
+		return;
+	}
+	if (const auto* puzzle = Locator::entitiesRegistry::value().TryGet<const ecs::components::PuzzleGame>(object))
+	{
+		// A puzzle game has played once the player solves it
+		Pushb(ecs::puzzle_game::PlayedBeforeSolved(puzzle->type).value_or(false));
 		return;
 	}
 	if (const auto* animal = Locator::entitiesRegistry::value().TryGet<const ecs::components::Animal>(object))
@@ -5432,7 +5460,13 @@ void GetObjectState() // 143 GET_OBJECT_STATE
 		Pushi(0);
 		return;
 	}
-	// The game also gives the state of a puzzle game. openblack makes no puzzle games, so this is the only other case.
+	// A puzzle game that nobody has started gives whether it has played
+	if (const auto* puzzle = registry.TryGet<const ecs::components::PuzzleGame>(object))
+	{
+		const bool played = ecs::puzzle_game::PlayedBeforeSolved(puzzle->type).value_or(false);
+		Pushi(static_cast<int32_t>(ecs::puzzle_game::StateBeforeStart(played)));
+		return;
+	}
 	ScriptMessage("Thing not a known type for function");
 	Pushi(0);
 }
@@ -8939,12 +8973,13 @@ void SetCanBuildWorshipsite() // 376 SET_CAN_BUILD_WORSHIPSITE
 
 void GetFacingCameraPosition() // 377 GET_FACING_CAMERA_POSITION
 {
-	// const auto distance = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	const auto distance = Popf();
+	// The point in front of the camera of the player, from the last view report. Before the first report, the eye and
+	// the focus are both the middle of the world's axes.
+	const auto view = ScriptView();
+	const auto eye = view.has_value() ? view->eye : glm::vec3(0.0f);
+	const auto focus = view.has_value() ? view->focus : glm::vec3(0.0f);
+	PushVec(script_camera::FacingPoint(eye, focus, distance));
 }
 
 void SetComputerPlayerAttitude() // 378 SET_COMPUTER_PLAYER_ATTITUDE
@@ -9382,10 +9417,10 @@ void WithinRotation() // 416 WITHIN_ROTATION
 
 void GetPlayerTownTotal() // 417 GET_PLAYER_TOWN_TOTAL
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The number of towns that the player has now
+	const auto& registry = Locator::entitiesRegistry::value();
+	Pushf(static_cast<float>(ecs::player_towns::Total(registry, player)));
 }
 
 void SpiritScreenPoint() // 418 SPIRIT_SCREEN_POINT
