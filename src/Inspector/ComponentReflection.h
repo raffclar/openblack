@@ -17,8 +17,8 @@
 #include <entt/core/type_info.hpp>
 #include <entt/meta/context.hpp>
 
+#include "ECS/Reflection/ComponentJsonCodec.h"
 #include "ECS/Reflection/ComponentReflection.h"
-#include "Inspector/ComponentJsonCodec.h"
 
 /// The JSON face of the reflection of the components, which only the inspector uses
 namespace openblack::ecs::reflection

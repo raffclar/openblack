@@ -19,7 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
-#include "Graphics/RenderPass.h"
+#include "Visual/RenderPass.h"
 
 namespace openblack::graphics
 {

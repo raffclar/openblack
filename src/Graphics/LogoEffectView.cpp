@@ -20,10 +20,10 @@
 #include <glm/mat4x4.hpp>
 
 #include "3D/L3DSkinFormat.h"
-#include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
+#include "Visual/RenderPass.h"
 
 namespace openblack::graphics
 {

@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Graphics/LandShadowBake.h"
-#include "Graphics/TreeShadows.h"
+#include "Visual/TreeShadows.h"
 
 namespace tree_shadows = openblack::graphics::tree_shadows;
 

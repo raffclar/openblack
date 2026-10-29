@@ -29,7 +29,7 @@
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/Mesh.h"
-#include "Graphics/RenderModes.h"
+#include "Visual/RenderModes.h"
 
 namespace openblack::graphics
 {

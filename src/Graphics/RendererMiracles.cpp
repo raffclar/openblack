@@ -51,7 +51,6 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/InstanceDesc.h"
 #include "Graphics/ShaderManager.h"
-#include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/ViewFrustum.h"
 #include "Graphics/ZSort.h"
@@ -62,6 +61,7 @@
 #include "Renderer.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/TexelDepth.h"
 
 using namespace openblack;
 using namespace openblack::graphics;

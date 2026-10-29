@@ -64,7 +64,7 @@ TEST(TempleHelp, EachRoomHasItsHelpAndTheOptionsRoomSharesTheMainRooms)
 
 TEST(TempleHelp, LookingAtAScrollStartsItsHelpWhetherOrNotTheHelpSystemIsOn)
 {
-	using Content = TempleScrolls::Content;
+	using Content = temple_scrolls::Content;
 	FakeScripts scripts;
 	LookAtScroll(scripts, Content::World);
 	LookAtScroll(scripts, Content::CreatureAttributes);

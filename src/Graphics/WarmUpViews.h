@@ -13,7 +13,7 @@
 
 #include <array>
 
-#include "RenderPass.h"
+#include "Visual/RenderPass.h"
 
 /// The views of a warm-up: the renderer draws the first frame of a land behind the loading screen, so that it makes the
 /// pipelines and the render targets of the scene there. The views that draw into the window keep to one pixel, and the

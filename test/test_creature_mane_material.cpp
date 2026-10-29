@@ -11,7 +11,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Graphics/RenderModes.h"
+#include "Visual/RenderModes.h"
 
 using namespace openblack::graphics;
 

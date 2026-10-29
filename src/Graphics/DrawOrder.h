@@ -13,7 +13,7 @@
 
 #include <bgfx/defines.h>
 
-#include "Graphics/RenderPass.h"
+#include "Visual/RenderPass.h"
 
 /// The order of the opaque draws within a program. bgfx sorts the draws of the scene's views by program and then by the
 /// depth each draw is given, keeping the order they came in where both are the same. Vulkan makes a new set of bindings

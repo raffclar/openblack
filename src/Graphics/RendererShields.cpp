@@ -26,13 +26,13 @@
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "Graphics/RenderModes.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ZSort.h"
 #include "Locator.h"
 #include "Renderer.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/RenderModes.h"
 
 using namespace openblack;
 using namespace openblack::graphics;

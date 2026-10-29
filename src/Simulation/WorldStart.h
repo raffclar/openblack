@@ -22,7 +22,7 @@
 #include "Common/DeveloperTools.h"
 #include "Common/PlayerProfiles.h"
 #include "Creature/CreatureTattoo.h"
-#include "Graphics/UploadPacer.h"
+#include "Visual/UploadPacer.h"
 
 namespace openblack
 {

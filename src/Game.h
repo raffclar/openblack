@@ -45,7 +45,6 @@
 #include "GameFrameOrder.h"
 #include "GameSession.h"
 #include "GameTurnOrder.h"
-#include "Graphics/UploadPacer.h"
 #include "Gui/EndGameBoxRules.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
@@ -64,6 +63,7 @@
 #include "Simulation/TurnBody.h"
 #include "Simulation/WorldStart.h"
 #include "Story/NewGameChoice.h"
+#include "Visual/UploadPacer.h"
 #include "Windowing/SizeFollower.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
 

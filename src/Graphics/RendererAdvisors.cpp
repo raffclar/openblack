@@ -33,7 +33,6 @@
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
-#include "Graphics/RenderModes.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
@@ -42,6 +41,7 @@
 #include "Locator.h"
 #include "Renderer.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/RenderModes.h"
 
 using namespace openblack;
 using namespace openblack::graphics;

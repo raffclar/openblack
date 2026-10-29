@@ -16,7 +16,7 @@
 #include <glm/ext/vector_uint4_sized.hpp>
 #include <glm/vec3.hpp>
 
-#include "Graphics/LightBeams.h"
+#include "Visual/LightBeams.h"
 
 /// The white light at the main room's way out. When the player goes through the door out of the temple, a sheet of
 /// white light grows on the floor from the door towards the middle of the room. It is added over all of the room, with

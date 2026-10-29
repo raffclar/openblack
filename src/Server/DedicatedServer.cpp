@@ -29,7 +29,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -573,7 +572,6 @@ bool ServerWorld::Frame()
 	// The frame steps that change the world: the creatures' fights, walks and animations, and the frame's effects
 	simulation::PlayCreaturePoses();
 	simulation::PlayFrameEffects(_frameView);
-	Locator::audio::value().Update();
 	land.KeepAlignmentInProfile();
 	if (sim_run::Finished(Locator::simulation::value().GetSettings(), clock.GetTurn()))
 	{

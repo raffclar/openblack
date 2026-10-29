@@ -22,13 +22,11 @@
 
 #include "AxisAlignedBoundingBox.h"
 #include "FootprintPaint.h"
-#include "Graphics/LightBeams.h"
-#include "Graphics/Mesh.h"
-#include "Graphics/ShaderProgram.h"
-#include "Graphics/TreeShadows.h"
 #include "L3DSkinTexels.h"
 #include "L3DSubMesh.h"
 #include "ScreenPick.h"
+#include "Visual/LightBeams.h"
+#include "Visual/TreeShadows.h"
 #include "Visual/UploadMode.h"
 
 namespace openblack

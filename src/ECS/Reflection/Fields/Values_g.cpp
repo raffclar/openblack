@@ -16,8 +16,8 @@
 #include "ECS/GameEndRules.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "Graphics/Moon.h"
-#include "Graphics/RenderModes.h"
 #include "Graphics/Sun.h"
+#include "Visual/RenderModes.h"
 
 namespace openblack::ecs::reflection
 {

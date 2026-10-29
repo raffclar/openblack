@@ -11,7 +11,7 @@
 
 #include <cstdint>
 
-#include "Graphics/RenderModes.h"
+#include "Visual/RenderModes.h"
 
 /// How the heart of a temple shows: the model of the temple outside. Its light is always multiplied by white, which
 /// takes one 256th off it. While the temple is destroyed, the heart glows in the colour of its player and fades out.

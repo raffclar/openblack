@@ -24,10 +24,10 @@
 #include "Creature/CreatureMind.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
-#include "Graphics/TexelDepth.h"
 #include "Level.h"
 #include "Sound/LoadedSound.h"
 #include "Sound/ScriptMusic.h"
+#include "Visual/TexelDepth.h"
 
 namespace openblack
 {

@@ -22,6 +22,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/TempleInteriorInterface.h"
+#include "3D/TempleSubMeshTexture.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Temple/SaveGameRoomRules.h"
 

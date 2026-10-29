@@ -18,7 +18,7 @@
 #include <thread>
 #include <vector>
 
-#include "Graphics/UploadPacer.h"
+#include "Visual/UploadPacer.h"
 
 namespace openblack::resources
 {

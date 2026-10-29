@@ -23,9 +23,8 @@
 #include <glm/vec3.hpp>
 
 #include "AxisAlignedBoundingBox.h"
-
-#include "../Graphics/RenderModes.h"
-#include "../Graphics/RenderPass.h"
+#include "Visual/RenderModes.h"
+#include "Visual/RenderPass.h"
 
 namespace bgfx
 {

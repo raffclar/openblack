@@ -13,7 +13,7 @@
 
 #include <glm/vec4.hpp>
 
-#include "RenderPass.h"
+#include "Visual/RenderPass.h"
 
 namespace openblack::graphics
 {
