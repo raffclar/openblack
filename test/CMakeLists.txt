@@ -2183,3 +2183,6 @@ target_link_libraries(test_script_animal_speed PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_effect_requests test_effect_requests.cpp)
 openblack_setup_and_add_test(test_script_dead_living test_script_dead_living.cpp)
 openblack_setup_and_add_test(test_game_sound_requests audio/test_game_sound_requests.cpp)
+openblack_setup_and_add_test(
+  test_creature_go_near_in_pen test_creature_go_near_in_pen.cpp
+)

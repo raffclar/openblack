@@ -287,7 +287,8 @@ void Measure(CreatureLocomotion& self, const Creature& creature, const Transform
 	// Drawn at another size than its own in a temple's pen, it keeps clear of things by its own size
 	self.shownRadius = bodyRadius * self.scale;
 	const auto shown = ShownSize(creature);
-	self.radius = shown > 0.0f ? self.shownRadius * creature_morph::ClampScale(creature.size) / shown : self.shownRadius;
+	// The game divides the two sizes first, so out of the pen the two radii are the same
+	self.radius = shown > 0.0f ? (creature_morph::ClampScale(creature.size) / shown) * self.shownRadius : self.shownRadius;
 	// While it clears a thing out of its way, it keeps clear of things by its drawn size
 	if (self.clearingWay)
 	{
