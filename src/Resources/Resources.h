@@ -113,7 +113,7 @@ private:
 		                    self._clipSounds, self._musicTimings, self._textures, self._animations, self._levels,
 		                    self._creatureMinds, self._creatureRigs, self._creatureSkinArt, self._sounds, self._glows,
 		                    self._cameraPaths, self._cameraEdits, self._cameraZones, self._particleFiles, self._particleBitmaps,
-		                    self._gestureTemplates));
+		                    self._gestureTemplates, self._videos));
 	}
 
 	MeshManager _meshes;
