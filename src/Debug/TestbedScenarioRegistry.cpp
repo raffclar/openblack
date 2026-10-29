@@ -7945,10 +7945,9 @@ void AddCombat(std::vector<Scenario>& all)
 		    .description = "The red tiger asks the blue tiger to fight, and both fight by themselves. The creatures do not "
 		                   "faint. When the duel is on, a script sets the life of the blue tiger to one half. Two seconds "
 		                   "later the fight of the red tiger stops.",
-		    .expected = "Both tigers finish their moves and play their responses: the red tiger is happy and the blue "
-		                "tiger is sad. When the first of the two responses ends, the fight stops for both. If the red "
-		                "tiger ends first, the blue tiger stops with no fear. If the blue tiger ends first, it fears the "
-		                "red tiger, and the red tiger stops.",
+		    .expected = "The duel stops, and both tigers finish their moves and play their responses. The red tiger has "
+		                "more life, and its response ends first. Two turns later its fight ends. The blue tiger then "
+		                "stops at once with no fear, and it does not obey the red tiger again.",
 		    .environment = {.fainting = false},
 		    .framing = ringside,
 		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), asked},
