@@ -112,5 +112,11 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::PuzzleGame::order>("order")
 	    .Field<&components::PuzzleGame::bases>("bases")
 	    .Field<&components::PuzzleGame::rings>("rings")
-	    .Field<&components::PuzzleGame::kept>("kept");
+	    .Field<&components::PuzzleGame::kept>("kept")
+	    .Field<&components::PuzzleGame::treeCounts>("treeCounts")
+	    .Field<&components::PuzzleGame::trees>("trees")
+	    .Field<&components::PuzzleGame::treesPlacedAt>("treesPlacedAt")
+	    .Field<&components::PuzzleGame::mists>("mists")
+	    .Field<&components::PuzzleGame::bats>("bats")
+	    .Field<&components::PuzzleGame::lanterns>("lanterns");
 }

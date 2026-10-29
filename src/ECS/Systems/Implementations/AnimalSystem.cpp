@@ -1442,6 +1442,14 @@ bool AnimalSystem::CommonStateTurn(entt::entity entity, Animal& animal)
 	case AnimalState::Landed:
 		Landed(entity, animal);
 		return true;
+	case AnimalState::SetDying:
+		// An animal that a script tells to start to die dies in its turn. A miracle's animal fades in its own way.
+		if (EntityRegistry().AllOf<SpellAnimal>(entity))
+		{
+			return false;
+		}
+		SetDying(entity);
+		return true;
 	default:
 		return false;
 	}
