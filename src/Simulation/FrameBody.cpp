@@ -53,6 +53,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/Systems/TornadoSystemInterface.h"
@@ -271,6 +272,12 @@ void PlayFrameEffects(FrameViewInterface& view)
 	if (Locator::worshipSiteSystem::has_value())
 	{
 		Locator::worshipSiteSystem::value().UpdateFrame(clock.GetFrameGameTime(), clock.GetFrameRealTime(), LandDrawn());
+	}
+	// The icons at the worship sites show their charge: a ring of light, a shine and, while they charge, a pulse
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().UpdateChargeLooks(static_cast<int32_t>(clock.GetFrameGameTime().count()),
+		                                                    LandDrawn());
 	}
 	// The players' symbols of belief over the village centres move on
 	Locator::townSystem::value().UpdateFrame(clock.GetFrameRealTime(), LandDrawn());

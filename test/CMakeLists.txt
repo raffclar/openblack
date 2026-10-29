@@ -2194,3 +2194,4 @@ openblack_setup_and_add_test(test_worship_site_looks test_worship_site_looks.cpp
 openblack_setup_and_add_test(
   test_creature_go_near_in_pen test_creature_go_near_in_pen.cpp
 )
+openblack_setup_and_add_test(test_icon_charge_looks test_icon_charge_looks.cpp)

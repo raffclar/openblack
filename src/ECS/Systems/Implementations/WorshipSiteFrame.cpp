@@ -14,29 +14,23 @@
 #include <vector>
 
 #include "3D/FieldCrop.h"
-#include "3D/L3DMesh.h"
 #include "Camera/Camera.h"
 #include "Common/PortableRotations.h"
-#include "ECS/Components/Mesh.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/DrawnOnScreen.h"
 #include "ECS/NeedFlagRules.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/WorshipSites.h"
-#include "Graphics/MeshDetail.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/WorshipBattery.h"
 #include "Particles/LightSheet.h"
 #include "Particles/ParticleEffect.h"
-#include "Resources/ResourceManager.h"
-#include "Resources/ResourcesInterface.h"
-#include "Scenery/ObjectDrawList.h"
 #include "WorshipSiteSystem.h"
 
 using namespace openblack;
@@ -102,33 +96,7 @@ void WorshipSiteSystem::UpdateFrame(std::chrono::milliseconds gameTime, std::chr
 
 bool WorshipSiteSystem::DrawnThisFrame(entt::entity site) const
 {
-	auto& registry = _world->Entities();
-	if (!Locator::objectDrawListSystem::has_value())
-	{
-		return true;
-	}
-	const auto& drawList = Locator::objectDrawListSystem::value();
-	if (!drawList.Drawn(registry, site))
-	{
-		return false;
-	}
-	const auto& view = drawList.GetView();
-	const auto* transform = registry.TryGet<const Transform>(site);
-	const auto* mesh = registry.TryGet<const Mesh>(site);
-	if (!view.has_value() || transform == nullptr || mesh == nullptr || !Locator::resources::has_value())
-	{
-		return true;
-	}
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (!meshes.Contains(mesh->id))
-	{
-		return true;
-	}
-	// The sphere round the box of the site's model, where the frame draws the site
-	const auto box = meshes.Handle(mesh->id)->GetBoundingBox();
-	const auto centre = transform->position + (transform->rotation * (transform->scale * box.Center()));
-	const float radius = std::abs(transform->scale.x) * graphics::mesh_detail::HalfDiagonal(box.Size());
-	return object_draw_list::SphereOnScreen(*view, transform->position, centre, radius);
+	return ecs::DrawnOnScreen(_world->Entities(), site);
 }
 
 void WorshipSiteSystem::UpdateNeedFlags(int32_t gameMilliseconds)
