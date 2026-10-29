@@ -410,6 +410,39 @@ TEST(GestureRequests, TheLeash)
 	EXPECT_TRUE(Requests(context).empty());
 }
 
+// A scribble of the empty hand stops the charge of an icon for the hand, unless it shakes off the leash first
+TEST(GestureRequests, AScribbleOfTheEmptyHandStopsTheChargeOfAnIcon)
+{
+	const Request cancel {.gesture = GestureType::Scribble, .purpose = Purpose::CancelCharge};
+	HandContext context;
+	EXPECT_TRUE(Requests(context).empty());
+
+	context.iconCharging = true;
+	auto requests = Requests(context);
+	ASSERT_EQ(requests.size(), 1u);
+	EXPECT_EQ(requests[0], cancel);
+	EXPECT_FALSE(ShowsRecognition(Purpose::CancelCharge));
+	EXPECT_TRUE(RestsAfter(Purpose::CancelCharge));
+	EXPECT_FALSE(HelpEventOf(cancel, context).has_value());
+
+	// The leash in the hand comes off first; a leash tied to something lets the scribble stop the charge
+	context.creature = HandContext::Creature {.leashed = true, .knows = {false, true, false}, .worn = LeashType::Rope};
+	requests = Requests(context);
+	ASSERT_EQ(requests.size(), 1u);
+	EXPECT_EQ(requests[0].purpose, Purpose::ShakeOffLeash);
+	context.creature->tied = true;
+	requests = Requests(context);
+	ASSERT_EQ(requests.size(), 1u);
+	EXPECT_EQ(requests[0], cancel);
+
+	// A thing or a seed in the hand: the scribble does not stop a charge
+	context.holdingObject = true;
+	EXPECT_EQ(std::ranges::count(Requests(context), cancel), 0);
+	context.holdingObject = false;
+	context.seed = HandContext::Seed {};
+	EXPECT_EQ(std::ranges::count(Requests(context), cancel), 0);
+}
+
 TEST(GestureRequests, OnLandOneTheLeashPickerAlsoWaitsForTheSquareWave)
 {
 	HandContext context;

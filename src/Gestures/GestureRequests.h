@@ -65,6 +65,9 @@ enum class Purpose : uint8_t
 	CloseSelection,
 	/// With the hand ready, the R: the last miracle that came into the hand comes again from its icon
 	RepeatMiracle,
+	/// A scribble with the empty hand, while an icon of a worship site of the player charges a miracle for the hand: the
+	/// icon that started its charge last stops it
+	CancelCharge,
 };
 
 [[nodiscard]] std::string_view Name(Purpose purpose);
@@ -130,6 +133,8 @@ struct HandContext
 	bool actionHeld {false};
 	/// The hand holds a thing that isn't a miracle's seed
 	bool holdingObject {false};
+	/// An icon at a worship site of the player charges a miracle for this hand
+	bool iconCharging {false};
 
 	/// The player's creature
 	struct Creature
