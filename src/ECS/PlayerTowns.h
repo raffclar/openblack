@@ -28,4 +28,8 @@ namespace openblack::ecs::player_towns
 /// The towns of a player, the first town that the player got first
 [[nodiscard]] std::vector<entt::entity> InOrder(const Registry& registry, PlayerNames player);
 
+/// The towns of all players: the list of each player in turn, from the first player, and the list of the neutral
+/// player last
+[[nodiscard]] std::vector<entt::entity> AllInOrder(const Registry& registry);
+
 } // namespace openblack::ecs::player_towns

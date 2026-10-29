@@ -35,6 +35,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Map.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "InfoConstants.h"
@@ -424,24 +425,14 @@ inline bool CellCollides(glm::vec2 point, uint32_t mask)
 /// player in turn and the neutral towns last. The first town that it finds wins a tie.
 inline entt::entity NearestTown(glm::vec2 point, float reach)
 {
-	struct Entry
-	{
-		PlayerNames owner;
-		uint32_t id;
-		script_find::Candidate candidate;
-	};
-	std::vector<Entry> towns;
-	EntityRegistry().Each<const components::Town, const Transform>(
-	    [&towns](entt::entity entity, const components::Town& town, const Transform& transform) {
-		    towns.push_back(
-		        {.owner = town.owner,
-		         .id = town.id,
-		         .candidate = {.entity = entity, .at = map_coords::FromMetres({transform.position.x, transform.position.z})}});
-	    });
-	std::ranges::sort(towns, [](const Entry& a, const Entry& b) { return std::tie(a.owner, a.id) < std::tie(b.owner, b.id); });
 	std::vector<script_find::Candidate> ordered;
-	ordered.reserve(towns.size());
-	std::ranges::transform(towns, std::back_inserter(ordered), &Entry::candidate);
+	for (const auto town : player_towns::AllInOrder(EntityRegistry()))
+	{
+		if (const auto* transform = EntityRegistry().TryGet<const Transform>(town))
+		{
+			ordered.push_back({.entity = town, .at = map_coords::FromMetres({transform->position.x, transform->position.z})});
+		}
+	}
 	return script_find::FindNearestTown(map_coords::FromMetres(point), reach, ordered);
 }
 
