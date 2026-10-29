@@ -5132,8 +5132,25 @@ void Runner::StartHandCast(size_t index)
 		Locator::alignmentSystem::value().SetPlayerAlignment(PlayerNames::PLAYER_ONE, *setup.casterAlignment);
 	}
 	const auto level = magic::GetPowerUpGesture(magic::GetSpellSeedInfo(info, *seed), setup.type).level;
-	const auto held = setup.fromWorship ? magic.SummonSeed(PlayerNames::PLAYER_ONE, *seed, level)
-	                                    : magic.GiveSeedToHand(PlayerNames::PLAYER_ONE, *seed, level, 1.0f);
+	auto held = entt::entity {entt::null};
+	if (setup.fromWorship && setup.fromSite)
+	{
+		// The first worship site of the player gives the seed
+		auto site = entt::entity {entt::null};
+		Locator::entitiesRegistry::value().Each<const ecs::components::WorshipSite>(
+		    [&site](entt::entity entity, const ecs::components::WorshipSite& data) {
+			    if (site == entt::null && data.player == PlayerNames::PLAYER_ONE)
+			    {
+				    site = entity;
+			    }
+		    });
+		held = magic.SummonSeedAtSite(site, *seed, level);
+	}
+	else
+	{
+		held = setup.fromWorship ? magic.SummonSeed(PlayerNames::PLAYER_ONE, *seed, level)
+		                         : magic.GiveSeedToHand(PlayerNames::PLAYER_ONE, *seed, level, 1.0f);
+	}
 	if (held == entt::null)
 	{
 		Log("The hand couldn't take the seed");

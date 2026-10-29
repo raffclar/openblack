@@ -177,7 +177,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::SpellCaster::entity>("entity")
 	    .Field<&components::SpellCaster::withoutIcon>("withoutIcon")
 	    .Field<&components::SpellCaster::worshipSite>("worshipSite")
-	    .Field<&components::SpellCaster::madeBySpellIcon>("madeBySpellIcon");
+	    .Field<&components::SpellCaster::madeBySpellIcon>("madeBySpellIcon")
+	    .Field<&components::SpellCaster::icon>("icon");
 	Reflect<components::Spell>(context)
 	    .Field<&components::Spell::magicType>("magicType")
 	    .Field<&components::Spell::spellClass>("spellClass")
@@ -203,6 +204,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Spell::reaction>("reaction")
 	    .Field<&components::Spell::humanCasting>("humanCasting")
 	    .Field<&components::Spell::maxObjectsToCreate>("maxObjectsToCreate")
+	    .Field<&components::Spell::upkeepMotes>("upkeepMotes")
+	    .Field<&components::Spell::eventMotes>("eventMotes")
 	    .Field<&components::Spell::resourceFirstDone>("resourceFirstDone")
 	    .Field<&components::Spell::lastRipple>("lastRipple")
 	    .Field<&components::Spell::forestPlanted>("forestPlanted")

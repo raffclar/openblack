@@ -12146,6 +12146,7 @@ std::vector<Scenario> Build()
 	AddStoreScenarios(all);
 	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
+	AddWorshipSiteScenarios(all);
 	return all;
 }
 

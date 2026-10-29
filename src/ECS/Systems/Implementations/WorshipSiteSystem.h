@@ -10,9 +10,11 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/WorshipSiteLooks.h"
 #include "ECS/WorshipSiteWorld.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -23,6 +25,11 @@ namespace openblack::ecs::components
 {
 struct Dance;
 } // namespace openblack::ecs::components
+
+namespace openblack::particles
+{
+class LightSheet;
+} // namespace openblack::particles
 
 namespace openblack::ecs::systems
 {
@@ -45,6 +52,7 @@ public:
 	entt::entity DebugAllowSite(entt::entity town, bool anyLand) override;
 	void RemoveSites(entt::entity temple) override;
 	void UpdateTurn() override;
+	void UpdateFrame(std::chrono::milliseconds gameTime, std::chrono::milliseconds realTime, bool landDrawn) override;
 	void RemakeModelsAfterLoad() override;
 	void ProcessChants() override;
 	void SetDancers(entt::entity site, uint32_t dancers) override;
@@ -52,6 +60,7 @@ public:
 	float UseChants(entt::entity site, float amount) override;
 	float UseCreateChants(entt::entity site, float amount) override;
 	float MaintainSpell(entt::entity site, float amount) override;
+	void AddMote(entt::entity site, glm::vec3 from, glm::vec3 to) override;
 	void ReturnChants(entt::entity site, float amount) override;
 	[[nodiscard]] float StoredChants(entt::entity site) const override;
 	void SetStoredChants(entt::entity site, float chants) override;
@@ -62,6 +71,7 @@ public:
 	[[nodiscard]] bool IsBuilt(entt::entity site) const override;
 	[[nodiscard]] entt::entity TempleOf(PlayerNames player) const override;
 	[[nodiscard]] std::optional<glm::vec2> PlaceAt(entt::entity site, SitePlace place) const override;
+	[[nodiscard]] std::optional<glm::vec3> DancePosition(entt::entity site) const override;
 	[[nodiscard]] std::optional<float> StandingHeight(entt::entity site) const override;
 	void AddWorshipper(entt::entity site, entt::entity villager) override;
 	void RemoveWorshipper(entt::entity site, entt::entity villager) override;
@@ -105,6 +115,29 @@ private:
 	void CountChantsUsed(entt::entity site, float amount);
 	/// The site is given to a town if it hasn't it yet
 	void AddTownIfMissing(entt::entity site, entt::entity town);
+
+	/// A site's turn works out what its need flags show, and gives it the flags it lacks
+	void UpdateNeeds(entt::entity site);
+	/// How much a site's dancers want rest, 0 to 1: none without a dance
+	[[nodiscard]] float DesireForRest(entt::entity site) const;
+	/// Whether a frame draws a site: the frame draws the land, the list of things to draw has it, and it is on the
+	/// screen
+	[[nodiscard]] bool DrawnThisFrame(entt::entity site) const;
+	/// The need flags of the drawn built sites ease to their needs and turn to the camera
+	void UpdateNeedFlags(int32_t gameMilliseconds);
+	/// The ring of light round a drawn built site's dance is set from the site and moves on
+	void UpdateRing(entt::entity site, bool drawn, int32_t realMilliseconds);
+
+	/// What the frames keep of a site: the ring of light round its dance and the throb of its strain. A saved game
+	/// does not keep these.
+	struct SiteLook
+	{
+		std::shared_ptr<particles::LightSheet> ring;
+		/// Where the ring stands; it stands again when the site is somewhere else, as after a load
+		glm::vec3 ringCentre {0.0f};
+		worship_site_looks::Throb throb;
+	};
+	std::unordered_map<entt::entity, SiteLook> _looks;
 
 	std::unique_ptr<worship_site::WorldInterface> _world;
 	/// Only while the debug tools let a town have its site: the land without worship sites lets it have one too

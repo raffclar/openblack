@@ -140,6 +140,27 @@ public:
 		_registry.Destroy(dance);
 	}
 	void ArtefactsLeaveSite(entt::entity site) override { artefactsLeft.push_back(site); }
+	entt::entity MakeNeedFlag(entt::entity site, uint8_t need) override
+	{
+		if (!makesFlags)
+		{
+			return entt::null;
+		}
+		const auto flag = _registry.Create();
+		_registry.Assign<WorshipSiteFlag>(flag, WorshipSiteFlag {.site = site, .need = need});
+		return flag;
+	}
+	uint32_t StartMotes() override { return ++motesStarted; }
+	void AddMote(uint32_t effect, glm::vec3 from, glm::vec3 to, uint32_t rgb) override
+	{
+		motes.push_back({.effect = effect, .from = from, .to = to, .rgb = rgb});
+	}
+	bool StepMotes(uint32_t effect) override
+	{
+		motesStepped.push_back(effect);
+		return motesRun;
+	}
+	void RemoveMotes(uint32_t effect) override { motesRemoved.push_back(effect); }
 	void Remove(entt::entity object) override
 	{
 		removed.push_back(object);
@@ -148,6 +169,22 @@ public:
 
 	int32_t landNumber {2};
 	uint32_t turn {0};
+	/// It makes the need flags that the sites ask for
+	bool makesFlags {false};
+	/// The motes' effects: how many were started, each mote given, each step and whether the effect runs on after it,
+	/// and the effects removed
+	struct Mote
+	{
+		uint32_t effect;
+		glm::vec3 from;
+		glm::vec3 to;
+		uint32_t rgb;
+	};
+	uint32_t motesStarted {0};
+	std::vector<Mote> motes;
+	std::vector<uint32_t> motesStepped;
+	bool motesRun {true};
+	std::vector<uint32_t> motesRemoved;
 	/// The building sites opened for a site and a town asked to build it, in turn, and the sites closed
 	std::vector<std::pair<entt::entity, entt::entity>> openedSites;
 	std::unordered_map<entt::entity, float> siteDesires;
@@ -789,4 +826,79 @@ TEST(WorshipSiteSystem, ATempleWithoutSitesLosesNothing)
 	f.system->RemoveSites(temple);
 	EXPECT_TRUE(f.world->removed.empty());
 	EXPECT_TRUE(f.world->removedDances.empty());
+}
+
+TEST(WorshipSiteNeeds, EachTurnWorksOutTheNeedsAndGivesTheSiteItsThreeFlags)
+{
+	Fixture f;
+	f.world->makesFlags = true;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	// Three worship and one of them dances: two hide, a hundredth each
+	for (int i = 0; i < 3; ++i)
+	{
+		f.system->AddWorshipper(site, f.registry.Create());
+	}
+	f.system->SetDancers(site, 1);
+	f.system->UpdateTurn();
+	const auto& component = f.registry.Get<const WorshipSite>(site);
+	// No dancer wants food or rest, as none is a villager in the dance
+	EXPECT_FLOAT_EQ(component.needs.at(0), 0.0f);
+	EXPECT_FLOAT_EQ(component.needs.at(1), 0.0f);
+	EXPECT_FLOAT_EQ(component.needs.at(2), 0.02f);
+	for (uint8_t need = 0; need < 3; ++need)
+	{
+		const auto flag = component.needFlags.at(need);
+		ASSERT_TRUE(f.registry.Valid(flag));
+		EXPECT_TRUE(f.registry.Get<const WorshipSiteFlag>(flag).site == site);
+		EXPECT_EQ(f.registry.Get<const WorshipSiteFlag>(flag).need, need);
+	}
+	// The next turn keeps the same flags
+	const auto flags = component.needFlags;
+	f.system->UpdateTurn();
+	EXPECT_EQ(f.registry.Get<const WorshipSite>(site).needFlags, flags);
+}
+
+TEST(WorshipSiteNeeds, ASiteGoesWithItsFlagsAndItsMotes)
+{
+	Fixture f;
+	f.world->makesFlags = true;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	f.system->UpdateTurn();
+	f.system->AddMote(site, glm::vec3(0.0f), glm::vec3(10.0f, 0.0f, 0.0f));
+	const auto flags = f.registry.Get<const WorshipSite>(site).needFlags;
+	f.system->RemoveSites(temple);
+	for (const auto flag : flags)
+	{
+		EXPECT_EQ(std::ranges::count(f.world->removed, flag), 1);
+	}
+	EXPECT_EQ(f.world->motesRemoved, std::vector<uint32_t> {1u});
+}
+
+TEST(WorshipSiteMotes, TheFirstMoteStartsTheEffectAndTheSiteTurnsEndIt)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_TWO);
+	const glm::vec3 icon {1.0f, 2.0f, 3.0f};
+	const glm::vec3 miracle {40.0f, 0.0f, 3.0f};
+	f.system->AddMote(site, icon, miracle);
+	f.system->AddMote(site, icon, miracle);
+	// One effect for both, each mote in the colour of the site's player
+	EXPECT_EQ(f.world->motesStarted, 1u);
+	ASSERT_EQ(f.world->motes.size(), 2u);
+	EXPECT_EQ(f.world->motes[0].effect, 1u);
+	EXPECT_EQ(f.world->motes[1].effect, 1u);
+	EXPECT_EQ(f.world->motes[0].from, icon);
+	EXPECT_EQ(f.world->motes[0].to, miracle);
+	EXPECT_EQ(f.world->motes[0].rgb, Player::k_Colours.at(1) & 0xFFFFFFu);
+	// The site's turn moves them on, and once the effect has ended the next mote starts another
+	f.system->UpdateTurn();
+	EXPECT_EQ(f.world->motesStepped, std::vector<uint32_t> {1u});
+	f.world->motesRun = false;
+	f.system->UpdateTurn();
+	EXPECT_EQ(f.registry.Get<const WorshipSite>(site).manaPath, 0u);
+	f.system->UpdateTurn();
+	EXPECT_EQ(f.world->motesStepped.size(), 2u);
+	f.system->AddMote(site, icon, miracle);
+	EXPECT_EQ(f.world->motesStarted, 2u);
+	EXPECT_EQ(f.world->motes.back().effect, 2u);
 }

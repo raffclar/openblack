@@ -266,6 +266,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The flags over the stores move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
     {.component = "*", .field = "", .marker = "WorkshopFlag"},
+    {.component = "*", .field = "", .marker = "WorshipSiteFlag"},
     // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.
     // The world reads the hand only from the reports of its player (ReportedHand).
     {.component = "Transform", .field = "", .marker = "Hand"},
