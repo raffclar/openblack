@@ -417,3 +417,133 @@ TEST_F(GodChargeTest, ACastTakesTheCostButNeverMoreThanTheStore)
 	_system.TakeCastCharge(icon);
 	EXPECT_EQ(Entities().Get<const WorshipIcon>(icon).store, 0.0f);
 }
+
+// A script finds the worship site of an icon: the site of a site's icon, or the site of the town of a stone hand
+TEST_F(SpellIconSystemTest, TheSiteOfAnIconIsItsOwnOrTheSiteOfTheTownOfAStoneHand)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<SiteIcons>(site);
+	const auto icon = Icon(site, SpellSeedType::Heal, entt::null);
+	const auto town = registry.Create();
+	registry.Assign<Town>(town).worshipSite = site;
+	const auto hand = registry.Create();
+	registry.Assign<TownCentreIcon>(hand, TownCentreIcon {.town = town, .seed = SpellSeedType::Heal});
+	const auto homeless = registry.Create();
+	registry.Assign<TownCentreIcon>(homeless, TownCentreIcon {.town = registry.Create(), .seed = SpellSeedType::Heal});
+
+	EXPECT_EQ(_system.SiteOfIcon(icon), site);
+	EXPECT_EQ(_system.SiteOfIcon(hand), site);
+	EXPECT_TRUE(_system.SiteOfIcon(homeless) == entt::null);
+	EXPECT_TRUE(_system.SiteOfIcon(site) == entt::null);
+	EXPECT_TRUE(_system.SiteOfIcon(entt::null) == entt::null);
+}
+
+// The icons of the site lose their stores, but each icon continues to charge
+TEST_F(SpellIconSystemTest, EmptyStoresOfASiteKeepTheChargesAndOtherSites)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<SiteIcons>(site);
+	const auto heal = Icon(site, SpellSeedType::Heal, entt::null);
+	const auto water = Icon(site, SpellSeedType::Water, entt::null);
+	const auto other = registry.Create();
+	registry.Assign<SiteIcons>(other);
+	const auto otherIcon = Icon(other, SpellSeedType::Heal, entt::null);
+
+	_system.EmptyIconStores(site);
+
+	EXPECT_EQ(registry.Get<const WorshipIcon>(heal).store, 0.0f);
+	EXPECT_EQ(registry.Get<const WorshipIcon>(water).store, 0.0f);
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(heal).charging);
+	EXPECT_EQ(registry.Get<const WorshipIcon>(otherIcon).store, 50.0f);
+}
+
+namespace
+{
+/// A temple with a worship site in each of two places, the second place empty
+struct TempleWithSites
+{
+	entt::entity temple {entt::null};
+	entt::entity first {entt::null};
+	entt::entity second {entt::null};
+};
+
+TempleWithSites MakeTemple(Registry& registry)
+{
+	TempleWithSites made;
+	made.temple = registry.Create();
+	auto& worship = registry.Assign<CitadelWorship>(made.temple);
+	made.first = registry.Create();
+	made.second = registry.Create();
+	for (const auto site : {made.first, made.second})
+	{
+		registry.Assign<SiteIcons>(site);
+		registry.Assign<WorshipSite>(site, WorshipSite {.temple = made.temple, .player = PlayerNames::PLAYER_ONE});
+	}
+	// The site in the first place comes first, whatever the order in which the sites were made
+	worship.sites[0] = made.second;
+	worship.sites[2] = made.first;
+	return made;
+}
+} // namespace
+
+// Only the charges for the hand that the script names stop, and only at the sites of the temple
+TEST_F(SpellIconSystemTest, CancelChargesStopsOnlyTheChargesForTheHandAtTheTemplesSites)
+{
+	auto& registry = Entities();
+	const auto made = MakeTemple(registry);
+	const auto mine = Icon(made.first, SpellSeedType::Heal, entt::null);
+	const auto god = Icon(made.second, SpellSeedType::Water, entt::null);
+	registry.Get<WorshipIcon>(god).charger = PlayerNames::PLAYER_TWO;
+	registry.Get<WorshipIcon>(mine).powerUp = 1;
+	const auto elsewhere = registry.Create();
+	registry.Assign<SiteIcons>(elsewhere);
+	const auto away = Icon(elsewhere, SpellSeedType::Heal, entt::null);
+
+	_system.CancelChargesFor(made.temple, PlayerNames::PLAYER_ONE);
+
+	const auto& stopped = registry.Get<const WorshipIcon>(mine);
+	EXPECT_FALSE(stopped.charging);
+	EXPECT_EQ(stopped.powerUp, magic::k_BasePowerUpLevel);
+	EXPECT_EQ(stopped.charger, PlayerNames::NEUTRAL);
+	EXPECT_EQ(stopped.store, 0.0f);
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(god).charging);
+	EXPECT_EQ(registry.Get<const WorshipIcon>(god).store, 50.0f);
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(away).charging);
+	// A temple without sites, and no temple, stop nothing
+	_system.CancelChargesFor(entt::null, PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(god).charging);
+}
+
+// The icon of a seed comes from the first site in the order of the places round the temple
+TEST_F(SpellIconSystemTest, TheIconInATempleComesFromTheFirstPlaceThatHasIt)
+{
+	auto& registry = Entities();
+	const auto made = MakeTemple(registry);
+	const auto inFirst = Icon(made.first, SpellSeedType::Wood, entt::null);
+	const auto inSecond = Icon(made.second, SpellSeedType::Wood, entt::null);
+	const auto heal = Icon(made.first, SpellSeedType::Heal, entt::null);
+
+	EXPECT_EQ(_system.IconInTemple(made.temple, SpellSeedType::Wood), inSecond);
+	EXPECT_EQ(_system.IconInTemple(made.temple, SpellSeedType::Heal), heal);
+	EXPECT_TRUE(_system.IconInTemple(made.temple, SpellSeedType::Water) == entt::null);
+	EXPECT_TRUE(_system.IconInTemple(entt::null, SpellSeedType::Wood) == entt::null);
+	EXPECT_NE(inFirst, inSecond);
+}
+
+// A miracle charges for a script while an icon of the temple has prayer power in its store, whatever its charging flag
+TEST_F(GodChargeTest, AnIconWithAStoreCountsAsAMiracleThatCharges)
+{
+	auto& registry = Entities();
+	const auto made = MakeTemple(registry);
+	const auto heal = Icon(made.first, SpellSeedType::Heal, entt::null);
+	registry.Get<WorshipIcon>(heal).charging = false;
+
+	EXPECT_TRUE(_system.AnyIconStores(made.temple, std::nullopt));
+	EXPECT_TRUE(_system.AnyIconStores(made.temple, MagicType::Heal));
+	EXPECT_FALSE(_system.AnyIconStores(made.temple, MagicType::Water));
+	registry.Get<WorshipIcon>(heal).store = 0.0f;
+	EXPECT_FALSE(_system.AnyIconStores(made.temple, std::nullopt));
+	EXPECT_FALSE(_system.AnyIconStores(entt::null, std::nullopt));
+}

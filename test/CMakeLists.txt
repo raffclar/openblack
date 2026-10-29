@@ -2148,3 +2148,7 @@ add_test(NAME test_guard_sweep
 openblack_setup_and_add_test(test_box_keyboard input/test_box_keyboard.cpp)
 openblack_setup_and_add_test(test_creature_catch_while_busy test_creature_catch_while_busy.cpp)
 openblack_setup_and_add_test(test_puzzle_game_rules test_puzzle_game_rules.cpp)
+openblack_setup_and_add_test(
+  test_script_prayer_natives test_script_prayer_natives.cpp
+)
+target_link_libraries(test_script_prayer_natives PRIVATE ScriptLibrary)

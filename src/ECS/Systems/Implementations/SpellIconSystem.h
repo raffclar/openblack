@@ -45,6 +45,11 @@ public:
 	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;
 	void TakeCastCharge(entt::entity icon) override;
 	bool Tap(entt::entity icon, PlayerNames player) override;
+	[[nodiscard]] entt::entity SiteOfIcon(entt::entity icon) const override;
+	void EmptyIconStores(entt::entity site) override;
+	void CancelChargesFor(entt::entity temple, PlayerNames charger) override;
+	[[nodiscard]] entt::entity IconInTemple(entt::entity temple, SpellSeedType seed) const override;
+	[[nodiscard]] bool AnyIconStores(entt::entity temple, std::optional<MagicType> type) const override;
 	[[nodiscard]] bool HasIconFor(PlayerNames player, SpellSeedType seed) const override;
 	[[nodiscard]] bool IsIcon(entt::entity entity) const override;
 	[[nodiscard]] bool IsHandReady(PlayerNames player) const override { return HandReady(player); }
@@ -103,6 +108,10 @@ private:
 	void StartCharge(entt::entity icon, PlayerNames player);
 	/// The worship sites of a player, in the order of their places round the temple
 	[[nodiscard]] std::vector<entt::entity> SitesOf(PlayerNames player) const;
+	/// The worship sites of a temple, in the order of their places round the temple
+	[[nodiscard]] std::vector<entt::entity> SitesOfTemple(entt::entity temple) const;
+	/// An icon stops its charge: its store goes back to its site
+	void CancelCharge(components::WorshipIcon& icon) const;
 	/// Whether a gesture of a player may ask a site's icon for its miracle
 	[[nodiscard]] bool IconValidForRequest(entt::entity icon, PlayerNames player) const;
 	/// Deletes an icon and forgets it, with the seeds out from it; what it was charging and what it stored are lost

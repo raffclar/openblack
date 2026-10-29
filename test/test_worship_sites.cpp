@@ -556,6 +556,24 @@ TEST(WorshipSiteChants, WhatIsDrawnCountsInThePlayersStatistics)
 	EXPECT_FLOAT_EQ(f.registry.Get<const WorshipChants>(site).battery, 7.0f);
 }
 
+// A script sets the battery of a site. What the site can give this turn stays the same until the turn of the site ends.
+TEST(WorshipSiteChants, AScriptSetsTheBatteryButNotWhatTheTurnCanGive)
+{
+	Fixture f;
+	const auto [temple, site] = BuiltSite(f, PlayerNames::PLAYER_ONE);
+	f.system->SetDancers(site, 4);
+	f.system->ProcessChants();
+	const float available = f.system->ChantsAvailable(site);
+	f.system->SetStoredChants(site, 123.5f);
+	EXPECT_EQ(f.system->StoredChants(site), 123.5f);
+	EXPECT_EQ(f.registry.Get<const WorshipChants>(site).battery, 123.5f);
+	EXPECT_EQ(f.system->ChantsAvailable(site), available);
+	// A thing that is not a site has no battery
+	f.system->SetStoredChants(temple, 5.0f);
+	EXPECT_EQ(f.system->StoredChants(temple), 0.0f);
+	EXPECT_EQ(f.system->StoredChants(entt::null), 0.0f);
+}
+
 TEST(WorshipSiteChants, CheatsGiveWithoutDrawing)
 {
 	Fixture f;
