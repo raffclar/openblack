@@ -362,6 +362,8 @@ void TempleInterior::SetInterface(gui::GameInterface* interface)
 {
 	_interface = interface;
 	_scrolls.reset();
+	// The texts and the font of another interface write the scrolls differently
+	_keptScrolls = {};
 	_signs.reset();
 	_challengeRoom.reset();
 	_saveGameRoom.reset();
@@ -379,16 +381,9 @@ void TempleInterior::CreateScrolls()
 	{
 		return;
 	}
-	// The rooms read the parchment every scroll is written on as they are set up
-	auto& fileSystem = Locator::filesystem::value();
-	const auto path = fileSystem.GetPath<filesystem::Path::Textures>() / "ChallengeScroll.raw";
-	std::vector<uint8_t> parchment;
-	if (fileSystem.Exists(path))
-	{
-		parchment = fileSystem.ReadAll(path);
-	}
-	_scrolls = std::make_unique<TempleScrolls>(_interface->GetTexts(), _interface->GetFont(), std::move(parchment));
-	_scrolls->Create(GatherScrollFacts());
+	ReadRoomPictures();
+	_scrolls = std::make_unique<TempleScrolls>(_interface->GetTexts(), _interface->GetFont(), _roomPictures->parchment);
+	_scrolls->Create(GatherScrollFacts(), std::move(_keptScrolls));
 	_signs = std::make_unique<TempleSigns>(_interface->GetTexts(), _interface->GetFont());
 
 	// The main room finds the buttons of what the map shows as it is set up
@@ -437,6 +432,29 @@ void TempleInterior::CreateScrolls()
 	{
 		_saveGameRoom->Find(*meshes.Handle(saveGameMeshId));
 	}
+	if (_roomPictures->emptyPicture.has_value())
+	{
+		_saveGameRoom->SetEmptyPicture(*_roomPictures->emptyPicture);
+	}
+	_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
+	ListSavedGames();
+}
+
+void TempleInterior::ReadRoomPictures()
+{
+	if (_roomPictures.has_value())
+	{
+		return;
+	}
+	auto& pictures = _roomPictures.emplace();
+	// The parchment every scroll is written on
+	auto& fileSystem = Locator::filesystem::value();
+	const auto path = fileSystem.GetPath<filesystem::Path::Textures>() / "ChallengeScroll.raw";
+	if (fileSystem.Exists(path))
+	{
+		pictures.parchment = fileSystem.ReadAll(path);
+	}
+	// The empty picture of the save game room, from its colours and alpha
 	const auto colours = fileSystem.GetPath<filesystem::Path::Textures>() / "PictureTexture.raw";
 	const auto alpha = fileSystem.GetPath<filesystem::Path::Textures>() / "PictureTexturea.raw";
 	if (fileSystem.Exists(colours) && fileSystem.Exists(alpha))
@@ -444,7 +462,7 @@ void TempleInterior::CreateScrolls()
 		const auto rgb = fileSystem.ReadAll(colours);
 		const auto a = fileSystem.ReadAll(alpha);
 		const size_t texels = std::min(rgb.size() / 3, a.size());
-		std::vector<uint8_t> rgba(texels * 4);
+		auto& rgba = pictures.emptyPicture.emplace(texels * 4);
 		for (size_t i = 0; i < texels; ++i)
 		{
 			rgba[(i * 4) + 0] = rgb[(i * 3) + 0];
@@ -452,10 +470,19 @@ void TempleInterior::CreateScrolls()
 			rgba[(i * 4) + 2] = rgb[(i * 3) + 2];
 			rgba[(i * 4) + 3] = a[i];
 		}
-		_saveGameRoom->SetEmptyPicture(rgba);
 	}
-	_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
-	ListSavedGames();
+}
+
+void TempleInterior::PrepareScrolls()
+{
+	if (_interface == nullptr || _scrolls != nullptr)
+	{
+		return;
+	}
+	ReadRoomPictures();
+	TempleScrolls scrolls(_interface->GetTexts(), _interface->GetFont(), _roomPictures->parchment);
+	scrolls.Create(GatherScrollFacts(), std::move(_keptScrolls));
+	_keptScrolls = scrolls.TakeTextures();
 }
 
 void TempleInterior::ListSavedGames()
@@ -1907,7 +1934,7 @@ void TempleInterior::Activate(TempleRoom room)
 		addGlowsToRegistry(*_rooms, roomType);
 	}
 
-	Locator::rendereringSystem::emplace<ecs::systems::RenderingSystemTemple>();
+	DrawTemple();
 
 	// The temple's camera takes over from the island's, coming into the room along its path
 	_active = true;
@@ -1960,15 +1987,16 @@ void TempleInterior::WarmUpVisit(const std::function<void()>& draw)
 		addGlowsToRegistry(*rooms, roomType);
 	}
 	std::swap(_rooms, rooms);
-	const auto island = Locator::rendereringSystem::handle();
-	Locator::rendereringSystem::emplace<ecs::systems::RenderingSystemTemple>();
+	DrawTemple();
 	_active = true;
 	_warmUpVisit = true;
 	draw();
 	_warmUpVisit = false;
 	_active = false;
-	Locator::rendereringSystem::reset(island);
+	DrawIsland();
 	std::swap(_rooms, rooms);
+	// The first visit uses these textures again
+	PrepareScrolls();
 }
 
 void TempleInterior::EnterLockedRoom(TempleRoom room)
@@ -2149,6 +2177,30 @@ void TempleInterior::BringBackDialogue()
 	temple_help::BringBackDialogue(dialogue, _heldDialogue);
 }
 
+void TempleInterior::DrawTemple()
+{
+	_islandDraw = Locator::rendereringSystem::handle();
+	Locator::rendereringSystem::reset(_templeDraw);
+	if (!Locator::rendereringSystem::has_value())
+	{
+		Locator::rendereringSystem::emplace<ecs::systems::RenderingSystemTemple>();
+		_templeDraw = Locator::rendereringSystem::handle();
+	}
+	// The rooms of this visit are new things, so the draw lists are made again
+	Locator::rendereringSystem::value().SetLayoutDirty();
+}
+
+void TempleInterior::DrawIsland()
+{
+	Locator::rendereringSystem::reset(std::exchange(_islandDraw, {}));
+	if (!Locator::rendereringSystem::has_value())
+	{
+		Locator::rendereringSystem::emplace<ecs::systems::RenderingSystem>();
+	}
+	// The island's things can have changed while the temple was drawn, so the draw lists are made again
+	Locator::rendereringSystem::value().SetLayoutDirty();
+}
+
 void TempleInterior::Close()
 {
 	if (_soundsOfCreatureCave)
@@ -2159,6 +2211,11 @@ void TempleInterior::Close()
 	// The creature's room's flames, smoke and mist are entities of the land's registry, so they go before the land
 	_creatureCaveEffects.reset();
 	_people.reset();
+	// The next visit uses the scrolls' textures again
+	if (_scrolls != nullptr)
+	{
+		_keptScrolls = _scrolls->TakeTextures();
+	}
 	_scrolls.reset();
 	_signs.reset();
 	_challengeRoom.reset();
@@ -2189,7 +2246,7 @@ void TempleInterior::Close()
 	    [this](const entt::entity entity, auto&&...) { _rooms->Destroy(entity); });
 
 	auto& camera = Locator::camera::value();
-	Locator::rendereringSystem::emplace<ecs::systems::RenderingSystem>();
+	DrawIsland();
 	if (_outsideCameraModel != nullptr)
 	{
 		camera.SetModel(std::move(_outsideCameraModel));

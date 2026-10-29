@@ -104,6 +104,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_player_system test_player_system.cpp)
 openblack_setup_and_add_test(test_sound_tags test_sound_tags.cpp)
 target_link_libraries(test_sound_tags PRIVATE pack l3d morph)
+if(MSVC)
+  target_compile_options(test_sound_tags PRIVATE /bigobj)
+endif()
 openblack_setup_and_add_test(test_interpolator test_interpolator.cpp)
 openblack_setup_and_add_test(test_set_camera_pos camera/test_set_camera_pos.cpp)
 openblack_setup_and_add_test(

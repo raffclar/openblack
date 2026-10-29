@@ -1887,6 +1887,15 @@ void Renderer::DrawTempleMapPass() const
 	const auto visit = Locator::temple::value().GetVisits();
 	if (_templeMapVisit == visit)
 	{
+		// The map shows the land of this visit already. The warm-up of a new load makes the triangles of the land's
+		// blocks for the next visit.
+		if (_warmingUp)
+		{
+			for (const auto& block : Locator::terrainSystem::value().GetBlocks())
+			{
+				[[maybe_unused]] const auto& triangles = block.GetTriangles(land_detail::Mesh::Full, 0, true);
+			}
+		}
 		return;
 	}
 	_templeMapVisit = visit;
