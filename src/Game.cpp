@@ -2386,8 +2386,18 @@ bool Game::Update() noexcept
 			    }
 			    return PlayFrameStep(step, frame);
 		    }
+		    const auto landLoads = [] {
+			    return Locator::landSystem::has_value() ? Locator::landSystem::value().LandLoads() : 0U;
+		    };
+		    const auto loadsBefore = landLoads();
 		    _frameGuard->Before();
 		    const bool played = PlayFrameStep(step, frame);
+		    if (!frame_write_guard::LooksAtStep(loadsBefore, landLoads()))
+		    {
+			    // The step loaded a land, which makes a new synced world: the next step takes a new sample
+			    _frameGuard->Forget();
+			    return played;
+		    }
 		    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn());
 		    return played;
 	    }))
@@ -4144,20 +4154,20 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 
 void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 {
-	// In the temple, without the interface or with a box on the screen, the camera does not read its keys
+	// In the temple, without the interface or while a box has the keyboard, the camera does not read its keys
+	auto& actions = Locator::gameActionSystem::value();
 	const bool interfaceActive =
 	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	if (!game_frame::CameraReadsKeys({
 	        .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
 	        .interfaceActive = interfaceActive,
-	        .boxShows = FrontEndBoxShows(),
+	        .boxHasKeyboard = actions.BoxHasKeyboard(),
 	    }))
 	{
 		return;
 	}
 	auto& camera = Locator::camera::value();
 	// The keys of the camera act after the camera moved, so that their steps move it in the next frame
-	auto& actions = Locator::gameActionSystem::value();
 	// A miracle's camera path keeps the camera until the player moves it with the movement keys or grips the land,
 	// which hand it straight back; meanwhile the player's other camera controls do nothing
 	auto& cameraPaths = Locator::cameraPathSystem::value();
@@ -4267,6 +4277,11 @@ bool Game::Initialize() noexcept
 		// If gui captures this input, do not propagate
 		if (!Locator::debugGui::value().ProcessEvents(event))
 		{
+			// At each key that goes down, a repeat of a held key too, the game finds again whether a box has the keyboard
+			if (event.type == SDL_KEYDOWN)
+			{
+				Locator::gameActionSystem::value().BoxKeyDown(_interface && _interface->BoxTakesKeyboard());
+			}
 			// A full-screen video takes Escape: it fades out, unless Shift or Ctrl is held
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
 			    Locator::videoSystem::value().Escape((event.key.keysym.mod & KMOD_SHIFT) != 0,
@@ -5831,7 +5846,7 @@ void Game::LeaveAsObserverAtTheEndOfTheRun()
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The observer leaves the network game at the end of the run");
 }
 
-void Game::LeaveNetworkGame()
+void Game::LeaveNetworkGame(game_session::NetworkLeave leave)
 {
 	if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
 	{
@@ -5840,14 +5855,15 @@ void Game::LeaveNetworkGame()
 	// The game server makes the god of the player a leaver for every computer
 	Locator::networkGame::value().Leave();
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player leaves the network game");
-	// A join from the command line, and a run of the tools, stop the game. A join from the front end goes back to it.
+	// A join from the command line, and a run of the tools, stop the game. A join from the front end goes to the box
+	// that the control gives.
 	const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();
 	if (_joinedFromCommandLine || toolRun)
 	{
 		_leaveNetworkGame = true;
 		return;
 	}
-	_gameEndAsked = game_session::End::Online;
+	_gameEndAsked = game_session::EndAfterNetworkLeave(leave);
 }
 
 void Game::LeaveAsAPlayerDoes()
@@ -6390,6 +6406,11 @@ void Game::StartNextGameWhenSaved()
 		StartAfterNetworkGame();
 		break;
 	case game_session::Start::Skirmish:
+		// A player who left a network game plays alone again: the skirmish box starts a game of this computer alone
+		if (Locator::networkGame::has_value())
+		{
+			Locator::networkGame::value().EndNetworkGame();
+		}
 		OpenSkirmishBoxOverGame();
 		break;
 	case game_session::Start::SavedGame:

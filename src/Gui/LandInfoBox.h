@@ -34,7 +34,8 @@ class TextDatabase;
 /// A box of 780 by 580 in the middle of the dialog space. The title is across its top, on a light grey band at half
 /// opacity. The list is under the title and shows no selection. Back is an arrow at the bottom left. Go! is a button in
 /// the middle of the bottom. Go! and Escape close the box. Back closes the box and ends the skirmish, and the skirmish
-/// box shows again. The box fades in over half a second and out over a fifth.
+/// box shows again. In a network game, Back also makes the player leave the network game. The box fades in over half a
+/// second and out over a fifth.
 class LandInfoBox
 {
 public:

@@ -94,3 +94,12 @@ entt::entity FishFarmArchetype::Create(const glm::vec3& position)
 	registry.Assign<FishFarm>(entity, std::move(farm));
 	return entity;
 }
+
+entt::entity FishFarmArchetype::CreateLoaded(const glm::vec3& position, entt::entity town, float fish)
+{
+	const auto entity = Create(position);
+	auto& farm = Locator::entitiesRegistry::value().Get<FishFarm>(entity);
+	farm.town = town;
+	farm.fish = fish;
+	return entity;
+}

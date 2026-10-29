@@ -31,6 +31,18 @@ TEST(GameSession, EachEndGivesTheStartOfTheNextGame)
 	EXPECT_FALSE(NextStart(End::Quit).has_value());
 }
 
+TEST(GameSession, LeaveGameGoesToTheNetworkFrontEnd)
+{
+	EXPECT_EQ(EndAfterNetworkLeave(NetworkLeave::LeaveGame), End::Online);
+	EXPECT_EQ(NextStart(EndAfterNetworkLeave(NetworkLeave::LeaveGame)), Start::Online);
+}
+
+TEST(GameSession, BackInTheLandInformationBoxLeavesTheNetworkGameForTheSkirmishBox)
+{
+	EXPECT_EQ(EndAfterNetworkLeave(NetworkLeave::LandInfoBoxBack), End::Skirmish);
+	EXPECT_EQ(NextStart(EndAfterNetworkLeave(NetworkLeave::LandInfoBoxBack)), Start::Skirmish);
+}
+
 TEST(GameSession, APlainStartContinuesAndAFirstStartIsANewGame)
 {
 	EXPECT_EQ(FirstStart({.hadProfile = true}), Start::Continue);

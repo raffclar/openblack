@@ -21,6 +21,10 @@ class BigForestArchetype
 public:
 	static entt::entity Create(const glm::vec3& position, BigForestInfo type, uint32_t unknown, float yAngleRadians,
 	                           float scale);
+	/// A big forest from a game's file, with the wood that the file gives. It makes no forest: the import makes the
+	/// forest of the file.
+	static entt::entity CreateLoaded(const glm::vec3& position, BigForestInfo type, float yAngleRadians, float scale,
+	                                 float wood);
 	BigForestArchetype() = delete;
 };
 } // namespace openblack::ecs::archetypes

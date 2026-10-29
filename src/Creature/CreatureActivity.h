@@ -91,6 +91,8 @@ enum class Thing : uint8_t
 	TotemStatue,
 	/// A miracle
 	Spell,
+	/// An object with no kind of its own, which a creature examines as any object: a town's desire flag
+	PlainObject,
 	/// Anything else, such as a whole thing
 	Other,
 };
@@ -133,7 +135,7 @@ constexpr float k_TallestThingNotToPooOn = 1.5f;
 /// - Anger: a tree or a rock. Any other object only when its data lets a creature attack it, it is not the creature
 ///   itself and it is not dead. A creature does not attack a creature that is its friend.
 /// - Play: a thing that lies about, a static, a rock, a tree, a creature or a totem statue. A villager or an animal that
-///   is not dead, or a building, only when its data lets a creature play with it.
+///   is not dead, or a building or a plain object, only when its data lets a creature play with it.
 /// - Fear: a creature, a miracle or an animal that frightens.
 /// - Curiosity: an object whose data lets a creature look it over, and that is not dead.
 /// - Poo: an object that does not live and is taller than k_TallestThingNotToPooOn.

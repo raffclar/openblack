@@ -16,6 +16,7 @@
 #include <iterator>
 #include <numbers>
 
+#include <SDL_scancode.h>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
@@ -2762,6 +2763,29 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .commands =
 	        {{.kind = Kind::KnowMiracle, .creature = 1, .delaySeconds = 0.5f, .value = static_cast<size_t>(MagicType::Water)}},
 	});
+
+	// A tiger that only wants to look at things, by a small town whose desire flags stand near its store
+	auto curious = Content(CreatureType::Tiger, {0.0f, -30.0f}, 0.0f, "curious");
+	curious.phase = 13;
+	curious.desires = OnlyDesire(Desire::Curiosity);
+	all.push_back({
+	    .id = "mind.curious_about_desire_flag",
+	    .name = "A curious creature can look at a town's desire flag",
+	    .facet = Facet::Mind,
+	    .description = "A grown tiger that only wants to look at things stands 30 m south of a small town: a Celtic storage "
+	                   "pit with two villagers of the town. The town's desire flags stand over the pit.",
+	    .expected = "The tiger comes across the flags as it comes across the pit. The data of a flag lets a creature act "
+	                "on it and look it over, so a flag can be the thing of a curiosity plan, as the pit and the villagers "
+	                "can. In the first two minutes the inspector's creature plan names a flag as the object of a look "
+	                "(ExamineByLooking). A flag is never the thing "
+	                "of a plan to attack, to play, to sleep by or to pick up.",
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -40.0f}, {30.0f, 30.0f}}},
+	    .creatures = {curious},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 10.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-12.0f, 4.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {12.0f, 4.0f}, .joinTown = true}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
 }
 
 void AddLight(std::vector<Scenario>& all)
@@ -4182,6 +4206,31 @@ void AddAudio(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview},
 	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 3}},
 	});
+
+	{
+		const auto key = [](Kind kind, SDL_Scancode scancode) {
+			return Command {.kind = kind, .delaySeconds = 2.0f, .value = static_cast<size_t>(scancode)};
+		};
+		all.push_back({
+		    .id = "interface.box_held_key",
+		    .name = "A key held while a box opens and closes",
+		    .facet = Facet::Interface,
+		    .description = "After 2 seconds the scenario puts the up arrow key (Move Forwards) down and holds it. Every 2 "
+		                   "seconds after that: the land information box shows, the keyboard repeats the held key, "
+		                   "Escape closes the box, the keyboard repeats the held key again, and the key comes up.",
+		    .expected = "The camera moves forwards from the first press. It does not stop when the box shows, because no "
+		                "key went down. It stops at the repeat, because the box now has the keyboard. It stays stopped "
+		                "after Escape closes the box, until the second repeat. Then it moves forwards again until the key "
+		                "comes up. input.state's box_keyboard shows when the box has the keyboard.",
+		    .framing = {.shot = Shot::Overview},
+		    .commands = {key(Kind::PlainKeyDown, SDL_SCANCODE_UP),
+		                 {.kind = Kind::SkirmishBox, .delaySeconds = 2.0f, .value = 3},
+		                 key(Kind::PlainKeyRepeat, SDL_SCANCODE_UP),
+		                 key(Kind::PressPlainKey, SDL_SCANCODE_ESCAPE),
+		                 key(Kind::PlainKeyRepeat, SDL_SCANCODE_UP),
+		                 key(Kind::PlainKeyUp, SDL_SCANCODE_UP)},
+		});
+	}
 
 	all.push_back({
 	    .id = "interface.leave_skirmish_question",
@@ -7850,6 +7899,29 @@ void AddCombat(std::vector<Scenario>& all)
 		    .framing = ringside,
 		    .creatures = {asker, asked},
 		    .commands = {Play(Kind::PlayAction, 1, animations::k_Impress, 1.0f, false), Fight(Kind::StartFight, 0, 1, 6.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
+	{
+		// The other tiger walks as the fight starts. It continues until the first tiger tells it to obey, two turns later.
+		auto asker = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto asked = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		asker.pauseMind = true;
+		asked.pauseMind = true;
+		all.push_back({
+		    .id = "combat.asked_walks_on",
+		    .name = "A tiger walks on for a moment when it is asked to fight",
+		    .facet = Facet::Combat,
+		    .description = "The blue tiger starts to walk away from the red tiger. One second later, the red tiger asks the "
+		                   "blue tiger to fight. Both fight by themselves.",
+		    .expected = "The red tiger stops at once and turns to face the blue tiger. The blue tiger walks on for two "
+		                "turns, then slows to a stand and turns to face the red tiger. Then both taunt. In the arena, "
+		                "each tiger turns on the spot to face the other. The red tiger does not start its duel before the "
+		                "blue tiger.",
+		    .framing = ringside,
+		    .creatures = {asker, asked},
+		    .commands = {Go(Kind::WalkTo, 1, {25.0f, 0.0f}, 1.0f, false), Fight(Kind::StartFight, 0, 1, 1.0f),
 		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
 		});
 	}
@@ -12007,7 +12079,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
+	       kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat ||
+	       kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
 	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
 	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
 	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
@@ -12039,7 +12112,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 193> k_Names {
+	constexpr std::array<std::string_view, 196> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -12233,6 +12306,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "computer personality",
 	    "computer sends with no lesson",
 	    "skirmish box",
+	    "put a key down",
+	    "repeat a held key",
+	    "let go of a key",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

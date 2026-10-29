@@ -66,6 +66,12 @@ leave it with no start. In each case every client must stay in step with the ser
     python tools/sim/net_check.py --land "Online Maps/mpm_2p_1.map" --turns 300 --hash-fields
         --server-alignment 0.0025 --leave-room-first
 
+With --box-back CLIENT:TURN the client (from 0) clicks Back in the information box of the land at the turn, while the
+box shows: the player leaves the network game, as with Leave Game. The server must see the leave of one slot, and the
+other clients must stay in step with the server. The summary has a "box_back" block:
+
+    python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --clients 2 --turns 600 --box-back 1:200
+
 --alignment gives the profile of a client an alignment from earlier games. Each god of the game starts at the alignment
 of its own player's profile, on the server and on every client:
 
@@ -1054,6 +1060,31 @@ def leash_result(leash, server_log, logs):
     return result
 
 
+SLOT_LEAVES = re.compile(r"The player of slot (\d+) leaves the game")
+
+
+def box_back_leave(client_lines, server_lines, slot):
+    """Whether a click of Back in the information box of the land left the network game as Leave Game does. The client
+    clicked Back while the box showed, Back left the network game, and the first slot that the server saw leave is the
+    slot of the client. A god that stays can win a game of two gods: its client then stops and leaves after."""
+    pressed = any("Tests: the player presses Back in the land information box" in line for line in client_lines)
+    back_left = any("The land information box: Back leaves the network game" in line for line in client_lines)
+    left = any("The player leaves the network game" in line for line in client_lines)
+    slots = [int(match.group(1)) for line in server_lines if (match := SLOT_LEAVES.search(line))]
+    return {"pressed": pressed, "back_left": back_left, "left": left, "server_slots": slots,
+            "same": pressed and back_left and left and slots[:1] == [slot]}
+
+
+def box_back_result(client_log, server_log, client):
+    """What the client that clicked Back and the server wrote of the leave. The desktop gods join in the order of their
+    numbers, so the client from 0 plays the slot of the same number."""
+    result = box_back_leave(lines_with(client_log, ["Tests: the player presses Back", "Back leaves the network game",
+                                                    "The player leaves the network game"]),
+                            lines_with(server_log, ["leaves the game"]), client)
+    result["client"] = client + 1
+    return result
+
+
 def write_kept_alignment(folder, alignment):
     """Writes the list of profiles of a server or a client whose profile kept an alignment from an earlier game. The
     world of each game must start the same on every computer with any value."""
@@ -1170,9 +1201,12 @@ def free_port():
 
 
 WEB_WIDTH = 1280
-# The click on the speech button of the web client, from the top right corner of the page: below the small line of the
-# page (the build, Join Online Game and Log) that lies over the top of the button
-WEB_SPEECH_FROM_CORNER = (16, 24)
+# The height of the strip above the game in the web page (--badge-bar in web/page/page.css): the build, Join Online Game
+# and Log have their own strip, so they lie over no control of the game
+WEB_BADGE_BAR = 22
+# The click on the speech button of the web client: the centre of the button, from the top right corner of the game
+# canvas, which starts below the strip
+WEB_SPEECH_FROM_CORNER = (16, 12)
 
 
 # The keys of the leash check in the web page, as the page reads them
@@ -1268,7 +1302,7 @@ def web_chat_steps(chats, seconds, width=WEB_WIDTH, leashes=(), close_box=False)
         text = value
         for kind in ("mouseMoved", "mousePressed", "mouseReleased"):
             steps.append({"at": at, "do": "mouse", "type": kind, "x": width - WEB_SPEECH_FROM_CORNER[0],
-                          "y": WEB_SPEECH_FROM_CORNER[1],
+                          "y": WEB_BADGE_BAR + WEB_SPEECH_FROM_CORNER[1],
                           "button": "none" if kind == "mouseMoved" else "left"})
             at += 0.1
         steps.append({"at": at, "do": "shot", "name": f"chat{number}-open"})
@@ -1546,6 +1580,8 @@ def main():
                         "destruction on the server and on every client, so that the game is decided and its turns stop")
     parser.add_argument("--leave", help="CLIENT:TURN: at the turn the client (from 0) leaves the game as a player does: "
                         "Escape, Exit Online Game and Leave Game")
+    parser.add_argument("--box-back", help="CLIENT:TURN: at the turn the client (from 0) clicks Back in the information "
+                        "box of the land, and the player leaves the network game")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     parser.add_argument("--client-args", default="",
@@ -1636,6 +1672,11 @@ def main():
     client_dirs = [os.path.join(out, f"client{index + 1}") for index in range(desktop_clients)]
     web_dir = os.path.join(out, "web")
     leaver, leave_turn = (int(part) for part in options.leave.split(":")) if options.leave else (None, None)
+    if options.box_back:
+        if options.leave:
+            parser.error("--box-back and --leave each make a client leave: give only one")
+        # The client that clicks Back leaves the game as the client of --leave does
+        leaver, leave_turn = (int(part) for part in options.box_back.split(":"))
     server_trace = os.path.join(server_dir, "draws.tsv")
     for path in [server_log, server_trace, os.path.join(server_dir, "rows.txt")] + [os.path.join(d, n) for d in client_dirs
                                               for n in ("client.log", "record.jsonl", "draws.tsv", "rows.txt")]:
@@ -1756,7 +1797,7 @@ def main():
                 command += ["--throw-lead-latency-ms", str(options.throw_lead_latency_ms)]
             command += sim_report.gods_need_no_temple_args(False, **land_kind)
             if leaver == index:
-                command += ["--sim-leave-at", str(leave_turn)]
+                command += ["--sim-info-box-back-at" if options.box_back else "--sim-leave-at", str(leave_turn)]
             if options.hash_fields:
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
@@ -2065,6 +2106,12 @@ def main():
                 print(f"the leash check of client {result['client']} failed: on {result['on']}, off {result['off']}, "
                       f"clients {result['clients']}")
                 all_same = False
+    if options.box_back:
+        summary["box_back"] = box_back_result(os.path.join(client_dirs[leaver], "client.log"), server_log, leaver)
+        print(f"box back: {json.dumps(summary['box_back'])[:600]}")
+        if not summary["box_back"]["same"]:
+            print("the client that clicked Back in the information box of the land did not leave as Leave Game does")
+            all_same = False
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the",
                                                 "turns of the game stop", "leaves the game"])
     # A component with no registration is left out of the checksum: a change in it would never show here

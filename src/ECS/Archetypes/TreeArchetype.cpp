@@ -36,8 +36,10 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position, TreeInfo type, bool isNonScenic,
-                                   float yAngleRadians, float maxSize, float scale)
+namespace
+{
+/// The parts that every tree has: its place, its outline, its kind, its model and its sway
+entt::entity MakeTree(const glm::vec3& position, TreeInfo type, float yAngleRadians, float maxSize, float scale)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
@@ -50,7 +52,35 @@ entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position,
 	    registry.Assign<Transform>(entity, position, portable_math::EulerAngleY(-yAngleRadians), glm::vec3(scale));
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.normal, transform);
 	registry.Assign<Fixed>(entity, point, radius);
-	auto& tree = registry.Assign<Tree>(entity, type, maxSize);
+	registry.Assign<Tree>(entity, type, maxSize);
+	const auto resourceId = resources::HashIdentifier(info.normal);
+	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(-1));
+	// As a tree is made, one of 16 sways by the tree's facing, so neighbours facing alike sway alike.
+	// The game truncates towards zero.
+	const auto swaySlot = static_cast<int32_t>(std::trunc((yAngleRadians * 8.0f / glm::pi<float>()) + 0.5f)) & 0xF;
+	registry.Assign<Swayable>(entity, static_cast<uint8_t>(swaySlot));
+
+	// The thing keeps the angles it got
+	ecs::placed_turn::KeepAngles(registry, entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
+	return entity;
+}
+} // namespace
+
+entt::entity TreeArchetype::CreateLoaded(const glm::vec3& position, TreeInfo type, float yAngleRadians, float maxSize,
+                                         float scale, uint16_t growthCountdown)
+{
+	const auto entity = MakeTree(position, type, yAngleRadians, maxSize, scale);
+	Locator::entitiesRegistry::value().Get<Tree>(entity).growthCountdown = growthCountdown;
+	return entity;
+}
+
+entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position, TreeInfo type, bool isNonScenic,
+                                   float yAngleRadians, float maxSize, float scale)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = MakeTree(position, type, yAngleRadians, maxSize, scale);
+	const auto& info = Locator::infoConstants::value().tree.at(static_cast<size_t>(type));
+	auto& tree = registry.Get<Tree>(entity);
 	// A tree made short of its full size grows while it is in a forest, first after a random part of its kind's wait
 	tree.madeToGrow = maxSize != scale;
 	tree.nonScenic = isNonScenic;
@@ -69,14 +99,5 @@ entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position,
 			registry.Assign<ForestMember>(entity, ForestMember {.forest = forestId});
 		}
 	}
-	const auto resourceId = resources::HashIdentifier(info.normal);
-	registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(-1));
-	// As a tree is made, one of 16 sways by the tree's facing, so neighbours facing alike sway alike.
-	// The game truncates towards zero.
-	const auto swaySlot = static_cast<int32_t>(std::trunc((yAngleRadians * 8.0f / glm::pi<float>()) + 0.5f)) & 0xF;
-	registry.Assign<Swayable>(entity, static_cast<uint8_t>(swaySlot));
-
-	// The thing keeps the angles it got
-	ecs::placed_turn::KeepAngles(Locator::entitiesRegistry::value(), entity, glm::vec3(0.0f, yAngleRadians, 0.0f));
 	return entity;
 }

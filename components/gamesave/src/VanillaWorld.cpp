@@ -385,20 +385,20 @@ void ReadWallHug(WorldReader& r)
 	// Some states of the move keep the values of their path round an obstacle
 	if (state >= 0x0C && state <= 0x12)
 	{
-		r.Byte();
-		r.Word();
-		r.Ref();
-		r.Word();
-		r.Coords();
+		r.Byte("hugTurnsToObject");
+		r.Word("hugEntryDistance");
+		r.Ref("hugObject");
+		r.Word("hugIndex");
+		r.Coords("hugCoords");
 	}
 	else if (state == 0x0B)
 	{
-		r.Byte();
+		r.Byte("turnsUntilStepRebuild");
 	}
 	r.Ref("footpath");
 	r.Coords("goal");
 	r.Ref("target");
-	r.Bytes(12);
+	r.Bytes(12, "step");
 }
 
 void ReadContainer(WorldReader& r)
@@ -663,22 +663,25 @@ void ReadCitadel(WorldReader& r)
 
 void ReadTownDesire(WorldReader& r)
 {
-	for (int i = 0; i < 5; ++i)
+	// Two lists that openblack does not use, the boosts of a cheat and of the scripts, and the desires
+	for (const std::string_view name : {"", "", "desireCheat", "desireBoost", "desire"})
 	{
-		r.Array(4);
+		r.Array(4, name);
 	}
 	r.Word();
 	r.Ref();
-	r.Word();
-	for (int i = 0; i < 4; ++i)
+	r.Word("desirePopulation");
+	// The raw desires, then three lists that the town makes again each turn
+	for (const std::string_view name : {"desireRaw", "", "", ""})
 	{
-		r.Array(4);
+		r.Array(4, name);
 	}
-	r.Array(12);
-	r.Array(12);
-	for (int i = 0; i < 5; ++i)
+	r.Array(12, "desireSorted");
+	r.Array(12, "desireSortedRaw");
+	for (const std::string_view name :
+	     {"desireTurnsOverAlignment", "desireDoingAtStart", "desireDoingCountAtStart", "desireDoing", "desireDoingCount"})
 	{
-		r.Array(4);
+		r.Array(4, name);
 	}
 }
 
@@ -715,7 +718,7 @@ void ReadTown(WorldReader& r)
 	}
 	r.Refs("pots");
 	r.Refs("forests");
-	r.Bytes(280);
+	r.Bytes(280, "stats");
 	r.Bytes(12, "areaMin");
 	r.Bytes(12, "areaMax");
 	r.Ref("creche");
@@ -873,8 +876,12 @@ void ReadVillager(WorldReader& r)
 	r.Ref("mother");
 	r.Word();
 	r.Word();
-	for (const auto state : states)
+	// The values of the top state, then the values of the final state
+	constexpr std::array<std::string_view, 2> k_ValueNames = {"topStateValue", "finalStateValue"};
+	for (size_t index = 0; index < states.size(); ++index)
 	{
+		const auto state = states.at(index);
+		const auto name = k_ValueNames.at(index);
 		if (state >= k_VillagerStateLayouts.size())
 		{
 			r.Fail("The villager state " + std::to_string(state) + " is not a state of the game");
@@ -885,8 +892,8 @@ void ReadVillager(WorldReader& r)
 		{
 			if (discipleType == k_TradingDisciple)
 			{
-				r.Word();
-				r.Ref();
+				r.Word(name);
+				r.Ref(name);
 			}
 			continue;
 		}
@@ -895,11 +902,11 @@ void ReadVillager(WorldReader& r)
 		{
 			if (size == 0)
 			{
-				r.Ref();
+				r.Ref(name);
 			}
 			else
 			{
-				r.Bytes(size);
+				r.Bytes(size, name);
 			}
 		}
 	}
