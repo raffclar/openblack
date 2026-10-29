@@ -2215,6 +2215,41 @@ void AddStory(std::vector<Scenario>& all)
 	                .distance = 1.0f},
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	});
+	// The player's temple of the second land with its Norse town, an Indian town that the player won and the Indian town
+	// nearest the temple, at the same distances and directions from the temple as on the second land
+	constexpr std::string_view k_SecondLandSites = R"(CREATE_TOWN(950, "-129.73,154.60", "PLAYER_ONE", 7, "NORSE")
+SET_TOWN_BELIEF(950, "PLAYER_ONE", 1.0)
+CREATE_ABODE(950, "-139.73,164.60", "NORSE_ABODE_B", 0, 1000, 0, 0)
+CREATE_VILLAGER_POS("-135.73,160.60", "-139.73,164.60", "NORSE_FORESTER", 20)
+CREATE_VILLAGER_POS("-135.73,160.60", "-139.73,164.60", "NORSE_HOUSEWIFE", 20)
+CREATE_TOWN(951, "-599.77,-138.91", "PLAYER_ONE", 4, "INDIAN")
+SET_TOWN_BELIEF(951, "PLAYER_ONE", 1.0)
+CREATE_ABODE(951, "-609.77,-128.91", "INDIAN_ABODE_A", 0, 1000, 0, 0)
+CREATE_VILLAGER_POS("-605.77,-132.91", "-609.77,-128.91", "INDIAN_FORESTER", 20)
+CREATE_VILLAGER_POS("-605.77,-132.91", "-609.77,-128.91", "INDIAN_HOUSEWIFE", 20)
+CREATE_TOWN(952, "-498.68,206.42", "NEUTRAL", 4, "INDIAN")
+CREATE_ABODE(952, "-508.68,216.42", "INDIAN_ABODE_A", 0, 1000, 0, 0)
+CREATE_VILLAGER_POS("-504.68,212.42", "-508.68,216.42", "INDIAN_FORESTER", 20)
+CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
+)";
+	all.push_back({
+	    .id = "worship.site_places_second_land",
+	    .name = "The places of the player's worship sites around the temple of the second land",
+	    .facet = Facet::Story,
+	    .description = "Lines of a land put the player's temple, turned as on the second land, in the middle. The player "
+	                   "has a Norse town to the north-west and an Indian town far to the west. A neutral Indian town is "
+	                   "the Indian town nearest the temple. Each town of the player gets its site as the land is laid "
+	                   "out, and the sites are built at once.",
+	    .expected = "The Norse site takes the first place around the temple, with its altar about 28 m west of the "
+	                "temple. The Indian site takes the next place to the south, with its altar 18 m west and 22 m south "
+	                "of the temple: there the scripts of the second land look for the altar of the site.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {glm::vec2 {-60.0f, -50.0f}, glm::vec2 {30.0f, 40.0f}},
+	                .distance = 1.0f},
+	    .landScript = k_SecondLandSites,
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.5f}},
+	});
 	AddBreederOffers(all);
 	AddOgreLair(all);
 	AddGuideStorm(all);
