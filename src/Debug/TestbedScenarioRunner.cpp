@@ -3473,6 +3473,26 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::SkirmishBox)
 	{
+		if (command.value == 5 || command.value == 6)
+		{
+			// The game's own mind file takes the place of the creature that the profile keeps. This needs no interface, thus
+			// the dedicated server brings the creature too.
+			const auto path =
+			    Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
+			auto mind = std::make_shared<creaturemind::MindFileData>();
+			const bool read = creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success;
+			const auto brought = ecs::creature_from_file::BringKept(PlayerNames::PLAYER_ONE, read ? mind : nullptr);
+			// With 6, the profile also keeps the new creature in its file. Thus a load of a saved skirmish brings it again.
+			if (command.value == 6 && brought.creature.has_value() && Locator::creatureCarryOverSystem::has_value())
+			{
+				Locator::creatureCarryOverSystem::value().KeepCreature(*brought.creature);
+			}
+			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+			                brought.creature.has_value()
+			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))
+			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
+			return;
+		}
 		auto* game = Game::Instance();
 		if (game == nullptr || game->GetInterface() == nullptr)
 		{
@@ -3512,25 +3532,6 @@ void Runner::Give(const Command& command)
 			lands.ShowLandMessage(
 			    {.kind = land_message::Message::Kind::AddLine, .text = "Battle another god for this realm", .number = 2});
 			Log(fmt::format("{:.1f}s: {}: the land information box shows", _seconds, Name(command.kind)));
-			return;
-		}
-		if (command.value == 5 || command.value == 6)
-		{
-			// The game's own mind file takes the place of the creature that the profile keeps
-			const auto path =
-			    Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
-			auto mind = std::make_shared<creaturemind::MindFileData>();
-			const bool read = creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success;
-			const auto brought = ecs::creature_from_file::BringKept(PlayerNames::PLAYER_ONE, read ? mind : nullptr);
-			// With 6, the profile also keeps the new creature in its file. Thus a load of a saved skirmish brings it again.
-			if (command.value == 6 && brought.creature.has_value() && Locator::creatureCarryOverSystem::has_value())
-			{
-				Locator::creatureCarryOverSystem::value().KeepCreature(*brought.creature);
-			}
-			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
-			                brought.creature.has_value()
-			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))
-			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
 			return;
 		}
 		// The box holds the game, so that the scenario's clock stops while it is up
