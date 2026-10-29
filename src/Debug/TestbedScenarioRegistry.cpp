@@ -10196,6 +10196,25 @@ void AddMind(std::vector<Scenario>& all)
 	                 deedOn(k_DamageByThrowing, 20.0f), deedOn(k_StealObjectToTown, 20.0f), deedOn(k_PlayWithToy, 20.0f)},
 	});
 
+	constexpr size_t k_PutWoodInWorkshop = 9;
+	all.push_back({
+	    .id = "mind.copy_wood_to_workshop",
+	    .name = "Copy the player's gift of wood to a workshop",
+	    .facet = Facet::Mind,
+	    .description = "A grown-up tiger on the learning leash, with its town's workshop near it and in its view, and a birch "
+	                   "behind it. Every 30 seconds the player gives wood to the workshop, four times.",
+	    .expected = "After a gift the tiger points at the workshop and watches the camera. When it copies the gift, it "
+	                "walks to the birch, pulls it up, carries it to the workshop and throws it in: the workshop's pile of "
+	                "logs shows the wood. The log shows the copy of the gift as the action GiveWoodFromTreeToWorkshop.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -45.0f}, {40.0f, 25.0f}}},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger, .needs = Content()}},
+	    .objects = {{.type = AbodeInfo::CelticWorkshop, .offset = {30.0f, -35.0f}, .storedFood = 0, .storedWood = 0},
+	                {.type = TreeInfo::Birch, .offset = {-25.0f, 20.0f}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), deedOn(k_PutWoodInWorkshop, 2.0f), deedOn(k_PutWoodInWorkshop, 30.0f),
+	                 deedOn(k_PutWoodInWorkshop, 30.0f), deedOn(k_PutWoodInWorkshop, 30.0f)},
+	});
+
 	all.push_back({
 	    .id = "mind.deed_sight",
 	    .name = "Copy only a deed it can see",
@@ -12450,6 +12469,36 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                 .offset = k_ImpressedHut + glm::vec2 {6.0f, -6.0f},
 	                 .joinTown = true,
 	                 .homeIn = 2}},
+	});
+
+	// The tiger and a second loose scaffold stand inside the shot of objects.scaffold_starts_building, away from the
+	// hand's way, so that the shot and the hand's input stay the same. The tiger stays still until the input is over.
+	constexpr glm::vec2 k_SiteWatcher {-32.0f, 47.0f};
+	constexpr glm::vec2 k_SecondScaffold {-14.0f, 44.0f};
+	constexpr float k_WatcherWaits = 20.0f;
+	all.push_back({
+	    .id = "objects.creature_scaffold_on_site",
+	    .name = "A creature leaves a scaffold that a building site keeps",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building, with the player's tiger "
+	                   "and a second loose scaffold north of the scaffold. The tiger stays still for 20 seconds. The input "
+	                   "tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the scaffold, holds it still "
+	                   "near the village centre, and puts it down. After 100 seconds a script tells the tiger to examine "
+	                   "the scaffold on the site by picking it up, and after 40 seconds more, the loose scaffold.",
+	    .expected = "The scaffold opens a building site. After the time that a hand can take it back, the tiger cannot "
+	                "pick it up: a creature takes a scaffold only when a hand can take it. The tiger picks up the loose "
+	                "scaffold and looks at it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_SiteWatcher,
+	                   .pauseMind = true,
+	                   .thinksAfterSeconds = k_WatcherWaits}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f},
+	                {.type = ScaffoldInfo::Normal, .offset = k_SecondScaffold, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 100.0f, .object = 1, .action = "ExamineByPickingUp"},
+	                 {.kind = Kind::DoAction, .delaySeconds = 40.0f, .object = 2, .action = "ExamineByPickingUp"}},
 	});
 
 	// The abode number of a house and the size, as a land script gives Khazar's scaffold for a house

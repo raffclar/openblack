@@ -366,6 +366,10 @@ TEST(MiracleDeeds, TheLastThingAMiracleReachedSaysWhatThePlayerDid)
 	EXPECT_EQ(MiracleDeed(MagicType::ExplosionOnePuTwo, true, false, nothing), magic::k_NoDeed);
 	EXPECT_EQ(MiracleDeed(MagicType::Food, false, false, {.storagePit = true}), magic::k_DeedCastFoodInStoragePit);
 	EXPECT_EQ(MiracleDeed(MagicType::Wood, false, false, nothing), magic::k_NoDeed);
+	// Wood shows a deed only at a storage pit or a building that goes up. Wood by a workshop shows none: no part of the
+	// game tells the workshop wood miracle deed.
+	EXPECT_EQ(MiracleDeed(MagicType::Wood, false, false, {.storagePit = true}), magic::k_DeedCastWoodInStoragePit);
+	EXPECT_EQ(MiracleDeed(MagicType::Wood, false, false, {.buildingBeingBuilt = true}), magic::k_DeedCastWoodByBuildingSite);
 	EXPECT_EQ(MiracleDeed(MagicType::FlockGround, true, false, nothing), magic::k_DeedImpressWithMagic);
 }
 

@@ -164,4 +164,34 @@ void openblack::testbed_scenarios::AddCreatureLearningScenarios(std::vector<Scen
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 1.0f,
 	});
+	// The lion stands under the hand, so that it sees the hand take the totem of the town north of it
+	const glm::vec2 watcher = k_DanceCentre + glm::vec2(0.0f, -20.0f);
+	all.push_back({
+	    .id = "creatures.learns_totem",
+	    .name = "A creature learning to use a totem by watching the hand",
+	    .facet = Facet::Mind,
+	    .description = "The player's temple with a Celtic town of the player's north of it, the town's worship site put up "
+	                   "built. A grown-up lion, content and wanting only to find out about things, stands under the hand "
+	                   "south of the village centre. After five seconds the hand takes hold of the totem and lets go, "
+	                   "then again every three seconds, five times in all.",
+	    .expected = "Each time the hand takes the totem, the lion sees it: it takes up the reaction to the hand at the "
+	                "totem and looks the totem over. Six or more seconds after it first saw the hand at the totem it "
+	                "knows the skill: its thoughts say it has learnt to use the totem and the Mind panel marks UseTotem "
+	                "known.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {Curious(watcher, 0.0f)},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_DanceCentre},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = k_DanceCentre + glm::vec2(10.0f, -10.0f),
+	                 .joinTown = true}},
+	    .temples = {{.offset = k_Temple + glm::vec2(60.0f, 0.0f)}},
+	    .commands = {{.kind = Command::Kind::HandGripTotem, .delaySeconds = 5.0f, .object = 0},
+	                 {.kind = Command::Kind::HandGripTotem, .delaySeconds = 3.0f, .object = 0},
+	                 {.kind = Command::Kind::HandGripTotem, .delaySeconds = 3.0f, .object = 0},
+	                 {.kind = Command::Kind::HandGripTotem, .delaySeconds = 3.0f, .object = 0},
+	                 {.kind = Command::Kind::HandGripTotem, .delaySeconds = 3.0f, .object = 0}},
+	    .hand = HandHold {.offset = watcher, .height = 12.0f},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 }

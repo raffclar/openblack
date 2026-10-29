@@ -1123,6 +1123,8 @@ struct Command
 	bool onGlobe {false};
 	/// A script's action is done to the scenario's first temple in place of the object
 	bool onTemple {false};
+	/// A script's action is done to the totem of the object, a town centre, in place of the object
+	bool onTotem {false};
 	/// The leash put on
 	LeashType leash {LeashType::Rope};
 	/// The part of the body stroked, by its place in the hand's parts (the head first)
