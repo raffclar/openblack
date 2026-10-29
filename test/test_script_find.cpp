@@ -277,3 +277,21 @@ TEST(ScriptFind, ATownNumberIsCutTowardsNought)
 	// Out of range, as the game's conversion gives it
 	EXPECT_EQ(script_find::TownIdFromScript(3.0e9f), 0x80000000u);
 }
+
+TEST(ScriptFind, AWorshipSiteIsMeasuredFromItsAltar)
+{
+	Registry registry;
+	const auto altar = registry.Create();
+	const auto site = registry.Create();
+	registry.Assign<components::WorshipSite>(site).altar = altar;
+	const auto lone = registry.Create();
+	registry.Assign<components::WorshipSite>(lone);
+	const auto tree = registry.Create();
+
+	EXPECT_TRUE(script_find::MeasuredFrom(registry, site) == altar);
+	// A site with no altar, and any other thing, is measured from itself
+	EXPECT_TRUE(script_find::MeasuredFrom(registry, lone) == lone);
+	EXPECT_TRUE(script_find::MeasuredFrom(registry, tree) == tree);
+	registry.Destroy(altar);
+	EXPECT_TRUE(script_find::MeasuredFrom(registry, site) == site);
+}
