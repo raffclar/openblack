@@ -187,6 +187,9 @@ public:
 	void Trigger(uint32_t event);
 	/// A game turn ends: each event may happen again, and the clock moves on
 	void EndTurn();
+	/// A land is cleared: the clock starts again from 0. The counts keep their times, which then are ahead of the clock
+	/// until the clock catches up.
+	void ResetClock() { _clock = 0; }
 
 	[[nodiscard]] uint32_t Clock() const { return _clock; }
 	[[nodiscard]] const EventCount& Count(uint32_t event) const { return _counts.at(event); }

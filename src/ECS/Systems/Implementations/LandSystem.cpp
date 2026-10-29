@@ -70,6 +70,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -92,6 +93,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -127,6 +129,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Help/HelpProfile.h"
 #include "Help/Spirits.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
@@ -862,6 +865,16 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	}
 	Locator::guidanceSystem::value().Reset();
 	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
+	// The help's clock, which times what the player did, starts again at 0 with the land. The counts stay.
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Get().ResetClock();
+	}
+	// Nor do the camera's places to keep out of, its fence or its height limits
+	if (Locator::cameraZoneSystem::has_value())
+	{
+		Locator::cameraZoneSystem::value().Reset();
+	}
 	// The turns of a new land start from zero, and so does the turn of the last autosave
 	if (Locator::saveGameSystem::has_value())
 	{
