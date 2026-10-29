@@ -6376,7 +6376,7 @@ void SetAviSequence() // 203 SET_AVI_SEQUENCE
 	if (sequence == 1)
 	{
 		// The intro is cut short: it fades from 58 s and ends at 60 s. The script's fade is lifted at once under it
-		videos.Play("Data/INTRO.bik");
+		videos.Play(ecs::systems::k_IntroFilm);
 		videos.ScheduleIntro();
 		director.FadeBackToNormal(0);
 	}

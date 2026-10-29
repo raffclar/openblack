@@ -367,6 +367,7 @@ void TempleInterior::SetInterface(gui::GameInterface* interface)
 	_signs.reset();
 	_challengeRoom.reset();
 	_saveGameRoom.reset();
+	_savedGamesRead.reset();
 	_saveGameQuestion.reset();
 	_text.clear();
 	if (_active)
@@ -424,20 +425,44 @@ void TempleInterior::CreateScrolls()
 		_challengeRoom->Find(*meshes.Handle(challengeMeshId));
 	}
 
-	// The save game room finds its pictures and buttons, makes the empty picture from its colours and alpha, and reads
-	// the small pictures of the saved games
-	_saveGameRoom = std::make_unique<TempleSaveGameRoom>();
-	const entt::id_type saveGameMeshId = entt::hashed_string("temple/interior/savegame_l3d").value();
-	if (meshes.Contains(saveGameMeshId))
+	// The save game room finds its pictures and buttons and makes the empty picture from its colours and alpha once. It
+	// reads the small pictures of the saved games and their list when they changed after the last visit.
+	if (_saveGameRoom == nullptr)
 	{
-		_saveGameRoom->Find(*meshes.Handle(saveGameMeshId));
+		_saveGameRoom = std::make_unique<TempleSaveGameRoom>();
+		_savedGamesRead.reset();
+		const entt::id_type saveGameMeshId = entt::hashed_string("temple/interior/savegame_l3d").value();
+		if (meshes.Contains(saveGameMeshId))
+		{
+			_saveGameRoom->Find(*meshes.Handle(saveGameMeshId));
+		}
+		if (_roomPictures->emptyPicture.has_value())
+		{
+			_saveGameRoom->SetEmptyPicture(*_roomPictures->emptyPicture);
+		}
 	}
-	if (_roomPictures->emptyPicture.has_value())
+	ReadSavedGamesWhenChanged();
+}
+
+void TempleInterior::ReadSavedGamesWhenChanged()
+{
+	if (_saveGameRoom == nullptr)
 	{
-		_saveGameRoom->SetEmptyPicture(*_roomPictures->emptyPicture);
+		return;
+	}
+	// With no save system, the room reads at each visit
+	std::optional<temple::save_game_room::SavedGamesStamp> now;
+	if (Locator::saveGameSystem::has_value())
+	{
+		now = Locator::saveGameSystem::value().GetSavedGamesStamp();
+		if (!temple::save_game_room::ReadsSavedGamesAgain(_savedGamesRead, *now))
+		{
+			return;
+		}
 	}
 	_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
 	ListSavedGames();
+	_savedGamesRead = now;
 }
 
 void TempleInterior::ReadRoomPictures()
@@ -1509,13 +1534,12 @@ void TempleInterior::SetCurrentRoom(TempleRoom room)
 		{
 			_challengeRoom->Enter();
 		}
-		// Coming into the save game room, the room reads the saved games and their pictures and writes its scroll again,
-		// and no picture is shown in high detail
+		// Coming into the save game room, the room reads the saved games and their pictures again when they changed, writes
+		// its scroll again, and no picture is shown in high detail
 		if (room == TempleRoom::SaveGame && _saveGameRoom != nullptr)
 		{
 			_saveGameRoom->Enter();
-			_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
-			ListSavedGames();
+			ReadSavedGamesWhenChanged();
 			if (_scrolls != nullptr)
 			{
 				_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
@@ -2219,7 +2243,11 @@ void TempleInterior::Close()
 	_scrolls.reset();
 	_signs.reset();
 	_challengeRoom.reset();
-	_saveGameRoom.reset();
+	// The save game room stays for the next visit, as at its start
+	if (_saveGameRoom != nullptr)
+	{
+		_saveGameRoom->Leave();
+	}
 	_saveGameQuestion.reset();
 	_replay.reset();
 	_text.clear();

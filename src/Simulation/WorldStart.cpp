@@ -88,6 +88,7 @@
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/DetailLevel.h"
@@ -514,6 +515,12 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 				                         resources::CameraZoneLoader::FromDiskTag {}, f);
 			}
 		});
+	}
+
+	// The films that the scripts start are read with the other resources too
+	if (Locator::videoSystem::has_value())
+	{
+		Locator::videoSystem::value().RegisterScriptFilms();
 	}
 
 	view.StartupStep("camera paths");

@@ -51,6 +51,7 @@ public:
 	bool LoadWorldState(std::span<const uint8_t> bytes) override;
 	bool Delete(uint32_t slot) override;
 	[[nodiscard]] std::optional<std::vector<uint8_t>> ReadPictureFile(std::string_view name) const override;
+	[[nodiscard]] temple::save_game_room::SavedGamesStamp GetSavedGamesStamp() const override;
 	[[nodiscard]] std::vector<Slot> Slots() const override;
 	[[nodiscard]] std::vector<VanillaCheck> CheckVanillaRecords() const override;
 	void TakeTemplePicture() override;
@@ -186,6 +187,8 @@ private:
 	std::optional<std::filesystem::path> _challengeFolder;
 	bool _challengePicturesRead {false};
 	uint32_t _pictureRequests {0};
+	/// The count of the saves, the deletes and the slot pictures that the game started to write, for the save game room
+	uint64_t _savedGamesChanges {0};
 	/// The turns of the last autosave, the last quick save and the last load. The turn of the last autosave starts again
 	/// with each land; the other two stay from land to land.
 	uint32_t _lastAutosaveTurn {0};

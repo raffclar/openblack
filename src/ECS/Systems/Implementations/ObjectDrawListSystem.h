@@ -38,7 +38,7 @@ public:
 	ObjectDrawListSystem(ObjectDrawListSystem&&) = delete;
 	ObjectDrawListSystem& operator=(ObjectDrawListSystem&&) = delete;
 
-	void Update(uint32_t turn) override;
+	void Update(uint32_t turn, bool landDrawn) override;
 	void PrepareLand() override;
 	void RequestRebuild(uint32_t frames) override;
 	[[nodiscard]] object_draw_list::Frame GetFrame() const override { return _frame; }

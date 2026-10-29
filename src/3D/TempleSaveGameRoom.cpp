@@ -173,6 +173,14 @@ void TempleSaveGameRoom::Enter()
 	Destroy(_large);
 }
 
+void TempleSaveGameRoom::Leave()
+{
+	Enter();
+	_alignment = 0.0f;
+	_held.reset();
+	_wasPressed = false;
+}
+
 void TempleSaveGameRoom::SetSaves(std::vector<Save> saves)
 {
 	_saves = std::move(saves);
