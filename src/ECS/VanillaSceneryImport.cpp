@@ -178,6 +178,59 @@ std::vector<uint32_t> ForestOrder(const VanillaWorld& world)
 	return {numbers.begin(), numbers.end()};
 }
 
+/// The kind of still thing or loose thing that a record is, nothing for any other record
+std::optional<StaticKind> StaticKindOf(const VanillaRecord& record)
+{
+	switch (static_cast<VanillaType>(record.type))
+	{
+	case VanillaType::MobileStatic:
+		return StaticKind::MobileStatic;
+	case VanillaType::Rock:
+	case VanillaType::Bonfire:
+		return StaticKind::Rock;
+	case VanillaType::BaseOnly:
+		return StaticKind::BaseOnly;
+	case VanillaType::StreetLantern:
+		return StaticKind::StreetLantern;
+	case VanillaType::DeadTree:
+		return StaticKind::DeadTree;
+	case VanillaType::Feature:
+		return StaticKind::Feature;
+	case VanillaType::AnimatedStatic:
+		return StaticKind::AnimatedStatic;
+	case VanillaType::MobileObject:
+	case VanillaType::Poo:
+		return StaticKind::MobileObject;
+	default:
+		return std::nullopt;
+	}
+}
+
+/// The row of a still thing or a loose thing in its table. A dead tree keeps the row of its tree after the row of the
+/// static things.
+std::optional<uint32_t> StaticRowOf(const VanillaWorld& world, const VanillaRecord& record, StaticKind kind)
+{
+	const auto info = world.Word(record, "info").value_or(0);
+	const auto index = [](auto row) { return row.has_value() ? std::optional(static_cast<uint32_t>(*row)) : std::nullopt; };
+	switch (kind)
+	{
+	case StaticKind::MobileStatic:
+	case StaticKind::Rock:
+	case StaticKind::BaseOnly:
+	case StaticKind::StreetLantern:
+		return index(MobileStaticRowOf(info));
+	case StaticKind::DeadTree:
+		return index(TreeRowOf(world.Word(record, "treeInfo").value_or(0)));
+	case StaticKind::Feature:
+		return index(FeatureRowOf(info));
+	case StaticKind::AnimatedStatic:
+		return index(AnimatedStaticRowOf(info));
+	case StaticKind::MobileObject:
+		return index(MobileObjectRowOf(info));
+	}
+	return std::nullopt;
+}
+
 } // namespace
 
 std::optional<TreeInfo> TreeRowOf(uint32_t number)
@@ -317,6 +370,57 @@ ImportedFarms ReadFarms(const VanillaWorld& world)
 		imported.skipped.push_back(Skip(record, why));
 	}
 	return imported;
+}
+
+ImportedStatics ReadStatics(const VanillaWorld& world)
+{
+	ImportedStatics imported;
+	for (const auto& record : world.Records())
+	{
+		const auto kind = StaticKindOf(record);
+		if (!kind.has_value())
+		{
+			continue;
+		}
+		const auto position = PositionOf(world, record);
+		const auto row = StaticRowOf(world, record, *kind);
+		if (!position.has_value() || !row.has_value())
+		{
+			imported.skipped.push_back(Skip(record, "the thing has no place or no row of its table"));
+			continue;
+		}
+		imported.statics.push_back({.number = record.number,
+		                            .kind = *kind,
+		                            .row = *row,
+		                            .position = *position,
+		                            .heading = world.Float(record, "heading").value_or(0.0f),
+		                            .scale = world.Float(record, "scale").value_or(1.0f),
+		                            .life = world.Float(record, "life").value_or(1.0f),
+		                            .xAngle = world.Float(record, "xAngle").value_or(0.0f),
+		                            .zAngle = world.Float(record, "zAngle").value_or(0.0f),
+		                            .woodMultiplier = world.Float(record, "woodMultiplier").value_or(1.0f)});
+	}
+	return imported;
+}
+
+std::optional<ImportedDayCycle> ReadDayCycle(const VanillaWorld& world)
+{
+	if (world.Records().empty())
+	{
+		return std::nullopt;
+	}
+	const auto& game = world.Game();
+	const auto visualTime = world.Float(game, "visualTime");
+	const auto duration = world.Float(game, "dayDuration");
+	const auto night = world.Float(game, "dayNight");
+	const auto change = world.Float(game, "dayChange");
+	const auto scale = world.Float(game, "visualTimeScale");
+	if (!visualTime.has_value() || !duration.has_value() || !night.has_value() || !change.has_value() || !scale.has_value())
+	{
+		return std::nullopt;
+	}
+	return ImportedDayCycle {
+	    .visualTime = *visualTime, .duration = *duration, .night = *night, .change = *change, .scale = *scale};
 }
 
 } // namespace openblack::ecs::vanilla_world_import

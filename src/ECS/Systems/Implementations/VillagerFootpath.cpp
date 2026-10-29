@@ -316,7 +316,7 @@ uint32_t villager_footpath::MoveOnPath(LivingAction& action)
 		return 1;
 	}
 	const auto& wallHug = registry.Get<const WallHug>(villager);
-	if (!villager_home::WalkIsOverAt(villager, wallHug.goal))
+	if (!villager_home::WalkIsOverAt(villager, wallHug.goalPlace))
 	{
 		return 0;
 	}

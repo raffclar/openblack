@@ -104,9 +104,6 @@ struct ImportedWalk
 	bool hugsCircle {false};
 };
 
-/// True when the villager walks in its top state, or goes back to the walk in the state before
-[[nodiscard]] bool UsesWalkGoal(const std::array<uint8_t, 3>& states);
-
 /// A metre value that gives the whole map units again, as openblack changes metres to whole units. Nothing when no
 /// float near the value does.
 [[nodiscard]] std::optional<float> MetresOfWhole(int32_t whole);

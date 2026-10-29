@@ -52,7 +52,7 @@ void openblack::ecs::reflection::RegisterFields_Components_w(entt::meta_ctx& con
 	    .Field<&components::TurningWalker::turnAngle>("turnAngle")
 	    .Field<&components::TurningWalker::speed>("speed");
 	Reflect<components::WallHug>(context)
-	    .Field<&components::WallHug::goal>("goal")
+	    .Field<&components::WallHug::goalPlace>("goalPlace")
 	    .Field<&components::WallHug::step>("step")
 	    .Field<&components::WallHug::stepAltitude>("stepAltitude")
 	    .Field<&components::WallHug::yAngle>("yAngle")

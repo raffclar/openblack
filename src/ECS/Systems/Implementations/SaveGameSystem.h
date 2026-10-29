@@ -139,6 +139,13 @@ private:
 	/// Puts the fields and the fish farms of the world file into the world, in the place of those of the land. Each
 	/// villager that keeps its work takes its field or fish farm, and each field and farm takes its workers of the file.
 	void ImportVanillaFarms(const gamesave::VanillaWorld& world, VanillaMade& made, const VanillaWorks& works);
+	/// Puts the still things and the loose things of the world file into the world: the rocks and the other static
+	/// things, the lanterns, the dead trees, the features, the animated things and the loose things. A thing of the land
+	/// that the file has at the same place with the same row stays, the other things of the land go, and the file makes
+	/// the rest.
+	void ImportVanillaStatics(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// Puts the clock of day and night and the count of things made of the world file into the world
+	void ImportVanillaGameValues(const gamesave::VanillaWorld& world);
 	/// The world file in the game's layout of a save of a game that came from such a file
 	[[nodiscard]] std::vector<ecs::save_files::SaveFile> VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
 	                                                                  std::span<const gamesave::SavedCreature> saved,

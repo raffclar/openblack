@@ -474,10 +474,10 @@ void ReadPot(WorldReader& r)
 void ReadMobileObject(WorldReader& r)
 {
 	ReadMobile(r);
-	r.Ref();
-	r.Word();
-	r.Word();
-	r.Ref();
+	r.Ref("heldObject");
+	r.Float("xAngle");
+	r.Float("zAngle");
+	r.Ref("path");
 }
 
 void ReadForest(WorldReader& r)
@@ -670,8 +670,8 @@ void ReadMobileStatic(WorldReader& r)
 {
 	ReadMultiMapFixed(r);
 	r.Ref();
-	r.Word();
-	r.Word();
+	r.Float("xAngle");
+	r.Float("zAngle");
 }
 
 void ReadAtomCore(WorldReader& r)
@@ -745,7 +745,7 @@ void ReadRock(WorldReader& r)
 	ReadMobileStatic(r);
 	r.Word();
 	r.Word();
-	r.Ref();
+	r.Ref("rockPlayer");
 }
 
 void ReadCollectionDataEmitterRule(WorldReader& r)
@@ -827,8 +827,8 @@ void ReadStream(WorldReader& r)
 void ReadDeadTree(WorldReader& r)
 {
 	ReadRock(r);
-	r.Word();
-	r.Word();
+	r.Word("treeInfo");
+	r.Float("woodMultiplier");
 }
 
 void ReadAnimatedStatic(WorldReader& r)

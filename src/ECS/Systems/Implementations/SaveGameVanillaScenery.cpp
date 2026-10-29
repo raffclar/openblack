@@ -9,27 +9,45 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstdlib>
+
 #include <algorithm>
+#include <map>
 #include <ranges>
+#include <utility>
 #include <vector>
 
 #include <VanillaWorld.h>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BigForestArchetype.h"
+#include "ECS/Archetypes/DeadTreeArchetype.h"
+#include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/FieldArchetype.h"
 #include "ECS/Archetypes/FishFarmArchetype.h"
+#include "ECS/Archetypes/MobileObjectArchetype.h"
+#include "ECS/Archetypes/MobileStaticArchetype.h"
+#include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
+#include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/DeadTree.h"
+#include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/MagicForest.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VanillaSceneryImport.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
@@ -74,6 +92,118 @@ void RemoveLandForests(ecs::Registry& registry)
 	}
 	registry.Each<TownForests>([](TownForests& listed) { listed.forests.clear(); });
 	registry.SetDirty();
+}
+
+/// The kinds of things of the land that a still thing or a loose thing of the file can be. A rock is a static thing of
+/// the land, so the static things and the rocks of the file look among the same things.
+enum class LandFamily : uint8_t
+{
+	Static,
+	Lantern,
+	DeadTree,
+	Feature,
+	AnimatedStatic,
+	MobileObject,
+};
+
+LandFamily FamilyOf(world_import::StaticKind kind)
+{
+	switch (kind)
+	{
+	case world_import::StaticKind::MobileStatic:
+	case world_import::StaticKind::Rock:
+	case world_import::StaticKind::BaseOnly:
+		return LandFamily::Static;
+	case world_import::StaticKind::StreetLantern:
+		return LandFamily::Lantern;
+	case world_import::StaticKind::DeadTree:
+		return LandFamily::DeadTree;
+	case world_import::StaticKind::Feature:
+		return LandFamily::Feature;
+	case world_import::StaticKind::AnimatedStatic:
+		return LandFamily::AnimatedStatic;
+	case world_import::StaticKind::MobileObject:
+		return LandFamily::MobileObject;
+	}
+	return LandFamily::Static;
+}
+
+using LandKey = std::pair<LandFamily, uint32_t>;
+
+/// The still things and the loose things of the land, by their kind and their row
+std::map<LandKey, std::vector<entt::entity>> LandStatics(ecs::Registry& registry)
+{
+	std::map<LandKey, std::vector<entt::entity>> things;
+	const auto add = [&things](LandFamily family, auto row, entt::entity entity) {
+		things[{family, static_cast<uint32_t>(row)}].push_back(entity);
+	};
+	registry.Each<const MobileStatic>(
+	    [&add](entt::entity entity, const MobileStatic& thing) { add(LandFamily::Static, thing.type, entity); });
+	registry.Each<const StreetLantern>(
+	    [&add](entt::entity entity, const StreetLantern& thing) { add(LandFamily::Lantern, thing.info, entity); });
+	registry.Each<const DeadTree>(
+	    [&add](entt::entity entity, const DeadTree& thing) { add(LandFamily::DeadTree, thing.type, entity); });
+	registry.Each<const Feature>(
+	    [&add](entt::entity entity, const Feature& thing) { add(LandFamily::Feature, thing.type, entity); });
+	registry.Each<const AnimatedStatic>(
+	    [&add](entt::entity entity, const AnimatedStatic& thing) { add(LandFamily::AnimatedStatic, thing.type, entity); });
+	registry.Each<const MobileObject>(
+	    [&add](entt::entity entity, const MobileObject& thing) { add(LandFamily::MobileObject, thing.type, entity); });
+	return things;
+}
+
+/// Takes the thing of the land that stands where the file puts its thing: at the same map position, or one map unit
+/// from it, because the metres of a thing cannot keep every map position. Nothing when no thing of the land is there.
+entt::entity TakeLandThing(const ecs::Registry& registry, std::vector<entt::entity>& things, const gamesave::MapCoords& place)
+{
+	const auto found = std::ranges::find_if(things, [&registry, &place](entt::entity thing) {
+		const auto at = ecs::thing_map_place::Of(registry, thing);
+		return std::abs(at.x - place.x) <= 1 && std::abs(at.z - place.z) <= 1;
+	});
+	if (found == things.end())
+	{
+		return entt::null;
+	}
+	const auto thing = *found;
+	things.erase(found);
+	return thing;
+}
+
+/// Makes a still thing or a loose thing of the file
+entt::entity MakeStatic(const world_import::ImportedStatic& file)
+{
+	using namespace ecs::archetypes;
+	const auto position = GroundPosition(file.position);
+	switch (file.kind)
+	{
+	case world_import::StaticKind::MobileStatic:
+	case world_import::StaticKind::Rock:
+		return MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(file.row), 0.0f, file.xAngle, file.heading,
+		                                     file.zAngle, file.scale);
+	case world_import::StaticKind::BaseOnly:
+	{
+		// It shows only as a print on the land, the newest of the prints
+		const auto entity = MobileStaticArchetype::Create(position, static_cast<MobileStaticInfo>(file.row), 0.0f, file.xAngle,
+		                                                  file.heading, file.zAngle, file.scale);
+		auto& registry = Locator::entitiesRegistry::value();
+		uint32_t prints = 0;
+		registry.Each<const GroundPrint>([&prints](const GroundPrint& print) { prints = std::max(prints, print.made + 1); });
+		registry.AssignOrReplace<GroundPrint>(entity, GroundPrint {.made = prints});
+		return entity;
+	}
+	case world_import::StaticKind::StreetLantern:
+		return StreetLanternArchetype::Create(position, static_cast<MobileStaticInfo>(file.row));
+	case world_import::StaticKind::DeadTree:
+		return DeadTreeArchetype::Create(position, static_cast<TreeInfo>(file.row), file.xAngle, file.heading, file.zAngle,
+		                                 file.scale);
+	case world_import::StaticKind::Feature:
+		return FeatureArchetype::Create(position, static_cast<FeatureInfo>(file.row), file.heading, file.scale);
+	case world_import::StaticKind::AnimatedStatic:
+		return AnimatedStaticArchetype::Create(position, static_cast<AnimatedStaticInfo>(file.row), file.heading, file.scale);
+	case world_import::StaticKind::MobileObject:
+		return MobileObjectArchetype::Create(position, static_cast<MobileObjectInfo>(file.row), file.heading, file.scale);
+	}
+	return entt::null;
 }
 
 } // namespace
@@ -258,4 +388,96 @@ void SaveGameSystem::ImportVanillaFarms(const gamesave::VanillaWorld& world, Van
 	registry.SetDirty();
 	SPDLOG_LOGGER_INFO(ImportLog(), "Imported {} fields and {} fish farms of the game's file; {} villagers keep their work",
 	                   fields, imported.fishFarms.size(), works.size());
+}
+
+void SaveGameSystem::ImportVanillaStatics(const gamesave::VanillaWorld& world, VanillaMade& made)
+{
+	const auto imported = world_import::ReadStatics(world);
+	for (const auto& why : imported.skipped)
+	{
+		SPDLOG_LOGGER_WARN(ImportLog(), "The import does not take {}", why);
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto land = LandStatics(registry);
+
+	// A thing of the land at the place of a thing of the file is that thing: it stays, with the life of the file
+	size_t kept = 0;
+	std::vector<const world_import::ImportedStatic*> toMake;
+	for (const auto& file : imported.statics)
+	{
+		auto& things = land[{FamilyOf(file.kind), file.row}];
+		const auto thing = TakeLandThing(registry, things, file.position);
+		if (thing == entt::null)
+		{
+			toMake.push_back(&file);
+			continue;
+		}
+		ecs::thing_map_place::Keep(registry, thing, {file.position.x, file.position.z, 0.0f});
+		if (file.life != 1.0f)
+		{
+			ecs::world_objects::SetLife(thing, file.life);
+		}
+		made.emplace(file.number, thing);
+		++kept;
+	}
+	// The other things of the land are not in the file, so they go
+	size_t removed = 0;
+	for (const auto& [key, things] : land)
+	{
+		for (const auto thing : things)
+		{
+			if (registry.Valid(thing))
+			{
+				const auto at = ecs::thing_map_place::Of(registry, thing);
+				SPDLOG_LOGGER_DEBUG(ImportLog(), "The thing {} of kind {} and row {} of the land at {}, {} is not in the file",
+				                    entt::to_integral(thing), static_cast<int>(key.first), key.second, at.x, at.z);
+				ecs::world_objects::Remove(thing);
+				++removed;
+			}
+		}
+	}
+	// The file makes the rest
+	for (const auto* file : toMake)
+	{
+		const auto entity = MakeStatic(*file);
+		if (entity == entt::null)
+		{
+			continue;
+		}
+		SPDLOG_LOGGER_DEBUG(ImportLog(), "The file makes its thing {} of kind {} and row {} at {}, {}", file->number,
+		                    static_cast<int>(file->kind), file->row, file->position.x, file->position.z);
+		ecs::thing_map_place::Keep(registry, entity, {file->position.x, file->position.z, 0.0f});
+		if (auto* deadTree = registry.TryGet<DeadTree>(entity))
+		{
+			deadTree->woodMultiplier = file->woodMultiplier;
+		}
+		if (file->life != 1.0f)
+		{
+			ecs::world_objects::SetLife(entity, file->life);
+		}
+		made.emplace(file->number, entity);
+	}
+	registry.SetDirty();
+	SPDLOG_LOGGER_INFO(ImportLog(),
+	                   "Imported {} still and loose things of the game's file: {} of the land stay, {} are made and {} "
+	                   "of the land go",
+	                   imported.statics.size(), kept, toMake.size(), removed);
+}
+
+void SaveGameSystem::ImportVanillaGameValues(const gamesave::VanillaWorld& world)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The count of things made continues from the count of the file
+	if (const auto data = world.GameData(); data.has_value())
+	{
+		registry.Context().thingsMade = data->thingsMade;
+	}
+	// The clock of day and night: the hour that shows, the cycle, and whether it runs
+	if (const auto cycle = world_import::ReadDayCycle(world); cycle.has_value() && Locator::skySystem::has_value())
+	{
+		auto& clock = Locator::skySystem::value().GetClock();
+		clock.ForceVisualTime(cycle->visualTime);
+		clock.SetScale(cycle->scale);
+		clock.SetCycle(cycle->duration, cycle->night, cycle->change);
+	}
 }

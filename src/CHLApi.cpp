@@ -254,6 +254,7 @@
 #include "ECS/VillagerScriptRules.h"
 #include "ECS/VillagerSkeletons.h"
 #include "ECS/WalkerPlacement.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -2415,11 +2416,12 @@ void GetPosition() // 023 GET_POSITION
 		}
 		else if (const auto* wallHug = registry.TryGet<const ecs::components::WallHug>(object);
 		         wallHug != nullptr && transform != nullptr && !registry.AllOf<ecs::components::Creature>(object) &&
-		         ecs::villager_script_rules::WithinAStepOfGoal(glm::vec2(transform->position.x, transform->position.z),
-		                                                       wallHug->goal, wallHug->speed))
+		         ecs::villager_script_rules::WithinAStepOfGoalPlace(glm::vec2(transform->position.x, transform->position.z),
+		                                                            wallHug->goalPlace, wallHug->speed))
 		{
 			// A walker within a turn's step of where it is walking to is seen there, on the ground
-			position = {wallHug->goal.x, Locator::terrainSystem::value().GetHeightAt(wallHug->goal), wallHug->goal.y};
+			const auto goal = ecs::wall_hug::ToPoint(wallHug->goalPlace);
+			position = {goal.x, Locator::terrainSystem::value().GetHeightAt(goal), goal.y};
 		}
 		else if (transform != nullptr)
 		{

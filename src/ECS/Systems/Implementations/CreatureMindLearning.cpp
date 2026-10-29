@@ -165,6 +165,7 @@
 #include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/TownDesire.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Moon.h"
 #include "Gui/TextDatabase.h"
@@ -5120,7 +5121,8 @@ void CreatureMindSystem::WatchVillagerSkill(entt::entity creature, CreatureMindS
 	float toGoal = 0.0f;
 	if (const auto* walk = registry.TryGet<const WallHug>(villager); walk != nullptr)
 	{
-		toGoal = gutils::GetDistanceInMetres(glm::vec2(glm::xz(registry.Get<const Transform>(villager).position)), walk->goal);
+		toGoal = gutils::GetDistanceInMetres(glm::vec2(glm::xz(registry.Get<const Transform>(villager).position)),
+		                                     wall_hug::ToPoint(walk->goalPlace));
 	}
 	const auto state = creature_watching::StateToLearnFrom({
 	    .state = action->states.at(static_cast<size_t>(LivingAction::Index::Top)),

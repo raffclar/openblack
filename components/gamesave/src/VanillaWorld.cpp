@@ -501,10 +501,12 @@ void ReadGameTail(WorldReader& r)
 		r.Word();
 	}
 	r.Float("visualTime");
-	for (int i = 0; i < 4; ++i)
-	{
-		r.Word();
-	}
+	// The cycle of day and night: the seconds of a day, the part of it that changes, the part that is night, and the
+	// rate that the clock runs at
+	r.Float("dayDuration");
+	r.Float("dayChange");
+	r.Float("dayNight");
+	r.Float("visualTimeScale");
 	ReadHelp(r);
 	ReadScriptThings(r);
 	r.Point("startCamera");

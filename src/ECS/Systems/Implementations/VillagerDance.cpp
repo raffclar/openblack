@@ -243,7 +243,7 @@ uint32_t villager_dance::MoveToDancePos(LivingAction& action)
 		const auto slot = moves::SlotPosition(*placed->dance, placed->group, placed->slot, DanceShapes());
 		if (auto* wallHug = registry.TryGet<WallHug>(villager); wallHug != nullptr)
 		{
-			wallHug->goal = map_coords::ToMetres(slot);
+			wallHug->goalPlace = {slot.x, slot.z};
 		}
 	}
 	return villager_home::MoveToPos(action);

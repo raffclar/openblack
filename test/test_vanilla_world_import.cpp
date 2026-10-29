@@ -763,14 +763,13 @@ TEST(VanillaSceneryImport, SavedGamesOfLandOneImportTheirFarms)
 	EXPECT_GT(*files, 0U);
 }
 
-/// Each villager of a saved game of Land 1 that keeps its states keeps a goal that metres give again, and its work is a
-/// field or a fish farm of the file
+/// Each villager of a saved game of Land 1 that keeps its states keeps its walk, and its work is a field or a fish farm
+/// of the file
 TEST(VanillaWorldImport, SavedGamesOfLandOneKeepWalksAndWork)
 {
 	size_t kept = 0;
 	size_t walking = 0;
 	size_t working = 0;
-	size_t lostGoals = 0;
 	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
 		const auto imported = world_import::ReadTowns(world);
 		for (const auto& villager : imported.villagers)
@@ -781,13 +780,6 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepWalksAndWork)
 			}
 			++kept;
 			walking += villager.moveState == 0x0B || villager.moveState == 0x0C ? 1 : 0;
-			// The import makes a villager that walks decide again when no metre value gives its goal
-			if (world_import::UsesWalkGoal(villager.states) &&
-			    (!world_import::MetresOfWhole(villager.walk.goal.x).has_value() ||
-			     !world_import::MetresOfWhole(villager.walk.goal.z).has_value()))
-			{
-				++lostGoals;
-			}
 			auto work = world_import::WorkOf(villager.states[0], villager.topValues);
 			if (!work.has_value())
 			{
@@ -810,9 +802,7 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepWalksAndWork)
 	EXPECT_GT(kept, 0U);
 	EXPECT_GT(walking, 0U);
 	EXPECT_GT(working, 0U);
-	EXPECT_LT(lostGoals * 10, kept);
-	std::cout << "Kept " << kept << " villagers, " << walking << " walking and " << working << " working, " << lostGoals
-	          << " goals that metres do not give" << std::endl;
+	std::cout << "Kept " << kept << " villagers, " << walking << " walking and " << working << " working" << std::endl;
 }
 
 /// Each town of a saved game of Land 1 has its belief, its desires and its running counts. The food and the wood that
@@ -957,4 +947,115 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneKeepThePlansAndTheBuildingSitesOfThe
 	}
 	EXPECT_EQ(plans, 54U);
 	EXPECT_EQ(sites, 55U);
+}
+
+// Each still thing and loose thing of the file comes with the row of its table. A rock and a lantern take the rows of
+// the static things, a dead tree the row of its tree, and a lump of poo the row of the loose things.
+TEST(VanillaWorldImport, StillAndLooseThingsTakeTheRowsOfTheirTables)
+{
+	auto world = GameAtTurn(10);
+	const auto staticRow = world_import::k_FirstMobileStaticRowNumber;
+	world.Record(VanillaType::MobileStatic)
+	    .Position(100, 200)
+	    .Value("info", staticRow - 3)
+	    .Value("heading", 1.5f)
+	    .Value("scale", 2.0f)
+	    .Value("xAngle", -0.25f)
+	    .Value("zAngle", 0.125f);
+	world.Record(VanillaType::Rock).Position(300, 400).Value("info", staticRow - 7).Value("life", 0.5f);
+	world.Record(VanillaType::StreetLantern).Position(5, 6).Value("info", staticRow - 1);
+	world.Record(VanillaType::DeadTree)
+	    .Position(7, 8)
+	    .Value("info", staticRow - 2)
+	    .Value("treeInfo", world_import::k_FirstTreeRowNumber - 4)
+	    .Value("woodMultiplier", 0.75f);
+	world.Record(VanillaType::Feature).Position(9, 10).Value("info", world_import::k_FirstFeatureRowNumber - 11);
+	world.Record(VanillaType::AnimatedStatic).Position(11, 12).Value("info", world_import::k_FirstAnimatedStaticRowNumber);
+	world.Record(VanillaType::MobileObject).Position(13, 14).Value("info", world_import::k_FirstMobileObjectRowNumber - 2);
+	world.Record(VanillaType::Poo).Position(15, 16).Value("info", world_import::k_FirstMobileObjectRowNumber - 5);
+	world.Record(VanillaType::Bonfire).Position(21, 22).Value("info", staticRow - 8);
+	world.Record(VanillaType::BaseOnly).Position(23, 24).Value("info", staticRow - 6);
+	// A feature with a row of another table, and a tree, which is not a still thing of this list
+	world.Record(VanillaType::Feature).Position(17, 18).Value("info", 5u);
+	world.Record(VanillaType::Tree).Position(19, 20).Value("info", world_import::k_FirstTreeRowNumber);
+
+	const auto imported = world_import::ReadStatics(world.Make());
+	ASSERT_EQ(imported.statics.size(), 10U);
+	EXPECT_EQ(imported.skipped.size(), 1U);
+	const auto& still = imported.statics[0];
+	EXPECT_EQ(still.number, 2U);
+	EXPECT_EQ(still.kind, world_import::StaticKind::MobileStatic);
+	EXPECT_EQ(still.row, 3U);
+	EXPECT_EQ(still.position.x, 100);
+	EXPECT_EQ(still.position.z, 200);
+	EXPECT_EQ(still.heading, 1.5f);
+	EXPECT_EQ(still.scale, 2.0f);
+	EXPECT_EQ(still.xAngle, -0.25f);
+	EXPECT_EQ(still.zAngle, 0.125f);
+	EXPECT_EQ(still.life, 1.0f);
+	EXPECT_EQ(imported.statics[1].kind, world_import::StaticKind::Rock);
+	EXPECT_EQ(imported.statics[1].row, 7U);
+	EXPECT_EQ(imported.statics[1].life, 0.5f);
+	EXPECT_EQ(imported.statics[2].kind, world_import::StaticKind::StreetLantern);
+	EXPECT_EQ(imported.statics[2].row, 1U);
+	EXPECT_EQ(imported.statics[3].kind, world_import::StaticKind::DeadTree);
+	EXPECT_EQ(imported.statics[3].row, 4U);
+	EXPECT_EQ(imported.statics[3].woodMultiplier, 0.75f);
+	EXPECT_EQ(imported.statics[4].kind, world_import::StaticKind::Feature);
+	EXPECT_EQ(imported.statics[4].row, 11U);
+	EXPECT_EQ(imported.statics[5].kind, world_import::StaticKind::AnimatedStatic);
+	EXPECT_EQ(imported.statics[5].row, 0U);
+	EXPECT_EQ(imported.statics[6].kind, world_import::StaticKind::MobileObject);
+	EXPECT_EQ(imported.statics[6].row, 2U);
+	EXPECT_EQ(imported.statics[7].kind, world_import::StaticKind::MobileObject);
+	EXPECT_EQ(imported.statics[7].row, 5U);
+	EXPECT_EQ(imported.statics[8].kind, world_import::StaticKind::Rock);
+	EXPECT_EQ(imported.statics[8].row, 8U);
+	EXPECT_EQ(imported.statics[9].kind, world_import::StaticKind::BaseOnly);
+	EXPECT_EQ(imported.statics[9].row, 6U);
+}
+
+// The game object keeps the clock of day and night: the hour that shows, the seconds of a day, the part of the half day
+// that changes, the part that is night, and the rate of the clock
+TEST(VanillaWorldImport, TheClockOfDayAndNightComesFromTheGameObject)
+{
+	auto world = GameAtTurn(10);
+	EXPECT_FALSE(world_import::ReadDayCycle(world.Make()).has_value());
+	world.Value("visualTime", 22.25f)
+	    .Value("dayDuration", 1700.0f)
+	    .Value("dayChange", 0.07f)
+	    .Value("dayNight", 0.083f)
+	    .Value("visualTimeScale", 0.0f);
+	const auto cycle = world_import::ReadDayCycle(world.Make());
+	ASSERT_TRUE(cycle.has_value());
+	EXPECT_EQ(cycle->visualTime, 22.25f);
+	EXPECT_EQ(cycle->duration, 1700.0f);
+	EXPECT_EQ(cycle->change, 0.07f);
+	EXPECT_EQ(cycle->night, 0.083f);
+	EXPECT_EQ(cycle->scale, 0.0f);
+}
+
+/// Each still thing and loose thing of a saved game of Land 1 has a row of its table, and the clock of each file has the
+/// game's cycle
+TEST(VanillaWorldImport, SavedGamesOfLandOneHaveRowsForTheirStillThings)
+{
+	size_t statics = 0;
+	const auto files = ForEachLandOneSave([&statics](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadStatics(world);
+		EXPECT_TRUE(imported.skipped.empty()) << path << " " << (imported.skipped.empty() ? "" : imported.skipped.front());
+		statics += imported.statics.size();
+		const auto cycle = world_import::ReadDayCycle(world);
+		ASSERT_TRUE(cycle.has_value()) << path;
+		EXPECT_EQ(cycle->duration, 1700.0f) << path;
+		EXPECT_EQ(cycle->night, 0.083f) << path;
+		EXPECT_EQ(cycle->change, 0.07f) << path;
+		EXPECT_GE(cycle->visualTime, 0.0f) << path;
+		EXPECT_LT(cycle->visualTime, 24.0f) << path;
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(statics, 0U);
+	std::cout << "Read " << statics << " still and loose things" << std::endl;
 }

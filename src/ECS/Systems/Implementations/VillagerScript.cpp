@@ -311,7 +311,7 @@ void KeepInMind(entt::entity villager, ScriptRemind& remind)
 	auto& registry = Entities();
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
 	const auto* transform = registry.TryGet<const Transform>(villager);
-	const auto goal = wallHug != nullptr ? wallHug->goal : glm::vec2(0.0f);
+	const auto goal = wallHug != nullptr ? wall_hug::ToPoint(wallHug->goalPlace) : glm::vec2(0.0f);
 	const auto standing = transform != nullptr ? glm::xz(transform->position) : glm::vec2(0.0f);
 	remind.goal = rules::KeptGoal(goal, standing, remind.returnTo);
 	const auto* arguments = registry.TryGet<const ScriptStateArguments>(villager);
@@ -326,7 +326,7 @@ void BringBackToMind(entt::entity villager, const ScriptRemind& remind)
 	auto& registry = Entities();
 	if (auto* wallHug = registry.TryGet<WallHug>(villager); wallHug != nullptr)
 	{
-		wallHug->goal = remind.goal;
+		wallHug->goalPlace = wall_hug::ToWhole(remind.goal);
 	}
 	registry.AssignOrReplace<ScriptStateArguments>(villager, remind.arguments);
 	if (remind.animation.has_value())
@@ -517,7 +517,7 @@ uint32_t villager_script::ScriptGoAndMoveAlongPath(LivingAction& action)
 		return 1;
 	}
 	// At the point: it walks on along the track from the share of the way it had walked, then waits for the script
-	if (villager_home::AreWeThere(villager, wallHug->goal))
+	if (villager_home::AreWeThere(villager, wallHug->goalPlace))
 	{
 		const auto number = path->number;
 		const auto forward = path->walk.forward;
