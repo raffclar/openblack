@@ -95,8 +95,8 @@ enum class LoadKind : uint8_t
 	WorldState,
 };
 
-/// The saved state of each system that a save keeps, by the name of the system. With valueEnds, each section also keeps
-/// where each value ends, for tools.
+/// The saved state of each system that a save keeps, by the name of the system. Each section also keeps the bytes of
+/// its presentation values. With valueEnds, each section also keeps where each value ends, for tools.
 [[nodiscard]] std::vector<reflection::NamedSection> SavedSystemSections(const entt::meta_ctx& reflection,
                                                                         bool valueEnds = false);
 

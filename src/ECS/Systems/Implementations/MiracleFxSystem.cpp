@@ -465,7 +465,7 @@ void MiracleFxSystem::Reset()
 
 void MiracleFxSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _holderEffects);
+	reflection::SavePresentation(out, _holderEffects);
 	// The tribes' names that spin in the world, and which of them rings the hand
 	out.WriteSize(_runners.size());
 	for (const auto& runner : _runners)

@@ -264,12 +264,12 @@ void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 	}
 	reflection::Save(out, _borderShown);
 	reflection::Save(out, _bordersDirty);
-	reflection::Save(out, _scrollClock);
-	reflection::Save(out, _scrollRemainder);
-	reflection::Save(out, _ripples);
-	reflection::Save(out, _handWasInside);
-	reflection::Save(out, _handSeen);
-	reflection::Save(out, _handBefore);
+	reflection::SavePresentation(out, _scrollClock);
+	reflection::SavePresentation(out, _scrollRemainder);
+	reflection::SavePresentation(out, _ripples);
+	reflection::SavePresentation(out, _handWasInside);
+	reflection::SavePresentation(out, _handSeen);
+	reflection::SavePresentation(out, _handBefore);
 }
 
 bool InfluenceSystem::LoadState(reflection::BinaryReader& in)

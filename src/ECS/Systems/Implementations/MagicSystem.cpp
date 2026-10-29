@@ -3792,6 +3792,9 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _creatureBeams);
 	reflection::Save(out, _world.PuttingOutFire());
 	reflection::Save(out, _grid);
+	// The movement of this computer's hand and the place of its effect: only the frames change them, and only the hand's
+	// own effect and the casts that the hand sends read them
+	out.BeginPresentation();
 	reflection::Save(out, _handVelocity);
 	reflection::Save(out, _lastHandPosition);
 	out.WriteRaw(_handSpin);
@@ -3799,6 +3802,7 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _handEffectPoint);
 	reflection::Save(out, _handScale);
 	reflection::Save(out, _handAtStep);
+	out.EndPresentation();
 	// The hands keep their seeds (HandHeldSeed). An older save kept the seed of the first player here.
 	reflection::Save(out, std::optional<entt::entity> {});
 	out.WriteRaw(_input);

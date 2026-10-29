@@ -43,7 +43,8 @@ public:
 	[[nodiscard]] static int BarHeight(int width, int height, float fraction);
 
 private:
-	[[nodiscard]] float Fraction(float timer) const;
+	/// How far in the bars are after a slide of this time, for a slide of this length in seconds
+	[[nodiscard]] float Fraction(float timer, float transitionSeconds) const;
 
 	bool _on {false};
 	/// Game time since they started sliding, in milliseconds. A new game resets the bars to off at once, with no slide.
