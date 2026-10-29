@@ -15,6 +15,7 @@
 
 #include "3D/Mists.h"
 #include "ECS/Components/Mist.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 
@@ -55,11 +56,17 @@ void MistSystem::SetFade(entt::entity mist, float startSize, float endSize, floa
 	shown->fadeAlpha = fade.alpha;
 	shown->size = startSize;
 	shown->colour = WithAlpha(shown->colour, mists::AlphaByte(fade.alpha));
+	// The mist's object takes the same size
+	if (auto* transform = registry.TryGet<Transform>(mist))
+	{
+		transform->scale = glm::vec3(startSize);
+	}
 }
 
 void MistSystem::ProcessTurn()
 {
-	Locator::entitiesRegistry::value().Each<Mist>([](Mist& mist) {
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<Mist>([&registry](entt::entity entity, Mist& mist) {
 		if (!mist.fading)
 		{
 			return;
@@ -79,5 +86,10 @@ void MistSystem::ProcessTurn()
 		mist.fadeElapsed = fade.elapsed;
 		mist.fadeAlpha = fade.alpha;
 		mist.colour = WithAlpha(mist.colour, mists::AlphaByte(fade.alpha));
+		// The mist's object takes the same size
+		if (auto* transform = registry.TryGet<Transform>(entity))
+		{
+			transform->scale = glm::vec3(mist.size);
+		}
 	});
 }

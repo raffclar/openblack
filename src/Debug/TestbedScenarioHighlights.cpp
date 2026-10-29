@@ -148,7 +148,7 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	                "fades away, a step each game turn, gone after ten seconds. The log tells that CREATE_MIST gave back "
 	                "1 value and that SET_MIST_FADE ran.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, -18.0f}, .look = {0.0f, 3.0f, 0.0f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 16.0f, -40.0f}, .look = {0.0f, 3.0f, 0.0f}},
 	    .commands = {{.kind = Command::Kind::CallNative,
 	                  .delaySeconds = 1.0f,
 	                  .script = "CREATE_MIST",
