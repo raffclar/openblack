@@ -1079,7 +1079,8 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 
 std::array<std::optional<glm::vec3>, 2> GameActionMap::GetHandPositions() const
 {
-	auto handPositions = Locator::handSystem::value().GetPlayerHandPositions();
+	// The hands that this computer moves
+	auto handPositions = Locator::handSystem::value().GetOwnHandPositions();
 
 	return {{
 	    handPositions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)],

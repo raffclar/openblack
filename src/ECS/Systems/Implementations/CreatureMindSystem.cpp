@@ -783,17 +783,20 @@ bool IsSubMove(creature_mind::Movement::Kind kind)
 
 /// Where the creature's head looks for a step that gives it something to look at: the top of a thing, or its foot, a
 /// point, or the camera. It doesn't look at a thing it holds, nor at one it is walking past within ten of it.
-/// Where the player's hand nearest a creature is, none for a creature without a player or when there is no hand
+/// Where the hand nearest a creature is, of the player whose hand the creature reads (see ReportedCreaturePlayer). None
+/// for a creature without a player, or when there is no hand.
 std::optional<glm::vec3> NearestHand(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (body == nullptr || body->owner == PlayerNames::NEUTRAL || transform == nullptr || !Locator::handSystem::has_value())
+	const auto player = openblack::ecs::ReportedCreaturePlayer(creature);
+	if (body == nullptr || body->owner == PlayerNames::NEUTRAL || transform == nullptr || !player.has_value() ||
+	    !Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
 	std::optional<glm::vec3> nearest;
-	for (const auto& hand : Locator::handSystem::value().GetPlayerHandPositions())
+	for (const auto& hand : Locator::handSystem::value().GetHandPositionsOf(*player))
 	{
 		if (hand.has_value() &&
 		    (!nearest.has_value() || glm::distance(*hand, transform->position) < glm::distance(*nearest, transform->position)))
@@ -1117,6 +1120,14 @@ bool WatchedIsInTheAir(const ecs::Registry& registry, const creature_mind::IdleM
 	return physics::living::IsActuallyInTheAir(entry->body->Speed(), centre.y, land, entry->body->Radius());
 }
 
+/// The game turns that the hand stays in one place, of the player whose camera the creature reads
+uint32_t HandStillTurnsOf(entt::entity creature)
+{
+	const auto player = openblack::ecs::ReportedCreaturePlayer(creature);
+	return Locator::handSystem::has_value() && player.has_value() ? Locator::handSystem::value().GetHandStillTurnsOf(*player)
+	                                                              : 0;
+}
+
 /// Its player's camera as a creature watching it sees it, only while its step watches the camera; none for a creature
 /// without a player
 std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registry& registry, entt::entity creature,
@@ -1144,7 +1155,7 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 	    .groundDistance = glm::length(offset),
 	    .point = point,
 	    .turn = creature_locomotion::HeadingOf(offset).TurnFrom(self->heading),
-	    .handStillTurns = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandStillTurns() : 0,
+	    .handStillTurns = HandStillTurnsOf(creature),
 	};
 }
 

@@ -1263,7 +1263,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 					const auto left = Locator::handSystem::value().GetDrawnHandPosition();
 					const auto right =
 					    Locator::handSystem::value()
-					        .GetPlayerHandPositions()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
+					        .GetOwnHandPositions()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
 					if (left.has_value() || right.has_value())
 					{
 						std::optional<entt::entity> thing;

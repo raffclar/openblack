@@ -94,9 +94,17 @@ void creature_sight::SeePlayerAction(PlayerNames player, creature_desires::Desir
 	{
 		return;
 	}
-	const auto hand = Locator::handSystem::value().GetPlayerHandPositions().at(static_cast<size_t>(Side::Left));
 	const auto creature = Locator::leashSystem::value().PlayersCreature(player);
-	if (!hand.has_value() || !creature.has_value())
+	if (!creature.has_value())
+	{
+		return;
+	}
+	// The creature reads the hand of the same player as the camera
+	const auto handPlayer = openblack::ecs::ReportedCreaturePlayer(*creature);
+	const auto hand = handPlayer.has_value()
+	                      ? Locator::handSystem::value().GetHandPositionsOf(*handPlayer).at(static_cast<size_t>(Side::Left))
+	                      : std::nullopt;
+	if (!hand.has_value())
 	{
 		return;
 	}
