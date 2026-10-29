@@ -156,6 +156,14 @@ void EffectRequestSystem::AddPlasma(EffectHandle handle, const particles::Plasma
 	}
 }
 
+void EffectRequestSystem::AddManaPathSpark(EffectHandle handle, const particles::mana_path::Spark& spark)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->AddManaPathSpark(handle, spark);
+	}
+}
+
 bool EffectRequestSystem::ShowsEffects() const
 {
 	return _findServer() != nullptr;

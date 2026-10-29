@@ -80,6 +80,8 @@ struct EffectRequest
 	std::optional<particles::ProcessInfo> processInfo;
 	/// The miracle that gets the events of the effect. Its owner then steps the effect with Step, and the turn does not.
 	particles::SpellSink* sink {nullptr};
+	/// The turn does not step the effect: its owner does, with Step, also when no miracle gets its events
+	bool ownerSteps {false};
 	/// The effect draws immediately after the hand, and does not sort with the other effects
 	bool drawnWithHand {false};
 	/// The effect starts hidden
@@ -120,6 +122,8 @@ public:
 	virtual void AddTargetPosition(EffectHandle handle, glm::vec3 position) = 0;
 	/// A plasma beam for the effect to fire
 	virtual void AddPlasma(EffectHandle handle, const particles::PlasmaCommand& command) = 0;
+	/// A spark for the effect of the mana path to carry from one point to another
+	virtual void AddManaPathSpark(EffectHandle handle, const particles::mana_path::Spark& spark) = 0;
 
 	/// One step of an effect that its owner steps. Gives false when the effect ended, and then the effect is gone.
 	virtual bool ProcessForSpell(EffectHandle handle, const particles::ProcessInfo& info, float seconds) = 0;
@@ -186,6 +190,8 @@ public:
 	virtual void AddTargetPosition(EffectHandle handle, glm::vec3 position) = 0;
 	/// A plasma beam for the effect to fire
 	virtual void AddPlasma(EffectHandle handle, const particles::PlasmaCommand& command) = 0;
+	/// A spark for the effect of the mana path to carry from one point to another
+	virtual void AddManaPathSpark(EffectHandle handle, const particles::mana_path::Spark& spark) = 0;
 
 	/// Whether the particles of this computer show the effects. It is false on a computer that shows nothing.
 	[[nodiscard]] virtual bool ShowsEffects() const = 0;

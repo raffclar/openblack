@@ -79,6 +79,10 @@ public:
 	{
 		changes.emplace_back("plasma", handle);
 	}
+	void AddManaPathSpark(EffectHandle handle, const particles::mana_path::Spark& /*spark*/) override
+	{
+		changes.emplace_back("manaPathSpark", handle);
+	}
 	bool ProcessForSpell(EffectHandle handle, const particles::ProcessInfo& /*info*/, float /*seconds*/) override
 	{
 		changes.emplace_back("step", handle);
@@ -255,8 +259,9 @@ TEST(EffectRequests, TheTurnsChangeAndReadARunningEffectByItsNumber)
 	effects.AddTarget(handle, entt::entity {4});
 	effects.AddTargetPosition(handle, glm::vec3(1.0f));
 	effects.AddPlasma(handle, {});
-	const std::vector<std::string> expected {"player",  "power",  "magnitude",      "alpha", "processInfo",
-	                                         "enabled", "target", "targetPosition", "plasma"};
+	effects.AddManaPathSpark(handle, {});
+	const std::vector<std::string> expected {"player",  "power",  "magnitude",      "alpha",  "processInfo",
+	                                         "enabled", "target", "targetPosition", "plasma", "manaPathSpark"};
 	ASSERT_EQ(server.changes.size(), expected.size());
 	for (size_t i = 0; i < expected.size(); ++i)
 	{
@@ -273,6 +278,7 @@ TEST(EffectRequests, NoEffectAndAComputerThatShowsNothingChangeNothingAndRunNoth
 	effects.SetPlayer(k_NoEffectHandle, 1);
 	effects.AddTarget(k_NoEffectHandle, entt::entity {1});
 	effects.AddPlasma(k_NoEffectHandle, {});
+	effects.AddManaPathSpark(k_NoEffectHandle, {});
 	EXPECT_TRUE(server.changes.empty());
 
 	EffectRequestSystem unshown([]() -> EffectServerInterface* { return nullptr; });

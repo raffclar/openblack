@@ -1202,10 +1202,13 @@ EffectHandle ParticleSystem::Serve(const EffectRequest& request, EffectHandle ha
 	{
 		it->effect->SetDirection(*request.direction);
 	}
-	// The miracle owns the effect and steps it. The effect tells the miracle that it started.
-	if (request.sink != nullptr)
+	// The owner steps the effect. A miracle that owns it also gets told that the effect started.
+	if (request.sink != nullptr || request.ownerSteps)
 	{
 		it->ownedBySpell = true;
+	}
+	if (request.sink != nullptr)
+	{
 		it->effect->SetSink(request.sink);
 	}
 	// The event can start other effects, so find the effect again
@@ -1397,6 +1400,14 @@ void ParticleSystem::AddPlasma(EffectId id, const particles::PlasmaCommand& comm
 	if (const auto it = FindRunning(id); it != _effects.end())
 	{
 		it->effect->AddPlasma(command);
+	}
+}
+
+void ParticleSystem::AddManaPathSpark(EffectId id, const particles::mana_path::Spark& spark)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->effect->AddManaPathSpark(spark);
 	}
 }
 

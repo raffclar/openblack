@@ -35,8 +35,8 @@
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleConstruction.h"
@@ -287,37 +287,35 @@ void GameWorshipSiteWorld::ArtefactsLeaveSite(entt::entity site)
 
 uint32_t GameWorshipSiteWorld::StartMotes()
 {
-	// The mana path's effect, at the middle of the world
-	return Locator::particleSystem::has_value()
-	           ? Locator::particleSystem::value().StartOwned(ParticleType::ManaPath, glm::vec3(0.0f), 1.0f)
-	           : 0;
+	// The mana path's effect, at the middle of the world. The site steps it, not the turn.
+	return Locator::effectRequestSystem::has_value() ? Locator::effectRequestSystem::value().Start({
+	                                                       .type = ParticleType::ManaPath,
+	                                                       .ownerSteps = true,
+	                                                   })
+	                                                 : k_NoEffectHandle;
 }
 
 void GameWorshipSiteWorld::AddMote(uint32_t effect, glm::vec3 from, glm::vec3 to, uint32_t rgb)
 {
-	if (!Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		return;
-	}
-	if (auto* running = Locator::particleSystem::value().Find(effect); running != nullptr)
-	{
-		running->AddManaPathSpark({.from = from, .to = to, .rgb = rgb & 0xFFFFFFu});
+		Locator::effectRequestSystem::value().AddManaPathSpark(effect, {.from = from, .to = to, .rgb = rgb & 0xFFFFFFu});
 	}
 }
 
 bool GameWorshipSiteWorld::StepMotes(uint32_t effect)
 {
 	// The site steps it with no hand, at full strength
-	return Locator::particleSystem::has_value() &&
-	       Locator::particleSystem::value().ProcessForSpell(
+	return Locator::effectRequestSystem::has_value() &&
+	       Locator::effectRequestSystem::value().Step(
 	           effect, particles::ProcessInfo {}, std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count());
 }
 
 void GameWorshipSiteWorld::RemoveMotes(uint32_t effect)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().Delete(effect);
+		Locator::effectRequestSystem::value().Remove(effect);
 	}
 }
 

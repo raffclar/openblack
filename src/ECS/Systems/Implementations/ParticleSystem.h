@@ -270,6 +270,7 @@ public:
 	void AddTarget(EffectId id, entt::entity target) override;
 	void AddTargetPosition(EffectId id, glm::vec3 position) override;
 	void AddPlasma(EffectId id, const particles::PlasmaCommand& command) override;
+	void AddManaPathSpark(EffectId id, const particles::mana_path::Spark& spark) override;
 	void AddBeliefSprite(const particles::BeliefSprite& sprite) override;
 	void AddHandManaPathSpark(const particles::mana_path::Spark& spark) override;
 	void AddStormBolt(glm::vec3 cloudPoint) override;

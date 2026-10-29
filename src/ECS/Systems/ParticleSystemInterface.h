@@ -167,6 +167,8 @@ public:
 	virtual void AddTargetPosition(EffectId /*id*/, glm::vec3 /*position*/) {}
 	/// A plasma beam for the effect to fire, as a temple heart's spot visual fires one at what takes a blow for it
 	virtual void AddPlasma(EffectId /*id*/, const particles::PlasmaCommand& /*command*/) {}
+	/// A spark for the mana path effect to carry, as a worship site sends its motes
+	virtual void AddManaPathSpark(EffectId /*id*/, const particles::mana_path::Spark& /*spark*/) {}
 	/// A symbol of belief rises from something that gained it, in the effect every symbol rises in, kept running once
 	/// wanted; no more than a few hundred wait
 	virtual void AddBeliefSprite(const particles::BeliefSprite& /*sprite*/) {}

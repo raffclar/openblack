@@ -44,6 +44,7 @@ public:
 	void AddTarget(EffectHandle handle, entt::entity target) override;
 	void AddTargetPosition(EffectHandle handle, glm::vec3 position) override;
 	void AddPlasma(EffectHandle handle, const particles::PlasmaCommand& command) override;
+	void AddManaPathSpark(EffectHandle handle, const particles::mana_path::Spark& spark) override;
 	[[nodiscard]] bool ShowsEffects() const override;
 	bool Step(EffectHandle handle, const particles::ProcessInfo& info, float seconds) override;
 	void RestoreSink(EffectHandle handle, particles::SpellSink* sink) override;
