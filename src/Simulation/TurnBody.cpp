@@ -881,6 +881,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::weatherSystem::value().ProcessClimates(turn);
 		}
 		break;
+	case Step::LosingBelief:
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().LosingBeliefTurn();
+		}
+		break;
 	case Step::HeldThing:
 		// What the hand holds stays where the hand is for the game, and the hand lets go of it once it is gone
 		if (Locator::handGrabSystem::has_value())

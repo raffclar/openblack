@@ -93,6 +93,9 @@ public:
 	/// A town of the player here has few adults left: the advisors warn of it when the town has people and is near the
 	/// point under the cursor
 	virtual void LowOnPeople(entt::entity town) = 0;
+	/// Once a game turn, before the hand's turn: every tenth turn, away from the first land, the advisors warn when
+	/// another player comes near the belief of a town of the player at this computer
+	virtual void LosingBeliefTurn() = 0;
 	/// For the testbed: every kind counts as heard as long ago as can be
 	virtual void EndWaits() = 0;
 

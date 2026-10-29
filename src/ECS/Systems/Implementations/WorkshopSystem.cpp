@@ -573,10 +573,11 @@ entt::entity WorkshopSystem::TownForBuilding(glm::vec3 place) const
 			return ecs::town_homes::TownOfAbode(registry, nearest);
 		}
 	}
-	// Else the nearest town, or the town of the nearest planned building, in the order of the players
+	// Else the nearest town, or the town of the nearest planned building, in the order of the players. The neutral towns
+	// do not count.
 	entt::entity found = entt::null;
 	float best = k_TownReach;
-	for (uint8_t index = 0; index < static_cast<uint8_t>(PlayerNames::_COUNT); ++index)
+	for (uint8_t index = 0; index < static_cast<uint8_t>(PlayerNames::NEUTRAL); ++index)
 	{
 		for (const auto town : ecs::town_turns::TownsInGainedOrder(registry, static_cast<PlayerNames>(index)))
 		{

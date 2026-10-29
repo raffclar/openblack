@@ -412,6 +412,11 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneImportWhole)
 		const auto imported = world_import::ReadTowns(*read.world);
 		EXPECT_TRUE(imported.skipped.empty()) << entry.path();
 		EXPECT_EQ(imported.towns.size(), read.world->OfType(VanillaType::Town).size()) << entry.path();
+		// Each town is in one list of the players
+		for (const auto& town : imported.towns)
+		{
+			EXPECT_EQ(std::ranges::count(imported.townLists, town.number), 1) << entry.path() << " town " << town.id;
+		}
 		EXPECT_EQ(imported.villagers.size(),
 		          read.world->OfType(VanillaType::Villager).size() + read.world->OfType(VanillaType::SpecialVillager).size())
 		    << entry.path();
@@ -430,6 +435,29 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneImportWhole)
 		EXPECT_EQ(static_cast<uint32_t>(inside), present) << entry.path();
 	}
 	EXPECT_GT(files, 0U);
+}
+
+TEST(VanillaWorldImport, ReadsTheOrderOfThePlayersTownLists)
+{
+	auto fake = GameAtTurn(100);
+	// 2 and 3: two towns of the first player, 4: a town of the second player
+	for (const uint32_t id : {0U, 1U, 2U})
+	{
+		fake.Record(VanillaType::Town)
+		    .Position(1000 * (id + 1), 1000)
+		    .Value<uint32_t>("id", id)
+		    .Value<uint32_t>("tribe", static_cast<uint32_t>(Tribe::NORSE))
+		    .Value<uint8_t>("player", id == 2 ? 1 : 0);
+	}
+	// 5 and 6: the players. The first player got the town with the higher number first.
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 0).Refs("towns", {3, 2});
+	fake.Record(VanillaType::Player).Value<uint8_t>("number", 1).Refs("towns", {4});
+	const auto world = fake.Make();
+
+	const auto imported = world_import::ReadTowns(world);
+	EXPECT_TRUE(imported.skipped.empty());
+	EXPECT_EQ(imported.towns.size(), 3U);
+	EXPECT_EQ(imported.townLists, (std::vector<uint32_t> {3, 2, 4}));
 }
 
 namespace

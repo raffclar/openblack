@@ -200,7 +200,8 @@ TEST(GameTurnOrder, TheHelpComesAfterTheScriptsAndBeforeTheTimeOfDay)
 TEST(GameTurnOrder, TheLateStepsOfTheTurnComeInTheGamesOrder)
 {
 	const auto recorder = PlayOneTurn();
-	EXPECT_TRUE(recorder.Before(Step::Climates, Step::HeldThing));
+	EXPECT_TRUE(recorder.Before(Step::Climates, Step::LosingBelief));
+	EXPECT_TRUE(recorder.Before(Step::LosingBelief, Step::HeldThing));
 	EXPECT_TRUE(recorder.Before(Step::HeldThing, Step::PlayerSparkles));
 	EXPECT_TRUE(recorder.Before(Step::PlayerSparkles, Step::Rewards));
 	EXPECT_TRUE(recorder.Before(Step::Rewards, Step::Guidance));

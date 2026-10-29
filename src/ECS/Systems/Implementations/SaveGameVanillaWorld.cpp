@@ -350,6 +350,16 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		made.emplace(town.number, PutTown(registry, town));
 		townIds.emplace(town.number, town.id);
 	}
+	// Each town takes its place in the list of its player as the file keeps it. A town that no list of the file holds
+	// keeps its place before the towns of the lists.
+	for (const auto number : imported.townLists)
+	{
+		const auto town = made.find(number);
+		if (town != made.end() && townIds.contains(number))
+		{
+			registry.Get<Town>(town->second).gained = registry.Context().nextTownGained++;
+		}
+	}
 
 	for (const auto& abode : imported.abodes)
 	{

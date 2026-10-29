@@ -98,6 +98,7 @@
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsClasses.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -708,12 +709,17 @@ void CreatureMindSystem::LookFarAbout(entt::entity creature, CreatureMindState& 
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto from = map_coords::FromMetres(glm::xz(transform.position));
-	// The nearest town but the one it came across last, and that town's storage pit
+	// The nearest town but the one it came across last, and that town's storage pit. The towns come in the order of each
+	// player's list in turn and the neutral list last, so the first of towns equally near counts.
 	std::vector<creature_object_beliefs::TownCell> towns;
-	registry.Each<const Town, const Transform>([&](entt::entity town, const Town&, const Transform& at) {
-		towns.push_back(
-		    {.id = entt::to_integral(town), .cell = map_coords::Cell(map_coords::FromMetres(glm::xz(at.position)))});
-	});
+	for (const auto town : ecs::player_towns::AllInOrder(registry))
+	{
+		if (const auto* at = registry.TryGet<const Transform>(town))
+		{
+			towns.push_back(
+			    {.id = entt::to_integral(town), .cell = map_coords::Cell(map_coords::FromMetres(glm::xz(at->position)))});
+		}
+	}
 	const auto last = mind.lastTown != entt::null ? std::optional(entt::to_integral(mind.lastTown)) : std::nullopt;
 	if (const auto town = creature_object_beliefs::NearestOtherTown(map_coords::Cell(from), towns, last); town.has_value())
 	{
