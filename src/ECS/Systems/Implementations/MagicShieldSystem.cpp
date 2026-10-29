@@ -48,9 +48,9 @@
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -184,15 +184,17 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 	transform.scale = glm::vec3(dome.pose.scale);
 	// Its sparkling trail and hum, on the dome. Its random numbers are only this computer's: the trail does not change
 	// the world.
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		dome.effect = particles.Start(ParticleType::PhysicalShieldFx, transform.position, miracle.magnitude);
-		if (dome.effect != ParticleSystemInterface::k_NoEffect)
-		{
-			particles.SetPlayer(dome.effect, static_cast<int>(miracle.caster.player));
-			particles.AddTarget(dome.effect, object);
-		}
+		auto& effects = Locator::effectRequestSystem::value();
+		dome.effect = effects.Start({
+		    .type = ParticleType::PhysicalShieldFx,
+		    .position = transform.position,
+		    .magnitude = miracle.magnitude,
+		    .synced = false,
+		    .player = static_cast<int>(miracle.caster.player),
+		});
+		effects.AddTarget(dome.effect, object);
 	}
 }
 
@@ -248,9 +250,9 @@ bool MagicShieldSystem::StepDome(entt::entity object)
 	dome.pose = shield::StepDome(dome.shape, dome.state, dome.age, k_TurnSeconds);
 	if (dome.pose.gone)
 	{
-		if (dome.effect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+		if (Locator::effectRequestSystem::has_value())
 		{
-			Locator::particleSystem::value().Delete(dome.effect);
+			Locator::effectRequestSystem::value().Remove(dome.effect);
 		}
 		return false;
 	}
@@ -269,16 +271,13 @@ bool MagicShieldSystem::StepDome(entt::entity object)
 	transform.position.y = LandHeight(transform.position) + dome.pose.height;
 	transform.rotation = portable_math::EulerAngleY(dome.pose.angle);
 	transform.scale = glm::vec3(dome.pose.scale);
-	if (dome.effect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value() && Locator::effectRequestSystem::value().IsRunning(dome.effect))
 	{
-		auto& particles = Locator::particleSystem::value();
-		particles.SetOrigin(dome.effect, transform.position);
-		if (auto* effect = particles.Find(dome.effect))
-		{
-			effect->SetMagnitude(shieldObject.radius);
-			const float alpha = dome.state.dying ? shield::DyingEffectAlpha(dome.alpha, dome.state.dieTime) : dome.alpha;
-			effect->SetGlobalAlpha(alpha);
-		}
+		auto& effects = Locator::effectRequestSystem::value();
+		effects.Move(dome.effect, transform.position);
+		effects.SetMagnitude(dome.effect, shieldObject.radius);
+		const float alpha = dome.state.dying ? shield::DyingEffectAlpha(dome.alpha, dome.state.dieTime) : dome.alpha;
+		effects.SetAlpha(dome.effect, alpha);
 	}
 	return true;
 }

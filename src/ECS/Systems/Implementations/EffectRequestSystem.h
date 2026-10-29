@@ -30,9 +30,20 @@ public:
 
 	EffectHandle Start(const EffectRequest& request) override;
 	void Show(const EffectRequest& request) override;
+	EffectHandle StartHere(const EffectRequest& request) override;
 	void Move(EffectHandle handle, glm::vec3 position) override;
 	void Stop(EffectHandle handle) override;
 	void Remove(EffectHandle handle) override;
+	[[nodiscard]] bool IsRunning(EffectHandle handle) const override;
+	void SetPlayer(EffectHandle handle, int player) override;
+	void SetPower(EffectHandle handle, float power) override;
+	void SetMagnitude(EffectHandle handle, float magnitude) override;
+	void SetAlpha(EffectHandle handle, float alpha) override;
+	void SetProcessInfo(EffectHandle handle, const particles::ProcessInfo& info) override;
+	void SetEnabled(EffectHandle handle, bool enabled) override;
+	void AddTarget(EffectHandle handle, entt::entity target) override;
+	void AddTargetPosition(EffectHandle handle, glm::vec3 position) override;
+	void AddPlasma(EffectHandle handle, const particles::PlasmaCommand& command) override;
 	void Reset() override;
 	[[nodiscard]] EffectHandle NextHandle() const override { return _next; }
 
@@ -40,6 +51,9 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
+	/// The particles that show the effect, none for no effect or on a computer that shows nothing
+	[[nodiscard]] EffectServerInterface* ServerFor(EffectHandle handle) const;
+
 	FindServer _findServer;
 	EffectHandle _next {k_FirstEffectHandle};
 };

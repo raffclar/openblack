@@ -29,12 +29,12 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -182,25 +182,30 @@ std::optional<VillagerStates> GamePhysicsHooksWorld::VillagerStateOf(entt::entit
 
 std::optional<uint32_t> GamePhysicsHooksWorld::StartHeartBeamSource(glm::vec3 position, PlayerNames player)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	auto& particles = Locator::particleSystem::value();
-	const auto id = particles.StartSpotVisual(SpotVisualType::MagicBeamOnCitadel, position, -1, entt::null, 1.0f);
-	if (id == ParticleSystemInterface::k_NoEffect)
+	auto& effects = Locator::effectRequestSystem::value();
+	const auto handle = effects.Start({
+	    .type = SpotVisualType::MagicBeamOnCitadel,
+	    .position = position,
+	    .turns = -1,
+	    .player = static_cast<int>(player),
+	});
+	// The heart fires its beams only from a source that started
+	if (!effects.IsRunning(handle))
 	{
 		return std::nullopt;
 	}
-	particles.SetPlayer(id, static_cast<int>(player));
-	return id;
+	return handle;
 }
 
 void GamePhysicsHooksWorld::AddPlasma(uint32_t source, const particles::PlasmaCommand& command)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddPlasma(source, command);
+		Locator::effectRequestSystem::value().AddPlasma(source, command);
 	}
 }
 

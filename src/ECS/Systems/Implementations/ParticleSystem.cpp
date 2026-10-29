@@ -1156,7 +1156,7 @@ ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType
 	return id;
 }
 
-void ParticleSystem::Serve(const EffectRequest& request, EffectHandle handle)
+EffectHandle ParticleSystem::Serve(const EffectRequest& request, EffectHandle handle)
 {
 	_givenId = handle;
 	EffectId id = k_NoEffect;
@@ -1177,7 +1177,7 @@ void ParticleSystem::Serve(const EffectRequest& request, EffectHandle handle)
 	const auto it = FindRunning(id);
 	if (it == _effects.end())
 	{
-		return;
+		return k_NoEffect;
 	}
 	if (request.direction.has_value())
 	{
@@ -1190,6 +1190,41 @@ void ParticleSystem::Serve(const EffectRequest& request, EffectHandle handle)
 	if (request.processInfo.has_value())
 	{
 		it->effect->SetProcessInfo(*request.processInfo);
+	}
+	return id;
+}
+
+void ParticleSystem::SetMagnitude(EffectHandle handle, float magnitude)
+{
+	if (const auto it = FindRunning(handle); it != _effects.end())
+	{
+		it->effect->SetMagnitude(magnitude);
+	}
+}
+
+void ParticleSystem::SetAlpha(EffectHandle handle, float alpha)
+{
+	if (const auto it = FindRunning(handle); it != _effects.end())
+	{
+		it->effect->SetGlobalAlpha(alpha);
+	}
+}
+
+void ParticleSystem::SetProcessInfo(EffectHandle handle, const particles::ProcessInfo& info)
+{
+	if (const auto it = FindRunning(handle); it != _effects.end())
+	{
+		it->effect->SetProcessInfo(info);
+	}
+}
+
+void ParticleSystem::SetEnabled(EffectHandle handle, bool enabled)
+{
+	if (const auto it = FindRunning(handle); it != _effects.end())
+	{
+		auto info = it->effect->GetProcessInfo();
+		info.enabled = enabled;
+		it->effect->SetProcessInfo(info);
 	}
 }
 

@@ -41,9 +41,9 @@
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
@@ -100,21 +100,20 @@ glm::vec3 RandomBodyPoint(const ecs::Registry& registry, entt::entity creature)
 /// from a random point of this body to a random point of the other's
 void FireSwapBeam(const ecs::Registry& registry, entt::entity creature, const CreatureSwap& swap)
 {
-	if (!Locator::particleSystem::has_value() || !Locator::time::has_value() || !Locator::gameRandom::has_value())
+	if (!Locator::effectRequestSystem::has_value() || !Locator::time::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& effects = Locator::effectRequestSystem::value();
 	if (!creature_swap::IsBeamTurn(Locator::time::value().GetTurn()) || !registry.Valid(swap.other) ||
-	    !registry.AllOf<Creature, Transform>(swap.other) || swap.beam == ParticleSystemInterface::k_NoEffect ||
-	    !particles.IsRunning(swap.beam))
+	    !registry.AllOf<Creature, Transform>(swap.other) || !effects.IsRunning(swap.beam))
 	{
 		return;
 	}
 	const auto from = RandomBodyPoint(registry, creature);
 	const auto to = RandomBodyPoint(registry, swap.other);
-	particles.AddPlasma(swap.beam,
-	                    creature_swap::Beam(from, to, Locator::gameRandom::value().GameRand(creature_swap::k_BeamAlphaDraws)));
+	effects.AddPlasma(swap.beam,
+	                  creature_swap::Beam(from, to, Locator::gameRandom::value().GameRand(creature_swap::k_BeamAlphaDraws)));
 }
 
 int BeamPlayer(PlayerNames owner)
@@ -341,20 +340,22 @@ void CreatureMindSystem::StepSwap(entt::entity creature, const creature_mind::Co
 			static_cast<void>(creature_spells::TryFinishAll(spells->spells));
 		}
 	}
-	if (commands.startSwapBeam && Locator::particleSystem::has_value())
+	if (commands.startSwapBeam && Locator::effectRequestSystem::has_value())
 	{
 		const auto& body = registry.Get<const Creature>(creature);
-		auto& particles = Locator::particleSystem::value();
+		auto& effects = Locator::effectRequestSystem::value();
 		auto* swap = registry.TryGet<CreatureSwap>(creature);
 		// A beam of an earlier swap still about it goes first
-		if (swap != nullptr && swap->beam != ParticleSystemInterface::k_NoEffect)
+		if (swap != nullptr)
 		{
-			particles.CloseDown(swap->beam);
+			effects.Stop(swap->beam);
 		}
-		const auto beam =
-		    particles.StartSpotVisual(SpotVisualType::MagicBeamCreatureSwap, registry.Get<const Transform>(creature).position,
-		                              k_SwapBeamTurns, entt::null, 1.0f);
-		particles.SetPlayer(beam, BeamPlayer(body.owner));
+		const auto beam = effects.Start({
+		    .type = SpotVisualType::MagicBeamCreatureSwap,
+		    .position = registry.Get<const Transform>(creature).position,
+		    .turns = k_SwapBeamTurns,
+		    .player = BeamPlayer(body.owner),
+		});
 		if (swap != nullptr)
 		{
 			swap->beam = beam;

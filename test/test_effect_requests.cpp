@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
+#include <string>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -35,11 +37,45 @@ public:
 	std::vector<std::pair<EffectHandle, glm::vec3>> moved;
 	std::vector<EffectHandle> stopped;
 	std::vector<EffectHandle> removed;
+	/// The effects that run, by their numbers
+	std::vector<EffectHandle> running;
+	/// The calls that change a running effect, as the name of the call and the number of the effect
+	std::vector<std::pair<std::string, EffectHandle>> changes;
+	/// The number that the particles give an effect that only this computer shows
+	EffectHandle ownNumber {7};
 
-	void Serve(const EffectRequest& request, EffectHandle handle) override { served.emplace_back(request, handle); }
+	EffectHandle Serve(const EffectRequest& request, EffectHandle handle) override
+	{
+		served.emplace_back(request, handle);
+		const auto number = handle != k_NoEffectHandle ? handle : ownNumber++;
+		running.push_back(number);
+		return number;
+	}
 	void Move(EffectHandle handle, glm::vec3 position) override { moved.emplace_back(handle, position); }
 	void Stop(EffectHandle handle) override { stopped.push_back(handle); }
 	void Remove(EffectHandle handle) override { removed.push_back(handle); }
+	[[nodiscard]] bool IsRunning(EffectHandle handle) const override
+	{
+		return std::ranges::find(running, handle) != running.end();
+	}
+	void SetPlayer(EffectHandle handle, int /*player*/) override { changes.emplace_back("player", handle); }
+	void SetPower(EffectHandle handle, float /*power*/) override { changes.emplace_back("power", handle); }
+	void SetMagnitude(EffectHandle handle, float /*magnitude*/) override { changes.emplace_back("magnitude", handle); }
+	void SetAlpha(EffectHandle handle, float /*alpha*/) override { changes.emplace_back("alpha", handle); }
+	void SetProcessInfo(EffectHandle handle, const particles::ProcessInfo& /*info*/) override
+	{
+		changes.emplace_back("processInfo", handle);
+	}
+	void SetEnabled(EffectHandle handle, bool /*enabled*/) override { changes.emplace_back("enabled", handle); }
+	void AddTarget(EffectHandle handle, entt::entity /*target*/) override { changes.emplace_back("target", handle); }
+	void AddTargetPosition(EffectHandle handle, glm::vec3 /*position*/) override
+	{
+		changes.emplace_back("targetPosition", handle);
+	}
+	void AddPlasma(EffectHandle handle, const particles::PlasmaCommand& /*command*/) override
+	{
+		changes.emplace_back("plasma", handle);
+	}
 };
 
 } // namespace
@@ -133,4 +169,62 @@ TEST(EffectRequests, ASaveKeepsTheNextNumber)
 	ASSERT_TRUE(loaded.LoadState(in));
 	EXPECT_EQ(in.Remaining(), 0u);
 	EXPECT_EQ(loaded.NextHandle(), saved.NextHandle());
+}
+
+TEST(EffectRequests, AnEffectOfThisComputerTakesTheNumberOfTheParticlesAndNoNumberOfTheSimulation)
+{
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	const auto own = effects.StartHere({.type = ParticleType::FlockFlyingCastGood, .synced = false});
+	EXPECT_EQ(own, 7u);
+	EXPECT_EQ(effects.NextHandle(), k_FirstEffectHandle);
+	ASSERT_EQ(server.served.size(), 1u);
+	EXPECT_EQ(server.served[0].second, k_NoEffectHandle);
+	EXPECT_TRUE(effects.IsRunning(own));
+
+	EffectRequestSystem unshown([]() -> EffectServerInterface* { return nullptr; });
+	EXPECT_EQ(unshown.StartHere({.type = ParticleType::FlockFlyingCastGood}), k_NoEffectHandle);
+}
+
+TEST(EffectRequests, TheTurnsChangeAndReadARunningEffectByItsNumber)
+{
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	const auto handle = effects.Start({.type = SpotVisualType::MagicBeam});
+	EXPECT_TRUE(effects.IsRunning(handle));
+	EXPECT_FALSE(effects.IsRunning(handle + 1));
+	effects.SetPlayer(handle, 2);
+	effects.SetPower(handle, 0.5f);
+	effects.SetMagnitude(handle, 3.0f);
+	effects.SetAlpha(handle, 0.25f);
+	effects.SetProcessInfo(handle, {});
+	effects.SetEnabled(handle, false);
+	effects.AddTarget(handle, entt::entity {4});
+	effects.AddTargetPosition(handle, glm::vec3(1.0f));
+	effects.AddPlasma(handle, {});
+	const std::vector<std::string> expected {"player",  "power",  "magnitude",      "alpha", "processInfo",
+	                                         "enabled", "target", "targetPosition", "plasma"};
+	ASSERT_EQ(server.changes.size(), expected.size());
+	for (size_t i = 0; i < expected.size(); ++i)
+	{
+		EXPECT_EQ(server.changes[i].first, expected[i]);
+		EXPECT_EQ(server.changes[i].second, handle);
+	}
+}
+
+TEST(EffectRequests, NoEffectAndAComputerThatShowsNothingChangeNothingAndRunNothing)
+{
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	EXPECT_FALSE(effects.IsRunning(k_NoEffectHandle));
+	effects.SetPlayer(k_NoEffectHandle, 1);
+	effects.AddTarget(k_NoEffectHandle, entt::entity {1});
+	effects.AddPlasma(k_NoEffectHandle, {});
+	EXPECT_TRUE(server.changes.empty());
+
+	EffectRequestSystem unshown([]() -> EffectServerInterface* { return nullptr; });
+	const auto handle = unshown.Start({.type = SpotVisualType::MagicBeam});
+	EXPECT_FALSE(unshown.IsRunning(handle));
+	unshown.SetMagnitude(handle, 2.0f);
+	unshown.SetEnabled(handle, true);
 }

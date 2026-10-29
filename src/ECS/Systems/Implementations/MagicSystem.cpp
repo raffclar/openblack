@@ -2879,11 +2879,10 @@ void MagicSystem::SeedOutOfHandWithSpell(bool followsSpell)
 void MagicSystem::FailCast()
 {
 	const auto point = _hand.point.value_or(_hand.handPosition);
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
 		// Only the hand of this computer failed the cast, so the failure draws on the random numbers of this computer
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast, point, std::nullopt, entt::null, 1.0f,
-		                                                 false);
+		Locator::effectRequestSystem::value().Show({.type = SpotVisualType::SpellFailCast, .position = point, .synced = false});
 	}
 	if (Locator::audio::has_value())
 	{
