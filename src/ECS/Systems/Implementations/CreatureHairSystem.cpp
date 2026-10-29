@@ -27,6 +27,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHairStep.h"
 #include "Locator.h"
@@ -108,9 +109,18 @@ void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType specie
 void CreatureHairSystem::SetShown(bool shown)
 {
 	_shown = shown;
-	if (!shown && Locator::entitiesRegistry::has_value())
+	if (shown)
+	{
+		return;
+	}
+	// The hair of the creatures and of their copies starts again when it shows again
+	if (Locator::entitiesRegistry::has_value())
 	{
 		Locator::entitiesRegistry::value().Each<CreatureHair>([](CreatureHair& hair) { hair = {}; });
+	}
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().Each<CreatureHair>([](CreatureHair& hair) { hair = {}; });
 	}
 }
 
@@ -131,23 +141,23 @@ void CreatureHairSystem::Update(std::chrono::duration<float, std::milli> gameTim
 	    });
 }
 
-void CreatureHairSystem::StepCopy(Registry& copies, entt::entity copy, std::chrono::duration<float, std::milli> frameTime)
+void CreatureHairSystem::StepCopy(Registry& copies, entt::entity copy, std::chrono::duration<float, std::milli> frameTime,
+                                  const Registry& bodies)
 {
 	if (!_shown || !copies.Valid(copy))
 	{
 		return;
 	}
-	const auto& land = Locator::entitiesRegistry::value();
 	const auto* body = copies.TryGet<const CreatureCopy>(copy);
 	const auto* animation = copies.TryGet<const CreatureAnimation>(copy);
 	const auto* transform = copies.TryGet<const Transform>(copy);
 	auto* hair = copies.TryGet<CreatureHair>(copy);
-	if (body == nullptr || animation == nullptr || transform == nullptr || hair == nullptr || !land.Valid(body->creature))
+	if (body == nullptr || animation == nullptr || transform == nullptr || hair == nullptr || !bodies.Valid(body->creature))
 	{
 		return;
 	}
-	const auto* creature = land.TryGet<const Creature>(body->creature);
-	const auto* morph = land.TryGet<const CreatureMorph>(body->creature);
+	const auto* creature = bodies.TryGet<const Creature>(body->creature);
+	const auto* morph = bodies.TryGet<const CreatureMorph>(body->creature);
 	if (creature == nullptr || morph == nullptr)
 	{
 		return;

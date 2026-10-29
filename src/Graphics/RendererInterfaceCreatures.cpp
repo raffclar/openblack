@@ -199,20 +199,23 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 	// Each request shows for one frame of the scene only
 	const auto shown = *_menuCreature;
 	_menuCreature.reset();
-	if (shown.viewSize.x <= 0.0f || shown.viewSize.y <= 0.0f || !desc.entities.Valid(shown.copy))
+	// The copy and its creature are things of the drawn registry
+	if (shown.viewSize.x <= 0.0f || shown.viewSize.y <= 0.0f || !Locator::drawnRegistry::has_value() ||
+	    !Locator::drawnRegistry::value().Valid(shown.copy))
 	{
 		return;
 	}
-	const auto* copy = desc.entities.TryGet<const ecs::components::CreatureCopy>(shown.copy);
-	const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(shown.copy);
-	const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
-	if (copy == nullptr || transform == nullptr || !desc.entities.Valid(copy->creature))
+	const auto& drawn = Locator::drawnRegistry::value();
+	const auto* copy = drawn.TryGet<const ecs::components::CreatureCopy>(shown.copy);
+	const auto* transform = drawn.TryGet<const ecs::components::Transform>(shown.copy);
+	const auto* animation = drawn.TryGet<const ecs::components::CreatureAnimation>(shown.copy);
+	if (copy == nullptr || transform == nullptr || !drawn.Valid(copy->creature))
 	{
 		return;
 	}
-	const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(copy->creature);
-	const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(copy->creature);
-	const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(copy->creature);
+	const auto* mesh = drawn.TryGet<const ecs::components::Mesh>(copy->creature);
+	const auto* creature = drawn.TryGet<const ecs::components::Creature>(copy->creature);
+	const auto* morph = drawn.TryGet<const ecs::components::CreatureMorph>(copy->creature);
 	const auto& meshes = Locator::resources::value().GetMeshes();
 	if (mesh == nullptr || creature == nullptr || !meshes.Contains(mesh->id))
 	{
@@ -265,13 +268,13 @@ void Renderer::DrawMenuCreature(const DrawSceneDesc& desc, const InterfaceCreatu
 		    .skins = {},
 		    .blendSeams = Locator::config::value().blendCreatureSeams,
 		};
-		if (const auto skins = _creatureSkins.find(copy->creature); skins != _creatureSkins.end())
+		if (const auto skins = _drawnCreatureSkins.find(copy->creature); skins != _drawnCreatureSkins.end())
 		{
 			targets->skins = skins->second.drawn;
 		}
 	}
-	const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(shown.copy);
-	const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(shown.copy);
+	const auto* eyes = drawn.TryGet<const ecs::components::CreatureEyes>(shown.copy);
+	const auto* hair = drawn.TryGet<const ecs::components::CreatureHair>(shown.copy);
 	for (const auto layer : tattoo_menu::DrawOrder(hair != nullptr, Locator::creatureHairSystem::value().IsShown()))
 	{
 		switch (layer)

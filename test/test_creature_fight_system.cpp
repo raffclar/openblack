@@ -1710,7 +1710,7 @@ public:
 	void PoseTurn(entt::entity) override {}
 	void PoseTurns() override {}
 	void HoldTurnPose(entt::entity) override {}
-	void PoseCopy(ecs::Registry&, entt::entity, float) override {}
+	void PoseCopy(ecs::Registry&, entt::entity, float, const ecs::Registry&) override {}
 	[[nodiscard]] std::optional<glm::vec3> BoneInAnimation(entt::entity, size_t, float, uint32_t, bool) override
 	{
 		return std::nullopt;

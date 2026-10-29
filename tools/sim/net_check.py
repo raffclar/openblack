@@ -505,6 +505,46 @@ def say_in_chat(pid, text):
     print(f"chat: client with pid {pid} says {text!r} (click: {clicked})")
 
 
+# The points of the menu's buttons on a window of 1280 by 1024: Options on the first page, the Players tab, and Edit
+# Tattoo on the Players page
+TATTOO_MENU_CLICKS = (("Options", (640, 704)), ("Players", (640, 80)), ("Edit Tattoo", (773, 772)))
+
+
+def menu_page(pid):
+    """The page that the game's menu of a client shows, or none when the menu is shut"""
+    windows = inspector_call(pid, "gui.windows", {}) or {}
+    for item in windows.get("items", []):
+        if isinstance(item, dict) and item.get("name") == "menu":
+            if not item.get("open"):
+                return None
+            # The Edit Tattoo button shows only while the profile keeps its creature
+            tattoo = " with Edit Tattoo" if "Edit Tattoo" in item.get("buttons", []) else ""
+            return f"{item.get('page')}{tattoo}"
+    return None
+
+
+def open_tattoo_menu(pid):
+    """A client opens the tattoo editor from the game's menu as the player does, with the input of the player only:
+    Escape opens the menu, then clicks on Options, the Players tab and Edit Tattoo. The editor shows a creature of its
+    own over the menu. True when the editor is open."""
+    frame = inspector_call(pid, "engine.frame", {}) or {}
+    width, height = frame.get("window") or [1280, 1024]
+    inspector_call(pid, "input.key", {"params": {"key": "Escape"}})
+    time.sleep(1.5)
+    pages = [menu_page(pid)]
+    for _, (x, y) in TATTOO_MENU_CLICKS:
+        inspector_call(pid, "input.pointer", {"params": {"screen": [round(x * width / 1280), round(y * height / 1024)]}})
+        time.sleep(0.5)
+        inspector_call(pid, "input.button", {"params": {"button": "left", "action": "click"}})
+        time.sleep(1.5)
+        pages.append(menu_page(pid))
+    windows = inspector_call(pid, "gui.windows", {}) or {}
+    shown = any(item.get("name") == "tattoo_editor" and item.get("open") for item in windows.get("items", [])
+                if isinstance(item, dict))
+    print(f"tattoo menu: client with pid {pid} opened the tattoo editor: {shown} (menu pages {pages})")
+    return shown
+
+
 def chat_lines(log_path):
     """The lines of the chat that came to a client, as (turn, god, text)"""
     found = []
@@ -1493,6 +1533,11 @@ def main():
                              "this many times before it lets go")
     parser.add_argument("--chat", action="append", default=[],
                         help="TURNS:CLIENT:TEXT, the client (from 1) says the line in the chat after that many turns")
+    parser.add_argument("--tattoo-menu", action="append", default=[], metavar="TURNS:CLIENT",
+                        help="the client (from 1) opens the tattoo editor from the game's menu after that many turns")
+    parser.add_argument("--profile-creature", action="append", default=[], metavar="CLIENT:FOLDER",
+                        help="the profile of the client (from 1) keeps the creature files of the folder (Player.erc and "
+                             "PhysiquePlayer.erc, as a game alone keeps them), so its menu shows Edit Tattoo")
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
                              "through the inspector, once it compared --hold-after turns")
@@ -1765,6 +1810,11 @@ def main():
         for index in join_order(options.clients, desktop_clients, bool(options.scenario)):
             client_dir = client_dirs[index]
             os.makedirs(client_dir, exist_ok=True)
+            for value in options.profile_creature:
+                client, folder = value.split(":", 1)
+                if int(client) == index + 1:
+                    kept = os.path.join(client_dir, "Profiles", "developer", "Scripts", "CreatureMind")
+                    shutil.copytree(folder, kept, dirs_exist_ok=True)
             is_observer = index >= options.clients
             # The observers of a scenario are in the room before the start; other observers join the game as it turns
             if (is_observer and not options.all_computer_gods and not options.scenario
@@ -1811,6 +1861,7 @@ def main():
             camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
             chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
+            chatting = chatting or any(value.split(":", 1)[1] == str(index + 1) for value in options.tattoo_menu)
             if (camera or index in holds or options.slot_miracle == index + 1 or chatting or options.slot_fight
                     or options.give == index + 1 or any(leash["client"] == index for leash in leashes)):
                 command += ["--inspect-port", "0"]
@@ -1863,6 +1914,9 @@ def main():
         chats = [(int(turns), int(client) - 1, text) for turns, client, text in
                  (value.split(":", 2) for value in options.chat)]
         said = set()
+        tattoo_menus = [(int(turns), int(client) - 1) for turns, client in
+                        (value.split(":", 1) for value in options.tattoo_menu)]
+        tattooed = set()
         cameras_again = set()
         while time.monotonic() - started < run_limit_seconds(options.turns):
             if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
@@ -1874,6 +1928,11 @@ def main():
                         os.path.join(client_dirs[index], "client.log"), [f"Network game: {turns} turns compared"])):
                     say_in_chat(clients[index].pid, text)
                     said.add(number)
+            for number, (turns, index) in enumerate(tattoo_menus):
+                if (number not in tattooed and 0 <= index < len(clients) and clients[index].poll() is None and lines_with(
+                        os.path.join(client_dirs[index], "client.log"), [f"Network game: {turns} turns compared"])):
+                    open_tattoo_menu(clients[index].pid)
+                    tattooed.add(number)
             for index, near in holds.items():
                 if index not in held and clients[index].poll() is None and lines_with(
                         os.path.join(client_dirs[index], "client.log"),
