@@ -109,8 +109,7 @@ void ReadCheckoutFolders(const std::filesystem::path& folder)
 	std::string line;
 	while (std::getline(stream, line))
 	{
-		while (!line.empty() && (line.back() == '' || line.back() == '
-'))
+		while (!line.empty() && (line.back() == '\r' || line.back() == '\n'))
 		{
 			line.pop_back();
 		}
