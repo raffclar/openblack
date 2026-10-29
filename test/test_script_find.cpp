@@ -21,10 +21,12 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 
@@ -199,6 +201,41 @@ TEST(ScriptFind, KindsOfThings)
 	EXPECT_EQ(static_cast<int>(ScriptType::Highlight), 37);
 	expect(sign, ScriptType::Highlight, 1u);
 	EXPECT_FALSE(script_find::KindOf(registry, nothing).has_value());
+}
+
+// The scripts find a worship site by its tribe, a scaffold of any subtype and a lump of poo as a thing of its own type
+TEST(ScriptFind, WorshipSitesScaffoldsAndPoo)
+{
+	Registry registry;
+	const auto site = registry.Create();
+	registry.Assign<components::WorshipSite>(site).tribe = Tribe::NORSE;
+	const auto scaffold = registry.Create();
+	registry.Assign<components::Scaffold>(scaffold);
+	const auto poo = registry.Create();
+	registry.Assign<components::MobileObject>(poo, MobileObjectInfo::LumpOfPoo);
+	const auto barrel = registry.Create();
+	registry.Assign<components::MobileObject>(barrel, MobileObjectInfo::EgyptBarrel);
+
+	EXPECT_EQ(static_cast<int>(ScriptType::WorshipSite), 19);
+	EXPECT_EQ(static_cast<int>(ScriptType::Poo), 25);
+	EXPECT_EQ(static_cast<int>(ScriptType::Scaffold), 39);
+	const auto siteKind = script_find::KindOf(registry, site);
+	ASSERT_TRUE(siteKind.has_value());
+	EXPECT_TRUE(script_find::Matches(*siteKind, ScriptType::WorshipSite, 7));
+	EXPECT_FALSE(script_find::Matches(*siteKind, ScriptType::WorshipSite, 6));
+	EXPECT_TRUE(script_find::Matches(*siteKind, ScriptType::WorshipSite, script_find::k_AnySubtype));
+	const auto scaffoldKind = script_find::KindOf(registry, scaffold);
+	ASSERT_TRUE(scaffoldKind.has_value());
+	EXPECT_TRUE(script_find::Matches(*scaffoldKind, ScriptType::Scaffold, script_find::k_AnySubtype));
+	EXPECT_FALSE(scaffoldKind->subtype.has_value());
+	const auto pooKind = script_find::KindOf(registry, poo);
+	ASSERT_TRUE(pooKind.has_value());
+	EXPECT_EQ(pooKind->type, ScriptType::Poo);
+	EXPECT_EQ(pooKind->subtype, static_cast<uint32_t>(MobileObjectInfo::LumpOfPoo));
+	EXPECT_FALSE(script_find::Matches(*pooKind, ScriptType::MobileObject, script_find::k_AnySubtype));
+	const auto barrelKind = script_find::KindOf(registry, barrel);
+	ASSERT_TRUE(barrelKind.has_value());
+	EXPECT_EQ(barrelKind->type, ScriptType::MobileObject);
 }
 
 TEST(ScriptFind, AMiracleInTheHandFromAGlobeIsAOneShotMiracle)

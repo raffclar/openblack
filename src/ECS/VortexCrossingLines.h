@@ -58,8 +58,8 @@ struct World
 [[nodiscard]] map_coords::MapCoords MapPlace(glm::vec3 position, float ground);
 
 /// The line making the thing again relative to the vortex's place: a villager, an animal, a pot (not one of a storage
-/// pit's piles), a tree, a rock or other static thing, a thing lying about, a dead tree or a globe holding a miracle. None
-/// for anything else.
+/// pit's piles), a tree, a rock or other static thing, a thing lying about, a dead tree, a globe holding a miracle or a
+/// scaffold that no workshop counts. None for anything else.
 [[nodiscard]] std::optional<vortex::crossing::Line> LineFor(const Registry& registry, entt::entity thing,
                                                             const map_coords::MapCoords& vortex, const World& world);
 
