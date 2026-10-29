@@ -33,7 +33,7 @@ inline constexpr EffectHandle k_NoEffectHandle = 0;
 /// sets of numbers never meet.
 inline constexpr EffectHandle k_FirstEffectHandle = 0x8000'0001u;
 
-/// Which part of the game moves an effect on
+/// The part of the game that steps an effect
 enum class EffectStep : uint8_t
 {
 	/// The particles step it once a game turn
