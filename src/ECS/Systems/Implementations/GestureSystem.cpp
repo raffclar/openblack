@@ -39,6 +39,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
 #include "Help/HelpProfile.h"
@@ -273,6 +274,13 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		{
 			context.inInfluence = hand.IsInInfluenceOf(player);
 		}
+	}
+	// An icon at the sites of the player's temple that charges a miracle for the empty hand, which a scribble stops
+	if (!seedEntity.has_value() && !context.holdingObject && Locator::spellIconSystem::has_value() &&
+	    Locator::worshipSiteSystem::has_value())
+	{
+		const auto temple = Locator::worshipSiteSystem::value().TempleOf(player);
+		context.iconCharging = Locator::spellIconSystem::value().ChargesFor(temple, player);
 	}
 	// A circle is remembered for the seed it was drawn for
 	if (!seedEntity.has_value() || *seedEntity != _circleSeed)
@@ -753,6 +761,11 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		// The hand shakes, and at the turn it lets go of the thing where it is, never planted again
 		ShakeHand();
 		SendRequest(player_commands::HandShakeOff {});
+		break;
+	case Purpose::CancelCharge:
+		// The hand shakes, and at the turn the icon that started its charge for the hand last stops it
+		ShakeHand();
+		SendRequest(player_commands::IconChargeStop {});
 		break;
 	case Purpose::LeashGesture:
 		if (creature.has_value())

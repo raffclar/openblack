@@ -19,12 +19,15 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TownHomes.h"
+#include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -143,6 +146,30 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 		if (chants != nullptr && Shows(Subject::Altar, handInInfluence))
 		{
 			submissions.push_back({.numbers = PrayerEnergy(chants->battery)});
+		}
+		return submissions;
+	}
+	// The wood flag of a workshop shows the wood that the workshop requires, wherever the hand is
+	if (const auto* flag = registry.TryGet<const WorkshopFlag>(object))
+	{
+		if (registry.Valid(flag->workshop) && Shows(Subject::NeedsSign, handInInfluence) &&
+		    Locator::workshopSystem::has_value() && Locator::resourceStoreSystem::has_value() &&
+		    Locator::infoConstants::has_value())
+		{
+			const auto required = ecs::workshop::WoodRequired(
+			    Locator::workshopSystem::value().RoomOf(flag->workshop),
+			    Locator::resourceStoreSystem::value().GetResource(flag->workshop, ResourceType::Wood),
+			    Locator::infoConstants::value().scaffold.woodValue);
+			submissions.push_back({.numbers = NeedsSign(NeedsRow::WorkshopWood, 0.0f, required)});
+		}
+		return submissions;
+	}
+	// A need flag of a worship site shows its need as high as the flag stands, wherever the hand is
+	if (const auto* sign = registry.TryGet<const WorshipSiteFlag>(object))
+	{
+		if (Shows(Subject::NeedsSign, handInInfluence))
+		{
+			submissions.push_back({.numbers = NeedsSign(static_cast<NeedsRow>(sign->need), sign->level, 0)});
 		}
 		return submissions;
 	}

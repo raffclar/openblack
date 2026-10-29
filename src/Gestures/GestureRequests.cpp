@@ -32,6 +32,8 @@ std::string_view gesture::Name(Purpose purpose)
 		return "shake the leash off";
 	case Purpose::ShakeOffHeld:
 		return "shake off what is held";
+	case Purpose::CancelCharge:
+		return "stop the charge of an icon";
 	case Purpose::LeashGesture:
 		return "leash";
 	case Purpose::PickLeash:
@@ -63,6 +65,7 @@ bool gesture::ShowsRecognition(Purpose purpose)
 	case Purpose::DropSeed:
 	case Purpose::ShakeOffLeash:
 	case Purpose::ShakeOffHeld:
+	case Purpose::CancelCharge:
 	case Purpose::ClosePicker:
 	case Purpose::HiddenScript:
 	case Purpose::CloseSelection:
@@ -213,10 +216,15 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 		}
 		else if (!seed.has_value())
 		{
-			// The empty hand shakes off the leash it holds; one tied to something stays
+			// The empty hand shakes off the leash it holds; one tied to something stays. Else the scribble stops the
+			// charge of an icon that charges a miracle for the hand.
 			if (context.creature.has_value() && context.creature->leashed && !context.creature->tied)
 			{
 				requests.push_back({.gesture = GestureType::Scribble, .purpose = Purpose::ShakeOffLeash});
+			}
+			else if (context.iconCharging)
+			{
+				requests.push_back({.gesture = GestureType::Scribble, .purpose = Purpose::CancelCharge});
 			}
 		}
 		else if (context.inInfluence)

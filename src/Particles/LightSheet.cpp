@@ -58,7 +58,7 @@ void LightSheet::Update(float seconds)
 	_time += seconds;
 	_sinceShift = seconds + _sinceShift;
 	const float since = _sinceShift;
-	_slide = _slide - (seconds * k_SlideSpeed);
+	_slide = _slide - (seconds * _slideSpeed);
 	if (_pulsed)
 	{
 		UpdatePulsed(seconds);

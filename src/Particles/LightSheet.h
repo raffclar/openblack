@@ -100,6 +100,14 @@ public:
 	[[nodiscard]] bool Hidden() const { return _hidden; }
 	/// The strength fed in at its first point from now on, 0 to 1
 	void SetStrength(float strength) { _strength = strength; }
+	/// The colour of its light from now on (0xRRGGBB)
+	void SetRgb(uint32_t rgb) { _rgb = rgb & 0xFFFFFFu; }
+	/// How many times a second the stars slide up the sheet from now on. A negative speed slides them down.
+	void SetSlideSpeed(float speed) { _slideSpeed = speed; }
+	/// A sheet with its own clock is moved on by time only by its owner, which sets its values first. The particles
+	/// draw it but do not move it on.
+	void SetOwnClock(bool own) { _ownClock = own; }
+	[[nodiscard]] bool OwnClock() const { return _ownClock; }
 	/// Time passes: the wave rolls on, the stars slide and the strengths move along
 	void Update(float seconds);
 	/// Its corners, three over each point (the land, the bright line and the top), and its triangles, four between each
@@ -142,6 +150,10 @@ private:
 	float _sinceShift {0.0f};
 	float _slide {0.0f};
 	glm::vec3 _middle {0.0f};
+	/// Only a sheet with its own clock changes these, and its owner sets them again before each move. A saved game does
+	/// not keep them.
+	float _slideSpeed {k_SlideSpeed};
+	bool _ownClock {false};
 };
 
 } // namespace openblack::particles

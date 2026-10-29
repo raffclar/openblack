@@ -1116,6 +1116,17 @@ ParticleSystemInterface::EffectId ParticleSystem::StartByFrame(ParticleType type
 	return id;
 }
 
+ParticleSystemInterface::EffectId ParticleSystem::StartOwned(ParticleType type, glm::vec3 origin, float magnitude)
+{
+	const auto id = Start(type, origin, magnitude, true);
+	// The turn does not step it: its owner does
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->ownedBySpell = true;
+	}
+	return id;
+}
+
 void ParticleSystem::SetShown(EffectId id, bool shown)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())

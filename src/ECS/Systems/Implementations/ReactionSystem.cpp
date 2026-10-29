@@ -2055,6 +2055,36 @@ void ReactionSystem::Reset()
 	_turn = 0;
 	_joins = 0;
 	_landBalances = {1.0f, 1.0f, 1.0f};
+	_gainShown = {};
+}
+
+void ReactionSystem::TownGainsTurn(uint32_t turn)
+{
+	_gainShown = {};
+	if (turn % magic::town_belief::k_GainShownEvery != 0)
+	{
+		return;
+	}
+	// Each player adds what each town gained in them, in the order of the towns. Every tally goes back to nothing.
+	std::array<float, static_cast<size_t>(PlayerNames::_COUNT)> gained {};
+	Locator::entitiesRegistry::value().Each<const Town, TownImpression>(
+	    [&gained](entt::entity, const Town&, TownImpression& impression) {
+		    const auto town = magic::town_belief::TakeGainedSinceShown(impression.belief);
+		    for (size_t p = 0; p < gained.size(); ++p)
+		    {
+			    gained.at(p) += town.at(p);
+		    }
+	    });
+	for (size_t p = 0; p < gained.size(); ++p)
+	{
+		_gainShown.at(p) = magic::town_belief::GainShown(gained.at(p));
+	}
+}
+
+std::optional<float> ReactionSystem::TakeGainShown(PlayerNames player)
+{
+	const auto p = static_cast<size_t>(player);
+	return p < _gainShown.size() ? std::exchange(_gainShown.at(p), std::nullopt) : std::nullopt;
 }
 
 std::vector<ReactionSystemInterface::Active> ReactionSystem::ReactionsAt(const glm::vec3& point) const

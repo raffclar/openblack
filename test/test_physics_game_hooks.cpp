@@ -600,14 +600,16 @@ TEST(PhysicsGameHooks, AThingThatIsAResourceGoesIntoTheStoreItMeets)
 	EXPECT_EQ(f.world->taken, taken);
 }
 
-TEST(PhysicsGameHooks, AStoragePitThatTakesAThrowOfTheLocalPlayerCountsForTheHelp)
+TEST(PhysicsGameHooks, AStoragePitOrAWorshipSiteThatTakesAThrowOfTheLocalPlayerCountsForTheHelp)
 {
 	Fixture f;
 	auto& registry = f.world->registry;
 	const auto pit = registry.Create();
 	registry.Assign<StoragePit>(pit);
 	const auto site = registry.Create();
-	f.world->stores = {pit, site};
+	registry.Assign<WorshipSite>(site);
+	const auto other = registry.Create();
+	f.world->stores = {pit, site, other};
 	const auto strike = [&f, &registry](entt::entity store, PlayerNames player) {
 		const auto tree = registry.Create();
 		f.world->resources[tree] = {.type = ResourceType::Wood, .amount = 100};
@@ -615,12 +617,15 @@ TEST(PhysicsGameHooks, AStoragePitThatTakesAThrowOfTheLocalPlayerCountsForTheHel
 		f.hooks->ReactToImpact(f.dynamics, f.struck, {.hitBy = store, .player = player});
 	};
 	strike(pit, PlayerNames::PLAYER_ONE);
-	EXPECT_EQ(f.world->helpEvents, std::vector<uint32_t> {help::profile::k_ThrownIntoStore});
-	// Another player's throw, or a store that is not a storage pit, counts nothing
-	strike(pit, PlayerNames::PLAYER_TWO);
 	strike(site, PlayerNames::PLAYER_ONE);
-	EXPECT_EQ(f.world->helpEvents.size(), 1u);
-	EXPECT_EQ(f.world->taken.size(), 3u);
+	const std::vector<uint32_t> counted {help::profile::k_ThrownIntoStore, help::profile::k_ThrownIntoStore};
+	EXPECT_EQ(f.world->helpEvents, counted);
+	// Another player's throw, or a store that is not a storage pit or a worship site, counts nothing
+	strike(pit, PlayerNames::PLAYER_TWO);
+	strike(site, PlayerNames::PLAYER_TWO);
+	strike(other, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(f.world->helpEvents.size(), 2u);
+	EXPECT_EQ(f.world->taken.size(), 5u);
 }
 
 TEST(PhysicsGameHooks, RocksBreakBuildings)

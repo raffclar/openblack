@@ -129,6 +129,8 @@ struct ImportedBelief
 	std::array<float, k_ImportedPlayers> recent {};
 	std::array<float, k_ImportedPlayers> cap {};
 	std::array<float, k_ImportedPlayers> pending {};
+	/// What the town gained in each player since the hand last told the player
+	std::array<float, k_ImportedPlayers> gainedSinceShown {};
 	/// How weary the town is of each kind of reaction, 1 when it has never seen one
 	std::array<float, k_ImportedReactions> boredom {};
 	/// For each thing that the town wants, the level above which the want costs its owner belief

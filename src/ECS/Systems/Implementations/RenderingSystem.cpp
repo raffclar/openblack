@@ -82,6 +82,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Workshop.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Graveyards.h"
@@ -1054,10 +1055,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    look.x = graphics::object_tint::PackAdded(added, grainFlow);
 		    }
 
-		    // A flag over a town's store, or the wood flag of a workshop, is not there at all while it does not show
+		    // A flag over a town's store, the wood flag of a workshop or a need flag of a worship site is not there at all
+		    // while it does not show
 		    const auto* townFlag = registry.TryGet<const TownDesireFlag>(entity);
 		    const auto* woodFlag = registry.TryGet<const WorkshopFlag>(entity);
-		    if ((townFlag != nullptr && !townFlag->shown) || (woodFlag != nullptr && !woodFlag->shown))
+		    const auto* needFlag = registry.TryGet<const WorshipSiteFlag>(entity);
+		    if ((townFlag != nullptr && !townFlag->shown) || (woodFlag != nullptr && !woodFlag->shown) ||
+		        (needFlag != nullptr && !needFlag->shown))
 		    {
 			    look.z = 1.0f;
 			    modelMatrix = glm::mat4(0.0f);

@@ -50,6 +50,8 @@ public:
 	void StartTurn() override;
 	void EndReactionIfOver(entt::entity living) override;
 	void BelieveInTown(entt::entity town) override;
+	void TownGainsTurn(uint32_t turn) override;
+	[[nodiscard]] std::optional<float> TakeGainShown(PlayerNames player) override;
 	[[nodiscard]] uint32_t CurrentTurn() const override { return _turn; }
 	void Reset() override;
 	void SetFreshIdsAtNextReset() override { _freshIdsAtNextReset = true; }
@@ -112,6 +114,8 @@ private:
 	uint32_t _joins {0};
 	/// The things' and the miracles' balances of impressiveness
 	std::array<float, 3> _landBalances {1.0f, 1.0f, 1.0f};
+	/// For each player, the number for the belief that the towns gained, which the hand shows at this turn
+	std::array<std::optional<float>, static_cast<size_t>(PlayerNames::_COUNT)> _gainShown {};
 };
 
 } // namespace openblack::ecs::systems

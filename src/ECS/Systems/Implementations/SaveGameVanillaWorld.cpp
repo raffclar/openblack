@@ -195,6 +195,7 @@ void PutBelief(ecs::Registry& registry, entt::entity entity, const world_import:
 	belief.recent = file.recent;
 	belief.cap = file.cap;
 	belief.pending = file.pending;
+	belief.gainedSinceShown = file.gainedSinceShown;
 	belief.desireLevel = file.desireLevel;
 	// A kind of reaction that the town has never seen has a weariness of 1, as a kind that the town does not list
 	impression.boredom.clear();

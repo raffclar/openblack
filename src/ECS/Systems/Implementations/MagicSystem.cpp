@@ -75,6 +75,7 @@
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/StreetLantern.h"
@@ -1110,7 +1111,7 @@ magic::SpellCasterInterface* MagicSystem::CasterOf(const Spell& spell)
 			{
 				return nullptr;
 			}
-			_siteCaster.Bind(spell.caster.worshipSite);
+			_siteCaster.Bind(spell.caster.worshipSite, EntityRegistry().ToEntity(spell));
 			return &_siteCaster;
 		}
 		return _players.at(static_cast<size_t>(spell.caster.player)).get();
@@ -2505,6 +2506,32 @@ bool MagicSystem::HandPointValid() const
 	return _hand.point.has_value() && PointValidForHeld(*_hand.point);
 }
 
+entt::entity MagicSystem::IconOfSeed(entt::entity seedEntity, const SpellSeed& seed) const
+{
+	const auto& registry = EntityRegistry();
+	if (seed.worshipSite == entt::null)
+	{
+		return entt::null;
+	}
+	entt::entity ofKind = entt::null;
+	entt::entity holder = entt::null;
+	registry.Each<const WorshipIcon>([&](entt::entity icon, const WorshipIcon& data) {
+		if (data.site != seed.worshipSite)
+		{
+			return;
+		}
+		if (holder == entt::null && std::ranges::find(data.seedsOut, seedEntity) != data.seedsOut.end())
+		{
+			holder = icon;
+		}
+		if (ofKind == entt::null && data.seed == seed.seedType)
+		{
+			ofKind = icon;
+		}
+	});
+	return holder != entt::null ? holder : ofKind;
+}
+
 bool MagicSystem::PointValidForHeld(glm::vec3 point) const
 {
 	if (!Held().has_value() || !EntityRegistry().Valid(*Held()))
@@ -2771,7 +2798,8 @@ entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)
 	                          .entity = entt::null,
 	                          .withoutIcon = !seed.hasIcon,
 	                          .worshipSite = seed.worshipSite,
-	                          .madeBySpellIcon = seed.hasIcon};
+	                          .madeBySpellIcon = seed.hasIcon,
+	                          .icon = IconOfSeed(heldEntity, seed)};
 	// The miracle starts with the hand as the command gives it
 	const particles::ProcessInfo hand {
 	    .handPosition = command.handPosition,
@@ -3515,6 +3543,42 @@ void MagicSystem::ReturnFromSeed(const SpellSeed& seed, float amount)
 float WorshipSiteSpellCaster::MaintainSpell(float amount)
 {
 	return Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().MaintainSpell(_site, amount) : 0.0f;
+}
+
+void WorshipSiteSpellCaster::OnChantsSpent(float chants, magic::ChantCharge charge)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::worshipSiteSystem::has_value() || _spell == entt::null || !registry.Valid(_spell) ||
+	    !registry.AllOf<Spell>(_spell))
+	{
+		return;
+	}
+	auto& spell = registry.Get<Spell>(_spell);
+	// The motes fly from the icon that made the seed; without it there are none
+	const auto icon = spell.caster.icon;
+	if (icon == entt::null || !registry.Valid(icon) || !registry.AllOf<Transform>(icon))
+	{
+		return;
+	}
+	const bool upkeep = charge == magic::ChantCharge::PerTurn;
+	float& spent = upkeep ? spell.upkeepMotes : spell.eventMotes;
+	spent = chants + spent;
+	if (!(magic::k_ChantsPerMote < spent))
+	{
+		return;
+	}
+	spent = 0.0f;
+	// Both ends stand at their places on the map, as high above the land as they are
+	const auto onMap = [](glm::vec3 point) {
+		if (!Locator::terrainSystem::has_value())
+		{
+			return point;
+		}
+		const auto& land = Locator::terrainSystem::value();
+		return map_coords::ToWorld(land, map_coords::HeldPlace(land, point));
+	};
+	const auto to = upkeep ? spell.castPosition : spell.position;
+	Locator::worshipSiteSystem::value().AddMote(_site, onMap(registry.Get<const Transform>(icon).position), onMap(to));
 }
 
 MagicSystemInterface::HandCastState MagicSystem::GetHandCastState() const

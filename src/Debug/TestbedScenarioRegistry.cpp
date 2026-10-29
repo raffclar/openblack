@@ -12398,6 +12398,21 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000}},
 	});
 
+	all.push_back({
+	    .id = "hand.tooltips_workshop_wood_flag",
+	    .name = "The hand over the wood flag of a workshop",
+	    .facet = Facet::Objects,
+	    .description = "The town and the workshop of objects.workshop_wood_by_hand: the workshop holds 1000 wood, less "
+	                   "than the wood of one scaffold, and has room for three scaffolds. Put the hand over the wood flag "
+	                   "beside the workshop, also out of the influence of the player.",
+	    .expected = "Over the flag the tooltip shows \"Wood Required\" with the wood of three scaffolds less 1000, at "
+	                "once and with no mouse button drawn. It shows also where the hand is out of the influence.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000}},
+	});
+
 	constexpr glm::vec2 k_LooseScaffold {-25.0f, 30.0f};
 	constexpr glm::vec2 k_BuildPlace {-5.0f, 25.0f};
 	all.push_back({
@@ -12575,6 +12590,7 @@ std::vector<Scenario> Build()
 	AddPoisonScenarios(all);
 	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
+	AddWorshipSiteScenarios(all);
 	return all;
 }
 

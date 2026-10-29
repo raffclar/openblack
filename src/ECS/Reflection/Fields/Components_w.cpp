@@ -171,7 +171,16 @@ void openblack::ecs::reflection::RegisterFields_Components_w(entt::meta_ctx& con
 	    .Field<&components::WorshipSite::foodPot>("foodPot")
 	    .Field<&components::WorshipSite::foodOnTheWay>("foodOnTheWay")
 	    .Field<&components::WorshipSite::worshippers>("worshippers")
-	    .Field<&components::WorshipSite::buildRequests>("buildRequests");
+	    .Field<&components::WorshipSite::buildRequests>("buildRequests")
+	    .Field<&components::WorshipSite::needs>("needs")
+	    .Field<&components::WorshipSite::needFlags>("needFlags")
+	    .Field<&components::WorshipSite::manaPath>("manaPath");
+	Reflect<components::WorshipSiteFlag>(context)
+	    .Field<&components::WorshipSiteFlag::site>("site")
+	    .Field<&components::WorshipSiteFlag::need>("need")
+	    .Field<&components::WorshipSiteFlag::level>("level")
+	    .Field<&components::WorshipSiteFlag::speed>("speed")
+	    .Field<&components::WorshipSiteFlag::shown>("shown");
 	Reflect<components::Worshipper>(context)
 	    .Field<&components::Worshipper::atWorship>("atWorship")
 	    .Field<&components::Worshipper::onTheWay>("onTheWay");

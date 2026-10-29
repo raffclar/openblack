@@ -109,6 +109,12 @@ public:
 	{
 		return Start(type, origin, magnitude, false);
 	}
+	/// An effect that its owner steps each turn with ProcessForSpell, never the particles' own turn. Its random numbers
+	/// are the shared ones.
+	virtual EffectId StartOwned(ParticleType type, glm::vec3 origin, float magnitude)
+	{
+		return Start(type, origin, magnitude, true);
+	}
 	/// Whether an effect that its thing draws shows in this frame: it shows only while the frame draws its thing
 	virtual void SetShown(EffectId /*id*/, bool /*shown*/) {}
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever

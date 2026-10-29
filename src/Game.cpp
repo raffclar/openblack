@@ -301,6 +301,7 @@
 #include "ECS/VillageTotem.h"
 #include "ECS/VillagerLabelSource.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipChantMusic.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
@@ -341,6 +342,7 @@
 #include "LHScriptX/Script.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
+#include "Magic/TownBelief.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkLand.h"
@@ -1908,6 +1910,41 @@ void Game::ProcessHandToolTipTurn()
 	toolTips.ProcessTurn(displayTimeRuns);
 }
 
+void Game::ShowBeliefGained()
+{
+	const auto shown = Locator::reactionSystem::has_value() ? Locator::reactionSystem::value().TakeGainShown(LocalInputPlayer())
+	                                                        : std::nullopt;
+	if (!shown.has_value())
+	{
+		return;
+	}
+	// The hand shows the belief gained at once, over anything else
+	if (_interface)
+	{
+		_interface->GetToolTips().Force(gui::world_tooltip::k_GotBelief, *shown);
+	}
+	// The number also floats up from the thing under the hand, or else from the point on the land under the hand
+	if (!Locator::pickingSystem::has_value() || !Locator::floatingNumberSystem::has_value())
+	{
+		return;
+	}
+	const auto pick = Locator::pickingSystem::value().GetPick();
+	std::optional<glm::vec3> place = pick.point;
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (pick.object.has_value() && registry.Valid(*pick.object))
+	{
+		if (const auto* transform = registry.TryGet<const ecs::components::Transform>(*pick.object))
+		{
+			place = transform->position;
+		}
+	}
+	if (place.has_value())
+	{
+		namespace belief = magic::town_belief;
+		Locator::floatingNumberSystem::value().AddWide(*place, *shown, belief::k_GainShownColour, belief::k_GainShownWidth);
+	}
+}
+
 void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entity> pointed)
 {
 	namespace tips = gui::hand_tooltip;
@@ -2186,6 +2223,9 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 	case Step::PlayerSparkles:
 		ecs::other_player_sparkles::AddAtCameras();
 		break;
+	case Step::BeliefGained:
+		ShowBeliefGained();
+		break;
 	case Step::HelpProfile:
 		// The help's count of what the player did moves on a turn. It reads the view of the camera from the last report.
 		if (Locator::helpProfileSystem::has_value())
@@ -2288,6 +2328,7 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 		    return registry.Get<const ecs::components::Transform>(entity).position;
 	    },
 	};
+	music.worshipChant = ecs::worship_chant_music::Heard(cameraPosition);
 	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
 	// The music heard follows the world's clock of the scripts' music
 	if (Locator::scriptMusicSystem::has_value())

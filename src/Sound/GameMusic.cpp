@@ -372,7 +372,7 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 		_landType = MusicType::None;
 		return;
 	}
-	if (ProcessCreatureFight(inputs) || ProcessCreatureDance(inputs) || ProcessAttached(inputs))
+	if (ProcessCreatureFight(inputs) || ProcessWorshipChant(inputs) || ProcessCreatureDance(inputs) || ProcessAttached(inputs))
 	{
 		_landType = MusicType::None;
 		return;
@@ -500,6 +500,34 @@ bool GameMusic::ProcessCreatureFight(const TurnInputs& inputs)
 	                          .fadeIn = true,
 	                      });
 	_playing = type;
+	return true;
+}
+
+// The chant at a worship site plays from the middle of the site's dance, in time with its music group. It does not fade
+// in. It counts as heard whenever its bank is there.
+bool GameMusic::ProcessWorshipChant(const TurnInputs& inputs)
+{
+	if (!inputs.worshipChant.has_value())
+	{
+		return false;
+	}
+	const auto& chant = *inputs.worshipChant;
+	const auto path = std::string(BankPath(chant.type));
+	auto& audio = Locator::audio::value();
+	const auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
+	if (!info)
+	{
+		return false;
+	}
+	SaveResumeChunks();
+	audio.MusicPlay(path, MusicPlayOptions {
+	                          .volume = k_FullVolume,
+	                          .startChunk = GetResumeChunk(info->groupId),
+	                          .sync = true,
+	                          .fadeIn = false,
+	                          .position = chant.position,
+	                      });
+	_playing = chant.type;
 	return true;
 }
 
