@@ -2166,3 +2166,7 @@ openblack_setup_and_add_test(test_creature_stop_plays_rest test_creature_stop_pl
 openblack_setup_and_add_test(test_hand_start test_hand_start.cpp)
 openblack_setup_and_add_test(test_hanoi_rules test_hanoi_rules.cpp)
 openblack_setup_and_add_test(test_headless_renderer test_headless_renderer.cpp)
+openblack_setup_and_add_test(
+  test_script_container_properties test_script_container_properties.cpp
+)
+target_link_libraries(test_script_container_properties PRIVATE ScriptLibrary)
