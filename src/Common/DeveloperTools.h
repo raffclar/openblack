@@ -143,6 +143,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-time-limit", .takesValue = true},
     DeveloperOption {.name = "sim-conditions", .takesValue = true},
     DeveloperOption {.name = "sim-leave-at", .takesValue = true},
+    DeveloperOption {.name = "sim-info-box-back-at", .takesValue = true},
     DeveloperOption {.name = "sim-checksums", .takesValue = true},
     DeveloperOption {.name = "sim-checksum-parts"},
     DeveloperOption {.name = "sim-checksum-fields"},

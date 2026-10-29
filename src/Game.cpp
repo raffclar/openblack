@@ -5831,7 +5831,7 @@ void Game::LeaveAsObserverAtTheEndOfTheRun()
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The observer leaves the network game at the end of the run");
 }
 
-void Game::LeaveNetworkGame()
+void Game::LeaveNetworkGame(game_session::NetworkLeave leave)
 {
 	if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
 	{
@@ -5840,14 +5840,15 @@ void Game::LeaveNetworkGame()
 	// The game server makes the god of the player a leaver for every computer
 	Locator::networkGame::value().Leave();
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player leaves the network game");
-	// A join from the command line, and a run of the tools, stop the game. A join from the front end goes back to it.
+	// A join from the command line, and a run of the tools, stop the game. A join from the front end goes to the box
+	// that the control gives.
 	const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();
 	if (_joinedFromCommandLine || toolRun)
 	{
 		_leaveNetworkGame = true;
 		return;
 	}
-	_gameEndAsked = game_session::End::Online;
+	_gameEndAsked = game_session::EndAfterNetworkLeave(leave);
 }
 
 void Game::LeaveAsAPlayerDoes()
@@ -6390,6 +6391,11 @@ void Game::StartNextGameWhenSaved()
 		StartAfterNetworkGame();
 		break;
 	case game_session::Start::Skirmish:
+		// A player who left a network game plays alone again: the skirmish box starts a game of this computer alone
+		if (Locator::networkGame::has_value())
+		{
+			Locator::networkGame::value().EndNetworkGame();
+		}
 		OpenSkirmishBoxOverGame();
 		break;
 	case game_session::Start::SavedGame:

@@ -9,6 +9,7 @@
 
 // The skirmish box of the game: the land list from the playground folder, and the choice that the player makes in it
 
+#include <algorithm>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -17,6 +18,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -27,6 +30,15 @@
 #include "Locator.h"
 
 using namespace openblack;
+
+namespace
+{
+/// This computer plays a network game with a session of a game server
+bool HasNetworkSession()
+{
+	return Locator::networkGame::has_value() && Locator::networkGame::value().Session() != nullptr;
+}
+} // namespace
 
 std::vector<gui::skirmish_box::Land> Game::ReadSkirmishLands()
 {
@@ -120,6 +132,7 @@ void Game::FollowLandInfoBox()
 	{
 		return;
 	}
+	PressLandInfoBoxBackForTests();
 	switch (_interface->GetLandInfoBox().TakeChoice())
 	{
 	case gui::LandInfoBox::Choice::None:
@@ -128,13 +141,46 @@ void Game::FollowLandInfoBox()
 	case gui::LandInfoBox::Choice::Back:
 		break;
 	}
-	// Back ends the skirmish, and the skirmish box shows again. A tool can play a playground land as a network game:
-	// there Back only closes the box.
+	// Back ends the skirmish, and the skirmish box shows again. In a network game, Back also leaves the network game
+	// as Leave Game does, and the other computers see a god that leaves. Then the skirmish box shows.
+	if (HasNetworkSession())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land information box: Back leaves the network game");
+		LeaveNetworkGame(game_session::NetworkLeave::LandInfoBoxBack);
+		return;
+	}
+	// A tool can play the world as a network game with no network: there Back only closes the box
 	if (Locator::time::value().IsNetworkGame())
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land information box: Back in a network game only closes the box");
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land information box: Back with no network session only closes the box");
 		return;
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land information box: Back ends the skirmish");
 	_gameEndAsked = game_session::End::Skirmish;
+}
+
+void Game::PressLandInfoBoxBackForTests()
+{
+	const auto backAt = Locator::simulation::value().GetSettings().landInfoBoxBackAt;
+	if (!backAt.has_value() || _testLandInfoBoxBackDone || Locator::time::value().GetTurn() < *backAt || !HasNetworkSession())
+	{
+		return;
+	}
+	_testLandInfoBoxBackDone = true;
+	auto& box = _interface->GetLandInfoBox();
+	const auto back = std::u16string(_interface->GetTexts().Get("HELP_TEXT_DIALOG_BACK"));
+	const auto controls = box.GetNamedControls();
+	const auto found = std::ranges::find(controls, back, &gui::Dialog::NamedControl::name);
+	if (found == controls.end())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Tests: the land information box does not show at turn {}",
+		                   Locator::time::value().GetTurn());
+		return;
+	}
+	// The press and the release of the mouse button over Back, as a player clicks
+	const auto centre = (found->rect.min + found->rect.max) / 2;
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Tests: the player presses Back in the land information box at turn {}",
+	                   Locator::time::value().GetTurn());
+	box.MouseDown(centre);
+	std::ignore = box.MouseUp(centre);
 }
