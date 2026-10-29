@@ -86,6 +86,11 @@ constexpr std::array k_Executors {
               .target = Target::BuildingBeingBuilt,
               .use = Target::PickableTree,
               .build = Build::GiveWoodToStore},
+    // A tree goes to a workshop as a tree goes to a building site
+    Executor {.action = "GiveWoodFromTreeToWorkshop",
+              .target = Target::Workshop,
+              .use = Target::PickableTree,
+              .build = Build::GiveWoodToStore},
     Executor {.action = "HelpRepairHouse",
               .target = Target::NeedsRepair,
               .use = Target::PickableTree,
