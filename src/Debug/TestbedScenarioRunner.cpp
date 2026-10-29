@@ -986,6 +986,7 @@ void Runner::Start(const Scenario& scenario)
 	_slotCreatures.clear();
 	_objects.clear();
 	_scriptFlock = entt::null;
+	_madeByNatives.clear();
 	_globes.clear();
 	_temples.clear();
 	_throwsDue.clear();
@@ -2885,6 +2886,12 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 		object = found->second;
 		break;
 	}
+	case ScriptArgument::Kind::Made:
+		if (argument.index >= _madeByNatives.size())
+		{
+			return std::nullopt;
+		}
+		return lhvm::VMValue(_madeByNatives.at(argument.index));
 	}
 	if (!object.has_value())
 	{
@@ -2938,6 +2945,13 @@ std::string Runner::CallNative(const Command& command)
 	if (!vm.CallNative(id, arguments, results))
 	{
 		return fmt::format("{} could not run now", command.script);
+	}
+	for (const auto& [value, type] : results)
+	{
+		if (type == lhvm::DataType::Object)
+		{
+			_madeByNatives.push_back(value.uintVal);
+		}
 	}
 	return fmt::format("{} ran and gave back {} values", command.script, results.size());
 }

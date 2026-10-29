@@ -570,6 +570,9 @@ struct ScriptArgument
 		Flock,
 		/// The scenario's town of the player, as a script names a town
 		Town,
+		/// An object that an earlier native call of the scenario gave back (index, counting the first as 0), as a
+		/// script keeps the thing that it made in a variable
+		Made,
 	};
 	Kind kind {Kind::Number};
 	float number {0.0f};
