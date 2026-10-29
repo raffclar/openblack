@@ -2395,11 +2395,16 @@ bool LetsCreatureAct(const ecs::Registry& registry, entt::entity thing)
 	{
 		return false;
 	}
-	// A field has the data of its town's field building, and a village totem the data of its statue
+	// A field has the data of its town's field building, a village totem the data of its statue, and a town's desire
+	// flag the data of the prayer site
 	const GObjectInfo* info = nullptr;
 	if (registry.AllOf<Field>(thing))
 	{
 		info = FieldBuildingInfo(registry, thing);
+	}
+	else if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		info = Locator::infoConstants::has_value() ? &Locator::infoConstants::value().prayerSite : nullptr;
 	}
 	else if (registry.AllOf<VillageTotem>(thing))
 	{
@@ -2433,6 +2438,7 @@ bool Frightens(AnimalInfo type)
 
 /// The data that tells if a creature can act on a thing. A field has the data of its town's field building, a village
 /// totem the data of its statue, the temple the data of its heart, and the altar of a worship site the data of its site.
+/// A town's desire flag has the data of the prayer site.
 const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thing)
 {
 	if (!Locator::infoConstants::has_value())
@@ -2455,6 +2461,10 @@ const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thin
 	if (registry.AllOf<VillageTotem>(thing))
 	{
 		return TotemStatueInfo(registry, thing);
+	}
+	if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		return &info.prayerSite;
 	}
 	if (const auto* animal = registry.TryGet<const Animal>(thing))
 	{
@@ -2516,6 +2526,10 @@ creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity
 	if (registry.AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
 	{
 		return Thing::Building;
+	}
+	if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		return Thing::PlainObject;
 	}
 	return Thing::Other;
 }
@@ -2585,6 +2599,11 @@ std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::ent
 	if (const auto* farm = registry.TryGet<const FishFarm>(thing))
 	{
 		return town(farm->town);
+	}
+	// A town's desire flag is of its town
+	if (const auto* flag = registry.TryGet<const TownDesireFlag>(thing))
+	{
+		return town(flag->town);
 	}
 	if (registry.AllOf<VillageTotem>(thing))
 	{

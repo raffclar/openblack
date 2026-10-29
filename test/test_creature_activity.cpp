@@ -120,6 +120,39 @@ TEST(CreatureActivity, ForCompassionItActsOnVillagersAndBuildings)
 	EXPECT_FALSE(ThingSuits(Desire::Compassion, {.kind = Thing::Spell}));
 }
 
+// A plain object, such as a town's desire flag, suits a desire as any object does: by the data of the object, and never
+// for rest, fear or friends
+TEST(CreatureActivity, APlainObjectSuitsTheDesiresThatAnyObjectSuits)
+{
+	// The data of the prayer site: a creature can act on it and examine it, but not attack it or play with it
+	const ThingFacts flag {.kind = Thing::PlainObject, .inspectable = true};
+	EXPECT_TRUE(ThingSuits(Desire::Compassion, flag));
+	EXPECT_TRUE(ThingSuits(Desire::Hunger, flag));
+	EXPECT_TRUE(ThingSuits(Desire::Curiosity, flag));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, flag));
+	EXPECT_FALSE(ThingSuits(Desire::Play, flag));
+	EXPECT_FALSE(ThingSuits(Desire::Impress, flag));
+	EXPECT_FALSE(ThingSuits(Desire::Fear, flag));
+	EXPECT_FALSE(ThingSuits(Desire::Tiredness, flag));
+	EXPECT_FALSE(ThingSuits(Desire::Rest, flag));
+	EXPECT_FALSE(ThingSuits(Desire::BringStuffHome, flag));
+	EXPECT_FALSE(ThingSuits(Desire::BeFriends, flag));
+	EXPECT_FALSE(ThingSuits(Desire::GetHigh, flag));
+	// It takes poo only when it is taller than the tallest thing a creature does not poo on
+	EXPECT_FALSE(ThingSuits(Desire::Poo, flag));
+	EXPECT_TRUE(ThingSuits(Desire::Poo, {.kind = Thing::PlainObject, .height = k_TallestThingNotToPooOn + 0.5f}));
+	// Other data can let a creature attack it or play with it
+	EXPECT_TRUE(ThingSuits(Desire::Anger, {.kind = Thing::PlainObject, .attackable = true}));
+	EXPECT_FALSE(ThingSuits(Desire::Anger, {.kind = Thing::PlainObject, .attackable = true, .itself = true}));
+	EXPECT_TRUE(ThingSuits(Desire::Play, {.kind = Thing::PlainObject, .playable = true}));
+	// Data that does not let a creature act on it refuses every desire
+	EXPECT_FALSE(ThingSuits(Desire::Compassion, {.kind = Thing::PlainObject, .canActOn = false}));
+	EXPECT_FALSE(ThingSuits(Desire::Hunger, {.kind = Thing::PlainObject, .canActOn = false}));
+	// Anything else that is not an object suits none of the desires that need an object
+	EXPECT_FALSE(ThingSuits(Desire::Compassion, {.kind = Thing::Other}));
+	EXPECT_FALSE(ThingSuits(Desire::Curiosity, {.kind = Thing::Other, .inspectable = true}));
+}
+
 // To get high, it acts only on a magic mushroom
 TEST(CreatureActivity, ToGetHighItActsOnlyOnAMagicMushroom)
 {
