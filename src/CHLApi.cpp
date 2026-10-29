@@ -9137,6 +9137,50 @@ static bool IsAdultHolderBuilding(const ecs::Registry& registry, entt::entity ob
 	return registry.AnyOf<ecs::components::Abode, ecs::components::SpellDispenser>(object);
 }
 
+/// The grown villagers of a town now
+static uint32_t TownAdultsNow(const ecs::Registry& registry, entt::entity town)
+{
+	uint32_t adults = 0;
+	registry.Each<const ecs::components::Villager>([town, &adults](const ecs::components::Villager& villager) {
+		if (villager.town == town && villager.lifeStage != ecs::components::Villager::LifeStage::Child)
+		{
+			++adults;
+		}
+	});
+	return adults;
+}
+
+/// The room for adults in the built buildings of a town now: the adult places of each building of its tribe's table that
+/// has a place for anyone, as the town stats count them
+static int32_t TownAdultRoomNow(const ecs::Registry& registry, entt::entity townEntity, const ecs::components::Town& town)
+{
+	const auto* tribe = registry.TryGet<const Tribe>(townEntity);
+	if (tribe == nullptr || !Locator::infoConstants::has_value())
+	{
+		return 0;
+	}
+	const auto& rows = Locator::infoConstants::value().abode;
+	int32_t room = 0;
+	registry.Each<const ecs::components::Abode>([&](entt::entity entity, const ecs::components::Abode& abode) {
+		if (abode.townId != town.id)
+		{
+			return;
+		}
+		const auto* progress = registry.TryGet<const ecs::components::BuildProgress>(entity);
+		if (progress != nullptr && progress->built < 1.0f)
+		{
+			return;
+		}
+		const auto row = std::ranges::find_if(
+		    rows, [&](const GAbodeInfo& info) { return info.tribeType == *tribe && info.abodeNumber == abode.type; });
+		if (row != rows.end() && row->maxVillagersInAbode + row->maxChildrenInAbode != 0)
+		{
+			room += static_cast<int32_t>(row->maxVillagersInAbode);
+		}
+	});
+	return room;
+}
+
 /// The adults of a town or a building, or the room for them, as ID_ADULT_SIZE and OBJECT_ADULT_CAPACITY give it. Any
 /// other thing gives 0 and a message.
 static void PushAdultCount(bool room)
@@ -9149,17 +9193,12 @@ static void PushAdultCount(bool room)
 		Pushf(0.0f);
 		return;
 	}
-	if (registry.AllOf<ecs::components::Town>(object))
+	if (const auto* town = registry.TryGet<const ecs::components::Town>(object); town != nullptr)
 	{
-		// The town counts its people and the room in its built houses on each turn
-		const auto* stats = registry.TryGet<const ecs::components::TownStats>(object);
-		if (stats == nullptr)
-		{
-			Pushf(0.0f);
-			return;
-		}
-		Pushf(room ? ecs::script_containers::TownAdultRoom(static_cast<int32_t>(stats->adultPlaces))
-		           : ecs::script_containers::TownAdults(stats->adults));
+		// The town keeps these counts up to date at all times, so they are counted now and not taken from the turn's
+		// town stats
+		Pushf(room ? ecs::script_containers::TownAdultRoom(TownAdultRoomNow(registry, object, *town))
+		           : ecs::script_containers::TownAdults(TownAdultsNow(registry, object)));
 		return;
 	}
 	if (!IsAdultHolderBuilding(registry, object))

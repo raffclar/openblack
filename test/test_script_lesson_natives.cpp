@@ -27,9 +27,9 @@
 #include "CHLApi.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Town.h"
-#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
@@ -324,22 +324,40 @@ TEST_F(ScriptLessonNatives, SetObjectCarryingGivesAVillagerItsObject)
 TEST_F(ScriptLessonNatives, AdultSizeAndCapacityOfATownOrABuilding)
 {
 	auto info = std::make_unique<InfoConstants>();
-	// The first row of the building's number gives its room
+	// The first row of the building's number and tribe gives its room
 	auto& row = info->abode.at(0);
 	row.abodeNumber = AbodeNumber::A;
+	row.tribeType = Tribe::NORSE;
 	row.maxVillagersInAbode = 4;
+	row.maxChildrenInAbode = 2;
 	Locator::infoConstants::emplace(*info);
 
 	auto& registry = Registry();
 	const auto man = MakeVillager(Villager::LifeStage::Adult);
 	const auto woman = MakeVillager(Villager::LifeStage::Adult);
 	const auto child = MakeVillager(Villager::LifeStage::Child);
+	const auto stranger = MakeVillager(Villager::LifeStage::Adult);
 	const auto house = MakeAbode({child, woman, man});
-	const auto town = MakeTown({house}, {});
-	registry.Assign<TownStats>(town, TownStats {.adults = 23, .adultPlaces = 19});
+	const auto second = MakeAbode({});
+	// A building that is not built yet gives no room
+	const auto site = MakeAbode({});
+	registry.Assign<BuildProgress>(site, BuildProgress {.built = 0.5f});
+	const auto town = MakeTown({house, second, site}, {});
+	registry.Get<Town>(town).id = 3;
+	registry.Assign<Tribe>(town, Tribe::NORSE);
+	for (const auto building : {house, second, site})
+	{
+		registry.Get<Abode>(building).townId = 3;
+	}
+	for (const auto person : {man, woman, child})
+	{
+		registry.Get<Villager>(person).town = town;
+	}
+	registry.Get<Villager>(stranger).town = MakeTown({}, {});
 
-	EXPECT_EQ(CallForFloat(k_IdAdultSize, {Object(town)}), 23.0f);
-	EXPECT_EQ(CallForFloat(k_ObjectAdultCapacity, {Object(town)}), 19.0f);
+	// The town counts its adults and the room for adults of its built houses at the time of the call
+	EXPECT_EQ(CallForFloat(k_IdAdultSize, {Object(town)}), 2.0f);
+	EXPECT_EQ(CallForFloat(k_ObjectAdultCapacity, {Object(town)}), 8.0f);
 	EXPECT_EQ(CallForFloat(k_IdAdultSize, {Object(house)}), 2.0f);
 	EXPECT_EQ(CallForFloat(k_ObjectAdultCapacity, {Object(house)}), 4.0f);
 	// A villager is neither a town nor a building, and nothing is not alive
