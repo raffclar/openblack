@@ -105,7 +105,7 @@ TEST_F(HandsAtTheCitadel, TheFirstTurnMeasuresTheMovementOfTheHandFromTheCitadel
 	// With no report the hand goes from the citadel to the origin, which is a movement
 	_hands.StartAtCitadel(PlayerNames::PLAYER_ONE, k_Citadel);
 	_hands.ProcessTurn();
-	EXPECT_EQ(_hands.GetHandStillTurns(), 0u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_ONE), 0u);
 	const auto& stillness = Locator::entitiesRegistry::value().Get<const HandStillness>(_hand);
 	EXPECT_EQ(stillness.velocity, (glm::vec3(0.0f) - k_Citadel) * 10.0f * 0.6f);
 	// A report at the citadel is not a movement
@@ -113,7 +113,7 @@ TEST_F(HandsAtTheCitadel, TheFirstTurnMeasuresTheMovementOfTheHandFromTheCitadel
 	_hands.Report(PlayerNames::PLAYER_ONE,
 	              {.collidePoint = k_Citadel, .handPoint = k_Citadel, .camera = k_Camera, .focus = k_Citadel});
 	_hands.ProcessTurn();
-	EXPECT_EQ(_hands.GetHandStillTurns(), 1u);
+	EXPECT_EQ(_hands.GetHandStillTurnsOf(PlayerNames::PLAYER_ONE), 1u);
 }
 
 TEST_F(HandsAtTheCitadel, AReportMovesTheHandAndTheCameraFromTheCitadel)
