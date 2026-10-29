@@ -753,7 +753,7 @@
   "query": "town.homeless"
  },
  {
-  "description": "The puzzle games: kind, their order, solved, started, calm turns, and each piece of the beach temple puzzle with the pieces above and below it",
+  "description": "The puzzle games: kind, their order, solved, started, calm turns, each piece of the beach temple puzzle with the pieces above and below it, and each spot of the tree puzzle with its count of changes, its tree and the size of the tree",
   "kind": "list",
   "parameters": [],
   "query": "puzzle.list"

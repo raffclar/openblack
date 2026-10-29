@@ -1935,6 +1935,37 @@ void AddBeachTemplePuzzle(std::vector<Scenario>& all)
 	});
 }
 
+/// The tree puzzle of the second land, as a script makes it: not turned, at its normal size
+void AddTreePuzzle(std::vector<Scenario>& all)
+{
+	// The puzzle's place, from the middle of the map. The spots of the grid are about ten metres apart.
+	constexpr glm::vec2 k_Puzzle {0.0f, -40.0f};
+	constexpr float k_PuzzleObjectType = 32.0f;
+	constexpr float k_TreeKind = 1.0f;
+	all.push_back({
+	    .id = "story.tree_puzzle",
+	    .name = "The trees of the second land's tree puzzle",
+	    .facet = Facet::Story,
+	    .description = "A script makes the second land's tree puzzle south of the middle: nine trees on a grid of three "
+	                   "by three spots, with a lantern at each corner, mist over the spots and bats over the middle.",
+	    .expected = "Nine small trees, conifers and oaks, grow to full size in about two seconds. A lantern stands one "
+	                "step out from each corner. Bats fly over the middle spot. When the hand pulls a tree, that tree and "
+	                "the trees of the spots next to it change kind and grow again from small.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 45.0f, 30.0f, k_Puzzle.y - 25.0f},
+	                .look = {k_Puzzle.x + 10.0f, 3.0f, k_Puzzle.y + 10.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 0.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_TreeKind},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -2056,6 +2087,7 @@ void AddStory(std::vector<Scenario>& all)
 	AddRivalCreatureLoads(all);
 	AddSingingStones(all);
 	AddBeachTemplePuzzle(all);
+	AddTreePuzzle(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)

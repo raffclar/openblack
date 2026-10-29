@@ -1153,8 +1153,9 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakePuzzleProvider(Worl
 {
 	auto provider = std::make_unique<FunctionProvider>("puzzle");
 	provider->Add(Query("list",
-	                    "The puzzle games: kind, their order, solved, started, calm turns, and each piece of the beach "
-	                    "temple puzzle with the pieces above and below it",
+	                    "The puzzle games: kind, their order, solved, started, calm turns, each piece of the beach "
+	                    "temple puzzle with the pieces above and below it, and each spot of the tree puzzle with its "
+	                    "count of changes, its tree and the size of the tree",
 	                    {}, ResultKind::List),
 	              [sources](const QueryContext& /*context*/) {
 		              const auto* registry = Registry(sources);
@@ -1198,6 +1199,25 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakePuzzleProvider(Worl
 			              }
 			              item["bases"] = std::move(bases);
 			              item["rings"] = std::move(rings);
+			              // The tree puzzle: the count of changes of each spot, and its tree with its size
+			              Json spots = Json::array();
+			              for (size_t spot = 0; spot < game.trees.size(); ++spot)
+			              {
+				              Json spotJson = Json::object();
+				              const auto tree = game.trees.at(spot);
+				              spotJson["count"] = game.treeCounts.at(spot);
+				              spotJson["tree"] = ToId(tree);
+				              if (const auto* transform = tree != entt::null && registry->Valid(tree)
+				                                              ? registry->TryGet<const Transform>(tree)
+				                                              : nullptr)
+				              {
+					              spotJson["size"] = transform->scale.y;
+				              }
+				              spotJson["mist"] = ToId(game.mists.at(spot));
+				              spotJson["bat"] = ToId(game.bats.at(spot));
+				              spots.push_back(std::move(spotJson));
+			              }
+			              item["spots"] = std::move(spots);
 			              items.push_back(std::move(item));
 		              });
 		              return QueryResult::Value(std::move(items));
