@@ -23,6 +23,7 @@
 #include <thread>
 #include <utility>
 
+#include <bgfx/bgfx.h>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
 #include <spdlog/spdlog.h>
@@ -88,6 +89,18 @@ namespace
 
 constexpr std::string_view k_TurnWord = "turn ";
 constexpr std::string_view k_ChecksumWord = " checksum ";
+
+/// Logs the number of objects that the graphics library keeps. The resources keep only their data, thus these objects
+/// are the objects of the renderer and of the parts that make their own objects.
+void LogGraphicsObjects()
+{
+	const auto* stats = bgfx::getStats();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"),
+	                   "Graphics objects: {} textures, {} vertex buffers, {} index buffers, {} dynamic vertex buffers, {} "
+	                   "dynamic index buffers, {} frame buffers",
+	                   stats->numTextures, stats->numVertexBuffers, stats->numIndexBuffers, stats->numDynamicVertexBuffers,
+	                   stats->numDynamicIndexBuffers, stats->numFrameBuffers);
+}
 
 /// The world of the server. It starts the services of the world, loads the land and plays the frames of the world,
 /// with no window and no view of a player.
@@ -193,7 +206,7 @@ bool ServerWorld::Initialize()
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	Locator::config::emplace(ServerConfig(_settings));
 
-	// The services that the server shares with the game, then the renderer that makes the resources with no device
+	// The services that the server shares with the game, then the renderer with no device
 	InitializeSimulationCore();
 	_servicesStarted = true;
 	if (!InitializeEngine(GraphicsBackend::Noop, false))
@@ -718,12 +731,13 @@ bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, st
 EngineConfig ServerConfig(const ServerSettings& settings)
 {
 	EngineConfig config;
-	// No window and no device: the renderer makes its resources and draws nothing, and the audio plays nothing
+	// No window and no device: the renderer draws nothing, the audio plays nothing, and the loaders keep only the data
 	config.resolution = {0, 0};
 	config.displayMode = windowing::DisplayMode::Windowed;
 	config.background = true;
 	config.dedicatedServer = true;
 	config.graphicsBackend = GraphicsBackend::Noop;
+	config.resourceUploads = graphics::UploadMode::DataOnly;
 	config.vsync = false;
 	config.clockedAudio = sim_run::FrameTimeFromMs(settings.frameMilliseconds).has_value();
 	return config;
@@ -863,6 +877,7 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The server stops on a signal");
 		}
+		LogGraphicsObjects();
 	}
 	checksums.SetTurnListener({});
 #if defined(OPENBLACK_GAME_ROLE)

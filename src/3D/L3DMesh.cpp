@@ -57,10 +57,11 @@ TextureFormat TextureFormatOf(l3d_skin::Layout layout)
 }
 } // namespace
 
-L3DMesh::L3DMesh(std::string debugName, bool dynamic) noexcept
+L3DMesh::L3DMesh(std::string debugName, bool dynamic, UploadMode upload) noexcept
     : _flags(static_cast<l3d::L3DMeshFlags>(0))
     , _debugName(std::move(debugName))
     , _dynamic(dynamic)
+    , _upload(upload)
 {
 }
 
@@ -113,6 +114,11 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 		const auto texels = std::span(reinterpret_cast<const uint16_t*>(skin.texels.data()), skin.texels.size());
 		KnowSkinMasks(skin.id, texels);
 		_skins[skin.id] = std::make_unique<Texture2D>(_debugName.c_str());
+		if (_upload == UploadMode::DataOnly)
+		{
+			_skins[skin.id]->Describe(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormatOf(_skinLayout));
+			continue;
+		}
 		const auto bytes = l3d_skin::TexelsIn(_skinLayout, texels);
 		const auto size = static_cast<uint32_t>(bytes.size());
 		// bgfx only lets a texture created without texels have them changed
@@ -361,7 +367,7 @@ void L3DMesh::UpdateVertices(const l3d::L3DFile& l3d) noexcept
 void L3DMesh::UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept
 {
 	assert(_dynamic);
-	if (const auto found = _skins.find(skin); found != _skins.end())
+	if (const auto found = _skins.find(skin); found != _skins.end() && _upload == UploadMode::Device)
 	{
 		const auto bytes = l3d_skin::TexelsIn(_skinLayout, texels);
 		found->second->Update(bytes.data(), static_cast<uint32_t>(bytes.size()));
