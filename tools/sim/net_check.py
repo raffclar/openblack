@@ -557,6 +557,13 @@ def close_land_info_box(pid, call=None, wait=time.sleep):
     return True
 
 
+def hand_holds(pid):
+    """The creature that the hand of a client holds to stroke or slap it, through the inspector; None for none"""
+    systems = inspector_call(pid, "creatures.systems", {})
+    hand = systems.get("hand") if isinstance(systems, dict) else None
+    return hand.get("creature") if isinstance(hand, dict) else None
+
+
 def hold_creature(pid, near, slaps=0):
     """The hand of a client holds the creature nearest a point, strokes it and lets go; then a click puts the leash on
     and a tap on the land leads the creature there. The camera looks at the creature first, and the pointer goes to a
@@ -571,42 +578,52 @@ def hold_creature(pid, near, slaps=0):
         print("hold: no creature near", near)
         return
     creature = items[0]["id"]
-    def pixel_on_creature():
+    def pixel_on_creature(action=None):
         """Looks at the creature from each side in turn, and gives a pixel where the interface picks it: the pointer goes
-        to points of the creature's body, from its feet up"""
+        to points of the creature's body, from its feet up. The creature walks, so the button action (press or click)
+        follows the pick at once: a later press would find the creature a step away from the pointer."""
         for yaw in (0, 90, 180, 270):
             inspector_call(pid, "camera.frame", {"params": {"id": creature, "yaw": yaw, "pitch": 40, "distance": 18}})
             time.sleep(1.0)
             for height in (1.0, 2.0, 0.5, 3.0, 1.5, 4.0, 2.5):
-                found = inspector_call(pid, "objects.find", {"params": {"kind": "Creature"}, "near": [x, z],
-                                                             "radius": 600, "limit": 1})
-                items = found.get("items", []) if isinstance(found, dict) else []
-                if not items:
+                # The creature walks: its place is asked again for each try
+                found = inspector_call(pid, "ecs.entity", {"params": {"id": creature}})
+                at = found.get("position") if isinstance(found, dict) else None
+                if not isinstance(at, list):
                     return None
-                at = items[0]["position"]
                 moved = inspector_call(pid, "input.pointer", {"params": {"world": [at[0], at[1] + height, at[2]],
                                                                          "timing": "immediate"}})
-                time.sleep(0.2)
+                # The hand takes the pick of the last frame that was drawn, so a frame must draw with the pointer there
+                time.sleep(0.15)
                 pick = inspector_call(pid, "players.pick", {})
                 pointer = moved.get("pointer") if isinstance(moved, dict) else None
                 if os.environ.get("NET_CHECK_DEBUG"):
                     print("hold debug", yaw, height, json.dumps(moved)[:160], pick.get("object") if isinstance(pick, dict) else pick)
                 if isinstance(pick, dict) and pick.get("object") == creature and isinstance(pointer, list):
+                    if action:
+                        inspector_call(pid, "input.button", {"params": {"button": "right", "action": action}})
                     return [int(value) for value in pointer]
         return None
 
     # The creature walks among the houses and the people: the search tries again a while later
+    # The hand takes the pick of the last frame that was drawn, and the creature walks: a press can come when the pick
+    # has left the creature. The hand holds the creature when the creature systems say so, else the press is let go and
+    # tried again.
     pixel = None
     for _ in range(8):
-        pixel = pixel_on_creature()
+        pixel = pixel_on_creature("press")
         if pixel is not None:
-            break
+            time.sleep(1.0)
+            if hand_holds(pid) == creature:
+                break
+            inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
+            time.sleep(1.0)
+            pixel = None
+            continue
         time.sleep(4.0)
     if pixel is None:
-        print("hold: the pointer found no pixel on creature", creature)
+        print("hold: the hand did not hold creature", creature)
         return
-    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
-    time.sleep(1.0)
     # The hand goes round a little on the body while it holds the creature
     for dx, dy in ((10, 0), (0, 10), (-10, 0), (0, -10), (0, 0)):
         inspector_call(pid, "input.pointer", {"params": {"screen": [pixel[0] + dx, pixel[1] + dy]}})
@@ -625,11 +642,10 @@ def hold_creature(pid, near, slaps=0):
     # The camera flies back to where it was before the hold
     time.sleep(8.0)
     # A click on the creature puts the leash on
-    pixel = pixel_on_creature()
+    pixel = pixel_on_creature("click")
     if pixel is None:
         print("hold: the pointer found no pixel on creature", creature, "for the leash")
         return
-    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "click"}})
     time.sleep(2.0)
     # A tap on the land below leads the creature there
     inspector_call(pid, "input.pointer", {"params": {"screen": [pixel[0], min(pixel[1] + 300, 1000)], "timing": "immediate"}})

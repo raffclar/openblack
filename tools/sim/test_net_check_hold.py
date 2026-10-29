@@ -91,5 +91,55 @@ class LandInfoBox(unittest.TestCase):
         self.assertEqual(state["keys"], [])
 
 
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class HoldRetry(unittest.TestCase):
+    def run_hold(self, holds_on_press):
+        """Runs hold_creature against a fake inspector. The hand holds the creature from the press with the given
+        number (from 1) on. Gives the buttons that the hand got."""
+        buttons = []
+
+        def call(pid, query, request):
+            if query == "gui.windows":
+                return {"items": []}
+            if query == "objects.find":
+                return {"items": [{"id": 7, "position": [10.0, 0.0, 10.0]}]}
+            if query == "ecs.entity":
+                return {"position": [10.0, 0.0, 10.0]}
+            if query == "input.pointer":
+                return {"pointer": [100, 200]}
+            if query == "players.pick":
+                return {"object": 7}
+            if query == "input.button":
+                buttons.append(request["params"]["action"])
+                return {}
+            if query == "creatures.systems":
+                presses = buttons.count("press")
+                return {"hand": {"creature": 7 if presses >= holds_on_press else None}}
+            return None
+
+        saved = (net_check.inspector_call, net_check.time.sleep)
+        net_check.inspector_call = call
+        net_check.time.sleep = lambda _: None
+        try:
+            net_check.hold_creature(1, "10,10")
+        finally:
+            net_check.inspector_call, net_check.time.sleep = saved
+        return buttons
+
+    def test_a_press_that_does_not_hold_is_let_go_and_tried_again(self):
+        buttons = self.run_hold(2)
+        self.assertEqual(buttons[:3], ["press", "release", "press"])
+
+    def test_a_press_that_holds_is_not_repeated(self):
+        buttons = self.run_hold(1)
+        self.assertEqual(buttons[0], "press")
+        self.assertEqual(buttons.count("press"), 1)
+
+    def test_a_hand_that_never_holds_stops_after_8_tries(self):
+        buttons = self.run_hold(99)
+        self.assertEqual(buttons.count("press"), 8)
+        self.assertNotIn("click", buttons)
+
+
 if __name__ == "__main__":
     unittest.main()
