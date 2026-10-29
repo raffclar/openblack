@@ -22,6 +22,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/PlayerMiracles.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
@@ -139,19 +140,9 @@ void GameRewardOpeningWorld::FindTownForMiracle()
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	// TODO(reward-chest): the game walks the player's own list of towns; the order of that list is unconfirmed, so the
-	// towns are taken in the order they were made
-	std::vector<std::pair<uint32_t, entt::entity>> towns;
-	const auto player = Player();
-	registry.Each<const ecs::components::Town>([&](entt::entity entity, const ecs::components::Town& town) {
-		if (town.owner == player)
-		{
-			towns.emplace_back(town.id, entity);
-		}
-	});
-	std::ranges::sort(towns);
+	// The first of the player's towns, in the order of their town list, that shows fewer miracles than its centre holds
 	const auto& icons = Locator::spellIconSystem::value();
-	for (const auto& [id, town] : towns)
+	for (const auto town : player_towns::InOrder(registry, Player()))
 	{
 		const auto shown = icons.CentreMiraclesShown(town);
 		if (shown.has_value() && *shown < reward::k_CentreMostMiracles)

@@ -45,3 +45,24 @@ TEST(PlayerTowns, ThePlayersTownsComeInTheOrderThePlayerGotThem)
 	          (std::vector<entt::entity> {first, second, won}));
 	EXPECT_TRUE(openblack::ecs::player_towns::InOrder(registry, PlayerNames::PLAYER_TWO).empty());
 }
+
+TEST(PlayerTowns, AllTheTownsComeInTheListOfEachPlayerInTurnAndTheNeutralListLast)
+{
+	Registry registry;
+	const auto neutral = MakeTown(registry, 1, PlayerNames::NEUTRAL, 0);
+	const auto twoWon = MakeTown(registry, 2, PlayerNames::PLAYER_TWO, 5);
+	const auto oneWon = MakeTown(registry, 3, PlayerNames::PLAYER_ONE, 4);
+	const auto twoFirst = MakeTown(registry, 4, PlayerNames::PLAYER_TWO, 1);
+	const auto oneFirst = MakeTown(registry, 5, PlayerNames::PLAYER_ONE, 2);
+	EXPECT_EQ(openblack::ecs::player_towns::AllInOrder(registry),
+	          (std::vector<entt::entity> {oneFirst, oneWon, twoFirst, twoWon, neutral}));
+}
+
+TEST(PlayerTowns, ATownWonLaterComesAfterATownMadeLater)
+{
+	// The list order is the order of gain, not the order the land made the towns
+	Registry registry;
+	const auto won = MakeTown(registry, 1, PlayerNames::PLAYER_ONE, 3);
+	const auto made = MakeTown(registry, 2, PlayerNames::PLAYER_ONE, 1);
+	EXPECT_EQ(openblack::ecs::player_towns::AllInOrder(registry), (std::vector<entt::entity> {made, won}));
+}

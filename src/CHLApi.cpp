@@ -157,6 +157,7 @@
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlacedTurn.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
@@ -2566,24 +2567,14 @@ static std::vector<ecs::script_find::Candidate> ScriptFindCandidates(const Scrip
 static entt::entity FindScriptTown(const map_coords::MapCoords& at, float reach)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	struct Entry
-	{
-		PlayerNames owner;
-		uint32_t id;
-		ecs::script_find::Candidate candidate;
-	};
-	std::vector<Entry> towns;
-	registry.Each<const ecs::components::Town, const Transform>(
-	    [&towns, &registry](entt::entity entity, const ecs::components::Town& town, const Transform&) {
-		    towns.push_back({.owner = town.owner,
-		                     .id = town.id,
-		                     .candidate = {.entity = entity, .at = ScriptFindPosition(registry, entity)}});
-	    });
-	std::ranges::sort(towns,
-	                  [](const Entry& a, const Entry& b) { return a.owner != b.owner ? a.owner < b.owner : a.id < b.id; });
 	std::vector<ecs::script_find::Candidate> ordered;
-	ordered.reserve(towns.size());
-	std::ranges::transform(towns, std::back_inserter(ordered), &Entry::candidate);
+	for (const auto town : ecs::player_towns::AllInOrder(registry))
+	{
+		if (registry.AllOf<Transform>(town))
+		{
+			ordered.push_back({.entity = town, .at = ScriptFindPosition(registry, town)});
+		}
+	}
 	return ecs::script_find::FindNearestTown(at, reach, ordered);
 }
 

@@ -602,11 +602,10 @@ void ComputerPlayerSystem::ProcessTurn()
 				}
 			}
 		}
-		if (auto* power = registry.TryGet<PlayerInfluencePower>(entity); power != nullptr)
+		// After its mind, the player notes its influence power, its running average and a sample of its history
+		if (Locator::influenceSystem::has_value())
 		{
-			power->power =
-			    Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().InfluencePower(name) : 0.0f;
-			power->average = player_relations::NextAverageInfluence(power->average, power->power);
+			Locator::influenceSystem::value().NoteInfluencePower(name);
 		}
 	}
 	if (_timesEvery != 0 && turn % _timesEvery == 0 && !_times.Gods().empty())

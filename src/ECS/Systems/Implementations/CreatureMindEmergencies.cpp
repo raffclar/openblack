@@ -31,6 +31,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -58,23 +59,14 @@ constexpr std::string_view k_PutOutFireAction = "PutOutFireWithMagicWater";
 /// towns last. The first town that it finds wins a tie.
 entt::entity NearestTownWithin(const ecs::Registry& registry, glm::vec3 point, float reach)
 {
-	struct Entry
-	{
-		PlayerNames owner;
-		uint32_t id;
-		ecs::script_find::Candidate candidate;
-	};
-	std::vector<Entry> towns;
-	registry.Each<const Town, const Transform>([&towns](entt::entity town, const Town& data, const Transform& transform) {
-		towns.push_back(
-		    {.owner = data.owner,
-		     .id = data.id,
-		     .candidate = {.entity = town, .at = map_coords::FromMetres({transform.position.x, transform.position.z})}});
-	});
-	std::ranges::sort(towns, [](const Entry& a, const Entry& b) { return std::tie(a.owner, a.id) < std::tie(b.owner, b.id); });
 	std::vector<ecs::script_find::Candidate> ordered;
-	ordered.reserve(towns.size());
-	std::ranges::transform(towns, std::back_inserter(ordered), &Entry::candidate);
+	for (const auto town : ecs::player_towns::AllInOrder(registry))
+	{
+		if (const auto* transform = registry.TryGet<const Transform>(town))
+		{
+			ordered.push_back({.entity = town, .at = map_coords::FromMetres({transform->position.x, transform->position.z})});
+		}
+	}
 	return ecs::script_find::FindNearestTown(map_coords::FromMetres({point.x, point.z}), reach, ordered);
 }
 
