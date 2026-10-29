@@ -41,6 +41,9 @@ struct SpellChants
 	bool free {false};               ///< pays nothing and always has full strength
 };
 
+/// Each time a worship site has spent more than this on a miracle, a mote of prayer power flies to the miracle
+inline constexpr float k_ChantsPerMote = 100.0f;
+
 /// Why prayer power was drawn from the caster
 enum class ChantCharge : uint8_t
 {

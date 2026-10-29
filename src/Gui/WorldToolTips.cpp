@@ -164,6 +164,15 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 		}
 		return submissions;
 	}
+	// A need flag of a worship site shows its need as high as the flag stands, wherever the hand is
+	if (const auto* sign = registry.TryGet<const WorshipSiteFlag>(object))
+	{
+		if (Shows(Subject::NeedsSign, handInInfluence))
+		{
+			submissions.push_back({.numbers = NeedsSign(static_cast<NeedsRow>(sign->need), sign->level, 0)});
+		}
+		return submissions;
+	}
 	if (registry.AllOf<Pot>(object) && Shows(Subject::Pile, handInInfluence) && Locator::resourceStoreSystem::has_value())
 	{
 		// A pile, of a store or alone, says what its store holds or else what it holds itself

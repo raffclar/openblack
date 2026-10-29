@@ -43,6 +43,11 @@ public:
 	void RemoveSpellIcons(entt::entity site) override;
 	void RemoveDance(entt::entity dance) override;
 	void ArtefactsLeaveSite(entt::entity site) override;
+	uint32_t StartMotes() override;
+	void AddMote(uint32_t effect, glm::vec3 from, glm::vec3 to, uint32_t rgb) override;
+	bool StepMotes(uint32_t effect) override;
+	void RemoveMotes(uint32_t effect) override;
+	entt::entity MakeNeedFlag(entt::entity site, uint8_t need) override;
 	void Remove(entt::entity object) override;
 };
 

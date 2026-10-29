@@ -83,7 +83,18 @@ public:
 	virtual void RemoveDance(entt::entity /*dance*/) {}
 	/// The artefacts put down by a site are no longer among its own; they stay where they are
 	virtual void ArtefactsLeaveSite(entt::entity /*site*/) {}
-	/// A thing of a site (the site itself, its altar, its food pot with what is in it) goes from the world
+	/// The particle effect of a site's motes of prayer power, which the site steps in its turn; 0 when it can't be
+	/// started
+	virtual uint32_t StartMotes() { return 0; }
+	/// A mote flies along a path from one point to another in a colour (0xRRGGBB)
+	virtual void AddMote(uint32_t /*effect*/, glm::vec3 /*from*/, glm::vec3 /*to*/, uint32_t /*rgb*/) {}
+	/// One turn of the motes' effect: false once it has ended, and then it is gone
+	virtual bool StepMotes(uint32_t /*effect*/) { return false; }
+	/// The motes' effect goes at once
+	virtual void RemoveMotes(uint32_t /*effect*/) {}
+	/// A need flag of a site, with the model of its row of the info; none when it can't be made
+	virtual entt::entity MakeNeedFlag(entt::entity /*site*/, uint8_t /*need*/) { return entt::null; }
+	/// A thing of a site (the site itself, its altar, its food pot with what is in it, its need flags) goes from the world
 	virtual void Remove(entt::entity object) = 0;
 };
 

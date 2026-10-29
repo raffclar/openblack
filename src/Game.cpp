@@ -301,6 +301,7 @@
 #include "ECS/VillageTotem.h"
 #include "ECS/VillagerLabelSource.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipChantMusic.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
@@ -2327,6 +2328,7 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 		    return registry.Get<const ecs::components::Transform>(entity).position;
 	    },
 	};
+	music.worshipChant = ecs::worship_chant_music::Heard(cameraPosition);
 	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
 	// The music heard follows the world's clock of the scripts' music
 	if (Locator::scriptMusicSystem::has_value())

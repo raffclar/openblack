@@ -536,6 +536,9 @@ struct MiracleCast
 	/// By hand, the seed comes from the player's worship, charged from their prayer power and ready after a moment, rather
 	/// than from a bubble
 	bool fromWorship {false};
+	/// From worship, the seed comes from the player's first worship site, as a tap on its icon gives it, so that the
+	/// site pays for the miracle
+	bool fromSite {false};
 	/// By hand, a circle drawn round the point first, of this radius, for the storms and shields; none draws none
 	std::optional<float> circleRadius;
 	/// Cast straight at its point by this player, rather than the player's
@@ -1483,6 +1486,8 @@ void AddCreatureExplorationScenarios(std::vector<Scenario>& all);
 void AddCreatureActionScenarios(std::vector<Scenario>& all);
 /// The network map for 32 gods, with a citadel and a village in each slot
 void AddGodsRingMapScenarios(std::vector<Scenario>& all);
+/// The looks and the chant of a worship site: its ring of light, its need flags and its motes of prayer power
+void AddWorshipSiteScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

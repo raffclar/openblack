@@ -42,6 +42,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/ComputerMindWorshipRules.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
 #include "ECS/PlayerTowns.h"
@@ -52,6 +53,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WorshipSiteLooks.h"
 #include "ECS/WorshipSites.h"
 #include "ECS/WorshipperRules.h"
 #include "GameWorshipSiteWorld.h"
@@ -360,6 +362,19 @@ void WorshipSiteSystem::Remove(entt::entity site)
 	}
 	// A site still going up stops being a building site
 	_world->CloseBuildingSite(site);
+	// Its motes, its need flags and its ring of light go with it
+	if (component.manaPath != 0)
+	{
+		_world->RemoveMotes(component.manaPath);
+	}
+	for (const auto flag : component.needFlags)
+	{
+		if (flag != entt::null && registry.Valid(flag))
+		{
+			_world->Remove(flag);
+		}
+	}
+	_looks.erase(site);
 	_world->Remove(site);
 }
 
@@ -369,6 +384,60 @@ void WorshipSiteSystem::UpdateTurn()
 	registry.Each<const WorshipSite, Mesh>(
 	    [this](const WorshipSite& site, Mesh& mesh) { mesh.id = _world->SiteMesh(site.temple); });
 	// The sites' dances go on with every other dance, in the dances' own turn
+	std::vector<entt::entity> sites;
+	registry.Each<const WorshipSite>([&sites](entt::entity site, const WorshipSite&) { sites.push_back(site); });
+	for (const auto site : sites)
+	{
+		UpdateNeeds(site);
+	}
+}
+
+void WorshipSiteSystem::UpdateNeeds(entt::entity site)
+{
+	auto& registry = _world->Entities();
+	// Its motes move on a turn first, and their effect goes once it has ended
+	if (auto& motes = registry.Get<WorshipSite>(site).manaPath; motes != 0 && !_world->StepMotes(motes))
+	{
+		registry.Get<WorshipSite>(site).manaPath = 0;
+	}
+	// Food first, then rest, then hiding
+	const auto* dance = DanceOf(site);
+	const auto worshippers = static_cast<uint32_t>(registry.Get<const WorshipSite>(site).worshippers.size());
+	const std::array<float, worship_site_looks::k_NeedFlags> needs {
+	    DesireForFood(site),
+	    DesireForRest(site),
+	    worship_site_looks::HidingIndicator(dance != nullptr, worshippers, dance != nullptr ? dance->dancers : 0),
+	};
+	auto& component = registry.Get<WorshipSite>(site);
+	component.needs = needs;
+	for (uint8_t need = 0; need < worship_site_looks::k_NeedFlags; ++need)
+	{
+		auto& flag = component.needFlags.at(need);
+		if (flag == entt::null || !registry.Valid(flag))
+		{
+			// Made as the site's world makes it: the reference to the site's component is not kept over it
+			const auto made = _world->MakeNeedFlag(site, need);
+			registry.Get<WorshipSite>(site).needFlags.at(need) = made;
+		}
+	}
+}
+
+float WorshipSiteSystem::DesireForRest(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	const auto dance = registry.Get<const WorshipSite>(site).dance;
+	if (!ecs::dances::IsDance(registry, dance))
+	{
+		return 0.0f;
+	}
+	// Each dancer wants what it lacks of full life; one that is not a villager wants none, but counts
+	std::vector<float> desires;
+	for (const auto dancer : ecs::dances::Dancers(registry, dance))
+	{
+		const auto* person = registry.TryGet<const Villager>(dancer);
+		desires.push_back(person != nullptr ? computer_mind_rules::LifeDesire(person->life) : 0.0f);
+	}
+	return computer_mind_rules::DancersRestDesire(desires);
 }
 
 void WorshipSiteSystem::RemakeModelsAfterLoad()
@@ -472,6 +541,24 @@ float WorshipSiteSystem::UseCreateChants(entt::entity site, float amount)
 float WorshipSiteSystem::MaintainSpell(entt::entity site, float amount)
 {
 	return _world->Entities().Get<const WorshipChants>(site).freeMaintenance ? amount : UseChants(site, amount);
+}
+
+void WorshipSiteSystem::AddMote(entt::entity site, glm::vec3 from, glm::vec3 to)
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site) || !registry.AllOf<WorshipSite>(site))
+	{
+		return;
+	}
+	// The site's effect of motes is started with its first mote
+	if (registry.Get<const WorshipSite>(site).manaPath == 0)
+	{
+		const auto started = _world->StartMotes();
+		registry.Get<WorshipSite>(site).manaPath = started;
+	}
+	const auto& component = registry.Get<const WorshipSite>(site);
+	const auto rgb = Player::k_Colours.at(static_cast<size_t>(component.player) & (Player::k_Colours.size() - 1));
+	_world->AddMote(component.manaPath, from, to, rgb & 0xFFFFFFu);
 }
 
 void WorshipSiteSystem::ReturnChants(entt::entity site, float amount)
@@ -887,6 +974,23 @@ std::optional<glm::vec2> WorshipSiteSystem::PlaceAt(entt::entity site, SitePlace
 		return std::nullopt;
 	}
 	return ws::TurnedPoint(at, component.facing, *point);
+}
+
+std::optional<glm::vec3> WorshipSiteSystem::DancePosition(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site) || !registry.AllOf<WorshipSite, Transform>(site))
+	{
+		return std::nullopt;
+	}
+	const auto point = _world->SitePoint(ws::k_DancePoint);
+	if (!point.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto at = ws::TurnedPoint(Across(registry.Get<const Transform>(site).position),
+	                                registry.Get<const WorshipSite>(site).facing, *point);
+	return glm::vec3(at.x, _world->LandHeightAt(at) + point->y, at.y);
 }
 
 std::optional<float> WorshipSiteSystem::StandingHeight(entt::entity site) const

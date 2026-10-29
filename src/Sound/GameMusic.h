@@ -31,12 +31,11 @@ namespace openblack::audio
 /// The game's music: once a game turn, picks what music plays and hands it to the audio library's music player.
 ///
 /// In order, the first that wants to play wins: the citadel's music while inside the citadel, music a script has
-/// started, the music of a creature's dance with villagers near the camera, music a script has attached to an object
-/// while the camera is near it, and the music of the land under the
-/// camera. Over land the music follows the player's alignment, and near a town that of its tribe too. Each music group
-/// remembers where it got to, so the land's music carries on in time when it changes and picks up where it left off when
-/// it comes back.
-// TODO(raffclar): the game also plays creature fight and chant music before the creature dance music
+/// started, the music of the player's creature's fight, the chant at a worship site near the camera, the music of a
+/// creature's dance with villagers near the camera, music a script has attached to an object while the camera is near
+/// it, and the music of the land under the camera. Over land the music follows the player's alignment, and near a town that of
+/// its tribe too. Each music group remembers where it got to, so the land's music carries on in time when it changes and picks
+/// up where it left off when it comes back.
 class GameMusic final: public ecs::systems::SavedStateInterface
 {
 public:
@@ -104,6 +103,8 @@ public:
 			glm::vec3 position;
 		};
 		std::optional<CreatureDance> creatureDance;
+		/// The chant of the worshippers at the worship site that the camera hears, and where the site's dance is
+		std::optional<CreatureDance> worshipChant;
 		/// The music of the local player's creature's fight, heard while the player directs the fight or while the camera
 		/// is near the arena of the fight (see SelectFightType)
 		std::optional<MusicType> creatureFight;
@@ -196,6 +197,7 @@ private:
 	bool ProcessCitadel(const TurnInputs& inputs);
 	bool ProcessScript(const TurnInputs::ScriptPiece& script);
 	bool ProcessCreatureFight(const TurnInputs& inputs);
+	bool ProcessWorshipChant(const TurnInputs& inputs);
 	bool ProcessCreatureDance(const TurnInputs& inputs);
 	bool ProcessAttached(const TurnInputs& inputs);
 	bool ProcessLand(const TurnInputs& inputs);

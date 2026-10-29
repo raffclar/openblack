@@ -30,11 +30,13 @@
 #include "ECS/Components/TownArtefact.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleConstruction.h"
@@ -260,6 +262,57 @@ void GameWorshipSiteWorld::ArtefactsLeaveSite(entt::entity site)
 			artefact.inSite = false;
 		}
 	});
+}
+
+uint32_t GameWorshipSiteWorld::StartMotes()
+{
+	// The mana path's effect, at the middle of the world
+	return Locator::particleSystem::has_value()
+	           ? Locator::particleSystem::value().StartOwned(ParticleType::ManaPath, glm::vec3(0.0f), 1.0f)
+	           : 0;
+}
+
+void GameWorshipSiteWorld::AddMote(uint32_t effect, glm::vec3 from, glm::vec3 to, uint32_t rgb)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	if (auto* running = Locator::particleSystem::value().Find(effect); running != nullptr)
+	{
+		running->AddManaPathSpark({.from = from, .to = to, .rgb = rgb & 0xFFFFFFu});
+	}
+}
+
+bool GameWorshipSiteWorld::StepMotes(uint32_t effect)
+{
+	// The site steps it with no hand, at full strength
+	return Locator::particleSystem::has_value() &&
+	       Locator::particleSystem::value().ProcessForSpell(
+	           effect, particles::ProcessInfo {}, std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count());
+}
+
+void GameWorshipSiteWorld::RemoveMotes(uint32_t effect)
+{
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().Delete(effect);
+	}
+}
+
+entt::entity GameWorshipSiteWorld::MakeNeedFlag(entt::entity site, uint8_t need)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return entt::null;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& row = Locator::infoConstants::value().showNeeds.at(need);
+	const auto flag = registry.Create();
+	registry.Assign<WorshipSiteFlag>(flag, WorshipSiteFlag {.site = site, .need = need});
+	registry.Assign<Mesh>(flag, resources::HashIdentifier(row.mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<Transform>(flag, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	return flag;
 }
 
 void GameWorshipSiteWorld::Remove(entt::entity object)

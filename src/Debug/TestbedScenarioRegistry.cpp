@@ -12660,6 +12660,7 @@ std::vector<Scenario> Build()
 	AddPoisonScenarios(all);
 	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
+	AddWorshipSiteScenarios(all);
 	return all;
 }
 

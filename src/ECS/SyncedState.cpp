@@ -78,6 +78,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // number, and each computer gives the trail its own number. The turns use these numbers only to find the effect.
     {.component = "Spell", .field = "castEffect", .marker = ""},
     {.component = "FlockSpell", .field = "castEffect", .marker = ""},
+    // The motes of a worship site are an effect of each computer too, found again by the number of this computer
+    {.component = "WorshipSite", .field = "manaPath", .marker = ""},
     // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
     {.component = "LearningMarker", .field = "", .marker = ""},
     // The frames move the hair of a creature. Only the draw reads it.
@@ -265,6 +267,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The flags over the stores move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
     {.component = "*", .field = "", .marker = "WorkshopFlag"},
+    {.component = "*", .field = "", .marker = "WorshipSiteFlag"},
     // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.
     // The world reads the hand only from the reports of its player (ReportedHand).
     {.component = "Transform", .field = "", .marker = "Hand"},

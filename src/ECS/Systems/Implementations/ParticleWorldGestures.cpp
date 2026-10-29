@@ -126,7 +126,8 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	}
 	for (const auto& sheet : _world.LightSheets())
 	{
-		if (!sheet->Hidden())
+		// A sheet with its own clock is moved on by its owner
+		if (!sheet->Hidden() && !sheet->OwnClock())
 		{
 			sheet->Update(gameSeconds);
 		}
