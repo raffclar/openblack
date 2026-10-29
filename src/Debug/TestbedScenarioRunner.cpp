@@ -972,6 +972,7 @@ void Runner::Start(const Scenario& scenario)
 	_creatures.clear();
 	_slotCreatures.clear();
 	_objects.clear();
+	_scriptFlock = entt::null;
 	_globes.clear();
 	_temples.clear();
 	_throwsDue.clear();
@@ -2793,6 +2794,36 @@ std::string Runner::StopScript(const Command& command)
 	return fmt::format("stopped {} tasks of {}; the object is {}in a script", stopped, command.script, inScript ? "" : "not ");
 }
 
+std::optional<entt::entity> Runner::ScriptFlock()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(_scriptFlock) && ecs::script_flocks::IsFlock(registry, _scriptFlock))
+	{
+		return _scriptFlock;
+	}
+	const auto first = ObjectAt(0);
+	if (!first.has_value())
+	{
+		return std::nullopt;
+	}
+	// The flock starts where the first object is, as a script makes one at a point
+	const auto& at = registry.Get<const ecs::components::Transform>(*first).position;
+	_scriptFlock = ecs::script_flocks::Create(registry, map_coords::FromMetres({at.x, at.z}));
+	// The scenario keeps the flock as a script variable keeps it. Without the reference, the scripts' turn lets go of the
+	// flock and its members leave it.
+	auto& scripts = Locator::scriptObjects::value();
+	static_cast<void>(scripts.Register(_scriptFlock, true));
+	scripts.AddReference(_scriptFlock);
+	for (const auto object : _objects)
+	{
+		if (registry.Valid(object) && registry.AnyOf<ecs::components::Villager, ecs::components::Animal>(object))
+		{
+			static_cast<void>(ecs::script_flocks::AddLiving(registry, _scriptFlock, object));
+		}
+	}
+	return _scriptFlock;
+}
+
 std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argument)
 {
 	// A number, or an object that the scripts' table knows, or a marker made for it
@@ -2821,6 +2852,9 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	case ScriptArgument::Kind::Position:
 		// A position is three values, which only a native call gives
 		return std::nullopt;
+	case ScriptArgument::Kind::Flock:
+		object = ScriptFlock();
+		break;
 	}
 	if (!object.has_value())
 	{
