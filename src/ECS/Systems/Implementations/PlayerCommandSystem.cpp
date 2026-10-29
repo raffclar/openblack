@@ -602,20 +602,28 @@ void PlayerCommandSystem::RunSent(uint32_t turn)
 	{
 		_listener(turn, commands);
 	}
+	// The humans of the network session join at the start of the game, before all other work of the turn: each gets its
+	// hands, then the slots with no player fill. The game knows its humans and its computer gods before its first turn,
+	// so each command of the first turn finds them in the game.
 	std::vector<PlayerNames> joined;
 	for (const auto& command : commands)
 	{
-		Run(command, turn);
 		if (std::holds_alternative<PlayerJoined>(command.action))
 		{
+			Run(command, turn);
 			joined.push_back(command.player);
 		}
 	}
-	// The humans of the network session joined at the start of the game: each gets its player, and the slots with no
-	// player fill
 	if (!joined.empty() && openblack::Locator::computerPlayerSystem::has_value())
 	{
 		openblack::Locator::computerPlayerSystem::value().HumansJoined(joined);
+	}
+	for (const auto& command : commands)
+	{
+		if (!std::holds_alternative<PlayerJoined>(command.action))
+		{
+			Run(command, turn);
+		}
 	}
 	StartGodsAtSentAlignments(joined);
 	BringCreatures(joined);
