@@ -683,7 +683,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
-	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
 	Locator::skySystem::emplace<ecs::systems::SkySystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
@@ -699,9 +698,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::time::emplace<TimeSystem>();
 	Locator::simulation::emplace<ecs::systems::SimulationSystem>();
 	Locator::vegetation::emplace<VegetationSystem>();
-	Locator::mistSystem::emplace<MistSystem>();
-	Locator::cloudSystem::emplace<CloudSystem>();
-	Locator::villageLightSystem::emplace<VillageLightSystem>();
 	Locator::abodeSoundSystem::emplace<AbodeSoundSystem>();
 	Locator::villageTotemSystem::emplace<VillageTotemSystem>();
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
@@ -809,6 +805,15 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	return true;
 }
 
+void openblack::InitializePresentation()
+{
+	// The sea, the mists, the clouds and the village lights, which the turns and the scripts do not read
+	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
+	Locator::mistSystem::emplace<MistSystem>();
+	Locator::cloudSystem::emplace<CloudSystem>();
+	Locator::villageLightSystem::emplace<VillageLightSystem>();
+}
+
 void openblack::InitializeClient(const player_profiles::Store& profiles)
 {
 	// The input of the player, the drawing of the world, the editor, the videos and the online services
@@ -828,6 +833,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	{
 		return false;
 	}
+	InitializePresentation();
 	InitializeClient(profiles);
 	return true;
 }

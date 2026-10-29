@@ -13,6 +13,7 @@
 
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "ECS/Archetypes/VillageLightArchetype.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
@@ -124,10 +125,13 @@ void PlayFrameEffects(FrameViewInterface& view)
 		auto actions = profiler.BeginScoped(Profiler::Stage::VegetationUpdate);
 		Locator::vegetation::value().Update(gameTime);
 	}
-	// The clouds drift with the wind, then every mist and cloud animates
-	Locator::cloudSystem::value().Update(gameTime);
-	// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
-	Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
+	// The clouds drift with the wind, then every mist and cloud animates. Only a computer that draws the world moves them.
+	if (Locator::cloudSystem::has_value())
+	{
+		Locator::cloudSystem::value().Update(gameTime);
+		// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
+		Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
+	}
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), clock.GetFrameRealTime(),
 	                                    camera.GetOrigin());
@@ -233,9 +237,20 @@ void PlayFrameEffects(FrameViewInterface& view)
 	{
 		Locator::influenceSystem::value().ShowHandInfluence(gameTime);
 	}
-	Locator::mistSystem::value().Update(gameTime);
-	Locator::cloudSystem::value().AnimateStormClouds(gameTime);
-	Locator::villageLightSystem::value().Update(gameTime);
+	if (Locator::mistSystem::has_value())
+	{
+		Locator::mistSystem::value().Update(gameTime);
+	}
+	if (Locator::cloudSystem::has_value())
+	{
+		Locator::cloudSystem::value().AnimateStormClouds(gameTime);
+	}
+	// The lights of owners that have gone go on every computer, then the lights flicker where the world is drawn
+	ecs::archetypes::VillageLightArchetype::DestroyOwnerless();
+	if (Locator::villageLightSystem::has_value())
+	{
+		Locator::villageLightSystem::value().Update(gameTime);
+	}
 	// The disciples glow, and the one in or under the hand shows the symbol of its work
 	ecs::villager_disciple::UpdateMarks();
 	// The town totems move to their shares by the real clock, also while the game is paused

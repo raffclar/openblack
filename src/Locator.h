@@ -254,10 +254,13 @@ bool InitializeHeadlessEngine() noexcept;
 /// The script machine and the systems of the world, which the game and the dedicated server share. The players' profiles
 /// are kept as the store says.
 bool InitializeSimulation(const player_profiles::Store& profiles) noexcept;
+/// The systems that only show the world, which no turn and no script reads. The dedicated server does not make them.
+/// Call it after the simulation.
+void InitializePresentation();
 /// The services of the game on the player's computer: the input, the drawing of the world, the editor, the videos and
 /// the online services. Call it after the simulation.
 void InitializeClient(const player_profiles::Store& profiles);
-/// The simulation, then the services of the game on the player's computer
+/// The simulation, the systems that show the world, then the services of the game on the player's computer
 bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
