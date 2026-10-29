@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "VanillaWorld.h"
@@ -399,6 +400,91 @@ ImportedStatics ReadStatics(const VanillaWorld& world)
 		                            .xAngle = world.Float(record, "xAngle").value_or(0.0f),
 		                            .zAngle = world.Float(record, "zAngle").value_or(0.0f),
 		                            .woodMultiplier = world.Float(record, "woodMultiplier").value_or(1.0f)});
+	}
+	return imported;
+}
+
+ImportedAnimals ReadAnimals(const VanillaWorld& world)
+{
+	ImportedAnimals imported;
+	// The towns of the file give the town of each animal and of each flock that belongs to a town
+	std::unordered_map<uint32_t, uint32_t> townOf;
+	for (const auto* town : world.OfType(VanillaType::Town))
+	{
+		for (const auto number : world.Refs(*town, "animals"))
+		{
+			townOf.emplace(number, town->number);
+		}
+		for (const auto number : world.Refs(*town, "flocks"))
+		{
+			townOf.emplace(number, town->number);
+		}
+	}
+	const auto town = [&townOf](uint32_t number) {
+		const auto found = townOf.find(number);
+		return found != townOf.end() ? found->second : 0;
+	};
+	for (const auto& record : world.Records())
+	{
+		if (record.Is(VanillaType::Flock))
+		{
+			const auto place = PositionOf(world, record);
+			const auto saved = world.Raw(record, "domainCentre");
+			const auto radius = world.Half(record, "domainRadius");
+			const auto distance = world.Half(record, "flockDistance");
+			if (!place.has_value() || saved.size() != sizeof(gamesave::MapCoords) || !radius.has_value() ||
+			    !distance.has_value())
+			{
+				imported.skipped.push_back(Skip(record, "the flock has no place or not all its values"));
+				continue;
+			}
+			ImportedFlock flock {.number = record.number,
+			                     .place = *place,
+			                     .domainRadius = *radius,
+			                     .flockDistance = *distance,
+			                     .shepherd = world.Ref(record, "shepherd").value_or(0),
+			                     .heart = world.Ref(record, "heart").value_or(0),
+			                     .town = town(record.number)};
+			std::memcpy(&flock.savedPlace, saved.data(), sizeof(flock.savedPlace));
+			const auto members = world.Refs(record, "members");
+			flock.members.assign(members.begin(), members.end());
+			imported.flocks.push_back(std::move(flock));
+			continue;
+		}
+		// An animal is a living thing that is not a villager, with a row of the table of the animals
+		if (world.Field(record, "birthTurn") == nullptr || world.Field(record, "villagerFlags") != nullptr)
+		{
+			continue;
+		}
+		const auto row = AnimalRowOf(world.Word(record, "info").value_or(0));
+		if (!row.has_value())
+		{
+			continue;
+		}
+		const auto position = PositionOf(world, record);
+		const auto action = world.Raw(record, "action");
+		if (!position.has_value() || action.size() < 2)
+		{
+			imported.skipped.push_back(Skip(record, "the animal has no place or no states"));
+			continue;
+		}
+		const auto walk = ReadWalk(world, record);
+		imported.animals.push_back({.number = record.number,
+		                            .row = *row,
+		                            .position = *position,
+		                            .scale = world.Float(record, "scale").value_or(1.0f),
+		                            .life = world.Float(record, "life").value_or(1.0f),
+		                            .birthTurn = world.Word(record, "birthTurn").value_or(0),
+		                            .goal = walk.goal,
+		                            .angle = walk.angle,
+		                            .speed = walk.speed,
+		                            .stepX = walk.stepX,
+		                            .stepZ = walk.stepZ,
+		                            .moveState = world.Byte(record, "moveState").value_or(0),
+		                            .state = action[0],
+		                            .finalState = action[1],
+		                            .flock = world.Ref(record, "flock").value_or(0),
+		                            .town = town(record.number)});
 	}
 	return imported;
 }

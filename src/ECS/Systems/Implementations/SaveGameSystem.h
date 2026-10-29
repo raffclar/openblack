@@ -124,11 +124,12 @@ private:
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
-	/// Reads the whole world file of the game. Puts its turn, its towns, buildings, villagers, forests, trees, fields and fish
-	/// farms into the world, then takes the seeds of the random draws. Returns whether the file reads as a whole world.
-	bool ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes);
 	/// The entity that each object number of a world file of the game became
 	using VanillaMade = std::unordered_map<uint32_t, entt::entity>;
+	/// Reads the whole world file of the game. Puts its turn, its towns, buildings, villagers, forests, trees, fields, fish
+	/// farms, still things and script things into the world, then the running scripts, then takes the seeds of the
+	/// random draws. The creatures are in the world already. Returns whether the file reads as a whole world.
+	bool ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes, const VanillaMade& creatures);
 	/// Each villager that keeps the work of a state of the file: a field or a fish farm, and a spot in a field
 	using VanillaWorks = std::vector<std::pair<entt::entity, ecs::vanilla_world_import::ImportedWork>>;
 	/// Puts the turn, the towns, the buildings of the towns and the villagers of the world file into the world
@@ -146,6 +147,14 @@ private:
 	void ImportVanillaStatics(const gamesave::VanillaWorld& world, VanillaMade& made);
 	/// Puts the clock of day and night and the count of things made of the world file into the world
 	void ImportVanillaGameValues(const gamesave::VanillaWorld& world);
+	/// The markers, the timers, the highlights and the influences of the scripts replace those of the land. A heart of
+	/// a temple is the temple of the land.
+	void ImportVanillaScriptThings(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// The animals and the flocks of the file replace those of the land. The flock of a temple is the flock of the temple
+	/// of the land.
+	void ImportVanillaAnimals(const gamesave::VanillaWorld& world, VanillaMade& made);
+	/// The running scripts of the file replace the scripts of the land, with the table of the objects that they hold
+	void ImportVanillaScripts(const gamesave::VanillaWorld& world, const VanillaMade& made);
 	/// The world file in the game's layout of a save of a game that came from such a file
 	[[nodiscard]] std::vector<ecs::save_files::SaveFile> VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
 	                                                                  std::span<const gamesave::SavedCreature> saved,

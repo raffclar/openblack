@@ -24,6 +24,7 @@
 namespace openblack::gamesave
 {
 class VanillaWorld;
+struct VanillaRecord;
 } // namespace openblack::gamesave
 
 // The towns, the buildings of the towns and the villagers of a world file of the game, as values that openblack can
@@ -103,6 +104,9 @@ struct ImportedWalk
 	/// It heads for or goes round the circle of a thing, of water or of the edge of the land
 	bool hugsCircle {false};
 };
+
+/// The walk of a record of a walker of the file: a villager or an animal
+[[nodiscard]] ImportedWalk ReadWalk(const gamesave::VanillaWorld& world, const gamesave::VanillaRecord& record);
 
 /// A metre value that gives the whole map units again, as openblack changes metres to whole units. Nothing when no
 /// float near the value does.

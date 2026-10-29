@@ -11,10 +11,13 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+
+#include "ECS/ScriptObjectTable.h"
 
 namespace openblack::ecs::systems
 {
@@ -27,6 +30,14 @@ struct ScriptObjectPlace
 	bool createdByScript {false};
 	/// How many script references hold it
 	uint8_t references {0};
+};
+
+/// What a saved game of the game keeps for an object that its scripts hold
+struct ScriptHold
+{
+	entt::entity object {entt::null};
+	bool inScript {false};
+	bool controlled {false};
 };
 
 /// The objects the scripts hold, the references they keep to them, and which of them a script controls
@@ -70,6 +81,13 @@ public:
 	[[nodiscard]] virtual std::vector<uint8_t> SaveTable() const { return {}; }
 	/// Puts back the table of a saved world from the bytes of SaveTable. Returns whether the bytes fit the table.
 	virtual bool LoadTable(std::span<const uint8_t> bytes) { return bytes.empty(); }
+	/// The table of a saved game of the game replaces the table. An object of the old table that is not in the new
+	/// table and that the load does not keep is let go: it goes when a script made it, and else it is no longer in a
+	/// script or controlled by one. Then each object of the new table takes the script flags that the file keeps.
+	virtual void PutSavedTable(const script_objects::Table& /*table*/, std::span<const ScriptHold> /*holds*/,
+	                           const std::function<bool(entt::entity)>& /*kept*/)
+	{
+	}
 };
 
 } // namespace openblack::ecs::systems

@@ -27,6 +27,7 @@
 
 #include "3D/MapCoords.h"
 #include "ECS/VanillaSceneryImport.h"
+#include "ECS/VanillaScriptImport.h"
 #include "ECS/VanillaWorldImport.h"
 #include "ECS/WallHugRules.h"
 
@@ -1058,4 +1059,182 @@ TEST(VanillaWorldImport, SavedGamesOfLandOneHaveRowsForTheirStillThings)
 	}
 	EXPECT_GT(statics, 0U);
 	std::cout << "Read " << statics << " still and loose things" << std::endl;
+}
+
+// A flock keeps its place, the place that it comes back to, its reach, its shepherd and its line. An animal keeps its
+// walk and its states, and the towns of the file give the town of each animal and each flock.
+TEST(VanillaSceneryImport, ReadsTheAnimalsAndTheFlocksOfTheFile)
+{
+	constexpr uint32_t k_SheepRow = world_import::k_FirstAnimalRowNumber - static_cast<uint32_t>(AnimalInfo::Sheep);
+	constexpr uint32_t k_DoveRow = world_import::k_FirstAnimalRowNumber - static_cast<uint32_t>(AnimalInfo::Dove);
+	auto world = GameAtTurn(10);
+	// 2: the town, 3: the flock, 4 and 5: its sheep, 6: a dove on its own, 7: a living thing with no animal row
+	world.Record(VanillaType::Town).Refs("animals", {4}).Refs("flocks", {3});
+	world.Record(VanillaType::Flock)
+	    .Position(100, 200)
+	    .Ref("shepherd", 0)
+	    .Ref("heart", 0)
+	    .Refs("members", {5, 4})
+	    .Value<uint16_t>("domainRadius", 40)
+	    .Value<uint16_t>("flockDistance", 12)
+	    .Value("domainCentre", MapCoords {.x = 110, .z = 210, .altitude = 0.0f});
+	const auto animal = [&world](uint32_t row, int32_t x, uint32_t flock) {
+		world.Record(static_cast<VanillaType>(0x83))
+		    .Position(x, 7)
+		    .Value("info", row)
+		    .Value("life", 0.5f)
+		    .Value("scale", 1.25f)
+		    .Value<uint16_t>("speed", 300)
+		    .Value<uint16_t>("angle", 512)
+		    .Value<uint8_t>("moveState", 0x0B)
+		    .Value("goal", MapCoords {.x = x + 50, .z = 9, .altitude = 0.0f})
+		    .Value("step", std::array<int32_t, 3> {3, 0, 4})
+		    .Value("action", std::array<uint8_t, 6> {2, 1, 0, 0, 0, 0})
+		    .Value("birthTurn", 77U)
+		    .Ref("flock", flock);
+	};
+	animal(k_SheepRow, 1000, 3);
+	animal(k_SheepRow, 2000, 3);
+	animal(k_DoveRow, 3000, 0);
+	animal(5000, 4000, 0);
+	const auto imported = world_import::ReadAnimals(world.Make());
+	EXPECT_TRUE(imported.skipped.empty());
+	ASSERT_EQ(imported.flocks.size(), 1U);
+	const auto& flock = imported.flocks.front();
+	EXPECT_EQ(flock.number, 3U);
+	EXPECT_EQ(flock.place.x, 100);
+	EXPECT_EQ(flock.savedPlace.z, 210);
+	EXPECT_EQ(flock.domainRadius, 40U);
+	EXPECT_EQ(flock.flockDistance, 12U);
+	EXPECT_EQ(flock.town, 2U);
+	EXPECT_EQ(flock.members, std::vector<uint32_t>({5, 4}));
+	ASSERT_EQ(imported.animals.size(), 3U);
+	const auto& sheep = imported.animals.front();
+	EXPECT_EQ(sheep.number, 4U);
+	EXPECT_EQ(sheep.row, AnimalInfo::Sheep);
+	EXPECT_EQ(sheep.position.x, 1000);
+	EXPECT_EQ(sheep.life, 0.5f);
+	EXPECT_EQ(sheep.scale, 1.25f);
+	EXPECT_EQ(sheep.birthTurn, 77U);
+	EXPECT_EQ(sheep.goal.x, 1050);
+	EXPECT_EQ(sheep.stepX, 3);
+	EXPECT_EQ(sheep.stepZ, 4);
+	EXPECT_EQ(sheep.speed, 300U);
+	EXPECT_EQ(sheep.angle, 512U);
+	EXPECT_EQ(sheep.moveState, 0x0BU);
+	EXPECT_EQ(sheep.state, 2U);
+	EXPECT_EQ(sheep.finalState, 1U);
+	EXPECT_EQ(sheep.flock, 3U);
+	EXPECT_EQ(sheep.town, 2U);
+	EXPECT_EQ(imported.animals[1].town, 0U);
+	EXPECT_EQ(imported.animals[2].row, AnimalInfo::Dove);
+	EXPECT_EQ(imported.animals[2].flock, 0U);
+}
+
+/// Each animal and each flock of a saved game of Land 1 reads whole. Each member of a flock is a villager, or an animal
+/// of the file that has the flock as its flock.
+TEST(VanillaSceneryImport, SavedGamesOfLandOneHaveTheirAnimalsInTheirFlocks)
+{
+	size_t animals = 0;
+	size_t flocks = 0;
+	size_t villagers = 0;
+	const auto files = ForEachLandOneSave([&](const std::filesystem::path& path, const VanillaWorld& world) {
+		const auto imported = world_import::ReadAnimals(world);
+		EXPECT_TRUE(imported.skipped.empty()) << path << " " << (imported.skipped.empty() ? "" : imported.skipped.front());
+		animals += imported.animals.size();
+		flocks += imported.flocks.size();
+		for (const auto& flock : imported.flocks)
+		{
+			for (const auto member : flock.members)
+			{
+				// A villager can also be a member of a flock
+				const auto* record = world.Record(member);
+				ASSERT_NE(record, nullptr) << path << " flock " << flock.number;
+				if (world.Field(*record, "villagerFlags") != nullptr)
+				{
+					++villagers;
+					continue;
+				}
+				const auto found = std::ranges::find(imported.animals, member, &world_import::ImportedAnimal::number);
+				ASSERT_NE(found, imported.animals.end()) << path << " flock " << flock.number;
+				EXPECT_EQ(found->flock, flock.number) << path << " animal " << member;
+			}
+		}
+	});
+	if (!files.has_value())
+	{
+		GTEST_SKIP() << "Set OPENBLACK_VANILLA_SAVES to a copy of a Profiles folder of the game to check its saved games";
+	}
+	EXPECT_GT(animals, 0U);
+	EXPECT_GT(flocks, 0U);
+	std::cout << "Read " << animals << " animals and " << flocks << " flocks, with " << villagers << " villagers in flocks"
+	          << std::endl;
+}
+
+namespace script_import = openblack::ecs::vanilla_script_import;
+
+// The rows of the highlights count back from their first row, as the rows of the other tables
+TEST(VanillaScriptImport, HighlightRowsCountBackFromTheFirstRow)
+{
+	EXPECT_EQ(script_import::HighlightRowOf(2088), HighlightInfo::Scroll);
+	EXPECT_EQ(script_import::HighlightRowOf(2087), HighlightInfo::DidYouKnowSign);
+	EXPECT_EQ(script_import::HighlightRowOf(2086), HighlightInfo::Silver);
+	EXPECT_EQ(script_import::HighlightRowOf(2085), HighlightInfo::Gold);
+	EXPECT_FALSE(script_import::HighlightRowOf(2089).has_value());
+	EXPECT_FALSE(script_import::HighlightRowOf(2084).has_value());
+}
+
+// A marker keeps its place, a timer its turns, a highlight its row and its values, and an influence its player, its
+// reach and the object that it goes with. The heart of a temple belongs to the owner of the temple.
+TEST(VanillaScriptImport, ReadsTheThingsOfTheScripts)
+{
+	auto world = GameAtTurn(10);
+	// 2: a player, 3: a temple, 4: its heart
+	world.Record(VanillaType::Player).Value<uint8_t>("number", 1);
+	world.Record(VanillaType::Citadel).Position(0, 0).Ref("owner", 2).Ref("heart", 4);
+	world.Record(VanillaType::CitadelHeart).Position(0, 0);
+	// 5: a marker, 6: a timer, 7: a gold scroll with a height, 8: an influence that goes with the marker
+	world.Record(VanillaType::ScriptMarker).Position(10, 20);
+	world.Record(VanillaType::ScriptTimer).Position(0, 0).Value("timerSetTurn", 300U).Value("timerTurns", 40U);
+	world.Record(VanillaType::ScriptHighlight)
+	    .Position(30, 40)
+	    .Value("info", 2085U)
+	    .Value("highlightActive", 1U)
+	    .Value("highlightHeightSet", 1U)
+	    .Value("highlightHeight", 2.5f)
+	    .Value("highlightText", 12U)
+	    .Value("highlightCategory", 3U);
+	world.Record(VanillaType::InfluenceRing)
+	    .Position(50, 60)
+	    .Ref("follows", 5)
+	    .Ref("player", 2)
+	    .Value("radius", 25.0f)
+	    .Value("anti", 1U);
+	// 9: a marker with no place
+	world.Record(VanillaType::ScriptMarker);
+	const auto made = world.Make();
+	const auto things = script_import::ReadScriptThings(made);
+	ASSERT_EQ(things.markers.size(), 1U);
+	EXPECT_EQ(things.markers[0].number, 5U);
+	EXPECT_EQ(things.markers[0].position.z, 20);
+	EXPECT_EQ(things.skipped.size(), 1U);
+	ASSERT_EQ(things.timers.size(), 1U);
+	EXPECT_EQ(things.timers[0].setTurn, 300U);
+	EXPECT_EQ(things.timers[0].turns, 40);
+	ASSERT_EQ(things.highlights.size(), 1U);
+	const auto& highlight = things.highlights[0];
+	EXPECT_EQ(highlight.kind, HighlightInfo::Gold);
+	EXPECT_TRUE(highlight.active);
+	EXPECT_EQ(highlight.drawHeight, std::optional(2.5f));
+	EXPECT_EQ(highlight.text, 12U);
+	EXPECT_EQ(highlight.category, 3U);
+	ASSERT_EQ(things.rings.size(), 1U);
+	EXPECT_EQ(things.rings[0].follows, 5U);
+	EXPECT_EQ(things.rings[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(things.rings[0].radius, 25.0f);
+	EXPECT_TRUE(things.rings[0].anti);
+
+	EXPECT_EQ(script_import::HeartPlayer(made, 4), PlayerNames::PLAYER_TWO);
+	EXPECT_FALSE(script_import::HeartPlayer(made, 5).has_value());
+	EXPECT_FALSE(script_import::HeartPlayer(made, 0).has_value());
 }

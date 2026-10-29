@@ -136,3 +136,11 @@ void Table::Clear()
 	_places = {};
 	_next = 1;
 }
+
+void Table::Put(uint16_t place, const Place& entry)
+{
+	if (place != 0 && place < k_Places)
+	{
+		_places.at(place) = entry;
+	}
+}

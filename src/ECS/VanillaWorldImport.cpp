@@ -357,6 +357,11 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 
 } // namespace
 
+ImportedWalk ReadWalk(const VanillaWorld& world, const VanillaRecord& record)
+{
+	return WalkOf(world, record);
+}
+
 std::optional<AbodeInfo> AbodeRowOf(uint32_t number)
 {
 	const auto count = static_cast<uint32_t>(AbodeInfo::_COUNT);
