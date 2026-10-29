@@ -7852,18 +7852,44 @@ void GetLastSpellCastPos() // 295 GET_LAST_SPELL_CAST_POS
 
 void AddSpotVisualTargetPos() // 296 ADD_SPOT_VISUAL_TARGET_POS
 {
-	// const auto position = PopVec();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The visual's rules also act on the point, such as a beam that ends there
+	const auto position = PopVec();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "ADD_SPOT_VISUAL_TARGET_POS: thing not valid");
+		return;
+	}
+	// A thing that holds no visual of a script takes no target
+	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
+	    effect.has_value() && Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().AddTargetPosition(*effect, position);
+	}
 }
 
 void AddSpotVisualTargetObject() // 297 ADD_SPOT_VISUAL_TARGET_OBJECT
 {
-	// const auto target = Pop().uintVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The visual's rules also act on the target, such as a beam that follows it while it moves
+	const auto target = PopObject();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "ADD_SPOT_VISUAL_TARGET_OBJECT: thing not valid");
+		return;
+	}
+	// No target, or a thing that holds no visual of a script, adds nothing
+	if (!registry.Valid(target))
+	{
+		return;
+	}
+	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
+	    effect.has_value() && Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().AddTarget(*effect, target);
+	}
 }
 
 void SetIndestructable() // 298 SET_INDESTRUCTABLE

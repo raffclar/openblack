@@ -5202,6 +5202,52 @@ void AddObjects(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
 	});
 
+	// A land's script aims a magic beam from one villager at another, as the healer of Land 2 calls the child
+	all.push_back({
+	    .id = "scripts.spot_beam_target",
+	    .name = "A script aims a magic beam at a villager that walks",
+	    .facet = Facet::Objects,
+	    .description =
+	        "A villager that a script holds stands still. A second villager walks to and fro 16 to the side. "
+	        "After one second, SPECIAL_EFFECT_OBJECT starts a magic beam on the first villager for 60 "
+	        "seconds, and ADD_SPOT_VISUAL_TARGET_OBJECT gives the beam the second villager as its target. "
+	        "After two more seconds, SPECIAL_EFFECT_POSITION starts a magic beam 10 to the side of the first villager, "
+	        "and ADD_SPOT_VISUAL_TARGET_POS gives it a point 12 above the land.",
+	    .expected = "Wiggling ribbons of light go from the place of the first villager to the middle of the second "
+	                "villager. The ribbons follow the second villager while it walks. The second beam goes from its "
+	                "place up to the point above the land and stays there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 5.0f, -10.0f}, .look = {0.0f, 2.0f, 6.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 0.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {-8.0f, 12.0f},
+	                 .walkTo = glm::vec2 {8.0f, 12.0f},
+	                 .walkAfterSeconds = 0.5f,
+	                 .walkRepeatSeconds = 8.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SPECIAL_EFFECT_OBJECT",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 20.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 60.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "ADD_SPOT_VISUAL_TARGET_OBJECT",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "SPECIAL_EFFECT_POSITION",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 20.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-10.0f, 4.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 60.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "ADD_SPOT_VISUAL_TARGET_POS",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-10.0f, 4.0f}, .height = 12.0f}}}},
+	});
+
 	all.push_back({
 	    .id = "objects.smash_stone",
 	    .name = "Smashing a stone in half",
@@ -12095,6 +12141,7 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 		{
 		case ScriptArgument::Kind::Number:
 		case ScriptArgument::Kind::Integer:
+		case ScriptArgument::Kind::LastResult:
 			return true;
 		case ScriptArgument::Kind::Marker:
 		case ScriptArgument::Kind::Position:

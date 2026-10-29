@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <optional>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
@@ -28,6 +29,9 @@ namespace openblack::ecs::script_spot_visuals
 
 /// The thing for a visual a script started, where the visual was made
 entt::entity MakeThing(Registry& registry, uint32_t effect, glm::vec3 position);
+
+/// The visual of a thing that holds a visual which a script started. A thing of another kind has no visual.
+[[nodiscard]] std::optional<uint32_t> EffectOf(const Registry& registry, entt::entity thing);
 
 /// The things whose visual has ended go from the world
 void RemoveEnded(Registry& registry, const std::function<bool(uint32_t effect)>& running);
