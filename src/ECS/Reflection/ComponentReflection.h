@@ -39,7 +39,7 @@
 #include "ReflectionTraits.h"
 
 #if defined(OPENBLACK_INSPECTOR)
-#include "Inspector/ComponentJsonCodec.h"
+#include "ComponentJsonCodec.h"
 #endif
 
 /// The fields of the components, registered once with the reflection of EnTT. The game writes every registered
