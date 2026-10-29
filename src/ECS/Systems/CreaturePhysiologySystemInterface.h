@@ -49,6 +49,9 @@ public:
 	virtual void FinishAction(entt::entity creature, std::string_view action) = 0;
 	/// Grew stronger, or weaker, by some amount
 	virtual void ModifyStrength(entt::entity creature, float amount) = 0;
+	/// Grew stronger by the strength gain of an action, by its name in the game's creature action table. Energy and
+	/// exhaustion do not change.
+	virtual void GainStrengthOf(entt::entity creature, std::string_view action) = 0;
 
 	/// How many game turns of the body pass each game turn
 	virtual void SetTimeScale(float scale) = 0;

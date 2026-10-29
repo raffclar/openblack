@@ -66,6 +66,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/ObjectPhysics.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerPhysics.h"
@@ -629,16 +630,22 @@ void PhysicsGameHooks::ConsiderMimickingLanding(entt::entity object, std::option
 	{
 		landing.thingsTown = registry.Get<const Town>(town).owner;
 	}
-	// The nearest town, the first of equals
+	// The nearest town, the first of equals. The towns come in the order of each player's list in turn and the neutral
+	// list last.
 	float nearest = std::numeric_limits<float>::max();
-	registry.Each<const Town, const Transform>([&](entt::entity candidate, const Town& owner, const Transform&) {
+	for (const auto candidate : player_towns::AllInOrder(registry))
+	{
+		if (!registry.AllOf<Transform>(candidate))
+		{
+			continue;
+		}
 		const float distance = distanceTo(candidate);
 		if (distance < nearest)
 		{
 			nearest = distance;
-			landing.nearestTown = owner.owner;
+			landing.nearestTown = registry.Get<const Town>(candidate).owner;
 		}
-	});
+	}
 	if (const auto deed = creature_deeds::LandingDeed(landing))
 	{
 		_world->PlayerDid(*deed, transform->position, object, *player);

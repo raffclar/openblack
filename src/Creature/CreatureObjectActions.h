@@ -128,6 +128,12 @@ enum class Status : uint8_t
 /// thing, the walk makes the pose.
 [[nodiscard]] bool PosesBody(bool playing, Status status);
 
+/// Whether the thing in the hand of a creature counts as what the creature carries, while the hand does an action of
+/// this kind and status (none for no action). As a throw starts, the thing stops being what the creature carries. The
+/// hand keeps the thing until the release, and then lets it go. Until then the mind, the scripts, the towns and the
+/// thing itself see that the creature carries nothing.
+[[nodiscard]] bool CarriesHeld(std::optional<Kind> kind, Status status, bool released);
+
 /// Why an action failed, to the extent that the mind must know
 enum class Failure : uint8_t
 {

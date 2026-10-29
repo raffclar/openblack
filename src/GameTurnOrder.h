@@ -125,6 +125,7 @@ enum class Step : uint8_t
 	Fields,
 	FishFarms,
 	WalkPaths,
+	PuzzleGames,
 	Footpaths,
 	ForestGrowth,
 	/// The parts of the creatures' turns that are not for one creature, before the turn of the living
@@ -202,6 +203,8 @@ enum class Step : uint8_t
 	CameraBookmarks,
 	ScriptHighlights,
 	Climates,
+	/// Every tenth turn the advisors warn when a town of the player at this computer loses its belief in the player
+	LosingBelief,
 	HeldThing,
 	/// The sparkles at the cameras of the other players of a network game
 	PlayerSparkles,
@@ -295,6 +298,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fields, .stage = Stage::Lists},
     {.step = Step::FishFarms, .stage = Stage::Lists},
     {.step = Step::WalkPaths, .stage = Stage::Lists},
+    // The puzzle games put back their pieces that moved, newest puzzle first
+    {.step = Step::PuzzleGames, .stage = Stage::Lists},
     {.step = Step::Footpaths, .stage = Stage::Lists},
     {.step = Step::ForestGrowth, .stage = Stage::Forests},
     // Each living thing takes its own turn in the order of the game's list of the living. Each creature does the steps
@@ -333,6 +338,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::CameraBookmarks, .stage = Stage::WeatherThings},
     {.step = Step::ScriptHighlights, .stage = Stage::Highlights},
     {.step = Step::Climates, .stage = Stage::Climates},
+    {.step = Step::LosingBelief, .stage = Stage::Climates},
     {.step = Step::HeldThing, .stage = Stage::Hand},
     {.step = Step::PlayerSparkles, .stage = Stage::Hand},
     {.step = Step::Rewards, .stage = Stage::Rewards},

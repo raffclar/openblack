@@ -24,6 +24,7 @@
 namespace openblack::gamesave
 {
 class VanillaWorld;
+struct VanillaRecord;
 } // namespace openblack::gamesave
 
 // The towns, the buildings of the towns and the villagers of a world file of the game, as values that openblack can
@@ -104,8 +105,8 @@ struct ImportedWalk
 	bool hugsCircle {false};
 };
 
-/// True when the villager walks in its top state, or goes back to the walk in the state before
-[[nodiscard]] bool UsesWalkGoal(const std::array<uint8_t, 3>& states);
+/// The walk of a record of a walker of the file: a villager or an animal
+[[nodiscard]] ImportedWalk ReadWalk(const gamesave::VanillaWorld& world, const gamesave::VanillaRecord& record);
 
 /// A metre value that gives the whole map units again, as openblack changes metres to whole units. Nothing when no
 /// float near the value does.
@@ -293,6 +294,9 @@ struct ImportedTowns
 	/// The plans and the building sites of the towns. The lists of each town give their order.
 	std::vector<ImportedPlan> plans;
 	std::vector<ImportedSite> sites;
+	/// The numbers of the objects of the towns in the order of the town lists of the players: the list of each player of
+	/// the file in turn, each list in the order that its player got the towns
+	std::vector<uint32_t> townLists;
 	/// Each record that the import does not take, and why
 	std::vector<std::string> skipped;
 };

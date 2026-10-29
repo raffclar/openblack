@@ -25,6 +25,32 @@
 namespace openblack::ecs::systems
 {
 
+/// An animal as a saved game keeps it
+struct LoadedAnimal
+{
+	AnimalInfo type {AnimalInfo::None};
+	/// Its place and its goal in whole map units, and its height in the world
+	glm::ivec2 position {0};
+	float altitude {0.0f};
+	glm::ivec2 goal {0};
+	/// The step of a turn, in whole map units
+	glm::ivec2 step {0};
+	/// The way it faces in game angles, and its whole map units a turn
+	uint16_t angle {0};
+	uint16_t speed {0};
+	/// The state of its move, by its number in the game's table of the move states
+	uint8_t moveState {0};
+	float scale {1.0f};
+	float life {1.0f};
+	uint32_t birthTurn {0};
+	/// Its state and the state that it goes into next, by their numbers in the game's table of the animal states
+	uint8_t state {0};
+	uint8_t finalState {0};
+	/// The flock that it joins at the start of the line, and its town. None for none.
+	entt::entity flock {entt::null};
+	entt::entity town {entt::null};
+};
+
 /// The animals: the land's birds and grazers, the doves or bats about each temple, and the flocks of doves and bats and the
 /// packs of wolves the miracles make. A bird flock's leader flies legs about its home or where it is sent and its followers
 /// keep a formation behind it; a wolf runs where it is sent, hunting what crosses its way. The miracle's animals fade out
@@ -80,6 +106,11 @@ public:
 	/// An animal of any kind that stays at its position, with a size and a heading. It is in no flock and does not move.
 	/// It shows the clip and the light of an animal that a script holds still.
 	virtual entt::entity CreateStillAnimal(AnimalInfo type, glm::vec3 position, float heading, float scale) = 0;
+	/// An animal of a saved game, as the save keeps it. It joins its flock last in the line, so that the members of a
+	/// flock made in the order of their line keep that order. None for a kind that is not a land animal.
+	virtual entt::entity CreateLoadedAnimal([[maybe_unused]] const LoadedAnimal& loaded) { return entt::null; }
+	/// The flock of the birds of a temple, made about the temple the first time. None for what is not a temple.
+	virtual entt::entity TempleFlock([[maybe_unused]] entt::entity temple) { return entt::null; }
 	/// An animal leaves its flock, which goes when it is left empty, and joins another as its newest member
 	virtual void JoinFlock(entt::entity animal, entt::entity flock) = 0;
 	/// An animal leaves its flock, which goes once it has no one left

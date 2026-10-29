@@ -34,6 +34,23 @@ inline constexpr float k_LookDistance = 20.0f;
 /// The longest name that the name box takes
 inline constexpr size_t k_NameLength = 32;
 
+/// What the room's list of saved games and their small pictures come from. Two equal stamps tell that the game did not
+/// save a game, delete a game or write the picture of a slot between them, for the same player on the same land.
+struct SavedGamesStamp
+{
+	/// The count of the saves, the deletes and the slot pictures that the game started to write
+	uint64_t changes {0};
+	/// The player's folder in the profiles' folder, empty for none
+	std::string player;
+	uint32_t land {0};
+
+	[[nodiscard]] bool operator==(const SavedGamesStamp&) const = default;
+};
+
+/// Whether the room reads its list and its small pictures again: at the first read, and when the saved games changed
+/// after the last read
+[[nodiscard]] bool ReadsSavedGamesAgain(const std::optional<SavedGamesStamp>& lastRead, const SavedGamesStamp& now);
+
 /// The parts of the room's mesh that are controls
 enum class Part : uint8_t
 {

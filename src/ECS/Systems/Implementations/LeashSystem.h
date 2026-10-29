@@ -49,6 +49,8 @@ public:
 	bool Toggle(entt::entity creature) override;
 	bool ChangeType(entt::entity creature, LeashType type) override;
 	bool TieTo(entt::entity creature, entt::entity object) override;
+	bool HandTie(entt::entity creature, entt::entity object) override;
+	bool RestoreTie(entt::entity creature, entt::entity object, uint32_t tiedTurn) override;
 	void UntieToHand(entt::entity creature) override;
 	void PlayHandAttachSound(entt::entity creature) override;
 	void SetWorks(entt::entity creature, bool works) override;
@@ -86,6 +88,10 @@ public:
 	bool TakeOffAtTemple(PlayerNames player) override;
 
 private:
+	/// Ties the leash to the thing, and does what the source of the tie does in addition
+	bool Tie(entt::entity creature, entt::entity object, creature_leash::TieSource source);
+	/// The hand ties the leash: a fight of the creature stops, and what it does stops as a failure
+	void FailForTie(entt::entity creature);
 	/// Puts the leash on for the player, unless the rules refuse it, which is logged and remembered
 	bool PutOnFor(PlayerNames player, entt::entity creature, LeashType type);
 	/// Carries out what a shortcut does to the player's creature
@@ -106,7 +112,8 @@ private:
 	/// What the worn leash does to the creature's desires this turn, and to those of a creature it is tied to
 	void UpdateMoods(entt::entity creature, const components::CreatureLeash::Worn& worn);
 	/// The creature takes an order on the land or on a thing, unless it refuses
-	/// Before an order: a creature on its way to a fight takes none (false), and a duelling one's fight is called off
+	/// Before an order: the creature that started a fight takes none out of its duel (false). Else the order calls off
+	/// the fight that the creature is in.
 	bool TakeOutOfFight(entt::entity creature);
 	bool TakeGroundOrder(entt::entity creature, const glm::vec3& place);
 	bool TakeThingOrder(entt::entity creature, entt::entity object);

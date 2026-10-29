@@ -56,6 +56,7 @@ public:
 	void HandTookHold(entt::entity creature) override;
 	void HandLetGo(entt::entity creature) override;
 	[[nodiscard]] bool IsSettingUpFight(entt::entity creature) const override;
+	[[nodiscard]] bool StartedFight(entt::entity creature) const override;
 	[[nodiscard]] bool IsFighting(entt::entity creature) const override;
 	[[nodiscard]] bool IsDuelling(entt::entity creature) const override;
 	void TakeForScript(entt::entity creature) override;
@@ -112,10 +113,7 @@ public:
 private:
 	/// The start of a fight. When ask is false, the other creature agreed before and is not asked again.
 	StartResult Start(entt::entity creature, entt::entity opponent, bool ask);
-	/// The turn's parts: fights started by the leash, the stages before and after the
-	/// duel, the duel's moves, and the creatures knocked out
-	void StartFightsFromMinds();
-	void StartFightFromMind(entt::entity creature);
+	/// The turn's parts: the stages before and after the duel, the duel's moves, and the creatures knocked out
 	void ProcessStages();
 	void StageTurn(entt::entity creature);
 	/// A fighter's animation, its move in the duel, its blow and its pose for the turn
@@ -162,6 +160,9 @@ private:
 	/// One creature beat the other, by a blow or otherwise: the loser faints, and the winner is made to have a poo on
 	/// the loser or to show off
 	void Win(entt::entity winner, entt::entity loser, bool byBlow);
+	/// A creature of a fight stops what it does. Each creature in its duel then gets stronger by the strength gain of the
+	/// fight action, one or two times, as the stop makes each of them stop.
+	void GainStrengthAtStop(entt::entity stopper, creature_fight::StopEnd end);
 	/// The opponent of a creature has no life left: the creature wins and leaves the duel. The loser does not faint,
 	/// and nobody forces a plan on the winner.
 	void WinByOpponentsLife(entt::entity winner, entt::entity loser);
@@ -172,6 +173,9 @@ private:
 	/// The fight of the creature stops with no response, as when its partner tells it to stop. In the steps before the
 	/// duel it leaves the fight at once. Else it finishes its move and then leaves the fight.
 	void StopFight(entt::entity creature, std::optional<bool> won, std::string_view why);
+	/// The plan of the creature stopped, and its partner is after its duel: the partner stops with no response, and the
+	/// plan of the partner fails
+	void StopPartnerAfterDuel(entt::entity partner, entt::entity creature);
 	void BeginDuel(entt::entity creature);
 	void MeasureBlows(entt::entity creature);
 	/// Faints and lies out cold, to be taken home later

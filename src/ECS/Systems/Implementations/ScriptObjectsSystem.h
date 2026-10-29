@@ -44,6 +44,8 @@ public:
 	[[nodiscard]] uint32_t TimesFull() const override { return _timesFull; }
 	[[nodiscard]] std::vector<uint8_t> SaveTable() const override;
 	bool LoadTable(std::span<const uint8_t> bytes) override;
+	void PutSavedTable(const script_objects::Table& table, std::span<const ScriptHold> holds,
+	                   const std::function<bool(entt::entity)>& kept) override;
 
 private:
 	/// An object no script reference holds any more is let go of: a flock or dance a script controls is disbanded, and

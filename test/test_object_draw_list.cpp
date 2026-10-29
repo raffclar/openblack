@@ -402,3 +402,28 @@ TEST(ObjectDrawList, APartThatStaysDrawnKeepsItsOwnerUntilTheListIsCleared)
 	kept.Clear();
 	EXPECT_FALSE(kept.Keeps(totem));
 }
+
+// A frame that does not draw the land, as in the temple, does not make the list again and draws none of it. The clock
+// does not step on it, so the next frame of the land measures the camera's move from the last frame of the land.
+TEST(ObjectDrawList, AFrameWithoutTheLandKeepsTheListAndTheClock)
+{
+	constexpr auto k_Without = FrameWithoutLand();
+	EXPECT_FALSE(k_Without.rebuilt);
+	EXPECT_FALSE(k_Without.drawAll);
+	EXPECT_FALSE(k_Without.landDrawn);
+	EXPECT_TRUE(Drawn(Frame {}, true, true));
+	EXPECT_FALSE(Drawn(k_Without, true, true));
+	EXPECT_FALSE(Drawn(k_Without, true, false));
+	EXPECT_FALSE(Drawn(k_Without, false, true));
+
+	Clock clock;
+	const glm::vec3 eye {100.0f, 50.0f, 100.0f};
+	const glm::vec3 focus {200.0f, 0.0f, 200.0f};
+	static_cast<void>(clock.Next(0, eye, focus, false));
+	static_cast<void>(clock.Next(0, eye, focus, false));
+	// The temple's frames move the camera far away, but they do not step the clock. Back on the land, the camera is
+	// where it was, so the frame is still.
+	const auto back = clock.Next(0, eye, focus, false);
+	EXPECT_FALSE(back.rebuilt);
+	EXPECT_FALSE(back.drawAll);
+}

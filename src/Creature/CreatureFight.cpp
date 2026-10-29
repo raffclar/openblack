@@ -522,12 +522,13 @@ bool creature_fight::LetsChoose(const MindInFight& mind)
 	{
 		return false;
 	}
-	return !mind.fighting || mind.onlyAsked || (mind.startedIt && mind.planned && mind.waitsForFight && !mind.won);
+	return !mind.fighting || mind.onlyAsked || mind.mindFree ||
+	       (mind.startedIt && mind.planned && mind.waitsForFight && !mind.won);
 }
 
 bool creature_fight::ObeysInFight(const MindInFight& mind)
 {
-	return mind.fighting && !mind.onlyAsked && !mind.startedIt && !mind.won;
+	return mind.fighting && !mind.onlyAsked && !mind.startedIt && !mind.won && !mind.mindFree;
 }
 
 bool creature_fight::HealthyEnoughToFight(float life)
@@ -1505,4 +1506,76 @@ bool creature_fight::FightMusicHeard(bool directsFight, std::span<const glm::vec
 float creature_fight::HealthAfterLifeLost(float health, float damage)
 {
 	return std::max(health - damage, 0.0f);
+}
+
+namespace
+{
+/// The two creatures of a stop: their duels, the partners of their minds and the gains that they got
+class StopSteps
+{
+public:
+	explicit StopSteps(const StopLinks& links)
+	    : _duels {links.stopperDuels, links.partnerDuels}
+	    , _hasPartner {links.stopperHasPartner, links.partnerHasPartner}
+	{
+	}
+
+	/// The creature gives up its action as a failure
+	void Fail(size_t self)
+	{
+		if (_duels.at(self))
+		{
+			++_gains.at(self);
+		}
+		Finish(self);
+	}
+
+	/// The creature stops, then its mind forgets its partner and makes the partner give up its action
+	void Finish(size_t self)
+	{
+		Stop(self);
+		if (_hasPartner.at(self))
+		{
+			_hasPartner.at(self) = false;
+			Fail(Other(self));
+		}
+	}
+
+	[[nodiscard]] StrengthGains Gains() const { return {.stopper = _gains[0], .partner = _gains[1]}; }
+
+private:
+	[[nodiscard]] static size_t Other(size_t self) { return 1 - self; }
+
+	/// The creature stops what it does. In its duel, it gives the gain to its partner, which leaves its duel and gives up
+	/// its action. The creature leaves its own duel last.
+	void Stop(size_t self)
+	{
+		if (_duels.at(self))
+		{
+			const auto other = Other(self);
+			++_gains.at(other);
+			_duels.at(other) = false;
+			Fail(other);
+		}
+		_duels.at(self) = false;
+	}
+
+	std::array<bool, 2> _duels;
+	std::array<bool, 2> _hasPartner;
+	std::array<uint32_t, 2> _gains {};
+};
+} // namespace
+
+StrengthGains creature_fight::StrengthGainsAtStop(StopEnd end, StopLinks links)
+{
+	StopSteps steps(links);
+	if (end == StopEnd::Failure)
+	{
+		steps.Fail(0);
+	}
+	else
+	{
+		steps.Finish(0);
+	}
+	return steps.Gains();
 }

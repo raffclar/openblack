@@ -20,12 +20,12 @@
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-entt::entity PuzzleGameArchetype::Create(const glm::vec3& position, float yAngleRadians, float scale,
-                                         script::PuzzleGameType type)
+entt::entity PuzzleGameArchetype::Create(const glm::vec3& position, float yAngleRadians, const PuzzleGame& game)
 {
 	auto& registry = openblack::Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
-	registry.Assign<Transform>(entity, position, openblack::x87::GameTurnMatrix(0.0f, yAngleRadians, 0.0f), glm::vec3(scale));
-	registry.Assign<PuzzleGame>(entity, type);
+	registry.Assign<Transform>(entity, position, openblack::x87::GameTurnMatrix(0.0f, yAngleRadians, 0.0f),
+	                           glm::vec3(game.scale));
+	registry.Assign<PuzzleGame>(entity, game);
 	return entity;
 }

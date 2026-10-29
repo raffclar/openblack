@@ -25,6 +25,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/WallHugRules.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -71,7 +72,7 @@ void PathFinding::Draw() noexcept
 			auto& transform = registry.Get<Transform>(_selectedVillager.value());
 			auto& wallHug = registry.Get<WallHug>(_selectedVillager.value());
 			ImGui::DragFloat3("Position", glm::value_ptr(transform.position));
-			ImGui::DragFloat2("Goal", glm::value_ptr(wallHug.goal));
+			ImGui::DragInt2("Goal", glm::value_ptr(wallHug.goalPlace));
 			ImGui::DragFloat("Speed (m/s)", &wallHug.speed);
 		}
 	}
@@ -115,7 +116,7 @@ void PathFinding::Draw() noexcept
 				if (ImGui::Button("Execute"))
 				{
 					auto& wallHug = registry.Get<WallHug>(*_selectedVillager);
-					wallHug.goal = glm::xz(_destination);
+					wallHug.goalPlace = ecs::wall_hug::ToWhole(glm::xz(_destination));
 					registry.Remove<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
 					                MoveStateFinalStepTag, MoveStateArrivedTag>(*_selectedVillager);
 					registry.Assign<MoveStateLinearTag>(*_selectedVillager);

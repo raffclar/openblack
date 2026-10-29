@@ -118,8 +118,7 @@ struct CreatureObjectAction
 	/// Eating: the energy that the food gave the body as the animation started, which its hunger falls by once it keeps
 	/// the meal down
 	float mealEnergy {0.0f};
-	/// The plan that asked for the action stopped, and the body plays the action on alone. Then a stomp crushes no
-	/// living thing under its foot.
+	/// The plan that asked for the action stopped, and the body plays the action on alone
 	bool planStopped {false};
 	/// Why it gave up, when it did
 	std::string failure;

@@ -59,6 +59,14 @@ public:
 	bool Catch(entt::entity, entt::entity) override { return false; }
 	void Cancel(entt::entity creature) override { cancelled.push_back(creature); }
 	void EndPoint(entt::entity creature) override { pointsEnded.push_back(creature); }
+	/// The hands point: a plan stop that ends the action of the body ends the point
+	void StopForPlan(entt::entity creature, bool stopsBody) override
+	{
+		if (stopsBody)
+		{
+			EndPoint(creature);
+		}
+	}
 	void Drop(entt::entity) override {}
 	[[nodiscard]] State GetState(entt::entity) const override { return State::Busy; }
 	[[nodiscard]] bool IsCatching(entt::entity) const override { return false; }

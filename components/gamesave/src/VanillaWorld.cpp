@@ -452,14 +452,17 @@ void ReadHelp(WorldReader& r)
 
 void ReadScriptThings(WorldReader& r)
 {
-	// The objects that the scripts use, each with two values
+	// The objects that the scripts use, by their place in the table: the object, whether a script made it, and the
+	// number of script references that hold it
 	for (int i = 0; i < 511 && !r.Failed(); ++i)
 	{
-		r.Ref();
-		r.Word();
-		r.Byte();
+		r.Ref("scriptObject");
+		r.Word("scriptObjectMade");
+		r.Byte("scriptObjectCount");
 	}
-	for (const uint32_t size : {4, 4, 4, 4, 4, 12, 12, 4, 4, 4, 4})
+	// The place where the next search for a free place starts, then other values of the scripts
+	r.Word("scriptNextPlace");
+	for (const uint32_t size : {4, 4, 4, 4, 12, 12, 4, 4, 4, 4})
 	{
 		r.Bytes(size);
 	}
@@ -501,10 +504,12 @@ void ReadGameTail(WorldReader& r)
 		r.Word();
 	}
 	r.Float("visualTime");
-	for (int i = 0; i < 4; ++i)
-	{
-		r.Word();
-	}
+	// The cycle of day and night: the seconds of a day, the part of it that changes, the part that is night, and the
+	// rate that the clock runs at
+	r.Float("dayDuration");
+	r.Float("dayChange");
+	r.Float("dayNight");
+	r.Float("visualTimeScale");
 	ReadHelp(r);
 	ReadScriptThings(r);
 	r.Point("startCamera");

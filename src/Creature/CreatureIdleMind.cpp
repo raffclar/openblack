@@ -1760,6 +1760,16 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			mind.stepStarted = false;
 			mind.gaveUp = true;
 		}
+		else if (senses.handsTouched && step.order.kind == ObjectOrder::Kind::PickUp)
+		{
+			// After the hold, on each turn that the body still plays the pick-up, the head looks at no point
+			commands.noLookPoint = true;
+		}
+		else if (senses.handsTouched && step.order.kind == ObjectOrder::Kind::Destroy && step.order.object.has_value())
+		{
+			// After the blow, on each turn that the body still plays the stomp, the thing under the foot takes it again
+			commands.stomp = Commands::Stomp {.object = *step.order.object, .lastStep = mind.step + 1 == mind.agenda.size()};
+		}
 		break;
 	case Step::Kind::Cast:
 		if (!mind.castDone)

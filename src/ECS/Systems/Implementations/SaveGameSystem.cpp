@@ -768,7 +768,7 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	leashes.SetWorks(entity, kept.works != 0);
 	if (const auto tied = save_state::FromRef(kept.tiedTo); tied.has_value() && registry.Valid(*tied))
 	{
-		leashes.TieTo(entity, *tied);
+		leashes.RestoreTie(entity, *tied, kept.word34);
 	}
 }
 
@@ -999,6 +999,7 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	};
 
 	auto outcome = std::make_shared<std::atomic<ecs::save_files::SaveWrite>>(ecs::save_files::SaveWrite::NotOpened);
+	++_savedGamesChanges;
 	auto* fileSystem = &Locator::filesystem::value();
 	Writer().Queue(std::format("the files of slot {}", slot), [fileSystem,
 	                                                           files = std::make_shared<const ecs::save_files::SlotWrite>(
@@ -1505,11 +1506,16 @@ bool SaveGameSystem::LoadVanilla(uint32_t slot, const std::filesystem::path& slo
 		                   entt::to_integral(entity));
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded {} creatures from the game's file of slot {}", matched.size(), slot);
-	const bool world = ImportVanillaWorld(slot, bytes);
+	VanillaMade creatures;
+	for (const auto& [creature, entity] : matched)
+	{
+		creatures.emplace(creature->number, entity);
+	}
+	const bool world = ImportVanillaWorld(slot, bytes, creatures);
 	return !matched.empty() || world;
 }
 
-bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes)
+bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes, const VanillaMade& creatures)
 {
 	// The game reads its whole world from the file. openblack reads the whole file, but it takes only some parts of
 	// the world from it.
@@ -1524,13 +1530,24 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	SPDLOG_LOGGER_INFO(Log(), "The game's file of slot {} has {} objects at turn {}", slot, read.world->Records().size(),
 	                   data.has_value() ? data->gameTurn : 0);
 	// The towns and the villagers of the file replace the towns and the villagers of the land
-	VanillaMade made;
+	VanillaMade made = creatures;
 	VanillaWorks works;
 	ImportVanillaTowns(*read.world, made, works);
 	// The forests, the big forests and the trees of the file replace those of the land
 	ImportVanillaForests(*read.world, made);
 	// The fields and the fish farms of the file replace those of the land
 	ImportVanillaFarms(*read.world, made, works);
+	// The still things and the loose things of the file replace those of the land
+	ImportVanillaStatics(*read.world, made);
+	// The animals and their flocks replace those of the land
+	ImportVanillaAnimals(*read.world, made);
+	// The markers, the timers, the highlights and the influences of the scripts replace those of the land
+	ImportVanillaScriptThings(*read.world, made);
+	// The running scripts of the file, with the objects that they hold, replace the scripts of the land. The game loads
+	// them after all the objects of the file.
+	ImportVanillaScripts(*read.world, made);
+	// The clock of day and night, and the count of things made, which continues after all that the import makes
+	ImportVanillaGameValues(*read.world);
 	// The game data of the file has the two seeds of the random draws. After the load, the draws continue from them
 	// as the game's draws do. The creatures and the towns are made first, because the creation of a thing can draw.
 	if (data.has_value() && Locator::gameRandom::has_value())
@@ -1672,6 +1689,7 @@ bool SaveGameSystem::Delete(uint32_t slot)
 		std::filesystem::remove(file, error);
 	}
 	std::filesystem::remove(folder, error);
+	++_savedGamesChanges;
 	SPDLOG_LOGGER_INFO(Log(), "Deleted the saved game in slot {}", slot);
 	return true;
 }
@@ -1692,6 +1710,14 @@ std::optional<std::vector<uint8_t>> SaveGameSystem::ReadPictureFile(std::string_
 		return std::nullopt;
 	}
 	return ReadFile(path);
+}
+
+temple::save_game_room::SavedGamesStamp SaveGameSystem::GetSavedGamesStamp() const
+{
+	const auto player = PlayerFolder();
+	return {.changes = _savedGamesChanges,
+	        .player = player.has_value() ? player->generic_string() : std::string {},
+	        .land = LandNumber()};
 }
 
 namespace
@@ -1993,6 +2019,7 @@ void SaveGameSystem::PutSlotPicture(uint32_t slot)
 	}
 	// The writer copies the temporary picture into the slot's cells on its own thread, after the files before it
 	auto* files = &Locator::filesystem::value();
+	++_savedGamesChanges;
 	Writer().Queue((*pictures / gamesave::LargePictureFileName(slot)).generic_string(),
 	               [files, step = SlotPictureStep(*pictures, slot)]() { return step(*files); });
 }

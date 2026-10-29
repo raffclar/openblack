@@ -122,10 +122,10 @@ uint32_t move_to_object::MoveToObject(LivingAction& action)
 		step = targetStep;
 		wallHug.speed = GetSpeedStateSpeed(static_cast<SpeedState>(gutils::ConvertMetersToWholeDistance(step)));
 	}
-	wallHug.goal = there;
+	wallHug.goalPlace = wall_hug::ToWhole(there);
 	// The villager takes its step towards where the thing is now. If the step puts it there, it arrives too.
 	villager_home::TakeWalkStep(villager);
-	if (villager_home::WalkIsOverAt(villager, wallHug.goal))
+	if (villager_home::WalkIsOverAt(villager, wallHug.goalPlace))
 	{
 		registry.Remove<MoveTarget, MoveStateFinalStepTag, MoveStateArrivedTag>(villager);
 		living.VillagerSetTopStateToFinal(action);

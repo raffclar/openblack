@@ -1888,6 +1888,38 @@ void AddSingingStones(std::vector<Scenario>& all)
 	});
 }
 
+/// The beach temple puzzle of the second land, as its script makes it: turned a half turn, at its normal size
+void AddBeachTemplePuzzle(std::vector<Scenario>& all)
+{
+	// The puzzle's place, from the middle of the map. The half turn puts its three bases in a row to the south.
+	constexpr glm::vec2 k_Puzzle {0.0f, -40.0f};
+	constexpr float k_PuzzleObjectType = 32.0f;
+	constexpr float k_HanoiKind = 3.0f;
+	all.push_back({
+	    .id = "story.beach_temple_puzzle",
+	    .name = "The rings of The Beach Temple Puzzle",
+	    .facet = Facet::Story,
+	    .description = "A script makes the second land's beach temple puzzle south of the middle, turned a half turn, as "
+	                   "its quest makes it on the beach.",
+	    .expected = "Three bases stand in a row from north to south, 20 apart. The four rings are stacked on the north "
+	                "base, the largest at the bottom. The hand can take only the top ring. A ring that the hand drops "
+	                "near a base or a larger ring flickers out and stands on that stack. A ring dropped far from a stack "
+	                "flickers back to its place after six turns.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Puzzle.x + 35.0f, 25.0f, k_Puzzle.y - 20.0f},
+	                .look = {k_Puzzle.x, 3.0f, k_Puzzle.y - 20.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "CREATE_WITH_ANGLE_AND_SCALE",
+	                  .scriptArguments = {{.number = 180.0f},
+	                                      {.number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_PuzzleObjectType},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = k_HanoiKind},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = k_Puzzle}}}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -2008,6 +2040,7 @@ void AddStory(std::vector<Scenario>& all)
 	AddGuideStorm(all);
 	AddRivalCreatureLoads(all);
 	AddSingingStones(all);
+	AddBeachTemplePuzzle(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)
@@ -4938,6 +4971,24 @@ void AddObjects(std::vector<Scenario>& all)
 	                 Act(Kind::PutDown, 0, 1.0f, true), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 0.5f),
 	                 OnObject(Kind::PickUp, 0, 2, 1.5f), Go(Kind::WalkTo, 0, {6.0f, 10.0f}, 0.5f),
 	                 Act(Kind::PutDown, 0, 1.0f, true), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 0.5f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "objects.pickup_head_look",
+	    .name = "The head look after the hold of a pick-up, close up",
+	    .facet = Facet::Objects,
+	    .description = "A content tiger with a ball in front of it. A script tells it to hold the ball. Then it puts the "
+	                   "ball down. This repeats, seen close up.",
+	    .expected = "As it reaches, the head and the eyes look at the ball. From the moment that the hand takes hold of "
+	                "the ball to the end of the pick-up, the head and the eyes look at no point: they turn to the "
+	                "front. After the pick-up, they look at the things near the creature again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 Act(Kind::PutDown, 0, 6.0f, true)},
 	    .repeatFrom = 0,
 	});
 
@@ -7919,6 +7970,19 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "combat.strength_gain_at_stop",
+	    .name = "A knock-out makes both tigers stronger",
+	    .facet = Facet::Combat,
+	    .description = "Two tigers, the red one of strength 0.6 and the blue one of strength 0.4, fight by themselves.",
+	    .expected = "At the knock-out the strength of each tiger increases two times by the strength gain of the fight "
+	                "action, 0.012 each time. The fight transcript has a record strength_gain with two gains for each "
+	                "tiger.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.4f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
 	{
 		// Each tiger holds a rock as the fight starts. It lets go of the rock before its taunt.
 		auto start = Fight(Kind::StartFight, 0, 1, 1.0f);
@@ -8009,6 +8073,36 @@ void AddCombat(std::vector<Scenario>& all)
 		    .creatures = {asker, asked},
 		    .commands = {Go(Kind::WalkTo, 1, {25.0f, 0.0f}, 1.0f, false), Fight(Kind::StartFight, 0, 1, 1.0f),
 		                 Fight(Kind::FightAbort, 0, 1, 0.1f)},
+		});
+	}
+
+	{
+		// The needs of the blue tiger are not set again each frame, so the script can take its life
+		auto asked = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		asked.hold = false;
+		all.push_back({
+		    .id = "combat.asked_stops_after_duel",
+		    .name = "The end of the first tiger stops the asked tiger after the duel",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger asks the blue tiger to fight, and both fight by themselves. The creatures do not "
+		                   "faint. When the duel is on, a script sets the life of the blue tiger to one half. Two seconds "
+		                   "later the fight of the red tiger stops.",
+		    .expected = "The duel stops, and both tigers finish their moves and play their responses. The red tiger has "
+		                "more life, and its response ends first. Two turns later its fight ends. The blue tiger then "
+		                "stops at once with no fear, and it does not obey the red tiger again.",
+		    .environment = {.fainting = false},
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), asked},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 0.5f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 {.kind = Kind::CallNative,
+		                  .delaySeconds = 12.0f,
+		                  .script = "SET_PROPERTY",
+		                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+		                                       .number = static_cast<float>(script::ObjectPropertyType::Health)},
+		                                      {.kind = ScriptArgument::Kind::Creature, .index = 1},
+		                                      {.kind = ScriptArgument::Kind::Number, .number = 0.5f}}},
+		                 Fight(Kind::FightAbort, 0, 0, 2.0f)},
 		});
 	}
 

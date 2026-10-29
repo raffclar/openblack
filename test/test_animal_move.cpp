@@ -175,3 +175,13 @@ TEST(AnimalMove, AScriptSeesItThereOnlyStrictlyWithinAStep)
 	// While the moves' own arrival counts one exactly a step away
 	EXPECT_TRUE(WithinStep({0, 0}, {3, 4}, 5));
 }
+
+// A saved move keeps its stage: arrived, the last step or a step straight through. Another move state gives no stage.
+TEST(AnimalMove, TheMoveStatesOfTheGameGiveTheStagesOfAMove)
+{
+	EXPECT_EQ(MoveStageOfGame(0x01), MoveStage::AtGoal);
+	EXPECT_EQ(MoveStageOfGame(0x04), MoveStage::FinalStep);
+	EXPECT_EQ(MoveStageOfGame(0x0B), MoveStage::StepThrough);
+	EXPECT_FALSE(MoveStageOfGame(0x00).has_value());
+	EXPECT_FALSE(MoveStageOfGame(0x0C).has_value());
+}

@@ -49,6 +49,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/DiscipleRules.h"
 #include "ECS/DiscipleSymbol.h"
 #include "ECS/DiscipleWorkRules.h"
@@ -800,7 +801,7 @@ uint32_t villager_disciple::InHand(LivingAction& action)
 	const auto villager = EntityOf(action);
 	auto& registry = Entities();
 	auto* held = registry.TryGet<DiscipleHeld>(villager);
-	if (held == nullptr || !disciple::LooksForWorkWhileHeld(registry.AllOf<HeldByCreature>(villager)))
+	if (held == nullptr || !disciple::LooksForWorkWhileHeld(ecs::creature_carried::CarrierOf(registry, villager).has_value()))
 	{
 		return 1;
 	}

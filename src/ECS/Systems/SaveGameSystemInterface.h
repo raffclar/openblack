@@ -21,6 +21,8 @@
 
 #include <ChallengePictureFiles.h>
 
+#include "Temple/SaveGameRoomRules.h"
+
 namespace openblack::ecs::systems
 {
 
@@ -82,6 +84,9 @@ public:
 	virtual bool Delete(uint32_t slot) = 0;
 	/// A file of the saved games' pictures, by its name, nothing when there is none
 	[[nodiscard]] virtual std::optional<std::vector<uint8_t>> ReadPictureFile(std::string_view name) const = 0;
+	/// What the save game room's list and small pictures come from now. The stamp changes when the game starts to write a
+	/// save or the picture of a slot, deletes a save, or when the player or the land changes.
+	[[nodiscard]] virtual temple::save_game_room::SavedGamesStamp GetSavedGamesStamp() const = 0;
 	/// After a load of a world file in the game's layout: the creatures of the file, and whether openblack writes their
 	/// records with the same bytes now
 	[[nodiscard]] virtual std::vector<VanillaCheck> CheckVanillaRecords() const = 0;

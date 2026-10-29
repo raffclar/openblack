@@ -51,6 +51,11 @@ public:
 	/// Whether the clock runs
 	void SetRunning(bool running) { _scale = running ? 1.0f : 0.0f; }
 	[[nodiscard]] bool IsRunning() const { return _scale != 0.0f; }
+	/// The rate that the clock runs at, as a saved game keeps it: 1 runs, 0 stands
+	void SetScale(float scale) { _scale = scale; }
+	[[nodiscard]] float GetScale() const { return _scale; }
+	/// Jumps to an hour of visual time, as a saved game sets it, and stops a move to another hour
+	void ForceVisualTime(float hour);
 	/// Jumps to an hour of script time
 	void SetScriptTime(float hour);
 	/// Moves to an hour of script time over `seconds` of game time, the short way round

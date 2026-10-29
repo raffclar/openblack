@@ -15,12 +15,18 @@
 #include <filesystem>
 #include <optional>
 #include <span>
+#include <string_view>
 
 #include "Graphics/FilmSurface.h"
 #include "Video/VideoRules.h"
 
 namespace openblack::ecs::systems
 {
+
+/// The file of the story's intro
+inline constexpr std::string_view k_IntroFilm = "Data/INTRO.bik";
+/// The file of the falling spell's film
+inline constexpr std::string_view k_FallingSpellFilm = "Data/Spells/fall/fall.bik";
 
 /// The picture of the video playing, for the renderer
 struct VideoPicture
@@ -51,6 +57,9 @@ public:
 	/// Plays a video, replacing any playing. A video that can't be opened (or while films are turned off) still exists
 	/// for a frame and then ends, with nothing shown. True when the file opened
 	virtual bool Play(const std::filesystem::path& path) = 0;
+	/// A land loads: the files of the films that the scripts start (the intro and the falling spell's film) are read with
+	/// the other resources behind the loading screen. Thus the turn that starts a film does not read its file.
+	virtual void RegisterScriptFilms() = 0;
 	/// The intro's schedule: a fade from 58 s, the end at 60 s. An intro whose file didn't open counts no frames, so it
 	/// stays black and paused until Escape ends it, as the game does; with films turned off it ends at once instead
 	virtual void ScheduleIntro() = 0;

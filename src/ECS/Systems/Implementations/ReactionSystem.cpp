@@ -505,11 +505,12 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	{
 		return false;
 	}
-	// A creature that sets up a fight is not yet in it. The creature that started the fight is refused below.
+	// Only the duel keeps a creature from reactions. Before the duel and after it, the other creature takes them up. The
+	// creature that started the fight is refused below.
 	if (Locator::creatureFightSystem::has_value())
 	{
 		const auto& fights = Locator::creatureFightSystem::value();
-		if ((fights.IsFighting(entity) && !fights.IsSettingUpFight(entity)) || fights.IsKnockedOut(entity))
+		if (fights.IsDuelling(entity) || fights.IsKnockedOut(entity))
 		{
 			return false;
 		}

@@ -357,6 +357,11 @@ std::optional<ImportedVillager> ReadVillager(const VanillaWorld& world, const Va
 
 } // namespace
 
+ImportedWalk ReadWalk(const VanillaWorld& world, const VanillaRecord& record)
+{
+	return WalkOf(world, record);
+}
+
 std::optional<AbodeInfo> AbodeRowOf(uint32_t number)
 {
 	const auto count = static_cast<uint32_t>(AbodeInfo::_COUNT);
@@ -420,12 +425,6 @@ std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStat
 		return ImportedWork {.target = *values[1].object, .spot = spot};
 	}
 	return std::nullopt;
-}
-
-bool UsesWalkGoal(const std::array<uint8_t, 3>& states)
-{
-	return villager_walk::Walks(static_cast<VillagerStates>(states[0])) ||
-	       villager_walk::Walks(static_cast<VillagerStates>(states[2]));
 }
 
 std::optional<float> MetresOfWhole(int32_t whole)
@@ -570,6 +569,13 @@ ImportedTowns ReadTowns(const VanillaWorld& world)
 				imported.villagers.push_back(*villager);
 				continue;
 			}
+		}
+		else if (record.Is(VanillaType::Player))
+		{
+			// The player's list of towns, in the order that the player got them
+			const auto towns = world.Refs(record, "towns");
+			imported.townLists.insert(imported.townLists.end(), towns.begin(), towns.end());
+			continue;
 		}
 		else
 		{

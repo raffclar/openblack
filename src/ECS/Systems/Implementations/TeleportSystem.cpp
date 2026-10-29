@@ -62,6 +62,7 @@
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
@@ -138,7 +139,7 @@ std::optional<glm::vec3> VillagerWalkingTo(entt::entity villager)
 	{
 		return std::nullopt;
 	}
-	return OnLand(wallHug->goal);
+	return OnLand(ecs::wall_hug::ToPoint(wallHug->goalPlace));
 }
 
 /// A creature walking somewhere, and where
@@ -597,7 +598,8 @@ bool TeleportSystem::DropOnStone(entt::entity villager, entt::entity stone, Play
 	const auto& wallHug = registry.Get<const WallHug>(villager);
 	auto& listed = registry.Get<TeleportStone>(stone);
 	std::erase_if(listed.travellers, [villager](const auto& entry) { return entry.living == villager; });
-	listed.travellers.insert(listed.travellers.begin(), {.living = villager, .destination = OnLand(wallHug.goal)});
+	listed.travellers.insert(listed.travellers.begin(),
+	                         {.living = villager, .destination = OnLand(ecs::wall_hug::ToPoint(wallHug.goalPlace))});
 	if (!DoTeleport(stone, villager, true))
 	{
 		return false;
@@ -651,7 +653,7 @@ bool TeleportSystem::RouteWorshipper(entt::entity villager, glm::vec3 site)
 		return false;
 	}
 	// On its way to worship, arriving at the site at the end, it turns aside into the stone
-	wallHug->goal = {site.x, site.z};
+	wallHug->goalPlace = ecs::wall_hug::ToWhole({site.x, site.z});
 	auto& living = Locator::livingActionSystem::value();
 	living.VillagerSetState(*action, LivingAction::Index::Final, VillagerStates::ArrivesAtWorshipSiteForWorship, false);
 	living.VillagerSetState(*action, LivingAction::Index::Top, VillagerStates::GotoWorshipSiteForWorship, false);

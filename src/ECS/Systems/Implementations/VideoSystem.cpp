@@ -97,7 +97,7 @@ VideoSystem::Hooks GameHooks()
 		            [&found, local](const ecs::components::Creature& creature) { found = found || creature.owner == local; });
 		        return found;
 	        },
-	    .fallingSpellPath = []() { return std::filesystem::path("Data/Spells/fall/fall.bik"); },
+	    .fallingSpellPath = []() { return std::filesystem::path(k_FallingSpellFilm); },
 	    .fallingSpellCue = [audio =
 	                            std::make_shared<video::FallingSpellAudio>()](video::FallingSpellCue cue) { audio->Play(cue); },
 	    .whiteFadeReached =
@@ -125,6 +125,29 @@ VideoSystem::VideoSystem(Hooks hooks, video::DecodeMode mode)
     : _hooks(std::move(hooks))
     , _decodeMode(mode)
 {
+}
+
+void VideoSystem::RegisterScriptFilms()
+{
+	if (!_filmsEnabled || !Locator::resources::has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	auto& videos = Locator::resources::value().GetVideos();
+	for (const auto film : {k_IntroFilm, k_FallingSpellFilm})
+	{
+		const std::filesystem::path path(film);
+		if (!fileSystem.Exists(path))
+		{
+			continue;
+		}
+		// The size of the file is the most that the load reads
+		std::error_code error;
+		const auto bytes = std::filesystem::file_size(fileSystem.FindPath(path), error);
+		videos.RegisterLoad(VideoId(path), error ? 0 : static_cast<size_t>(bytes), resources::VideoLoader::FromDiskTag {},
+		                    path);
+	}
 }
 
 bool VideoSystem::Play(const std::filesystem::path& path)

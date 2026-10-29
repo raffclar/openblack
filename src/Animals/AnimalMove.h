@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <functional>
+#include <optional>
 
 #include <glm/vec2.hpp>
 
@@ -46,6 +47,10 @@ struct Move
 	uint16_t speed {0};
 	MoveStage stage {MoveStage::AtGoal};
 };
+
+/// The stage of a move from the number of its move state in the game's table of the move states: arrived, the last step
+/// or a step straight through. Nothing for another move state.
+[[nodiscard]] std::optional<MoveStage> MoveStageOfGame(uint8_t moveState);
 
 /// A turn towards an angle: the angle it now faces, and how far and which way it turned (0 when facing it already)
 struct Turn

@@ -35,6 +35,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -1304,6 +1305,10 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	if (registry.AllOf<Scaffold>(object))
 	{
 		_world->ScaffoldIntoHand(object, player);
+	}
+	if (registry.AllOf<HanoiBlock>(object))
+	{
+		_world->PuzzlePieceIntoHand(object);
 	}
 	if (registry.AllOf<Pot>(object))
 	{

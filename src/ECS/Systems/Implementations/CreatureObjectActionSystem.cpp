@@ -109,6 +109,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/CreaturePlacement.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Graveyards.h"
@@ -2477,6 +2478,34 @@ std::optional<entt::entity> CreatureObjectActionSystem::GetHeld(entt::entity cre
 	return held != nullptr && registry.Valid(held->object) ? std::optional(held->object) : std::nullopt;
 }
 
+std::optional<entt::entity> CreatureObjectActionSystem::GetCarried(entt::entity creature) const
+{
+	return ecs::creature_carried::CarriedBy(Locator::entitiesRegistry::value(), creature);
+}
+
+bool CreatureObjectActionSystem::HandsTouched(entt::entity creature) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
+	return action != nullptr && action->phase == Phase::Playing && action->status == Status::Contact;
+}
+
+bool CreatureObjectActionSystem::CrushUnderFoot(entt::entity creature, entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.AllOf<Creature>(creature) || !registry.Valid(thing) ||
+	    !OnTheMap(registry, thing))
+	{
+		return false;
+	}
+	// A living thing takes the crush again on each turn, also when it is dead already
+	if (registry.AnyOf<Villager, Animal, Creature>(thing))
+	{
+		Crush(creature, registry.Get<const Creature>(creature), thing);
+	}
+	return true;
+}
+
 std::optional<float> CreatureObjectActionSystem::FoodValueOf(entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -2646,7 +2675,7 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 	const auto* holder = registry.TryGet<const HeldByCreature>(object);
 	const bool inMap =
 	    ecs::InMapCells(registry, object) && !registry.AnyOf<InHand, HeldByCreature, InPhysics, CarriedByTornado>(object);
-	const bool heldByThisCreature = holder != nullptr && holder->creature == creature;
+	const bool heldByThisCreature = holder != nullptr && ecs::creature_carried::Carries(registry, creature, object);
 	const auto* leash = registry.Valid(creature) ? registry.TryGet<const CreatureLeash>(creature) : nullptr;
 	const bool leashTied = leash != nullptr && leash->worn.has_value() && leash->worn->tiedTo == object;
 
@@ -2711,7 +2740,7 @@ bool CreatureObjectActionSystem::CanEat(entt::entity creature, entt::entity obje
 
 bool CreatureObjectActionSystem::CanEatHeld(entt::entity creature) const
 {
-	const auto held = GetHeld(creature);
+	const auto held = GetCarried(creature);
 	return held.has_value() && creature_object_actions::MayEatHeld(KindFactsOf(*held), CanPickUp(creature, *held));
 }
 
@@ -2972,7 +3001,7 @@ void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
 	if (auto* needs = registry.TryGet<CreatureNeeds>(entity); needs != nullptr && registry.AllOf<Creature>(entity))
 	{
 		needs->carriedWeight.reset();
-		const auto held = GetHeld(entity);
+		const auto held = GetCarried(entity);
 		if (!held.has_value())
 		{
 			return;
@@ -3473,18 +3502,9 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			{
 				break;
 			}
-			// A living thing under the foot takes the crush of the stomp, from the creature and its player. The crush
-			// belongs to the plan, so a stomp that plays on after its plan stopped crushes nothing.
-			if (registry.AnyOf<Villager, Animal, Creature>(target))
-			{
-				if (!action.planStopped)
-				{
-					Crush(creature, body, target);
-				}
-			}
-			// A building is broken about where it stands, and a rock is smashed in two; the blow does nothing to anything
-			// else
-			else if (registry.AnyOf<Abode, SpellDispenser>(target))
+			// A building is broken about where it stands, and a rock is smashed in two. The blow does nothing to anything
+			// else. A living thing takes the crush from the plan of the creature on each turn after the blow.
+			if (registry.AnyOf<Abode, SpellDispenser>(target))
 			{
 				if (Locator::buildingDamageSystem::has_value())
 				{

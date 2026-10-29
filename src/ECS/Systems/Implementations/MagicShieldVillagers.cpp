@@ -44,6 +44,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -369,7 +370,7 @@ uint32_t MagicShieldSystem::AgainTurnsFor(entt::entity villager, const ShieldRea
 	{
 		if (const auto* hug = registry.TryGet<const WallHug>(villager))
 		{
-			goalUnder = shield::IsUnder(hug->goal, PositionOf(reaction.object), found->radius, 0.0f);
+			goalUnder = shield::IsUnder(wall_hug::ToPoint(hug->goalPlace), PositionOf(reaction.object), found->radius, 0.0f);
 		}
 	}
 	return shield::VillagerAgainTurns(town.hasTown, town.sinceAttacked,
