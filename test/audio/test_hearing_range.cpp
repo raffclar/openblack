@@ -15,7 +15,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/HearingRange.h"
+#include "Sound/HearingRange.h"
 
 using namespace openblack::audio;
 

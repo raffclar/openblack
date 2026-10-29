@@ -15,8 +15,8 @@
 #include <entt/fwd.hpp>
 #include <glm/vec3.hpp>
 
-#include "Audio/EmitterFollow.h"
-#include "Audio/Sound.h"
+#include "Sound/EmitterFollow.h"
+#include "Sound/LoadedSound.h"
 
 namespace openblack::ecs::components
 {

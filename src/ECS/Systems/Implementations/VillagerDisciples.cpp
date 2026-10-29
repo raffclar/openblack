@@ -23,8 +23,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/HelpSpeech.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -80,6 +78,8 @@
 #include "Magic/VillagerReactionRules.h"
 #include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/HelpSpeech.h"
+#include "Sound/SoundRequestInterface.h"
 #include "VillagerAnimate.h"
 #include "VillagerBreeding.h"
 #include "VillagerBuild.h"
@@ -775,7 +775,7 @@ void villager_disciple::PutDown(entt::entity villager, std::optional<PlayerNames
 	{
 		return;
 	}
-	if (!Locator::helpSpeechSystem::has_value() || !Locator::audio::has_value() || !Locator::alignmentSystem::has_value())
+	if (!Locator::helpSpeechSystem::has_value() || !Locator::sounds::has_value() || !Locator::alignmentSystem::has_value())
 	{
 		return;
 	}
@@ -790,7 +790,7 @@ void villager_disciple::PutDown(entt::entity villager, std::optional<PlayerNames
 	                    *sample, sound.has_value() ? "found" : "missing");
 	if (sound.has_value() && Locator::resources::value().GetSounds().Contains(*sound))
 	{
-		Locator::audio::value().StartSoundEffect(
+		Locator::sounds::value().StartSoundEffect(
 		    *sound, {.pitchPercent = k_MadePitch, .volume = k_MadeVolume, .voicePlayType = pack::AudioBankLoop::Once});
 	}
 }

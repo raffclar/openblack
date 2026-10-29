@@ -21,13 +21,13 @@
 #include "3D/L3DAnim.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/Light.h"
-#include "Audio/ScriptMusic.h"
-#include "Audio/Sound.h"
 #include "Creature/CreatureMind.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
 #include "Graphics/TexelDepth.h"
 #include "Level.h"
+#include "Sound/LoadedSound.h"
+#include "Sound/ScriptMusic.h"
 
 namespace openblack
 {

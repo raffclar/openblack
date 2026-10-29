@@ -13,7 +13,6 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
-#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDeeds.h"
 #include "ECS/AltarSacrifice.h"
@@ -37,6 +36,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Sound/GameSoundEffects.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;

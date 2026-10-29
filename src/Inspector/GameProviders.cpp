@@ -43,7 +43,6 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/CustomMusicPlayerInterface.h"
 #include "Audio/GameMusic.h"
-#include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
@@ -267,6 +266,7 @@
 #include "RegistryProviders.h"
 #include "Resources/ResourcesInterface.h"
 #include "RunControl.h"
+#include "Sound/MusicMood.h"
 #include "SystemProviders.h"
 #include "Temple/TemplePeople.h"
 #include "Windowing/WindowingInterface.h"
@@ -306,6 +306,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"oceanSystem", "land.ocean"},
     LocatorCoverage {"skySystem", "sky.state"},
     LocatorCoverage {"audio", "audio.state"},
+    // The sound requests keep no state of their own. They go to the audio at once, and audio.state shows the audio.
+    LocatorCoverage {"sounds", "audio.state"},
     LocatorCoverage {"camera", "camera.state"},
     LocatorCoverage {"gameActionSystem", "players.input"},
     LocatorCoverage {"rendereringSystem", "engine.frame"},

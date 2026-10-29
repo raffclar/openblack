@@ -20,8 +20,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowDust.h"
@@ -34,6 +32,8 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -220,10 +220,10 @@ uint32_t GameBuildingDamageWorld::DustTint(uint32_t argb, int32_t snow) const
 
 void GameBuildingDamageWorld::PlaySound(std::span<const int32_t> keys, entt::entity building, glm::vec3 position)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().PlayAnimEffect(std::string(k_BuildingSoundBank), keys, building, position,
-		                                       audio::CurrentSoundEffectConditions());
+		Locator::sounds::value().PlayAnimEffect(std::string(k_BuildingSoundBank), keys, building, position,
+		                                        audio::CurrentSoundEffectConditions());
 	}
 }
 

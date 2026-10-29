@@ -24,8 +24,6 @@
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera.h"
 #include "CameraLens.h"
 #include "Common/MachineClock.h"
@@ -38,6 +36,8 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 #include "Temple/TempleHelpScripts.h"
 #include "Windowing/WindowingInterface.h"
 

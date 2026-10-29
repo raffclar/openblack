@@ -20,8 +20,6 @@
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -40,6 +38,8 @@
 #include "Particles/ParticleEffect.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -199,7 +199,7 @@ void MagicSystem::AfterSeedCast(const SpellSeed& seed, MagicType type)
 	{
 		Locator::miracleFxSystem::value().ReleaseTribalPowerRing(*tribe, _hand.handPosition);
 	}
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}

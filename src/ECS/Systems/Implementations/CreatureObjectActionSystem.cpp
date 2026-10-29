@@ -32,9 +32,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableMath.h"
@@ -143,6 +140,9 @@
 #include "ObjectMeasures.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "VillagerFire.h"
 #include "VillagerPhysics.h"
 
@@ -723,14 +723,14 @@ void PlayKickSound(const ecs::Registry& registry, entt::entity target, glm::vec3
 		}
 		object = k_KickedTree;
 	}
-	if (!object.has_value() || !Locator::audio::has_value())
+	if (!object.has_value() || !Locator::sounds::has_value())
 	{
 		return;
 	}
 	const std::array<int32_t, 5> keys {0, 0, *object, 0, k_BeenKicked};
-	Locator::audio::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot,
-	                                       openblack::audio::CurrentSoundEffectConditions(),
-	                                       openblack::audio::AnimEffectMeasure::AcrossFirst);
+	Locator::sounds::value().PlayAnimEffect(std::string(k_KickSoundBank), keys, target, foot,
+	                                        openblack::audio::CurrentSoundEffectConditions(),
+	                                        openblack::audio::AnimEffectMeasure::AcrossFirst);
 }
 
 /// The foot meets what the creature kicks. The order of the rules is:

@@ -22,8 +22,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Animals/AnimalAnimation.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/ScriptSoundEffect.h"
 #include "Blast/DustPuff.h"
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
@@ -42,6 +40,8 @@
 #include "Resources/Loaders.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/ScriptSoundEffect.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

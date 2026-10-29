@@ -19,9 +19,6 @@
 
 #include "3D/L3DAnim.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/ClipSounds.h"
-#include "Audio/GameSoundEffects.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
@@ -29,6 +26,9 @@
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/ClipSounds.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -50,7 +50,7 @@ public:
 
 	[[nodiscard]] const sas::ClipSounds* SoundsOf(AnimId clip) const override
 	{
-		if (!Locator::resources::has_value() || !Locator::audio::has_value())
+		if (!Locator::resources::has_value() || !Locator::sounds::has_value())
 		{
 			return nullptr;
 		}
@@ -78,7 +78,7 @@ public:
 	               bool bySampleRules) override
 	{
 		const auto conditions = bySampleRules ? std::optional(audio::CurrentSoundEffectConditions()) : std::nullopt;
-		auto& audio = Locator::audio::value();
+		auto& audio = Locator::sounds::value();
 		// The sound stays with its owner, and it stops when the owner goes or dies
 		const auto played = audio.PlayAnimEffect(std::string(bank), keys, owner, position, conditions);
 		audio.SetEmitterFollows(played.emitter, audio::Follows::Owner);
@@ -87,8 +87,8 @@ public:
 	void EndSound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& position,
 	              audio::AnimEffectEnd end) override
 	{
-		Locator::audio::value().EndAnimEffect(std::string(bank), keys, owner, position, end,
-		                                      audio::AnimEffectMeasure::Straight);
+		Locator::sounds::value().EndAnimEffect(std::string(bank), keys, owner, position, end,
+		                                       audio::AnimEffectMeasure::Straight);
 	}
 };
 

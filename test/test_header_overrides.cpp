@@ -11,7 +11,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/HeaderOverrides.h"
+#include "Sound/HeaderOverrides.h"
 
 using namespace openblack::audio;
 using openblack::pack::AudioBankOverride;

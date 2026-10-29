@@ -12,12 +12,12 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
-#include "Audio/Sound.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
+#include "Sound/SoundId.h"
 #include "Utils.h"
 
 using namespace openblack;

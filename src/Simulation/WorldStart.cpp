@@ -50,8 +50,6 @@
 #include "3D/TempleRoomMeshes.h"
 #include "Audio/AnimEffectTable.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/ClipSounds.h"
-#include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
 #include "Camera/CameraZones.h"
 #include "Common/BufferedLogSink.h"
@@ -100,6 +98,8 @@
 #include "Physics/Materials.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/ClipSounds.h"
+#include "Sound/HelpSpeech.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::simulation

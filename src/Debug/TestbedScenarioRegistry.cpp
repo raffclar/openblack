@@ -24,7 +24,6 @@
 #include "3D/FlatLand.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
-#include "Audio/Sound.h"
 #include "Common/PortableMath.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
@@ -37,6 +36,7 @@
 #include "Input/BindableActions.h"
 #include "Particles/ParticleTypes.h"
 #include "ScriptHeaders/ScriptEnums.h"
+#include "Sound/SoundId.h"
 #include "TestbedDispenserGrid.h"
 
 using namespace openblack;

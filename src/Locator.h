@@ -47,7 +47,8 @@ using InfoConstants = v120::InfoConstants;
 namespace audio
 {
 class AudioManagerInterface;
-}
+class SoundRequestInterface;
+} // namespace audio
 
 namespace chlapi
 {
@@ -292,6 +293,8 @@ struct Locator
 	using oceanSystem = entt::locator<OceanInterface>;
 	using skySystem = entt::locator<ecs::systems::SkySystemInterface>;
 	using audio = entt::locator<audio::AudioManagerInterface>;
+	/// The sounds that the world asks for. The audio library plays them through the audio manager.
+	using sounds = entt::locator<openblack::audio::SoundRequestInterface>;
 	using camera = entt::locator<Camera>;
 	using gameActionSystem = entt::locator<input::GameActionInterface>;
 	using rendereringSystem = entt::locator<ecs::systems::RenderingSystemInterface>;

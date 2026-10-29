@@ -32,9 +32,6 @@
 #include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
 #include "Animals/FishFarmRules.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -147,6 +144,9 @@
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleShields.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -842,7 +842,7 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 			// A tree in the map's cells that the water grows comes out of them and goes in again
 			ecs::thing_map_place::Reinsert(object);
 			// It rustles as it grows
-			if (Locator::audio::has_value() && Locator::gameRandom::has_value())
+			if (Locator::sounds::has_value() && Locator::gameRandom::has_value())
 			{
 				const auto sample =
 				    k_TreeGrowSounds.at(Locator::gameRandom::value().LocalRand(static_cast<int32_t>(k_TreeGrowSounds.size())));
@@ -1649,9 +1649,9 @@ void MagicSystem::HeldSeedTurn()
 void MagicSystem::ProcessTurn()
 {
 	// The hum of an armed seed follows the hand one time each turn, before the audio turn
-	if (_holdLoop != entt::null && Locator::audio::has_value())
+	if (_holdLoop != entt::null && Locator::sounds::has_value())
 	{
-		Locator::audio::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
+		Locator::sounds::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
 	}
 	if (!Locator::infoConstants::has_value() || !Locator::particleSystem::has_value())
 	{
@@ -2290,7 +2290,7 @@ bool MagicSystem::TapGlobe(entt::entity orb, PlayerNames player)
 		// The hand takes the globe itself, and a globe does not show the name of its miracle
 		_heldMiracleToolTip.reset();
 		// The pop is heard where the hand took it
-		if (Locator::audio::has_value())
+		if (Locator::sounds::has_value())
 		{
 			audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04),
 			                            {.position = _hand.handPosition, .owner = seed});
@@ -2381,7 +2381,7 @@ void MagicSystem::StopHandEffect(SpellSeed& seed)
 void MagicSystem::StartHoldLoop()
 {
 	StopHoldLoop();
-	if (Locator::audio::has_value() && Held().has_value())
+	if (Locator::sounds::has_value() && Held().has_value())
 	{
 		_holdLoop = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
 		                                        {.position = _hand.handPosition,
@@ -2395,9 +2395,9 @@ void MagicSystem::StartHoldLoop()
 void MagicSystem::StopHoldLoop()
 {
 	// Cut at once, as the hand's hum is
-	if (_holdLoop != entt::null && Locator::audio::has_value() && Locator::audio::value().EmitterExists(_holdLoop))
+	if (_holdLoop != entt::null && Locator::sounds::has_value() && Locator::sounds::value().EmitterExists(_holdLoop))
 	{
-		Locator::audio::value().StopEmitter(_holdLoop);
+		Locator::sounds::value().StopEmitter(_holdLoop);
 	}
 	_holdLoop = entt::null;
 }
@@ -2883,7 +2883,7 @@ void MagicSystem::FailCast()
 		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast, point, std::nullopt, entt::null, 1.0f,
 		                                                 false);
 	}
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellCastFailure), std::nullopt);
 	}

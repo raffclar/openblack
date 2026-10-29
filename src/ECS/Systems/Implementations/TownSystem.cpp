@@ -27,8 +27,6 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -97,6 +95,8 @@
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
 #include "Particles/DrawnEffectSteps.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 #include "VillagerBreeding.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDiscipleWork.h"

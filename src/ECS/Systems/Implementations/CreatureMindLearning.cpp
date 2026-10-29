@@ -34,7 +34,6 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/MusicMood.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -174,6 +173,7 @@
 #include "MagicLiving.h"
 #include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/MusicMood.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

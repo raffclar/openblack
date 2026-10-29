@@ -28,8 +28,6 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Blast/RootsPile.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
@@ -127,6 +125,8 @@
 #include "Physics/LivingRules.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Temple/TempleEntranceTap.h"
 #include "VillagerPhysics.h"
 
@@ -513,7 +513,7 @@ void GameHandGrabWorld::HeldTurn(entt::entity object)
 
 void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		// Each of these sounds is a sound of its own to the voice rules. It stays where it started, and it stops when
 		// the camera goes too far.
@@ -1370,11 +1370,11 @@ void GameHandGrabWorld::MoveScoopStream(uint32_t stream, glm::vec3 hand)
 
 entt::entity GameHandGrabWorld::PlayScoopSound(entt::entity playing, ResourceType resource, glm::vec3 hand, float ramp)
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return entt::null;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	// Its pitch rises as the scoop ramps up
 	const auto pitch = hand_grab::ScoopSoundPitch(ramp);
 	// Already playing, it goes on where it started and only follows the ramp
@@ -1390,11 +1390,11 @@ entt::entity GameHandGrabWorld::PlayScoopSound(entt::entity playing, ResourceTyp
 
 void GameHandGrabWorld::StopScoopSound()
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	audio.StopSoundEffect(static_cast<entt::id_type>(k_ScoopSound));
 	audio.StopSoundEffect(static_cast<entt::id_type>(k_ScoopWoodSound));
 }

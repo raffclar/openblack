@@ -10,8 +10,6 @@
 #include "GamePhysicsHooksWorld.h"
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Creature.h"
@@ -45,6 +43,8 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -216,7 +216,7 @@ glm::mat4 GamePhysicsHooksWorld::PlacementOf(entt::entity object) const
 
 void GamePhysicsHooksWorld::PlaySound(entt::id_type sound, glm::vec3 position, entt::entity owner)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(sound, {.position = position, .owner = owner});
 	}

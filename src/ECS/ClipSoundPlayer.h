@@ -19,8 +19,8 @@
 #include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
-#include "Audio/HearingRange.h"
 #include "Creature/CreatureAudio.h"
+#include "Sound/HearingRange.h"
 
 namespace openblack
 {

@@ -21,7 +21,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/Sound.h"
 #include "Creature/CreatureTeleportAgendas.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Archetypes/Utils.h"
@@ -66,6 +65,7 @@
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
 #include "Particles/DrawnEffectSteps.h"
+#include "Sound/SoundId.h"
 #include "VillagerReactions.h"
 #include "VillagerTeleport.h"
 

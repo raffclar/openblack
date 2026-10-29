@@ -32,6 +32,7 @@
 #include "Audio/AudioManager.h"
 #include "Audio/AudioManagerNoOp.h"
 #include "Audio/ClockedAudioPlayer.h"
+#include "Audio/GameSoundRequests.h"
 #include "Audio/QueuedAudioManager.h"
 #include "CHLApi.h"
 #include "Common/EventManager.h"
@@ -416,6 +417,7 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	}
 	// The game's calls go to the audio through the queue of the main thread
 	Locator::audio::emplace<audio::QueuedAudioManager>(std::move(machineAudio), Locator::mainThreadQueue::value());
+	Locator::sounds::emplace<audio::GameSoundRequests>();
 	return true;
 }
 
@@ -428,6 +430,7 @@ bool openblack::InitializeHeadlessEngine() noexcept
 		return false;
 	}
 	Locator::audio::emplace<AudioManagerNoOp>();
+	Locator::sounds::emplace<audio::GameSoundRequests>();
 	return true;
 }
 
@@ -946,6 +949,7 @@ void openblack::ShutDownServices()
 	Locator::advisorSystem::reset();
 
 	// The audio resources have been cleared and all sounds have been stopped. It is now safe to reset audio
+	Locator::sounds::reset();
 	if (Locator::audio::has_value())
 	{
 		Locator::audio::reset();
