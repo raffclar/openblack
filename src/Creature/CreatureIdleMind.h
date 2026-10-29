@@ -752,6 +752,9 @@ enum class HandsCheck : uint8_t
 /// The check of the hands before a step that needs empty hands, until the let-go starts. A faint that does not come
 /// from the mind also does this check before it starts.
 [[nodiscard]] HandsCheck CheckHands(bool holds, bool bodyBusy, bool handsBusy);
+/// Whether the step is a walk to a point, to a point near the creature or to a thing. Such a walk starts while the body
+/// only moves, and its new route takes the place of the route that the creature walks. Other steps wait for the body.
+[[nodiscard]] bool StartsOnTheWay(const Step& step);
 
 /// The turns between when a fainted creature lies still and when its wait starts, plus the turn between the end of
 /// the wait and the start of the next part of the faint
@@ -786,6 +789,8 @@ struct Senses
 	bool bodyDancing {false};
 	/// Whether it is on its way somewhere or turning, and where it stands
 	bool moving {false};
+	/// Whether the body only moves: it is on its way or turns, and plays no action. A new walk can start then.
+	bool onlyMoves {false};
 	/// How going near, getting away from or turning to face an object, or drawing a gesture, is going, by the
 	/// creature's movement
 	SubMove subMove {SubMove::Running};

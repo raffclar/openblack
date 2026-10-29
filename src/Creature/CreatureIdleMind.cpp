@@ -1209,6 +1209,23 @@ std::optional<Gaze> creature_mind::LookOf(const Step& step)
 	return std::nullopt;
 }
 
+bool creature_mind::StartsOnTheWay(const Step& step)
+{
+	if (step.kind != Step::Kind::Move)
+	{
+		return false;
+	}
+	switch (step.movement.kind)
+	{
+	case Movement::Kind::ToPoint:
+	case Movement::Kind::Nearby:
+	case Movement::Kind::ToObject:
+		return true;
+	default:
+		return false;
+	}
+}
+
 namespace
 {
 /// Whether the step starts its clip with a try that the body can refuse. A refused try comes again on each turn. A
@@ -1341,12 +1358,15 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			return commands;
 		}
 		// Nothing starts while the body still plays an action. A stop starts while the body moves, to stop it, and a
-		// faint starts at once. The steps of a teleport also start at once. A step that tries to start its clip tries
-		// again on each turn.
+		// faint starts at once. The steps of a teleport also start at once. A walk to a point or to a thing starts
+		// while the body only moves: the new walk takes the place of the old one at once. A step that tries to start its
+		// clip tries again on each turn.
 		const bool teleportStep = step.kind == Step::Kind::Teleport || step.kind == Step::Kind::Transported ||
 		                          step.kind == Step::Kind::StopTeleportControl;
+		const bool walkOnTheWay =
+		    StartsOnTheWay(step) && senses.onlyMoves && !(handsChecked && senses.hands == HandsState::Busy);
 		if (step.kind != Step::Kind::Wait && step.kind != Step::Kind::WatchCamera && step.kind != Step::Kind::StopMoving &&
-		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && !teleportStep && bodyBusy)
+		    step.kind != Step::Kind::PracticeDance && !IsFaint(step) && !teleportStep && !walkOnTheWay && bodyBusy)
 		{
 			if (TriesToStartClip(step, senses))
 			{
