@@ -172,6 +172,7 @@
 #include "Graphics/LandShadowBake.h"
 #include "Graphics/LightShine.h"
 #include "Graphics/MaterialStages.h"
+#include "Graphics/Mesh.h"
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ModelLight.h"
 #include "Graphics/Moon.h"
