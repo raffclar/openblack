@@ -19,6 +19,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownArtefact.h"
@@ -261,6 +262,7 @@ TEST(VortexCrossingLines, TheReaderTakesEveryKindsLine)
 	registry.Assign<MobileObject>(add({1000.0f, k_Ground, 2000.0f}), MobileObjectInfo::EgyptBarrel);
 	registry.Assign<DeadTree>(add({1000.0f, k_Ground, 2000.0f}), DeadTree {.type = TreeInfo::Oak});
 	registry.Assign<OneOffSpellSeed>(add({1000.0f, k_Ground, 2000.0f}), OneOffSpellSeed {.seedType = SpellSeedType::Food});
+	registry.Assign<Scaffold>(add({1000.0f, k_Ground, 2000.0f}), Scaffold {.town = town});
 	for (const auto thing : things)
 	{
 		const auto text = LineText(registry, thing);
@@ -322,6 +324,26 @@ TEST(VortexCrossingLines, ARockIsWrittenAtTheHeightItWasPutDownAt)
 	const auto line = vortex_crossing::LineFor(registry, rock, raised, FakeWorld());
 	ASSERT_TRUE(line.has_value());
 	EXPECT_FLOAT_EQ(std::get<vortex::crossing::MobileStaticLine>(*line).offset.altitude, 1.5f);
+}
+
+TEST(VortexCrossingLines, AScaffoldOfNoWorkshopKeepsItsTownTurnAndSize)
+{
+	Registry registry;
+	const auto town = registry.Create();
+	registry.Assign<Town>(town, Town {.id = 3});
+	const auto scaffold = Thing(registry, {1010.0f, k_Ground, 1990.0f}, glm::mat3(1.0f), 1.1f);
+	registry.Assign<Scaffold>(scaffold, Scaffold {.town = town});
+	const auto text = LineText(registry, scaffold);
+	// The angle and the size are in thousandths, truncated
+	EXPECT_EQ(text, fmt::format("CREATE_SCAFFOLD(3, \"10.00,-10.00\", 0, 0, {})\n", map_coords::FtoL(1.1f * 1000.0f)));
+	EXPECT_TRUE(ReaderTakes(Read(text))) << text;
+	// A scaffold of no town is written with the town -1
+	registry.Get<Scaffold>(scaffold).town = entt::null;
+	EXPECT_TRUE(LineText(registry, scaffold).starts_with("CREATE_SCAFFOLD(-1, "));
+	// A scaffold that a workshop counts as its own writes no line
+	const auto workshop = registry.Create();
+	registry.Get<Scaffold>(scaffold).workshop = workshop;
+	EXPECT_EQ(LineText(registry, scaffold), "");
 }
 
 TEST(VortexCrossingLines, EachToyIsWrittenAsTheSameToyAtItsSize)

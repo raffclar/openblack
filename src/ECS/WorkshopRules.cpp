@@ -64,6 +64,20 @@ uint32_t workshop::ValueOfScale(float scale)
 	return static_cast<uint32_t>(map_coords::FtoL(value));
 }
 
+float workshop::ScaleOfScriptSize(float size)
+{
+	return ScaleOfValue(static_cast<uint32_t>(map_coords::FtoL(size)));
+}
+
+std::optional<AbodeNumber> workshop::ScriptBuildingOf(int32_t number)
+{
+	if (number == static_cast<int32_t>(AbodeNumber::Invalid))
+	{
+		return std::nullopt;
+	}
+	return static_cast<AbodeNumber>(number);
+}
+
 float workshop::WoodWant(uint32_t wood, uint32_t scaffoldWood)
 {
 	// 0.0001 as the game keeps it

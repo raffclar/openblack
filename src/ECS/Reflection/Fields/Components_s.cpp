@@ -70,6 +70,7 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Scaffold::place>("place")
 	    .Field<&components::Scaffold::putDownTurn>("putDownTurn")
 	    .Field<&components::Scaffold::scriptBuilding>("scriptBuilding")
+	    .Field<&components::Scaffold::destroysThingsInWay>("destroysThingsInWay")
 	    .Field<&components::Scaffold::gentle>("gentle")
 	    .Field<&components::Scaffold::handPlayer>("handPlayer")
 	    .Field<&components::Scaffold::phantom>("phantom")

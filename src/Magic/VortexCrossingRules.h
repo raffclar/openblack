@@ -199,8 +199,19 @@ struct OneOffSpellLine
 	map_coords::MapCoords offset;
 	std::string magic;
 };
+/// A scaffold that no workshop counts as its own, with the town that it was made for. The scaffolds have one row in
+/// their table.
+struct ScaffoldLine
+{
+	/// The town's number, -1 for none
+	int32_t town {-1};
+	map_coords::MapCoords offset;
+	int32_t row {0};
+	float yAngle {0.0f};
+	float scale {1.0f};
+};
 using Line = std::variant<VillagerLine, SpecialVillagerLine, AnimalLine, PotLine, TreeLine, MobileStaticLine, MobileObjectLine,
-                          DeadTreeLine, OneOffSpellLine>;
+                          DeadTreeLine, OneOffSpellLine, ScaffoldLine>;
 
 /// The land scripts' text for a command: its name, then each parameter by its letter (A a place or plain text, N a whole
 /// number, F a number, L quoted text), comma separated in brackets, ending the line
