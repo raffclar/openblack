@@ -119,6 +119,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "logo-effect"},
     DeveloperOption {.name = "continue"},
     DeveloperOption {.name = "skip-opening", .takesValue = true},
+    DeveloperOption {.name = "direct-start-creature", .takesValue = true},
     DeveloperOption {.name = "play-video", .takesValue = true},
     DeveloperOption {.name = "film-surface", .takesValue = true},
     DeveloperOption {.name = "scenario", .takesValue = true},

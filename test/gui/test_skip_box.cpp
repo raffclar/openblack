@@ -165,6 +165,57 @@ TEST(NewGameChoice, TheDebugCowIsMadeOnlyOnTheFirstLand)
 	EXPECT_FALSE(MakesDebugCow(SkipFor(Choice::StartNormally), 1));
 }
 
+// Debug only: a developer's direct start of a later land makes the player's creature of a chosen species
+TEST(NewGameChoice, TheDirectStartCreatureIsNamedBySpecies)
+{
+	using openblack::CreatureType;
+	using openblack::new_game_choice::k_DirectCreatureNames;
+	using openblack::new_game_choice::ParseDirectCreature;
+	EXPECT_EQ(ParseDirectCreature("cow"), CreatureType::Cow);
+	EXPECT_EQ(ParseDirectCreature("giantape"), CreatureType::GiantApe);
+	EXPECT_EQ(ParseDirectCreature("brownbear"), CreatureType::BrownBear);
+	EXPECT_FALSE(ParseDirectCreature("").has_value());
+	EXPECT_FALSE(ParseDirectCreature("Cow").has_value());
+	EXPECT_FALSE(ParseDirectCreature("dragon").has_value());
+	// Every species the game has, but not the unknown one, has exactly one name
+	EXPECT_EQ(k_DirectCreatureNames.size(), static_cast<size_t>(CreatureType::_COUNT) - 1);
+	for (const auto& entry : k_DirectCreatureNames)
+	{
+		EXPECT_NE(entry.species, CreatureType::Unknown);
+		EXPECT_EQ(ParseDirectCreature(entry.name), entry.species);
+	}
+}
+
+TEST(NewGameChoice, ADirectStartRunsTheControlScriptOfALaterLandOnly)
+{
+	using openblack::CreatureType;
+	using openblack::new_game_choice::DirectStartLand;
+	const NewGameStart withTiger {.answer = Choice::StartNormally, .directCreature = CreatureType::Tiger};
+	EXPECT_EQ(DirectStartLand(withTiger, 2), 2);
+	EXPECT_EQ(DirectStartLand(withTiger, 5), 5);
+	// The first land has the story's top script, and the game plays any land as it does without the option
+	EXPECT_FALSE(DirectStartLand(withTiger, 1).has_value());
+	EXPECT_FALSE(DirectStartLand(NewGameStart {.answer = Choice::StartNormally}, 2).has_value());
+	EXPECT_FALSE(DirectStartLand(std::nullopt, 2).has_value());
+}
+
+TEST(NewGameChoice, TheDirectStartCreatureIsMadeOnlyWhenNoneCameThrough)
+{
+	using openblack::CreatureType;
+	using openblack::new_game_choice::DirectStartCreature;
+	const NewGameStart withWolf {.answer = Choice::StartNormally, .directCreature = CreatureType::Wolf};
+	EXPECT_EQ(DirectStartCreature(withWolf, 2, false, false), CreatureType::Wolf);
+	// A creature that came through the vortex, or one the player has, is used instead
+	EXPECT_FALSE(DirectStartCreature(withWolf, 2, true, false).has_value());
+	EXPECT_FALSE(DirectStartCreature(withWolf, 2, false, true).has_value());
+	// Never on the first land, and never without the option
+	EXPECT_FALSE(DirectStartCreature(withWolf, 1, false, false).has_value());
+	EXPECT_FALSE(DirectStartCreature(NewGameStart {.answer = Choice::StartNormally}, 2, false, false).has_value());
+	EXPECT_FALSE(DirectStartCreature(std::nullopt, 2, false, false).has_value());
+	// The option does not change the question's answer
+	EXPECT_EQ(AnswerAtOnce(withWolf, false), Choice::StartNormally);
+}
+
 TEST(NewGameChoice, SelectionsAreBroughtIntoRange)
 {
 	EXPECT_EQ(ClampChoice(-1), Choice::StartNormally);
