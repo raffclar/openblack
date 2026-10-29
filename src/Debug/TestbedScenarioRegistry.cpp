@@ -11395,7 +11395,7 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	    .expected = "Each villager of the flock plays the prayer clip one time. The script then controls each villager. "
 	                "The log tells that the two natives ran and gave back no values.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 10.0f}}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -12.0f}, .look = {0.0f, 1.0f, 0.0f}},
 	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-4.0f, 0.0f}},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 0.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {4.0f, 0.0f}}},

@@ -2809,6 +2809,11 @@ std::optional<entt::entity> Runner::ScriptFlock()
 	// The flock starts where the first object is, as a script makes one at a point
 	const auto& at = registry.Get<const ecs::components::Transform>(*first).position;
 	_scriptFlock = ecs::script_flocks::Create(registry, map_coords::FromMetres({at.x, at.z}));
+	// The scenario keeps the flock as a script variable keeps it. Without the reference, the scripts' turn lets go of the
+	// flock and its members leave it.
+	auto& scripts = Locator::scriptObjects::value();
+	static_cast<void>(scripts.Register(_scriptFlock, true));
+	scripts.AddReference(_scriptFlock);
 	for (const auto object : _objects)
 	{
 		if (registry.Valid(object) && registry.AnyOf<ecs::components::Villager, ecs::components::Animal>(object))
