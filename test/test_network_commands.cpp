@@ -34,6 +34,7 @@
 #include "Locator.h"
 
 #define LOCATOR_IMPLEMENTATIONS
+#include "ECS/Systems/Implementations/EffectRequestSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
 
 using namespace openblack;
@@ -81,6 +82,20 @@ public:
 		spotVisuals.push_back({.type = type, .position = position, .turns = turns, .owner = owner, .magnitude = magnitude});
 		return static_cast<EffectId>(spotVisuals.size());
 	}
+	void Serve(const ecs::systems::EffectRequest& request, ecs::systems::EffectHandle /*handle*/) override
+	{
+		if (const auto* type = std::get_if<SpotVisualType>(&request.type))
+		{
+			spotVisuals.push_back({.type = *type,
+			                       .position = request.position,
+			                       .turns = request.turns,
+			                       .owner = request.owner,
+			                       .magnitude = request.magnitude});
+		}
+	}
+	void Move(ecs::systems::EffectHandle /*handle*/, glm::vec3 /*position*/) override {}
+	void Stop(ecs::systems::EffectHandle /*handle*/) override {}
+	void Remove(ecs::systems::EffectHandle /*handle*/) override {}
 	void SetOrigin(EffectId /*id*/, glm::vec3 /*origin*/) override {}
 	void SetPlayer(EffectId /*id*/, int /*player*/) override {}
 	void SetDrawPath(EffectId /*id*/, particles::draw::DrawPath /*path*/) override {}
@@ -348,6 +363,8 @@ TEST_F(NetworkCommands, TheLeaveOfTheServerDefeatsTheGodOfThePlayerAtTheTurn)
 TEST_F(NetworkCommands, TheGripOfAnotherComputerMakesItsDustAtTheTurnOfTheServer)
 {
 	auto& particles = static_cast<FakeParticles&>(Locator::particleSystem::emplace<FakeParticles>());
+	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>(
+	    [&particles]() -> ecs::systems::EffectServerInterface* { return &particles; });
 	_commands.SetSource(&_source);
 	// The own grip goes to the server, and makes no dust before the server's turn
 	_commands.Submit(GripDust {.point = {10.0f, 2.0f, 30.0f}});
@@ -365,6 +382,7 @@ TEST_F(NetworkCommands, TheGripOfAnotherComputerMakesItsDustAtTheTurnOfTheServer
 	EXPECT_EQ(dust.owner, entt::entity {entt::null});
 	EXPECT_EQ(dust.magnitude, 1.0f);
 	_commands.SetSource(nullptr);
+	Locator::effectRequestSystem::reset();
 	Locator::particleSystem::reset();
 }
 
@@ -410,6 +428,8 @@ TEST_F(NetworkCommands, TheHumansOfTheFirstTurnJoinTogether)
 TEST_F(NetworkCommands, TheHumansAndTheSlotsOfTheFirstTurnJoinBeforeTheOtherCommandsOfTheTurn)
 {
 	auto& particles = static_cast<FakeParticles&>(Locator::particleSystem::emplace<FakeParticles>());
+	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>(
+	    [&particles]() -> ecs::systems::EffectServerInterface* { return &particles; });
 	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
 	auto& minds = static_cast<FakeMinds&>(Locator::computerPlayerSystem::emplace<FakeMinds>());
 	minds.particles = &particles;
@@ -429,6 +449,7 @@ TEST_F(NetworkCommands, TheHumansAndTheSlotsOfTheFirstTurnJoinBeforeTheOtherComm
 	_commands.SetSource(nullptr);
 	Locator::computerPlayerSystem::reset();
 	Locator::handSystem::reset();
+	Locator::effectRequestSystem::reset();
 	Locator::particleSystem::reset();
 }
 

@@ -203,9 +203,11 @@ class AppleBarrelSystemInterface;
 class TimeSystemInterface;
 class SimulationSystemInterface;
 class VegetationInterface;
+class SkyClockSystemInterface;
 class SkySystemInterface;
 class WeatherSystemInterface;
 class ParticleSystemInterface;
+class EffectRequestSystemInterface;
 class MagicSystemInterface;
 class GestureEventsInterface;
 class ReactionSystemInterface;
@@ -291,6 +293,7 @@ struct Locator
 	using gameRandom = entt::locator<GameRandomInterface>;
 	using terrainSystem = entt::locator<LandIslandInterface>;
 	using oceanSystem = entt::locator<OceanInterface>;
+	using skyClockSystem = entt::locator<ecs::systems::SkyClockSystemInterface>;
 	using skySystem = entt::locator<ecs::systems::SkySystemInterface>;
 	using audio = entt::locator<audio::AudioManagerInterface>;
 	using camera = entt::locator<Camera>;
@@ -403,6 +406,8 @@ struct Locator
 	using influenceSystem = entt::locator<ecs::systems::InfluenceSystemInterface>;
 	using townDesireSystem = entt::locator<ecs::systems::TownDesireSystemInterface>;
 	using particleSystem = entt::locator<ecs::systems::ParticleSystemInterface>;
+	/// The particle effects that the turns and the scripts ask for, by numbers that the simulation gives
+	using effectRequestSystem = entt::locator<ecs::systems::EffectRequestSystemInterface>;
 	using magicSystem = entt::locator<ecs::systems::MagicSystemInterface>;
 	using gestureEvents = entt::locator<ecs::systems::GestureEventsInterface>;
 	using reactionSystem = entt::locator<ecs::systems::ReactionSystemInterface>;

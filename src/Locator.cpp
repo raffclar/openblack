@@ -83,6 +83,7 @@
 #include "ECS/Systems/Implementations/DialogueControlSystem.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
 #include "ECS/Systems/Implementations/EditorSystem.h"
+#include "ECS/Systems/Implementations/EffectRequestSystem.h"
 #include "ECS/Systems/Implementations/ExplosionSystem.h"
 #include "ECS/Systems/Implementations/FieldSystem.h"
 #include "ECS/Systems/Implementations/FightTranscriptSystem.h"
@@ -160,6 +161,7 @@
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
 #include "ECS/Systems/Implementations/SharkSystem.h"
 #include "ECS/Systems/Implementations/SimulationSystem.h"
+#include "ECS/Systems/Implementations/SkyClockSystem.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
@@ -683,7 +685,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
-	Locator::skySystem::emplace<ecs::systems::SkySystem>();
+	// The clock of day and night, and the entities of the sky, which every computer makes at this place in the order
+	Locator::skyClockSystem::emplace<ecs::systems::SkyClockSystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
@@ -760,6 +763,10 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::influenceSystem::emplace<InfluenceSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
 	Locator::particleSystem::emplace<ParticleSystem>();
+	// The turns and the scripts ask for effects here. The particles of this computer, if any, show them.
+	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>([]() -> ecs::systems::EffectServerInterface* {
+		return Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	});
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
@@ -807,8 +814,9 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 
 void openblack::InitializePresentation()
 {
-	// The sea, the mists, the clouds and the village lights, which the turns and the scripts do not read
+	// The sea, the sky, the mists, the clouds and the village lights, which the turns and the scripts do not read
 	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
+	Locator::skySystem::emplace<ecs::systems::SkySystem>();
 	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
@@ -1077,13 +1085,15 @@ void openblack::ShutDownServices()
 	Locator::forestSystem::reset();
 	Locator::fireflySystem::reset();
 	Locator::gestureSystem::reset();
+	Locator::effectRequestSystem::reset();
 	Locator::particleSystem::reset();
 	Locator::terrainSystem::reset();
 	Locator::filesystem::reset();
 	Locator::gameActionSystem::reset();
 
 	Locator::oceanSystem::reset();
-	Locator::skySystem ::reset();
+	Locator::skySystem::reset();
+	Locator::skyClockSystem::reset();
 	Locator::cameraHelpSystem::reset();
 	Locator::cameraPathSystem::reset();
 	Locator::cloudSystem::reset();

@@ -155,6 +155,7 @@
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FilmCreatureSystemInterface.h"
@@ -213,6 +214,7 @@
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
@@ -304,7 +306,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"gameRandom", "engine.services"},
     LocatorCoverage {"terrainSystem", "land.terrain"},
     LocatorCoverage {"oceanSystem", "land.ocean"},
-    LocatorCoverage {"skySystem", "sky.state"},
+    LocatorCoverage {"skyClockSystem", "sky.state"},
+    LocatorCoverage {"skySystem", "sky.moon"},
     LocatorCoverage {"audio", "audio.state"},
     LocatorCoverage {"camera", "camera.state"},
     LocatorCoverage {"gameActionSystem", "players.input"},
@@ -382,6 +385,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"influenceSystem", "influence.hand"},
     LocatorCoverage {"townDesireSystem", "living.town_desires"},
     LocatorCoverage {"particleSystem", "particles.effects"},
+    LocatorCoverage {"effectRequestSystem", "particles.requests"},
     LocatorCoverage {"magicSystem", "magic.state"},
     LocatorCoverage {"gestureEvents", "players.gestures"},
     LocatorCoverage {"reactionSystem", "magic.reactions"},
@@ -998,19 +1002,19 @@ std::unique_ptr<ProviderInterface> SkyStateProvider(std::unique_ptr<ProviderInte
 		provider->Add(description,
 		              [shared, name = description.name](const QueryContext& context) { return shared->Run(name, context); });
 	}
-	provider->Add(
-	    Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
-	    Serve<Locator::skySystem>("the sky", [](const ecs::systems::SkySystemInterface& sky, const QueryContext& /*c*/) {
-		    const auto times = sky.GetDayNightTimes();
-		    return Json {{"sky_type", sky.GetCurrentSkyType()},
-		                 {"time", sky.GetTime()},
-		                 {"script_hour", sky.GetClock().GetScriptTime()},
-		                 {"visual_hour", sky.GetClock().GetVisualTime()},
-		                 {"night_full", times.nightFull},
-		                 {"dusk_start", times.duskStart},
-		                 {"dusk_end", times.duskEnd},
-		                 {"day_full", times.dayFull}};
-	    }));
+	provider->Add(Query("state", "The sky: its type, its time, the script clock's hour and the day and night's times"),
+	              Serve<Locator::skyClockSystem>(
+	                  "the sky", [](const ecs::systems::SkyClockSystemInterface& sky, const QueryContext& /*c*/) {
+		                  const auto times = sky.GetDayNightTimes();
+		                  return Json {{"sky_type", sky.GetCurrentSkyType()},
+		                               {"time", sky.GetTime()},
+		                               {"script_hour", sky.GetClock().GetScriptTime()},
+		                               {"visual_hour", sky.GetClock().GetVisualTime()},
+		                               {"night_full", times.nightFull},
+		                               {"dusk_start", times.duskStart},
+		                               {"dusk_end", times.duskEnd},
+		                               {"day_full", times.dayFull}};
+	                  }));
 	return provider;
 }
 
@@ -4395,6 +4399,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return {};
 		    }
 		    return Locator::particleSystem::value().GetBeliefSpritesSeen();
+	    },
+	    .nextRequest = []() -> std::optional<ecs::systems::EffectHandle> {
+		    if (!Locator::effectRequestSystem::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    return Locator::effectRequestSystem::value().NextHandle();
 	    },
 	}));
 

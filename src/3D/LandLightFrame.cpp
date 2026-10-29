@@ -15,7 +15,7 @@
 #include "3D/LandLightTable.h"
 #include "Camera/Camera.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/DetailLevel.h"
@@ -28,9 +28,9 @@ namespace openblack
 LandLightInputs FrameLandLightInputs()
 {
 	LandLightInputs inputs;
-	if (Locator::skySystem::has_value())
+	if (Locator::skyClockSystem::has_value())
 	{
-		inputs.skyType = Locator::skySystem::value().GetCurrentSkyType();
+		inputs.skyType = Locator::skyClockSystem::value().GetCurrentSkyType();
 	}
 	if (Locator::alignmentSystem::has_value())
 	{

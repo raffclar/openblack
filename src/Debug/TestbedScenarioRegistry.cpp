@@ -2976,6 +2976,21 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.sky_dawn",
+	    .name = "The sky at dawn",
+	    .facet = Facet::Light,
+	    .description = "Six in the morning, and the clock does not move. The camera looks low over the testbed's lake to "
+	                   "the sky, past a birch on the shore.",
+	    .expected = "The dome blends the night sky into the sky of dawn. The land and the water take the dim light of "
+	                "dawn, and the moon or the sun shows where the hour puts it.",
+	    .environment = {.hour = 6.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x, 6.0f, k_NearShallows - 30.0f},
+	                .look = {k_Lake.x, 12.0f, k_NearShallows + 10.0f}},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {k_Lake.x + 8.0f, k_NearShallows - 14.0f}}},
+	});
+
+	all.push_back({
 	    .id = "light.snow_close",
 	    .name = "Heavy snow near the camera",
 	    .facet = Facet::Light,

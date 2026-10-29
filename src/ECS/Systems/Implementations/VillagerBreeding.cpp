@@ -56,7 +56,7 @@
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -605,7 +605,8 @@ uint32_t villager_breeding::ChildAtCreche(LivingAction& action)
 	{
 		return 0;
 	}
-	const bool daytime = Locator::skySystem::has_value() && creche::IsDaytime(Locator::skySystem::value().GetCurrentSkyType());
+	const bool daytime =
+	    Locator::skyClockSystem::has_value() && creche::IsDaytime(Locator::skyClockSystem::value().GetCurrentSkyType());
 	const auto abode = AbodeOf(child);
 	const bool firstIn = abode != entt::null && FirstOfHomeIsIn(abode);
 	const bool touching = abode == entt::null && AreTouching(child, creche, k_CrecheTouch);

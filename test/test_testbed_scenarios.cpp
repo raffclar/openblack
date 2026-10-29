@@ -121,6 +121,7 @@ TEST(TestbedScenarios, CoversTheCreatureFeatures)
 	                       "light.reflections",
 	                       "light.rain_splashes",
 	                       "light.rain_splashes_night",
+	                       "light.sky_dawn",
 	                       "light.snow_close",
 	                       "movement.course",
 	                       "movement.route_obstacles",

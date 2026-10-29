@@ -17,7 +17,7 @@
 #include "ECS/MobileStaticRules.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -52,9 +52,10 @@ entt::entity MobileStaticArchetype::Create(const glm::vec3& position, MobileStat
 
 	// A bonfire's flames are a spot visual on it that burns for as long as it stands; it is no fire, so it never spreads,
 	// hurts or heats what is held over it
-	if (type == MobileStaticInfo::Bonfire && Locator::particleSystem::has_value())
+	if (type == MobileStaticInfo::Bonfire && Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::Bonfire, position + offset, -1, entity, 1.0f);
+		Locator::effectRequestSystem::value().Show(
+		    {.type = SpotVisualType::Bonfire, .position = position + offset, .turns = -1, .owner = entity});
 	}
 
 	// The thing keeps the angles it got

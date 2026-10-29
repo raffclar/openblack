@@ -74,6 +74,10 @@ using ParticleEffectInfo = ecs::systems::ParticleSystemInterface::EffectInfo;
 /// The symbols of belief that rose last: where, how much and in which colour, the newest first, with the count of all
 [[nodiscard]] Json BeliefSummary(const ecs::systems::ParticleSystemInterface::BeliefSpritesSeen& seen);
 
+/// The effects that the turns and the scripts asked for: the number that the next one gets, none without the requests,
+/// and how many of the running effects have a number that the simulation gave
+[[nodiscard]] Json RequestSummary(std::optional<ecs::systems::EffectHandle> next, std::span<const ParticleEffectInfo> effects);
+
 struct ParticleSources
 {
 	std::function<std::span<const water_rings::Ring>()> rings;
@@ -83,6 +87,8 @@ struct ParticleSources
 	std::function<std::span<const liquid_particles::Particle>(PlayerNames)> playerLiquids;
 	/// The symbols of belief that rose last
 	std::function<ecs::systems::ParticleSystemInterface::BeliefSpritesSeen()> belief;
+	/// The number that the next effect a turn or a script asks for gets
+	std::function<std::optional<ecs::systems::EffectHandle>()> nextRequest;
 };
 
 ///   particles.splash   near, radius          the splashes within the radius, nearest first, with their state
@@ -90,6 +96,7 @@ struct ParticleSources
 ///   particles.emitters {owner}               the effects that follow an object
 ///   particles.liquid                         the pool of liquid particles: counts by kind, drops on the land
 ///   particles.belief                         the symbols of belief that rose last, the newest first
+///   particles.requests                       the effects that the turns and the scripts asked for
 class ParticlesProvider final: public ProviderInterface
 {
 public:
