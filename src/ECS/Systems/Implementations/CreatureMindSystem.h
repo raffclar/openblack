@@ -91,9 +91,8 @@ public:
 	void NoteLeashOrder(entt::entity creature) override;
 	void ChangeDesireSource(entt::entity creature, uint32_t type, float amount) override;
 	[[nodiscard]] bool CanForceAction(entt::entity creature, size_t animation, bool mirrored,
-	                                  float interruptsAfter) const override;
-	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	                 float interruptsAfter) override;
+	                                  double interruptsAfter) const override;
+	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) override;
 	bool Sleep(entt::entity creature) override;
 	bool Eat(entt::entity creature, std::optional<entt::entity> food) override;
 	bool Drink(entt::entity creature) override;
@@ -161,9 +160,10 @@ public:
 	[[nodiscard]] static bool CanSteal(entt::entity creature, entt::entity thing);
 
 private:
-	/// Whether the body is far enough through what it plays to be stopped by an action forced on it
+	/// Whether a forced action can stop the body action. The body action is an action on an object, or else the action
+	/// of the body layer. A body that plays no action takes the forced action.
 	[[nodiscard]] static bool MayInterrupt(entt::entity creature, const components::CreatureAnimation& body,
-	                                       float interruptsAfter);
+	                                       double interruptsAfter);
 	/// Gives a creature its desires and what it has learnt, if it has none yet: as it is made (StartMind), else the first
 	/// time that its mind thinks, or sooner when it gets an order before then
 	void SetUpMind(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind);

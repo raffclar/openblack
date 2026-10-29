@@ -4213,16 +4213,9 @@ void CreatureCreateRelativeToCreature() // 069 CREATURE_CREATE_RELATIVE_TO_CREAT
 		PushObject(entt::null);
 		return;
 	}
-	// Only a player that plays can get the copy. On a land with one player who has a creature, the copy belongs to no
-	// player.
+	// Each of the seven players can get the copy, also a player that nobody plays. On a land with one player who has a
+	// creature, the copy belongs to the second player.
 	std::array<script::property_rules::PlayerPlace, 7> places {};
-	registry.Each<const ecs::components::Player>([&places](entt::entity, const ecs::components::Player& player) {
-		const auto place = static_cast<size_t>(player.name);
-		if (place < places.size())
-		{
-			places.at(place).plays = true;
-		}
-	});
 	for (size_t i = 0; i < places.size(); ++i)
 	{
 		places.at(i).hasCreature = Locator::playerSystem::has_value() &&
@@ -7165,12 +7158,13 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 	{
 		return;
 	}
+	// The players that play and the neutral player take part. A player that nobody plays does not.
 	std::vector<PlayerNames> inGame;
 	for (size_t p = 0; p < static_cast<size_t>(PlayerNames::_COUNT); ++p)
 	{
 		const auto name = static_cast<PlayerNames>(p);
 		if (name == PlayerNames::NEUTRAL ||
-		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().FindPlayer(name).has_value()))
+		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(name)))
 		{
 			inGame.push_back(name);
 		}

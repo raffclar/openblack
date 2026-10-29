@@ -94,3 +94,23 @@ TEST(CreatureLostThing, StepThingsStartAtTheCurrentStep)
 	EXPECT_EQ(StepThings(agenda, 1), (std::vector<uint32_t> {2, 3, 4}));
 	EXPECT_TRUE(StepThings(agenda, 3).empty());
 }
+
+TEST(CreatureLostThing, ATreeThrownIntoAStoreIsNotLost)
+{
+	constexpr uint32_t k_Self = 9;
+	constexpr uint32_t k_Store = 2;
+	constexpr uint32_t k_Tree = 3;
+	creature_planner::Plan plan {};
+	plan.about = 1;
+	plan.object = k_Store;
+	plan.instrument = k_Tree;
+	// Other orders keep the thing to use
+	StopUseBeforeThrowIntoStore(plan, {.kind = creature_mind::ObjectOrder::Kind::Throw, .object = k_Store}, k_Self);
+	EXPECT_EQ(plan.instrument, std::optional<uint32_t>(k_Tree));
+	// The throw into the store makes the creature itself the thing to use
+	StopUseBeforeThrowIntoStore(plan, {.kind = creature_mind::ObjectOrder::Kind::ThrowInStore, .object = k_Store}, k_Self);
+	EXPECT_EQ(plan.instrument, std::optional<uint32_t>(k_Self));
+	// The store takes in the tree, and the creature does not lose a thing
+	const FakeWorld world {.gone = {k_Tree}};
+	EXPECT_FALSE(world.Lost({.planThings = PlanThings(plan), .stepThings = {k_Store}}));
+}

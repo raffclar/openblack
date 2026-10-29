@@ -1242,6 +1242,11 @@ void GameHandGrabWorld::NoteTakenAt(glm::vec3 point)
 	auto& registry = Entities();
 	std::vector<influence_rules::PlayerInfluenceAt> players;
 	registry.Each<const Player>([&players, point](entt::entity, const Player& player) {
+		// The neutral player is not asked: it is the answer when no player has influence there
+		if (player.name == PlayerNames::NEUTRAL)
+		{
+			return;
+		}
 		const float influence = Locator::influenceSystem::has_value()
 		                            ? Locator::influenceSystem::value().PlayerInfluence(player.name, point)
 		                            : 0.0f;

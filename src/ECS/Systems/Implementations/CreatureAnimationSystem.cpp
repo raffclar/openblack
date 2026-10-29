@@ -54,6 +54,7 @@
 #include "Creature/CreatureProportions.h"
 #include "Creature/CreaturePuke.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/CreatureShownFace.h"
 #include "Creature/CreatureSway.h"
 #include "Creature/CreatureTurnPose.h"
 #include "Creature/CreatureWalkPlanner.h"
@@ -66,6 +67,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreaturePlacement.h"
 #include "ECS/Registry.h"
@@ -464,6 +466,13 @@ struct PoseReport
 	std::optional<size_t> missingBody;
 };
 
+/// A face that only this computer shows, and the bones that the pose gives with it
+struct ShownFacePose
+{
+	creature_layers::FaceLayer& face;
+	std::vector<glm::mat4>& boneMatrices;
+};
+
 /// A clip of the log, from the animation that the pose sampled, or from none when the species does not have it
 creature_animation_log::Clip LogClip(creature_animation_log::Layer layer, size_t index, float timeMs, const Animation* played)
 {
@@ -482,7 +491,8 @@ creature_animation_log::Clip LogClip(creature_animation_log::Layer layer, size_t
 void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const CreatureRig& rig,
               const creature_morph::Morph& morph, const Transform& transform, float size, float milliseconds, float seconds,
               float bodyStepMs, const HeadLook& look, const std::function<uint32_t(uint32_t)>& random,
-              std::optional<HoldingHand> holding = std::nullopt, PoseReport* report = nullptr)
+              std::optional<HoldingHand> holding = std::nullopt, PoseReport* report = nullptr,
+              const ShownFacePose* shown = nullptr)
 {
 	const auto* stand = AnimationOf(adjusted, animation, rig, morph, creature_layers::animations::k_Stand);
 	if (stand == nullptr)
@@ -521,9 +531,16 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 		animation.body.animations[1] = move.value_or(creature_layers::animations::k_Stand);
 		animation.body.chooseDanceMove = false;
 	}
-	animation.face = creature_layers::AdvanceFace(
-	    animation.face, milliseconds,
-	    DurationOf(animation.face.current.has_value() ? animationOf(*animation.face.current) : nullptr));
+	const auto advanceFace = [&](const creature_layers::FaceLayer& face) {
+		return creature_layers::AdvanceFace(face, milliseconds,
+		                                    DurationOf(face.current.has_value() ? animationOf(*face.current) : nullptr));
+	};
+	animation.face = advanceFace(animation.face);
+	// The face that only this computer shows moves on as the face of the world does
+	if (shown != nullptr)
+	{
+		shown->face = advanceFace(shown->face);
+	}
 	animation.gesture = creature_layers::AdvanceGesture(
 	    animation.gesture, playbackMs,
 	    DurationOf(animation.gesture.animation.has_value() ? animationOf(*animation.gesture.animation) : nullptr));
@@ -625,47 +642,65 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 	    mirror.empty() ? animation.yaw.angle : -animation.yaw.angle, creature_layers::k_YawLimit, animation, mirror);
 	// The sway leans the body between the head's turning and the face
 	AddSway(poses, animation, transform, animationOf);
-	// The face and gestures, relative to their first frames
-	if (animation.face.current.has_value())
-	{
-		if (report != nullptr)
+	// The face, relative to its first frame
+	const auto addFace = [&](std::vector<skeletal_animation::Pose>& to, const creature_layers::FaceLayer& face,
+	                         PoseReport* log) {
+		if (!face.current.has_value())
 		{
-			report->clips.push_back(LogClip(creature_animation_log::Layer::Face, *animation.face.current, animation.face.timeMs,
-			                                animationOf(*animation.face.current)));
+			return;
 		}
-		if (const auto* face = animationOf(*animation.face.current))
+		if (log != nullptr)
 		{
-			skeletal_animation::AddLayer(poses, *face, static_cast<uint32_t>(std::max(animation.face.timeMs, 0.0f)), 0,
+			log->clips.push_back(
+			    LogClip(creature_animation_log::Layer::Face, *face.current, face.timeMs, animationOf(*face.current)));
+		}
+		if (const auto* played = animationOf(*face.current))
+		{
+			skeletal_animation::AddLayer(to, *played, static_cast<uint32_t>(std::max(face.timeMs, 0.0f)), 0,
 			                             animation.skeleton);
 		}
-	}
-	if (animation.gesture.animation.has_value())
+	};
+	// The gestures and a blow's wobble, relative to their first frames, on top of the face
+	const auto addGestures = [&](std::vector<skeletal_animation::Pose>& to, PoseReport* log) {
+		if (animation.gesture.animation.has_value())
+		{
+			if (log != nullptr)
+			{
+				log->clips.push_back(LogClip(creature_animation_log::Layer::Gesture, *animation.gesture.animation,
+				                             animation.gesture.timeMs, animationOf(*animation.gesture.animation)));
+			}
+			if (const auto* gesture = animationOf(*animation.gesture.animation))
+			{
+				skeletal_animation::AddLayer(to, *gesture, static_cast<uint32_t>(std::max(animation.gesture.timeMs, 0.0f)), 0,
+				                             animation.skeleton);
+			}
+		}
+		// The wobble plays the way the body plays
+		if (animation.wobble.animation.has_value())
+		{
+			if (log != nullptr)
+			{
+				log->clips.push_back(LogClip(creature_animation_log::Layer::Wobble, *animation.wobble.animation,
+				                             animation.wobble.timeMs, animationOf(*animation.wobble.animation)));
+			}
+			if (const auto* wobble = animationOf(*animation.wobble.animation))
+			{
+				skeletal_animation::AddLayer(to, *wobble, static_cast<uint32_t>(std::max(animation.wobble.timeMs, 0.0f)), 0,
+				                             animation.skeleton, mirror);
+			}
+		}
+	};
+	// The bones with the face that only this computer shows go to their own matrices. The bones of the world do not
+	// change.
+	if (shown != nullptr)
 	{
-		if (report != nullptr)
-		{
-			report->clips.push_back(LogClip(creature_animation_log::Layer::Gesture, *animation.gesture.animation,
-			                                animation.gesture.timeMs, animationOf(*animation.gesture.animation)));
-		}
-		if (const auto* gesture = animationOf(*animation.gesture.animation))
-		{
-			skeletal_animation::AddLayer(poses, *gesture, static_cast<uint32_t>(std::max(animation.gesture.timeMs, 0.0f)), 0,
-			                             animation.skeleton);
-		}
+		auto drawn = poses;
+		addFace(drawn, shown->face, nullptr);
+		addGestures(drawn, nullptr);
+		skeletal_animation::ComposeBoneMatrices(drawn, animation.skeleton.parents, shown->boneMatrices);
 	}
-	// A blow's wobble, relative to its first frame, the way the body plays
-	if (animation.wobble.animation.has_value())
-	{
-		if (report != nullptr)
-		{
-			report->clips.push_back(LogClip(creature_animation_log::Layer::Wobble, *animation.wobble.animation,
-			                                animation.wobble.timeMs, animationOf(*animation.wobble.animation)));
-		}
-		if (const auto* wobble = animationOf(*animation.wobble.animation))
-		{
-			skeletal_animation::AddLayer(poses, *wobble, static_cast<uint32_t>(std::max(animation.wobble.timeMs, 0.0f)), 0,
-			                             animation.skeleton, mirror);
-		}
-	}
+	addFace(poses, animation.face, report);
+	addGestures(poses, report);
 	skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents, animation.boneMatrices);
 }
 /// The pose of a body that plays an action, a start, loop and end, or nothing
@@ -1102,13 +1137,19 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    // A walking body is drawn between the places of its last two turns
 		    const auto transform = DrawnTransform(turnTransform, &animation);
 
-		    if (!animation.newerTurnPose.empty() && animation.olderTurnPose.size() == animation.newerTurnPose.size() &&
-		        transform.scale.x != 0.0f && transform.scale.y != 0.0f && transform.scale.z != 0.0f)
+		    // A face that only this computer shows is drawn with the bones that its own pose gave
+		    const auto* shown = registry.TryGet<const ShownCreatureFace>(entity);
+		    const bool drawsShown =
+		        shown != nullptr && !shown->newerTurnPose.empty() && shown->olderTurnPose.size() == shown->newerTurnPose.size();
+		    const auto& older = drawsShown ? shown->olderTurnPose : animation.olderTurnPose;
+		    const auto& newer = drawsShown ? shown->newerTurnPose : animation.newerTurnPose;
+		    if (!newer.empty() && older.size() == newer.size() && transform.scale.x != 0.0f && transform.scale.y != 0.0f &&
+		        transform.scale.z != 0.0f)
 		    {
-			    animation.boneMatrices.resize(animation.newerTurnPose.size());
+			    animation.boneMatrices.resize(newer.size());
 			    creature_turn_pose::BlendToMesh(
-			        animation.olderTurnPose, animation.newerTurnPose, weight,
-			        creature::PlacementMatrix(transform.position, transform.rotation, transform.scale), animation.boneMatrices);
+			        older, newer, weight, creature::PlacementMatrix(transform.position, transform.rotation, transform.scale),
+			        animation.boneMatrices);
 		    }
 		    if (animation.boneMatrices.size() != base->GetBoneMatrices().size())
 		    {
@@ -1304,11 +1345,40 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 		{
 			report.emplace();
 		}
+		// The world changes a face that only this computer shows when it changes its own face. If the face of the world
+		// changed in a different way since the last pose, the shown face becomes the face of the world, as the one face
+		// of the creature does.
+		auto* shown = registry.TryGet<ShownCreatureFace>(entity);
+		if (shown != nullptr)
+		{
+			shown->face = creature_shown_face::AfterWorldWrites(shown->face, shown->worldFace, animation->face);
+		}
+		std::vector<glm::mat4> shownMatrices;
+		const auto shownPose =
+		    shown != nullptr ? std::optional<ShownFacePose>(ShownFacePose {.face = shown->face, .boneMatrices = shownMatrices})
+		                     : std::nullopt;
 		PoseBody(
 		    _adjusted, *animation, rig, morph->drawn, *transform, ShownSize(*creature), static_cast<float>(turnMs),
 		    static_cast<float>(turnMs) / 1000.0f, static_cast<float>(stepMs), look,
 		    [this](uint32_t range) { return _random.GameRand(range); }, HoldingHandOf(registry, entity),
-		    report.has_value() ? &*report : nullptr);
+		    report.has_value() ? &*report : nullptr, shownPose.has_value() ? &*shownPose : nullptr);
+		if (shown != nullptr && !creature_shown_face::StaysAfterPose(shown->face, animation->face))
+		{
+			registry.Remove<ShownCreatureFace>(entity);
+			shown = nullptr;
+		}
+		if (shown != nullptr)
+		{
+			shown->worldFace = animation->face;
+			if (!shownMatrices.empty())
+			{
+				auto drawn = creature_turn_pose::ToWorld(shownMatrices,
+				                                         ecs::creature_placement::PlacementOf(registry, entity, *transform));
+				shown->olderTurnPose =
+				    shown->newerTurnPose.empty() ? animation->newerTurnPose : std::move(shown->newerTurnPose);
+				shown->newerTurnPose = std::move(drawn);
+			}
+		}
 		if (report.has_value())
 		{
 			auto& log = Locator::creatureAnimationLog::value();
@@ -1431,6 +1501,10 @@ void CreatureAnimationSystem::HoldTurnPose(entt::entity creature)
 	if (auto* animation = registry.TryGet<CreatureAnimation>(creature); animation != nullptr)
 	{
 		animation->olderTurnPose = animation->newerTurnPose;
+	}
+	if (auto* shown = registry.TryGet<ShownCreatureFace>(creature); shown != nullptr)
+	{
+		shown->olderTurnPose = shown->newerTurnPose;
 	}
 }
 

@@ -31,6 +31,15 @@ public:
 	/// The entity of the player. The game makes the player when the land has none yet. Every god slot and the neutral
 	/// player have a player from the start of the game, also before the humans of a network game join.
 	virtual entt::entity EnsurePlayer(PlayerNames name) = 0;
+	/// Makes the player of each god slot and the neutral player, in the order of their numbers, when the land has none of
+	/// that name. Each land has all eight players from its start, also when nobody plays a slot.
+	void EnsureAllPlayers()
+	{
+		for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+		{
+			EnsurePlayer(static_cast<PlayerNames>(number));
+		}
+	}
 	/// Remembers that the owner of a newly made creature got it, after the creatures they got before
 	virtual void AddCreature(entt::entity creature) = 0;
 	/// Makes the creature the primary creature of its owner, before the creatures that the owner got before
@@ -70,5 +79,8 @@ public:
 	{
 		return player_kind::IsHuman({.player = name, .networkGame = false, .computerMind = false});
 	}
+	/// Whether a person or a computer mind plays the player. Every land has all the players, so many walks of the players
+	/// look only at the players that play. The neutral player and a player that nobody plays do not play.
+	[[nodiscard]] bool PlaysInGame(PlayerNames name) const { return IsHumanPlayer(name) || IsComputerPlayer(name); }
 };
 } // namespace openblack::ecs::systems

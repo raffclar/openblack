@@ -383,6 +383,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "CreatureAnimation", .field = "drawnPlace", .marker = ""},
     // Where the frame draws the thing in a creature's hand. The turns go by its Transform.
     {.component = "HeldByCreature", .field = "drawn", .marker = ""},
+    // The face that a stroke of this computer's hand pulls. Only this computer shows it, and only the draw reads it.
+    {.component = "ShownCreatureFace", .field = "", .marker = ""},
     // The creature's eyes, the sounds of its body and the prints of its feet
     {.component = "CreatureEyes", .field = "", .marker = ""},
     {.component = "CreatureAudio", .field = "", .marker = ""},

@@ -65,6 +65,7 @@
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -204,7 +205,9 @@ std::vector<int> GameParticleWorld::PlayersInGame() const
 {
 	std::vector<int> players;
 	Locator::entitiesRegistry::value().Each<const ecs::components::Player>([&players](const ecs::components::Player& player) {
-		if (player.name != PlayerNames::NEUTRAL)
+		// Only the players that play take part, not the neutral player or a player that nobody plays
+		if (player.name != PlayerNames::NEUTRAL && Locator::playerSystem::has_value() &&
+		    Locator::playerSystem::value().PlaysInGame(player.name))
 		{
 			players.push_back(static_cast<int>(player.name));
 		}
