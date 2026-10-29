@@ -987,6 +987,7 @@ void Runner::Start(const Scenario& scenario)
 	_slotCreatures.clear();
 	_objects.clear();
 	_scriptFlock = entt::null;
+	_keptByScript.clear();
 	_madeByNatives.clear();
 	_globes.clear();
 	_temples.clear();
@@ -2962,6 +2963,15 @@ std::string Runner::CallNative(const Command& command)
 		}
 		const auto type = ScriptDataTypeOf(argument.kind);
 		arguments.emplace_back(std::pair(*given, type));
+		if (const auto kept = static_cast<entt::entity>(given->uintVal);
+		    argument.kept && type == lhvm::DataType::Object && std::ranges::find(_keptByScript, kept) == _keptByScript.end())
+		{
+			// The scenario keeps the thing as a script variable keeps it, so that it stays in the control of the script
+			auto& scripts = Locator::scriptObjects::value();
+			static_cast<void>(scripts.Register(kept, false));
+			scripts.AddReference(kept);
+			_keptByScript.push_back(kept);
+		}
 	}
 	std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> results;
 	const auto id = static_cast<uint32_t>(std::distance(functions->begin(), found));

@@ -283,6 +283,8 @@ private:
 	std::vector<entt::entity> _objects;
 	/// The script flock of the scenario's villagers and animals, after a command gave it
 	entt::entity _scriptFlock {entt::null};
+	/// The objects and creatures that the scenario keeps as script variables keep them
+	std::vector<entt::entity> _keptByScript;
 	/// The objects that the native calls of the scenario gave back, in order
 	std::vector<uint32_t> _madeByNatives;
 	/// The globes that the scenario puts down on their own, in the order of its list

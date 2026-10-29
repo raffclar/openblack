@@ -2176,3 +2176,7 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_script_lesson_natives PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_script_delete test_script_delete.cpp)
+openblack_setup_and_add_test(
+  test_script_animal_speed test_script_animal_speed.cpp
+)
+target_link_libraries(test_script_animal_speed PRIVATE ScriptLibrary)

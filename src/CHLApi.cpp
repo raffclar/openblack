@@ -1931,6 +1931,21 @@ void GetProperty() // 021 GET_PROPERTY
 		Pushf(0.0f);
 		return;
 	case script::ObjectPropertyType::Speed:
+		// A thing in the physics gives the speed of its flight
+		if (registry.AllOf<ecs::components::InPhysics>(object) && Locator::dynamicsSystem::has_value())
+		{
+			if (const auto* entry = Locator::dynamicsSystem::value().Find(object); entry != nullptr && entry->body != nullptr)
+			{
+				Pushf(glm::length(entry->body->velocity));
+				return;
+			}
+		}
+		// An animal gives its walk speed, metres a turn
+		if (registry.AllOf<ecs::components::Animal>(object))
+		{
+			Pushf(Locator::animalSystem::has_value() ? Locator::animalSystem::value().SpeedForScript(object) : 0.0f);
+			return;
+		}
 		if (const auto* wallHug = Locator::entitiesRegistry::value().TryGet<const ecs::components::WallHug>(object);
 		    wallHug != nullptr)
 		{
@@ -2430,6 +2445,15 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 		// A weather thing's storm travels at it, metres a second
 		if (Locator::weatherSystem::has_value() && Locator::weatherSystem::value().SetWeatherThingSpeed(object, value))
 		{
+			return;
+		}
+		// An animal walks at it, metres a turn
+		if (registry.AllOf<ecs::components::Animal>(object))
+		{
+			if (Locator::animalSystem::has_value())
+			{
+				Locator::animalSystem::value().SetSpeedFromScript(object, value);
+			}
 			return;
 		}
 		// Metres a turn

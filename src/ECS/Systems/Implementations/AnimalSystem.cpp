@@ -29,6 +29,7 @@
 #include "3D/MapCoords.h"
 #include "AnimalSystemDetail.h"
 #include "Animals/AnimalAnimation.h"
+#include "Animals/AnimalMove.h"
 #include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
 #include "Animals/PredatorRules.h"
@@ -1996,6 +1997,36 @@ uint16_t AnimalSystem::SpeedOf(entt::entity entity) const
 {
 	const auto* animal = EntityRegistry().TryGet<const Animal>(entity);
 	return animal != nullptr ? animal->move.speed : 0;
+}
+
+void AnimalSystem::SetSpeedFromScript(entt::entity entity, float metresPerTurn)
+{
+	auto* animal = EntityRegistry().TryGet<Animal>(entity);
+	// A miracle wolf ignores a speed from a script
+	if (animal == nullptr || animal->type == AnimalInfo::SpellWolf)
+	{
+		return;
+	}
+	animal->move.speed = animals::SpeedFromScript(metresPerTurn);
+	// It plays the clip of its state at the new speed. A different clip starts from its beginning
+	const auto clip = ClipFor(*animal, animal->state);
+	if (clip != animal->animation)
+	{
+		animal->animation = clip;
+		animal->clipPlace = 0;
+	}
+}
+
+float AnimalSystem::SpeedForScript(entt::entity entity) const
+{
+	const auto* animal = EntityRegistry().TryGet<const Animal>(entity);
+	if (animal == nullptr)
+	{
+		return 0.0f;
+	}
+	// An animal with no life, or one that lies dead, is dead
+	const bool dead = animal->life == 0.0f || animal->state == AnimalState::Dead;
+	return animals::SpeedForScript(animal->move.speed, dead);
 }
 
 void AnimalSystem::SetScale(entt::entity animal, float scale)
