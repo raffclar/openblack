@@ -72,6 +72,7 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerRoutine.h"
+#include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -548,7 +549,7 @@ void AnimalSystem::SetupMoveRoundTo(entt::entity entity, Animal& animal, glm::ve
 	animal.move.goal = Fixed(goal);
 	// The walk goes from where it is, facing as it faces, at its speed, and turns as its kind turns
 	auto& walk = registry.AssignOrReplace<WallHug>(entity);
-	walk.goal = goal;
+	walk.goalPlace = animal.move.goal;
 	walk.position = animal.move.position;
 	walk.placedAt = Metres(animal.move.position);
 	walk.gameAngle = animal.move.angle;
@@ -1413,7 +1414,7 @@ void AnimalSystem::BringDown([[maybe_unused]] entt::entity wolf, entt::entity pr
 		// in these states
 		if (auto* wallHug = registry.TryGet<WallHug>(prey))
 		{
-			wallHug->goal = Xz(registry.Get<const Transform>(prey).position);
+			wallHug->goalPlace = wall_hug::ToWhole(Xz(registry.Get<const Transform>(prey).position));
 		}
 		if (auto* action = registry.TryGet<LivingAction>(prey); action != nullptr && Locator::livingActionSystem::has_value())
 		{
@@ -1837,7 +1838,7 @@ void AnimalSystem::MoveFlockPlace(entt::entity flock, glm::ivec2 place)
 		}
 		else if (auto* wallHug = registry.TryGet<WallHug>(leader))
 		{
-			wallHug->goal = Metres(place);
+			wallHug->goalPlace = place;
 		}
 	}
 	flockData->place = map_coords::MapCoords {place.x, place.y, 0.0f};

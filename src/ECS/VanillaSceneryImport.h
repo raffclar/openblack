@@ -168,4 +168,70 @@ struct ImportedFarms
 /// The fields and the fish farms of the world. A field without a row of the tables goes into the skipped list.
 [[nodiscard]] ImportedFarms ReadFarms(const gamesave::VanillaWorld& world);
 
+/// The kinds of still things and loose things that the import makes from the file
+enum class StaticKind : uint8_t
+{
+	/// A thing of the table of static things: a rock, a stone, a post or a lantern
+	MobileStatic,
+	/// A thing of the table of static things that is a rock to the scripts, or a bonfire
+	Rock,
+	/// A thing of the table of static things that shows only as a print on the land, as the holder of a singing stone
+	BaseOnly,
+	/// A lantern of a town or of the country
+	StreetLantern,
+	/// A tree that came out of the ground
+	DeadTree,
+	Feature,
+	/// A gate or another thing that a script opens and closes
+	AnimatedStatic,
+	/// A thing of the table of loose things, as a log, food or a lump of poo
+	MobileObject,
+};
+
+/// A still thing or a loose thing of the file
+struct ImportedStatic
+{
+	uint32_t number {0};
+	StaticKind kind {StaticKind::MobileStatic};
+	/// Its row of its table: the static things for a mobile static, a rock and a lantern, the trees for a dead tree, the
+	/// features, the animated things or the loose things
+	uint32_t row {0};
+	gamesave::MapCoords position {};
+	float heading {0.0f};
+	float scale {1.0f};
+	float life {1.0f};
+	/// How it leans, in radians about x and about z (a mobile static, a rock, a dead tree or a loose thing)
+	float xAngle {0.0f};
+	float zAngle {0.0f};
+	/// What the wood of a dead tree is worth against that of a tree
+	float woodMultiplier {1.0f};
+};
+
+struct ImportedStatics
+{
+	/// In the order of the file
+	std::vector<ImportedStatic> statics;
+	std::vector<std::string> skipped;
+};
+
+/// The still things and the loose things of the world. A thing without a row of its table goes into the skipped list.
+[[nodiscard]] ImportedStatics ReadStatics(const gamesave::VanillaWorld& world);
+
+/// The clock of day and night of a file
+struct ImportedDayCycle
+{
+	/// The time of day that the game shows, in hours from 0 to 24
+	float visualTime {12.0f};
+	/// The seconds of game time in a day
+	float duration {1700.0f};
+	/// The parts of the half day that are night and that change from night to day
+	float night {0.083f};
+	float change {0.07f};
+	/// The rate that the clock runs at, 0 when it stands
+	float scale {1.0f};
+};
+
+/// The clock of day and night of the file, nothing when the game object does not keep it
+[[nodiscard]] std::optional<ImportedDayCycle> ReadDayCycle(const gamesave::VanillaWorld& world);
+
 } // namespace openblack::ecs::vanilla_world_import

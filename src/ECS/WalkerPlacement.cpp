@@ -58,7 +58,7 @@ void walker_placement::Place(Registry& registry, entt::entity entity, glm::vec3 
 	if (arrived)
 	{
 		// Standing at its goal, it stands where it is put rather than walking back
-		wallHug->goal = metres;
+		wallHug->goalPlace = wall_hug::ToWhole(metres);
 		registry.Assign<MoveStateArrivedTag>(entity, MoveStateClockwise::Undefined, metres);
 		return;
 	}

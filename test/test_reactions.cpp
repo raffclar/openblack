@@ -311,7 +311,7 @@ protected:
 			auto& component = registry.Assign<Villager>(villager);
 			component.town = _town;
 			component.life = 1.0f;
-			registry.Assign<WallHug>(villager, WallHug {.goal = glm::vec2(0.0f), .yAngle = 0.0f, .speed = 1.0f});
+			registry.Assign<WallHug>(villager, WallHug {.goalPlace = {0, 0}, .yAngle = 0.0f, .speed = 1.0f});
 			registry.Assign<LivingAction>(villager, VillagerStates::DecideWhatToDo, static_cast<uint16_t>(0));
 			_villagers.push_back(villager);
 		}
@@ -926,7 +926,7 @@ TEST_F(Reactions, AFiremanWalkingAwayFromTheFireIsNoLongerOneOfItsFiremen)
 	EXPECT_EQ(StateOf(villager), VillagerStates::MoveToPos);
 	EXPECT_EQ(static_cast<VillagerStates>(action.states.at(static_cast<size_t>(LivingAction::Index::Final))),
 	          VillagerStates::DecideWhatToDo);
-	EXPECT_EQ(registry.Get<const WallHug>(villager).goal, glm::vec2(600.0f, 600.0f));
+	EXPECT_EQ(registry.Get<const WallHug>(villager).goalPlace, ecs::wall_hug::ToWhole({600.0f, 600.0f}));
 	Locator::fireSystem::reset();
 	Locator::reactionSystem::reset();
 }

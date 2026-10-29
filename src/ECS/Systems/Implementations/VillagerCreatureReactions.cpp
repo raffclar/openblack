@@ -604,7 +604,7 @@ uint32_t villager_creature::MoveTowardsCreatureReaction(LivingAction& action)
 	// The villager takes its step while the creature is there. If the walk ends within half a metre of the goal, the
 	// villager starts the state that it walked to.
 	ecs::villager_home::TakeWalkStep(villager);
-	const auto goal = registry.Get<const WallHug>(villager).goal;
+	const auto goal = registry.Get<const WallHug>(villager).goalPlace;
 	if (ecs::villager_home::WalkIsOverAt(villager, goal))
 	{
 		const auto at = ecs::villager_home::WalkPosition(villager);

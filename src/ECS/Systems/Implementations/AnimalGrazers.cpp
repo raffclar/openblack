@@ -193,7 +193,7 @@ bool AnimalSystem::GroundMoveTo(entt::entity entity, Animal& animal)
 		auto& turning = registry.Get<TurningWalker>(entity);
 		turning.speed = animal.move.speed;
 		turning.turnAngle = TurnAngleOf(animal);
-		walk.goal = Metres(animal.move.goal);
+		walk.goalPlace = animal.move.goal;
 		walk.position = animal.move.position;
 		walk.placedAt = Metres(animal.move.position);
 		walk.yAngle = animal.heading;
@@ -362,7 +362,7 @@ std::optional<glm::ivec2> AnimalSystem::LookForGrazeSpot(entt::entity entity, co
 				}
 				// Its shepherd too, where it stands and where it walks to
 				if (const auto* walker = registry.TryGet<const WallHug>(member);
-				    walker != nullptr && (CellOf(WalkerPosition(member)) == cell || CellOf(Fixed(walker->goal)) == cell))
+				    walker != nullptr && (CellOf(WalkerPosition(member)) == cell || CellOf(walker->goalPlace) == cell))
 				{
 					return false;
 				}

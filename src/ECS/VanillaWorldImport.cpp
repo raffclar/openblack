@@ -422,12 +422,6 @@ std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStat
 	return std::nullopt;
 }
 
-bool UsesWalkGoal(const std::array<uint8_t, 3>& states)
-{
-	return villager_walk::Walks(static_cast<VillagerStates>(states[0])) ||
-	       villager_walk::Walks(static_cast<VillagerStates>(states[2]));
-}
-
 std::optional<float> MetresOfWhole(int32_t whole)
 {
 	const float near = map_coords::ToMetres(whole);

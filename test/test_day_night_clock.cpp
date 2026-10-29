@@ -104,3 +104,19 @@ TEST(DayNightClock, ALandsCycleIsClamped)
 	EXPECT_FLOAT_EQ(times[0], 12.0f);
 	EXPECT_FLOAT_EQ(times[3], 12.0f);
 }
+
+// A saved game sets the hour of visual time at once: a move to another hour stops, and an hour past the day wraps
+TEST(DayNightClock, ASavedGameSetsTheVisualHour)
+{
+	DayNightClock clock;
+	clock.Reset();
+	clock.MoveScriptTime(20.0f, 30.0f);
+	clock.ForceVisualTime(22.25f);
+	EXPECT_EQ(clock.GetVisualTime(), 22.25f);
+	clock.SetScale(0.0f);
+	EXPECT_FALSE(clock.IsRunning());
+	clock.ProcessTurn();
+	EXPECT_EQ(clock.GetVisualTime(), 22.25f);
+	clock.ForceVisualTime(25.0f);
+	EXPECT_EQ(clock.GetVisualTime(), 1.0f);
+}

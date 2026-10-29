@@ -43,6 +43,8 @@ enum class VanillaType : uint32_t
 	Tree = 0x4F,
 	Creche = 0x50,
 	Graveyard = 0x51,
+	MobileObject = 0x53,
+	MobileStatic = 0x54,
 	FishFarm = 0x5B,
 	StandardBuildingSite = 0x5C,
 	TownCentre = 0x60,
@@ -53,10 +55,18 @@ enum class VanillaType : uint32_t
 	ComputerPlayer = 0x66,
 	Creature = 0x69,
 	Game = 0x6A,
+	Poo = 0x6B,
+	Rock = 0x6F,
+	DeadTree = 0x70,
+	FelledTree = 0x71,
+	Bonfire = 0x72,
 	Feature = 0x74,
+	AnimatedStatic = 0x75,
 	SpecialVillager = 0x76,
 	Camera = 0x77,
+	BaseOnly = 0xF6,
 	Climate = 0xFC,
+	StreetLantern = 0xFE,
 };
 
 /// How a named value of a record is kept in the file
