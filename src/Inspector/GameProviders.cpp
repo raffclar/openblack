@@ -369,6 +369,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"helpSpeechSystem", "view.script_control"},
     LocatorCoverage {"highDetailSystem", "view.script_control"},
     LocatorCoverage {"walkPathSystem", "living.walk_paths"},
+    LocatorCoverage {"puzzleGameSystem", "puzzle.list"},
     LocatorCoverage {"danceSystem", "living.dances"},
     LocatorCoverage {"sharkSystem", "living.sharks"},
     LocatorCoverage {"introSystem", "living.intro"},
@@ -4451,6 +4452,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	    },
 	}));
 	inspector.Add(MakeTownProvider(World()));
+	inspector.Add(MakePuzzleProvider(World()));
 	inspector.Add(MakeWorshipProvider(World()));
 	inspector.Add(MakeInfluenceProvider({
 	    .hand = [](int player) -> std::optional<glm::vec3> {

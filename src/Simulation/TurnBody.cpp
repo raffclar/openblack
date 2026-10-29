@@ -88,6 +88,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/RealWeatherSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -646,6 +647,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::WalkPaths:
 		// The things that the scripts walk along tracks move on
 		Locator::walkPathSystem::value().ProcessTurn();
+		break;
+	case Step::PuzzleGames:
+		// Each puzzle game that the player has not solved puts back its pieces that moved and tests for a solution
+		if (Locator::puzzleGameSystem::has_value())
+		{
+			Locator::puzzleGameSystem::value().ProcessTurn();
+		}
 		break;
 	case Step::Footpaths:
 		// The footpaths that the game finds between things take a few more steps, and it lays those that it found

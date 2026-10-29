@@ -103,6 +103,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -631,6 +632,14 @@ void GameHandGrabWorld::ScaffoldIntoHand(entt::entity scaffold, PlayerNames play
 	if (Locator::workshopSystem::has_value())
 	{
 		Locator::workshopSystem::value().TakenByHand(scaffold, player);
+	}
+}
+
+void GameHandGrabWorld::PuzzlePieceIntoHand(entt::entity piece)
+{
+	if (Locator::puzzleGameSystem::has_value())
+	{
+		Locator::puzzleGameSystem::value().TakenInHand(piece);
 	}
 }
 
