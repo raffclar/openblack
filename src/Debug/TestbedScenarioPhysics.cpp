@@ -17,6 +17,7 @@
 #include <array>
 #include <numbers>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "3D/FlatLand.h"
@@ -352,9 +353,9 @@ void AddCreatureCatch(std::vector<Scenario>& all)
 	});
 }
 
-void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
+/// Boulders from the south break a creche, and the pieces fly north towards a tiger near the creche
+Scenario CatchBuildingPieceStage()
 {
-	// Boulders from the south break a creche, and the pieces fly north towards a tiger near the creche
 	constexpr glm::vec2 k_Creche = k_Field + glm::vec2 {0.0f, 10.0f};
 	std::vector<ObjectSetup> objects {{.type = AbodeInfo::CelticCreche, .offset = k_Creche}};
 	std::vector<ThrowSetup> throws;
@@ -372,15 +373,8 @@ void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
 		    .repeatSeconds = 6.0f,
 		});
 	}
-	all.push_back({
-	    .id = "physics.creature_catches_building_piece",
-	    .name = "A creature that tries to catch a piece of a building",
+	return {
 	    .facet = Facet::Physics,
-	    .description = "Big boulders thrown from the south break a creche again and again. A tiger stands north east of "
-	                   "the creche.",
-	    .expected = "The tiger does not try to catch the boulders, because they are too heavy. Pieces of the creche fly "
-	                "north. The game log shows that the tiger is made to catch a piece. When its body is free, it turns "
-	                "to the piece and catches it in its hand, as it catches a thrown villager.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed,
 	                .eye = glm::vec3(k_Field.x + 45.0f, 18.0f, k_Field.y + 20.0f),
@@ -388,7 +382,53 @@ void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
 	    .creatures = {{.species = CreatureType::Tiger, .offset = k_Field + glm::vec2 {14.0f, 18.0f}, .facingDegrees = 0.0f}},
 	    .objects = objects,
 	    .throws = throws,
-	});
+	};
+}
+
+void AddCreatureCatchesBuildingPiece(std::vector<Scenario>& all)
+{
+	auto busy = CatchBuildingPieceStage();
+	busy.id = "physics.creature_catches_building_piece";
+	busy.name = "A busy creature that tries to catch a piece of a building";
+	busy.description = "Big boulders thrown from the south break a creche again and again. A tiger stands north east of "
+	                   "the creche and does what it likes.";
+	busy.expected = "The tiger does not try to catch the boulders, because they are too heavy. Pieces of the creche fly "
+	                "north. The game log shows that the tiger is made to catch a piece. It stops its point or its dance "
+	                "at double speed, but a turn or an action plays to its end. The catch starts only when the body is "
+	                "free, so a piece that lands first is not caught.";
+	all.push_back(std::move(busy));
+
+	// The mind of the tiger starts just after the first boulder breaks the creche, so its body is free for the catch
+	constexpr float k_ThinksAfterTheBreak = 3.5f;
+	auto still = CatchBuildingPieceStage();
+	still.id = "physics.creature_catches_building_piece_still";
+	still.name = "A still creature that catches a piece of a building";
+	still.description = "Big boulders thrown from the south break a creche. A tiger stands still north east of the creche "
+	                    "until the first boulder hits.";
+	still.expected = "The tiger does not try to catch the boulders, because they are too heavy. Pieces of the creche fly "
+	                 "north. The game log shows that the tiger is made to catch a piece. Its body is free, so its catch "
+	                 "starts on the next turn: it steps or turns to the piece and catches it in its hand, or gives up "
+	                 "when the piece has gone past or landed.";
+	still.creatures.front().pauseMind = true;
+	still.creatures.front().thinksAfterSeconds = k_ThinksAfterTheBreak;
+	auto pointing = still;
+	all.push_back(std::move(still));
+
+	// The tiger faces north and points north for five seconds from before the break
+	pointing.creatures.front().facingDegrees = 180.0f;
+	pointing.id = "physics.creature_catches_building_piece_pointing";
+	pointing.name = "A pointing creature that is made to catch a piece of a building";
+	pointing.description = "Big boulders thrown from the south break a creche. A tiger north east of the creche points "
+	                       "north when the first boulder flies.";
+	pointing.expected = "The game log shows that the tiger is made to catch a piece. The tiger stops its point at once: "
+	                    "its arm comes down at double speed. The catch starts when the arm is down, so a piece that "
+	                    "lands first is not caught.";
+	pointing.commands = {{.kind = Command::Kind::PointAt,
+	                      .creature = 0,
+	                      .delaySeconds = 1.0f,
+	                      .waitUntilFree = false,
+	                      .point = k_Field + glm::vec2 {14.0f, 80.0f}}};
+	all.push_back(std::move(pointing));
 }
 
 void AddCreatureCatchWhileWalking(std::vector<Scenario>& all)

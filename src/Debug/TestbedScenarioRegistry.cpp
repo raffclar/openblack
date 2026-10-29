@@ -6027,6 +6027,42 @@ void AddObjects(std::vector<Scenario>& all)
 		});
 	}
 
+	// A leash order stops the plan while the tiger reaches for the villager. The pick-up continues and takes her at its
+	// moment.
+	all.push_back({
+	    .id = "creature.pick_up_through_an_order",
+	    .name = "A pick-up that continues through a leash order",
+	    .facet = Facet::Objects,
+	    .description = "A tiger on the learning leash starts to pick up the villager in front of it. A fifth of a second "
+	                   "later, the player tells it with the leash to go to a point to the north.",
+	    .expected = "The order does not cut the pick-up. The tiger plays its reach to the end and takes the villager at "
+	                "the moment of the pick-up; in its hand she plays her scared stiff clip. When the pick-up ends, the "
+	                "tiger walks to the point.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::PickUp, 0, 0, 1.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, 40.0f}, 0.2f, false)},
+	});
+
+	// A leash order stops the plan while the tiger points. The arm does not hold its point: it plays the end of the point
+	// at once.
+	all.push_back({
+	    .id = "creature.point_through_an_order",
+	    .name = "A point that ends through a leash order",
+	    .facet = Facet::Objects,
+	    .description = "A tiger on the learning leash points at the land in front of it, for five seconds. One second "
+	                   "later, the player tells it with the leash to go to a point to the north.",
+	    .expected = "The arm does not stop at once and does not hold its point for the five seconds. At the order, the arm "
+	                "plays the end of its point animations. When the point ends, the tiger walks to the point.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Go(Kind::PointAt, 0, {0.0f, -40.0f}, 1.0f, false),
+	                 Go(Kind::LeashOrderAt, 0, {0.0f, 40.0f}, 1.0f, false)},
+	});
+
 	auto hungryAtTheGive = hungryThinking;
 	hungryAtTheGive.pauseMind = true;
 	hungryAtTheGive.thinksAfterSeconds = k_ThinksBeforeTheGive;
@@ -7952,6 +7988,27 @@ void AddCombat(std::vector<Scenario>& all)
 		    .creatures = {asker, asked},
 		    .commands = {Go(Kind::WalkTo, 1, {25.0f, 0.0f}, 1.0f, false), Fight(Kind::StartFight, 0, 1, 1.0f),
 		                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
+	{
+		// The first tiger stops the fight on the turn after the request, before it tells the other tiger to obey
+		auto asker = red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f);
+		auto asked = blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f);
+		asker.pauseMind = true;
+		asked.pauseMind = true;
+		all.push_back({
+		    .id = "combat.asked_stops_on_early_end",
+		    .name = "An early end of a fight stops the tiger that was asked",
+		    .facet = Facet::Combat,
+		    .description = "The blue tiger starts to walk away from the red tiger. One second later, the red tiger asks the "
+		                   "blue tiger to fight. One turn after that, the fight of the red tiger stops.",
+		    .expected = "The red tiger stops at once. On the turn that the fight stops, the blue tiger also stops its walk "
+		                "and slows to a stand. No arena appears.",
+		    .framing = ringside,
+		    .creatures = {asker, asked},
+		    .commands = {Go(Kind::WalkTo, 1, {25.0f, 0.0f}, 1.0f, false), Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAbort, 0, 1, 0.1f)},
 		});
 	}
 

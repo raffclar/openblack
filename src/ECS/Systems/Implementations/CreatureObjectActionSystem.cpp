@@ -1365,7 +1365,9 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 		else
 		{
 			SetPointing(action, transform, body, held, true);
-			action.holdMs = action.pointsUntilTold
+			// A point that ended during its turn does not hold the arm
+			action.holdMs = action.pointEnding ? 0.0f
+			                : action.pointsUntilTold
 			                    ? std::numeric_limits<float>::infinity()
 			                    : action.pointSeconds.value_or(creature_object_actions::k_PointSeconds) * 1000.0f;
 			action.pointMs = points->pointMs;
@@ -2169,12 +2171,14 @@ void CreatureObjectActionSystem::EndPoint(entt::entity creature)
 	{
 		return;
 	}
-	if (action->phase != Phase::Playing)
+	if (action->phase != Phase::Playing && !action->pointTurned)
 	{
 		// It has not started to point yet: it stops at once
 		action->status = Status::Done;
 		return;
 	}
+	// The arm plays to the end of its animations with no hold. A turn to the point ends first, and then the arm plays
+	// all of its animations.
 	action->holdMs = 0.0f;
 	action->pointEnding = true;
 }
@@ -2348,12 +2352,106 @@ bool CreatureObjectActionSystem::IsCatching(entt::entity creature) const
 	       (action->status == Status::Running || action->status == Status::Contact);
 }
 
+namespace
+{
+/// Whether the body turns on the spot for the action before it plays the animations: to get the thing in reach, to
+/// throw or to point
+bool TurnsForIt(const CreatureObjectAction& action)
+{
+	if (action.phase != Phase::Approach)
+	{
+		return false;
+	}
+	switch (action.kind)
+	{
+	case Kind::PickUp:
+	case Kind::Destroy:
+		return action.turnedToReach;
+	case Kind::Throw:
+		return action.attempts > 0;
+	case Kind::Point:
+		return action.pointTurned;
+	default:
+		return false;
+	}
+}
+
+creature_object_actions::PlanStop PlanStopOf(const CreatureObjectAction& action)
+{
+	return creature_object_actions::OnPlanStop(action.kind, action.phase == Phase::Playing, TurnsForIt(action));
+}
+
+bool Runs(const CreatureObjectAction& action)
+{
+	return action.status == Status::Running || action.status == Status::Contact;
+}
+} // namespace
+
 bool CreatureObjectActionSystem::PlaysOnAlone(entt::entity creature) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
-	return action != nullptr && creature_object_actions::PlaysOnWhenPlanStops(action->kind) &&
-	       action->phase == Phase::Playing && (action->status == Status::Running || action->status == Status::Contact);
+	if (action == nullptr || !Runs(*action))
+	{
+		return false;
+	}
+	const auto stop = PlanStopOf(*action);
+	return action->planStopped || stop == creature_object_actions::PlanStop::PlaysOn ||
+	       (stop == creature_object_actions::PlanStop::EndsPoint && action->pointEnding);
+}
+
+void CreatureObjectActionSystem::StopForPlan(entt::entity creature, bool stopsBody)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* action = registry.Valid(creature) ? registry.TryGet<CreatureObjectAction>(creature) : nullptr;
+	if (action == nullptr || !Runs(*action))
+	{
+		Cancel(creature);
+		return;
+	}
+	using creature_object_actions::PlanStop;
+	switch (PlanStopOf(*action))
+	{
+	case PlanStop::Stops:
+		Cancel(creature);
+		return;
+	case PlanStop::EndsPoint:
+		// A stop that leaves the body alone leaves the point to hold on and end by itself
+		if (stopsBody)
+		{
+			EndPoint(creature);
+		}
+		else
+		{
+			action->planStopped = true;
+		}
+		return;
+	case PlanStop::PlaysOn:
+		break;
+	}
+	action->planStopped = true;
+	if (action->kind != Kind::Eat)
+	{
+		return;
+	}
+	const auto held = GetHeld(creature);
+	switch (creature_object_actions::OnEatStop(action->phase == Phase::Playing, action->eaten.has_value(), held.has_value()))
+	{
+	case creature_object_actions::EatStop::Swallows:
+		SwallowStoppedEat(creature);
+		break;
+	case creature_object_actions::EatStop::Deletes:
+		// The hand lets go of the thing, and the thing goes out of the world. The eat animation plays on with an empty
+		// hand.
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} loses {} that it was about to eat: its plan stopped",
+		                    entt::to_integral(creature), entt::to_integral(*held));
+		registry.Remove<CreatureHeldObject>(creature);
+		registry.Remove<HeldByCreature>(*held);
+		ecs::world_objects::Remove(*held);
+		break;
+	case creature_object_actions::EatStop::Keeps:
+		break;
+	}
 }
 
 std::optional<float> CreatureObjectActionSystem::GetProgress(entt::entity creature) const
@@ -3375,10 +3473,14 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			{
 				break;
 			}
-			// A living thing under the foot takes the crush of the stomp, from the creature and its player
+			// A living thing under the foot takes the crush of the stomp, from the creature and its player. The crush
+			// belongs to the plan, so a stomp that plays on after its plan stopped crushes nothing.
 			if (registry.AnyOf<Villager, Animal, Creature>(target))
 			{
-				Crush(creature, body, target);
+				if (!action.planStopped)
+				{
+					Crush(creature, body, target);
+				}
 			}
 			// A building is broken about where it stands, and a rock is smashed in two; the blow does nothing to anything
 			// else
