@@ -148,6 +148,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/Workshop.h"
@@ -5363,6 +5364,14 @@ void Runner::UpdateVortices()
 				WriteCrossingFile(setup.crossingLines);
 			}
 			running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
+			if (!setup.crossingLines.empty() && running.vortex != entt::null)
+			{
+				// The scenario also gives its crossing lines to the vortex. Thus a world with no profile, such as the
+				// server, throws out the same things. These lines are the same as the lines that the game read from the
+				// file.
+				auto& lines = Locator::entitiesRegistry::value().Get<ecs::components::Vortex>(running.vortex).throwingOut.lines;
+				lines.assign(setup.crossingLines.begin(), setup.crossingLines.end());
+			}
 			if (setup.crowdForSeconds.has_value() && Locator::scriptObjects::has_value())
 			{
 				// A script makes the crowd at the vortex and keeps it in a variable, as the Land 2 arrival does
