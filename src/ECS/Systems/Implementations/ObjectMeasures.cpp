@@ -24,6 +24,7 @@
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
@@ -166,6 +167,12 @@ float object_measures::DistanceFromObject(const Registry& registry, entt::entity
 	       (TwoDRadius(registry, other) + TwoDRadius(registry, entity));
 }
 
+float object_measures::NavRadius(const Registry& registry, entt::entity creature)
+{
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
+	return walk != nullptr ? walk->radius : TwoDRadius(registry, creature);
+}
+
 float object_measures::Height(const Registry& registry, entt::entity entity)
 {
 	if (const auto* creature = registry.TryGet<const Creature>(entity))
@@ -179,7 +186,7 @@ float object_measures::Height(const Registry& registry, entt::entity entity)
 float object_measures::RoutePlanRadius(const Registry& registry, entt::entity entity, entt::entity creature)
 {
 	return cast_moves::RoutePlanRadius(TwoDRadius(registry, entity), Height(registry, entity), registry.AllOf<Tree>(entity),
-	                                   Height(registry, creature), TwoDRadius(registry, creature));
+	                                   Height(registry, creature), NavRadius(registry, creature));
 }
 
 bool object_measures::WalkedUpToItself(const Registry& registry, entt::entity entity)

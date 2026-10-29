@@ -860,9 +860,10 @@ std::optional<creature_cast_moves::WalkStart> CreatureMindSystem::GoNear(entt::e
 	{
 		return std::nullopt;
 	}
-	// It stops short of the thing by what it keeps clear of and its own radius, and no further than the distance more
+	// It stops short of the thing by what it keeps clear of and its radius on its walks, and no further than the distance
+	// more. In a temple's pen, this radius is of its own size, as the circle that its route goes round.
 	const float clear =
-	    object_measures::RoutePlanRadius(registry, casting.target, creature) + object_measures::TwoDRadius(registry, creature);
+	    object_measures::RoutePlanRadius(registry, casting.target, creature) + object_measures::NavRadius(registry, creature);
 	const auto target = Flat(*at);
 	if (reissue && casting.destination.has_value() && cast_moves::SameDestination(*casting.destination, target))
 	{

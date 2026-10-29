@@ -5803,6 +5803,22 @@ void AddObjects(std::vector<Scenario>& all)
 		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "TakeToyHome"}},
 		});
 		all.push_back({
+		    .id = "objects.kick_ball_in_pen",
+		    .name = "Kicking a ball about in the pen",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger of the player's stands in its pen before the temple, shown at a newborn's size. A "
+		                   "toy ball lies nine metres from it in the pen. A script tells it to kick the ball about.",
+		    .expected = "It walks towards the ball and stops some metres short of it, because its walks keep clear of "
+		                "things by its own size. It turns to the ball and kicks it: the ball flies off a short way, as a "
+		                "small creature kicks. It goes after the ball and kicks it again, two to four times in all.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+		    .creatures = {Content(CreatureType::Tiger, {-320.0f, 113.0f})},
+		    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {-320.0f, 122.0f}}},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .object = 0, .action = "KickBallAround"}},
+		});
+		all.push_back({
 		    .id = "objects.take_wheat_home",
 		    .name = "Taking wheat from a field home",
 		    .facet = Facet::Objects,

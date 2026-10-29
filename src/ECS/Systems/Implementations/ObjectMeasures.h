@@ -20,16 +20,20 @@ class Registry;
 }
 
 // How big the things of the world are, as creatures measure them to walk up to them and cast at them (see
-// creature_cast_moves): a thing's radius on the ground and height from its model and scale, the radius of a field and a fish farm always 5, a
-// creature's from its size and how far its bones reach.
+// creature_cast_moves): a thing's radius on the ground and height from its model and scale, the radius of a field and a fish
+// farm always 5, a creature's from its size and how far its bones reach.
 namespace openblack::ecs::systems::object_measures
 {
 
 /// A thing's radius on the ground, 0 for one without a model. Fields and teleport stones have fixed radii.
 [[nodiscard]] float TwoDRadius(const Registry& registry, entt::entity entity);
+/// The radius that a creature keeps clear of things by on its walks. In a temple's pen it is the radius of the creature's
+/// own size, not of its shown size. While the creature clears its way, it is the radius of its shown size.
+[[nodiscard]] float NavRadius(const Registry& registry, entt::entity creature);
 /// A thing's height, 0 for one without a model
 [[nodiscard]] float Height(const Registry& registry, entt::entity entity);
-/// What a creature walking up to the thing keeps clear of
+/// What a creature walking up to the thing keeps clear of: the thing's radius less a share of the creature's radius on
+/// its walks (NavRadius)
 [[nodiscard]] float RoutePlanRadius(const Registry& registry, entt::entity entity, entt::entity creature);
 /// A building or anything else of several map cells fixed to the land, or a tree: a creature walking up to one stops
 /// where its walk takes it
