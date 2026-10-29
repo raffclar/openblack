@@ -18,7 +18,6 @@
 #include <chrono>
 #include <filesystem>
 #include <memory>
-#include <numeric>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -61,6 +60,7 @@
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/HeadlessRenderer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/MultiplayerFrontEndRules.h"
@@ -91,21 +91,23 @@ namespace
 constexpr std::string_view k_TurnWord = "turn ";
 constexpr std::string_view k_ChecksumWord = " checksum ";
 
-/// Logs the number of objects that the graphics library keeps. The server makes no graphics objects, thus each object
-/// is an error of the part that made it.
-void LogGraphicsObjects()
+/// Logs the number of objects that the graphics library keeps. The server makes no graphics objects: each object more
+/// than the library's own objects at its start is an error of the part that made it.
+void LogGraphicsObjects(uint32_t libraryObjects)
 {
 	const auto* stats = bgfx::getStats();
-	const auto total = GraphicsObjectCount();
+	const auto total = graphics::GraphicsObjectCount();
 	SPDLOG_LOGGER_INFO(spdlog::get("game"),
 	                   "Graphics objects: {} textures, {} vertex buffers, {} index buffers, {} dynamic vertex buffers, {} "
-	                   "dynamic index buffers, {} frame buffers, {} shaders, {} programs, {} uniforms, {} occlusion queries",
+	                   "dynamic index buffers, {} frame buffers, {} shaders, {} programs, {} uniforms, {} occlusion queries; "
+	                   "{} of {} are the library's own",
 	                   stats->numTextures, stats->numVertexBuffers, stats->numIndexBuffers, stats->numDynamicVertexBuffers,
 	                   stats->numDynamicIndexBuffers, stats->numFrameBuffers, stats->numShaders, stats->numPrograms,
-	                   stats->numUniforms, stats->numOcclusionQueries);
-	if (total != 0)
+	                   stats->numUniforms, stats->numOcclusionQueries, libraryObjects, total);
+	if (total > libraryObjects)
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The server made {} graphics objects. It must make none.", total);
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The server made {} graphics objects. It must make none.",
+		                    total - libraryObjects);
 	}
 }
 
@@ -170,6 +172,8 @@ public:
 		Play,
 	};
 	void SetNetwork(std::function<NetworkStep()> beforeTurns) { _beforeTurns = std::move(beforeTurns); }
+	/// The objects that the graphics library made for itself as it started
+	[[nodiscard]] uint32_t LibraryGraphicsObjects() const { return _libraryObjects; }
 
 	void StartupStep(std::string_view /*step*/) override {}
 	void LoadHandAnimation() override {}
@@ -189,6 +193,7 @@ private:
 	sim_run::Request _simulation;
 	std::filesystem::path _startMap;
 	bool _servicesStarted {false};
+	uint32_t _libraryObjects {0};
 	/// The texts of the game, which the help's dialogue reads
 	std::optional<gui::TextDatabase> _texts;
 	ecs::systems::NoLandView _landView;
@@ -221,6 +226,7 @@ bool ServerWorld::Initialize()
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
 	}
+	_libraryObjects = graphics::GraphicsObjectCount();
 	auto& fileSystem = Locator::filesystem::value();
 	if (!fileSystem.IsPathValid(_settings.gamePath))
 	{
@@ -735,24 +741,6 @@ bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, st
 
 } // namespace
 
-uint32_t GraphicsObjectCount()
-{
-	const auto* stats = bgfx::getStats();
-	const std::array<uint32_t, 10> counts {
-	    stats->numTextures,
-	    stats->numVertexBuffers,
-	    stats->numIndexBuffers,
-	    stats->numDynamicVertexBuffers,
-	    stats->numDynamicIndexBuffers,
-	    stats->numFrameBuffers,
-	    stats->numShaders,
-	    stats->numPrograms,
-	    stats->numUniforms,
-	    stats->numOcclusionQueries,
-	};
-	return std::reduce(counts.begin(), counts.end(), 0u);
-}
-
 EngineConfig ServerConfig(const ServerSettings& settings)
 {
 	EngineConfig config;
@@ -902,7 +890,7 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The server stops on a signal");
 		}
-		LogGraphicsObjects();
+		LogGraphicsObjects(world->LibraryGraphicsObjects());
 	}
 	checksums.SetTurnListener({});
 #if defined(OPENBLACK_GAME_ROLE)

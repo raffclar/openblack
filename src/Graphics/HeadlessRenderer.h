@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <memory>
 
 #include "RendererInterface.h"
@@ -16,11 +18,16 @@
 namespace openblack::graphics
 {
 
+/// The number of objects that the graphics library keeps now: the textures, the buffers, the frame buffers, the shaders,
+/// the programs, the uniforms and the occlusion queries
+[[nodiscard]] uint32_t GraphicsObjectCount();
+
 /// The renderer of a world that nobody sees, such as the dedicated server. It has no window, no device, no shaders and
 /// no buffers or textures, and it draws nothing.
 ///
 /// The pictures that the world asks for never come and never fail, as with a device that has no screen. The graphics
-/// library starts with no device only to keep the calls of other parts safe: the server makes no object with it.
+/// library starts with no device only to keep the calls of other parts safe: the server makes no object with it. The
+/// library makes some objects of its own as it starts, for its debug text and its transient buffers.
 class HeadlessRenderer final: public RendererInterface
 {
 	/// Only Create makes a renderer, after the library started

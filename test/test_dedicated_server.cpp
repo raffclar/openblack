@@ -21,11 +21,11 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Graphics/HeadlessRenderer.h"
 #include "Server/DedicatedServer.h"
 #include "TestTempFolder.h"
 
 using openblack::server::ChecksumLine;
-using openblack::server::GraphicsObjectCount;
 using openblack::server::k_RoomSeed;
 using openblack::server::ParseChecksumLine;
 using openblack::server::RoomStart;
@@ -171,14 +171,21 @@ TEST(DedicatedServer, TheServerWritesNothingInTheProfileFolderItIsGiven)
 
 TEST(DedicatedServer, TheServerMakesNoGraphicsObjects)
 {
+	// The objects that the graphics library makes for itself as it starts
+	uint32_t libraryObjects = 0;
+	{
+		const auto renderer = openblack::graphics::HeadlessRenderer::Create();
+		ASSERT_NE(renderer, nullptr);
+		libraryObjects = openblack::graphics::GraphicsObjectCount();
+	}
 	const openblack::test::TestTempFolder profileFolder;
 	std::vector<uint32_t> objects;
 	const std::atomic<bool> stop {false};
 	const auto exitCode =
 	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&objects](uint32_t /*turn*/, uint64_t /*checksum*/) {
-		    objects.push_back(GraphicsObjectCount());
+		    objects.push_back(openblack::graphics::GraphicsObjectCount());
 	    });
 	EXPECT_EQ(exitCode, EXIT_SUCCESS);
 	ASSERT_FALSE(objects.empty());
-	EXPECT_TRUE(std::ranges::all_of(objects, [](uint32_t count) { return count == 0; }));
+	EXPECT_TRUE(std::ranges::all_of(objects, [libraryObjects](uint32_t count) { return count == libraryObjects; }));
 }

@@ -25,16 +25,17 @@ TEST(HeadlessRenderer, TheRendererMakesNoGraphicsObjectsAndDrawsFrames)
 	auto renderer = HeadlessRenderer::Create();
 	ASSERT_NE(renderer, nullptr);
 	EXPECT_EQ(bgfx::getRendererType(), bgfx::RendererType::Noop);
+	// Only the library's own objects: its debug text and its transient buffers
+	const auto libraryObjects = openblack::graphics::GraphicsObjectCount();
+	renderer->ConfigureView(openblack::graphics::RenderPass::Main, {640, 480}, 0);
+	renderer->BakeLandShadows(true);
+	renderer->PrepareCreatureSkins(4);
 	renderer->Frame();
 	renderer->Frame();
 	const auto* stats = bgfx::getStats();
-	EXPECT_EQ(stats->numTextures, 0);
-	EXPECT_EQ(stats->numVertexBuffers, 0);
-	EXPECT_EQ(stats->numIndexBuffers, 0);
-	EXPECT_EQ(stats->numDynamicVertexBuffers, 0);
+	EXPECT_EQ(openblack::graphics::GraphicsObjectCount(), libraryObjects);
 	EXPECT_EQ(stats->numFrameBuffers, 0);
-	EXPECT_EQ(stats->numShaders, 0);
-	EXPECT_EQ(stats->numPrograms, 0);
+	EXPECT_EQ(stats->numDynamicVertexBuffers, 0);
 	EXPECT_EQ(stats->numUniforms, 0);
 	EXPECT_EQ(renderer->GetPipelinesMade(), 0u);
 }
