@@ -166,6 +166,10 @@ public:
 	/// A storm's forked bolt, let down from a point of light under its cloud, in the effect every storm's bolts come down
 	/// in, which runs all the time; it comes down when the particles next step
 	virtual void AddStormBolt(glm::vec3 /*cloudPoint*/) {}
+	/// The model of an object breaks into pieces where it stands. The pieces fly out from the origin at the speed, in the
+	/// effect that throws the pieces of all broken objects, which runs all the time. The pieces start when the particles
+	/// next step. An object without a model gives no pieces.
+	virtual void ExplodeObject(entt::entity /*object*/, glm::vec3 /*origin*/, float /*speed*/) {}
 
 	/// This computer's hand in a frame, for the chain that follows it while it gestures
 	struct HandFrame

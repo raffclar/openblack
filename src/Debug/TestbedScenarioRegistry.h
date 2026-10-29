@@ -566,6 +566,8 @@ struct ScriptArgument
 		Position,
 		/// A whole number (number, made whole towards zero), as a script gives a constant such as a resource type
 		Integer,
+		/// The scenario's temple of the index
+		Temple,
 		/// A script flock of all the villagers and animals of the scenario. The first command that gives it makes it.
 		Flock,
 		/// The scenario's town of the player, as a script names a town

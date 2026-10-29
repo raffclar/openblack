@@ -2009,6 +2009,38 @@ void AddStory(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
 	});
+	{
+		// The scripts' delete with explode and with temple explode, as the later lands' scripts use them
+		using Argument = ScriptArgument;
+		const auto remove = [](float delay, Argument thing, float mode) {
+			return Command {.kind = Kind::CallNative,
+			                .delaySeconds = delay,
+			                .script = "OBJECT_DELETE",
+			                .scriptArguments = {thing, {.kind = Argument::Kind::Integer, .number = mode}}};
+		};
+		const Argument hut {.kind = Argument::Kind::Object, .index = 0};
+		const Argument temple {.kind = Argument::Kind::Temple, .index = 0};
+		all.push_back({
+		    .id = "temple.script_breaks_up",
+		    .name = "A script breaks up a hut and a rival's temple",
+		    .facet = Facet::Story,
+		    .description = "A rival's temple stands west of the middle with a hut in front of it. One second in, a script "
+		                   "deletes the temple with temple explode. Two seconds later it deletes the hut with explode. 20 "
+		                   "seconds after the first delete, it deletes the temple with temple explode again, as the last "
+		                   "land's fight does.",
+		    .expected = "The temple starts its destruction: the loop sound, the beams across it and the glow. The hut "
+		                "breaks into pieces of its model that fly out from where it stood, and the hut is gone. At the second "
+		                "delete, the model of the temple breaks into many pieces that fly out fast, while the temple "
+		                "itself stays. Two seconds later the temple explodes and goes, as its destruction ends.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Overview,
+		                .include = {k_Temple - glm::vec2 {60.0f}, k_Temple + glm::vec2 {60.0f}},
+		                .distance = 1.0f},
+		    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Temple + glm::vec2 {0.0f, -45.0f}}},
+		    .temples = {{.offset = k_Temple, .owner = PlayerNames::PLAYER_TWO, .angle = k_TempleTurn}},
+		    .commands = {remove(1.0f, temple, 3.0f), remove(2.0f, hut, 2.0f), remove(18.0f, temple, 3.0f)},
+		});
+	}
 	all.push_back({
 	    .id = "temple.intro_movement",
 	    .name = "Looking about the temple while the advisors introduce it",
@@ -12377,6 +12409,8 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 			return argument.index < scenario.objects.size();
 		case ScriptArgument::Kind::Creature:
 			return argument.index < scenario.creatures.size();
+		case ScriptArgument::Kind::Temple:
+			return argument.index < scenario.temples.size();
 		case ScriptArgument::Kind::Flock:
 			// The flock needs a villager or an animal of the scenario
 			return std::ranges::any_of(scenario.objects, [](const ObjectSetup& object) {
