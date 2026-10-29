@@ -172,9 +172,10 @@ TEST_F(HandsAtTheCitadel, AComputerMindThatTheGameMakesAfterTheCitadelLooksAtThe
 	const auto player = MakePlayer(PlayerNames::PLAYER_FOUR);
 	_hands.StartAtCitadel(PlayerNames::PLAYER_FOUR, k_Citadel);
 	ecs::systems::ComputerPlayerSystem minds;
-	EXPECT_EQ(minds.FindMind(PlayerNames::PLAYER_FOUR), nullptr);
+	auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_FALSE(registry.AllOf<ComputerPlayer>(player));
 	// A script command for the mind makes the mind
 	minds.SetCreatureLike(PlayerNames::PLAYER_FOUR, PlayerNames::PLAYER_ONE);
-	ASSERT_NE(minds.FindMind(PlayerNames::PLAYER_FOUR), nullptr);
-	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const ComputerPlayer>(player).hand.camera, k_Camera);
+	ASSERT_TRUE(registry.AllOf<ComputerPlayer>(player));
+	EXPECT_EQ(registry.Get<const ComputerPlayer>(player).hand.camera, k_Camera);
 }
