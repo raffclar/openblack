@@ -36,6 +36,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerCreatureInspection.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
@@ -314,9 +315,8 @@ void villager_creature::TownTurn(entt::entity town, uint32_t turn)
 			const auto thing = static_cast<entt::entity>(*plan->object);
 			const auto* mind = registry.TryGet<const CreatureMindState>(watched.creature);
 			const bool thingIsVillager = registry.Valid(thing) && registry.AllOf<Villager>(thing);
-			const auto* holder = thingIsVillager ? registry.TryGet<const HeldByCreature>(thing) : nullptr;
-			const bool hungryForPersonItHolds =
-			    plan->desire == creature_desires::Desire::Hunger && holder != nullptr && holder->creature == watched.creature;
+			const bool hungryForPersonItHolds = plan->desire == creature_desires::Desire::Hunger && thingIsVillager &&
+			                                    ecs::creature_carried::Carries(registry, watched.creature, thing);
 			shown = creature_attitude::PlanShows(mind->lastActionDone.value_or(0), thingIsVillager, hungryForPersonItHolds);
 		}
 		const bool changed = creature_attitude::Turn(watched.feeling, shown, turn, k_TurnsPerSecond);

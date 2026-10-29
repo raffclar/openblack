@@ -860,7 +860,7 @@ void CreatureMindSystem::SweepEyes(entt::entity entity, const Creature& creature
 	// Each turn it comes across what it carries
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
-		if (const auto held = Locator::creatureObjectActionSystem::value().GetHeld(entity); held.has_value())
+		if (const auto held = Locator::creatureObjectActionSystem::value().GetCarried(entity); held.has_value())
 		{
 			ComeAcross(entity, mind, *held);
 		}

@@ -4941,6 +4941,24 @@ void AddObjects(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	all.push_back({
+	    .id = "objects.pickup_head_look",
+	    .name = "The head look after the hold of a pick-up, close up",
+	    .facet = Facet::Objects,
+	    .description = "A content tiger with a ball in front of it. A script tells it to hold the ball. Then it puts the "
+	                   "ball down. This repeats, seen close up.",
+	    .expected = "As it reaches, the head and the eyes look at the ball. From the moment that the hand takes hold of "
+	                "the ball to the end of the pick-up, the head and the eyes look at no point: they turn to the "
+	                "front. After the pick-up, they look at the things near the creature again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 0.6f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = MobileObjectInfo::Ball, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "HoldObject"},
+	                 Act(Kind::PutDown, 0, 6.0f, true)},
+	    .repeatFrom = 0,
+	});
+
 	// A tiger a tenth of the size beside it, for whom a villager is too heavy
 	auto small = Posed(CreatureType::Tiger, {30.0f, 0.0f});
 	small.size = 0.1f;

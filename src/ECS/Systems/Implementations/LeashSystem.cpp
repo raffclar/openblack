@@ -443,7 +443,7 @@ orders::Body BodyOf(const Registry& registry, entt::entity creature)
 
 std::optional<entt::entity> HeldBy(entt::entity creature)
 {
-	return Locator::creatureObjectActionSystem::has_value() ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
+	return Locator::creatureObjectActionSystem::has_value() ? Locator::creatureObjectActionSystem::value().GetCarried(creature)
 	                                                        : std::nullopt;
 }
 
