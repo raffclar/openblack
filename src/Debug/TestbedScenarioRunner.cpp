@@ -979,6 +979,7 @@ void Runner::Start(const Scenario& scenario)
 	_scenario = &scenario;
 	_running = true;
 	_seconds = 0.0f;
+	_lastNativeResult.reset();
 	_fireBallTakeFrames.reset();
 	_nextMiracleLog = 0.0f;
 	_timeline = {};
@@ -2883,6 +2884,8 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	case ScriptArgument::Kind::Position:
 		// A position is three values, which only a native call gives
 		return std::nullopt;
+	case ScriptArgument::Kind::LastResult:
+		return _lastNativeResult;
 	case ScriptArgument::Kind::Flock:
 		object = ScriptFlock();
 		break;
@@ -2957,6 +2960,7 @@ std::string Runner::CallNative(const Command& command)
 	{
 		return fmt::format("{} could not run now", command.script);
 	}
+	_lastNativeResult = results.empty() ? std::nullopt : std::optional(results.front().first);
 	for (const auto& [value, type] : results)
 	{
 		if (type == lhvm::DataType::Object)

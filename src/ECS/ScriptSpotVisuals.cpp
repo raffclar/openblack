@@ -28,6 +28,19 @@ entt::entity MakeThing(Registry& registry, uint32_t effect, glm::vec3 position)
 	return thing;
 }
 
+std::optional<uint32_t> EffectOf(const Registry& registry, entt::entity thing)
+{
+	if (!registry.Valid(thing))
+	{
+		return std::nullopt;
+	}
+	if (const auto* visual = registry.TryGet<const components::ScriptSpotVisual>(thing))
+	{
+		return visual->effect;
+	}
+	return std::nullopt;
+}
+
 void RemoveEnded(Registry& registry, const std::function<bool(uint32_t effect)>& running)
 {
 	std::vector<entt::entity> ended;

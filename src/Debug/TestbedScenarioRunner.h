@@ -245,6 +245,8 @@ private:
 	const Scenario* _scenario {nullptr};
 	bool _running {false};
 	float _seconds {0.0f};
+	/// The first value that the last native call gave back, for a later call that uses it
+	std::optional<lhvm::VMValue> _lastNativeResult;
 	/// The turn count at which the scenario was laid out
 	std::optional<uint32_t> _layoutTurn;
 	/// When the made-up ping of the ping line started, in the scenario's seconds; none while it does not show
