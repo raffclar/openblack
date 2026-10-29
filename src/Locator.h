@@ -165,6 +165,8 @@ class DanceSystemInterface;
 class SharkSystemInterface;
 class VideoSystemInterface;
 class HelpTextSystemInterface;
+class TurnCheerSystemInterface;
+class AdvisorVoiceSystemInterface;
 class HelpProfileSystemInterface;
 class ComputerSettingsSystemInterface;
 class CreatureHelpSystemInterface;
@@ -324,6 +326,8 @@ struct Locator
 	using playerSystem = entt::locator<ecs::systems::PlayerSystemInterface>;
 	using alignmentSystem = entt::locator<ecs::systems::AlignmentSystemInterface>;
 	using cameraHelpSystem = entt::locator<ecs::systems::CameraHelpSystemInterface>;
+	/// The advisors' cheers as this computer's camera turns. The dedicated server does not make them.
+	using turnCheerSystem = entt::locator<ecs::systems::TurnCheerSystemInterface>;
 	using tutorialSkipSystem = entt::locator<ecs::systems::TutorialSkipSystemInterface>;
 	using playerProfileSystem = entt::locator<ecs::systems::PlayerProfileSystemInterface>;
 	using profileFolderSystem = entt::locator<ecs::systems::ProfileFolderSystemInterface>;
@@ -391,6 +395,8 @@ struct Locator
 	using sharkSystem = entt::locator<ecs::systems::SharkSystemInterface>;
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
+	/// The advisors' voices that this computer plays. The dedicated server does not make them.
+	using advisorVoiceSystem = entt::locator<ecs::systems::AdvisorVoiceSystemInterface>;
 	using helpProfileSystem = entt::locator<ecs::systems::HelpProfileSystemInterface>;
 	using computerSettingsSystem = entt::locator<ecs::systems::ComputerSettingsSystemInterface>;
 	using creatureHelpSystem = entt::locator<ecs::systems::CreatureHelpSystemInterface>;

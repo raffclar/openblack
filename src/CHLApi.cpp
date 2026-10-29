@@ -244,6 +244,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
@@ -7964,19 +7965,18 @@ void RestoreCameraDetails() // 284 RESTORE_CAMERA_DETAILS
 /// still, or stop
 void StartAngleSound(bool enable)
 {
-	if (!Locator::cameraHelpSystem::has_value())
+	// Only a computer that shows the world cheers its player on
+	if (!Locator::turnCheerSystem::has_value())
 	{
 		return;
 	}
-	auto& help = Locator::cameraHelpSystem::value().Get();
 	if (enable)
 	{
-		help.turnSpeed = 0.0f;
-		help::turn_cheer::Start(help.turnCheering);
+		Locator::turnCheerSystem::value().Start();
 	}
 	else
 	{
-		help::turn_cheer::Stop(help.turnCheering);
+		Locator::turnCheerSystem::value().Stop();
 	}
 }
 

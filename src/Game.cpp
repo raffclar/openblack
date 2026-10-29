@@ -285,6 +285,7 @@
 #include "ECS/Systems/TornadoSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/TurnCheerSystemInterface.h"
 #include "ECS/Systems/TutorialSkipSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
@@ -2155,17 +2156,16 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 void Game::ProcessTurnCheering()
 {
 	// While the turning lesson asks for it, the advisors cheer the player's turning of the camera on
-	if (!Locator::cameraHelpSystem::has_value() || !Locator::gameRandom::has_value() || !Locator::chlapi::has_value())
+	if (!Locator::turnCheerSystem::has_value() || !Locator::gameRandom::has_value() || !Locator::chlapi::has_value())
 	{
 		return;
 	}
-	auto& help = Locator::cameraHelpSystem::value().Get();
 	auto& random = Locator::gameRandom::value();
 	const help::turn_cheer::Random draws {
 	    .upTo = [&random](float x) { return random.LocalFloatRand(x); },
 	    .below = [&random](int32_t n) { return random.LocalRand(n); },
 	};
-	if (const auto line = help::turn_cheer::ProcessTurn(help.turnCheering, help.turnSpeed, GetTurn(), draws))
+	if (const auto line = Locator::turnCheerSystem::value().ProcessTurn(GetTurn(), draws))
 	{
 		Locator::chlapi::value().PlayBankSoundEffect(static_cast<int32_t>(audio::ScriptSoundBank::HelpSprites), *line, {});
 	}

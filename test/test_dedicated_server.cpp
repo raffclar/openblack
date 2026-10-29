@@ -205,7 +205,8 @@ TEST(DedicatedServer, TheServerMakesTheSkysCloudsButNoSystemThatOnlyShowsTheWorl
 	    MockSettings(profileFolder.Path()), stop, [&shown, &clouds](uint32_t /*turn*/, uint64_t /*checksum*/) {
 		    using openblack::Locator;
 		    shown = shown || Locator::oceanSystem::has_value() || Locator::mistSystem::has_value() ||
-		            Locator::cloudSystem::has_value() || Locator::villageLightSystem::has_value();
+		            Locator::cloudSystem::has_value() || Locator::villageLightSystem::has_value() ||
+		            Locator::advisorVoiceSystem::has_value() || Locator::turnCheerSystem::has_value();
 		    // The clouds of the sky are entities of the world on every computer, so that each entity has the same id
 		    clouds = std::as_const(Locator::entitiesRegistry::value()).Size<const openblack::ecs::components::Cloud>();
 	    });

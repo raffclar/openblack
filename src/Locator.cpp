@@ -49,6 +49,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/AbodeKnockSystem.h"
 #include "ECS/Systems/Implementations/AdvisorSystem.h"
+#include "ECS/Systems/Implementations/AdvisorVoiceSystem.h"
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
@@ -177,6 +178,7 @@
 #include "ECS/Systems/Implementations/TornadoSystem.h"
 #include "ECS/Systems/Implementations/TownDesireSystem.h"
 #include "ECS/Systems/Implementations/TownSystem.h"
+#include "ECS/Systems/Implementations/TurnCheerSystem.h"
 #include "ECS/Systems/Implementations/TutorialSkipSystem.h"
 #include "ECS/Systems/Implementations/VegetationSystem.h"
 #include "ECS/Systems/Implementations/VideoSystem.h"
@@ -239,6 +241,7 @@ using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
 using openblack::ecs::systems::AbodeSoundSystem;
 using openblack::ecs::systems::AdvisorSystem;
+using openblack::ecs::systems::AdvisorVoiceSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::AnimatedStaticSystem;
@@ -348,6 +351,7 @@ using openblack::ecs::systems::TipBubbleSystem;
 using openblack::ecs::systems::TornadoSystem;
 using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
+using openblack::ecs::systems::TurnCheerSystem;
 using openblack::ecs::systems::TutorialSkipSystem;
 using openblack::ecs::systems::VegetationSystem;
 using openblack::ecs::systems::VideoSystem;
@@ -823,6 +827,10 @@ void openblack::InitializePresentation()
 	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
+	// The sound, the gestures and the lip sync of the advisors' lines. The scripts time the lines on their own clock.
+	Locator::advisorVoiceSystem::emplace<AdvisorVoiceSystem>();
+	// The measure of how fast this computer's camera turns, and the advisors' cheers at it
+	Locator::turnCheerSystem::emplace<TurnCheerSystem>();
 }
 
 void openblack::InitializeClient(const player_profiles::Store& profiles)
@@ -1011,6 +1019,7 @@ void openblack::ShutDownServices()
 	Locator::sharkSystem::reset();
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
+	Locator::advisorVoiceSystem::reset();
 	Locator::helpProfileSystem::reset();
 	Locator::computerSettingsSystem::reset();
 	Locator::musicMoodSystem::reset();
@@ -1099,6 +1108,7 @@ void openblack::ShutDownServices()
 	Locator::skySystem::reset();
 	Locator::skyClockSystem::reset();
 	Locator::cameraHelpSystem::reset();
+	Locator::turnCheerSystem::reset();
 	Locator::cameraPathSystem::reset();
 	Locator::cloudSystem::reset();
 	Locator::mistSystem::reset();
