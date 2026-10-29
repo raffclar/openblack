@@ -12069,6 +12069,27 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                 .joinTown = true,
 	                 .homeIn = 2}},
 	});
+
+	all.push_back({
+	    .id = "objects.scaffold_offers_wonder",
+	    .name = "A scaffold of the value of seven offers the town a wonder",
+	    .facet = Facet::Objects,
+	    .description = "The town and the camera of objects.scaffold_starts_building. The town believes in the player, "
+	                   "so it wants a wonder. The loose scaffold has the value of seven scaffolds. An oak stands near the "
+	                   "place where the hand puts the scaffold down. The input tools/sim/hand_inputs/scaffold_build.json "
+	                   "moves the hand: it takes the scaffold, holds it still near the village centre, and puts it down.",
+	    .expected = "While the hand holds the scaffold still, the phantom of the Celtic wonder grows below the scaffold. "
+	                "Its size comes from the wonder power at that place: the desire of the town for a wonder, and the "
+	                "things near the place. When the hand puts the scaffold down, a building site of the wonder opens. "
+	                "The inspector query town.wonders shows the wonder and its power. When the wonder is finished, the "
+	                "most Celtic power of the player becomes larger by the power of the wonder.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 1.9f},
+	                {.type = TreeInfo::Oak, .offset = k_BuildPlace + glm::vec2 {-4.0f, -6.0f}}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 }
 
 std::vector<Scenario> Build()

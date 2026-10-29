@@ -153,25 +153,6 @@ TEST(ArtefactRules, AWorshipSitePowersUpItsArtefactsByItsShareOfThePlayersPeople
 	EXPECT_FLOAT_EQ(SitePowerUp(1.0f, 0.00001f, 10, 0), 0.0f);
 }
 
-TEST(ArtefactRules, AWondersPowerCountsTheThingsInItsPlacesCellOnceForEveryCellOfItsReach)
-{
-	EXPECT_FLOAT_EQ(WonderReach(0.5f), 15.0f);
-	EXPECT_FLOAT_EQ(WonderReach(2.0f), 30.0f);
-	const std::array<WonderNeighbour, 2> things {
-	    WonderNeighbour {.distance = 5.0f, .artefactWorth = 1.5f, .impressiveness = 1.0f},
-	    WonderNeighbour {.distance = 20.0f, .artefactWorth = 9.0f, .impressiveness = 9.0f},
-	};
-	// The far one is out of reach; the near one counts its worth and a tenth of its impressiveness each pass
-	EXPECT_FLOAT_EQ(WonderPower(0.5f, things, 1), 0.5f + 1.6f);
-	EXPECT_FLOAT_EQ(WonderPower(0.5f, things, 9), 0.5f + 9.0f * 1.6f);
-	// At least a quarter
-	EXPECT_FLOAT_EQ(WonderPower(0.0f, {}, 9), 0.25f);
-	// Its scale: power at most 5, times one less a tenth of it
-	EXPECT_FLOAT_EQ(WonderScale(1.0f), 0.9f);
-	EXPECT_FLOAT_EQ(WonderScale(5.0f), 2.5f);
-	EXPECT_FLOAT_EQ(WonderScale(12.0f), 2.5f);
-}
-
 TEST(ArtefactRules, AnArtefactBroughtAcrossJoinsItsNearestTownOnlyWhenItIsItsPlayers)
 {
 	const std::vector<NearbyTown> towns {

@@ -57,9 +57,11 @@ private:
 	/// from a random angle.
 	std::optional<scaffold_offer::Found> SearchOffer(entt::entity scaffold, entt::entity town);
 	/// The building that a town offers at a place for scaffolds of a value, only of the abode number when one is given.
-	/// The fit check ignores the building `ignored`, when it is given.
+	/// The fit check ignores the building `ignored`, when it is given. A wonder is of the wonder tribe when it is given,
+	/// else of the tribe of the town.
 	std::optional<components::ScaffoldOffer> SearchTownAt(entt::entity town, glm::vec3 place, uint32_t value,
-	                                                      std::optional<AbodeNumber> only, entt::entity ignored = entt::null);
+	                                                      std::optional<AbodeNumber> only, entt::entity ignored = entt::null,
+	                                                      std::optional<Tribe> wonderTribe = std::nullopt);
 	/// The scaffold under a scaffold that a hand holds or let go, which the held scaffold can join, none when there is
 	/// none. See the definition for the conditions.
 	[[nodiscard]] entt::entity ScaffoldUnder(entt::entity scaffold) const;

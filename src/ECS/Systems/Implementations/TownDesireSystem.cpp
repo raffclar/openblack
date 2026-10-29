@@ -28,6 +28,7 @@
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
@@ -40,6 +41,7 @@
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
@@ -98,6 +100,16 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 	auto& registry = Locator::entitiesRegistry::value();
 	town_desire::DesireInputs in;
 	in.tribe = tribe;
+	// The power that the Indian tribe gives the town's player, for its desire for children
+	if (Locator::magicSystem::has_value())
+	{
+		in.tribalPower4 = Locator::magicSystem::value().GetTribalPower(town.owner, Tribe::INDIAN);
+	}
+	// The belief of the town in its own player, for its desire to build a wonder
+	if (const auto* impression = registry.TryGet<const TownImpression>(townEntity); impression != nullptr)
+	{
+		in.belief = impression->belief.belief.at(static_cast<size_t>(town.owner));
+	}
 	auto& stats = in.stats;
 
 	registry.Each<const Villager>([&](const Villager& villager) {

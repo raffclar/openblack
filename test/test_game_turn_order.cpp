@@ -259,6 +259,13 @@ TEST(GameTurnOrder, TheTotemsTakeTheirTurnWithTheirTowns)
 	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::PlayerAlignment));
 }
 
+TEST(GameTurnOrder, TheTribalPowersSettleAfterTheComputerPlayersAndBeforeTheInfluence)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::ComputerPlayers, Step::TribalPowers));
+	EXPECT_TRUE(recorder.Before(Step::TribalPowers, Step::Influence));
+}
+
 TEST(GameTurnOrder, TheTeleportTravellersAreDroppedAfterTheTownsAndBeforeTheComputerPlayers)
 {
 	const auto recorder = PlayOneTurn();

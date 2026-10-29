@@ -714,6 +714,12 @@
   "query": "town.homes"
  },
  {
+  "description": "The wonders: town number, tribe, power, whether finished; and the power that each tribe gives each player, with the most it gave",
+  "kind": "object",
+  "parameters": [],
+  "query": "town.wonders"
+ },
+ {
   "description": "A town's owner and its belief in each player",
   "kind": "object",
   "parameters": [

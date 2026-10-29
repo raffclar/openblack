@@ -66,6 +66,7 @@
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TownHomes.h"
@@ -761,7 +762,8 @@ std::optional<scaffold_offer::Found> WorkshopSystem::SearchOffer(entt::entity sc
 	{
 		only = rows.at(static_cast<size_t>(*data.scriptBuilding)).abodeNumber;
 	}
-	const auto offer = SearchTownAt(town, place, value, only, ignored);
+	// A wonder is of the tribe of the scaffold's own town, when it has one
+	const auto offer = SearchTownAt(town, place, value, only, ignored, TribeOf(data.town));
 	if (!offer.has_value())
 	{
 		return std::nullopt;
@@ -770,7 +772,8 @@ std::optional<scaffold_offer::Found> WorkshopSystem::SearchOffer(entt::entity sc
 }
 
 std::optional<ScaffoldOffer> WorkshopSystem::SearchTownAt(entt::entity town, glm::vec3 place, uint32_t value,
-                                                          std::optional<AbodeNumber> only, entt::entity ignored)
+                                                          std::optional<AbodeNumber> only, entt::entity ignored,
+                                                          std::optional<Tribe> wonderTribe)
 {
 	const auto tribe = TribeOf(town);
 	if (!tribe.has_value())
@@ -780,7 +783,9 @@ std::optional<ScaffoldOffer> WorkshopSystem::SearchTownAt(entt::entity town, glm
 	const auto fits = [place, ignored](const ScaffoldOffer& offer, float yAngle) {
 		return ecs::town_planning::FitsForScaffold(place, offer.mesh, yAngle, offer.scale, ignored);
 	};
-	const auto candidates = ecs::town_planning::ScaffoldCandidates(town, *tribe, value, only);
+	// A wonder is of the given tribe, else of the town's tribe
+	const auto candidates =
+	    ecs::town_planning::ScaffoldCandidates(town, *tribe, value, only, place, wonderTribe.value_or(*tribe));
 	const float startYAngle = Locator::gameRandom::value().GameFloatRand(scaffold_offer::k_FullTurn);
 	return scaffold_offer::SearchTown(candidates, value, startYAngle, fits);
 }
@@ -1162,6 +1167,12 @@ bool WorkshopSystem::TryToBuild(entt::entity scaffold, entt::entity town)
 	data.site = building;
 	// The phantom on the site has the size of the scaffold
 	data.phantom.scale = registry.Get<const Transform>(scaffold).scale.x;
+	// A wonder gets the power of a wonder of the town at the scaffold
+	if (offer.number == AbodeNumber::Wonder && Locator::wonderSystem::has_value())
+	{
+		auto& wonders = Locator::wonderSystem::value();
+		wonders.SetPower(building, wonders.PowerAt(town, place));
+	}
 	data.phantom.shown.reset();
 	data.phantom.next.reset();
 	// The phantom of the building shows on the site

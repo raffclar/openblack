@@ -57,8 +57,8 @@ struct BuildersNeededInputs
 /// never below none nor above all
 [[nodiscard]] float DesireForVillagers(int32_t needed, int32_t maxBuilders, float forcedDesire);
 
-/// How much wood a building's site counts it worth: its size times its kind's wood, over the tribal power its site's
-/// player has of the fifth tribe
+/// How much wood a building's site counts it worth: its size times its kind's wood, over the power that the Egyptian
+/// tribe gives the player of the site
 [[nodiscard]] float WoodValue(float scale, uint32_t woodValue, float tribalPower);
 
 /// The wood still wanted to build a building: what isn't built yet of it (or for a built one, what isn't whole) of its

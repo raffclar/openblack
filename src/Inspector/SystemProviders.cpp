@@ -36,10 +36,12 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Wonder.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureReactionNotice.h"
@@ -1261,6 +1263,37 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeTownProvider(WorldS
 			              items.push_back(std::move(item));
 		              }
 		              return QueryResult::Value(std::move(items));
+	              });
+	provider->Add(Query("wonders",
+	                    "The wonders: town number, tribe, power, whether finished; and the power that each tribe gives "
+	                    "each player, with the most it gave",
+	                    {}, ResultKind::Object),
+	              [sources](const QueryContext& /*context*/) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              const auto* info = Info(sources);
+		              Json wonders = Json::array();
+		              registry->Each<const ecs::components::Wonder, const Abode>(
+		                  [&](entt::entity entity, const ecs::components::Wonder& wonder, const Abode& abode) {
+			                  auto item = ToListItem(entity, Describe(*registry, entity, info));
+			                  item["town"] = abode.townId;
+			                  item["tribe"] = info != nullptr && abode.info != AbodeInfo::None
+			                                      ? static_cast<int>(info->abode.at(static_cast<size_t>(abode.info)).tribeType)
+			                                      : -1;
+			                  item["power"] = wonder.power;
+			                  item["finished"] = !registry->AllOf<ecs::components::BuildProgress>(entity);
+			                  wonders.push_back(std::move(item));
+		                  });
+		              Json players = Json::array();
+		              registry->Each<const ecs::components::Player>([&](const ecs::components::Player& player) {
+			              players.push_back({{"player", static_cast<int>(player.name)},
+			                                 {"tribalPower", player.miracles.tribalPower},
+			                                 {"mostTribalPower", player.miracles.maxTribalPower}});
+		              });
+		              return QueryResult::Value({{"wonders", std::move(wonders)}, {"players", std::move(players)}});
 	              });
 	provider->Add(Query("belief", "A town's owner and its belief in each player", {id}),
 	              [sources](const QueryContext& context) {

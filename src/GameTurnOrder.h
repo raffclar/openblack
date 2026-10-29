@@ -106,6 +106,8 @@ enum class Step : uint8_t
 	Snow,
 	Players,
 	ComputerPlayers,
+	/// The power that each tribe gives each player
+	TribalPowers,
 	Influence,
 	PlayerStatistics,
 	Heartbeats,
@@ -282,6 +284,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Teleports, .stage = Stage::Players},
     {.step = Step::TownFlags, .stage = std::nullopt},
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
+    // After its computer mind, the power that each tribe gives a player becomes the most power that the tribe gave it
+    {.step = Step::TribalPowers, .stage = Stage::Players},
     // The influence of the towns and the temples. The borders that it draws and the influence that the hand keeps are
     // also in this step.
     {.step = Step::Influence, .stage = Stage::Players},
