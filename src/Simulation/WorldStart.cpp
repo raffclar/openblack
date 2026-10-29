@@ -48,10 +48,6 @@
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleRoomMeshes.h"
-#include "Audio/AnimEffectTable.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/ClipSounds.h"
-#include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
 #include "Camera/CameraZones.h"
 #include "Common/BufferedLogSink.h"
@@ -91,7 +87,6 @@
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
 #include "Gui/TextDatabase.h"
@@ -101,6 +96,11 @@
 #include "Physics/Materials.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/AnimEffectTable.h"
+#include "Sound/ClipSounds.h"
+#include "Sound/HelpSpeech.h"
+#include "Sound/SoundRequestInterface.h"
+#include "Visual/DetailLevel.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::simulation
@@ -660,7 +660,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 
 	view.StartupStep("level list");
 	// Load all sound packs in the Audio directory
-	auto& audioManager = Locator::audio::value();
+	auto& audioManager = Locator::sounds::value();
 	fileSystem.Iterate(
 	    fileSystem.GetPath<Path::Audio>(), true, [&audioManager, &soundManager, &fileSystem](const std::filesystem::path& f) {
 		    if (f.extension() != ".sad")
@@ -1096,7 +1096,7 @@ ProfileMenu ProfileMenuSettings()
 		settings.symbol = profile->symbol;
 		gui::TakeProfileSettings(settings, profile->settings);
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	settings.sfxVolume = audio.GetSfxVolume();
 	settings.musicVolume = audio.GetMusicVolume();
 	const auto& config = Locator::config::value();

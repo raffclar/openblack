@@ -29,7 +29,6 @@
 
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraDrag.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -92,6 +91,7 @@
 #include "Online/NetworkSession.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
+#include "Sound/GameSoundEffects.h"
 #include "Temple/ChallengeRoomRules.h"
 #include "Temple/SaveGameRoomRules.h"
 #include "Temple/ScrollPictures.h"

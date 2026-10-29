@@ -460,6 +460,21 @@ TEST(ScriptObjectsSystem, AVisualsThingGoesWhenItsVisualEnds)
 	EXPECT_TRUE(registry.Valid(lasting));
 }
 
+TEST(ScriptObjectsSystem, OnlyAVisualsThingGivesTheVisualThatTakesATarget)
+{
+	openblack::ecs::Registry registry;
+	constexpr uint32_t k_Effect = 20;
+	const auto beam = openblack::ecs::script_spot_visuals::MakeThing(registry, k_Effect, glm::vec3(0.0f));
+	const auto villager = registry.Create();
+	// The thing of a visual gives its visual, which then takes the target
+	EXPECT_EQ(openblack::ecs::script_spot_visuals::EffectOf(registry, beam), k_Effect);
+	// Another thing, no thing, and a thing that went give no visual
+	EXPECT_EQ(openblack::ecs::script_spot_visuals::EffectOf(registry, villager), std::nullopt);
+	EXPECT_EQ(openblack::ecs::script_spot_visuals::EffectOf(registry, entt::null), std::nullopt);
+	registry.Destroy(beam);
+	EXPECT_EQ(openblack::ecs::script_spot_visuals::EffectOf(registry, beam), std::nullopt);
+}
+
 TEST(ScriptObjectsSystem, AnObjectNoVariableHoldsFreesItsPlaceAfterTheScriptsTurn)
 {
 	auto [world, system] = MakeSystem();

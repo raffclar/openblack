@@ -19,7 +19,7 @@
 #include "EngineConfig.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/Texture2D.h"
-#include "Graphics/UploadMode.h"
+#include "Visual/UploadMode.h"
 
 using namespace openblack;
 

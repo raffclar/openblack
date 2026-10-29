@@ -19,11 +19,11 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/GameRandom.h"
+#include "Sound/SoundRequestInterface.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
@@ -84,6 +84,7 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -648,6 +649,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The things that the scripts walk along tracks move on
 		Locator::walkPathSystem::value().ProcessTurn();
 		break;
+	case Step::Mists:
+		// The mists that a script fades take a step of their size and their alpha
+		if (Locator::mistSystem::has_value())
+		{
+			Locator::mistSystem::value().ProcessTurn();
+		}
+		break;
 	case Step::PuzzleGames:
 		// Each puzzle game that the player has not solved puts back its pieces that moved and tests for a solution
 		if (Locator::puzzleGameSystem::has_value())
@@ -954,7 +962,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::SoundTags:
 		// The objects' looping sounds start again where they stopped, within reach of where the game hears them from
-		Locator::soundTagSystem::value().ProcessTurn(Locator::audio::value().GetListener().origin);
+		Locator::soundTagSystem::value().ProcessTurn(Locator::sounds::value().GetListener().origin);
 		break;
 	case Step::Ambience:
 		// The view does this step

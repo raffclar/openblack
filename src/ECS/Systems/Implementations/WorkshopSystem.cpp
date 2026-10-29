@@ -25,8 +25,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -56,11 +54,11 @@
 #include "ECS/ScaffoldImpressionRules.h"
 #include "ECS/ScaffoldOfferRules.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -78,6 +76,8 @@
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -192,10 +192,9 @@ constexpr uint32_t k_JoinSounds = 4;
 /// A puff at a scaffold shows that it starts no building
 void Puff(glm::vec3 position)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast, position, std::nullopt, entt::null,
-		                                                 1.0f);
+		Locator::effectRequestSystem::value().Show({.type = SpotVisualType::SpellFailCast, .position = position});
 	}
 }
 
@@ -917,10 +916,10 @@ void WorkshopSystem::Join(entt::entity held, entt::entity target, std::optional<
 	}
 	BuildBuilding(target, heldData.handPlayer);
 	// A puff shows at the joined scaffold, and one of four sounds plays where the hand is
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().StartSpotVisual(
-		    SpotVisualType::ObjectAppear, registry.Get<const Transform>(target).position, std::nullopt, entt::null, 1.0f);
+		Locator::effectRequestSystem::value().Show(
+		    {.type = SpotVisualType::ObjectAppear, .position = registry.Get<const Transform>(target).position});
 	}
 	if (hand.has_value())
 	{

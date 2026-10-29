@@ -54,10 +54,6 @@
 #include "Animals/GrazerRules.h"
 #include "Animals/HunterRules.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/CustomMusicPlayerInterface.h"
-#include "Audio/GameMusic.h"
-#include "Audio/HeaderOverrides.h"
-#include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
@@ -272,6 +268,10 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
+#include "Sound/CustomMusicPlayerInterface.h"
+#include "Sound/GameMusic.h"
+#include "Sound/HeaderOverrides.h"
+#include "Sound/MusicMood.h"
 #include "TestbedDispenserGrid.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -979,6 +979,7 @@ void Runner::Start(const Scenario& scenario)
 	_scenario = &scenario;
 	_running = true;
 	_seconds = 0.0f;
+	_lastNativeResult.reset();
 	_fireBallTakeFrames.reset();
 	_nextMiracleLog = 0.0f;
 	_timeline = {};
@@ -986,6 +987,7 @@ void Runner::Start(const Scenario& scenario)
 	_slotCreatures.clear();
 	_objects.clear();
 	_scriptFlock = entt::null;
+	_keptByScript.clear();
 	_madeByNatives.clear();
 	_globes.clear();
 	_temples.clear();
@@ -1092,6 +1094,15 @@ void Runner::Start(const Scenario& scenario)
 	{
 		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
+	}
+	// The land's start makes the sheet of the players' symbols after the land's script, which switches on the computer
+	// players
+	if (scenario.environment.symbolsAfterLandScript)
+	{
+		if (auto* game = Game::Instance(); game != nullptr)
+		{
+			game->MakePlayersSymbols(scenario.environment.profileSymbol);
+		}
 	}
 	if (scenario.objectsAfterLandScript)
 	{
@@ -2571,7 +2582,12 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		if (command.ctrl)
 		{
-			registry.Get<ecs::components::Dance>(dance).cameraWanted = true;
+			// The dance wants the camera of every god, so that every computer of a network game sets the same world and
+			// turns its own camera
+			for (auto& hand : registry.Get<ecs::components::Dance>(dance).hands)
+			{
+				hand.cameraWanted = true;
+			}
 		}
 		return fmt::format("{} dancers{}", dancers, command.ctrl ? ", the dance wants its camera" : "");
 	}
@@ -2869,9 +2885,19 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	case ScriptArgument::Kind::Creature:
 		object = CreatureAt(argument.index);
 		break;
+	case ScriptArgument::Kind::Temple:
+		if (argument.index < _temples.size())
+		{
+			object = _temples.at(argument.index);
+		}
+		break;
 	case ScriptArgument::Kind::Position:
 		// A position is three values, which only a native call gives
 		return std::nullopt;
+	case ScriptArgument::Kind::Result:
+		return _lastNativeResult;
+	case ScriptArgument::Kind::LastResult:
+		return _lastNativeResult;
 	case ScriptArgument::Kind::Flock:
 		object = ScriptFlock();
 		break;
@@ -2939,6 +2965,15 @@ std::string Runner::CallNative(const Command& command)
 		}
 		const auto type = ScriptDataTypeOf(argument.kind);
 		arguments.emplace_back(std::pair(*given, type));
+		if (const auto kept = static_cast<entt::entity>(given->uintVal);
+		    argument.kept && type == lhvm::DataType::Object && std::ranges::find(_keptByScript, kept) == _keptByScript.end())
+		{
+			// The scenario keeps the thing as a script variable keeps it, so that it stays in the control of the script
+			auto& scripts = Locator::scriptObjects::value();
+			static_cast<void>(scripts.Register(kept, false));
+			scripts.AddReference(kept);
+			_keptByScript.push_back(kept);
+		}
 	}
 	std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> results;
 	const auto id = static_cast<uint32_t>(std::distance(functions->begin(), found));
@@ -2946,6 +2981,7 @@ std::string Runner::CallNative(const Command& command)
 	{
 		return fmt::format("{} could not run now", command.script);
 	}
+	_lastNativeResult = results.empty() ? std::nullopt : std::optional(results.front().first);
 	for (const auto& [value, type] : results)
 	{
 		if (type == lhvm::DataType::Object)
@@ -3912,6 +3948,17 @@ void Runner::Give(const Command& command)
 		         : !target.has_value()                                   ? "no such object"
 		         : minds.ScriptDoAction(*entity, *action, *target, with) ? fmt::format("doing {}", command.action)
 		                                                                 : "can't";
+		break;
+	}
+	case Kind::GodOrder:
+	{
+		const auto* tables = minds.GetTables();
+		const auto action = tables != nullptr ? creature_mind_tables::FindAction(*tables, command.action) : std::nullopt;
+		const auto target = command.atCreature.has_value() ? CreatureAt(*command.atCreature) : std::nullopt;
+		result = !action.has_value()                             ? "no such action"
+		         : !target.has_value()                           ? "no such creature"
+		         : minds.ObeyGodOrder(*entity, *action, *target) ? fmt::format("ordered {}", command.action)
+		                                                         : "can't";
 		break;
 	}
 	case Kind::MakeFriends:

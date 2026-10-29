@@ -245,6 +245,8 @@ private:
 	const Scenario* _scenario {nullptr};
 	bool _running {false};
 	float _seconds {0.0f};
+	/// The first value that the last native call gave back, for a later call that uses it
+	std::optional<lhvm::VMValue> _lastNativeResult;
 	/// The turn count at which the scenario was laid out
 	std::optional<uint32_t> _layoutTurn;
 	/// When the made-up ping of the ping line started, in the scenario's seconds; none while it does not show
@@ -281,6 +283,8 @@ private:
 	std::vector<entt::entity> _objects;
 	/// The script flock of the scenario's villagers and animals, after a command gave it
 	entt::entity _scriptFlock {entt::null};
+	/// The objects and creatures that the scenario keeps as script variables keep them
+	std::vector<entt::entity> _keptByScript;
 	/// The objects that the native calls of the scenario gave back, in order
 	std::vector<uint32_t> _madeByNatives;
 	/// The globes that the scenario puts down on their own, in the order of its list

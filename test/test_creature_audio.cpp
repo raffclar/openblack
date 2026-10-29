@@ -17,8 +17,8 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/ScriptSoundEffect.h"
 #include "Creature/CreatureAudio.h"
+#include "Sound/ScriptSoundEffect.h"
 
 using namespace openblack;
 using namespace openblack::creature_audio;

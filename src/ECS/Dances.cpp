@@ -145,12 +145,20 @@ void dances::ProcessTurn(Registry& registry, entt::entity entity, const TurnCont
 		return;
 	}
 	// No dance follows what it is danced about: every maker of a dance in the game makes it stay at its place
-	const bool handNear = context.handNear && context.handNear(dance);
-	const auto moving = dance_rules::ProcessTurn(dance, context.turn, handNear);
-	if (dance.cameraAsked && context.cameraAsked)
+	const auto handsNear = context.handsNear ? context.handsNear(dance) : dance_rules::HandsNear {};
+	const auto moving = dance_rules::ProcessTurn(dance, context.turn, handsNear);
+	if (context.cameraAsked)
 	{
-		dance.cameraAsked = false;
-		context.cameraAsked(entity);
+		for (std::size_t god = 0; god < components::k_DanceHandGods; ++god)
+		{
+			// The start of a camera can change the registry, so the turn finds the dance again for each god
+			auto& hand = registry.Get<Dance>(entity).hands.at(god);
+			if (hand.cameraAsked)
+			{
+				hand.cameraAsked = false;
+				context.cameraAsked(entity, static_cast<PlayerNames>(god));
+			}
+		}
 	}
 	if (!context.playClipAgain)
 	{

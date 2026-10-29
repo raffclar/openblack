@@ -17,10 +17,10 @@ bool creature_hand::TakesHold(const Holdable& creature)
 	       !creature.frozen && !creature.scriptControlled && !creature.fainting;
 }
 
-bool creature_hand::MayHold(const Holdable& creature, PlayerNames handPlayer)
+bool creature_hand::MayHold(const Holdable& creature, PlayerNames handPlayer, bool allied)
 {
-	// An allied god's creature would be held too; allies aren't modelled
-	return TakesHold(creature) && creature.owner == handPlayer;
+	// The creature of an allied god takes hold as the player's own creature does
+	return TakesHold(creature) && (creature.owner == handPlayer || allied);
 }
 
 bool creature_hand::ShowsInteractTip(PlayerNames player, const Holdable& creature, bool held, bool handInInfluence)

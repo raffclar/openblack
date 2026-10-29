@@ -178,6 +178,9 @@ struct Environment
 	bool pushScrolling {false};
 	/// The symbol that the world shows for the first player in place of the symbol of the player's profile
 	std::optional<uint32_t> profileSymbol;
+	/// The sheet of the players' symbols is made again after the lines of the land's script, as at the start of a land.
+	/// Each computer player that the script switches on then shows the picture of its god.
+	bool symbolsAfterLandScript {false};
 	/// The player's prayer power, for watching a maintained miracle run out of it; the testbed's plenty when not given
 	std::optional<float> prayer;
 	/// The player's alignment, -1 evil to 1 good, as the scenario starts; neutral when not given
@@ -566,6 +569,13 @@ struct ScriptArgument
 		Position,
 		/// A whole number (number, made whole towards zero), as a script gives a constant such as a resource type
 		Integer,
+		/// The first value that the last native call gave back, such as the thing that it made
+		Result,
+		/// The first value that the last native call of the scenario gave back, as an object. A script keeps such a
+		/// value in a variable, such as the visual that SPECIAL_EFFECT_OBJECT gives.
+		LastResult,
+		/// The scenario's temple of the index
+		Temple,
 		/// A script flock of all the villagers and animals of the scenario. The first command that gives it makes it.
 		Flock,
 		/// The scenario's town of the player, as a script names a town
@@ -579,6 +589,9 @@ struct ScriptArgument
 	glm::vec2 point {0.0f};
 	float height {0.0f};
 	size_t index {0};
+	/// The scenario keeps the object or creature as a script variable keeps it. Then the scripts' turn does not let go of
+	/// a thing that the native takes control of.
+	bool kept {false};
 };
 
 /// The value of a command that plays custom music that stops the music
@@ -1072,6 +1085,10 @@ struct Command
 		PlainKeyDown,
 		PlainKeyRepeat,
 		PlainKeyUp,
+		/// The god of the creature orders it to do an action of the game's table (action, by its name) to another
+		/// creature of the scenario (atCreature), as the hand of a computer god orders it. A script does not give the
+		/// order, so the other creature answers a joint action by its own desires.
+		GodOrder,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -73,11 +73,6 @@
 #include "3D/WaterRings.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/ClipSounds.h"
-#include "Audio/GameMusic.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/HelpSpeech.h"
-#include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
@@ -90,6 +85,11 @@
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Sound/ClipSounds.h"
+#include "Sound/GameMusic.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/HelpSpeech.h"
+#include "Sound/ScriptSoundEffect.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
@@ -304,7 +304,6 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
@@ -366,6 +365,7 @@
 #include "Simulation/WorldStart.h"
 #include "Temple/TempleHelp.h"
 #include "Video/VideoRules.h"
+#include "Visual/DetailLevel.h"
 
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>
@@ -6314,15 +6314,35 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 	const auto localPlayer =
 	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	auto players = players_symbols::MakeSheet(std::move(file), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
-	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
-	auto& textureManager = Locator::resources::value().GetTextures();
 	// The lowest detail levels keep the sheet at half its size: each symbol takes every second texel of its full one
 	const bool halve = Locator::config::value().detail.lowResTextures;
-	const auto replace = [&textureManager, halve](const std::string& name, std::vector<uint8_t> bytes) {
-		if (auto halved = halve ? low_resolution_textures::Halve(bytes) : std::nullopt)
+	if (halve)
+	{
+		for (auto* bytes : {&players.colours, &players.alpha})
 		{
-			bytes = std::move(*halved);
+			if (auto halved = low_resolution_textures::Halve(*bytes))
+			{
+				*bytes = std::move(*halved);
+			}
 		}
+	}
+	// The square of each computer player takes the picture of its god. At the low detail levels the picture comes from
+	// the god's file of half size.
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+	{
+		if (!Locator::playerSystem::has_value() ||
+		    !Locator::playerSystem::value().IsComputerPlayer(static_cast<PlayerNames>(number)))
+		{
+			continue;
+		}
+		const auto god = players_symbols::k_GodPictures.at(players_symbols::GodPictureOf(number, landNumber));
+		const auto name = fmt::format("{}{}.cps", god, halve ? players_symbols::k_LowDetailLetter : "");
+		players_symbols::PutPicture(players, read(textures / name), number);
+	}
+	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
+	auto& textureManager = Locator::resources::value().GetTextures();
+	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {
 		textureManager.Erase(name);
 		try
 		{

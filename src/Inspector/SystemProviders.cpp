@@ -20,7 +20,6 @@
 #include <InspectorQuery.h>
 
 #include "3D/MapCoords.h"
-#include "Audio/Sound.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
@@ -46,6 +45,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::inspector;

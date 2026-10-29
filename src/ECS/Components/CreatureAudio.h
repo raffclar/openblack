@@ -16,8 +16,8 @@
 #include <string>
 #include <vector>
 
-#include "Audio/AnimEffectKeys.h"
 #include "Creature/CreatureAudio.h"
+#include "Sound/AnimEffectKeys.h"
 
 namespace openblack::ecs::components
 {

@@ -15,8 +15,8 @@
 
 #include "Animals/AnimalMove.h"
 #include "Animals/GrazerRules.h"
-#include "Audio/AnimEffectKeys.h"
 #include "ECS/Reflection/ComponentReflection.h"
+#include "Sound/AnimEffectKeys.h"
 
 namespace openblack::ecs::reflection
 {

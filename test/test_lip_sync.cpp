@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// audio::lip_sync (src/Audio/LipSync.h): the spectrum of a window of a recording and the mouth weights it gives, on
+// audio::lip_sync (src/Sound/LipSync.h): the spectrum of a window of a recording and the mouth weights it gives, on
 // synthetic tones.
 
 #include <cmath>
@@ -19,7 +19,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/LipSync.h"
+#include "Sound/LipSync.h"
 
 using namespace openblack::audio::lip_sync;
 

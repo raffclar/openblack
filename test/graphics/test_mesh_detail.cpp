@@ -11,8 +11,8 @@
 
 #include <gtest/gtest.h>
 
-#include "Graphics/DetailLevel.h"
 #include "Graphics/MeshDetail.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack::graphics;
 using mesh_detail::Mesh;

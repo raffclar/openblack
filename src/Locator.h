@@ -47,7 +47,8 @@ using InfoConstants = v120::InfoConstants;
 namespace audio
 {
 class AudioManagerInterface;
-}
+class SoundRequestInterface;
+} // namespace audio
 
 namespace chlapi
 {
@@ -207,6 +208,7 @@ class SkyClockSystemInterface;
 class SkySystemInterface;
 class WeatherSystemInterface;
 class ParticleSystemInterface;
+class EffectRequestSystemInterface;
 class MagicSystemInterface;
 class GestureEventsInterface;
 class ReactionSystemInterface;
@@ -295,6 +297,8 @@ struct Locator
 	using skyClockSystem = entt::locator<ecs::systems::SkyClockSystemInterface>;
 	using skySystem = entt::locator<ecs::systems::SkySystemInterface>;
 	using audio = entt::locator<audio::AudioManagerInterface>;
+	/// The sounds that the world asks for. The audio library plays them through the audio manager.
+	using sounds = entt::locator<openblack::audio::SoundRequestInterface>;
 	using camera = entt::locator<Camera>;
 	using gameActionSystem = entt::locator<input::GameActionInterface>;
 	using rendereringSystem = entt::locator<ecs::systems::RenderingSystemInterface>;
@@ -405,6 +409,8 @@ struct Locator
 	using influenceSystem = entt::locator<ecs::systems::InfluenceSystemInterface>;
 	using townDesireSystem = entt::locator<ecs::systems::TownDesireSystemInterface>;
 	using particleSystem = entt::locator<ecs::systems::ParticleSystemInterface>;
+	/// The particle effects that the turns and the scripts ask for, by numbers that the simulation gives
+	using effectRequestSystem = entt::locator<ecs::systems::EffectRequestSystemInterface>;
 	using magicSystem = entt::locator<ecs::systems::MagicSystemInterface>;
 	using gestureEvents = entt::locator<ecs::systems::GestureEventsInterface>;
 	using reactionSystem = entt::locator<ecs::systems::ReactionSystemInterface>;

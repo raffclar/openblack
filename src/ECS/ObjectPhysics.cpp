@@ -14,15 +14,13 @@
 #include <algorithm>
 #include <array>
 #include <numbers>
+#include <optional>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -64,10 +62,10 @@
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -77,6 +75,9 @@
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
 #include "Physics/ObjectRules.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -101,7 +102,7 @@ constexpr std::array<audio::SoundId, 3> k_TreePlantings = {audio::SoundId::G_Pla
 /// A sound at a point, played for what owns it
 void PlaySound(audio::SoundId sound, glm::vec3 point, entt::entity owner)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(sound), {.position = point, .owner = owner});
 	}
@@ -235,15 +236,16 @@ void Replant(const PhysicsEntry* entry, entt::entity tree)
 		}
 	}
 	// Away from towns, the player sees the forest grow
-	if (!search.NearTown() && Locator::particleSystem::has_value())
+	if (!search.NearTown() && Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		const auto effect = particles.StartSpotVisual(SpotVisualType::ForestCreated, position, objects::k_ReplantVisualTurns,
-		                                              entt::null, objects::k_ReplantVisualMagnitude);
-		if (effect != systems::ParticleSystemInterface::k_NoEffect && entry != nullptr && entry->player.has_value())
-		{
-			particles.SetPlayer(effect, static_cast<int>(*entry->player));
-		}
+		Locator::effectRequestSystem::value().Show({
+		    .type = SpotVisualType::ForestCreated,
+		    .position = position,
+		    .magnitude = objects::k_ReplantVisualMagnitude,
+		    .turns = objects::k_ReplantVisualTurns,
+		    .player =
+		        entry != nullptr && entry->player.has_value() ? std::optional(static_cast<int>(*entry->player)) : std::nullopt,
+		});
 	}
 	// The player who planted it is seen to, by their creature and by the world
 	if (entry == nullptr || !entry->player.has_value())

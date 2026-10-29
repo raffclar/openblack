@@ -15,7 +15,7 @@
 #include <string_view>
 #include <utility>
 
-#include "Audio/Sound.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 

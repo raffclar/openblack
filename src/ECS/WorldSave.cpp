@@ -34,8 +34,6 @@
 
 #include "3D/CameraEdits.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameMusic.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
@@ -73,6 +71,7 @@
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -103,6 +102,8 @@
 #include "Game.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
+#include "Sound/GameMusic.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -235,9 +236,9 @@ bool LoadCamera(std::span<const uint8_t> bytes)
 /// The sounds of a world state start again on this computer: the emitters are of the computer that made the state
 void ForgetEmitters(Registry& registry)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().ForgetSavedEmitters();
+		Locator::sounds::value().ForgetSavedEmitters();
 	}
 	registry.Each<components::SoundTag>([](entt::entity, components::SoundTag& tag) { tag.emitter = entt::null; });
 }
@@ -254,9 +255,9 @@ void ForgetTempleRooms(entt::registry& registry)
 /// gets its creed powers one by one.
 void ForgetSavedSounds(Registry& registry)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().ForgetSavedEmitters();
+		Locator::sounds::value().ForgetSavedEmitters();
 	}
 	if (!Locator::soundTagSystem::has_value())
 	{
@@ -303,9 +304,10 @@ systems::SavedStateInterface* FindGameMusic()
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 40> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 41> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindSystem<Locator::particleSystem>},
+    {"effectRequests", &FindSystem<Locator::effectRequestSystem>},
     {"towns", &FindSystem<Locator::townSystem>},
     {"magic", &FindSystem<Locator::magicSystem>},
     {"magicShield", &FindSystem<Locator::magicShieldSystem>},

@@ -125,6 +125,8 @@ enum class Step : uint8_t
 	Fields,
 	FishFarms,
 	WalkPaths,
+	/// The mists that a script fades take a step of their fades
+	Mists,
 	PuzzleGames,
 	Footpaths,
 	ForestGrowth,
@@ -298,6 +300,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fields, .stage = Stage::Lists},
     {.step = Step::FishFarms, .stage = Stage::Lists},
     {.step = Step::WalkPaths, .stage = Stage::Lists},
+    // The game steps the fades of the mists in its lists of things, after the things that walk along tracks
+    {.step = Step::Mists, .stage = Stage::Lists},
     // The puzzle games put back their pieces that moved, newest puzzle first
     {.step = Step::PuzzleGames, .stage = Stage::Lists},
     {.step = Step::Footpaths, .stage = Stage::Lists},

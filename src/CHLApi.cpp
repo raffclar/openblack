@@ -48,16 +48,17 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "3D/Mists.h"
 #include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameMusic.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/ScriptSoundEffect.h"
-#include "Audio/Sound.h"
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Sound/GameMusic.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/ScriptSoundEffect.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
@@ -82,6 +83,7 @@
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
+#include "ECS/Archetypes/MistArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
@@ -121,12 +123,14 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Mist.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/NeverFades.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
@@ -165,6 +169,7 @@
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
 #include "ECS/ScriptContainerWalk.h"
+#include "ECS/ScriptDelete.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/ScriptPoison.h"
@@ -218,6 +223,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
@@ -288,6 +294,7 @@
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
 #include "ScriptHeaders/ScriptCreateRules.h"
 #include "ScriptHeaders/ScriptCreatureRules.h"
+#include "ScriptHeaders/ScriptDeadLiving.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
@@ -1930,6 +1937,21 @@ void GetProperty() // 021 GET_PROPERTY
 		Pushf(0.0f);
 		return;
 	case script::ObjectPropertyType::Speed:
+		// A thing in the physics gives the speed of its flight
+		if (registry.AllOf<ecs::components::InPhysics>(object) && Locator::dynamicsSystem::has_value())
+		{
+			if (const auto* entry = Locator::dynamicsSystem::value().Find(object); entry != nullptr && entry->body != nullptr)
+			{
+				Pushf(glm::length(entry->body->velocity));
+				return;
+			}
+		}
+		// An animal gives its walk speed, metres a turn
+		if (registry.AllOf<ecs::components::Animal>(object))
+		{
+			Pushf(Locator::animalSystem::has_value() ? Locator::animalSystem::value().SpeedForScript(object) : 0.0f);
+			return;
+		}
 		if (const auto* wallHug = Locator::entitiesRegistry::value().TryGet<const ecs::components::WallHug>(object);
 		    wallHug != nullptr)
 		{
@@ -2431,6 +2453,15 @@ static void SetPropertyOf(entt::entity object, script::ObjectPropertyType prop, 
 		{
 			return;
 		}
+		// An animal walks at it, metres a turn
+		if (registry.AllOf<ecs::components::Animal>(object))
+		{
+			if (Locator::animalSystem::has_value())
+			{
+				Locator::animalSystem::value().SetSpeedFromScript(object, value);
+			}
+			return;
+		}
 		// Metres a turn
 		if (auto* wallHug = registry.TryGet<ecs::components::WallHug>(object); wallHug != nullptr)
 		{
@@ -2521,6 +2552,15 @@ void SetPosition() // 024 SET_POSITION
 		}
 		if (inHand || flying)
 		{
+			return;
+		}
+		// A marker is not in the map. It goes to the map position of the point and keeps the height of the point above
+		// the land.
+		if (registry.Valid(object) && registry.AllOf<ecs::components::ScriptMarker>(object))
+		{
+			const auto& island = Locator::terrainSystem::value();
+			registry.Get<Transform>(object).position = map_coords::ToWorld(island, map_coords::FromWorld(island, position));
+			registry.SetDirty();
 			return;
 		}
 		// A thing out of the map's cells stays where it is, as a thing that a creature holds
@@ -3495,7 +3535,7 @@ static std::optional<std::string> LoadedSoundGroup(std::string_view file)
 			return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
 		});
 	};
-	for (const auto& name : Locator::audio::value().GetSoundGroups() | std::views::keys)
+	for (const auto& name : Locator::sounds::value().GetSoundGroups() | std::views::keys)
 	{
 		if (sameName(name))
 		{
@@ -3510,7 +3550,7 @@ static std::optional<std::string> LoadedSoundGroup(std::string_view file)
 static std::optional<entt::id_type> BankSound(int32_t bank, int32_t sample)
 {
 	const auto file = audio::ScriptSoundBankFile(bank);
-	if (!file.has_value() || !Locator::audio::has_value() || !Locator::resources::has_value())
+	if (!file.has_value() || !Locator::sounds::has_value() || !Locator::resources::has_value())
 	{
 		return std::nullopt;
 	}
@@ -3543,7 +3583,7 @@ void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, const audio::Soun
 	{
 		return;
 	}
-	Locator::audio::value().StartSoundEffect(id, options);
+	Locator::sounds::value().StartSoundEffect(id, options);
 }
 
 void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
@@ -3669,6 +3709,7 @@ static void DeleteNow(entt::entity object)
 
 void ObjectDelete() // 048 OBJECT_DELETE
 {
+	namespace script_delete = ecs::script_delete;
 	const auto mode = Pop().intVal;
 	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
@@ -3676,48 +3717,51 @@ void ObjectDelete() // 048 OBJECT_DELETE
 	{
 		return;
 	}
-	// TODO(opening): a puzzle game is only let go of by the script
-	switch (mode)
+	const auto* temple = registry.TryGet<const ecs::components::Temple>(object);
+	const auto step = script_delete::Choose(mode, {.puzzleGame = registry.AllOf<ecs::components::PuzzleGame>(object),
+	                                               .object = IsScriptObject(registry, object),
+	                                               .creature = registry.AllOf<ecs::components::Creature>(object),
+	                                               .temple = temple != nullptr,
+	                                               .templeDestroying = temple != nullptr && temple->destroying});
+	const auto* transform = registry.TryGet<const Transform>(object);
+	const auto position = transform != nullptr ? transform->position : glm::vec3(0.0f);
+	switch (step)
 	{
-	case 0:
-		// It goes at once
+	case script_delete::Step::Remove:
 		DeleteNow(object);
 		return;
-	case 1:
-		// Only one of the world's objects goes this way
-		if (!IsScriptObject(registry, object))
-		{
-			return;
-		}
-		if (registry.AllOf<ecs::components::Creature>(object))
-		{
-			// A creature fizzes right out over two seconds and goes for good
-			Locator::creatureFizzSystem::value().SetFizz(object, 1.0f, 2.0f, true);
-			return;
-		}
-		// A ghost of it flickers out where it stood
+	case script_delete::Step::Fizz:
+		Locator::creatureFizzSystem::value().SetFizz(object, 1.0f, 2.0f, true);
+		break;
+	case script_delete::Step::GhostThenRemove:
 		ecs::world_objects::LeaveGhost(object);
 		DeleteNow(object);
 		return;
-	case 2:
-		if (!IsScriptObject(registry, object))
-		{
-			return;
-		}
-		// TODO(opening): its model breaks up where it stood (15 and 3 to the 3D engine's break-up)
+	case script_delete::Step::BreakUpThenRemove:
+		// The pieces fly out from the place where it stood
+		Locator::particleSystem::value().ExplodeObject(object, position, script_delete::k_ExplodeSpeed);
 		DeleteNow(object);
 		return;
-	case 3:
-		// A temple starts its destruction
-		// TODO(opening): a heart already flagged breaks up instead (80 and 3 to the 3D engine's break-up), and is let go
-		if (registry.AllOf<ecs::components::Temple>(object) && Locator::templeDestructionSystem::has_value())
+	case script_delete::Step::StartTempleDestruction:
+		if (Locator::templeDestructionSystem::has_value())
 		{
 			Locator::templeDestructionSystem::value().Start(object);
 		}
-		return;
-	default:
-		// Any other mode only lets it go
-		return;
+		break;
+	case script_delete::Step::BreakUpTemple:
+		// The temple stays until its destruction ends
+		Locator::particleSystem::value().ExplodeObject(object, position, script_delete::k_TempleExplodeSpeed);
+		break;
+	case script_delete::Step::ClearPuzzle:
+		// TODO(puzzle-games): the puzzle game removes its pieces. The stand-in puzzle game has no pieces
+		break;
+	case script_delete::Step::LetGo:
+		break;
+	}
+	// The script lets go of the thing. A flock or a dance that stays loses its members
+	if (registry.Valid(object))
+	{
+		static_cast<void>(Locator::scriptObjects::value().Disband(object));
 	}
 }
 
@@ -6796,10 +6840,17 @@ void GameTeamSize() // 219 GAME_TEAM_SIZE
 
 void GameType() // 220 GAME_TYPE
 {
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushi(0);
+	// The script type of the thing, as a find or an is-of-type test matches it. A thing that has no script type gives 0.
+	const auto object = PopObject();
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object))
+	{
+		ObjectNoLongerValid();
+		Pushi(0);
+		return;
+	}
+	const auto kind = ecs::script_find::KindOf(registry, object);
+	Pushi(kind.has_value() ? static_cast<int32_t>(kind->type) : 0);
 }
 
 void GameSubType() // 221 GAME_SUB_TYPE
@@ -7551,28 +7602,48 @@ void IsWindMagicAtPos() // 262 IS_WIND_MAGIC_AT_POS
 
 void CreateMist() // 263 CREATE_MIST
 {
-	// const auto heightRatio = Popf();
-	// const auto transparency = Popf();
-	// const auto b = Popf();
-	// const auto g = Popf();
-	// const auto r = Popf();
-	// const auto scale = Popf();
-	// const auto pos = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// A puff of mist at the point given, in the colour given, one over the height ratio times wider than tall seen level
+	const auto heightRatio = Popf();
+	const auto transparency = Popf();
+	const auto blue = Popf();
+	const auto green = Popf();
+	const auto red = Popf();
+	const auto scale = Popf();
+	const auto position = PopVec();
+	const float ground = Locator::terrainSystem::value().GetHeightAt(glm::vec2(position.x, position.z));
+	const auto mist = ecs::archetypes::MistArchetype::Create(
+	    position, position.y - ground, mists::ScriptColour(red, green, blue, transparency), scale, 1.0f / heightRatio);
+	if (mist == entt::null)
+	{
+		ScriptMessage("Thing not created");
+		PushObject(entt::null);
+		return;
+	}
+	RegisterCreated(mist);
+	PushObject(mist);
 }
 
 void SetMistFade() // 264 SET_MIST_FADE
 {
-	// const auto duration = Popf();
-	// const auto endTransparency = Popf();
-	// const auto startTransparency = Popf();
-	// const auto endScale = Popf();
-	// const auto startScale = Popf();
-	// const auto mist = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The mist's size and alpha (0 to 255) go from their starts to their ends over the seconds given, a step each turn
+	const auto duration = Popf();
+	const auto endTransparency = Popf();
+	const auto startTransparency = Popf();
+	const auto endScale = Popf();
+	const auto startScale = Popf();
+	const auto mist = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (mist == entt::null || !registry.Valid(mist))
+	{
+		ScriptMessage("Thing deleted");
+		return;
+	}
+	if (!registry.AllOf<ecs::components::Mist>(mist))
+	{
+		ScriptMessage("Must be mist object!");
+		return;
+	}
+	Locator::mistSystem::value().SetFade(mist, startScale, endScale, startTransparency, endTransparency, duration);
 }
 
 void GetObjectFade() // 265 GET_OBJECT_FADE
@@ -8040,18 +8111,44 @@ void GetLastSpellCastPos() // 295 GET_LAST_SPELL_CAST_POS
 
 void AddSpotVisualTargetPos() // 296 ADD_SPOT_VISUAL_TARGET_POS
 {
-	// const auto position = PopVec();
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The visual's rules also act on the point, such as a beam that ends there
+	const auto position = PopVec();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "ADD_SPOT_VISUAL_TARGET_POS: thing not valid");
+		return;
+	}
+	// A thing that holds no visual of a script takes no target
+	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
+	    effect.has_value() && Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().AddTargetPosition(*effect, position);
+	}
 }
 
 void AddSpotVisualTargetObject() // 297 ADD_SPOT_VISUAL_TARGET_OBJECT
 {
-	// const auto target = Pop().uintVal;
-	// const auto object = Pop().uintVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The visual's rules also act on the target, such as a beam that follows it while it moves
+	const auto target = PopObject();
+	const auto object = PopObject();
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "ADD_SPOT_VISUAL_TARGET_OBJECT: thing not valid");
+		return;
+	}
+	// No target, or a thing that holds no visual of a script, adds nothing
+	if (!registry.Valid(target))
+	{
+		return;
+	}
+	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
+	    effect.has_value() && Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().AddTarget(*effect, target);
+	}
 }
 
 void SetIndestructable() // 298 SET_INDESTRUCTABLE
@@ -8959,7 +9056,7 @@ void SetGameSound() // 357 SET_GAME_SOUND
 	const auto enable = Pop().intVal != 0;
 	if (!enable)
 	{
-		Locator::audio::value().StopAllSoundEffects();
+		Locator::sounds::value().StopAllSoundEffects();
 	}
 	Locator::chlapi::value().SetGameSoundOn(enable);
 }
@@ -9836,7 +9933,7 @@ void StopSoundEffect() // 424 STOP_SOUND_EFFECT
 	}
 	if (const auto sound = BankSound(bank, sample))
 	{
-		Locator::audio::value().StopSoundEffect(*sound);
+		Locator::sounds::value().StopSoundEffect(*sound);
 	}
 }
 
@@ -10078,13 +10175,61 @@ void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC
 	}
 }
 
+/// What the search for the dead looks at in a thing
+static script::dead_living::LivingFacts DeadLivingFactsOf(const ecs::Registry& registry, entt::entity thing)
+{
+	using script::dead_living::LivingFacts;
+	if (registry.AllOf<ecs::components::Villager>(thing))
+	{
+		const auto* action = registry.TryGet<const ecs::components::LivingAction>(thing);
+		if (action == nullptr || !Locator::livingActionSystem::has_value())
+		{
+			return {};
+		}
+		return {.kind = LivingFacts::Kind::Villager,
+		        .deathMark = registry.AllOf<ecs::components::VillagerDeath>(thing),
+		        .topState = action->states.at(static_cast<size_t>(ecs::components::LivingAction::Index::Top)),
+		        .finalState = static_cast<uint8_t>(Locator::livingActionSystem::value().VillagerGetFinalState(*action))};
+	}
+	if (const auto* animal = registry.TryGet<const ecs::components::Animal>(thing))
+	{
+		// Of the animal states, only the dead state has the game's number of the dead state
+		return {.kind = LivingFacts::Kind::Animal,
+		        .deathMark = animal->dying,
+		        .topState =
+		            animal->state == ecs::components::AnimalState::Dead ? script::dead_living::k_DeadState : uint8_t {0},
+		        .life = animal->life};
+	}
+	return {};
+}
+
 void GetDeadLiving() // 446 GET_DEAD_LIVING
 {
-	// const auto radius = Popf();
-	// const auto position = PopVec();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pusho(0);
+	// The nearest dead villager or animal in the cells within the radius of the point. A thing farther than the radius
+	// in these cells also counts. The script then holds the thing.
+	const auto radius = Popf();
+	const auto position = PopVec();
+	const auto at = map_coords::FromMetres({position.x, position.z});
+	const auto found = ecs::script_find::FindNearest(at, radius, [](glm::ivec2 cell) {
+		const auto& registry = Locator::entitiesRegistry::value();
+		std::vector<ecs::script_find::Candidate> dead;
+		for (const auto thing : Locator::entitiesMap::value().GetAllInCell(cell))
+		{
+			if (registry.Valid(thing) && registry.AllOf<Transform>(thing) &&
+			    script::dead_living::IsDead(DeadLivingFactsOf(registry, thing)))
+			{
+				dead.push_back({.entity = thing, .at = ScriptFindPosition(registry, thing)});
+			}
+		}
+		return dead;
+	});
+	if (found == entt::null)
+	{
+		Pusho(0);
+		return;
+	}
+	Locator::scriptObjects::value().Register(found, false);
+	Pusho(static_cast<uint32_t>(found));
 }
 
 void AttachSoundTag() // 447 ATTACH_SOUND_TAG
@@ -10145,7 +10290,7 @@ void GameSoundPlaying() // 450 GAME_SOUND_PLAYING
 	const auto bank = Pop().intVal;
 	const auto sample = Pop().intVal;
 	const auto sound = BankSound(bank, sample);
-	Pushb(sound.has_value() && Locator::audio::value().IsSoundEffectPlaying(*sound));
+	Pushb(sound.has_value() && Locator::sounds::value().IsSoundEffectPlaying(*sound));
 }
 
 /// A player's temple, the earliest made when there are several, none when the player has none

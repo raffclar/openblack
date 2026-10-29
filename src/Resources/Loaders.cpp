@@ -46,9 +46,7 @@
 #include "3D/Light.h"
 #include "3D/LowResolutionTextures.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/ClipSounds.h"
 #include "Audio/MusicTimingFile.h"
-#include "Audio/SoundDecoder.h"
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
@@ -59,6 +57,8 @@
 #include "Help/AdvisorModel.h"
 #include "Locator.h"
 #include "Physics/Materials.h"
+#include "Sound/ClipSounds.h"
+#include "Sound/SoundDecoder.h"
 
 using namespace openblack;
 using namespace openblack::filesystem;

@@ -9,6 +9,8 @@
 
 #include "PlayersSymbols.h"
 
+#include <cmath>
+
 #include <algorithm>
 
 using namespace openblack::players_symbols;
@@ -17,7 +19,6 @@ namespace
 {
 
 constexpr size_t k_Texels = static_cast<size_t>(k_SheetSide) * k_SheetSide;
-constexpr size_t k_SquareTexels = static_cast<size_t>(k_SquareSide) * k_SquareSide;
 
 /// The texel at the top left of a square
 [[nodiscard]] size_t SquareStart(uint32_t square)
@@ -61,23 +62,48 @@ void openblack::players_symbols::CopyDesign(Sheet& players, const Sheet& designs
 
 void openblack::players_symbols::PutPicture(Sheet& players, std::span<const uint8_t> greys, uint32_t player)
 {
-	if (!players.Whole() || greys.size() != k_SquareTexels || !InSheet(player))
+	// The side of the square picture gives the side of the sheet: a sheet of full size, or a sheet at half size
+	const auto side = static_cast<uint32_t>(std::sqrt(static_cast<double>(greys.size())));
+	const auto sheetSide = side * k_SquaresInARow;
+	const auto texels = static_cast<size_t>(sheetSide) * sheetSide;
+	if (side == 0 || static_cast<size_t>(side) * side != greys.size() || players.colours.size() != texels * 3 ||
+	    players.alpha.size() != texels || !InSheet(player))
 	{
 		return;
 	}
-	const auto to = SquareStart(player);
-	for (uint32_t row = 0; row < k_SquareSide; ++row)
+	const auto to =
+	    static_cast<size_t>(player / k_SquaresInARow) * side * sheetSide + static_cast<size_t>(player % k_SquaresInARow) * side;
+	for (uint32_t row = 0; row < side; ++row)
 	{
-		for (uint32_t column = 0; column < k_SquareSide; ++column)
+		for (uint32_t column = 0; column < side; ++column)
 		{
-			const auto grey = greys[static_cast<size_t>(row) * k_SquareSide + column];
-			const auto texel = to + static_cast<size_t>(row) * k_SheetSide + column;
+			const auto grey = greys[static_cast<size_t>(row) * side + column];
+			const auto texel = to + static_cast<size_t>(row) * sheetSide + column;
 			players.colours.at(texel * 3) = grey;
 			players.colours.at(texel * 3 + 1) = grey;
 			players.colours.at(texel * 3 + 2) = grey;
 			players.alpha.at(texel) = grey;
 		}
 	}
+}
+
+uint32_t openblack::players_symbols::GodPictureOf(uint32_t player, int32_t landNumber)
+{
+	constexpr uint32_t k_SecondPlayer = 1;
+	constexpr int32_t k_KhazarLand = 3;
+	constexpr int32_t k_NemesisLand = 5;
+	constexpr int64_t k_Khazar = 1;
+	constexpr int64_t k_Nemesis = 2;
+	auto picture = static_cast<int64_t>(player) - 1;
+	if (landNumber == k_KhazarLand && player == k_SecondPlayer)
+	{
+		picture = k_Khazar;
+	}
+	if (landNumber == k_NemesisLand && player == k_SecondPlayer)
+	{
+		picture = k_Nemesis;
+	}
+	return static_cast<uint32_t>(std::clamp<int64_t>(picture, 0, static_cast<int64_t>(k_GodPictures.size()) - 1));
 }
 
 void openblack::players_symbols::PutProfileSymbol(Sheet& players, const Sheet& designs, uint32_t symbol, uint32_t player,

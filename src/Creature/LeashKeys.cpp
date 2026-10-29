@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include "Input/BindableActions.h"
+
 using namespace openblack;
 using namespace openblack::creature_leash;
 using input::BindableActionMap;

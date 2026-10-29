@@ -14,7 +14,7 @@
 #include <MusicCues.h>
 #include <PackFile.h>
 
-#include "SoundDecoder.h"
+#include "Sound/SoundDecoder.h"
 
 using namespace openblack::audio;
 

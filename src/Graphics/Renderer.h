@@ -39,7 +39,6 @@
 #include "Graphics/GroundShadow.h"
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
-#include "Graphics/LandDetail.h"
 #include "Graphics/PaintedSkinStamp.h"
 #include "Graphics/PartialBuildCap.h"
 #include "Graphics/RenderPass.h"
@@ -47,6 +46,7 @@
 #include "Graphics/SeaRows.h"
 #include "Graphics/VolumeGlowShell.h"
 #include "Particles/ParticleDrawFrame.h"
+#include "Visual/LandDetail.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."

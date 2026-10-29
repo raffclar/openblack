@@ -15,7 +15,7 @@
 
 #include "3D/OceanInterface.h"
 #include "3D/SeaTexture.h"
-#include "Graphics/UploadMode.h"
+#include "Visual/UploadMode.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."

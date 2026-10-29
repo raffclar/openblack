@@ -27,8 +27,6 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -64,6 +62,7 @@
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -97,6 +96,8 @@
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
 #include "Particles/DrawnEffectSteps.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 #include "VillagerBreeding.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDiscipleWork.h"
@@ -1196,15 +1197,11 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 		                                         .impressiveValue = info != nullptr ? info->impressiveValue : 0.0f});
 	}
 	// Fireworks and a fountain of the new player's symbols rise from its centre
-	if (player != PlayerNames::NEUTRAL && Locator::particleSystem::has_value())
+	if (player != PlayerNames::NEUTRAL && Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		particles.StartSpotVisual(SpotVisualType::TownFireworks, position, std::nullopt, entt::null);
-		const auto fountain = particles.StartSpotVisual(SpotVisualType::PlayerIconFountain, position, std::nullopt, entt::null);
-		if (fountain != ParticleSystemInterface::k_NoEffect)
-		{
-			particles.SetPlayer(fountain, static_cast<int>(player));
-		}
+		auto& effects = Locator::effectRequestSystem::value();
+		effects.Show({.type = SpotVisualType::TownFireworks, .position = position});
+		effects.Show({.type = SpotVisualType::PlayerIconFountain, .position = position, .player = static_cast<int>(player)});
 	}
 	// In a network game the new player counts a town taken over, for the winning condition
 	if (Locator::gameEndSystem::has_value())

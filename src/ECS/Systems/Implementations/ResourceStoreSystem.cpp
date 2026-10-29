@@ -32,8 +32,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -74,8 +72,8 @@
 #include "ECS/StoreRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
@@ -94,6 +92,8 @@
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -129,7 +129,7 @@ uint32_t TickMs()
 /// A sample of the in-game bank at a place, played for what owns it
 void PlayInGame(uint32_t sample, glm::vec3 position, entt::entity owner)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
 		                            {.position = position, .owner = owner});
@@ -976,10 +976,10 @@ bool ResourceStoreSystem::PourAt(ResourceType type, glm::vec3 point, uint32_t am
 	if (speedUp && type == ResourceType::Food)
 	{
 		pile.speedUp = true;
-		if (Locator::particleSystem::has_value())
+		if (Locator::effectRequestSystem::has_value())
 		{
-			pile.speedUpVisual =
-			    Locator::particleSystem::value().StartSpotVisual(SpotVisualType::PilefoodSpeedup, point, -1, created, 1.0f);
+			pile.speedUpVisual = Locator::effectRequestSystem::value().Start(
+			    {.type = SpotVisualType::PilefoodSpeedup, .position = point, .turns = -1, .owner = created});
 		}
 	}
 	// The people come to look at it: a new free pile always asks for the reaction of its kind

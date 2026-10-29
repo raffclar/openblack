@@ -41,9 +41,6 @@
 #include "3D/OceanInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/CustomMusicPlayerInterface.h"
-#include "Audio/GameMusic.h"
-#include "Audio/MusicMood.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
@@ -155,6 +152,7 @@
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EditorSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FilmCreatureSystemInterface.h"
@@ -268,6 +266,9 @@
 #include "RegistryProviders.h"
 #include "Resources/ResourcesInterface.h"
 #include "RunControl.h"
+#include "Sound/CustomMusicPlayerInterface.h"
+#include "Sound/GameMusic.h"
+#include "Sound/MusicMood.h"
 #include "SystemProviders.h"
 #include "Temple/TemplePeople.h"
 #include "Windowing/WindowingInterface.h"
@@ -308,6 +309,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"skyClockSystem", "sky.state"},
     LocatorCoverage {"skySystem", "sky.moon"},
     LocatorCoverage {"audio", "audio.state"},
+    // The sound requests keep no state of their own. They go to the audio at once, and audio.state shows the audio.
+    LocatorCoverage {"sounds", "audio.state"},
     LocatorCoverage {"camera", "camera.state"},
     LocatorCoverage {"gameActionSystem", "players.input"},
     LocatorCoverage {"rendereringSystem", "engine.frame"},
@@ -384,6 +387,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"influenceSystem", "influence.hand"},
     LocatorCoverage {"townDesireSystem", "living.town_desires"},
     LocatorCoverage {"particleSystem", "particles.effects"},
+    LocatorCoverage {"effectRequestSystem", "particles.requests"},
     LocatorCoverage {"magicSystem", "magic.state"},
     LocatorCoverage {"gestureEvents", "players.gestures"},
     LocatorCoverage {"reactionSystem", "magic.reactions"},
@@ -4397,6 +4401,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return {};
 		    }
 		    return Locator::particleSystem::value().GetBeliefSpritesSeen();
+	    },
+	    .nextRequest = []() -> std::optional<ecs::systems::EffectHandle> {
+		    if (!Locator::effectRequestSystem::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    return Locator::effectRequestSystem::value().NextHandle();
 	    },
 	}));
 

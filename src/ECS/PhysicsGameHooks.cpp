@@ -442,6 +442,14 @@ entt::entity PhysicsGameHooks::EndPhysics(DynamicsSystemInterface& dynamics, Phy
 		object_physics::ConsiderArtefact(entry, object, insert);
 	}
 	const bool scaffold = registry.AllOf<Scaffold>(object);
+	// A scaffold that stops in the physics tells of the scaffold drop deed. The deed goes to the player of the scaffold,
+	// and a scaffold always has the neutral player, so the deed does not go to the player whose hand dropped it.
+	if (scaffold && entry != nullptr)
+	{
+		const auto* transform = registry.TryGet<const Transform>(object);
+		_world->PlayerDid(creature_deeds::k_DropScaffold, transform != nullptr ? transform->position : glm::vec3(0.0f), object,
+		                  PlayerNames::NEUTRAL);
+	}
 	const auto kept = PhysicsClassHooks::EndPhysics(dynamics, entry, object, insert);
 	if (kept == entt::null || !registry.Valid(kept))
 	{

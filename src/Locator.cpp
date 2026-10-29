@@ -32,6 +32,7 @@
 #include "Audio/AudioManager.h"
 #include "Audio/AudioManagerNoOp.h"
 #include "Audio/ClockedAudioPlayer.h"
+#include "Audio/GameSoundRequests.h"
 #include "Audio/QueuedAudioManager.h"
 #include "CHLApi.h"
 #include "Common/EventManager.h"
@@ -83,6 +84,7 @@
 #include "ECS/Systems/Implementations/DialogueControlSystem.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
 #include "ECS/Systems/Implementations/EditorSystem.h"
+#include "ECS/Systems/Implementations/EffectRequestSystem.h"
 #include "ECS/Systems/Implementations/ExplosionSystem.h"
 #include "ECS/Systems/Implementations/FieldSystem.h"
 #include "ECS/Systems/Implementations/FightTranscriptSystem.h"
@@ -194,7 +196,6 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/HeadlessRenderer.h"
 #include "Graphics/RendererInterface.h"
-#include "Graphics/UploadMode.h"
 #include "Gui/TextDatabase.h"
 #include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
@@ -207,6 +208,7 @@
 #include "Online/WebSocketPushChannel.h"
 #include "PlayerSlots.h"
 #include "Profiler.h"
+#include "Visual/UploadMode.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/BrowserWebSocketClient.h"
 #include "Web/FetchHttpClient.h"
@@ -419,6 +421,7 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	}
 	// The game's calls go to the audio through the queue of the main thread
 	Locator::audio::emplace<audio::QueuedAudioManager>(std::move(machineAudio), Locator::mainThreadQueue::value());
+	Locator::sounds::emplace<audio::GameSoundRequests>();
 	return true;
 }
 
@@ -431,6 +434,7 @@ bool openblack::InitializeHeadlessEngine() noexcept
 		return false;
 	}
 	Locator::audio::emplace<AudioManagerNoOp>();
+	Locator::sounds::emplace<audio::GameSoundRequests>();
 	return true;
 }
 
@@ -762,6 +766,10 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::influenceSystem::emplace<InfluenceSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
 	Locator::particleSystem::emplace<ParticleSystem>();
+	// The turns and the scripts ask for effects here. The particles of this computer, if any, show them.
+	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>([]() -> ecs::systems::EffectServerInterface* {
+		return Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	});
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
 	Locator::vortexSystem::emplace<VortexSystem>();
@@ -952,6 +960,7 @@ void openblack::ShutDownServices()
 	Locator::advisorSystem::reset();
 
 	// The audio resources have been cleared and all sounds have been stopped. It is now safe to reset audio
+	Locator::sounds::reset();
 	if (Locator::audio::has_value())
 	{
 		Locator::audio::reset();
@@ -1080,6 +1089,7 @@ void openblack::ShutDownServices()
 	Locator::forestSystem::reset();
 	Locator::fireflySystem::reset();
 	Locator::gestureSystem::reset();
+	Locator::effectRequestSystem::reset();
 	Locator::particleSystem::reset();
 	Locator::terrainSystem::reset();
 	Locator::filesystem::reset();

@@ -21,8 +21,8 @@
 #include <SASFile.h>
 #include <entt/core/hashed_string.hpp>
 
-#include "AnimEffectKeys.h"
-#include "HearingRange.h"
+#include "Sound/AnimEffectKeys.h"
+#include "Sound/HearingRange.h"
 
 /// The sounds placed on the frames of the people's, animals' and birds' clips, and which of them a clip passes as it
 /// plays on

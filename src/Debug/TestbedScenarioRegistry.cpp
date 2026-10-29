@@ -23,8 +23,6 @@
 
 #include "3D/FlatLand.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/GameMusic.h"
-#include "Audio/Sound.h"
 #include "Common/PortableMath.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
@@ -37,6 +35,8 @@
 #include "Input/BindableActions.h"
 #include "Particles/ParticleTypes.h"
 #include "ScriptHeaders/ScriptEnums.h"
+#include "Sound/GameMusic.h"
+#include "Sound/SoundId.h"
 #include "TestbedDispenserGrid.h"
 
 using namespace openblack;
@@ -1020,6 +1020,83 @@ void AddNeeds(std::vector<Scenario>& all)
 	    .objects = {{.type = AnimalInfo::Cow, .offset = {8.0f, 0.0f}, .living = true}},
 	});
 
+	// A script slows one of two cows and then sends both, as Greedy Farmer slows its cow
+	all.push_back({
+	    .id = "animals.script_slows_cow",
+	    .name = "A script slows a cow",
+	    .facet = Facet::Animals,
+	    .description = "Two cows stand side by side, eight metres apart. After one second, SET_PROPERTY gives the left "
+	                   "cow a speed of 0.05 metres a turn. Then MOVE_GAME_THING sends each cow 30 metres to the north. "
+	                   "The scenario keeps each cow as a script variable does.",
+	    .expected = "The right cow walks to its point at the speed of its kind. The left cow walks slowly in its walk "
+	                "clip, and arrives a long time after the right cow. A script that reads the speed of the left cow "
+	                "gets 0.05.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -5.0f}, {15.0f, 35.0f}}, .distance = 0.6f},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {-4.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {4.0f, 0.0f}, .living = true}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 11.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.05f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-4.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 1, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {4.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
+	});
+
+	// A script slows a flock of animals and then sends each one, as The Slavers slows its animal flock
+	all.push_back({
+	    .id = "animals.script_slows_flock",
+	    .name = "A script slows a flock of animals",
+	    .facet = Facet::Animals,
+	    .description = "A horse, a sheep and a cow stand in a row, six metres apart. After one second, a script makes a "
+	                   "flock of them, and SET_PROPERTY gives the flock a speed of 0.05 metres a turn. Then "
+	                   "MOVE_GAME_THING sends each animal 30 metres to the north. The scenario keeps each animal as a "
+	                   "script variable does.",
+	    .expected = "Each animal of the flock takes the speed: the three animals walk slowly in their walk clips, side "
+	                "by side, and arrive together. A script that reads the speed of the flock gets 0.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -5.0f}, {15.0f, 35.0f}}, .distance = 0.6f},
+	    .objects = {{.type = AnimalInfo::Horse, .offset = {-6.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Sheep, .offset = {0.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {6.0f, 0.0f}, .living = true}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_PROPERTY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 11.0f},
+	                                      {.kind = ScriptArgument::Kind::Flock},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.05f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.1f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-6.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 1, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {0.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "MOVE_GAME_THING",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 2, .kept = true},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {6.0f, 30.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
+	});
+
 	// A free crow and a free cow, each the leader of a flock or herd of its own. Each picks its next place about its
 	// home, in map units, and goes there.
 	all.push_back({
@@ -1901,6 +1978,31 @@ void AddSingingStones(std::vector<Scenario>& all)
 	                .look = {k_Circle.x, 0.0f, k_Circle.y}},
 	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SingingStoneCircle"}},
 	});
+
+	// The funeral march of the second land's singing stones brings back the dead in the ring. The script finds the dead
+	// about a fixed place of the second land, from the middle of the map here.
+	constexpr glm::vec2 k_Ring {2103.497f - 2560.0f, 3000.377f - 2560.0f};
+	all.push_back({
+	    .id = "story.singing_stones_raise_dead",
+	    .name = "The singing stones bring back the dead in their ring",
+	    .facet = Facet::Story,
+	    .description = "A cow 3 east of the ring's centre and a villager 6 west of it are killed. Four seconds in, the "
+	                   "game's BringBackTheDead script runs, as the funeral march on the second land starts it.",
+	    .expected = "A big healing glow covers the ring. The nearest dead thing comes back first: the cow puffs steam and "
+	                "comes back alive at the ring's centre, not where it lay, as in the game. About 3 seconds later the "
+	                "villager puffs steam and comes back where it lay, of the same kind and age, as a skeleton. Each "
+	                "revived thing is let go 3 seconds after it comes back.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Ring.x + 4.0f, 14.0f, k_Ring.y - 22.0f},
+	                .look = {k_Ring.x, 0.0f, k_Ring.y}},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = k_Ring + glm::vec2 {3.0f, 0.0f}, .life = 0.0f},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_Ring + glm::vec2 {-6.0f, 0.0f}, .life = 0.0f}},
+	    .commands = {{.kind = Kind::RunScript,
+	                  .delaySeconds = 4.0f,
+	                  .script = "BringBackTheDead",
+	                  .scriptGlobals = {{"SSBringBackToLifeActive", {.number = 0.0f}}}}},
+	});
 }
 
 /// The beach temple puzzle of the second land, as its script makes it: turned a half turn, at its normal size
@@ -2009,6 +2111,38 @@ void AddStory(std::vector<Scenario>& all)
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
 	});
+	{
+		// The scripts' delete with explode and with temple explode, as the later lands' scripts use them
+		using Argument = ScriptArgument;
+		const auto remove = [](float delay, Argument thing, float mode) {
+			return Command {.kind = Kind::CallNative,
+			                .delaySeconds = delay,
+			                .script = "OBJECT_DELETE",
+			                .scriptArguments = {thing, {.kind = Argument::Kind::Integer, .number = mode}}};
+		};
+		const Argument hut {.kind = Argument::Kind::Object, .index = 0};
+		const Argument temple {.kind = Argument::Kind::Temple, .index = 0};
+		all.push_back({
+		    .id = "temple.script_breaks_up",
+		    .name = "A script breaks up a hut and a rival's temple",
+		    .facet = Facet::Story,
+		    .description = "A rival's temple stands west of the middle with a hut in front of it. One second in, a script "
+		                   "deletes the temple with temple explode. Two seconds later it deletes the hut with explode. 20 "
+		                   "seconds after the first delete, it deletes the temple with temple explode again, as the last "
+		                   "land's fight does.",
+		    .expected = "The temple starts its destruction: the loop sound, the beams across it and the glow. The hut "
+		                "breaks into pieces of its model that fly out from where it stood, and the hut is gone. At the second "
+		                "delete, the model of the temple breaks into many pieces that fly out fast, while the temple "
+		                "itself stays. Two seconds later the temple explodes and goes, as its destruction ends.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Overview,
+		                .include = {k_Temple - glm::vec2 {60.0f}, k_Temple + glm::vec2 {60.0f}},
+		                .distance = 1.0f},
+		    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Temple + glm::vec2 {0.0f, -45.0f}}},
+		    .temples = {{.offset = k_Temple, .owner = PlayerNames::PLAYER_TWO, .angle = k_TempleTurn}},
+		    .commands = {remove(1.0f, temple, 3.0f), remove(2.0f, hut, 2.0f), remove(18.0f, temple, 3.0f)},
+		});
+	}
 	all.push_back({
 	    .id = "temple.intro_movement",
 	    .name = "Looking about the temple while the advisors introduce it",
@@ -5193,6 +5327,43 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.give_wood_workshop",
+	    .name = "Giving a tree to a workshop as wood",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger, a birch to its left and its town's workshop off to the east, with no wood. A script "
+	                   "tells it to give wood from the birch to the workshop, as its copy of the player's gift of wood "
+	                   "to a workshop does.",
+	    .expected = "It walks to the birch and pulls it up, carries it towards the workshop until it is near enough to "
+	                "throw, turns to face the workshop with a look of compassion and throws the tree in. The tree is gone "
+	                "and the workshop's pile of logs shows the wood.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-25.0f, -15.0f}, {90.0f, 0.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = TreeInfo::Birch, .offset = {-20.0f, -15.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = {90.0f, 0.0f}, .storedFood = 0, .storedWood = 0}},
+	    .commands =
+	        {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "GiveWoodFromTreeToWorkshop", .with = 0}},
+	});
+
+	all.push_back({
+	    .id = "objects.steal_scaffold_to_town",
+	    .name = "Creature steals a scaffold and takes it to a town",
+	    .facet = Facet::Objects,
+	    .description = "A tiger with a scaffold of no workshop in front of it, and the storage pit of the player's town "
+	                   "behind it. A script tells it to steal the scaffold and take it to the town.",
+	    .expected = "It picks the scaffold up, looking at it. It goes near the storage pit of the town, to within three "
+	                "times its height, looking at the pit, and puts the scaffold down there. The scaffold makes no "
+	                "building site: only a scaffold that a hand puts down starts a building.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = AbodeInfo::CelticStoragePit, .offset = {0.0f, 90.0f}, .storedFood = 0, .storedWood = 0},
+	                {.type = ScaffoldInfo::Normal, .offset = {0.0f, -20.0f}, .scale = 0.7f}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 1, .action = "StealObjectAndTakeToTown"}},
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
+	all.push_back({
 	    .id = "objects.repair_house",
 	    .name = "Helping repair a house",
 	    .facet = Facet::Objects,
@@ -5313,6 +5484,52 @@ void AddObjects(std::vector<Scenario>& all)
 	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
 	                                      {.kind = ScriptArgument::Kind::Number, .number = 1000.0f},
 	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
+	});
+
+	// A land's script aims a magic beam from one villager at another, as the healer of Land 2 calls the child
+	all.push_back({
+	    .id = "scripts.spot_beam_target",
+	    .name = "A script aims a magic beam at a villager that walks",
+	    .facet = Facet::Objects,
+	    .description =
+	        "A villager that a script holds stands still. A second villager walks to and fro 16 to the side. "
+	        "After one second, SPECIAL_EFFECT_OBJECT starts a magic beam on the first villager for 60 "
+	        "seconds, and ADD_SPOT_VISUAL_TARGET_OBJECT gives the beam the second villager as its target. "
+	        "After two more seconds, SPECIAL_EFFECT_POSITION starts a magic beam 10 to the side of the first villager, "
+	        "and ADD_SPOT_VISUAL_TARGET_POS gives it a point 12 above the land.",
+	    .expected = "Wiggling ribbons of light go from the place of the first villager to the middle of the second "
+	                "villager. The ribbons follow the second villager while it walks. The second beam goes from its "
+	                "place up to the point above the land and stays there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 5.0f, -10.0f}, .look = {0.0f, 2.0f, 6.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 0.0f}, .inScript = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {-8.0f, 12.0f},
+	                 .walkTo = glm::vec2 {8.0f, 12.0f},
+	                 .walkAfterSeconds = 0.5f,
+	                 .walkRepeatSeconds = 8.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SPECIAL_EFFECT_OBJECT",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 20.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 60.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "ADD_SPOT_VISUAL_TARGET_OBJECT",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 1}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "SPECIAL_EFFECT_POSITION",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 20.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-10.0f, 4.0f}},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 60.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "ADD_SPOT_VISUAL_TARGET_POS",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-10.0f, 4.0f}, .height = 12.0f}}}},
 	});
 
 	all.push_back({
@@ -6357,9 +6574,42 @@ void AddObjects(std::vector<Scenario>& all)
 	}
 }
 
+/// The hand of the player and the creature of a rival god: the hand holds it only after a script makes the two gods
+/// allies
+void AddAlliedCreatureHold(std::vector<Scenario>& all)
+{
+	auto rival = Content(CreatureType::Tiger, {15.0f, 0.0f}, 270.0f, "ally's");
+	rival.owner = PlayerNames::PLAYER_TWO;
+	all.push_back({
+	    .id = "hand.allied_creature",
+	    .name = "The hand holds the creature of an allied god",
+	    .facet = Facet::Hand,
+	    .description = "The player's cow and the tiger of a rival god stand 30 apart. The hand tries to hold the tiger "
+	                   "and stroke its head. Then a script makes the two gods allies, and the hand holds the tiger and "
+	                   "strokes its head again.",
+	    .expected = "At the first try the hand does not hold the tiger, and the log shows that the hand can not hold "
+	                "it. After the alliance the hand holds the tiger, the camera turns to it, and the hand strokes its "
+	                "head. Then the hand lets go and the camera goes back.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Overview, .distance = 0.5f},
+	    .creatures = {Content(CreatureType::Cow, {-15.0f, 0.0f}, 90.0f, "player's"), rival},
+	    .commands = {Stroke(1, creature_feedback::BodyPart::Head, 1.0f),
+	                 Act(Kind::HandLetGo, 1, 1.0f),
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "SET_PLAYER_ALLY",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Number, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 2.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1.0f}}},
+	                 Stroke(1, creature_feedback::BodyPart::Head, 1.0f),
+	                 Act(Kind::HandLetGo, 1, 3.0f)},
+	});
+}
+
 void AddHand(std::vector<Scenario>& all)
 {
 	using creature_feedback::BodyPart;
+	AddAlliedCreatureHold(all);
 	// Every part of the body, the head first
 	std::vector<Command> strokes;
 	for (size_t part = 0; part < creature_feedback::k_BodyPartCount; ++part)
@@ -10974,6 +11224,26 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.gods_symbols",
+	    .name = "The computer gods' pictures in the world",
+	    .facet = Facet::Particles,
+	    .description = "As on the second land, a land script switches on the computer minds of the second and third "
+	                   "players. The sheet of the players' symbols is then made again, as at the start of a land. The "
+	                   "player icon fountains of the first three players stand side by side.",
+	    .expected = "The fountain on the left throws up the symbol of the player's profile. The fountain in the middle "
+	                "throws up the picture of Lethys for the second player. The fountain on the right throws up the "
+	                "picture of Khazar for the third player. Each picture is in the colour of its player.",
+	    .environment = {.symbolsAfterLandScript = true, .landNumber = 2},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 0.0f}, {20.0f, 0.0f}}, .distance = 0.35f},
+	    .particles = {{.file = "SF_PlayerIconFountain", .offset = {-15.0f, 0.0f}, .magnitude = 2.0f, .player = 0},
+	                  {.file = "SF_PlayerIconFountain", .offset = {0.0f, 0.0f}, .magnitude = 2.0f, .player = 1},
+	                  {.file = "SF_PlayerIconFountain", .offset = {15.0f, 0.0f}, .magnitude = 2.0f, .player = 2}},
+	    .landScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+TOGGLE_COMPUTER_PLAYER("PLAYER_THREE", 1)
+)",
+	});
+
+	all.push_back({
 	    .id = "particles.draw_paths",
 	    .name = "Sorted and queued sprites",
 	    .facet = Facet::Particles,
@@ -12368,6 +12638,8 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 		{
 		case ScriptArgument::Kind::Number:
 		case ScriptArgument::Kind::Integer:
+		case ScriptArgument::Kind::Result:
+		case ScriptArgument::Kind::LastResult:
 		case ScriptArgument::Kind::Town:
 			return true;
 		case ScriptArgument::Kind::Marker:
@@ -12377,6 +12649,8 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 			return argument.index < scenario.objects.size();
 		case ScriptArgument::Kind::Creature:
 			return argument.index < scenario.creatures.size();
+		case ScriptArgument::Kind::Temple:
+			return argument.index < scenario.temples.size();
 		case ScriptArgument::Kind::Flock:
 			// The flock needs a villager or an animal of the scenario
 			return std::ranges::any_of(scenario.objects, [](const ObjectSetup& object) {
@@ -12497,7 +12771,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 196> k_Names {
+	constexpr std::array<std::string_view, 197> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -12694,6 +12968,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "put a key down",
 	    "repeat a held key",
 	    "let go of a key",
+	    "a god orders its creature",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

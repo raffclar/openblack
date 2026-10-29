@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include <Audio/HelpSpeech.h>
+#include <Sound/HelpSpeech.h>
 #include <gtest/gtest.h>
 
 using namespace openblack::audio;

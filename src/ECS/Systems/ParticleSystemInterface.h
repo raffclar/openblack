@@ -23,6 +23,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Particles/ManaPathMaths.h"
@@ -42,8 +43,9 @@ namespace openblack::ecs::systems
 {
 
 /// The running particle effects: those miracles own and step themselves, the spot visuals scripts and the game place for
-/// a time, and any other effect, stepped once a game turn. What they draw is gathered between the turns.
-class ParticleSystemInterface: public SavedStateInterface
+/// a time, and any other effect, stepped once a game turn. What they draw is gathered between the turns. It also shows
+/// the effects that the turns and the scripts ask for through the effect requests.
+class ParticleSystemInterface: public SavedStateInterface, public EffectServerInterface
 {
 public:
 	/// A running effect, by a number that is never reused
@@ -166,6 +168,10 @@ public:
 	/// A storm's forked bolt, let down from a point of light under its cloud, in the effect every storm's bolts come down
 	/// in, which runs all the time; it comes down when the particles next step
 	virtual void AddStormBolt(glm::vec3 /*cloudPoint*/) {}
+	/// The model of an object breaks into pieces where it stands. The pieces fly out from the origin at the speed, in the
+	/// effect that throws the pieces of all broken objects, which runs all the time. The pieces start when the particles
+	/// next step. An object without a model gives no pieces.
+	virtual void ExplodeObject(entt::entity /*object*/, glm::vec3 /*origin*/, float /*speed*/) {}
 
 	/// This computer's hand in a frame, for the chain that follows it while it gestures
 	struct HandFrame

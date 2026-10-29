@@ -14,10 +14,10 @@
 
 #include <entt/entity/entity.hpp>
 
-#include "Audio/SilentPlayback.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "Help/AdvisorVoices.h"
 #include "Help/DialogueText.h"
+#include "Sound/SilentPlayback.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"

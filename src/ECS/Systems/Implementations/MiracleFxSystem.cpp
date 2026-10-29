@@ -27,9 +27,6 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/PortableRotations.h"
 #include "ECS/Components/Hand.h"
@@ -56,6 +53,9 @@
 #include "Particles/DrawnEffectSteps.h"
 #include "Particles/ParticleEffect.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -113,7 +113,7 @@ HandMiracleFx* HandFx()
 
 void PlaySound(entt::id_type id, std::optional<pack::AudioBankLoop> voicePlayType = std::nullopt)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(id, {.voicePlayType = voicePlayType});
 	}
@@ -434,7 +434,7 @@ void MiracleFxSystem::SeedShakenOff()
 void MiracleFxSystem::HandShaken()
 {
 	// The shake sound plays without a position, at its own volume
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		constexpr uint32_t k_ShakeVolume = 35;
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01), {.volume = k_ShakeVolume});

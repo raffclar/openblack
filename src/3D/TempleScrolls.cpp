@@ -25,9 +25,6 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LowResolutionTextures.h"
 #include "3D/TempleScroll.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/MachineClock.h"
 #include "EngineConfig.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -36,6 +33,9 @@
 #include "Input/KeyRebinding.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 
@@ -385,7 +385,7 @@ bool TempleScrolls::Hold(bool pressed, float mouseY, const std::optional<TempleC
 	if (scroll.position != previous && !_squeaked)
 	{
 		_squeaked = true;
-		if (Locator::audio::has_value())
+		if (Locator::sounds::has_value())
 		{
 			const auto ticks = machine_clock::Ticks();
 			const auto squeak = k_Squeaks.at(static_cast<size_t>(ticks % static_cast<int64_t>(k_Squeaks.size())));

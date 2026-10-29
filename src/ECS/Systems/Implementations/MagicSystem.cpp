@@ -32,9 +32,6 @@
 #include "3D/MapCoords.h"
 #include "3D/WaterRings.h"
 #include "Animals/FishFarmRules.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -101,6 +98,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
@@ -147,6 +145,9 @@
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleShields.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -842,7 +843,7 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 			// A tree in the map's cells that the water grows comes out of them and goes in again
 			ecs::thing_map_place::Reinsert(object);
 			// It rustles as it grows
-			if (Locator::audio::has_value() && Locator::gameRandom::has_value())
+			if (Locator::sounds::has_value() && Locator::gameRandom::has_value())
 			{
 				const auto sample =
 				    k_TreeGrowSounds.at(Locator::gameRandom::value().LocalRand(static_cast<int32_t>(k_TreeGrowSounds.size())));
@@ -1472,10 +1473,10 @@ void MagicSystem::Maintain(entt::entity entity, Spell& spell)
 		CloseDown(entity);
 	}
 	// A storm's swirl plays only while whoever cast it is still there
-	if (spell.castEffect != ParticleSystemInterface::k_NoEffect && CasterOf(spell) == nullptr)
+	if (spell.castEffect != k_NoEffectHandle && CasterOf(spell) == nullptr)
 	{
-		Locator::particleSystem::value().Delete(spell.castEffect);
-		spell.castEffect = ParticleSystemInterface::k_NoEffect;
+		Locator::effectRequestSystem::value().Remove(spell.castEffect);
+		spell.castEffect = k_NoEffectHandle;
 	}
 	spell.processInfo.enabled = true;
 	// A creature's miracle flows from its hands as they move; a locked miracle follows the hand; anything else stays
@@ -1578,9 +1579,9 @@ void MagicSystem::Delete(entt::entity entity)
 		{
 			Locator::particleSystem::value().Delete(spell->effect);
 		}
-		if (spell->castEffect != ParticleSystemInterface::k_NoEffect)
+		if (spell->castEffect != k_NoEffectHandle)
 		{
-			Locator::particleSystem::value().Delete(spell->castEffect);
+			Locator::effectRequestSystem::value().Remove(spell->castEffect);
 		}
 		if (spell->seed != entt::null && registry.Valid(spell->seed))
 		{
@@ -1649,9 +1650,9 @@ void MagicSystem::HeldSeedTurn()
 void MagicSystem::ProcessTurn()
 {
 	// The hum of an armed seed follows the hand one time each turn, before the audio turn
-	if (_holdLoop != entt::null && Locator::audio::has_value())
+	if (_holdLoop != entt::null && Locator::sounds::has_value())
 	{
-		Locator::audio::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
+		Locator::sounds::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
 	}
 	if (!Locator::infoConstants::has_value() || !Locator::particleSystem::has_value())
 	{
@@ -1829,11 +1830,12 @@ entt::entity MagicSystem::CreateDispenser(glm::vec3 position, MagicType type, fl
 	position.y = _world.LandHeight({position.x, position.z});
 	const auto entity = archetypes::SpellDispenserArchetype::Create(position, type, k_DispenserBuilding, yAngleRadians, 1.0f);
 	auto& dispenser = EntityRegistry().Get<SpellDispenser>(entity);
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
 		// Its swirl uses only this computer's random numbers: the swirl does not change the world. The swirl moves on in
 		// the frames that draw the dispenser, not in the turns.
-		dispenser.effect = Locator::particleSystem::value().StartByFrame(ParticleType::SpelldispenserVortex, position, 1.0f);
+		dispenser.effect = Locator::effectRequestSystem::value().Start(
+		    {.type = ParticleType::SpelldispenserVortex, .position = position, .synced = false, .step = EffectStep::Frame});
 	}
 	// Its first bubble comes once it has counted its period, as every later one does. A debug tool makes it, so it has
 	// no town.
@@ -1854,11 +1856,12 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 	// Made off: it floats nothing until a script turns it on
 	dispenser.timer.active = false;
 	JoinTown(entity, DispenserTown(town));
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
 		// Its swirl uses only this computer's random numbers: the swirl does not change the world. The swirl moves on in
 		// the frames that draw the dispenser, not in the turns.
-		dispenser.effect = Locator::particleSystem::value().StartByFrame(ParticleType::SpelldispenserVortex, position, 1.0f);
+		dispenser.effect = Locator::effectRequestSystem::value().Start(
+		    {.type = ParticleType::SpelldispenserVortex, .position = position, .synced = false, .step = EffectStep::Frame});
 	}
 	return entity;
 }
@@ -1959,9 +1962,10 @@ void MagicSystem::StoreHeldSeedIn(entt::entity dispenser)
 	// dispenser's own, so the dispenser continues to make its own globes as before.
 	const auto seed = registry.Get<const SpellSeed>(*Held());
 	const auto position = DispenserOrbPosition(dispenser);
-	if (CreateOneOffSeed(position, seed.seedType, seed.powerUp, 1.0f) != entt::null && Locator::particleSystem::has_value())
+	if (CreateOneOffSeed(position, seed.seedType, seed.powerUp, 1.0f) != entt::null &&
+	    Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::ObjectAppear, position, std::nullopt, entt::null);
+		Locator::effectRequestSystem::value().Show({.type = SpotVisualType::ObjectAppear, .position = position});
 	}
 	// The seed goes, with the prayer power that charged it
 	LetGoOfSeed(true);
@@ -1986,8 +1990,7 @@ entt::entity MagicSystem::MakeOrb(entt::entity entity)
 		// A new bubble starts the count again
 		after.timer.tick = 0;
 		registry.Get<OneOffSpellSeed>(orb).dispenser = entity;
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::MagicObjectCreated, position, std::nullopt,
-		                                                 entt::null);
+		Locator::effectRequestSystem::value().Show({.type = SpotVisualType::MagicObjectCreated, .position = position});
 	}
 	return orb;
 }
@@ -2044,9 +2047,9 @@ bool MagicSystem::Remove(entt::entity entity)
 	}
 	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(entity))
 	{
-		if (Locator::particleSystem::has_value() && dispenser->effect != 0)
+		if (Locator::effectRequestSystem::has_value() && dispenser->effect != k_NoEffectHandle)
 		{
-			Locator::particleSystem::value().Delete(dispenser->effect);
+			Locator::effectRequestSystem::value().Remove(dispenser->effect);
 		}
 		DestroyOrb(dispenser->orb);
 		registry.Destroy(entity);
@@ -2290,7 +2293,7 @@ bool MagicSystem::TapGlobe(entt::entity orb, PlayerNames player)
 		// The hand takes the globe itself, and a globe does not show the name of its miracle
 		_heldMiracleToolTip.reset();
 		// The pop is heard where the hand took it
-		if (Locator::audio::has_value())
+		if (Locator::sounds::has_value())
 		{
 			audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellBubblePop_04),
 			                            {.position = _hand.handPosition, .owner = seed});
@@ -2381,7 +2384,7 @@ void MagicSystem::StopHandEffect(SpellSeed& seed)
 void MagicSystem::StartHoldLoop()
 {
 	StopHoldLoop();
-	if (Locator::audio::has_value() && Held().has_value())
+	if (Locator::sounds::has_value() && Held().has_value())
 	{
 		_holdLoop = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_HandGesture_02),
 		                                        {.position = _hand.handPosition,
@@ -2395,9 +2398,9 @@ void MagicSystem::StartHoldLoop()
 void MagicSystem::StopHoldLoop()
 {
 	// Cut at once, as the hand's hum is
-	if (_holdLoop != entt::null && Locator::audio::has_value() && Locator::audio::value().EmitterExists(_holdLoop))
+	if (_holdLoop != entt::null && Locator::sounds::has_value() && Locator::sounds::value().EmitterExists(_holdLoop))
 	{
-		Locator::audio::value().StopEmitter(_holdLoop);
+		Locator::sounds::value().StopEmitter(_holdLoop);
 	}
 	_holdLoop = entt::null;
 }
@@ -2838,10 +2841,9 @@ void MagicSystem::AfterCast(entt::entity spellEntity)
 		return;
 	}
 	// Leaving the hand, it shows the cast succeeded where it was cast
-	if (const auto* spell = FindSpell(spellEntity); spell != nullptr && Locator::particleSystem::has_value())
+	if (const auto* spell = FindSpell(spellEntity); spell != nullptr && Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellSucceedCast, spell->castPosition, std::nullopt,
-		                                                 entt::null);
+		Locator::effectRequestSystem::value().Show({.type = SpotVisualType::SpellSucceedCast, .position = spell->castPosition});
 	}
 	// The hand lets go of the seed, so it starts the path of its gesture again. A seed kept in the hand does not do this.
 	if (ActsOnOwnHand() && Locator::gestureSystem::has_value())
@@ -2883,7 +2885,7 @@ void MagicSystem::FailCast()
 		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast, point, std::nullopt, entt::null, 1.0f,
 		                                                 false);
 	}
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellCastFailure), std::nullopt);
 	}
@@ -3672,15 +3674,16 @@ float MagicSystem::SpellStrength(entt::entity entity)
 
 void MagicSystem::StartCastEffect(Spell& spell, ParticleType type, bool synced)
 {
-	auto& particles = Locator::particleSystem::value();
 	// It plays out by itself, as big as the miracle and heading the way it was cast
-	spell.castEffect = particles.Start(type, spell.castPosition, spell.magnitude, synced);
-	if (auto* effect = particles.Find(spell.castEffect))
-	{
-		effect->SetDirection(spell.direction);
-		effect->SetPlayer(static_cast<int>(spell.caster.player));
-		effect->SetProcessInfo(spell.processInfo);
-	}
+	spell.castEffect = Locator::effectRequestSystem::value().Start({
+	    .type = type,
+	    .position = spell.castPosition,
+	    .magnitude = spell.magnitude,
+	    .synced = synced,
+	    .player = static_cast<int>(spell.caster.player),
+	    .direction = spell.direction,
+	    .processInfo = spell.processInfo,
+	});
 }
 
 void MagicSystem::RainOnFire(const glm::vec3& point)

@@ -19,10 +19,10 @@
 
 #include "Common/GameLanguage.h"
 #include "Creature/BonusCreatures.h"
-#include "Graphics/DetailLevel.h"
-#include "Graphics/LandDetail.h"
-#include "Graphics/UploadMode.h"
-#include "Windowing/WindowingInterface.h"
+#include "Visual/DetailLevel.h"
+#include "Visual/DisplayMode.h"
+#include "Visual/LandDetail.h"
+#include "Visual/UploadMode.h"
 
 namespace openblack
 {

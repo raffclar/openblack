@@ -27,6 +27,7 @@
 #include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
 #include "Common/ModelInverseSquareRoot.h"
+#include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureDesires.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -34,6 +35,7 @@
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicShield.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
@@ -690,6 +692,25 @@ TEST(PhysicsGameHooks, AnAnimalThatTheHandOfAComputerGodDroppedInTheSeaIsTheDeed
 	EXPECT_TRUE(f.hooks->HasSunk(f.dynamics, entry));
 	ASSERT_EQ(f.world->deeds.size(), 1U);
 	EXPECT_EQ(f.world->deeds[0].player, PlayerNames::PLAYER_TWO);
+}
+
+TEST(PhysicsGameHooks, AScaffoldThatStopsTellsTheScaffoldDropToTheNeutralPlayer)
+{
+	Fixture f;
+	auto& registry = f.world->registry;
+	const auto scaffold = registry.Create();
+	registry.Assign<Scaffold>(scaffold);
+	registry.Assign<Transform>(scaffold, glm::vec3(1.0f, 0.0f, 3.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	// With no physics record, nothing tells of the deed
+	static_cast<void>(f.hooks->EndPhysics(f.dynamics, nullptr, scaffold, false));
+	EXPECT_TRUE(f.world->deeds.empty());
+	PhysicsEntry entry {.entity = scaffold, .player = PlayerNames::PLAYER_ONE};
+	static_cast<void>(f.hooks->EndPhysics(f.dynamics, &entry, scaffold, false));
+	ASSERT_EQ(f.world->deeds.size(), 1U);
+	EXPECT_EQ(f.world->deeds[0].deed, creature_deeds::k_DropScaffold);
+	EXPECT_EQ(f.world->deeds[0].object, scaffold);
+	// The deed goes to the player of the scaffold, which is always the neutral player
+	EXPECT_EQ(f.world->deeds[0].player, PlayerNames::NEUTRAL);
 }
 
 TEST(PhysicsGameHooks, TheDropperIsTheFirstPlayerOfTheHandsThatLetTheThingGoLast)

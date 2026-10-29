@@ -9,8 +9,8 @@
 
 #pragma once
 
-#include "Audio/ScriptMusic.h"
 #include "ECS/Systems/SavedStateInterface.h"
+#include "Sound/ScriptMusic.h"
 
 namespace openblack::ecs::systems
 {

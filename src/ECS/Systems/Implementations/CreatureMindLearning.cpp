@@ -34,7 +34,6 @@
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/MusicMood.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
@@ -122,6 +121,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellIcon.h"
@@ -177,6 +177,7 @@
 #include "MagicLiving.h"
 #include "ObjectMeasures.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/MusicMood.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -377,7 +378,6 @@ bool Strokeable(const ecs::Registry& registry, entt::entity entity, entt::entity
 	       Locator::creatureObjectActionSystem::value().CanPickUp(self, entity);
 }
 
-creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity thing);
 std::optional<uint32_t> BeliefPlayerOf(const ecs::Registry& registry, entt::entity thing);
 bool DoingSomethingInteresting(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity object);
 
@@ -467,7 +467,7 @@ bool Accepts(const ecs::Registry& registry, Target target, entt::entity entity, 
 	case Target::Examinable:
 	{
 		using creature_activity::Thing;
-		const auto kind = KindOfThing(registry, entity);
+		const auto kind = mind_detail::KindOfThing(registry, entity);
 		return kind != Thing::Creature && kind != Thing::Field && kind != Thing::FishFarm && kind != Thing::Spell &&
 		       kind != Thing::Other;
 	}
@@ -2472,73 +2472,13 @@ const GObjectInfo* ActingInfoOf(const ecs::Registry& registry, entt::entity thin
 	return ecs::world_objects::InfoOf(thing);
 }
 
-/// The kind of a thing, by how the desires examine it
-creature_activity::Thing KindOfThing(const ecs::Registry& registry, entt::entity thing)
-{
-	using creature_activity::Thing;
-	if (registry.AllOf<Villager>(thing))
-	{
-		return Thing::Villager;
-	}
-	if (registry.AllOf<Animal>(thing))
-	{
-		return Thing::Animal;
-	}
-	if (registry.AllOf<Creature>(thing))
-	{
-		return Thing::Creature;
-	}
-	if (registry.AllOf<ecs::components::Spell>(thing))
-	{
-		return Thing::Spell;
-	}
-	if (registry.AllOf<Tree>(thing))
-	{
-		return Thing::Tree;
-	}
-	const auto* still = registry.TryGet<const MobileStatic>(thing);
-	if (registry.AnyOf<Rock, DeadTree>(thing) || (still != nullptr && still->type == MobileStaticInfo::Bonfire))
-	{
-		return Thing::Rock;
-	}
-	if (registry.AnyOf<MobileObject, Pot, Ball>(thing))
-	{
-		return Thing::MobileObject;
-	}
-	if (still != nullptr)
-	{
-		return Thing::MobileStatic;
-	}
-	if (registry.AllOf<Field>(thing))
-	{
-		return Thing::Field;
-	}
-	if (registry.AllOf<FishFarm>(thing))
-	{
-		return Thing::FishFarm;
-	}
-	if (registry.AllOf<VillageTotem>(thing))
-	{
-		return Thing::TotemStatue;
-	}
-	if (registry.AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
-	{
-		return Thing::Building;
-	}
-	if (registry.AllOf<TownDesireFlag>(thing))
-	{
-		return Thing::PlainObject;
-	}
-	return Thing::Other;
-}
-
 /// What a creature knows about a thing when it examines a desire for it. Only the facts that the desire uses cost time
 /// to find: the height for poo, and the pick-up rule for bringing stuff home.
 creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::entity creature, Desire desire,
                                            entt::entity thing, const creature_mind_tables::Tables* tables)
 {
 	using creature_activity::Thing;
-	const auto kind = KindOfThing(registry, thing);
+	const auto kind = mind_detail::KindOfThing(registry, thing);
 	const auto* info = ActingInfoOf(registry, thing);
 	creature_activity::ThingFacts facts {
 	    .kind = kind,
@@ -2567,9 +2507,18 @@ creature_activity::ThingFacts ThingFactsOf(const ecs::Registry& registry, entt::
 	}
 	const auto* feature = registry.TryGet<const Feature>(thing);
 	const auto* mobile = registry.TryGet<const MobileObject>(thing);
-	facts.mushroom =
-	    (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
-	    (mobile != nullptr && (mobile->type == MobileObjectInfo::MagicMushroom || mobile->type == MobileObjectInfo::Toadstool));
+	// A scaffold has the loose kind of the one row of the scaffolds
+	std::optional<MobileObjectInfo> looseKind;
+	if (mobile != nullptr)
+	{
+		looseKind = mobile->type;
+	}
+	else if (registry.AllOf<Scaffold>(thing) && Locator::infoConstants::has_value())
+	{
+		looseKind = Locator::infoConstants::value().scaffold.mobileType;
+	}
+	facts.mushroom = (feature != nullptr && feature->type == FeatureInfo::MagicMushroom) ||
+	                 looseKind == MobileObjectInfo::MagicMushroom || looseKind == MobileObjectInfo::Toadstool;
 	if (desire == Desire::Poo && kind != Thing::Spell && kind != Thing::Other)
 	{
 		facts.height = object_measures::Height(registry, thing);
@@ -2626,6 +2575,66 @@ std::optional<entt::entity> TownOfThing(const ecs::Registry& registry, entt::ent
 	return std::nullopt;
 }
 } // namespace
+
+creature_activity::Thing mind_detail::KindOfThing(const ecs::Registry& registry, entt::entity thing)
+{
+	using creature_activity::Thing;
+	if (registry.AllOf<Villager>(thing))
+	{
+		return Thing::Villager;
+	}
+	if (registry.AllOf<Animal>(thing))
+	{
+		return Thing::Animal;
+	}
+	if (registry.AllOf<Creature>(thing))
+	{
+		return Thing::Creature;
+	}
+	if (registry.AllOf<ecs::components::Spell>(thing))
+	{
+		return Thing::Spell;
+	}
+	if (registry.AllOf<Tree>(thing))
+	{
+		return Thing::Tree;
+	}
+	const auto* still = registry.TryGet<const MobileStatic>(thing);
+	if (registry.AnyOf<Rock, DeadTree>(thing) || (still != nullptr && still->type == MobileStaticInfo::Bonfire))
+	{
+		return Thing::Rock;
+	}
+	// A scaffold is a loose object
+	if (registry.AnyOf<MobileObject, Pot, Ball, Scaffold>(thing))
+	{
+		return Thing::MobileObject;
+	}
+	if (still != nullptr)
+	{
+		return Thing::MobileStatic;
+	}
+	if (registry.AllOf<Field>(thing))
+	{
+		return Thing::Field;
+	}
+	if (registry.AllOf<FishFarm>(thing))
+	{
+		return Thing::FishFarm;
+	}
+	if (registry.AllOf<VillageTotem>(thing))
+	{
+		return Thing::TotemStatue;
+	}
+	if (registry.AnyOf<Abode, Temple, WorshipSite, WorshipAltar, Feature, AnimatedStatic, Flowers, BigForest>(thing))
+	{
+		return Thing::Building;
+	}
+	if (registry.AllOf<TownDesireFlag>(thing))
+	{
+		return Thing::PlainObject;
+	}
+	return Thing::Other;
+}
 
 std::optional<CreatureMindSystem::ChosenActivity>
 CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindState& mind, Desire desire)

@@ -21,8 +21,6 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -30,6 +28,8 @@
 #include "Locator.h"
 #include "Particles/LightSheet.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

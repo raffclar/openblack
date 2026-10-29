@@ -26,6 +26,8 @@
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MagicShield.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/StreetLantern.h"
@@ -144,4 +146,19 @@ TEST(CreatureBeliefKinds, APieceThatBrokeOffABuildingIsARock)
 {
 	ecs::Registry registry;
 	EXPECT_EQ(mind_detail::BeliefKindOf(registry, Make<BuildingPiece>(registry)), kinds::k_Rock);
+}
+
+TEST(CreatureBeliefKinds, ACreatureExaminesAScaffoldAsALooseObject)
+{
+	ecs::Registry registry;
+	const auto scaffold = Make<Scaffold>(registry);
+	EXPECT_EQ(mind_detail::KindOfThing(registry, scaffold), creature_activity::Thing::MobileObject);
+	EXPECT_EQ(mind_detail::KindOfThing(registry, Make<MobileObject>(registry)), creature_activity::Thing::MobileObject);
+}
+
+TEST(CreatureBeliefKinds, AScaffoldDoesNotCatchTheEyeOfACreature)
+{
+	ecs::Registry registry;
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<Scaffold>(registry)), creature_look::Interest::None);
+	EXPECT_EQ(mind_detail::LookInterestOf(registry, Make<MobileObject>(registry)), creature_look::Interest::None);
 }

@@ -155,7 +155,8 @@ TEST(GameTurnOrder, TheFieldsAndFishFarmsComeBeforeTheTracksAndTheFootpaths)
 	EXPECT_TRUE(recorder.Before(Step::Dances, Step::Fields));
 	EXPECT_TRUE(recorder.Before(Step::Fields, Step::FishFarms));
 	EXPECT_TRUE(recorder.Before(Step::FishFarms, Step::WalkPaths));
-	EXPECT_TRUE(recorder.Before(Step::WalkPaths, Step::Footpaths));
+	EXPECT_TRUE(recorder.Before(Step::WalkPaths, Step::Mists));
+	EXPECT_TRUE(recorder.Before(Step::Mists, Step::Footpaths));
 	EXPECT_TRUE(recorder.Before(Step::Footpaths, Step::ForestGrowth));
 }
 

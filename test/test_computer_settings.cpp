@@ -23,7 +23,7 @@
 
 #include "Common/PlayerProfiles.h"
 #include "ECS/Systems/Implementations/ComputerSettingsSystem.h"
-#include "Graphics/DetailLevel.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack;
 using namespace openblack::computer_settings;
