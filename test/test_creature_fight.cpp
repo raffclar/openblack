@@ -13,6 +13,7 @@
 #include <array>
 #include <bit>
 #include <deque>
+#include <utility>
 #include <vector>
 
 #include <glm/ext/matrix_transform.hpp>
@@ -1341,4 +1342,35 @@ TEST(CreatureFight, AStateEndsByItsOwnTestBeforeItsAnimationMovesOn)
 	EXPECT_TRUE(OwnTestEnds(State::Cast, 0.0f, 66, 1000.0f, 0.0f, 100));
 	EXPECT_FALSE(OwnTestEnds(State::Cast, 0.0f, 66, 1000.0f, 0.0f, 2));
 	EXPECT_TRUE(OwnTestEnds(State::Cast, 0.0f, 66, 1000.0f, 1.0f, 2));
+}
+
+TEST(CreatureFight, AStopInTheDuelGivesTheStrengthOfTheFightToBothCreatures)
+{
+	using creature_fight::StopEnd;
+	const auto gains = [](StopEnd end, creature_fight::StopLinks links) {
+		const auto result = creature_fight::StrengthGainsAtStop(end, links);
+		return std::pair(result.stopper, result.partner);
+	};
+	// A failure in the duel of both: the minds of the two creatures make each of them stop two times
+	EXPECT_EQ(gains(StopEnd::Failure, {.stopperDuels = true, .partnerDuels = true}), std::pair(2u, 2u));
+	EXPECT_EQ(gains(StopEnd::Failure, {.stopperDuels = true, .partnerDuels = false}), std::pair(2u, 2u));
+	// The creature that stops left its duel before: only the duel of the partner gives gains
+	EXPECT_EQ(gains(StopEnd::Failure, {.stopperDuels = false, .partnerDuels = true}), std::pair(1u, 1u));
+	EXPECT_EQ(gains(StopEnd::Failure, {.stopperDuels = false, .partnerDuels = false}), std::pair(0u, 0u));
+	// A completed action gives no gain to the creature that stops, until the partner makes it give up its action
+	EXPECT_EQ(gains(StopEnd::Success, {.stopperDuels = true, .partnerDuels = true}), std::pair(1u, 2u));
+	EXPECT_EQ(gains(StopEnd::Success, {.stopperDuels = false, .partnerDuels = true}), std::pair(1u, 1u));
+	// With no partners of the minds, each duel gives one gain to each creature
+	EXPECT_EQ(gains(StopEnd::Failure,
+	                {.stopperDuels = true, .partnerDuels = true, .stopperHasPartner = false, .partnerHasPartner = false}),
+	          std::pair(1u, 1u));
+	EXPECT_EQ(gains(StopEnd::Success,
+	                {.stopperDuels = true, .partnerDuels = true, .stopperHasPartner = false, .partnerHasPartner = false}),
+	          std::pair(0u, 1u));
+	EXPECT_EQ(gains(StopEnd::Failure,
+	                {.stopperDuels = true, .partnerDuels = true, .stopperHasPartner = false, .partnerHasPartner = true}),
+	          std::pair(2u, 2u));
+	EXPECT_EQ(gains(StopEnd::Failure,
+	                {.stopperDuels = true, .partnerDuels = true, .stopperHasPartner = true, .partnerHasPartner = false}),
+	          std::pair(1u, 1u));
 }

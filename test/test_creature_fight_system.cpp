@@ -46,6 +46,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -62,6 +63,33 @@ namespace fight = openblack::creature_fight;
 
 namespace
 {
+/// Counts the strength gains of the actions that each creature gets, and does nothing else
+class CountedGains final: public ecs::systems::CreaturePhysiologySystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	float Eat(entt::entity /*creature*/, float /*foodValue*/) override { return 0.0f; }
+	void Drink(entt::entity /*creature*/) override {}
+	void EmptyBowels(entt::entity /*creature*/) override {}
+	void SitTurn(entt::entity /*creature*/) override {}
+	void WakeFromFaint(entt::entity /*creature*/) override {}
+	void FinishAction(entt::entity /*creature*/, std::string_view /*action*/) override {}
+	void ModifyStrength(entt::entity /*creature*/, float /*amount*/) override {}
+	void GainStrengthOf(entt::entity creature, std::string_view action) override
+	{
+		if (action == "Fight")
+		{
+			++gains[creature];
+		}
+	}
+	void SetTimeScale(float /*scale*/) override {}
+	[[nodiscard]] float GetTimeScale() const override { return 1.0f; }
+	void SetFaintingEnabled(bool /*enabled*/) override {}
+	[[nodiscard]] bool IsFaintingEnabled() const override { return true; }
+
+	std::map<entt::entity, uint32_t> gains;
+};
+
 /// Keeps the reactions made, and does nothing else
 class RecordedReactions final: public ecs::systems::ReactionSystemInterface
 {
@@ -2211,4 +2239,62 @@ TEST_F(CreatureFightSystemTest, AFightCalledOffInTheDuelFailsThePartnerAndNobody
 	EXPECT_TRUE(minds.desired.empty());
 	EXPECT_TRUE(minds.abandoned.empty());
 	Locator::creatureMindSystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, AKnockOutInTheDuelGivesBothCreaturesTheStrengthOfTheFightTwoTimes)
+{
+	auto& body = static_cast<CountedGains&>(Locator::creaturePhysiologySystem::emplace<CountedGains>());
+	// The plan that the win forces makes the winner give up its action, and the two minds stop each other
+	fights.KnockOut(second);
+	EXPECT_EQ(body.gains[first], 2u);
+	EXPECT_EQ(body.gains[second], 2u);
+	Locator::creaturePhysiologySystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, AFightCalledOffInTheDuelGivesBothCreaturesTheStrengthOfTheFightTwoTimes)
+{
+	auto& body = static_cast<CountedGains&>(Locator::creaturePhysiologySystem::emplace<CountedGains>());
+	fights.CallOff(first);
+	EXPECT_EQ(body.gains[first], 2u);
+	EXPECT_EQ(body.gains[second], 2u);
+	// Out of the duel, a second stop gives nothing
+	fights.CallOff(second);
+	EXPECT_EQ(body.gains[first], 2u);
+	EXPECT_EQ(body.gains[second], 2u);
+	Locator::creaturePhysiologySystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, AFightCalledOffBeforeTheDuelGivesNoStrength)
+{
+	auto& body = static_cast<CountedGains&>(Locator::creaturePhysiologySystem::emplace<CountedGains>());
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		registry.Get<CreatureFighting>(self).stage = CreatureFighting::Stage::Square;
+	}
+	fights.CallOff(first);
+	EXPECT_TRUE(body.gains.empty());
+	Locator::creaturePhysiologySystem::reset();
+}
+
+TEST_F(CreatureFightSystemTest, AHoldInTheDuelGivesBothCreaturesTheStrengthOfTheFightOneTimeWhenTheHandLetsGo)
+{
+	auto& body = static_cast<CountedGains&>(Locator::creaturePhysiologySystem::emplace<CountedGains>());
+	auto& hand = static_cast<HoldingHand&>(Locator::creatureHandSystem::emplace<HoldingHand>());
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto self : {first, second})
+	{
+		fight::Enter(registry.Get<CreatureFighting>(self).fighter, fight::State::Stance);
+	}
+	// The hold takes the held creature out of its duel with no gain
+	hand.held = first;
+	fights.FightTurn(first);
+	EXPECT_TRUE(body.gains.empty());
+	// Let go, its plan gives up its action. Only the duel of the opponent gives the gains.
+	hand.held.reset();
+	fights.HandLetGo(first);
+	EXPECT_EQ(body.gains[first], 1u);
+	EXPECT_EQ(body.gains[second], 1u);
+	Locator::creatureHandSystem::reset();
+	Locator::creaturePhysiologySystem::reset();
 }

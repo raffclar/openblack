@@ -921,4 +921,38 @@ constexpr float k_FightMusicDistance = 100.0f;
 constexpr float k_BlowHitEffect = 0.05f;
 /// The fight health of a creature in a duel after it loses damage to its life: the same amount less, never below none
 [[nodiscard]] float HealthAfterLifeLost(float health, float damage);
+
+/// How a creature stops what it does
+enum class StopEnd : uint8_t
+{
+	/// It gives up its action as a failure: an order, a forced plan, a new plan or the hand
+	Failure,
+	/// It completes its action
+	Success,
+};
+/// The two creatures of a fight as one of them stops what it does
+struct StopLinks
+{
+	/// Whether the creature that stops is in its duel against the partner
+	bool stopperDuels {false};
+	/// Whether the partner is in its duel against the creature that stops
+	bool partnerDuels {false};
+	/// Whether the mind of each creature has the other creature as its partner. The creature that asks for the fight and
+	/// the creature that agrees both get the partner.
+	bool stopperHasPartner {true};
+	bool partnerHasPartner {true};
+};
+/// How many times each creature gets the strength gain of the fight action as one of them stops what it does
+struct StrengthGains
+{
+	uint32_t stopper {0};
+	uint32_t partner {0};
+};
+/// The strength gains of a stop. The rules occur in this sequence, and each rule can start the rules again:
+/// 1. A creature in its duel that gives up its action as a failure gets the gain.
+/// 2. A creature in its duel that stops gives the gain to its partner. The partner then leaves its duel and gives up
+///    its action.
+/// 3. A mind that has a partner forgets the partner as it stops, and makes the partner give up its action.
+/// So a creature can get the gain two times.
+[[nodiscard]] StrengthGains StrengthGainsAtStop(StopEnd end, StopLinks links);
 } // namespace openblack::creature_fight
