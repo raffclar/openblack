@@ -3791,7 +3791,7 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _world.PuttingOutFire());
 	reflection::Save(out, _grid);
 	reflection::Save(out, _handVelocity);
-	reflection::Save(out, _lastHandPosition);
+	reflection::SavePresentation(out, _lastHandPosition);
 	out.WriteRaw(_handSpin);
 	reflection::Save(out, _spinningSeed);
 	reflection::Save(out, _handEffectPoint);

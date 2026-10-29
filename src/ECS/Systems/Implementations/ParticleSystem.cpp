@@ -1825,17 +1825,17 @@ void ParticleSystem::RestoreSink(EffectId id, particles::SpellSink* sink)
 
 void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _nextId);
+	reflection::SavePresentation(out, _nextId);
 	reflection::Save(out, _paused);
 	reflection::Save(out, _explodeObject);
 	reflection::Save(out, _stormBolts);
 	reflection::Save(out, _pendingStormBolts);
 	reflection::Save(out, _gestureTrails);
-	reflection::Save(out, _gestureChain);
-	reflection::Save(out, _selectionEffect);
+	reflection::SavePresentation(out, _gestureChain);
+	reflection::SavePresentation(out, _selectionEffect);
 	reflection::Save(out, _handManaPath);
 	reflection::Save(out, _beliefWanted);
-	reflection::Save(out, _chainScrollPace);
+	reflection::SavePresentation(out, _chainScrollPace);
 
 	// The effects and the world go into writers of their own first, so that the tables have every shared thing in them
 	// when they are written

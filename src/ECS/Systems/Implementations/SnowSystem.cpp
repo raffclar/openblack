@@ -52,7 +52,7 @@ void SnowSystem::SaveState(reflection::BinaryWriter& out) const
 {
 	reflection::Save(out, _depths);
 	reflection::Save(out, _melting);
-	reflection::Save(out, _objectPace);
+	reflection::SavePresentation(out, _objectPace);
 }
 
 bool SnowSystem::LoadState(reflection::BinaryReader& in)

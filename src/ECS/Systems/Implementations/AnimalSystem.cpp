@@ -132,7 +132,7 @@ void AnimalSystem::SaveState(reflection::BinaryWriter& out) const
 {
 	reflection::Save(out, _turn);
 	reflection::Save(out, _flocksMade);
-	reflection::Save(out, _soundPace);
+	reflection::SavePresentation(out, _soundPace);
 }
 
 bool AnimalSystem::LoadState(reflection::BinaryReader& in)

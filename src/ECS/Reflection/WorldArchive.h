@@ -230,6 +230,8 @@ struct NamedSection
 	std::vector<uint8_t> bytes;
 	/// For tools: where each value that the system saved ends, when the save kept them
 	std::vector<size_t> valueEnds;
+	/// For tools: the bytes of each presentation value of the system (see BinaryWriter::BeginPresentation)
+	std::vector<std::pair<size_t, size_t>> presentation;
 
 	bool operator==(const NamedSection&) const = default;
 };

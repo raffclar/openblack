@@ -1928,7 +1928,7 @@ void FireSystem::SaveState(reflection::BinaryWriter& out) const
 	// The sounds are not kept: the next turn gives the nearest fires their sounds again
 	reflection::Save(out, _fires);
 	reflection::Save(out, _burnPointTurn);
-	reflection::Save(out, _pace);
+	reflection::SavePresentation(out, _pace);
 }
 
 bool FireSystem::LoadState(reflection::BinaryReader& in)

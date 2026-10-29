@@ -9,11 +9,13 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -37,6 +39,14 @@ struct Sample
 	/// With the fields: the hash of each value that each system saves, in the order of its save, by the name of its part
 	std::unordered_map<std::string, std::vector<uint64_t>> systemValues;
 };
+
+/// The bytes of a value in the saved state of a system, from its first byte to the byte after its last byte
+using ByteRange = std::pair<size_t, size_t>;
+
+/// The hash of the bytes from start to end of the saved state of a system. The hash does not include the bytes of the
+/// presentation values, because only the frames of this computer change them. The ranges are in the order of the bytes.
+[[nodiscard]] uint64_t SyncedHash(std::span<const uint8_t> bytes, size_t start, size_t end,
+                                  std::span<const ByteRange> presentation);
 
 /// The first entity whose field differs between two samples, none when no row differs
 [[nodiscard]] std::optional<uint32_t> ChangedEntity(const Sample& before, const Sample& after, const std::string& part);

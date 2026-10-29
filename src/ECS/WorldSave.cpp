@@ -435,7 +435,10 @@ std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt
 			}
 			out.SetPlace(name, "");
 			system->SaveState(out);
-			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes()), .valueEnds = out.ValueEnds()});
+			sections.push_back({.name = std::string(name),
+			                    .bytes = std::move(out.Bytes()),
+			                    .valueEnds = out.ValueEnds(),
+			                    .presentation = out.PresentationRanges()});
 		}
 	}
 	return sections;

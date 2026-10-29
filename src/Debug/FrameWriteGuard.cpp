@@ -47,6 +47,30 @@ constexpr uint64_t k_FnvPrime = 1099511628211ull;
 
 } // namespace
 
+uint64_t SyncedHash(std::span<const uint8_t> bytes, size_t start, size_t end, std::span<const ByteRange> presentation)
+{
+	end = std::min(end, bytes.size());
+	auto hash = k_FnvOffset;
+	auto at = start;
+	for (const auto& [first, last] : presentation)
+	{
+		if (first >= end)
+		{
+			break;
+		}
+		if (first > at)
+		{
+			hash = Fnv(bytes.subspan(at, first - at), hash);
+		}
+		at = std::max(at, last);
+	}
+	if (at < end)
+	{
+		hash = Fnv(bytes.subspan(at, end - at), hash);
+	}
+	return hash;
+}
+
 std::vector<std::string> ChangedParts(const Sample& before, const Sample& after)
 {
 	std::unordered_map<std::string_view, uint64_t> earlier;
@@ -164,7 +188,8 @@ Sample Guard::Take() const
 		// Each system's saved state is one more part, and it goes into the hash of the whole sample
 		for (const auto& section : ecs::world_save::SavedSystemSections(*_context, _byField))
 		{
-			const auto hash = Fnv(section.bytes, k_FnvOffset);
+			// The guard does not look at the presentation values: only the frames of this computer change them
+			const auto hash = SyncedHash(section.bytes, 0, section.bytes.size(), section.presentation);
 			auto name = std::string(k_SystemPart) + section.name;
 			if (_byField)
 			{
@@ -173,13 +198,13 @@ Sample Guard::Take() const
 				size_t start = 0;
 				for (const auto end : section.valueEnds)
 				{
-					values.push_back(Fnv(std::span(section.bytes).subspan(start, end - start), k_FnvOffset));
+					values.push_back(SyncedHash(section.bytes, start, end, section.presentation));
 					start = end;
 				}
 				// The bytes that the system wrote after its last value are one more value
 				if (start < section.bytes.size())
 				{
-					values.push_back(Fnv(std::span(section.bytes).subspan(start), k_FnvOffset));
+					values.push_back(SyncedHash(section.bytes, start, section.bytes.size(), section.presentation));
 				}
 			}
 			sample.hash.parts.emplace_back(std::move(name), hash);

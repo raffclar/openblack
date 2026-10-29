@@ -1215,7 +1215,7 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 
 void TownSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _beliefSymbols);
+	reflection::SavePresentation(out, _beliefSymbols);
 }
 
 bool TownSystem::LoadState(reflection::BinaryReader& in)
