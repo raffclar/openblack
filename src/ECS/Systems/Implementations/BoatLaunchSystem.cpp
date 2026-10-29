@@ -203,8 +203,8 @@ void BoatLaunchSystem::Play(const Places& places)
 	_places = places;
 	_clocks = {};
 	_playing = true;
-	// The next frame makes the things of both stages. The frames show those of the stage that plays, and hide them all at
-	// the end. They go when the next film starts or the land closes.
+	// The next frame makes the things of both stages. The frames show those of the stage that plays, and remove the
+	// things of each stage at its end.
 	_partsWanted = true;
 	_boat = BoatMatrix();
 }
@@ -234,8 +234,8 @@ void BoatLaunchSystem::Stop()
 
 void BoatLaunchSystem::EndInFrame()
 {
-	Show(_launchParts, false);
-	Show(_sailingParts, false);
+	FreeParts(_launchParts);
+	FreeParts(_sailingParts);
 	_playing = false;
 	_boat.reset();
 	_clocks = {};
@@ -440,8 +440,8 @@ void BoatLaunchSystem::Update(uint32_t milliseconds)
 		EndInFrame();
 		return;
 	case rules::Step::SailingBegan:
-		// The boat at sea and its deck are drawn from the next frame
-		Show(_launchParts, false);
+		// The boat at sea and its deck are drawn from the next frame. The things of the launch go.
+		FreeParts(_launchParts);
 		_boat.reset();
 		return;
 	case rules::Step::Continues:

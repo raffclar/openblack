@@ -43,7 +43,7 @@ private:
 	/// The first frame of a film makes the things of both stages
 	void MakeWantedParts();
 	void FreeParts(std::vector<entt::entity>& parts);
-	/// The frames show or hide things of the film, and hide all of them at its end
+	/// The frames show or hide things of the film
 	void Show(const std::vector<entt::entity>& parts, bool shown);
 	[[nodiscard]] bool Shown(const std::vector<entt::entity>& parts) const;
 	void EndInFrame();
