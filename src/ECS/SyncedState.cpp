@@ -87,14 +87,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "IconSeed", .field = "ringSpin", .marker = ""},
     {.component = "IconSeed", .field = "phialFrame", .marker = ""},
     {.component = "IconSeed", .field = "phialPhase", .marker = ""},
-    // The puffs of smoke, the clouds, the mists, the sky and the lights
+    // The puffs of smoke, the mists, the sky and the lights. The sky's clouds are things of the drawn registry.
     {.component = "ChimneySmoke", .field = "puffs", .marker = ""},
     {.component = "ChimneySmoke", .field = "state", .marker = ""},
-    {.component = "Cloud", .field = "track", .marker = ""},
     {.component = "Mist", .field = "counter", .marker = ""},
     {.component = "Mist", .field = "counterRemainder", .marker = ""},
     {.component = "Mist", .field = "colour", .marker = ""},
-    {.component = "Transform", .field = "position", .marker = "Cloud"},
     {.component = "Transform", .field = "position", .marker = "Mist"},
     {.component = "Sun", .field = "", .marker = ""},
     {.component = "SkyDome", .field = "", .marker = ""},

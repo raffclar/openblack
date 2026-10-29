@@ -114,6 +114,10 @@ LoadEntities(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, 
 /// that the game still looks for starts its search again.
 void ForgetUnsavedState(entt::registry& registry);
 
+/// Removes the sky's clouds that a save from an older version keeps as things of the land. The clouds are now things of
+/// the drawn registry, and the land lays them out when it loads.
+void RemoveSavedSkyClouds(entt::registry& registry);
+
 /// A save does not keep the file of a dance. After a load each dance takes its file again from the row of the dances'
 /// table that it dances, so its groups continue to move as before the save.
 void TakeDanceFilesAgain(entt::registry& registry,

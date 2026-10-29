@@ -49,13 +49,14 @@ public:
 	};
 
 	/// What the system reads from the game: the texels of a grey image, the identity of the land now loaded (none
-	/// without a land), the land as it was laid, and the entities
+	/// without a land), the land as it was laid, the entities, and the drawn registry that holds the sky's clouds
 	struct Sources
 	{
 		std::function<std::span<const uint8_t>(entt::id_type)> image;
 		std::function<std::optional<uint64_t>()> landIdentity;
 		std::function<LaidLand()> lay;
 		std::function<Registry*()> registry;
+		std::function<const Registry*()> drawn;
 	};
 
 	/// The system with the game's textures, terrain and registry
@@ -71,7 +72,7 @@ public:
 
 private:
 	void Lay();
-	void CastShadows(const LandShadeFrame& frame, Registry& registry);
+	void CastShadows(const LandShadeFrame& frame, Registry& registry, const Registry* drawn);
 	void CastLights(const LandShadeFrame& frame, Registry& registry);
 	/// The image of a light at its warm levels, made once
 	[[nodiscard]] std::span<const uint8_t> WarmImage(entt::id_type id);

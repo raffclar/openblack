@@ -3043,20 +3043,20 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	};
 
 	desc.entities.Each<const Mist, const ecs::components::Transform>(
-	    [&](entt::entity entity, const Mist& mist, const ecs::components::Transform& transform) {
-		    auto colour = mist.colour;
-		    if (desc.entities.AnyOf<ecs::components::Cloud>(entity))
-		    {
-			    if (!cloudsShown)
-			    {
-				    return;
-			    }
-			    // How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
-			    const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
-			    colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
-		    }
-		    drawMist(mist, transform.position, colour, nullptr);
+	    [&](const Mist& mist, const ecs::components::Transform& transform) {
+		    drawMist(mist, transform.position, mist.colour, nullptr);
 	    });
+	// The sky's clouds are things of the drawn registry
+	if (cloudsShown && Locator::drawnRegistry::has_value())
+	{
+		std::as_const(Locator::drawnRegistry::value())
+		    .Each<const ecs::components::Cloud, const Mist, const ecs::components::Transform>(
+		        [&](const ecs::components::Cloud& /*unused*/, const Mist& mist, const ecs::components::Transform& transform) {
+			        // How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
+			        const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
+			        drawMist(mist, transform.position, (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu), nullptr);
+		        });
+	}
 	// A storm's cloud takes the land's colour, darkened by the storm's shade
 	if (Locator::cloudSystem::has_value())
 	{
