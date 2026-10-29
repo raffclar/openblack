@@ -1396,15 +1396,14 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 	const float modelDetail = Locator::config::value().detail.modelDetail;
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	// The matrix of the explorers' boat, if its film plays. The parts on its deck take the land's light of its place.
+	// While the boat sails, the hidden boat of the launch can give this matrix.
 	std::optional<glm::mat4> filmBoat;
-	drawn.Each<const BoatFilmPart, const DrawnMatrix>(
-	    [&filmBoat](const BoatFilmPart& part, const DrawnMatrix& matrix) {
-		    if (part.role == BoatFilmPart::Role::Boat)
-		    {
-			    filmBoat = matrix.model;
-		    }
-	    },
-	    entt::exclude<HiddenByState>);
+	drawn.Each<const BoatFilmPart, const DrawnMatrix>([&filmBoat](const BoatFilmPart& part, const DrawnMatrix& matrix) {
+		if (part.role == BoatFilmPart::Role::Boat)
+		{
+			filmBoat = matrix.model;
+		}
+	});
 	// A thing of the drawn registry has only its model, its place and its look: the systems of the land know nothing of
 	// it, so it takes nothing from them
 	drawn.Each<const Mesh, const Transform>(
