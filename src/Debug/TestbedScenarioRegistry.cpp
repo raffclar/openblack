@@ -11254,6 +11254,24 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 10.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
 	});
+	// The second visit uses the draws and the scroll textures of the first visit again
+	all.push_back({
+	    .id = "temple.visit_again",
+	    .name = "The player goes into the temple, leaves it and goes in again",
+	    .facet = Facet::Story,
+	    .description = "The player has a temple and goes into its main room after two seconds. After six seconds the "
+	                   "camera walks out through the door. After sixteen seconds the player goes into the main room "
+	                   "again.",
+	    .expected = "Each time, the camera comes into the main room along its path and the room, its scrolls and the "
+	                "map of the land show as on the first visit. Outside, the land and its things show as before the "
+	                "visit. No frame of a visit, of the walk out or of the land after it takes 10 ms or more.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = static_cast<size_t>(TempleRoom::Main)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 6.0f, .value = static_cast<size_t>(TempleRoom::Unknown)},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 16.0f, .value = static_cast<size_t>(TempleRoom::Main)}},
+	});
 }
 
 /// Land 1's script natives and land script commands that the lane land1-script-stubs completed

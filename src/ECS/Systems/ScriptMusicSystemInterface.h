@@ -35,6 +35,9 @@ public:
 	virtual void Reset() = 0;
 	/// With no music banks loaded (the -NOLOADMUSIC switch), no piece plays and none is ever over
 	virtual void SetBanksLoaded(bool loaded) = 0;
+	/// Registers the times of each piece of the scripts in the resource cache and asks for them, so that the loading
+	/// threads read them behind the loading screen and not in the turn that starts the piece
+	virtual void RegisterTimings() = 0;
 	[[nodiscard]] virtual const audio::ScriptMusic& GetMusic() const = 0;
 	/// Whether the world has the game's music (see audio::WorldHasMusic). Without it, no piece plays, and the scripts
 	/// that wait on music wait on the help text.

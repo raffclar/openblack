@@ -5313,6 +5313,7 @@ void Game::StartLandAudio()
 		if (Locator::scriptMusicSystem::has_value())
 		{
 			Locator::scriptMusicSystem::value().SetBanksLoaded(!_launchSwitches.noLoadMusic);
+			Locator::scriptMusicSystem::value().RegisterTimings();
 		}
 		if (!_launchSwitches.noLoadMusic)
 		{
