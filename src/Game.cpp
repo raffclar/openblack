@@ -4087,10 +4087,10 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				// The trees out of the land are drawn with their roots, as each now is
 				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
 				// The land's draw list, from the camera the frame is drawn from, is made again when it is due: what stands
-				// on the blocks beyond it isn't drawn
+				// on the blocks beyond it isn't drawn. A frame that does not draw the land keeps the list.
 				if (Locator::objectDrawListSystem::has_value())
 				{
-					Locator::objectDrawListSystem::value().Update(clock.GetTurn());
+					Locator::objectDrawListSystem::value().Update(clock.GetTurn(), simulation::LandDrawn());
 					// The things that the list draws show a little more or less of the snow where they stand
 					if (Locator::snowSystem::has_value())
 					{
@@ -4946,7 +4946,7 @@ void Game::StartPlayView()
 	}
 	if (_playVideo == "intro")
 	{
-		Locator::videoSystem::value().Play("Data/INTRO.bik");
+		Locator::videoSystem::value().Play(ecs::systems::k_IntroFilm);
 		Locator::videoSystem::value().ScheduleIntro();
 	}
 	else if (_playVideo == "fall")

@@ -213,12 +213,21 @@ struct Frame
 	bool rebuilt {false};
 	/// Every object in the list is drawn, and which are on screen noted; otherwise only those last on screen
 	bool drawAll {false};
+	/// The frame draws the land. A frame that does not draw the land draws no object of the list.
+	bool landDrawn {true};
 };
-/// Whether an object is drawn on a frame: it has to be in the list, and be on screen when last noted unless the frame
-/// draws them all
+/// The frame of the list when the frame does not draw the land: in the temple, or while a film hides the world. The game
+/// tests the blocks, steps the clock, makes the list and draws its objects as a part of the land's draw, so such a frame
+/// does none of it. The list stays as it is, and no object of it is drawn.
+[[nodiscard]] constexpr Frame FrameWithoutLand()
+{
+	return {.rebuilt = false, .drawAll = false, .landDrawn = false};
+}
+/// Whether an object is drawn on a frame: the frame draws the land, the object is in the list, and it was on screen when
+/// last noted unless the frame draws them all
 [[nodiscard]] constexpr bool Drawn(const Frame& frame, bool listed, bool lastOnScreen)
 {
-	return listed && (frame.drawAll || lastOnScreen);
+	return frame.landDrawn && listed && (frame.drawAll || lastOnScreen);
 }
 /// What a thing is, for whether the game draws it outside the list
 struct OwnDraw

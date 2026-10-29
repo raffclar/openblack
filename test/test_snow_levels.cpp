@@ -62,7 +62,7 @@ public:
 	std::vector<entt::entity> list;
 	std::optional<object_draw_list::View> view {object_draw_list::View {}};
 
-	void Update(uint32_t /*unused*/) override {}
+	void Update(uint32_t /*unused*/, bool /*unused*/) override {}
 	void PrepareLand() override {}
 	void RequestRebuild(uint32_t /*unused*/) override {}
 	[[nodiscard]] object_draw_list::Frame GetFrame() const override { return {}; }
