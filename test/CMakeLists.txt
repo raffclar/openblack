@@ -2131,3 +2131,7 @@ add_test(NAME test_guard_sweep
 )
 openblack_setup_and_add_test(test_box_keyboard input/test_box_keyboard.cpp)
 openblack_setup_and_add_test(test_creature_catch_while_busy test_creature_catch_while_busy.cpp)
+openblack_setup_and_add_test(
+  test_resource_data_only test_resource_data_only.cpp
+)
+target_link_libraries(test_resource_data_only PRIVATE l3d)

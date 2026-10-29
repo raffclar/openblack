@@ -64,10 +64,25 @@ using namespace openblack;
 using namespace openblack::filesystem;
 using namespace openblack::resources;
 
+namespace
+{
+/// What the loaders make from the data that they read. A world with no configuration makes the objects on the graphics
+/// device.
+[[nodiscard]] graphics::UploadMode Uploads()
+{
+	return Locator::config::has_value() ? Locator::config::value().resourceUploads : graphics::UploadMode::Device;
+}
+
+[[nodiscard]] bool KeepsDataOnly()
+{
+	return Uploads() == graphics::UploadMode::DataOnly;
+}
+} // namespace
+
 L3DLoader::result_type L3DLoader::operator()(FromBufferTag, const std::string& debugName,
                                              const std::vector<uint8_t>& data) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, false, Uploads());
 	if (!mesh->LoadFromBuffer(data))
 	{
 		throw std::runtime_error("Unable to load mesh");
@@ -92,7 +107,7 @@ std::vector<uint8_t> ReadZipped(const std::filesystem::path& path)
 
 L3DLoader::result_type L3DLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(path.stem().string());
+	auto mesh = std::make_shared<graphics::L3DMesh>(path.stem().string(), false, Uploads());
 	auto pathExt = string_utils::LowerCase(path.extension().string());
 
 	if (pathExt == ".l3d")
@@ -115,7 +130,7 @@ L3DLoader::result_type L3DLoader::operator()(FromDiskTag, const std::filesystem:
 
 L3DLoader::result_type L3DLoader::operator()(FromDynamicFileTag, const std::string& debugName, const l3d::L3DFile& file) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, true);
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, true, Uploads());
 	if (!mesh->Load(file))
 	{
 		throw std::runtime_error("Unable to load mesh");
@@ -126,7 +141,7 @@ L3DLoader::result_type L3DLoader::operator()(FromDynamicFileTag, const std::stri
 L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& debugName, const graphics::L3DMesh& skinSource,
                                              std::span<const std::vector<graphics::L3DSubMesh::MadePrimitive>> subMeshes) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, false, Uploads());
 	if (!mesh->LoadMade(skinSource, subMeshes))
 	{
 		throw std::runtime_error("Unable to make mesh");
@@ -137,7 +152,7 @@ L3DLoader::result_type L3DLoader::operator()(FromMadeTag, const std::string& deb
 L3DLoader::result_type L3DLoader::operator()(FromFileWithSkinsOfTag, const std::string& debugName, const l3d::L3DFile& file,
                                              const graphics::L3DMesh& skinSource) const
 {
-	auto mesh = std::make_shared<graphics::L3DMesh>(debugName);
+	auto mesh = std::make_shared<graphics::L3DMesh>(debugName, false, Uploads());
 	if (!mesh->LoadWithSkinsOf(file, skinSource))
 	{
 		throw std::runtime_error("Unable to load mesh");
@@ -238,9 +253,17 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromPackTag, const std:
 		throw std::runtime_error("Unsupported compressed texture format");
 	}
 
-	texture2D->Create(static_cast<uint16_t>(g3dTexture.ddsHeader.width), static_cast<uint16_t>(g3dTexture.ddsHeader.height), 1,
-	                  internalFormat, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                  bgfx::copy(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
+	const auto width = static_cast<uint16_t>(g3dTexture.ddsHeader.width);
+	const auto height = static_cast<uint16_t>(g3dTexture.ddsHeader.height);
+	if (KeepsDataOnly())
+	{
+		texture2D->Describe(width, height, 1, internalFormat);
+	}
+	else
+	{
+		texture2D->Create(width, height, 1, internalFormat, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+		                  bgfx::copy(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
+	}
 	// Its alpha as the game reads it into 4 bits a channel, which trees' shadows are cut out by
 	const auto compression =
 	    internalFormat == graphics::TextureFormat::BlockCompression1   ? graphics::tree_shadows::Compression::Dxt1
@@ -276,6 +299,11 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 	auto texture = std::make_shared<graphics::Texture2D>(name);
 	if (depth == graphics::texel_depth::Depth::FiveBits)
 	{
+		if (KeepsDataOnly())
+		{
+			texture->Describe(*side, *side, 1, graphics::TextureFormat::BGR5A1);
+			return texture;
+		}
 		const auto packed = graphics::texel_depth::PackRgb555(data, channels);
 		texture->Create(*side, *side, 1, graphics::TextureFormat::BGR5A1, graphics::Wrapping::Repeat, graphics::Filter::Linear,
 		                bgfx::copy(packed.data(), static_cast<uint32_t>(packed.size() * sizeof(packed[0]))));
@@ -288,10 +316,15 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 	{
 		kept.assign(data.begin(), data.end());
 	}
-	graphics::texel_depth::Reduce(data, depth);
 	texture->SetTexels(std::move(kept));
-	texture->Create(*side, *side, 1, channels == 3 ? graphics::TextureFormat::RGB8 : graphics::TextureFormat::R8,
-	                graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	const auto format = channels == 3 ? graphics::TextureFormat::RGB8 : graphics::TextureFormat::R8;
+	if (KeepsDataOnly())
+	{
+		texture->Describe(*side, *side, 1, format);
+		return texture;
+	}
+	graphics::texel_depth::Reduce(data, depth);
+	texture->Create(*side, *side, 1, format, graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(data.data(), static_cast<uint32_t>(data.size())));
 	return texture;
 }
@@ -322,6 +355,12 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
 	{
 		throw std::runtime_error("Unexpected size of " + rawTexturePath.string() + " or its alpha");
 	}
+	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
+	if (KeepsDataOnly())
+	{
+		texture->Describe(side, side, 1, graphics::TextureFormat::RGBA8);
+		return texture;
+	}
 	std::vector<uint8_t> texels;
 	texels.reserve(colours->pixels.size() * 4);
 	for (size_t i = 0; i < colours->pixels.size(); ++i)
@@ -330,7 +369,6 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
 		texels.insert(texels.end(), {rgb[0], rgb[1], rgb[2], alpha->pixels.at(i)});
 	}
 	graphics::texel_depth::Reduce(texels, graphics::texel_depth::Depth::FourBits);
-	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string() + "+alpha");
 	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
 	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
 	return texture;
@@ -352,6 +390,11 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
 	}
 	auto texture = std::make_shared<graphics::Texture2D>(name);
 	const auto layers = static_cast<uint16_t>(layerPaths.size());
+	if (KeepsDataOnly())
+	{
+		texture->Describe(side, side, layers, graphics::TextureFormat::BGR5A1);
+		return texture;
+	}
 	const auto* caps = bgfx::getCaps();
 	if (caps == nullptr || (caps->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0)
 	{
@@ -1014,6 +1057,12 @@ LandThumbnailLoader::result_type LandThumbnailLoader::operator()(FromDiskTag, co
 	thumbnail->side = picture.side;
 	thumbnail->description = std::string(file->description);
 	thumbnail->texture = std::make_shared<graphics::Texture2D>("Land thumbnail " + path.stem().string());
+	if (KeepsDataOnly())
+	{
+		thumbnail->texture->Describe(gui::land_thumbnail::k_TextureSide, gui::land_thumbnail::k_TextureSide, 1,
+		                             graphics::TextureFormat::BGRA4);
+		return thumbnail;
+	}
 	// As in the game, the texture repeats at its edges and its texels blend
 	thumbnail->texture->Create(
 	    gui::land_thumbnail::k_TextureSide, gui::land_thumbnail::k_TextureSide, 1, graphics::TextureFormat::BGRA4,

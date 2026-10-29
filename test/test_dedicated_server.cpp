@@ -59,6 +59,8 @@ TEST(DedicatedServer, TheServerHasNoWindowNoDeviceAndNoAudio)
 	const auto config = ServerConfig(ServerSettings {.gamePath = "data", .seed = 7, .turns = 100});
 	EXPECT_EQ(config.graphicsBackend, openblack::GraphicsBackend::Noop);
 	EXPECT_TRUE(config.dedicatedServer);
+	// The resources keep only their data
+	EXPECT_EQ(config.resourceUploads, openblack::graphics::UploadMode::DataOnly);
 	EXPECT_TRUE(config.background);
 	EXPECT_FALSE(config.vsync);
 	EXPECT_EQ(config.resolution.x, 0);

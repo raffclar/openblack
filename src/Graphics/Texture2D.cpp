@@ -75,14 +75,7 @@ void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t laye
 	}
 	// The size of the texture is known at once. The graphics library makes the texture on the main thread: a turn on
 	// another thread gives that work to the main thread, which makes the texture before the next draw.
-	bgfx::TextureInfo textureInfo;
-	bgfx::calcTextureSize(textureInfo, width, height, 1, false, false, layers, toBgfx(format));
-	_resolution = glm::u16vec2(textureInfo.width, textureInfo.height);
-	_numLayers = textureInfo.numLayers;
-	_format = fromBgfx(textureInfo.format);
-	_stride = textureInfo.width * textureInfo.bitsPerPixel / 8;
-	_storageSize = textureInfo.storageSize;
-
+	Describe(width, height, layers, format);
 	const auto* texels = reinterpret_cast<const bgfx::Memory*>(memory);
 	PostToMainThread(MainThreadApi::Graphics, [this, width, height, layers, format, flags, texels] {
 		if (texels != nullptr)
@@ -96,6 +89,17 @@ void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t laye
 			bgfx::setName(toBgfx(_handle), _name.c_str());
 		}
 	});
+}
+
+void Texture2D::Describe(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format) noexcept
+{
+	bgfx::TextureInfo textureInfo;
+	bgfx::calcTextureSize(textureInfo, width, height, 1, false, false, layers, toBgfx(format));
+	_resolution = glm::u16vec2(textureInfo.width, textureInfo.height);
+	_numLayers = textureInfo.numLayers;
+	_format = fromBgfx(textureInfo.format);
+	_stride = textureInfo.width * textureInfo.bitsPerPixel / 8;
+	_storageSize = textureInfo.storageSize;
 }
 
 void Texture2D::Update(const void* data, uint32_t size) const

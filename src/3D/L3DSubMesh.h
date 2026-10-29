@@ -112,7 +112,10 @@ public:
 	[[nodiscard]] bool IsPhysics() const { return _flags.isPhysics; }
 	/// True for a submesh made while the game runs from the faces of a broken shape
 	[[nodiscard]] bool IsMade() const { return _made; }
+	/// The buffers on the graphics device. Only a submesh with a device mesh (HasDeviceMesh) has them.
 	[[nodiscard]] graphics::Mesh& GetMesh() const;
+	/// False for a submesh that keeps only its data (see UploadMode), and for one with no triangles
+	[[nodiscard]] bool HasDeviceMesh() const { return _mesh != nullptr; }
 	[[nodiscard]] const AxisAlignedBoundingBox& GetBoundingBox() const { return _boundingBox; }
 	[[nodiscard]] const std::vector<Primitive>& GetPrimitives() const { return _primitives; }
 	/// The lightmap skin the game multiplies the submesh by, twice over, with the vertices' second texture
