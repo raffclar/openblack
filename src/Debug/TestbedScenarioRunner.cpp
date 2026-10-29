@@ -1282,7 +1282,6 @@ void Runner::Stop()
 		Game::Instance()->SetDemoRoundTrip(std::nullopt);
 	}
 	_demoPingSince.reset();
-	_lastNativeResult.reset();
 	// The debug option's bonus creatures are as they were
 	if (_unlockedBefore.has_value() && Locator::config::has_value())
 	{
@@ -2982,7 +2981,6 @@ std::string Runner::CallNative(const Command& command)
 	{
 		return fmt::format("{} could not run now", command.script);
 	}
-	_lastNativeResult = results.empty() ? std::nullopt : std::optional(results.front().first);
 	_lastNativeResult = results.empty() ? std::nullopt : std::optional(results.front().first);
 	for (const auto& [value, type] : results)
 	{
