@@ -82,6 +82,11 @@ public:
 	void ClearObjects();
 	/// The scripts' program starts again: every place is free and the next search starts at the first
 	void Clear();
+	/// A place takes the values that a saved game keeps for it. A place out of the table is not changed.
+	void Put(uint16_t place, const Place& entry);
+	/// The place where the next search for a free place starts
+	[[nodiscard]] uint16_t Next() const { return _next; }
+	void SetNext(uint16_t place) { _next = place; }
 
 	/// Gives each field to a visitor, so that a save writes zero into the gaps of the places and after the last field
 	template <typename Visitor>

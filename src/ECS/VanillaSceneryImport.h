@@ -217,6 +217,62 @@ struct ImportedStatics
 /// The still things and the loose things of the world. A thing without a row of its table goes into the skipped list.
 [[nodiscard]] ImportedStatics ReadStatics(const gamesave::VanillaWorld& world);
 
+/// An animal of the file: a bird or a grazer of the land, or an animal of a temple
+struct ImportedAnimal
+{
+	uint32_t number {0};
+	AnimalInfo row {AnimalInfo::None};
+	gamesave::MapCoords position {};
+	float scale {1.0f};
+	float life {1.0f};
+	uint32_t birthTurn {0};
+	/// Where it goes, in whole map units, the way it faces in game angles and its whole map units a turn
+	gamesave::MapCoords goal {};
+	uint16_t angle {0};
+	uint16_t speed {0};
+	/// The step of a turn in whole map units, and the state of its move by its number in the game's table of the move
+	/// states
+	int32_t stepX {0};
+	int32_t stepZ {0};
+	uint8_t moveState {0};
+	/// Its state and the state that it goes into next, by their numbers in the game's table of the animal states
+	uint8_t state {0};
+	uint8_t finalState {0};
+	/// The numbers of its flock and of the town that it belongs to in the file, 0 for none
+	uint32_t flock {0};
+	uint32_t town {0};
+};
+
+/// A flock of the file
+struct ImportedFlock
+{
+	uint32_t number {0};
+	/// Its place, and the place that it comes back to
+	gamesave::MapCoords place {};
+	gamesave::MapCoords savedPlace {};
+	/// How far from its place its leader goes, and its followers from its leader, in whole metres
+	uint16_t domainRadius {0};
+	uint16_t flockDistance {0};
+	/// The numbers of the villager that herds it, of the temple heart that it flies round and of its town, 0 for none
+	uint32_t shepherd {0};
+	uint32_t heart {0};
+	uint32_t town {0};
+	/// The numbers of its members in the order of its line. The last is its leader.
+	std::vector<uint32_t> members;
+};
+
+struct ImportedAnimals
+{
+	/// In the order of the file
+	std::vector<ImportedAnimal> animals;
+	std::vector<ImportedFlock> flocks;
+	std::vector<std::string> skipped;
+};
+
+/// The animals and the flocks of the world. An animal without a row of the table of the animals goes into the skipped
+/// list.
+[[nodiscard]] ImportedAnimals ReadAnimals(const gamesave::VanillaWorld& world);
+
 /// The clock of day and night of a file
 struct ImportedDayCycle
 {

@@ -2125,8 +2125,11 @@ openblack_setup_and_add_test(test_things_made test_things_made.cpp)
 openblack_setup_and_add_test(test_object_snow graphics/test_object_snow.cpp)
 openblack_setup_and_add_test(test_creature_turn_to_face test_creature_turn_to_face.cpp)
 openblack_setup_and_add_test(test_vanilla_world_import test_vanilla_world_import.cpp)
+target_link_libraries(test_vanilla_world_import PRIVATE ScriptLibrary)
 add_test(NAME test_guard_sweep
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/guard_sweep.py --self-test
 )
 openblack_setup_and_add_test(test_box_keyboard input/test_box_keyboard.cpp)
+openblack_setup_and_add_test(test_vanilla_script_import test_vanilla_script_import.cpp)
+target_link_libraries(test_vanilla_script_import PRIVATE ScriptLibrary)

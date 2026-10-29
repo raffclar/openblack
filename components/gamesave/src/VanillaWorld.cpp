@@ -452,14 +452,17 @@ void ReadHelp(WorldReader& r)
 
 void ReadScriptThings(WorldReader& r)
 {
-	// The objects that the scripts use, each with two values
+	// The objects that the scripts use, by their place in the table: the object, whether a script made it, and the
+	// number of script references that hold it
 	for (int i = 0; i < 511 && !r.Failed(); ++i)
 	{
-		r.Ref();
-		r.Word();
-		r.Byte();
+		r.Ref("scriptObject");
+		r.Word("scriptObjectMade");
+		r.Byte("scriptObjectCount");
 	}
-	for (const uint32_t size : {4, 4, 4, 4, 4, 12, 12, 4, 4, 4, 4})
+	// The place where the next search for a free place starts, then other values of the scripts
+	r.Word("scriptNextPlace");
+	for (const uint32_t size : {4, 4, 4, 4, 12, 12, 4, 4, 4, 4})
 	{
 		r.Bytes(size);
 	}

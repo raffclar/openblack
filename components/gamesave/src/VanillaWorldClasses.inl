@@ -428,8 +428,8 @@ void ReadFlock(WorldReader& r)
 	r.Refs("members");
 	r.Word();
 	r.Word();
-	r.Half();
-	r.Half();
+	r.Half("domainRadius");
+	r.Half("flockDistance");
 	r.Word();
 	r.Word();
 	r.Word();
@@ -795,10 +795,10 @@ void ReadMist(WorldReader& r)
 void ReadInfluenceRing(WorldReader& r)
 {
 	ReadPositioned(r);
-	r.Ref();
-	r.Ref();
-	r.Word();
-	r.Word();
+	r.Ref("follows");
+	r.Ref("player");
+	r.Float("radius");
+	r.Word("anti");
 }
 
 void ReadScriptMarker(WorldReader& r)
@@ -809,12 +809,12 @@ void ReadScriptMarker(WorldReader& r)
 void ReadScriptHighlight(WorldReader& r)
 {
 	ReadFixed(r);
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
-	r.Word();
+	r.Word("highlightUnknown");
+	r.Word("highlightActive");
+	r.Word("highlightHeightSet");
+	r.Float("highlightHeight");
+	r.Word("highlightText");
+	r.Word("highlightCategory");
 }
 
 void ReadStream(WorldReader& r)
@@ -873,8 +873,8 @@ void ReadChallenge(WorldReader& r)
 void ReadScriptTimer(WorldReader& r)
 {
 	ReadPositioned(r);
-	r.Word();
-	r.Word();
+	r.Word("timerSetTurn");
+	r.Word("timerTurns");
 }
 
 void ReadWorshipSite(WorldReader& r)

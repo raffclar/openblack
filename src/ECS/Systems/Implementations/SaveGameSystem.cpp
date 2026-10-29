@@ -1505,11 +1505,16 @@ bool SaveGameSystem::LoadVanilla(uint32_t slot, const std::filesystem::path& slo
 		                   entt::to_integral(entity));
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded {} creatures from the game's file of slot {}", matched.size(), slot);
-	const bool world = ImportVanillaWorld(slot, bytes);
+	VanillaMade creatures;
+	for (const auto& [creature, entity] : matched)
+	{
+		creatures.emplace(creature->number, entity);
+	}
+	const bool world = ImportVanillaWorld(slot, bytes, creatures);
 	return !matched.empty() || world;
 }
 
-bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes)
+bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> bytes, const VanillaMade& creatures)
 {
 	// The game reads its whole world from the file. openblack reads the whole file, but it takes only some parts of
 	// the world from it.
@@ -1524,7 +1529,7 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	SPDLOG_LOGGER_INFO(Log(), "The game's file of slot {} has {} objects at turn {}", slot, read.world->Records().size(),
 	                   data.has_value() ? data->gameTurn : 0);
 	// The towns and the villagers of the file replace the towns and the villagers of the land
-	VanillaMade made;
+	VanillaMade made = creatures;
 	VanillaWorks works;
 	ImportVanillaTowns(*read.world, made, works);
 	// The forests, the big forests and the trees of the file replace those of the land
@@ -1533,6 +1538,13 @@ bool SaveGameSystem::ImportVanillaWorld(uint32_t slot, std::span<const uint8_t> 
 	ImportVanillaFarms(*read.world, made, works);
 	// The still things and the loose things of the file replace those of the land
 	ImportVanillaStatics(*read.world, made);
+	// The animals and their flocks replace those of the land
+	ImportVanillaAnimals(*read.world, made);
+	// The markers, the timers, the highlights and the influences of the scripts replace those of the land
+	ImportVanillaScriptThings(*read.world, made);
+	// The running scripts of the file, with the objects that they hold, replace the scripts of the land. The game loads
+	// them after all the objects of the file.
+	ImportVanillaScripts(*read.world, made);
 	// The clock of day and night, and the count of things made, which continues after all that the import makes
 	ImportVanillaGameValues(*read.world);
 	// The game data of the file has the two seeds of the random draws. After the load, the draws continue from them
