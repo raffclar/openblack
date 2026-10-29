@@ -38,6 +38,7 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/HandStart.h"
 #include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -53,6 +54,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gui/TextDatabase.h"
+#include "Hand/HandStart.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
@@ -335,7 +337,16 @@ ComputerPlayer& ComputerPlayerSystem::MindOf(PlayerNames player)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = PlayerEntity(player);
 	auto* mind = registry.TryGet<ComputerPlayer>(entity);
-	auto& state = mind != nullptr ? *mind : registry.Assign<ComputerPlayer>(entity);
+	if (mind == nullptr)
+	{
+		mind = &registry.Assign<ComputerPlayer>(entity);
+		// A mind that the game makes after the citadel of its player has its camera at the citadel
+		if (const auto* start = registry.TryGet<const HandStart>(entity))
+		{
+			mind->hand.camera = hand_start::CameraOf(start->point);
+		}
+	}
+	auto& state = *mind;
 	// Every player has the tree of needs from its start, so a land script can set its weights at any time
 	if (state.mind.nodes.empty())
 	{

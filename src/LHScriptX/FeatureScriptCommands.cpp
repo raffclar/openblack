@@ -69,6 +69,7 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -87,6 +88,7 @@
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
+#include "Hand/HandStart.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -144,6 +146,28 @@ PlayerNames GetPlayerName(const std::string& name)
 		return player->second;
 	}
 	return PlayerNames::NEUTRAL;
+}
+
+/// The hands and the camera of the owner of a citadel start at the citadel when the script makes it. The citadel is at
+/// the exact map position that the script gives, at the height of the land there.
+void StartHandsAtCitadel(const ScriptCommandParameters& parameters)
+{
+	if (parameters.size() < 3 || !Locator::handSystem::has_value() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	auto place = parameters[0].GetMapPlace();
+	if (!place.has_value())
+	{
+		float x = 0.0f;
+		float y = 0.0f;
+		float z = 0.0f;
+		parameters[0].GetVector(x, y, z);
+		place = map_coords::MapCoords {.x = map_coords::ToFixed(x), .z = map_coords::ToFixed(z), .altitude = 0.0f};
+	}
+	const float ground = Locator::terrainSystem::value().GetAltitude(place->x, place->z);
+	Locator::handSystem::value().StartAtCitadel(GetPlayerName(parameters[2].GetString()),
+	                                            hand_start::AtCitadel(*place, ground));
 }
 
 /// The object the land's script made last
@@ -205,7 +229,12 @@ const std::array<const ScriptCommandSignature, 106> FeatureScriptCommands::k_Sig
     CREATE_COMMAND_BINDING("CREATE_TOWN_VILLAGER", CreateTownVillager),
     CREATE_COMMAND_BINDING("CREATE_SPECIAL_TOWN_VILLAGER", CreateSpecialTownVillager),
     CREATE_COMMAND_BINDING("CREATE_VILLAGER_POS", CreateVillagerPos),
-    CREATE_COMMAND_BINDING("CREATE_CITADEL", CreateCitadel),
+    {{"CREATE_CITADEL"},
+     [](const ScriptCommandParameters& ctx) {
+	     InvokeCallableFromContext(ctx, std::function(CreateCitadel));
+	     StartHandsAtCitadel(ctx);
+     },
+     GetScriptCommandParameters(CreateCitadel)},
     CREATE_COMMAND_BINDING("CREATE_PLANNED_CITADEL", CreatePlannedCitadel),
     CREATE_COMMAND_BINDING("CREATE_CREATURE_PEN", CreateCreaturePen),
     CREATE_COMMAND_BINDING("CREATE_WORSHIP_SITE", CreateWorshipSite),

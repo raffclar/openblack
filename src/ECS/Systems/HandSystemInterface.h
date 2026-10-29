@@ -122,6 +122,9 @@ public:
 	{
 		return GetPlayerHands();
 	}
+	/// A land script made the citadel of a player at a point. The reported hand, the camera and the computer mind of
+	/// the player start at the citadel. The hands and the mind that the game makes later start there too.
+	virtual void StartAtCitadel([[maybe_unused]] PlayerNames owner, [[maybe_unused]] const glm::vec3& point) {}
 	/// The player whose hand this computer moves with its pointer: the first player, unless a network game gave this
 	/// computer another god. Only the frames and the input of this computer read it.
 	virtual void SetOwnPlayer([[maybe_unused]] PlayerNames player) {}

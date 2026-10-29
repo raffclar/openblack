@@ -43,6 +43,7 @@ public:
 	[[nodiscard]] std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
 	GetHandsOf(PlayerNames player) const noexcept override;
 	std::array<entt::entity, static_cast<size_t>(Side::_Count)> MakeHandsOf(PlayerNames player) override;
+	void StartAtCitadel(PlayerNames owner, const glm::vec3& point) override;
 	void ReportSent(const player_commands::HandReport& report) override;
 	[[nodiscard]] uint32_t GetReportLatencyMs() const noexcept override { return _reportLatency.Milliseconds(); }
 	void FixReportLatency(std::optional<uint32_t> latencyMs) override { _reportLatency.Fix(latencyMs); }
