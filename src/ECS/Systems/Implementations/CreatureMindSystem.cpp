@@ -54,6 +54,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureLook.h"
+#include "Creature/CreatureLostThing.h"
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureMode.h"
 #include "Creature/CreatureObjectActions.h"
@@ -2708,6 +2709,11 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 			}
 		}
 		CountCompleted(entity, mind, commands, GetTables());
+		if (commands.object.has_value() && mind.planActive && mind.planner.current.has_value())
+		{
+			creature_lost_thing::StopUseBeforeThrowIntoStore(*mind.planner.current, *commands.object,
+			                                                 entt::to_integral(entity));
+		}
 		// Taking in what a thing is does nothing for the desire the plan serves
 		const bool plannedMeal = commands.effect == creature_mind::Effect::Eat && mind.planActive;
 		if (commands.effect != creature_mind::Effect::None && commands.effect != creature_mind::Effect::Observed &&
@@ -3780,6 +3786,26 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 		mind->idle.stepStarted = false;
 	}
 	ReleaseCast(creature);
+}
+
+void CreatureMindSystem::FailAction(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return;
+	}
+	EndJointAction(creature);
+	AbandonAction(creature);
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		Locator::creatureLocomotionSystem::value().Stop(creature);
+	}
+	// The loop that the body plays ends, as for a change of plan
+	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
+	{
+		body->body = creature_layers::EndLoop(body->body);
+	}
 }
 
 bool CreatureMindSystem::ForceDesireOn(entt::entity creature, creature_desires::Desire desire, entt::entity thing)

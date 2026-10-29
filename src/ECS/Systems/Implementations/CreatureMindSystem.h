@@ -105,6 +105,7 @@ public:
 	void FightStarted(entt::entity creature, entt::entity opponent, bool planned) override;
 	void FightOrdered(entt::entity creature, entt::entity asker) override;
 	void AbandonAction(entt::entity creature) override;
+	void FailAction(entt::entity creature) override;
 	bool ForceDesireOn(entt::entity creature, creature_desires::Desire desire, entt::entity thing) override;
 	void ForceCatch(entt::entity creature, entt::entity object) override;
 	bool TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera) override;

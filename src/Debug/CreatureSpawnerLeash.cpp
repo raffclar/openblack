@@ -202,7 +202,7 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	{
 		if (const auto object = NearestObject(registry, transform->position))
 		{
-			leashes.TieTo(entity, *object);
+			leashes.HandTie(entity, *object);
 		}
 	}
 	ImGui::SameLine();
@@ -210,7 +210,7 @@ void CreatureSpawner::DrawLeash(entt::entity entity) noexcept
 	{
 		if (const auto other = OtherCreature(registry, entity, transform->position))
 		{
-			leashes.TieTo(entity, *other);
+			leashes.HandTie(entity, *other);
 		}
 	}
 	ImGui::SameLine();
