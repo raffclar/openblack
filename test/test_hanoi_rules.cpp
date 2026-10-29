@@ -7,9 +7,14 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <entt/entity/registry.hpp>
+#include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/HanoiRules.h"
+#include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Reflection/WorldArchive.h"
 #include "ScriptHeaders/ScriptCreateRules.h"
 
 using openblack::MobileObjectInfo;
@@ -169,4 +174,40 @@ TEST(HanoiRules, TheCountOfCalmTurns)
 	EXPECT_EQ(hanoi::CalmAfterCalmTurn(4), 5);
 	EXPECT_EQ(hanoi::CalmAfterCalmTurn(5), 5);
 	EXPECT_EQ(hanoi::CalmAfterCalmTurn(-5), -4);
+}
+
+// A save keeps the puzzle, its links to its pieces and the links between the pieces
+TEST(HanoiRules, ASaveKeepsThePuzzleAndItsPieces)
+{
+	using openblack::ecs::components::HanoiBlock;
+	using openblack::ecs::components::PuzzleGame;
+	namespace reflection = openblack::ecs::reflection;
+	entt::meta_ctx context;
+	reflection::RegisterComponents(context);
+	entt::registry registry;
+	const auto puzzle = registry.create();
+	const auto base = registry.create();
+	const auto ring = registry.create();
+	PuzzleGame game {.type = openblack::script::PuzzleGameType::Hanoi, .angle = 1024, .calmTurns = -2, .order = 3};
+	game.bases.front() = base;
+	game.rings.front() = ring;
+	game.kept.at(hanoi::k_Bases) = HanoiBlock {.puzzle = puzzle, .below = base};
+	registry.emplace<PuzzleGame>(puzzle, game);
+	registry.emplace<HanoiBlock>(base, HanoiBlock {.puzzle = puzzle, .above = ring});
+	registry.emplace<HanoiBlock>(ring, HanoiBlock {.puzzle = puzzle, .home = {.altitude = 4.0f}, .below = base});
+
+	reflection::WorldSaveReport report;
+	const auto bytes = reflection::SaveWorld(registry, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	ASSERT_TRUE(reflection::LoadWorld(loaded, context, bytes, reflection::WorldLoadMode::Exact).has_value());
+	const auto& loadedGame = loaded.get<PuzzleGame>(puzzle);
+	EXPECT_EQ(loadedGame.bases.front(), base);
+	EXPECT_EQ(loadedGame.rings.front(), ring);
+	EXPECT_EQ(loadedGame.calmTurns, -2);
+	EXPECT_EQ(loadedGame.angle, 1024);
+	EXPECT_EQ(loadedGame.kept.at(hanoi::k_Bases).below, base);
+	EXPECT_EQ(loaded.get<HanoiBlock>(base).above, ring);
+	EXPECT_EQ(loaded.get<HanoiBlock>(ring).below, base);
+	EXPECT_EQ(loaded.get<HanoiBlock>(ring).home.altitude, 4.0f);
 }
