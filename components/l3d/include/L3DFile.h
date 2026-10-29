@@ -481,7 +481,9 @@ public:
 	}
 	[[nodiscard]] const std::span<L3DBone>& GetBoneSpan(uint32_t submeshIndex) const noexcept
 	{
-		return _boneSpans[submeshIndex];
+		// A model built in memory can have no bones for a submesh
+		static const std::span<L3DBone> k_None;
+		return submeshIndex < _boneSpans.size() ? _boneSpans[submeshIndex] : k_None;
 	}
 	[[nodiscard]] const std::span<L3DVertex>& GetVertexSpan(uint32_t submeshIndex) const noexcept
 	{
@@ -493,7 +495,9 @@ public:
 	}
 	[[nodiscard]] const std::span<L3DVertexGroup>& GetVertexGroupSpan(uint32_t submeshIndex) const noexcept
 	{
-		return _vertexGroupSpans[submeshIndex];
+		// A model built in memory can have no vertex groups for a submesh
+		static const std::span<L3DVertexGroup> k_None;
+		return submeshIndex < _vertexGroupSpans.size() ? _vertexGroupSpans[submeshIndex] : k_None;
 	}
 	/// A submesh's blends, each primitive's in turn, as many as each primitive's header counts
 	[[nodiscard]] std::span<const L3DBlend> GetBlendSpan(uint32_t submeshIndex) const noexcept
