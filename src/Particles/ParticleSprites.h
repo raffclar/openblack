@@ -15,8 +15,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-#include "Graphics/RenderModes.h"
 #include "ParticleEffect.h"
+#include "Visual/RenderModes.h"
 
 /// The particles' sprites as the GPU draws them: one instance each, turned into a quad by the vertex shader
 namespace openblack::particles::sprites

@@ -13,7 +13,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/Light.h"
-#include "Graphics/LightBeams.h"
+#include "Visual/LightBeams.h"
 
 using namespace openblack;
 using namespace openblack::graphics;

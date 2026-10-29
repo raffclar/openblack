@@ -82,7 +82,7 @@ public:
 		spotVisuals.push_back({.type = type, .position = position, .turns = turns, .owner = owner, .magnitude = magnitude});
 		return static_cast<EffectId>(spotVisuals.size());
 	}
-	void Serve(const ecs::systems::EffectRequest& request, ecs::systems::EffectHandle /*handle*/) override
+	ecs::systems::EffectHandle Serve(const ecs::systems::EffectRequest& request, ecs::systems::EffectHandle handle) override
 	{
 		if (const auto* type = std::get_if<SpotVisualType>(&request.type))
 		{
@@ -92,10 +92,15 @@ public:
 			                       .owner = request.owner,
 			                       .magnitude = request.magnitude});
 		}
+		return handle;
 	}
 	void Move(ecs::systems::EffectHandle /*handle*/, glm::vec3 /*position*/) override {}
 	void Stop(ecs::systems::EffectHandle /*handle*/) override {}
 	void Remove(ecs::systems::EffectHandle /*handle*/) override {}
+	void SetMagnitude(ecs::systems::EffectHandle /*handle*/, float /*magnitude*/) override {}
+	void SetAlpha(ecs::systems::EffectHandle /*handle*/, float /*alpha*/) override {}
+	void SetProcessInfo(ecs::systems::EffectHandle /*handle*/, const particles::ProcessInfo& /*info*/) override {}
+	void SetEnabled(ecs::systems::EffectHandle /*handle*/, bool /*enabled*/) override {}
 	void SetOrigin(EffectId /*id*/, glm::vec3 /*origin*/) override {}
 	void SetPlayer(EffectId /*id*/, int /*player*/) override {}
 	void SetDrawPath(EffectId /*id*/, particles::draw::DrawPath /*path*/) override {}

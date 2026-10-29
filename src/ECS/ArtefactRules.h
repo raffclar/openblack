@@ -151,24 +151,6 @@ struct BeliefInputs
 /// multiplier times its dancers over the player's people (none for a player without people)
 [[nodiscard]] float SitePowerUp(float artefactSpeed, float powerUpMultiplier, uint32_t dancers, uint32_t playerPopulation);
 
-/// A thing near where a wonder is planned, as the planning sees it
-struct WonderNeighbour
-{
-	float distance {0.0f};
-	/// Its artefact's worth (0 for one that isn't an artefact) and its impressiveness
-	float artefactWorth {0.0f};
-	float impressiveness {0.0f};
-};
-/// A planned wonder's power: the town's desire for a wonder, plus, for each thing nearer than its reach (the desire
-/// times 15 m, at least 15 m), its artefact's worth and a tenth of its impressiveness, at least a quarter. The game
-/// means to look in the cells round the place but looks in the place's own cell each time, so the things in that cell
-/// are counted once for each cell its reach covers: `passes`.
-[[nodiscard]] float WonderPower(float wonderDesire, std::span<const WonderNeighbour> inCell, uint32_t passes);
-/// How far a wonder's planning reaches for a desire
-[[nodiscard]] float WonderReach(float wonderDesire);
-/// A planned wonder's scale from its power: its power (5 at most) times one less a tenth of it
-[[nodiscard]] float WonderScale(float power);
-
 /// A town as an artefact made by a land's script, or brought across to a new land, looks for one: its place in the
 /// towns' list, its owner and its distance from the artefact
 struct NearbyTown

@@ -89,6 +89,7 @@ void openblack::ecs::reflection::RegisterFields_Values_m(entt::meta_ctx& context
 	    .Field<&openblack::magic::town_belief::Belief::belief>("belief", {k_PlayerNamesNames})
 	    .Field<&openblack::magic::town_belief::Belief::pending>("pending", {k_PlayerNamesNames})
 	    .Field<&openblack::magic::town_belief::Belief::recent>("recent", {k_PlayerNamesNames})
+	    .Field<&openblack::magic::town_belief::Belief::gainedSinceShown>("gainedSinceShown", {k_PlayerNamesNames})
 	    .Field<&openblack::magic::town_belief::Belief::cap>("cap", {k_PlayerNamesNames})
 	    .Field<&openblack::magic::town_belief::Belief::scale>("scale")
 	    .Field<&openblack::magic::town_belief::Belief::neutral>("neutral")

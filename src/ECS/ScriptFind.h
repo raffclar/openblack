@@ -53,6 +53,10 @@ struct Kind
 /// What a thing in the world is to the scripts; none for what they don't see as a thing
 [[nodiscard]] std::optional<Kind> KindOf(const Registry& registry, entt::entity entity);
 
+/// The thing whose place a search measures for a thing. A search measures a worship site from its altar, and any
+/// other thing from the thing itself
+[[nodiscard]] entt::entity MeasuredFrom(const Registry& registry, entt::entity entity);
+
 /// The cells a search about a place looks through: from the cell of the place less the reach to the cell of the place
 /// and the reach, along x and along z
 struct CellRange

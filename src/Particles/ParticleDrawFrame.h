@@ -27,11 +27,11 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-#include "Graphics/RenderModes.h"
 #include "LightSheet.h"
 #include "ParticleDrawPath.h"
 #include "ParticleEffect.h"
 #include "ParticleSprites.h"
+#include "Visual/RenderModes.h"
 
 /// What the particle effects draw in a frame, gathered once whatever the camera, and the order a camera draws it in,
 /// each effect in one of the three ways of DrawPath

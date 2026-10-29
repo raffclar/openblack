@@ -54,11 +54,13 @@ void MendBest(entt::entity town);
 /// town's other plans; the plan remembers whether the building had been finished. A building of no town is not.
 void PlanAgain(entt::entity building);
 
-/// The buildings of a tribe that a town can build from a held scaffold of a value, in the order of their abode numbers,
-/// each with how much the town wants it. With an abode number, only the building of that number. A number that the
-/// tribe has no building of is left out.
+/// The buildings of a tribe that a town can build from a held scaffold of a value at a place, in the order of their
+/// abode numbers, each with how much the town wants it. With an abode number, only the building of that number. A
+/// number that the tribe has no building of is left out. The wonder is of the wonder tribe, and its size comes from the
+/// power of a wonder of the town at the place.
 [[nodiscard]] std::vector<scaffold_offer::Candidate> ScaffoldCandidates(entt::entity town, Tribe tribe, uint32_t value,
-                                                                        std::optional<AbodeNumber> only);
+                                                                        std::optional<AbodeNumber> only, glm::vec3 place,
+                                                                        Tribe wonderTribe);
 
 /// Whether a building that a scaffold offers fits on the land at a place, turned by an angle and at a scale. The land at
 /// the place must be dry and not on the coast. No building may stand in the cells of its outline nearer than their radii

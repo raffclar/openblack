@@ -28,7 +28,6 @@
 #include "3D/TempleRoom.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
-#include "Graphics/GraphicsHandle.h"
 #include "Temple/ScrollPictureLine.h"
 
 namespace openblack
@@ -46,6 +45,7 @@ namespace gui
 class GameInterface;
 } // namespace gui
 struct OrientedTextVertex;
+struct TempleSubMeshTexture;
 class TempleDoors;
 class TemplePeople;
 struct TemplePerson;
@@ -81,16 +81,6 @@ struct TempleCursorHit
 	/// The room whose mesh the cursor is over, and the submesh of it, when it is over one
 	TempleRoom room {TempleRoom::Unknown};
 	std::optional<uint32_t> subMesh;
-};
-
-/// A texture a room's mesh draws one of its submeshes with, in place of its skin
-struct TempleSubMeshTexture
-{
-	uint32_t subMesh;
-	graphics::TextureHandle texture;
-	/// The submesh is a picture of the challenge room or the save game room. The game draws a picture in one colour,
-	/// fogged once at its first vertex, with no lightmap and no light.
-	bool picture {false};
 };
 
 /// A distance and direction that one of a room's submeshes moves in its mesh, as a held button moves into the wall

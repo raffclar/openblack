@@ -21,10 +21,10 @@
 
 #include <glm/gtc/type_precision.hpp>
 
-#include "3D/TempleScrolls.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/CreatureTattoo.h"
+#include "Temple/ScrollFacts.h"
 
 /// The Creature Cave, the temple's room for the player's creature, which F5 goes to. Its four scrolls tell of the
 /// creature: its attributes, the actions it has learnt, its mind and the miracles it can cast; and clicking the creature
@@ -105,7 +105,7 @@ struct Snapshot
 
 /// The scrolls' facts about the creature: the percentages cut short as the game does, the age in its hours of game time
 /// (which the scroll calls years), and the personality's desires with how much it feels each
-[[nodiscard]] TempleScrolls::CreatureFacts FactsOf(const Snapshot& snapshot);
+[[nodiscard]] temple_scrolls::CreatureFacts FactsOf(const Snapshot& snapshot);
 
 /// The personality text of a desire the mind scroll tells of, none for the others
 [[nodiscard]] std::optional<std::string_view> PersonalityText(creature_desires::Desire desire);
@@ -125,7 +125,7 @@ constexpr size_t k_PageCount = static_cast<size_t>(Page::_Count);
 /// The page's title in the game's texts
 [[nodiscard]] std::string_view TitleName(Page page);
 /// The scroll whose text a page shows, none for the tattoos
-[[nodiscard]] std::optional<TempleScrolls::Content> ContentOf(Page page);
+[[nodiscard]] std::optional<temple_scrolls::Content> ContentOf(Page page);
 /// The pages either side, going round
 [[nodiscard]] Page Next(Page page);
 [[nodiscard]] Page Previous(Page page);

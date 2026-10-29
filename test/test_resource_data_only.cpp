@@ -18,6 +18,7 @@
 #include "3D/L3DMesh.h"
 #include "EngineConfig.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Graphics/Mesh.h"
 #include "Graphics/Texture2D.h"
 #include "Visual/UploadMode.h"
 

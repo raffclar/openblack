@@ -14,7 +14,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Graphics/TexelDepth.h"
+#include "Visual/TexelDepth.h"
 
 namespace texel_depth = openblack::graphics::texel_depth;
 

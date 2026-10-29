@@ -16,6 +16,7 @@
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/Components/Wonder.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
@@ -127,6 +128,7 @@ void openblack::ecs::reflection::RegisterFields_Components_w(entt::meta_ctx& con
 	    .Field<&components::WeatherThing::storm>("storm")
 	    .Field<&components::WeatherThing::lastStorm>("lastStorm")
 	    .Field<&components::WeatherThing::affectedByWind>("affectedByWind");
+	Reflect<components::Wonder>(context).Field<&components::Wonder::power>("power");
 	Reflect<components::Workshop>(context)
 	    .Field<&components::Workshop::makingTurns>("makingTurns")
 	    .Field<&components::Workshop::counted>("counted")

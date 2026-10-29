@@ -83,6 +83,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -97,7 +98,6 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -1160,13 +1160,14 @@ std::optional<uint32_t> GameHandGrabWorld::PourPot(entt::entity pot, PlayerNames
 	// It pours out of the hand where the last report put the hand
 	const auto hand = ReportedHandPlace();
 	std::optional<uint32_t> pour;
-	if (Locator::particleSystem::has_value() && player == HandPlayer())
+	if (Locator::effectRequestSystem::has_value() && player == HandPlayer())
 	{
-		// A poisoned handful pours its own poisoned food
+		// A poisoned handful pours its own poisoned food. Only the computer of the hand shows the pour, so the particles
+		// of this computer give it its number.
 		const auto particles = facts->resource == ResourceType::Wood ? k_PourWood
 		                       : facts->poisoned                     ? k_PourPoisonedFood
 		                                                             : k_PourFood;
-		pour = Locator::particleSystem::value().Start(particles, hand, 1.0f);
+		pour = Locator::effectRequestSystem::value().StartHere({.type = particles, .position = hand, .synced = false});
 	}
 	// The handful is gone from the hand first, so that it can't take back what it pours. What it held goes to the stores
 	// and piles of it about the point, or makes a pile there; in the water it is lost.
@@ -1335,29 +1336,30 @@ void GameHandGrabWorld::ResizePot(entt::entity pot)
 
 std::optional<uint32_t> GameHandGrabWorld::StartScoopStream(ResourceType resource, glm::vec3 source, bool poisoned)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return std::nullopt;
 	}
 	// Poisoned food streams as its own
 	const auto stream = resource == ResourceType::Wood ? k_ScoopWood : poisoned ? k_ScoopPoisonedFood : k_ScoopFood;
-	return Locator::particleSystem::value().Start(stream, source, 1.0f);
+	return Locator::effectRequestSystem::value().Start({.type = stream, .position = source, .synced = false});
 }
 
 std::optional<uint32_t> GameHandGrabWorld::StartFishScoopStream(glm::vec3 source)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::particleSystem::value().Start(ParticleType::FoodPickupFish, source, 1.0f);
+	return Locator::effectRequestSystem::value().Start(
+	    {.type = ParticleType::FoodPickupFish, .position = source, .synced = false});
 }
 
 void GameHandGrabWorld::StopScoopStream(uint32_t stream)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().CloseDown(stream);
+		Locator::effectRequestSystem::value().Stop(stream);
 	}
 }
 
@@ -1371,9 +1373,9 @@ void GameHandGrabWorld::PinCursor(bool pinned)
 
 void GameHandGrabWorld::MoveScoopStream(uint32_t stream, glm::vec3 hand)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().SetOrigin(stream, hand);
+		Locator::effectRequestSystem::value().Move(stream, hand);
 	}
 }
 

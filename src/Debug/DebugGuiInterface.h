@@ -18,7 +18,7 @@
 #include <variant>
 #include <vector>
 
-#include "Graphics/RenderPass.h"
+#include "Visual/RenderPass.h"
 
 struct SDL_Window;
 struct SDL_Cursor;

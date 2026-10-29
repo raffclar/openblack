@@ -12,8 +12,8 @@
 #include <gtest/gtest.h>
 
 #include "Graphics/HandReflection.h"
-#include "Graphics/RenderModes.h"
-#include "Graphics/RenderPass.h"
+#include "Visual/RenderModes.h"
+#include "Visual/RenderPass.h"
 
 using namespace openblack::graphics;
 

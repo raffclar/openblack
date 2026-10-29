@@ -132,6 +132,7 @@ std::string Skip(const VanillaRecord& record, std::string_view why)
 constexpr size_t k_BeliefAt = 0x08;
 constexpr size_t k_RecentAt = 0x28;
 constexpr size_t k_CapAt = 0x68;
+constexpr size_t k_GainedSinceShownAt = 0x88;
 constexpr size_t k_PendingAt = 0xC8;
 constexpr size_t k_BoredomAt = 0xE8;
 constexpr size_t k_DesireLevelAt = 0x18C;
@@ -182,6 +183,7 @@ std::optional<ImportedBelief> ReadBelief(const VanillaWorld& world, const Vanill
 	                       .recent = ValuesAt<float, k_ImportedPlayers>(bytes, k_RecentAt),
 	                       .cap = ValuesAt<float, k_ImportedPlayers>(bytes, k_CapAt),
 	                       .pending = ValuesAt<float, k_ImportedPlayers>(bytes, k_PendingAt),
+	                       .gainedSinceShown = ValuesAt<float, k_ImportedPlayers>(bytes, k_GainedSinceShownAt),
 	                       .boredom = ValuesAt<float, k_ImportedReactions>(bytes, k_BoredomAt),
 	                       .desireLevel = ValuesAt<float, k_ImportedDesires>(bytes, k_DesireLevelAt)};
 }

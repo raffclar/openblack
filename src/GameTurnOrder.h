@@ -106,6 +106,8 @@ enum class Step : uint8_t
 	Snow,
 	Players,
 	ComputerPlayers,
+	/// The power that each tribe gives each player
+	TribalPowers,
 	Influence,
 	PlayerStatistics,
 	Heartbeats,
@@ -205,6 +207,8 @@ enum class Step : uint8_t
 	CameraBookmarks,
 	ScriptHighlights,
 	Climates,
+	/// Every tenth turn the hand tells the player at this computer the belief that the towns gained in the player
+	BeliefGained,
 	/// Every tenth turn the advisors warn when a town of the player at this computer loses its belief in the player
 	LosingBelief,
 	HeldThing,
@@ -284,6 +288,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Teleports, .stage = Stage::Players},
     {.step = Step::TownFlags, .stage = std::nullopt},
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
+    // After its computer mind, the power that each tribe gives a player becomes the most power that the tribe gave it
+    {.step = Step::TribalPowers, .stage = Stage::Players},
     // The influence of the towns and the temples. The borders that it draws and the influence that the hand keeps are
     // also in this step.
     {.step = Step::Influence, .stage = Stage::Players},
@@ -342,6 +348,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::CameraBookmarks, .stage = Stage::WeatherThings},
     {.step = Step::ScriptHighlights, .stage = Stage::Highlights},
     {.step = Step::Climates, .stage = Stage::Climates},
+    {.step = Step::BeliefGained, .stage = Stage::Climates},
     {.step = Step::LosingBelief, .stage = Stage::Climates},
     {.step = Step::HeldThing, .stage = Stage::Hand},
     {.step = Step::PlayerSparkles, .stage = Stage::Hand},

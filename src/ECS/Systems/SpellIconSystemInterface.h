@@ -75,6 +75,12 @@ public:
 	/// A script stops the charges for the hand of a player at the worship sites of a temple. Each icon that charges for
 	/// that hand stops and gives its store back to its site.
 	virtual void CancelChargesFor(entt::entity temple, PlayerNames charger) = 0;
+	/// Whether an icon at the worship sites of a temple charges a miracle for the hand of a player
+	[[nodiscard]] virtual bool ChargesFor(entt::entity /*temple*/, PlayerNames /*charger*/) const { return false; }
+	/// A scribble of the empty hand stops one charge for the hand of a player at the worship sites of a temple: the
+	/// charge that started last. Of charges that started in the same turn, the first in the order of the places stops.
+	/// It returns whether a charge stopped.
+	virtual bool CancelLatestChargeFor(entt::entity /*temple*/, PlayerNames /*charger*/) { return false; }
 	/// The icon of a seed at the worship sites of a temple. The first site in the order of the places round the temple
 	/// gives it. None when no site of the temple has an icon of the seed.
 	[[nodiscard]] virtual entt::entity IconInTemple(entt::entity temple, SpellSeedType seed) const = 0;

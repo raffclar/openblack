@@ -52,6 +52,7 @@
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Input/LocalPlayer.h"
 #include "Locator.h"
 
@@ -107,6 +108,10 @@ std::optional<std::string_view> LeashCommandWords(const Action& action)
 		    else if constexpr (std::is_same_v<Kind, HandShakeOff>)
 		    {
 			    return "shakes the hand";
+		    }
+		    else if constexpr (std::is_same_v<Kind, IconChargeStop>)
+		    {
+			    return "stops the charge of an icon";
 		    }
 		    else if constexpr (std::is_same_v<Kind, TempleLeashOff>)
 		    {
@@ -488,6 +493,15 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::handGrabSystem::has_value())
 			    {
 				    openblack::Locator::handGrabSystem::value().DoShakeOff(command.player);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, IconChargeStop>)
+		    {
+			    // The icon at the sites of the player's temple that started its charge for the hand last stops it
+			    if (openblack::Locator::spellIconSystem::has_value() && openblack::Locator::worshipSiteSystem::has_value())
+			    {
+				    const auto temple = openblack::Locator::worshipSiteSystem::value().TempleOf(command.player);
+				    std::ignore = openblack::Locator::spellIconSystem::value().CancelLatestChargeFor(temple, command.player);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, CreatureFightCheat>)

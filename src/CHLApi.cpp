@@ -201,6 +201,7 @@
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -949,30 +950,35 @@ int SpecialEffectTurns(float seconds)
 uint32_t StartScriptSpotVisual(int32_t effect, glm::vec3 position, int turns, entt::entity owner)
 {
 	constexpr int32_t k_LastSpotVisual = 49;
-	if (effect < 0 || effect > k_LastSpotVisual || !Locator::particleSystem::has_value())
+	if (effect < 0 || effect > k_LastSpotVisual || !Locator::effectRequestSystem::has_value())
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Spell not created");
 		return 0;
 	}
-	auto& particles = Locator::particleSystem::value();
-	const auto id = particles.StartSpotVisual(static_cast<SpotVisualType>(effect), position, turns, owner, 1.0f);
-	if (id == ecs::systems::ParticleSystemInterface::k_NoEffect)
+	auto& effects = Locator::effectRequestSystem::value();
+	// Each computer shows the visual in the colour of its own player
+	const auto handle = effects.Start({
+	    .type = static_cast<SpotVisualType>(effect),
+	    .position = position,
+	    .turns = turns,
+	    .owner = owner,
+	    .player = Locator::playerSystem::has_value()
+	                  ? std::optional(static_cast<int>(Locator::playerSystem::value().GetLocalPlayer()))
+	                  : std::nullopt,
+	});
+	if (!effects.IsRunning(handle))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Spell not created");
 		return 0;
 	}
-	if (Locator::playerSystem::has_value())
-	{
-		particles.SetPlayer(id, static_cast<int>(Locator::playerSystem::value().GetLocalPlayer()));
-	}
-	return id;
+	return handle;
 }
 
 /// The thing a script holds for a visual it started, taking its place in the scripts' table as made by a script; none
 /// when no visual was started. The script holds the thing, never the visual's own number.
 static entt::entity ScriptSpotVisualThing(uint32_t effect, glm::vec3 position)
 {
-	if (effect == ecs::systems::ParticleSystemInterface::k_NoEffect)
+	if (effect == ecs::systems::k_NoEffectHandle)
 	{
 		return entt::null;
 	}
@@ -2641,10 +2647,12 @@ static std::optional<uint8_t> FinalGameStateOf(const ecs::Registry& registry, en
 	return std::nullopt;
 }
 
-/// Where a thing is measured from by the scripts' searches
+/// The place from which the scripts' searches measure a thing: the altar of a worship site, else the thing itself
 static map_coords::MapCoords ScriptFindPosition(const ecs::Registry& registry, entt::entity entity)
 {
-	const auto& position = registry.Get<const Transform>(entity).position;
+	const auto measured = ecs::script_find::MeasuredFrom(registry, entity);
+	const auto* transform = registry.TryGet<const Transform>(measured);
+	const auto& position = (transform != nullptr ? transform : &registry.Get<const Transform>(entity))->position;
 	return map_coords::FromMetres({position.x, position.z});
 }
 
@@ -8122,9 +8130,9 @@ void AddSpotVisualTargetPos() // 296 ADD_SPOT_VISUAL_TARGET_POS
 	}
 	// A thing that holds no visual of a script takes no target
 	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
-	    effect.has_value() && Locator::particleSystem::has_value())
+	    effect.has_value() && Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddTargetPosition(*effect, position);
+		Locator::effectRequestSystem::value().AddTargetPosition(*effect, position);
 	}
 }
 
@@ -8145,9 +8153,9 @@ void AddSpotVisualTargetObject() // 297 ADD_SPOT_VISUAL_TARGET_OBJECT
 		return;
 	}
 	if (const auto effect = ecs::script_spot_visuals::EffectOf(registry, object);
-	    effect.has_value() && Locator::particleSystem::has_value())
+	    effect.has_value() && Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddTarget(*effect, target);
+		Locator::effectRequestSystem::value().AddTarget(*effect, target);
 	}
 }
 

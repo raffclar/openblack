@@ -89,6 +89,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownAggression.h"
@@ -967,6 +968,11 @@ void world_objects::Remove(entt::entity object)
 	graveyards::Lost(object);
 	// A crèche going hands its town's children over to another of the town's buildings
 	creches::Lost(object);
+	// A finished wonder that goes removes its power from its player
+	if (Locator::wonderSystem::has_value())
+	{
+		Locator::wonderSystem::value().Lost(object);
+	}
 	// A town's building going is planned again by its town, where it stood, and the things it put round itself go
 	if (registry.AllOf<Abode>(object))
 	{

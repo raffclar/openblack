@@ -20,7 +20,7 @@
 #include "Common/MainThreadQueue.h"
 #include "GraphicsHandleBgfx.h"
 #include "MainThreadWork.h"
-#include "UploadPacer.h"
+#include "Visual/UploadPacer.h"
 
 using namespace openblack::graphics;
 

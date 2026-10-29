@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Graphics/UploadPacer.h"
+#include "Visual/UploadPacer.h"
 
 using openblack::graphics::UploadPacer;
 

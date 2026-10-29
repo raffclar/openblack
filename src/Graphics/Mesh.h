@@ -15,7 +15,7 @@
 #include <optional>
 
 #include "GraphicsHandle.h"
-#include "RenderPass.h"
+#include "Visual/RenderPass.h"
 
 namespace bgfx
 {

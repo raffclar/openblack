@@ -186,6 +186,7 @@
 #include "ECS/Systems/Implementations/WalkPathSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
+#include "ECS/Systems/Implementations/WonderSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
@@ -357,6 +358,7 @@ using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WalkPathSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
+using openblack::ecs::systems::WonderSystem;
 using openblack::ecs::systems::WorkshopSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
 using openblack::graphics::HeadlessRenderer;
@@ -744,6 +746,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::boatLaunchSystem::emplace<BoatLaunchSystem>();
 	Locator::walkPathSystem::emplace<WalkPathSystem>();
 	Locator::puzzleGameSystem::emplace<PuzzleGameSystem>();
+	Locator::wonderSystem::emplace<WonderSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
 	Locator::sharkSystem::emplace<SharkSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
@@ -1007,6 +1010,7 @@ void openblack::ShutDownServices()
 	Locator::boatLaunchSystem::reset();
 	Locator::walkPathSystem::reset();
 	Locator::puzzleGameSystem::reset();
+	Locator::wonderSystem::reset();
 	Locator::danceSystem::reset();
 	Locator::sharkSystem::reset();
 	Locator::videoSystem::reset();

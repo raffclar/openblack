@@ -21,7 +21,7 @@
 #include <glm/ext/vector_uint2_sized.hpp>
 
 #include "GraphicsHandle.h"
-#include "TreeShadows.h"
+#include "Visual/TreeShadows.h"
 
 namespace openblack::graphics
 {

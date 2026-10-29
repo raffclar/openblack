@@ -66,6 +66,24 @@ TEST(WorldToolTips, PrayerEnergyIsWhatTheSiteStores)
 	EXPECT_EQ(Compose(energy.index, u"Prayer Energy: %3.0f", PrayerEnergy(0.0f).first, std::nullopt), u"Prayer Energy:   0");
 }
 
+// A sign of a need shows the level of the hunger and of the life as a percentage, and the wood that a workshop requires.
+// The sign of the people that hide has no words of its own and shows "Pick Up".
+TEST(WorldToolTips, ASignOfANeedShowsItsLevelOrTheWoodRequired)
+{
+	const auto food = NeedsSign(NeedsRow::Hunger, 0.26f, 7);
+	EXPECT_EQ(food.index, k_FoodDesire);
+	EXPECT_EQ(food.first, static_cast<double>(0.26f * 100.0f));
+	EXPECT_EQ(Compose(food.index, u"Food Desire: %3.0f%%", food.first, std::nullopt), u"Food Desire:  26%");
+	EXPECT_EQ(NeedsSign(NeedsRow::Life, 0.5f, 7).index, k_RestDesire);
+	EXPECT_EQ(NeedsSign(NeedsRow::Life, 0.5f, 7).first, 50.0);
+	const auto wood = NeedsSign(NeedsRow::WorkshopWood, 0.9f, 250);
+	EXPECT_EQ(wood.index, k_WoodRequired);
+	EXPECT_EQ(wood.first, 250.0);
+	EXPECT_EQ(NeedsSign(NeedsRow::WorkshopWood, 0.0f, 0xFFFFFFFFu).first, static_cast<double>(4294967296.0f));
+	EXPECT_EQ(NeedsSign(NeedsRow::Hiding, 0.9f, 250).index, k_PickUp);
+	EXPECT_FALSE(NeedsSign(NeedsRow::Hunger, 0.5f, 0).second.has_value());
+}
+
 TEST(WorldToolTips, PopulationAsPeopleOverPlaces)
 {
 	const auto population = Population(12, 34);
@@ -228,7 +246,7 @@ TEST(WorldToolTips, TheOwnDispenserTakesAHeldMiracleThatDidNotCastBefore)
 
 TEST(WorldToolTips, TheTemplesHealthAndTheVillageCentresTipsShowAnywhere)
 {
-	for (const auto subject : {Subject::Temple, Subject::VillageCentre, Subject::OwnCreature})
+	for (const auto subject : {Subject::Temple, Subject::VillageCentre, Subject::OwnCreature, Subject::NeedsSign})
 	{
 		EXPECT_FALSE(NeedsInfluence(subject));
 		EXPECT_TRUE(Shows(subject, true));

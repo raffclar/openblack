@@ -209,7 +209,8 @@ TEST(GameTurnOrder, TheHelpComesAfterTheScriptsAndBeforeTheTimeOfDay)
 TEST(GameTurnOrder, TheLateStepsOfTheTurnComeInTheGamesOrder)
 {
 	const auto recorder = PlayOneTurn();
-	EXPECT_TRUE(recorder.Before(Step::Climates, Step::LosingBelief));
+	EXPECT_TRUE(recorder.Before(Step::Climates, Step::BeliefGained));
+	EXPECT_TRUE(recorder.Before(Step::BeliefGained, Step::LosingBelief));
 	EXPECT_TRUE(recorder.Before(Step::LosingBelief, Step::HeldThing));
 	EXPECT_TRUE(recorder.Before(Step::HeldThing, Step::PlayerSparkles));
 	EXPECT_TRUE(recorder.Before(Step::PlayerSparkles, Step::Rewards));
@@ -258,6 +259,13 @@ TEST(GameTurnOrder, TheTotemsTakeTheirTurnWithTheirTowns)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::Players, Step::VillageTotems));
 	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::PlayerAlignment));
+}
+
+TEST(GameTurnOrder, TheTribalPowersSettleAfterTheComputerPlayersAndBeforeTheInfluence)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::ComputerPlayers, Step::TribalPowers));
+	EXPECT_TRUE(recorder.Before(Step::TribalPowers, Step::Influence));
 }
 
 TEST(GameTurnOrder, TheTeleportTravellersAreDroppedAfterTheTownsAndBeforeTheComputerPlayers)

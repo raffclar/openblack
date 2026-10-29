@@ -45,8 +45,6 @@
 #include "3D/LandLightTable.h"
 #include "3D/Light.h"
 #include "3D/LowResolutionTextures.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/MusicTimingFile.h"
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
@@ -58,6 +56,7 @@
 #include "Locator.h"
 #include "Physics/Materials.h"
 #include "Sound/ClipSounds.h"
+#include "Sound/MusicTimingFile.h"
 #include "Sound/SoundDecoder.h"
 
 using namespace openblack;

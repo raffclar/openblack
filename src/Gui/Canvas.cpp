@@ -17,12 +17,12 @@
 #include <glm/common.hpp>
 
 #include "Graphics/GraphicsHandleBgfx.h"
-#include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/Texture2D.h"
 #include "Locator.h"
+#include "Visual/RenderPass.h"
 
 using namespace openblack::gui;
 using openblack::graphics::RenderPass;

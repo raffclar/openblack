@@ -16,7 +16,7 @@
 #include <LHVMTypes.h>
 #include <gtest/gtest.h>
 
-#include "Inspector/ComponentJsonCodec.h"
+#include "ECS/Reflection/ComponentJsonCodec.h"
 
 TEST(ScriptValueJson, AScriptValueIsWrittenAsItsFloatAndItsInteger)
 {

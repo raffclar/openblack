@@ -116,6 +116,7 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAfterDeath.h"
@@ -578,6 +579,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::computerPlayerSystem::value().ProcessTurn();
 		}
 		break;
+	case Step::TribalPowers:
+		// Each player's tribes give the player the most power that they gave it, at least 1
+		if (Locator::wonderSystem::has_value())
+		{
+			Locator::wonderSystem::value().ProcessTurn();
+		}
+		break;
 	case Step::Influence:
 		// How far the players' influence reaches, and its border
 		Locator::influenceSystem::value().ProcessTurn(turn);
@@ -896,6 +904,14 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::weatherSystem::value().ProcessClimates(turn);
 		}
+		break;
+	case Step::BeliefGained:
+		// The towns add the belief that they gained in each player. The view shows the sum to the player at this computer.
+		if (Locator::reactionSystem::has_value())
+		{
+			Locator::reactionSystem::value().TownGainsTurn(turn);
+		}
+		view.PlayViewStep(step, cameraPosition);
 		break;
 	case Step::LosingBelief:
 		if (Locator::guidanceSystem::has_value())

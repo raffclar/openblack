@@ -64,6 +64,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PlayerTowns.h"
@@ -735,9 +736,10 @@ void PhysicsGameHooks::ReactToImpact(DynamicsSystemInterface& dynamics, PhysicsE
 			// An animal the store won't take is hurt by the blow as any other
 			if (world.IsStore(hitter, resource.type))
 			{
-				// A storage pit that takes a thing thrown by this computer's player counts for the player's help
-				const bool helpCounts =
-				    registry.AllOf<StoragePit>(hitter) && impact.player.has_value() && impact.player == world.OwnPlayer();
+				// A storage pit or a worship site that takes a thing thrown by this computer's player counts for the player's
+				// help
+				const bool helpCounts = registry.AnyOf<StoragePit, WorshipSite>(hitter) && impact.player.has_value() &&
+				                        impact.player == world.OwnPlayer();
 				const bool taken = world.TakeObject(hitter, object, impact.player);
 				if (taken && helpCounts)
 				{

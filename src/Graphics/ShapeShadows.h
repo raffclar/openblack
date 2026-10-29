@@ -14,7 +14,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
-#include "Graphics/TreeShadows.h"
+#include "Visual/TreeShadows.h"
 
 namespace openblack::graphics
 {

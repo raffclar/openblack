@@ -15,9 +15,9 @@
 #include <optional>
 #include <vector>
 
-#include <Audio/MusicTimingFile.h>
 #include <ECS/SyncedState.h>
 #include <PackFile.h>
+#include <Sound/MusicTimingFile.h>
 #include <Sound/ScriptMusic.h>
 #include <Sound/SoundDecoder.h>
 #include <gtest/gtest.h>

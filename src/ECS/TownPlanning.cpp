@@ -49,6 +49,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -536,7 +537,8 @@ void town_planning::PlanAgain(entt::entity building)
 }
 
 std::vector<scaffold_offer::Candidate> town_planning::ScaffoldCandidates(entt::entity town, Tribe tribe, uint32_t value,
-                                                                         std::optional<AbodeNumber> only)
+                                                                         std::optional<AbodeNumber> only, glm::vec3 place,
+                                                                         Tribe wonderTribe)
 {
 	auto& registry = Entities();
 	std::vector<scaffold_offer::Candidate> candidates;
@@ -558,13 +560,18 @@ std::vector<scaffold_offer::Candidate> town_planning::ScaffoldCandidates(entt::e
 		{
 			continue;
 		}
-		// TODO(scaffolds): a wonder takes its scale from the power of the things near the scaffold, which openblack does
-		// not find yet. Until then, a scaffold does not offer a wonder.
+		// The wonder is of the wonder tribe. Its size comes from the power of a wonder of the town at the place.
+		auto rowTribe = tribe;
+		float scale = 1.0f;
 		if (number == AbodeNumber::Wonder)
 		{
-			continue;
+			rowTribe = wonderTribe;
+			if (Locator::wonderSystem::has_value())
+			{
+				scale = Locator::wonderSystem::value().ScaleAt(town, place);
+			}
 		}
-		const auto found = GAbodeInfo::FindFirst(rows, tribe, number);
+		const auto found = GAbodeInfo::FindFirst(rows, rowTribe, number);
 		if (!found.has_value())
 		{
 			continue;
@@ -577,7 +584,7 @@ std::vector<scaffold_offer::Candidate> town_planning::ScaffoldCandidates(entt::e
 		                                    .scaffoldsRequired = info.scaffoldsRequired};
 		kind.sitesOfSameType = static_cast<uint32_t>(std::ranges::count(siteTypes, kind.type));
 		candidates.push_back({
-		    .offer = {.info = *found, .number = number, .mesh = info.meshId, .yAngle = 0.0f, .scale = 1.0f},
+		    .offer = {.info = *found, .number = number, .mesh = info.meshId, .yAngle = 0.0f, .scale = scale},
 		    .scaffoldsRequired = info.scaffoldsRequired,
 		    .desire = planned_building::DesireToBeBuilt(kind, plans, value),
 		});

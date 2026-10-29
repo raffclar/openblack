@@ -11,9 +11,9 @@
 
 #include <cstddef>
 
-#include "Graphics/UploadPacer.h"
 #include "Loaders.h"
 #include "ResourceManager.h"
+#include "Visual/UploadPacer.h"
 
 namespace openblack::resources
 {

@@ -19,8 +19,8 @@
 #include <glm/vec2.hpp>
 
 #include "Graphics/FilmSurface.h"
-#include "Graphics/RenderPass.h"
 #include "Video/VideoRules.h"
+#include "Visual/RenderPass.h"
 
 namespace openblack::graphics
 {

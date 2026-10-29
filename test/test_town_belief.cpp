@@ -9,8 +9,10 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <bit>
+#include <tuple>
 
 #include <gtest/gtest.h>
 
@@ -34,6 +36,39 @@ TEST(TownBelief, PendingBeliefIsBelievedAtTheTownsTurnByItsScale)
 	EXPECT_FLOAT_EQ(town.pending.at(0), 0.0f);
 	EXPECT_FLOAT_EQ(town.recent.at(0), 0.5f * 0.997f);
 	EXPECT_TRUE(Turn(town, 0.997f).empty());
+}
+
+// The belief that a town gains adds up until the tenth turn takes it to show it
+TEST(TownBelief, TheGainSinceItWasShownAddsUpUntilItIsTaken)
+{
+	Belief town;
+	town.scale = 2.0f;
+	Add(town, PlayerNames::PLAYER_ONE, 0.25f);
+	std::ignore = Turn(town, 0.997f);
+	Add(town, PlayerNames::PLAYER_ONE, 0.125f);
+	Add(town, PlayerNames::PLAYER_TWO, 0.5f);
+	std::ignore = Turn(town, 0.997f);
+	EXPECT_FLOAT_EQ(town.gainedSinceShown.at(0), 0.75f);
+	EXPECT_FLOAT_EQ(town.gainedSinceShown.at(1), 1.0f);
+
+	// A loss below nothing counts as no gain, and taking the gains clears every player's count
+	town.gainedSinceShown.at(2) = -0.5f;
+	const auto taken = TakeGainedSinceShown(town);
+	EXPECT_FLOAT_EQ(taken.at(0), 0.75f);
+	EXPECT_FLOAT_EQ(taken.at(1), 1.0f);
+	EXPECT_FLOAT_EQ(taken.at(2), 0.0f);
+	EXPECT_TRUE(std::ranges::all_of(town.gainedSinceShown, [](float gained) { return gained == 0.0f; }));
+}
+
+// Only a gain of more than a thousandth shows, in thousandths
+TEST(TownBelief, AGainShowsInThousandthsOnlyAboveTheLeastGain)
+{
+	EXPECT_FALSE(GainShown(0.0f).has_value());
+	EXPECT_FALSE(GainShown(0.001f).has_value());
+	ASSERT_TRUE(GainShown(0.0011f).has_value());
+	EXPECT_FLOAT_EQ(*GainShown(0.0011f), 1.1f);
+	EXPECT_FLOAT_EQ(*GainShown(0.25f), 250.0f);
+	EXPECT_EQ(k_GainShownEvery, 10u);
 }
 
 TEST(TownBelief, CappedAboveOnly)

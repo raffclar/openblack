@@ -28,9 +28,9 @@
 #include "HandReflection.h"
 #include "InstanceDesc.h"
 #include "InterfaceCreatures.h"
-#include "RenderModes.h"
-#include "RenderPass.h"
 #include "ScreenshotCapture.h"
+#include "Visual/RenderModes.h"
+#include "Visual/RenderPass.h"
 
 #include "../EngineConfig.h"
 

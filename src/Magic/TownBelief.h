@@ -53,6 +53,8 @@ struct Belief
 	std::array<float, k_PlayerCount> pending {};
 	/// What it has been given lately, fading every turn
 	std::array<float, k_PlayerCount> recent {};
+	/// What it gained at its turns since the hand last told the player at this computer about the belief gained
+	std::array<float, k_PlayerCount> gainedSinceShown {};
 	/// The most it believes in each player
 	std::array<float, k_PlayerCount> cap = [] {
 		std::array<float, k_PlayerCount> caps {};
@@ -88,6 +90,22 @@ struct Gained
 /// The town's turn: its recent tallies fade by the decay, and its pending belief is believed. The belief gained in each
 /// player that gained any, in player order.
 [[nodiscard]] std::vector<Gained> Turn(Belief& town, float recentDecay);
+
+/// Each tenth turn the hand tells the player at this computer the belief that the towns gained in them, when the sum is
+/// more than the least amount. It shows the sum times the scale.
+inline constexpr uint32_t k_GainShownEvery = 10;
+inline constexpr float k_LeastGainShown = 0.001f;
+inline constexpr float k_GainShownScale = 1000.0f;
+/// The number of the belief gained also floats up from the point under the hand: yellow, four wide
+inline constexpr uint32_t k_GainShownColour = 0xFFFFFF00;
+inline constexpr int k_GainShownWidth = 4;
+
+/// The number that the hand shows for the belief that the towns gained, none when the sum is too small
+[[nodiscard]] std::optional<float> GainShown(float gained);
+
+/// For each player, the belief that the town gained since the last time that the hand told the player, or nothing when
+/// it is not more than nothing. The tallies go back to nothing.
+[[nodiscard]] std::array<float, k_PlayerCount> TakeGainedSinceShown(Belief& town);
 
 /// The town got belief at its turn: each desire level goes back to the value in the desire table
 void ResetDesireLevels(Belief& town, std::span<const DesireDecay, k_DesireCount> table);

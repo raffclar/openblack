@@ -29,6 +29,7 @@
 #include "3D/TempleMap.h"
 #include "3D/TempleMapSpells.h"
 #include "3D/TempleScrolls.h"
+#include "3D/TempleSubMeshTexture.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
 #include "Common/FramePace.h"

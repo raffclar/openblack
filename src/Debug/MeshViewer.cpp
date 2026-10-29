@@ -33,6 +33,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
+#include "Graphics/Mesh.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/Texture2D.h"

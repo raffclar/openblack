@@ -68,6 +68,8 @@ public:
 	[[nodiscard]] int SurfaceAt(glm::vec3 point) const override;
 	[[nodiscard]] int SoundAlignment(int player) const override;
 	[[nodiscard]] glm::vec3 LandNormal(glm::vec2 xz) const override;
+	/// The game's sound actions by name, read from the data folder the first time they are needed
+	[[nodiscard]] const std::map<std::string, int32_t, std::less<>>& SoundActions() const;
 	[[nodiscard]] bool IsRainingAt(glm::vec3 point) const override;
 	[[nodiscard]] glm::vec3 WindAt(glm::vec3 point) const override;
 	[[nodiscard]] glm::vec3 SmoothWindAt(glm::vec3 point) const override;
@@ -239,10 +241,14 @@ public:
 	EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                         float magnitude, bool synced) override;
 
-	void Serve(const EffectRequest& request, EffectHandle handle) override;
+	EffectHandle Serve(const EffectRequest& request, EffectHandle handle) override;
 	void Move(EffectHandle handle, glm::vec3 position) override { SetOrigin(handle, position); }
 	void Stop(EffectHandle handle) override { CloseDown(handle); }
 	void Remove(EffectHandle handle) override { Delete(handle); }
+	void SetMagnitude(EffectHandle handle, float magnitude) override;
+	void SetAlpha(EffectHandle handle, float alpha) override;
+	void SetProcessInfo(EffectHandle handle, const particles::ProcessInfo& info) override;
+	void SetEnabled(EffectHandle handle, bool enabled) override;
 
 	void SetOrigin(EffectId id, glm::vec3 origin) override;
 	void SetPlayer(EffectId id, int player) override;

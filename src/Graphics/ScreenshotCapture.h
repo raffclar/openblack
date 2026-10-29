@@ -25,7 +25,7 @@
 #include <glm/vec2.hpp>
 
 #include "GraphicsHandle.h"
-#include "RenderPass.h"
+#include "Visual/RenderPass.h"
 
 namespace openblack::graphics
 {

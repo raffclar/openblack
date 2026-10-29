@@ -28,6 +28,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
+#include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
@@ -40,9 +41,6 @@ using namespace openblack::ecs::components;
 
 namespace
 {
-/// The tribal power the game divides a building's worth by: the fifth tribe's of the site's player. Each turn every
-/// player's tribal power is put back to the most it has had and at least 1, and nothing raises that most, so it is 1.
-constexpr float k_SiteTribalPower = 1.0f;
 
 ecs::Registry& Entities()
 {
@@ -264,7 +262,12 @@ float construction::SiteWoodValue(entt::entity building)
 	{
 		return 0.0f;
 	}
-	return building_site::WoodValue(transform->scale.x, info->woodValue, k_SiteTribalPower);
+	// A site belongs to the neutral player, so the game divides by the power that the Egyptian tribe gives the neutral
+	// player (vanilla-bugs row 745)
+	const float tribalPower = Locator::magicSystem::has_value()
+	                              ? Locator::magicSystem::value().GetTribalPower(PlayerNames::NEUTRAL, Tribe::EGYPTIAN)
+	                              : 1.0f;
+	return building_site::WoodValue(transform->scale.x, info->woodValue, tribalPower);
 }
 
 float construction::WoodNeededToBuild(entt::entity town, entt::entity building)

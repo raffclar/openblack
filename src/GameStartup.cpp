@@ -41,6 +41,7 @@
 #include "Creature/CreatureSkin.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
@@ -55,7 +56,6 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Graphics/LogoEffectView.h"
-#include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/LoadingScreen.h"
@@ -72,6 +72,7 @@
 #include "Sound/SoundId.h"
 #include "Video/StillPicture.h"
 #include "Video/VideoRules.h"
+#include "Visual/RenderPass.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -886,6 +887,11 @@ void Game::PrepareFirstFrames()
 	if (Locator::gestureSystem::has_value())
 	{
 		Locator::gestureSystem::value().LoadTemplates();
+	}
+	// The first villager that joins a dance reads the shapes of the dances from the data folder
+	if (Locator::danceSystem::has_value())
+	{
+		[[maybe_unused]] const auto& shapes = Locator::danceSystem::value().Shapes();
 	}
 	for (auto& map : landMaps)
 	{

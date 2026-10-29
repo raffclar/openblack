@@ -48,6 +48,8 @@ enum class Subject : uint8_t
 	OthersCreature,
 	/// The altar of a worship site: the prayer power that its site stores
 	Altar,
+	/// A sign that shows what a thing needs, for example the wood flag of a workshop
+	NeedsSign,
 };
 
 /// Whether the hand shows its tooltip over a thing only while the hand is within the player's influence. A temple's
@@ -61,6 +63,7 @@ enum class Subject : uint8_t
 	case Subject::Temple:
 	case Subject::VillageCentre:
 	case Subject::OwnCreature:
+	case Subject::NeedsSign:
 		return false;
 	case Subject::TempleEntrance:
 	case Subject::Store:
@@ -92,6 +95,8 @@ constexpr uint32_t k_BeliefLeft = 89;
 /// "%3.0f Belief Needed": the words the belief tooltip shows instead while another player is ahead in the town, with
 /// how far behind the player is
 constexpr uint32_t k_BeliefNeeded = 109;
+/// "Got %3.0f Belief", forced each tenth turn when the towns of the player gained belief in the player
+constexpr uint32_t k_GotBelief = 110;
 /// "Amount: %3.0f", forced as the hand takes food from a pile, a field or a fish farm
 constexpr uint32_t k_HeldAmount = 119;
 /// "Temple Health: %3.0f%%"
@@ -116,6 +121,24 @@ constexpr uint32_t k_Graveyard = 147;
 /// The game's text of its first tooltip, and how many there are
 constexpr uint32_t k_FirstToolTipText = 0xE73;
 constexpr uint32_t k_ToolTipCount = 170;
+
+/// "Pick Up", what a sign of the people that hide shows: it has no tooltip of its own
+constexpr uint32_t k_PickUp = 0;
+/// "Food Desire: %3.0f%%", over the sign of the hunger of a worship site
+constexpr uint32_t k_FoodDesire = 91;
+/// "Rest Desire: %3.0f%%", over the sign of the life of a worship site
+constexpr uint32_t k_RestDesire = 140;
+/// "Wood Required: %3.0f", over the wood flag of a workshop
+constexpr uint32_t k_WoodRequired = 136;
+
+/// The rows of the info for the signs that show what a thing needs, in the order of the info
+enum class NeedsRow : uint8_t
+{
+	Hunger,
+	Life,
+	Hiding,
+	WorkshopWood,
+};
 
 /// The tooltip a game text is, none for a text that is not a tooltip (the game shows nothing for it)
 [[nodiscard]] std::optional<uint32_t> ToolTipOfText(uint32_t text);
@@ -158,6 +181,10 @@ struct Wording
 
 /// The prayer power that a worship site stores, as its altar shows it
 [[nodiscard]] Numbered PrayerEnergy(float stored);
+
+/// The tooltip of a sign that shows a need. The hunger and the life show their level as a percentage. The wood flag
+/// shows the wood that its workshop requires. The sign of the people that hide shows "Pick Up".
+[[nodiscard]] Numbered NeedsSign(NeedsRow row, float level, uint32_t woodRequired);
 
 /// A village centre's people, and the places in the homes of its town
 [[nodiscard]] Numbered Population(uint32_t people, uint32_t places);

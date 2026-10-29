@@ -309,29 +309,35 @@ void GameParticleWorld::StartSound(const particles::Effect& /*effect*/,
 	Play(playing);
 }
 
+const std::map<std::string, int32_t, std::less<>>& GameParticleWorld::SoundActions() const
+{
+	if (_soundActions.has_value())
+	{
+		return *_soundActions;
+	}
+	_soundActions.emplace();
+	if (Locator::filesystem::has_value())
+	{
+		auto& fileSystem = Locator::filesystem::value();
+		const auto path = fileSystem.GetPath<filesystem::Path::Data>() / "SoundAction.h";
+		if (fileSystem.Exists(path))
+		{
+			const auto bytes = fileSystem.ReadAll(path);
+			*_soundActions = psys::ParseEnumHeader(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+		}
+	}
+	return *_soundActions;
+}
+
 void GameParticleWorld::Play(PlayingSound& sound) const
 {
 	if (!Locator::audio::has_value() || !Locator::camera::has_value())
 	{
 		return;
 	}
-	if (!_soundActions.has_value())
-	{
-		_soundActions.emplace();
-		if (Locator::filesystem::has_value())
-		{
-			auto& fileSystem = Locator::filesystem::value();
-			const auto path = fileSystem.GetPath<filesystem::Path::Data>() / "SoundAction.h";
-			if (fileSystem.Exists(path))
-			{
-				const auto bytes = fileSystem.ReadAll(path);
-				*_soundActions =
-				    psys::ParseEnumHeader(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
-			}
-		}
-	}
-	const auto action = _soundActions->find(sound.link->sound.action.sound);
-	if (action == _soundActions->end())
+	const auto& actions = SoundActions();
+	const auto action = actions.find(sound.link->sound.action.sound);
+	if (action == actions.end())
 	{
 		return;
 	}
@@ -1027,6 +1033,8 @@ void ParticleSystem::LoadAllTypes()
 		return;
 	}
 	FindTextureStems();
+	// The first sound of an effect reads the names of the game's sound actions
+	[[maybe_unused]] const auto& soundActions = _world.SoundActions();
 	for (size_t index = 0; index < particles::k_ParticleTypeCount; ++index)
 	{
 		const auto file = particles::ParticleTypeFile(static_cast<ParticleType>(index));
@@ -1156,7 +1164,7 @@ ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType
 	return id;
 }
 
-void ParticleSystem::Serve(const EffectRequest& request, EffectHandle handle)
+EffectHandle ParticleSystem::Serve(const EffectRequest& request, EffectHandle handle)
 {
 	_givenId = handle;
 	EffectId id = k_NoEffect;
@@ -1177,7 +1185,7 @@ void ParticleSystem::Serve(const EffectRequest& request, EffectHandle handle)
 	const auto it = FindRunning(id);
 	if (it == _effects.end())
 	{
-		return;
+		return k_NoEffect;
 	}
 	if (request.direction.has_value())
 	{
@@ -1190,6 +1198,41 @@ void ParticleSystem::Serve(const EffectRequest& request, EffectHandle handle)
 	if (request.processInfo.has_value())
 	{
 		it->effect->SetProcessInfo(*request.processInfo);
+	}
+	return id;
+}
+
+void ParticleSystem::SetMagnitude(EffectHandle handle, float magnitude)
+{
+	if (const auto it = FindRunning(handle); it != _effects.end())
+	{
+		it->effect->SetMagnitude(magnitude);
+	}
+}
+
+void ParticleSystem::SetAlpha(EffectHandle handle, float alpha)
+{
+	if (const auto it = FindRunning(handle); it != _effects.end())
+	{
+		it->effect->SetGlobalAlpha(alpha);
+	}
+}
+
+void ParticleSystem::SetProcessInfo(EffectHandle handle, const particles::ProcessInfo& info)
+{
+	if (const auto it = FindRunning(handle); it != _effects.end())
+	{
+		it->effect->SetProcessInfo(info);
+	}
+}
+
+void ParticleSystem::SetEnabled(EffectHandle handle, bool enabled)
+{
+	if (const auto it = FindRunning(handle); it != _effects.end())
+	{
+		auto info = it->effect->GetProcessInfo();
+		info.enabled = enabled;
+		it->effect->SetProcessInfo(info);
 	}
 }
 

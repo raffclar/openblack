@@ -40,6 +40,7 @@
 #include "ECS/RelaxationRules.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -269,7 +270,7 @@ void ArtefactSystem::Process(entt::entity object, TownArtefact& artefact)
 {
 	// A glow that has gone out is forgotten
 	if (artefact.effect != 0 &&
-	    (!Locator::particleSystem::has_value() || !Locator::particleSystem::value().IsRunning(artefact.effect)))
+	    (!Locator::effectRequestSystem::has_value() || !Locator::effectRequestSystem::value().IsRunning(artefact.effect)))
 	{
 		artefact.effect = 0;
 	}
@@ -573,18 +574,18 @@ void ArtefactSystem::SetValue(entt::entity object, TownArtefact& artefact, float
 {
 	artefact.value = value;
 	CreateEffectIfNecessary(object, artefact);
-	if (artefact.effect == 0 || !Locator::particleSystem::has_value())
+	if (artefact.effect == 0 || !Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
-	if (!particles.IsRunning(artefact.effect))
+	auto& effects = Locator::effectRequestSystem::value();
+	if (!effects.IsRunning(artefact.effect))
 	{
 		artefact.effect = 0;
 		return;
 	}
 	// The glow is as strong as it is worth
-	particles.SetPower(artefact.effect, artefact.value);
+	effects.SetPower(artefact.effect, artefact.value);
 }
 
 void ArtefactSystem::CreateEffectIfNecessary(entt::entity object, TownArtefact& artefact)
@@ -593,22 +594,28 @@ void ArtefactSystem::CreateEffectIfNecessary(entt::entity object, TownArtefact& 
 	{
 		return;
 	}
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		auto& particles = Locator::particleSystem::value();
-		artefact.effect = particles.StartSpotVisual(SpotVisualType::MagicFxOnObject, PositionOf(object), std::nullopt, object);
-		if (artefact.effect != 0)
+		auto& effects = Locator::effectRequestSystem::value();
+		artefact.effect =
+		    effects.Start({.type = SpotVisualType::MagicFxOnObject, .position = PositionOf(object), .owner = object});
+		// A glow that did not start keeps no number
+		if (!effects.IsRunning(artefact.effect))
+		{
+			artefact.effect = 0;
+		}
+		else
 		{
 			// It acts on its object, in its owner's colours
 			const auto& spot =
 			    Locator::infoConstants::value().spotVisual.at(static_cast<size_t>(SpotVisualType::MagicFxOnObject));
 			if (spot.targetOwnerObject != 1)
 			{
-				particles.AddTarget(artefact.effect, object);
+				effects.AddTarget(artefact.effect, object);
 			}
 			if (artefact.player.has_value())
 			{
-				particles.SetPlayer(artefact.effect, static_cast<int>(*artefact.player));
+				effects.SetPlayer(artefact.effect, static_cast<int>(*artefact.player));
 			}
 		}
 	}
