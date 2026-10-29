@@ -813,6 +813,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::scriptObjects::emplace<ecs::systems::ScriptObjectsSystem>();
 	Locator::buildingDamageSystem::emplace<ecs::systems::BuildingDamageSystem>();
 	Locator::scriptHighlightSystem::emplace<ecs::systems::ScriptHighlightSystem>();
+	// The scripts fade the mists, and the turns step the fades
+	Locator::mistSystem::emplace<MistSystem>();
 	// The land loads and plays its turns for the game and for the dedicated server both
 	Locator::landSystem::emplace<LandSystem>();
 	return true;
@@ -820,10 +822,9 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 
 void openblack::InitializePresentation()
 {
-	// The sea, the sky, the mists, the clouds and the village lights, which the turns and the scripts do not read
+	// The sea, the sky, the clouds and the village lights, which the turns and the scripts do not read
 	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
 	Locator::skySystem::emplace<ecs::systems::SkySystem>();
-	Locator::mistSystem::emplace<MistSystem>();
 	Locator::cloudSystem::emplace<CloudSystem>();
 	Locator::villageLightSystem::emplace<VillageLightSystem>();
 }
