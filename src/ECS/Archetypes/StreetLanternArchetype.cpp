@@ -72,8 +72,10 @@ entt::entity StreetLanternArchetype::Create(const glm::vec3& position, MobileSta
 	{
 		height = meshes.Handle(resourceId)->GetBoundingBox().Size().y;
 	}
+	// A computer that does not draw the world has no dark, and its lanterns do not crackle
+	const bool dark = Locator::villageLightSystem::has_value() && Locator::villageLightSystem::value().IsDark();
 	registry.Assign<SoundTag>(entity, static_cast<entt::id_type>(audio::SoundId::G_Lantern_01), glm::vec3(0.0f, height, 0.0f),
-	                          Locator::villageLightSystem::value().IsDark());
+	                          dark);
 	// Its light lights the village around it at night
 	VillageLightArchetype::Create(position, country ? VillageLight::Kind::Country : VillageLight::Kind::Town, entity);
 	return entity;

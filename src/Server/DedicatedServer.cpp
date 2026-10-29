@@ -272,11 +272,13 @@ bool ServerWorld::Initialize()
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The server keeps no profile: the profile folder {} is not used",
 		                   _settings.profileFolder->generic_string());
 	}
-	if (!InitializeGame(profiles))
+	// The server shows nothing, so it makes none of the systems that only show the world
+	if (!InitializeSimulation(profiles))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
 	}
+	InitializeClient(profiles);
 	auto& land = Locator::landSystem::value();
 	land.SetView(&_landView);
 	land.SetNewGameStart(_settings.opening);
