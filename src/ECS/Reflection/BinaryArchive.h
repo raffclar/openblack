@@ -190,6 +190,25 @@ public:
 	/// changed between two saves
 	void KeepValueEnds() { _keepValueEnds = true; }
 	[[nodiscard]] const std::vector<size_t>& ValueEnds() const { return _valueEnds; }
+
+	/// A presentation value starts. Only the frames of this computer change a presentation value, and no game turn reads
+	/// it. The save keeps it, but the tools that compare the synced state do not look at it. EndPresentation ends it.
+	void BeginPresentation()
+	{
+		if (_presentationDepth++ == 0)
+		{
+			_presentationStart = Size();
+		}
+	}
+	void EndPresentation()
+	{
+		if (--_presentationDepth == 0 && Size() > _presentationStart)
+		{
+			_presentation.emplace_back(_presentationStart, Size());
+		}
+	}
+	/// The bytes of each presentation value, from its first byte to the byte after its last byte, in the order of the save
+	[[nodiscard]] const std::vector<std::pair<size_t, size_t>>& PresentationRanges() const { return _presentation; }
 	/// A value starts and ends. Only the ends of the outer values are kept.
 	void EnterValue() { ++_depth; }
 	void LeaveValue()
@@ -263,6 +282,9 @@ private:
 	bool _keepValueEnds {false};
 	uint32_t _depth {0};
 	std::vector<size_t> _valueEnds;
+	uint32_t _presentationDepth {0};
+	size_t _presentationStart {0};
+	std::vector<std::pair<size_t, size_t>> _presentation;
 	/// The bytes written, and while the writer is open, room for more past them
 	mutable std::vector<uint8_t> _bytes;
 	/// While the writer is open: the count of the bytes written, which the list holds with room after them
@@ -359,6 +381,15 @@ template <typename Type>
 void Save(BinaryWriter& out, const Type& value);
 template <typename Type>
 void Load(BinaryReader& in, Type& value);
+
+/// Writes a presentation value of a system, as Save does (see BinaryWriter::BeginPresentation). Load reads it as usual.
+template <typename Type>
+void SavePresentation(BinaryWriter& out, const Type& value)
+{
+	out.BeginPresentation();
+	Save(out, value);
+	out.EndPresentation();
+}
 
 /// A codec that writes the bytes of the whole value, for a value type with private data that is plain and holds no
 /// entity. The archive keeps the size of the value, so that a value of another size fails the reader.

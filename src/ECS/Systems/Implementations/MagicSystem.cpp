@@ -75,6 +75,7 @@
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/StreetLantern.h"
@@ -1110,7 +1111,7 @@ magic::SpellCasterInterface* MagicSystem::CasterOf(const Spell& spell)
 			{
 				return nullptr;
 			}
-			_siteCaster.Bind(spell.caster.worshipSite);
+			_siteCaster.Bind(spell.caster.worshipSite, EntityRegistry().ToEntity(spell));
 			return &_siteCaster;
 		}
 		return _players.at(static_cast<size_t>(spell.caster.player)).get();
@@ -1203,15 +1204,15 @@ float MagicSystem::SeedPower(const Spell& spell) const
 
 void MagicSystem::AddEffectTarget(const Spell& spell, entt::entity target)
 {
-	if (spell.effect != ParticleSystemInterface::k_NoEffect)
+	if (spell.effect != k_NoEffectHandle)
 	{
-		Locator::particleSystem::value().AddTarget(spell.effect, target);
+		Locator::effectRequestSystem::value().AddTarget(spell.effect, target);
 	}
 }
 
 std::optional<entt::entity> MagicSystem::ShieldAt(glm::vec3 point, float margin)
 {
-	const auto shield = Locator::particleSystem::value().FindShield(point, margin);
+	const auto shield = Locator::effectRequestSystem::value().FindShield(point, margin);
 	if (!shield || shield->spell == entt::null)
 	{
 		return std::nullopt;
@@ -1221,7 +1222,7 @@ std::optional<entt::entity> MagicSystem::ShieldAt(glm::vec3 point, float margin)
 
 void MagicSystem::StrikeShield(entt::entity shieldSpell, glm::vec3 point)
 {
-	if (const auto shield = Locator::particleSystem::value().FindShield(point, k_ShieldStrikeMargin);
+	if (const auto shield = Locator::effectRequestSystem::value().FindShield(point, k_ShieldStrikeMargin);
 	    shield && shield->spell == shieldSpell)
 	{
 		particles::StrikeShield(*shield, point);
@@ -1286,21 +1287,25 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 	auto link = std::make_unique<SpellLink>(*this, entity);
 	const auto particleType = magic::spells::ParticleTypeOf(*this, spell);
 	spell.hasParticleType = particleType != ParticleType::None;
-	auto& particles = Locator::particleSystem::value();
-	spell.effect = particles.StartForSpell(particleType, point, spell.direction, spell.magnitude, *link);
-	if (spell.effect != ParticleSystemInterface::k_NoEffect)
+	// The miracle steps its effect, and the effect tells the miracle of its events
+	auto& effects = Locator::effectRequestSystem::value();
+	spell.effect = effects.Start({.type = particleType,
+	                              .position = point,
+	                              .magnitude = spell.magnitude,
+	                              .player = static_cast<int>(player),
+	                              .direction = spell.direction,
+	                              .processInfo = spell.processInfo,
+	                              .sink = link.get()});
+	// A miracle whose effect did not start keeps no number
+	if (!effects.IsRunning(spell.effect))
 	{
-		particles.SetPlayer(spell.effect, static_cast<int>(player));
-		if (auto* effect = particles.Find(spell.effect))
-		{
-			effect->SetProcessInfo(spell.processInfo);
-		}
+		spell.effect = k_NoEffectHandle;
 	}
 	_links.insert_or_assign(entity, std::move(link));
 	_spells.push_front(entity);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Magic: miracle {} cast at ({}, {})", static_cast<int>(type), point.x, point.z);
 	// A miracle that is its particle effect is nothing if the effect can't start: the cast is refused
-	if (magic::CastRefusedWithoutEffect(spell.hasParticleType, spell.effect != ParticleSystemInterface::k_NoEffect))
+	if (magic::CastRefusedWithoutEffect(spell.hasParticleType, spell.effect != k_NoEffectHandle))
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Magic: miracle {} refused, its effect couldn't start", static_cast<int>(type));
 		Delete(entity);
@@ -1372,9 +1377,9 @@ void MagicSystem::CloseDown(entt::entity entity)
 	{
 		Locator::teleportSystem::value().RemoveStonesOf(entity);
 	}
-	if (spell->effect != ParticleSystemInterface::k_NoEffect)
+	if (spell->effect != k_NoEffectHandle)
 	{
-		Locator::particleSystem::value().CloseDown(spell->effect);
+		Locator::effectRequestSystem::value().Stop(spell->effect);
 	}
 }
 
@@ -1533,10 +1538,10 @@ bool MagicSystem::Process(entt::entity entity, Spell& spell)
 			CloseDown(entity);
 		}
 	}
-	if (spell.effect != ParticleSystemInterface::k_NoEffect &&
-	    !Locator::particleSystem::value().ProcessForSpell(spell.effect, spell.processInfo, k_TurnSeconds))
+	if (spell.effect != k_NoEffectHandle &&
+	    !Locator::effectRequestSystem::value().Step(spell.effect, spell.processInfo, k_TurnSeconds))
 	{
-		spell.effect = ParticleSystemInterface::k_NoEffect;
+		spell.effect = k_NoEffectHandle;
 		// Its effect over, the people's reactions to it go, even while what it made keeps it
 		if (Locator::reactionSystem::has_value())
 		{
@@ -1559,7 +1564,7 @@ bool MagicSystem::Process(entt::entity entity, Spell& spell)
 	// It lives while its effect does, or until it closes down without one, or while what its kind made keeps it
 	return magic::FateOf({
 	           .hasParticleType = after->hasParticleType,
-	           .effectRunning = after->effect != ParticleSystemInterface::k_NoEffect,
+	           .effectRunning = after->effect != k_NoEffectHandle,
 	           .closedDown = after->closedDown,
 	           .keptByKind = magic::spells::KeptByKind(*this, *after),
 	       }) == magic::SpellFate::Continue;
@@ -1575,9 +1580,9 @@ void MagicSystem::Delete(entt::entity entity)
 		{
 			Locator::teleportSystem::value().RemoveStonesOf(entity);
 		}
-		if (spell->effect != ParticleSystemInterface::k_NoEffect)
+		if (spell->effect != k_NoEffectHandle)
 		{
-			Locator::particleSystem::value().Delete(spell->effect);
+			Locator::effectRequestSystem::value().Remove(spell->effect);
 		}
 		if (spell->castEffect != k_NoEffectHandle)
 		{
@@ -1654,7 +1659,8 @@ void MagicSystem::ProcessTurn()
 	{
 		Locator::sounds::value().SetEmitterPosition(_holdLoop, _hand.handPosition);
 	}
-	if (!Locator::infoConstants::has_value() || !Locator::particleSystem::has_value())
+	if (!Locator::infoConstants::has_value() || !Locator::effectRequestSystem::has_value() ||
+	    !Locator::effectRequestSystem::value().ShowsEffects())
 	{
 		return;
 	}
@@ -1725,30 +1731,29 @@ void MagicSystem::Update(float /*seconds*/)
 		                      ? particles::drawn_steps::StepTime(_handEffectPace, Locator::time::value().GetFrameRealTime(),
 		                                                         Locator::time::value().GetFrameGameTime(), true)
 		                      : std::optional(std::chrono::milliseconds {0});
-		if (seed.handEffect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value() && step.has_value())
+		if (seed.handEffect != k_NoEffectHandle && Locator::effectRequestSystem::has_value() && step.has_value())
 		{
 			const auto milliseconds = std::max<int64_t>(step->count(), 1);
 			const auto info = HandEffectInfo(seed);
-			auto& particles = Locator::particleSystem::value();
-			if (!particles.ProcessForSpell(seed.handEffect, info, static_cast<float>(milliseconds) * 0.001f))
+			auto& effects = Locator::effectRequestSystem::value();
+			if (!effects.Step(seed.handEffect, info, static_cast<float>(milliseconds) * 0.001f))
 			{
-				seed.handEffect = ParticleSystemInterface::k_NoEffect;
+				seed.handEffect = k_NoEffectHandle;
 			}
 			_handAtStep = info.handPosition;
-			particles.SetDrawOffset(seed.handEffect, glm::vec3(0.0f));
+			effects.SetDrawOffset(seed.handEffect, glm::vec3(0.0f));
 		}
 	}
 	// A miracle held from this computer's hand, such as the lightning or the rain cloud, keeps up with the hand between
 	// turns. The draw shows its particles that follow the hand at the live hand, with no limit of height.
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
 		for (const auto entity : _spells)
 		{
 			if (const auto* spell = FindSpell(entity); spell != nullptr && spell->castFromHand && spell->fromLocalHand &&
-			                                           spell->caster.player == OwnPlayer() &&
-			                                           spell->effect != ParticleSystemInterface::k_NoEffect)
+			                                           spell->caster.player == OwnPlayer() && spell->effect != k_NoEffectHandle)
 			{
-				Locator::particleSystem::value().SetLiveHand(spell->effect, _hand.handPosition);
+				Locator::effectRequestSystem::value().SetLiveHand(spell->effect, _hand.handPosition);
 			}
 		}
 	}
@@ -2353,32 +2358,34 @@ void MagicSystem::StartHandEffect(entt::entity entity)
 	auto& seed = registry.Get<SpellSeed>(entity);
 	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(seedInfo, seed.powerUp);
-	auto& particles = Locator::particleSystem::value();
-	// Only this computer's: it steps with the frames it draws, so it draws on its own random numbers
+	// Only this computer shows it. It steps with the frames that this computer draws, so it uses the random numbers of
+	// this computer. It draws immediately after the hand, and does not sort with the other effects.
 	const auto info = HandEffectInfo(seed);
-	seed.handEffect = particles.StartForSpell(magic::GetMagicInfo(Info(), type).particleTypeInHand, info.handPosition,
-	                                          glm::vec3(0.0f), _handScale, *_handEffectLink, false);
-	if (seed.handEffect != ParticleSystemInterface::k_NoEffect)
+	seed.handEffect = Locator::effectRequestSystem::value().StartHere({
+	    .type = magic::GetMagicInfo(Info(), type).particleTypeInHand,
+	    .position = info.handPosition,
+	    .magnitude = _handScale,
+	    .synced = false,
+	    .player = static_cast<int>(seed.player),
+	    .direction = glm::vec3(0.0f),
+	    .processInfo = info,
+	    .sink = _handEffectLink.get(),
+	    .drawnWithHand = true,
+	    .hidden = !seed.ready,
+	});
+	if (seed.handEffect != k_NoEffectHandle)
 	{
-		// Drawn at once just after the hand, rather than sorted with everything else
-		particles.SetDrawPath(seed.handEffect, particles::draw::DrawPath::Immediate);
-		particles.SetPlayer(seed.handEffect, static_cast<int>(seed.player));
-		if (auto* effect = particles.Find(seed.handEffect))
-		{
-			effect->SetProcessInfo(info);
-			effect->SetHidden(!seed.ready);
-		}
 		_handAtStep = info.handPosition;
 	}
 }
 
 void MagicSystem::StopHandEffect(SpellSeed& seed)
 {
-	if (seed.handEffect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+	if (seed.handEffect != k_NoEffectHandle && Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().Delete(seed.handEffect);
+		Locator::effectRequestSystem::value().Remove(seed.handEffect);
 	}
-	seed.handEffect = ParticleSystemInterface::k_NoEffect;
+	seed.handEffect = k_NoEffectHandle;
 }
 
 void MagicSystem::StartHoldLoop()
@@ -2503,6 +2510,32 @@ void MagicSystem::LetGoIfOutsideCastRule()
 bool MagicSystem::HandPointValid() const
 {
 	return _hand.point.has_value() && PointValidForHeld(*_hand.point);
+}
+
+entt::entity MagicSystem::IconOfSeed(entt::entity seedEntity, const SpellSeed& seed) const
+{
+	const auto& registry = EntityRegistry();
+	if (seed.worshipSite == entt::null)
+	{
+		return entt::null;
+	}
+	entt::entity ofKind = entt::null;
+	entt::entity holder = entt::null;
+	registry.Each<const WorshipIcon>([&](entt::entity icon, const WorshipIcon& data) {
+		if (data.site != seed.worshipSite)
+		{
+			return;
+		}
+		if (holder == entt::null && std::ranges::find(data.seedsOut, seedEntity) != data.seedsOut.end())
+		{
+			holder = icon;
+		}
+		if (ofKind == entt::null && data.seed == seed.seedType)
+		{
+			ofKind = icon;
+		}
+	});
+	return holder != entt::null ? holder : ofKind;
 }
 
 bool MagicSystem::PointValidForHeld(glm::vec3 point) const
@@ -2771,7 +2804,8 @@ entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)
 	                          .entity = entt::null,
 	                          .withoutIcon = !seed.hasIcon,
 	                          .worshipSite = seed.worshipSite,
-	                          .madeBySpellIcon = seed.hasIcon};
+	                          .madeBySpellIcon = seed.hasIcon,
+	                          .icon = IconOfSeed(heldEntity, seed)};
 	// The miracle starts with the hand as the command gives it
 	const particles::ProcessInfo hand {
 	    .handPosition = command.handPosition,
@@ -3516,6 +3550,42 @@ float WorshipSiteSpellCaster::MaintainSpell(float amount)
 	return Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().MaintainSpell(_site, amount) : 0.0f;
 }
 
+void WorshipSiteSpellCaster::OnChantsSpent(float chants, magic::ChantCharge charge)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::worshipSiteSystem::has_value() || _spell == entt::null || !registry.Valid(_spell) ||
+	    !registry.AllOf<Spell>(_spell))
+	{
+		return;
+	}
+	auto& spell = registry.Get<Spell>(_spell);
+	// The motes fly from the icon that made the seed; without it there are none
+	const auto icon = spell.caster.icon;
+	if (icon == entt::null || !registry.Valid(icon) || !registry.AllOf<Transform>(icon))
+	{
+		return;
+	}
+	const bool upkeep = charge == magic::ChantCharge::PerTurn;
+	float& spent = upkeep ? spell.upkeepMotes : spell.eventMotes;
+	spent = chants + spent;
+	if (!(magic::k_ChantsPerMote < spent))
+	{
+		return;
+	}
+	spent = 0.0f;
+	// Both ends stand at their places on the map, as high above the land as they are
+	const auto onMap = [](glm::vec3 point) {
+		if (!Locator::terrainSystem::has_value())
+		{
+			return point;
+		}
+		const auto& land = Locator::terrainSystem::value();
+		return map_coords::ToWorld(land, map_coords::HeldPlace(land, point));
+	};
+	const auto to = upkeep ? spell.castPosition : spell.position;
+	Locator::worshipSiteSystem::value().AddMote(_site, onMap(registry.Get<const Transform>(icon).position), onMap(to));
+}
+
 MagicSystemInterface::HandCastState MagicSystem::GetHandCastState() const
 {
 	HandCastState state {.state = _input.state,
@@ -3792,6 +3862,9 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _creatureBeams);
 	reflection::Save(out, _world.PuttingOutFire());
 	reflection::Save(out, _grid);
+	// The movement of this computer's hand and the place of its effect: only the frames change them, and only the hand's
+	// own effect and the casts that the hand sends read them
+	out.BeginPresentation();
 	reflection::Save(out, _handVelocity);
 	reflection::Save(out, _lastHandPosition);
 	out.WriteRaw(_handSpin);
@@ -3799,6 +3872,7 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _handEffectPoint);
 	reflection::Save(out, _handScale);
 	reflection::Save(out, _handAtStep);
+	out.EndPresentation();
 	// The hands keep their seeds (HandHeldSeed). An older save kept the seed of the first player here.
 	reflection::Save(out, std::optional<entt::entity> {});
 	out.WriteRaw(_input);
@@ -3865,7 +3939,7 @@ bool MagicSystem::LoadState(reflection::BinaryReader& in)
 		return true;
 	}
 	auto& registry = EntityRegistry();
-	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	auto* effects = Locator::effectRequestSystem::has_value() ? &Locator::effectRequestSystem::value() : nullptr;
 	for (const auto entity : spells)
 	{
 		const auto* spell = registry.Valid(entity) ? registry.TryGet<const Spell>(entity) : nullptr;
@@ -3874,9 +3948,9 @@ bool MagicSystem::LoadState(reflection::BinaryReader& in)
 			continue;
 		}
 		auto link = std::make_unique<SpellLink>(*this, entity);
-		if (particles != nullptr && spell->effect != ParticleSystemInterface::k_NoEffect)
+		if (effects != nullptr && spell->effect != k_NoEffectHandle)
 		{
-			particles->RestoreSink(spell->effect, link.get());
+			effects->RestoreSink(spell->effect, link.get());
 		}
 		_links.insert_or_assign(entity, std::move(link));
 		_spells.push_back(entity);
@@ -3888,9 +3962,9 @@ bool MagicSystem::LoadState(reflection::BinaryReader& in)
 		{
 			SetHeld(std::nullopt);
 		}
-		else if (particles != nullptr && seed->handEffect != ParticleSystemInterface::k_NoEffect)
+		else if (effects != nullptr && seed->handEffect != k_NoEffectHandle)
 		{
-			particles->RestoreSink(seed->handEffect, _handEffectLink.get());
+			effects->RestoreSink(seed->handEffect, _handEffectLink.get());
 		}
 	}
 	// The hum of an armed seed plays again

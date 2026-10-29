@@ -47,9 +47,9 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -264,12 +264,12 @@ void InfluenceSystem::SaveState(reflection::BinaryWriter& out) const
 	}
 	reflection::Save(out, _borderShown);
 	reflection::Save(out, _bordersDirty);
-	reflection::Save(out, _scrollClock);
-	reflection::Save(out, _scrollRemainder);
-	reflection::Save(out, _ripples);
-	reflection::Save(out, _handWasInside);
-	reflection::Save(out, _handSeen);
-	reflection::Save(out, _handBefore);
+	reflection::SavePresentation(out, _scrollClock);
+	reflection::SavePresentation(out, _scrollRemainder);
+	reflection::SavePresentation(out, _ripples);
+	reflection::SavePresentation(out, _handWasInside);
+	reflection::SavePresentation(out, _handSeen);
+	reflection::SavePresentation(out, _handBefore);
 }
 
 bool InfluenceSystem::LoadState(reflection::BinaryReader& in)
@@ -674,11 +674,11 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 		    virtual_influence::ManaPathStart(handCoords, map_coords::FromMetres({state.anchor->x, state.anchor->z}));
 	}
 	if (const auto scale = virtual_influence::EmitManaPath(shown, state, gameTime.count());
-	    scale.has_value() && Locator::particleSystem::has_value() && Locator::terrainSystem::has_value())
+	    scale.has_value() && Locator::effectRequestSystem::has_value() && Locator::terrainSystem::has_value())
 	{
 		const auto& land = Locator::terrainSystem::value();
 		const auto colour = Player::k_Colours.at(static_cast<size_t>(player) & (Player::k_Colours.size() - 1));
-		Locator::particleSystem::value().AddHandManaPathSpark({
+		Locator::effectRequestSystem::value().AddHandManaPathSpark({
 		    .from = map_coords::ToWorld(land, handCoords),
 		    .to = map_coords::ToWorld(land, *shown.manaPathStart),
 		    .rgb = virtual_influence::ScaleColour(colour, *scale) & 0xFFFFFFu,

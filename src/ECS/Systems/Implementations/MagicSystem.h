@@ -21,8 +21,8 @@
 
 #include <entt/entity/entity.hpp>
 
-#include "Common/FramePace.h"
 #include "Commands/PlayerCommands.h"
+#include "Common/FramePace.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "Magic/AreaEffect.h"
@@ -118,11 +118,20 @@ private:
 class WorshipSiteSpellCaster final: public magic::SpellCasterInterface
 {
 public:
-	void Bind(entt::entity site) { _site = site; }
+	/// The site, and the miracle it tops up
+	void Bind(entt::entity site, entt::entity spell)
+	{
+		_site = site;
+		_spell = spell;
+	}
 	float MaintainSpell(float amount) override;
+	/// Each hundred of prayer power that the site spends on the miracle, a mote flies from the site's spell icon to it:
+	/// for its upkeep to where it is cast from, for its events to where it is
+	void OnChantsSpent(float chants, magic::ChantCharge charge) override;
 
 private:
 	entt::entity _site {entt::null};
+	entt::entity _spell {entt::null};
 };
 
 class MagicSystem final: public MagicSystemInterface, private magic::SpellServicesInterface
@@ -340,6 +349,9 @@ private:
 	[[nodiscard]] bool HandPointValid() const;
 	/// Whether the held seed may be cast at a point: in the player's influence, by its cast rule
 	[[nodiscard]] bool PointValidForHeld(glm::vec3 point) const;
+	/// The worship site's spell icon that made a seed: the icon that has it out, else the site's icon of its kind. None
+	/// for a seed made at no site.
+	[[nodiscard]] entt::entity IconOfSeed(entt::entity seedEntity, const components::SpellSeed& seed) const;
 	/// A miracle held locked in the local hand that the hand moves outside its cast rule is let go, as the button would
 	void LetGoIfOutsideCastRule();
 	/// Carries out what the hand's casting state machine says. The hand of this computer shows its part at once; the

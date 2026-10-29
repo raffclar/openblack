@@ -112,7 +112,7 @@ std::optional<obstacles::Thing> creature_obstacle_things::ThingOf(const Registry
 		thing.walking = other->follower.IsFollowing();
 		return thing;
 	}
-	if (registry.AnyOf<Villager, Animal, FishFarm, StreetLantern, TownDesireFlag, WorkshopFlag>(entity))
+	if (registry.AnyOf<Villager, Animal, FishFarm, StreetLantern, TownDesireFlag, WorkshopFlag, WorshipSiteFlag>(entity))
 	{
 		return std::nullopt;
 	}

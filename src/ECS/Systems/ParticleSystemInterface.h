@@ -109,6 +109,12 @@ public:
 	{
 		return Start(type, origin, magnitude, false);
 	}
+	/// An effect that its owner steps each turn with ProcessForSpell, never the particles' own turn. Its random numbers
+	/// are the shared ones.
+	virtual EffectId StartOwned(ParticleType type, glm::vec3 origin, float magnitude)
+	{
+		return Start(type, origin, magnitude, true);
+	}
 	/// Whether an effect that its thing draws shows in this frame: it shows only while the frame draws its thing
 	virtual void SetShown(EffectId /*id*/, bool /*shown*/) {}
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
@@ -146,6 +152,8 @@ public:
 	virtual void SetLiveHand(EffectId id, glm::vec3 hand) = 0;
 	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
 	virtual void SetInTemple(EffectId id) = 0;
+	/// A hidden effect continues to step but does not draw
+	virtual void SetHidden(EffectId /*id*/, bool /*hidden*/) {}
 	/// An effect that the world and the temple do not draw. Only CollectEffectDrawFrame draws it, as for the seeds
 	/// pictured over the gestures' hints.
 	virtual void SetDrawnAlone(EffectId /*id*/) {}
@@ -159,6 +167,8 @@ public:
 	virtual void AddTargetPosition(EffectId /*id*/, glm::vec3 /*position*/) {}
 	/// A plasma beam for the effect to fire, as a temple heart's spot visual fires one at what takes a blow for it
 	virtual void AddPlasma(EffectId /*id*/, const particles::PlasmaCommand& /*command*/) {}
+	/// A spark for the mana path effect to carry, as a worship site sends its motes
+	virtual void AddManaPathSpark(EffectId /*id*/, const particles::mana_path::Spark& /*spark*/) {}
 	/// A symbol of belief rises from something that gained it, in the effect every symbol rises in, kept running once
 	/// wanted; no more than a few hundred wait
 	virtual void AddBeliefSprite(const particles::BeliefSprite& /*sprite*/) {}

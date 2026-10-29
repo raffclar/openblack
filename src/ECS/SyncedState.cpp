@@ -78,6 +78,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // number, and each computer gives the trail its own number. The turns use these numbers only to find the effect.
     {.component = "Spell", .field = "castEffect", .marker = ""},
     {.component = "FlockSpell", .field = "castEffect", .marker = ""},
+    // The motes of a worship site are an effect of each computer too, found again by the number of this computer
+    {.component = "WorshipSite", .field = "manaPath", .marker = ""},
     // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
     {.component = "LearningMarker", .field = "", .marker = ""},
     // The frames move the hair of a creature. Only the draw reads it.
@@ -212,12 +214,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SpellSeed", .field = "handEffect", .marker = ""},
     {.component = "Transform", .field = "position", .marker = "SpellSeed"},
     {.component = "Transform", .field = "rotation", .marker = "SpellSeed"},
-    // The number of a miracle's particle effect: each computer numbers its effects, and makes more of them for its own
-    // hand
+    // The numbers of the effects that the turns make, also the effect of a miracle. The simulation gives these numbers
+    // now, and the particles of this computer show each effect under its number. A game saved before has the numbers
+    // of the particles. The turns use a number only to find their effect on this computer.
     {.component = "Spell", .field = "effect", .marker = ""},
-    // The numbers of other effects that the turns make. The simulation gives these numbers now, and the particles of
-    // this computer show each effect under its number. A game saved before has the numbers of the particles. The turns
-    // use a number only to find their effect on this computer.
     {.component = "SpellDispenser", .field = "effect", .marker = ""},
     {.component = "TownArtefact", .field = "effect", .marker = ""},
     {.component = "MagicShield", .field = "effect", .marker = ""},
@@ -267,6 +267,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The flags over the stores move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
     {.component = "*", .field = "", .marker = "WorkshopFlag"},
+    {.component = "*", .field = "", .marker = "WorshipSiteFlag"},
     // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.
     // The world reads the hand only from the reports of its player (ReportedHand).
     {.component = "Transform", .field = "", .marker = "Hand"},

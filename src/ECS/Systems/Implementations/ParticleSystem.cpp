@@ -1124,6 +1124,17 @@ ParticleSystemInterface::EffectId ParticleSystem::StartByFrame(ParticleType type
 	return id;
 }
 
+ParticleSystemInterface::EffectId ParticleSystem::StartOwned(ParticleType type, glm::vec3 origin, float magnitude)
+{
+	const auto id = Start(type, origin, magnitude, true);
+	// The turn does not step it: its owner does
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->ownedBySpell = true;
+	}
+	return id;
+}
+
 void ParticleSystem::SetShown(EffectId id, bool shown)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
@@ -1191,13 +1202,36 @@ EffectHandle ParticleSystem::Serve(const EffectRequest& request, EffectHandle ha
 	{
 		it->effect->SetDirection(*request.direction);
 	}
+	// The owner steps the effect. A miracle that owns it also gets told that the effect started.
+	if (request.sink != nullptr || request.ownerSteps)
+	{
+		it->ownedBySpell = true;
+	}
+	if (request.sink != nullptr)
+	{
+		it->effect->SetSink(request.sink);
+	}
+	// The event can start other effects, so find the effect again
+	const auto started = FindRunning(id);
+	if (started == _effects.end())
+	{
+		return k_NoEffect;
+	}
 	if (request.player.has_value())
 	{
-		it->effect->SetPlayer(*request.player);
+		started->effect->SetPlayer(*request.player);
 	}
 	if (request.processInfo.has_value())
 	{
-		it->effect->SetProcessInfo(*request.processInfo);
+		started->effect->SetProcessInfo(*request.processInfo);
+	}
+	if (request.drawnWithHand)
+	{
+		started->path = particles::draw::DrawPath::Immediate;
+	}
+	if (request.hidden)
+	{
+		started->effect->SetHidden(true);
 	}
 	return id;
 }
@@ -1299,6 +1333,14 @@ void ParticleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
 	}
 }
 
+void ParticleSystem::SetHidden(EffectId id, bool hidden)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->effect->SetHidden(hidden);
+	}
+}
+
 void ParticleSystem::SetLiveHand(EffectId id, glm::vec3 hand)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
@@ -1358,6 +1400,14 @@ void ParticleSystem::AddPlasma(EffectId id, const particles::PlasmaCommand& comm
 	if (const auto it = FindRunning(id); it != _effects.end())
 	{
 		it->effect->AddPlasma(command);
+	}
+}
+
+void ParticleSystem::AddManaPathSpark(EffectId id, const particles::mana_path::Spark& spark)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->effect->AddManaPathSpark(spark);
 	}
 }
 
@@ -1907,17 +1957,17 @@ void ParticleSystem::RestoreSink(EffectId id, particles::SpellSink* sink)
 
 void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	reflection::Save(out, _nextId);
+	reflection::SavePresentation(out, _nextId);
 	reflection::Save(out, _paused);
 	reflection::Save(out, _explodeObject);
 	reflection::Save(out, _stormBolts);
 	reflection::Save(out, _pendingStormBolts);
 	reflection::Save(out, _gestureTrails);
-	reflection::Save(out, _gestureChain);
-	reflection::Save(out, _selectionEffect);
+	reflection::SavePresentation(out, _gestureChain);
+	reflection::SavePresentation(out, _selectionEffect);
 	reflection::Save(out, _handManaPath);
 	reflection::Save(out, _beliefWanted);
-	reflection::Save(out, _chainScrollPace);
+	reflection::SavePresentation(out, _chainScrollPace);
 
 	// The effects and the world go into writers of their own first, so that the tables have every shared thing in them
 	// when they are written

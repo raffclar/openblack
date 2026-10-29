@@ -227,7 +227,9 @@ void LiquidParticleSystem::Clear()
 
 void LiquidParticleSystem::SaveState(reflection::BinaryWriter& out) const
 {
-	// The drops, the dust and the motes in the order of the pool, and the pace of the frames that draw them
+	// The drops, the dust and the motes in the order of the pool, and the pace of the frames that draw them. These are
+	// presentation values: the frames move and draw the drops, and no turn reads them.
+	out.BeginPresentation();
 	out.WriteSize(_pool.size());
 	for (const auto& particle : _pool)
 	{
@@ -241,6 +243,7 @@ void LiquidParticleSystem::SaveState(reflection::BinaryWriter& out) const
 		reflection::Save(out, particle.onLand);
 	}
 	reflection::Save(out, _drawPace);
+	out.EndPresentation();
 }
 
 bool LiquidParticleSystem::LoadState(reflection::BinaryReader& in)

@@ -50,6 +50,9 @@ struct SpellCaster
 	/// A spell icon made the miracle: a seed that an icon made cast it. A creature does not learn such a miracle when no
 	/// seed is linked to it.
 	bool madeBySpellIcon {false};
+	/// The worship site's spell icon that made the seed, which the motes of prayer power fly from to the miracle. None
+	/// for a miracle not topped up by a site.
+	entt::entity icon {entt::null};
 };
 
 /// A running miracle. Positions are points of the world.
@@ -94,6 +97,10 @@ struct Spell
 	bool humanCasting {false};
 	/// How many objects it may still make, -1 for no limit
 	int maxObjectsToCreate {-1};
+	/// The prayer power that a worship site spent on it since its last mote, for each turn's upkeep and for its events.
+	/// Each time one is more than a hundred, a mote flies from the site's icon and it starts again from none.
+	float upkeepMotes {0.0f};
+	float eventMotes {0.0f};
 
 	// What some kinds of miracle keep
 	/// Food and wood: the first grain has landed

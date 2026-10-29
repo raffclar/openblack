@@ -3126,88 +3126,39 @@ void FlockCreate() // 036 FLOCK_CREATE
 	Pusho(static_cast<uint32_t>(flock));
 }
 
-/// A living or a flock put in a flock, or two livings made a flock together
-static void FlockAttachToFlock(entt::entity object, entt::entity target, bool asLeader)
+/// Puts a living, or each member of a flock, into a flock
+static void FlockAttachToFlock(entt::entity object, entt::entity flock, bool asLeader)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& scripts = Locator::scriptObjects::value();
-	const bool objectFlock = ecs::script_flocks::IsFlock(registry, object);
-	const bool targetFlock = ecs::script_flocks::IsFlock(registry, target);
-	if (objectFlock && targetFlock)
+	if (ecs::script_flocks::IsFlock(registry, object))
 	{
 		// The flock takes in every member of the other, which goes once it is empty
 		while (ecs::script_flocks::Size(registry, object) > 0)
 		{
-			ecs::script_flocks::AddLiving(registry, target, registry.Get<const ecs::components::Flock>(object).members.front());
+			ecs::script_flocks::AddLiving(registry, flock, registry.Get<const ecs::components::Flock>(object).members.front());
 		}
-		Pusho(static_cast<uint32_t>(target));
-		return;
-	}
-	if (objectFlock || targetFlock)
-	{
-		const auto flock = targetFlock ? target : object;
-		const auto living = targetFlock ? object : target;
-		if (!IsFlockLiving(registry, living))
-		{
-			ScriptMessage("JONTY-Trying to add non living to flock");
-			ScriptMessage("Thing not added to Flock");
-			Pusho(0);
-			return;
-		}
-		if (asLeader)
-		{
-			ecs::script_flocks::AddLeader(registry, flock, living);
-		}
-		else if (!ecs::script_flocks::AddLiving(registry, flock, living))
-		{
-			ScriptMessage("Living already in Flock");
-		}
-		SetFlockState(living);
 		Pusho(static_cast<uint32_t>(flock));
-		scripts.AddReference(living);
 		return;
 	}
-	if (!IsFlockLiving(registry, object) || !IsFlockLiving(registry, target))
+	if (!IsFlockLiving(registry, object))
 	{
-		ScriptMessage("JONTY- Something is seriously wrong with my code");
+		ScriptMessage("JONTY-Trying to add non living to flock");
 		ScriptMessage("Thing not added to Flock");
 		Pusho(0);
 		return;
 	}
-	// Two livings make a new flock where the second stands
-	const auto flock = ecs::script_flocks::Create(registry, ecs::script_flocks::PositionOf(registry, target));
-	if (!scripts.Register(flock, true))
-	{
-		ScriptMessage("Flock ID failed");
-		ecs::script_flocks::Destroy(registry, flock);
-		ScriptMessage("Thing not added to Flock");
-		Pusho(0);
-		return;
-	}
-	scripts.AddReference(target);
-	Pusho(static_cast<uint32_t>(flock));
-	// The leader keeps what it is doing; the others keep up with the flock
 	if (asLeader)
 	{
 		ecs::script_flocks::AddLeader(registry, flock, object);
-		scripts.AddReference(object);
 	}
-	else if (ecs::script_flocks::AddLiving(registry, flock, object))
-	{
-		SetFlockState(object);
-		scripts.AddReference(object);
-	}
-	else
+	else if (!ecs::script_flocks::AddLiving(registry, flock, object))
 	{
 		ScriptMessage("Living already in Flock");
 	}
-	if (!ecs::script_flocks::AddLiving(registry, flock, target))
-	{
-		ScriptMessage("Living already in Flock");
-		return;
-	}
-	SetFlockState(target);
-	scripts.AddReference(target);
+	SetFlockState(object);
+	Pusho(static_cast<uint32_t>(flock));
+	scripts.AddReference(object);
 }
 
 /// A villager, or each villager of a container, joins a town
@@ -3221,7 +3172,11 @@ static void FlockAttachToTown(entt::entity object, entt::entity town)
 			if (registry.Valid(member) && registry.AllOf<ecs::components::Villager>(member))
 			{
 				MoveVillagerToTown(member, town);
+				continue;
 			}
+			// A member that is not a villager stays where it is. Each one also leaves a 0 on the script's stack.
+			ScriptMessage("JONTY-Trying to add non villager to town");
+			Pusho(0);
 		}
 		Pusho(static_cast<uint32_t>(town));
 		return;
@@ -3305,15 +3260,16 @@ void FlockAttach() // 037 FLOCK_ATTACH
 		Pusho(0);
 		return;
 	}
-	if (ecs::script_flocks::IsFlock(registry, target) || ecs::script_flocks::IsFlock(registry, object))
-	{
-		FlockAttachToFlock(object, target, asLeader);
-		return;
-	}
+	// The type of the target sets the operation: first a dance, then a flock, then a town
 	if (ecs::dances::IsDance(registry, target))
 	{
 		registry.AssignOrReplace<ecs::components::ScriptControlled>(target);
 		FlockAttachToDance(object, target, asLeader);
+		return;
+	}
+	if (ecs::script_flocks::IsFlock(registry, target))
+	{
+		FlockAttachToFlock(object, target, asLeader);
 		return;
 	}
 	if (registry.AllOf<ecs::components::Town>(target))

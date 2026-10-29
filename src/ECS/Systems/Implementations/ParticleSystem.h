@@ -237,6 +237,7 @@ public:
 	bool ProcessForSpell(EffectId id, const particles::ProcessInfo& info, float seconds) override;
 	bool ProcessByFrame(EffectId id, float seconds) override;
 	EffectId StartByFrame(ParticleType type, glm::vec3 origin, float magnitude) override;
+	EffectId StartOwned(ParticleType type, glm::vec3 origin, float magnitude) override;
 	void SetShown(EffectId id, bool shown) override;
 	EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                         float magnitude, bool synced) override;
@@ -260,6 +261,7 @@ public:
 	bool Renumber(EffectId from, EffectId to) override;
 	void KeepOutOfSaves(EffectId id) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
+	void SetHidden(EffectId id, bool hidden) override;
 	void SetLiveHand(EffectId id, glm::vec3 hand) override;
 	void SetInTemple(EffectId id) override;
 	void SetDrawnAlone(EffectId id) override;
@@ -268,6 +270,7 @@ public:
 	void AddTarget(EffectId id, entt::entity target) override;
 	void AddTargetPosition(EffectId id, glm::vec3 position) override;
 	void AddPlasma(EffectId id, const particles::PlasmaCommand& command) override;
+	void AddManaPathSpark(EffectId id, const particles::mana_path::Spark& spark) override;
 	void AddBeliefSprite(const particles::BeliefSprite& sprite) override;
 	void AddHandManaPathSpark(const particles::mana_path::Spark& spark) override;
 	void AddStormBolt(glm::vec3 cloudPoint) override;

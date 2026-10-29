@@ -26,8 +26,8 @@
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -35,7 +35,6 @@
 #include "Magic/MagicTables.h"
 #include "Magic/SpellBehaviours.h"
 #include "MagicSystem.h"
-#include "Particles/ParticleEffect.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
@@ -80,12 +79,9 @@ void MagicSystem::ShowHeldSeed()
 		registry.Remove<Mesh>(entity);
 	}
 
-	if (seed.handEffect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+	if (seed.handEffect != k_NoEffectHandle && Locator::effectRequestSystem::has_value())
 	{
-		if (auto* effect = Locator::particleSystem::value().Find(seed.handEffect))
-		{
-			effect->SetHidden(!seed.ready);
-		}
+		Locator::effectRequestSystem::value().SetHidden(seed.handEffect, !seed.ready);
 	}
 }
 
@@ -102,22 +98,19 @@ void MagicSystem::PlaceHandEffect(glm::vec3 point, float handScale)
 	_handEffectPoint = point;
 	_handScale = handScale;
 	auto& registry = EntityRegistry();
-	if (!Held().has_value() || !registry.Valid(*Held()) || !Locator::particleSystem::has_value())
+	if (!Held().has_value() || !registry.Valid(*Held()) || !Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
 	const auto& seed = registry.Get<const SpellSeed>(*Held());
-	if (seed.handEffect == ParticleSystemInterface::k_NoEffect)
+	if (seed.handEffect == k_NoEffectHandle)
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
-	// The effect is as large as the hand is drawn, every frame, and is drawn where its point has moved to since it stepped
-	if (auto* effect = particles.Find(seed.handEffect))
-	{
-		effect->SetMagnitude(handScale);
-	}
-	particles.SetDrawOffset(seed.handEffect, point - _handAtStep);
+	// In each frame, the effect has the size of the hand. It draws at the point where its point moved to after its step.
+	auto& effects = Locator::effectRequestSystem::value();
+	effects.SetMagnitude(seed.handEffect, handScale);
+	effects.SetDrawOffset(seed.handEffect, point - _handAtStep);
 }
 
 bool MagicSystem::PlayerHasSpellIcon(PlayerNames player, SpellSeedType seed) const

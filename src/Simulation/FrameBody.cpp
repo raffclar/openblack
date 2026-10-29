@@ -64,6 +64,7 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LiquidParticles.h"
 #include "Profiler.h"
@@ -263,6 +264,12 @@ void PlayFrameEffects(FrameViewInterface& view)
 	if (Locator::workshopSystem::has_value())
 	{
 		Locator::workshopSystem::value().UpdateFlagsForFrame(std::chrono::duration<float>(gameTime).count());
+	}
+	// The worship sites' need flags ease to their needs, the rings round their dances show how full they are, and the
+	// straining sites throb
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().UpdateFrame(clock.GetFrameGameTime(), clock.GetFrameRealTime(), LandDrawn());
 	}
 	// The players' symbols of belief over the village centres move on
 	Locator::townSystem::value().UpdateFrame(clock.GetFrameRealTime(), LandDrawn());
