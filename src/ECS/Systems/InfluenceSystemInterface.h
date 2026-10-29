@@ -26,6 +26,22 @@ namespace openblack::ecs::systems
 
 namespace influence_rules
 {
+/// A player's influence power: the reach of their citadel, then the reach of each of their towns, then the reach of
+/// each of their other sources, added in this order. A source of anti-influence also adds its reach, as in the game.
+[[nodiscard]] inline float InfluencePowerOf(float citadelReach, std::span<const float> towns, std::span<const float> sources)
+{
+	float power = citadelReach;
+	for (const float town : towns)
+	{
+		power += town;
+	}
+	for (const float source : sources)
+	{
+		power += source;
+	}
+	return power;
+}
+
 /// A player's influence at a place
 struct PlayerInfluenceAt
 {
@@ -104,6 +120,10 @@ public:
 	virtual void HeldThingUsedOnLand(PlayerNames player) = 0;
 	/// Whether the game turn is being played: questions asked then measure from where the hands were at the turn
 	virtual void SetInGameTurn(bool inGameTurn) = 0;
+	/// The land is laid out: each player with a citadel has their influence power worked out once, before the first game
+	/// turn, as a turn works it out. It sets the power and its running average, and puts one sample into the influence
+	/// history.
+	virtual void LandLaidOut() {}
 	/// Fixes the reach of each citadel that has no fixed reach yet, in the order of the players. Only the game turn fixes
 	/// the reaches, so every computer and the dedicated server keep them in the same order. A question does not fix them.
 	virtual void FixCitadelReaches() = 0;
@@ -111,8 +131,11 @@ public:
 	[[nodiscard]] virtual std::span<const influence::Circle> GetCircles() const = 0;
 	/// Whether a player's border shows yet: from the first time their temple stands wholly built on the land
 	[[nodiscard]] virtual bool IsBorderShown(PlayerNames player) const = 0;
-	/// A player's whole power of influence: their citadel's reach, while it stands, with the reach of each of their towns
-	/// and of their other sources of influence
+	/// The turn of a player notes their influence power after their computer mind, as the game does. It sets the power
+	/// and its running average, and puts one sample into the influence history.
+	virtual void NoteInfluencePower(PlayerNames /*player*/) {}
+	/// A player's influence power as their turn last noted it. All questions get this noted value. Thus a question before
+	/// the turn of the player gets the power of the last turn.
 	[[nodiscard]] virtual float InfluencePower(PlayerNames /*player*/) const { return 0.0f; }
 	/// How far a player's citadel reaches with the land's multiplier, 0 when the player has no citadel
 	[[nodiscard]] virtual float CitadelReachOf(PlayerNames /*player*/) const { return 0.0f; }

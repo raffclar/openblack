@@ -223,6 +223,11 @@ void player_statistics::CountChantsUsed(ecs::Registry& registry, PlayerNames pla
 	Update(registry, player, [amount](PlayerStatistics& statistics) { statistics.chantsUsed += amount; });
 }
 
+void player_statistics::CountInfluence(ecs::Registry& registry, PlayerNames player, float power)
+{
+	Update(registry, player, [power](PlayerStatistics& statistics) { statistics.influenceHistory.Add(power); });
+}
+
 void player_statistics::ProcessTurn(uint32_t turn)
 {
 	auto& registry = Entities();
@@ -241,10 +246,6 @@ void player_statistics::ProcessTurn(uint32_t turn)
 		statistics.men.Check(men);
 		statistics.women.Check(women);
 		statistics.populationHistory.Add(static_cast<float>(men + women));
-		if (Locator::influenceSystem::has_value())
-		{
-			statistics.influenceHistory.Add(Locator::influenceSystem::value().InfluencePower(player.name));
-		}
 		if (turn % statistics::k_BeliefCheckEvery == 0)
 		{
 			statistics.belief.Check(BeliefIn(player.name));

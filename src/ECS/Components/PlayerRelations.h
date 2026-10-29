@@ -40,8 +40,9 @@ struct ComputerAttitudes
 	}();
 };
 
-/// The influence power of the player as the player's last turn found it, and its running average. The computer minds
-/// read these values, so a mind sees the players before it in this turn and the players after it in the last turn.
+/// The influence power of the player as the player's last turn found it, and its running average. All questions about
+/// the power read these values. Thus a mind sees the players before it in this turn and the players after it in the
+/// last turn.
 struct PlayerInfluencePower
 {
 	float power {0.0f};
