@@ -16,7 +16,11 @@
 
 #include "Creature/LeashRules.h"
 #include "Enums.h"
-#include "Input/GameActionMapInterface.h"
+
+namespace openblack::input
+{
+enum class BindableActionMap : uint64_t;
+} // namespace openblack::input
 
 /// The leash's controls, as the game binds and handles them by default.
 ///

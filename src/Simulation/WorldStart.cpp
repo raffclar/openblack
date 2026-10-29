@@ -87,7 +87,6 @@
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
 #include "Gui/TextDatabase.h"
@@ -101,6 +100,7 @@
 #include "Sound/ClipSounds.h"
 #include "Sound/HelpSpeech.h"
 #include "Sound/SoundRequestInterface.h"
+#include "Visual/DetailLevel.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::simulation

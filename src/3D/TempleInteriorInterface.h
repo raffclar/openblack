@@ -25,6 +25,7 @@
 #include "3D/TempleLight.h"
 #include "3D/TempleMap.h"
 #include "3D/TempleMapSpells.h"
+#include "3D/TempleRoom.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Graphics/GraphicsHandle.h"
@@ -48,18 +49,6 @@ struct OrientedTextVertex;
 class TempleDoors;
 class TemplePeople;
 struct TemplePerson;
-
-enum class TempleRoom
-{
-	Challenge,
-	CreatureCave,
-	Credits,
-	Main,
-	Multi,
-	Options,
-	SaveGame,
-	Unknown
-};
 
 /// A belt or medal of the creature's room: its icon's mesh, where it is, and its colour
 struct TempleCaveTrophy

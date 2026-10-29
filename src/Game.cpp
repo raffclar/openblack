@@ -303,7 +303,6 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
@@ -365,6 +364,7 @@
 #include "Simulation/WorldStart.h"
 #include "Temple/TempleHelp.h"
 #include "Video/VideoRules.h"
+#include "Visual/DetailLevel.h"
 
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>

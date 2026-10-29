@@ -80,7 +80,6 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/DetailLevel.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
 #include "Gui/SaveGameBoxes.h"
@@ -98,6 +97,7 @@
 #include "Temple/TempleControlNames.h"
 #include "Temple/TempleHelpScripts.h"
 #include "Temple/TempleRoomAccess.h"
+#include "Visual/DetailLevel.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;

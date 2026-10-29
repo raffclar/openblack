@@ -16,7 +16,7 @@
 
 #include <entt/entity/entity.hpp>
 
-#include "3D/TempleInteriorInterface.h"
+#include "3D/TempleRoom.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components

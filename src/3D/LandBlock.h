@@ -19,9 +19,9 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-#include "Graphics/LandDetail.h"
 #include "LandIslandInterface.h"
 #include "SharedIndexLists.h"
+#include "Visual/LandDetail.h"
 
 namespace openblack
 {

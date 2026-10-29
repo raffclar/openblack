@@ -194,7 +194,6 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/HeadlessRenderer.h"
 #include "Graphics/RendererInterface.h"
-#include "Graphics/UploadMode.h"
 #include "Gui/TextDatabase.h"
 #include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
@@ -207,6 +206,7 @@
 #include "Online/WebSocketPushChannel.h"
 #include "PlayerSlots.h"
 #include "Profiler.h"
+#include "Visual/UploadMode.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/BrowserWebSocketClient.h"
 #include "Web/FetchHttpClient.h"

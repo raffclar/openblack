@@ -19,9 +19,9 @@
 #include "Common/MachineClock.h"
 #include "ECS/Registry.h"
 #include "EngineConfig.h"
-#include "Graphics/DetailLevel.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
