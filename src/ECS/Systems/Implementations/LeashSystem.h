@@ -49,6 +49,8 @@ public:
 	bool Toggle(entt::entity creature) override;
 	bool ChangeType(entt::entity creature, LeashType type) override;
 	bool TieTo(entt::entity creature, entt::entity object) override;
+	bool HandTie(entt::entity creature, entt::entity object) override;
+	bool RestoreTie(entt::entity creature, entt::entity object, uint32_t tiedTurn) override;
 	void UntieToHand(entt::entity creature) override;
 	void PlayHandAttachSound(entt::entity creature) override;
 	void SetWorks(entt::entity creature, bool works) override;
@@ -86,6 +88,10 @@ public:
 	bool TakeOffAtTemple(PlayerNames player) override;
 
 private:
+	/// Ties the leash to the thing, and does what the source of the tie does in addition
+	bool Tie(entt::entity creature, entt::entity object, creature_leash::TieSource source);
+	/// The hand ties the leash: a fight of the creature stops, and what it does stops as a failure
+	void FailForTie(entt::entity creature);
 	/// Puts the leash on for the player, unless the rules refuse it, which is logged and remembered
 	bool PutOnFor(PlayerNames player, entt::entity creature, LeashType type);
 	/// Carries out what a shortcut does to the player's creature

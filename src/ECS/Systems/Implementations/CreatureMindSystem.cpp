@@ -3866,6 +3866,26 @@ void CreatureMindSystem::AbandonAction(entt::entity creature)
 	ReleaseCast(creature);
 }
 
+void CreatureMindSystem::FailAction(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return;
+	}
+	EndJointAction(creature);
+	AbandonAction(creature);
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		Locator::creatureLocomotionSystem::value().Stop(creature);
+	}
+	// The loop that the body plays ends, as for a change of plan
+	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
+	{
+		body->body = creature_layers::EndLoop(body->body);
+	}
+}
+
 bool CreatureMindSystem::ForceDesireOn(entt::entity creature, creature_desires::Desire desire, entt::entity thing)
 {
 	auto& registry = Locator::entitiesRegistry::value();

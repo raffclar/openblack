@@ -234,6 +234,49 @@ struct MindHooks
 	return creatureOwner != localPlayer;
 }
 
+/// The thing that ties the leash of a creature to a thing
+enum class TieSource : uint8_t
+{
+	/// The hand of the player
+	Hand,
+	/// A land script
+	Script,
+	/// The hand of a computer god
+	ComputerGod,
+	/// A saved game that loads a leash that was tied
+	LoadedGame,
+};
+
+/// What a tie does in addition to the tie itself
+struct TieEffects
+{
+	/// One of the two tie sounds plays
+	bool sound;
+	/// The creature learns from the leash about the thing, as when the player shows it the thing
+	bool lessons;
+	/// What the creature does stops as a failure, its walk stops and its pose ends
+	bool failsAction;
+	/// The creature acts on the thing at once, as for an order on the thing
+	bool actsOnThing;
+};
+
+/// Only the hand of the player stops what the creature does and makes it act on the thing. A script or a computer god
+/// only ties the leash. A loaded game puts the tie back as it was, with no sound and no lesson.
+[[nodiscard]] constexpr TieEffects EffectsOf(TieSource source)
+{
+	switch (source)
+	{
+	case TieSource::Hand:
+		return {.sound = true, .lessons = true, .failsAction = true, .actsOnThing = true};
+	case TieSource::Script:
+	case TieSource::ComputerGod:
+		return {.sound = true, .lessons = true, .failsAction = false, .actsOnThing = false};
+	case TieSource::LoadedGame:
+		break;
+	}
+	return {.sound = false, .lessons = false, .failsAction = false, .actsOnThing = false};
+}
+
 /// The two leash-attach sounds play in turn, and the first sound plays first. A tie and the leash put back in the hand
 /// each have one of these. Each one keeps its turn for all the creatures until the game stops.
 class AttachSoundTurns

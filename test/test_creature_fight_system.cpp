@@ -738,6 +738,19 @@ TEST_F(CreatureFightSystemTest, OnTheWayToAFightACreatureIsSettingItUp)
 	EXPECT_FALSE(registry.AllOf<CreatureFighting>(first));
 }
 
+TEST_F(CreatureFightSystemTest, AThingThatTheMindActsOnStartsNoFightInTheTurn)
+{
+	// The thing that the mind acts on is for its planner only. A tie of the leash to a creature starts no fight.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto third = MakeCreature(registry, PlayerNames::PLAYER_THREE, {100.0f, 0.0f, 0.0f});
+	const auto fourth = MakeCreature(registry, PlayerNames::PLAYER_FOUR, {110.0f, 0.0f, 0.0f});
+	registry.Assign<CreatureMindState>(third).leash.actOn = {entt::to_integral(fourth)};
+	fights.ProcessTurn();
+	fights.FightTurn(third);
+	EXPECT_FALSE(registry.AllOf<CreatureFighting>(third));
+	EXPECT_FALSE(registry.AllOf<CreatureFighting>(fourth));
+}
+
 TEST_F(CreatureFightSystemTest, ACreatureRefusesAFightWithOneTooBigOrTooSmall)
 {
 	auto& registry = Locator::entitiesRegistry::value();

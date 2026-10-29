@@ -642,8 +642,9 @@ struct Command
 		/// Putting a leash on it, which it is first taught; tying the leash to the scenario's object, untying it to the
 		/// hand, taking it off; keeping it within a radius of where it stands
 		PutOnLeash,
+		/// The hand of the player ties the leash to the scenario's object
 		TieLeash,
-		/// The leash tied to the flag of a town's desire (by value), the first such flag found
+		/// The hand of the player ties the leash to the flag of a town's desire (by value), the first such flag found
 		TieLeashToDesireFlag,
 		UntieLeash,
 		TakeOffLeash,
@@ -697,7 +698,7 @@ struct Command
 		BringRound,
 		/// The debug tools stop the fight of the creature with no knock-out: each fighter finishes, then is happy or sad
 		FightAbort,
-		/// Tying the leash it wears to the other creature, which has it fight that creature
+		/// The hand of the player ties the leash that the creature wears to the other creature, as an order on it
 		TieLeashToCreature,
 		/// A desire (by value) is set to a fraction (amount) of its maximum; the creature grows up to a stage (by value)
 		SetDesire,

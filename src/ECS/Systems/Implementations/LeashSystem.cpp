@@ -936,6 +936,27 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 
 bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 {
+	return Tie(creature, object, leash::TieSource::Script);
+}
+
+bool LeashSystem::HandTie(entt::entity creature, entt::entity object)
+{
+	return Tie(creature, object, leash::TieSource::Hand);
+}
+
+bool LeashSystem::RestoreTie(entt::entity creature, entt::entity object, uint32_t tiedTurn)
+{
+	if (!Tie(creature, object, leash::TieSource::LoadedGame))
+	{
+		return false;
+	}
+	Locator::entitiesRegistry::value().Get<CreatureLeash>(creature).lastTiedTurn = tiedTurn;
+	return true;
+}
+
+bool LeashSystem::Tie(entt::entity creature, entt::entity object, leash::TieSource source)
+{
+	const auto effects = leash::EffectsOf(source);
 	auto& registry = Locator::entitiesRegistry::value();
 	if (object == creature || !registry.Valid(object) || registry.TryGet<const Transform>(object) == nullptr)
 	{
@@ -969,34 +990,40 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	// leash of each other creature makes its sound at the thing, and the sound belongs to the player of that creature.
 	// That sound follows the player, who has no point in the world, so the next audio turn stops it. The emitter has no
 	// owner entity, and an emitter that follows no owner stops in the same way.
-	const auto tieSound = AttachSound(_tieSounds.Next());
-	const auto* body = registry.TryGet<const Creature>(creature);
-	const auto owner = body != nullptr ? body->owner : OwnPlayer();
-	if (!leash::TieSoundIsPlaced(owner, OwnPlayer()))
+	if (effects.sound)
 	{
-		PlaySound(tieSound, std::nullopt);
-	}
-	else if (Locator::audio::has_value())
-	{
-		audio::StartGameSoundEffect(static_cast<entt::id_type>(tieSound),
-		                            {
-		                                .position = registry.Get<const Transform>(object).position,
-		                                .voiceOwner = audio::VoiceOwner::Number,
-		                                .ownerNumber = static_cast<uint32_t>(PlayerNumber(owner)),
-		                                .follows = audio::Follows::Owner,
-		                            });
+		const auto tieSound = AttachSound(_tieSounds.Next());
+		const auto* body = registry.TryGet<const Creature>(creature);
+		const auto owner = body != nullptr ? body->owner : OwnPlayer();
+		if (!leash::TieSoundIsPlaced(owner, OwnPlayer()))
+		{
+			PlaySound(tieSound, std::nullopt);
+		}
+		else if (Locator::audio::has_value())
+		{
+			audio::StartGameSoundEffect(static_cast<entt::id_type>(tieSound),
+			                            {
+			                                .position = registry.Get<const Transform>(object).position,
+			                                .voiceOwner = audio::VoiceOwner::Number,
+			                                .ownerNumber = static_cast<uint32_t>(PlayerNumber(owner)),
+			                                .follows = audio::Follows::Owner,
+			                            });
+		}
 	}
 
-	// The creature learns that the player wants something done with what it is tied to
+	// The creature learns that the player wants something done with what it is tied to. The tie itself gives the
+	// creature no order to act on the thing.
 	if (auto* mind = MindOf(registry, creature))
 	{
-		const bool isCreature = registry.TryGet<const Creature>(object) != nullptr;
-		mind->leash.shown.push_back({
-		    .object = static_cast<uint32_t>(object),
-		    .type = worn.type,
-		    .lessons = leash::LessonsFor(worn.type, isCreature),
-		});
-		mind->leash.actOn.push_back(static_cast<uint32_t>(object));
+		if (effects.lessons)
+		{
+			const bool isCreature = registry.TryGet<const Creature>(object) != nullptr;
+			mind->leash.shown.push_back({
+			    .object = static_cast<uint32_t>(object),
+			    .type = worn.type,
+			    .lessons = leash::LessonsFor(worn.type, isCreature),
+			});
+		}
 		// Tied to a town's desire flag, the creature helps the town with the desire of that flag
 		const auto* flag = registry.TryGet<const TownDesireFlag>(object);
 		const auto* tables =
@@ -1007,7 +1034,33 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 			                                     tables->townActions);
 		}
 	}
+	// The hand of the player stops what the creature does as a failure, even when the creature then takes no order
+	if (effects.failsAction)
+	{
+		FailForTie(creature);
+	}
+	if (effects.actsOnThing)
+	{
+		TakeThingOrder(creature, object);
+	}
 	return true;
+}
+
+void LeashSystem::FailForTie(entt::entity creature)
+{
+	// A fight, or a fight that the creature goes to, stops
+	if (Locator::creatureFightSystem::has_value())
+	{
+		auto& fights = Locator::creatureFightSystem::value();
+		if (fights.IsSettingUpFight(creature) || fights.IsFighting(creature))
+		{
+			fights.CallOff(creature);
+		}
+	}
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().FailAction(creature);
+	}
 }
 
 void LeashSystem::UntieToHand(entt::entity creature)
@@ -2086,10 +2139,7 @@ void LeashSystem::DoOrder(PlayerNames player, const player_commands::LeashOrder&
 			                   entt::to_integral(*creature));
 			break;
 		}
-		if (TieTo(*creature, order.object))
-		{
-			TakeThingOrder(*creature, order.object);
-		}
+		HandTie(*creature, order.object);
 		break;
 	}
 	case LeashOrder::Kind::Untie:

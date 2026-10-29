@@ -113,10 +113,7 @@ public:
 private:
 	/// The start of a fight. When ask is false, the other creature agreed before and is not asked again.
 	StartResult Start(entt::entity creature, entt::entity opponent, bool ask);
-	/// The turn's parts: fights started by the leash, the stages before and after the
-	/// duel, the duel's moves, and the creatures knocked out
-	void StartFightsFromMinds();
-	void StartFightFromMind(entt::entity creature);
+	/// The turn's parts: the stages before and after the duel, the duel's moves, and the creatures knocked out
 	void ProcessStages();
 	void StageTurn(entt::entity creature);
 	/// A fighter's animation, its move in the duel, its blow and its pose for the turn

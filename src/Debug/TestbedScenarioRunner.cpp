@@ -2264,7 +2264,7 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 	case Kind::TieLeash:
 		if (const auto object = ObjectAt(command.object))
 		{
-			return leashes.TieTo(creature, *object) ? "tied" : "can't";
+			return leashes.HandTie(creature, *object) ? "tied" : "can't";
 		}
 		return "it is gone";
 	case Kind::TieLeashToDesireFlag:
@@ -2282,7 +2282,7 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 		{
 			return "no flag";
 		}
-		return leashes.TieTo(creature, *found) ? "tied" : "can't";
+		return leashes.HandTie(creature, *found) ? "tied" : "can't";
 	}
 	case Kind::LeashOrderAt:
 	{
@@ -3240,7 +3240,7 @@ std::string Runner::GiveFightCommand(entt::entity creature, const Command& comma
 	case Kind::TieLeashToCreature:
 		if (const auto other = CreatureAt(command.value); other.has_value() && Locator::leashSystem::has_value())
 		{
-			return Locator::leashSystem::value().TieTo(creature, *other) ? "tied" : "can't";
+			return Locator::leashSystem::value().HandTie(creature, *other) ? "tied" : "can't";
 		}
 		return "it is gone";
 	default:

@@ -768,7 +768,7 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	leashes.SetWorks(entity, kept.works != 0);
 	if (const auto tied = save_state::FromRef(kept.tiedTo); tied.has_value() && registry.Valid(*tied))
 	{
-		leashes.TieTo(entity, *tied);
+		leashes.RestoreTie(entity, *tied, kept.word34);
 	}
 }
 
