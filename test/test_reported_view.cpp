@@ -93,6 +93,34 @@ TEST(ReportedView, TheCameraArrivesByAReportAfterTheLastOrder)
 	EXPECT_FALSE(script_camera::ArrivedByReport(false, 4, 4));
 }
 
+// A refused take of the camera is no camera order, so a script that retries it does not stop the arrival
+TEST(ReportedView, ARefusedTakeOfTheCameraKeepsTheArrival)
+{
+	constexpr uint32_t k_Orders = 7;
+	const auto ordersAfter = [](bool taken, bool insideTemple) {
+		return k_Orders + (script_camera::TakeIsCameraOrder(taken, insideTemple) ? 1U : 0U);
+	};
+	// A report after the last order says that the camera has arrived. After a refused take, it still has.
+	EXPECT_TRUE(script_camera::ArrivedByReport(true, k_Orders, ordersAfter(false, false)));
+	// A take that changes the camera is an order: the old report no longer tells the arrival
+	EXPECT_FALSE(script_camera::ArrivedByReport(true, k_Orders, ordersAfter(true, false)));
+	// Inside the temple, a take keeps the temple's camera
+	EXPECT_TRUE(script_camera::ArrivedByReport(true, k_Orders, ordersAfter(true, true)));
+}
+
+// The point in front of the camera is on the line from the eye to the focus
+TEST(ReportedView, ThePointInFrontOfTheCameraIsAlongItsView)
+{
+	EXPECT_EQ(script_camera::FacingPoint({0.0f, 10.0f, 0.0f}, {0.0f, 10.0f, 5.0f}, 10.0f), glm::vec3(0.0f, 10.0f, 10.0f));
+	EXPECT_EQ(script_camera::FacingPoint({4.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 2.5f), glm::vec3(1.5f, 0.0f, 0.0f));
+	// A camera that looks straight down moves the direction a little to the side
+	const auto down = script_camera::FacingPoint({100.0f, 50.0f, 100.0f}, {100.0f, 0.0f, 100.0f}, 10.0f);
+	EXPECT_LT(down.x, 100.0f);
+	EXPECT_NEAR(down.x, 100.0f, 1e-3f);
+	EXPECT_FLOAT_EQ(down.y, 40.0f);
+	EXPECT_EQ(down.z, 100.0f);
+}
+
 // The player's camera has arrived once its eye and focus are where they go
 TEST(ReportedView, ThePlayersCameraArrivesAtItsTarget)
 {
