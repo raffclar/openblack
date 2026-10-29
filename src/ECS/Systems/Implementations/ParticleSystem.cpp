@@ -36,7 +36,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/StringUtils.h"
@@ -83,6 +82,7 @@
 #include "Particles/ParticleTypes.h"
 #include "Particles/VolumeGlow.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

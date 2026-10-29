@@ -14,8 +14,8 @@
 #include <set>
 #include <vector>
 
-#include <Graphics/LandDetail.h>
 #include <LNDFile.h>
+#include <Visual/LandDetail.h>
 #include <gtest/gtest.h>
 
 using namespace openblack::graphics::land_detail;

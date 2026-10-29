@@ -17,8 +17,8 @@
 #include <string>
 #include <vector>
 
-#include "Audio/LipSync.h"
 #include "Help/SpiritVoice.h"
+#include "Sound/LipSync.h"
 
 namespace openblack::help
 {

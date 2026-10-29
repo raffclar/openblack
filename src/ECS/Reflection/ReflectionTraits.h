@@ -30,8 +30,6 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 
-#include "Graphics/GraphicsHandle.h"
-
 // The handles of the graphics library. Each one is a number that names a resource of one run only.
 namespace bgfx
 {
@@ -48,6 +46,21 @@ struct UniformHandle;
 struct VertexBufferHandle;
 struct VertexLayoutHandle;
 } // namespace bgfx
+
+// The game's own names of these handles
+namespace openblack::graphics
+{
+struct IndexBufferHandle;
+struct FrameBufferHandle;
+struct VertexBufferHandle;
+struct VertexLayoutHandle;
+struct DynamicVertexBufferHandle;
+struct DynamicIndexBufferHandle;
+struct TextureHandle;
+struct UniformHandle;
+struct ShaderHandle;
+struct ProgramHandle;
+} // namespace openblack::graphics
 
 /// Tests on the types that the fields of components hold, which the reflection writes and reads by their kind
 namespace openblack::ecs::reflection::detail

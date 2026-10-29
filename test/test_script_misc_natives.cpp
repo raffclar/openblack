@@ -23,7 +23,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Audio/AudioManagerNoOp.h"
-#include "Audio/GameMusic.h"
+#include "Audio/GameSoundRequests.h"
 #include "CHLApi.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -31,6 +31,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "Locator.h"
+#include "Sound/GameMusic.h"
 
 using namespace openblack;
 using audio::GameMusic;
@@ -74,6 +75,7 @@ protected:
 
 	void TearDown() override
 	{
+		Locator::sounds::reset();
 		Locator::audio::reset();
 		Locator::vm::reset();
 		Locator::scriptObjects::reset();
@@ -198,6 +200,7 @@ TEST_F(ScriptMiscNatives, WithoutASoundDeviceMusicWaitsOnTheText)
 	EXPECT_TRUE(AskBool(k_LastMusicLine, {Float(5.0f)}));
 	EXPECT_TRUE(AskBool(k_MusicPlayed, {Int(static_cast<int32_t>(MusicType::ScriptMissionariesVerse1))}));
 	Locator::audio::emplace<audio::AudioManagerNoOp>();
+	Locator::sounds::emplace<audio::GameSoundRequests>();
 	EXPECT_TRUE(AskBool(k_LastMusicLine, {Float(5.0f)}));
 	EXPECT_TRUE(AskBool(k_MusicPlayed, {Int(static_cast<int32_t>(MusicType::ScriptMissionariesVerse1))}));
 	// Nothing sounds without one

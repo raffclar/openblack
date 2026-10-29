@@ -28,9 +28,6 @@
 #include "3D/L3DSubMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -92,6 +89,9 @@
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleMaths.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "VillagerFire.h"
 
 using namespace openblack;
@@ -1664,11 +1664,11 @@ void FireSystem::ConsiderSound(entt::entity object, float fraction)
 
 void FireSystem::PlaySounds()
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	auto& registry = Entities();
 	for (auto& slot : _soundSlots)
 	{
@@ -1702,9 +1702,9 @@ void FireSystem::StopSound(entt::entity object)
 		{
 			continue;
 		}
-		if (slot.emitter != entt::null && Locator::audio::has_value() && Locator::audio::value().EmitterExists(slot.emitter))
+		if (slot.emitter != entt::null && Locator::sounds::has_value() && Locator::sounds::value().EmitterExists(slot.emitter))
 		{
-			Locator::audio::value().StopEmitter(slot.emitter);
+			Locator::sounds::value().StopEmitter(slot.emitter);
 		}
 		slot = SoundSlot {};
 	}
@@ -1747,7 +1747,7 @@ void FireSystem::Update(std::chrono::milliseconds frameRealTime, std::chrono::mi
 		        .toWorld = [object](const fire::graphic::Anchor& anchor) { return ToWorld(object, anchor); },
 		        .random = [random](float range) { return random != nullptr ? random->LocalFloatRand(range) : 0.0f; },
 		    };
-		    if (fire::graphic::Update(look.graphic, inputs, seconds, sampler) && Locator::audio::has_value())
+		    if (fire::graphic::Update(look.graphic, inputs, seconds, sampler) && Locator::sounds::has_value())
 		    {
 			    // The steam hisses as it starts
 			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Fire: object {} hisses with steam at {:.0f}",
@@ -1943,9 +1943,9 @@ void FireSystem::Reset()
 {
 	for (const auto& slot : _soundSlots)
 	{
-		if (slot.emitter != entt::null && Locator::audio::has_value() && Locator::audio::value().EmitterExists(slot.emitter))
+		if (slot.emitter != entt::null && Locator::sounds::has_value() && Locator::sounds::value().EmitterExists(slot.emitter))
 		{
-			Locator::audio::value().StopEmitter(slot.emitter);
+			Locator::sounds::value().StopEmitter(slot.emitter);
 		}
 	}
 	_soundSlots = {};

@@ -26,10 +26,10 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/TreeShadows.h"
-#include "Graphics/UploadMode.h"
 #include "L3DSkinTexels.h"
 #include "L3DSubMesh.h"
 #include "ScreenPick.h"
+#include "Visual/UploadMode.h"
 
 namespace openblack
 {

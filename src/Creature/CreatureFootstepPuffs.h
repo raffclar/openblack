@@ -15,7 +15,7 @@
 
 #include <glm/vec3.hpp>
 
-#include "Audio/AnimEffectKeys.h"
+#include "Sound/AnimEffectKeys.h"
 
 /// The rules for the dust that a creature's footsteps throw up. Each footstep of the creature's animation makes a number
 /// of brown puffs at the creature's place on the ground. The puffs move out in random directions and fade in one

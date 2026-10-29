@@ -21,13 +21,13 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
-#include "Audio/AudioManagerInterface.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack::ecs::systems;
 
@@ -76,7 +76,7 @@ void ScriptMusicSystem::Reset()
 
 bool ScriptMusicSystem::HasMusic() const
 {
-	const bool soundDevice = Locator::audio::has_value() && Locator::audio::value().IsInstalled();
+	const bool soundDevice = Locator::sounds::has_value() && Locator::sounds::value().IsInstalled();
 	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 	const bool dedicatedServer = Locator::config::has_value() && Locator::config::value().dedicatedServer;
 	return audio::WorldHasMusic(soundDevice, networkGame, dedicatedServer);

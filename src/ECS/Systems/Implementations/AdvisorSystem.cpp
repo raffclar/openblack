@@ -22,8 +22,6 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Mesh.h"
@@ -35,6 +33,8 @@
 #include "Help/SpiritPose.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -275,11 +275,11 @@ void AdvisorSystem::ProcessTurn()
 
 void AdvisorSystem::PlayAnimSounds()
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto bank = std::string(k_AnimSoundBank);
 	for (int i = 0; i < k_Dudes; ++i)
 	{

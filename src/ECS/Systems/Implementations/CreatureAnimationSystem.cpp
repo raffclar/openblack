@@ -34,7 +34,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLightFrame.h"
-#include "Audio/Sound.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
 #include "Common/X87.h"
@@ -83,6 +82,7 @@
 #include "Locator.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

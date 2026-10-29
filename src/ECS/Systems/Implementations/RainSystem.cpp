@@ -29,8 +29,8 @@
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "EngineConfig.h"
-#include "Graphics/DetailLevel.h"
 #include "Locator.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

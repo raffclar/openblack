@@ -15,7 +15,7 @@
 #include <span>
 #include <vector>
 
-#include "ScriptMusic.h"
+#include "Sound/ScriptMusic.h"
 
 namespace openblack::pack
 {

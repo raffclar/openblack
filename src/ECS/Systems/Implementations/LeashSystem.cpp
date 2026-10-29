@@ -31,9 +31,6 @@
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/CameraBookmarks.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -111,6 +108,9 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -335,7 +335,7 @@ audio::SoundId AttachSound(int turn)
 
 void PlaySound(audio::SoundId sound, std::optional<glm::vec3> position)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::PlayGameSoundEffect(static_cast<entt::id_type>(sound), position);
 	}
@@ -999,7 +999,7 @@ bool LeashSystem::Tie(entt::entity creature, entt::entity object, leash::TieSour
 		{
 			PlaySound(tieSound, std::nullopt);
 		}
-		else if (Locator::audio::has_value())
+		else if (Locator::sounds::has_value())
 		{
 			audio::StartGameSoundEffect(static_cast<entt::id_type>(tieSound),
 			                            {

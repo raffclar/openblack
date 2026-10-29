@@ -14,7 +14,6 @@
 #include "3D/AllMeshes.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/Sound.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Transform.h"
@@ -25,6 +24,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
 #include "Utils.h"
 
 using namespace openblack;

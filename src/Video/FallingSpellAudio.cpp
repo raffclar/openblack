@@ -16,10 +16,10 @@
 #include <glm/vec3.hpp>
 
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Game.h"
 #include "Gui/GameInterface.h"
 #include "Locator.h"
+#include "Sound/GameSoundEffects.h"
 
 using namespace openblack::video;
 

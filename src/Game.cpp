@@ -73,11 +73,6 @@
 #include "3D/WaterRings.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
-#include "Audio/ClipSounds.h"
-#include "Audio/GameMusic.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/HelpSpeech.h"
-#include "Audio/ScriptSoundEffect.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
@@ -90,6 +85,11 @@
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
 #include "Common/DeveloperToolsGate.h"
+#include "Sound/ClipSounds.h"
+#include "Sound/GameMusic.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/HelpSpeech.h"
+#include "Sound/ScriptSoundEffect.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
@@ -304,7 +304,6 @@
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/FrameBuffer.h"
 #include "Graphics/RendererInterface.h"
 #include "Graphics/TexelDepth.h"
@@ -366,6 +365,7 @@
 #include "Simulation/WorldStart.h"
 #include "Temple/TempleHelp.h"
 #include "Video/VideoRules.h"
+#include "Visual/DetailLevel.h"
 
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>

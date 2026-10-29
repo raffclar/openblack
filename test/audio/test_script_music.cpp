@@ -16,10 +16,10 @@
 #include <vector>
 
 #include <Audio/MusicTimingFile.h>
-#include <Audio/ScriptMusic.h>
-#include <Audio/SoundDecoder.h>
 #include <ECS/SyncedState.h>
 #include <PackFile.h>
+#include <Sound/ScriptMusic.h>
+#include <Sound/SoundDecoder.h>
 #include <gtest/gtest.h>
 
 using namespace openblack::audio;

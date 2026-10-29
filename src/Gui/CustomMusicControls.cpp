@@ -14,8 +14,8 @@
 
 #include <glm/vec4.hpp>
 
-#include "Audio/CustomMusicPlayerInterface.h"
 #include "Controls.h"
+#include "Sound/CustomMusicPlayerInterface.h"
 
 using namespace openblack::gui;
 using namespace openblack::gui::custom_music_controls;

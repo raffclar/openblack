@@ -23,9 +23,6 @@
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
 
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "ECS/Archetypes/SpellIconArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Player.h"
@@ -49,6 +46,9 @@
 #include "Magic/MiracleVisuals.h"
 #include "Magic/SpellSeedRules.h"
 #include "Magic/WorshipBattery.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -959,7 +959,7 @@ bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 	}
 	const auto result = TapSiteIcon(siteIcon, player);
 	// A tap that did something clicks, faster the further along the centre its hand stands, for the hand at this machine
-	if (result != icons::TapResult::Nothing && player == OwnPlayer() && Locator::audio::has_value())
+	if (result != icons::TapResult::Nothing && player == OwnPlayer() && Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ClickOnSpell_01),
 		                            {.pitchPercent = icons::ClickPitch(hand)});
@@ -1196,7 +1196,7 @@ void SpellIconSystem::ChargedAt(entt::entity site, std::span<const magic::Worshi
 			{
 				GiveSeed(made.at(i));
 			}
-			if (sitePlayer == OwnPlayer() && Locator::audio::has_value())
+			if (sitePlayer == OwnPlayer() && Locator::sounds::has_value())
 			{
 				const auto voice = icons::FullyChargedVoice(component.seed);
 				audio::StartGameSoundEffect(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", voice).c_str()).value(),

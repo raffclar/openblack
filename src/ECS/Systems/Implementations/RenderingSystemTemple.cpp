@@ -34,12 +34,12 @@
 #include "EngineConfig.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/ShaderManager.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple/TemplePeople.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;

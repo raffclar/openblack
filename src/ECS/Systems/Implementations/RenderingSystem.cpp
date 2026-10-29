@@ -102,7 +102,6 @@
 #include "Game.h"
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/DrawnHand.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
@@ -121,6 +120,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/AppleBarrelRules.h"
 #include "Temple/TempleDestruction.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;

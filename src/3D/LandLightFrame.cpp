@@ -18,9 +18,9 @@
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "EngineConfig.h"
-#include "Graphics/DetailLevel.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/DetailLevel.h"
 
 namespace openblack
 {

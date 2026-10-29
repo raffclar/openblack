@@ -23,8 +23,6 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/L3DMesh.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/PortableRotations.h"
 #include "Common/RandomNumberManager.h"
@@ -46,6 +44,8 @@
 #include "Nature/TreeBend.h"
 #include "Nature/TreeSway.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
@@ -212,7 +212,7 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	auto& meshes = Locator::resources::value().GetMeshes();
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	auto& rng = Locator::rng::value();
 	const auto camera = Locator::camera::value().GetOrigin();
 	const auto idleChance = TreeRustle::IdleChance(gameTime);

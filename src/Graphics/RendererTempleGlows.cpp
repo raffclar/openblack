@@ -32,7 +32,6 @@
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/TempleExitGlow.h"
@@ -45,6 +44,7 @@
 #include "Renderer.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack;
 using namespace openblack::graphics;

@@ -23,7 +23,7 @@
 
 #include <Audio/AudioPlayerInterface.h>
 #include <Audio/MusicStreamBackend.h>
-#include <Audio/SoundDecoder.h>
+#include <Sound/SoundDecoder.h>
 #include <gtest/gtest.h>
 
 using namespace openblack::audio;

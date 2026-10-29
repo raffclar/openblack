@@ -28,9 +28,9 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "EngineConfig.h"
-#include "Graphics/DetailLevel.h"
-#include "Graphics/LandDetail.h"
 #include "Locator.h"
+#include "Visual/DetailLevel.h"
+#include "Visual/LandDetail.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;

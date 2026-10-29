@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-#include "Sound.h"
+#include "Sound/LoadedSound.h"
 
 namespace openblack::audio
 {

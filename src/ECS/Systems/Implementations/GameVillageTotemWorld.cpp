@@ -16,7 +16,6 @@
 #include "3D/AllMeshes.h"
 #include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/Sound.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
@@ -34,6 +33,7 @@
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundId.h"
 #include "VillagerWorship.h"
 
 using namespace openblack;

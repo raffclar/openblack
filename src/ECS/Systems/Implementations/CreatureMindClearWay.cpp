@@ -20,7 +20,6 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/MapCoords.h"
-#include "Audio/AnimEffectKeys.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureClearWay.h"
@@ -41,6 +40,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Sound/AnimEffectKeys.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;

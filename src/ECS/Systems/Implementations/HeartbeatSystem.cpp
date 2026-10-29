@@ -19,10 +19,6 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/HeaderOverrides.h"
-#include "Audio/Sound.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Heartbeat.h"
@@ -41,6 +37,10 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "Help/VillageVoices.h"
 #include "Locator.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/HeaderOverrides.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -236,7 +236,7 @@ void HeartbeatSystem::ProcessTurn(uint32_t turn)
 
 void HeartbeatSystem::SoundHeart()
 {
-	if (!Locator::playerSystem::has_value() || !Locator::audio::has_value())
+	if (!Locator::playerSystem::has_value() || !Locator::sounds::has_value())
 	{
 		return;
 	}
@@ -267,7 +267,7 @@ void HeartbeatSystem::SoundHeart()
 	{
 		place->y = Locator::terrainSystem::value().GetHeightAt(glm::xz(*place));
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	if (!audio.EmitterExists(_sound))
 	{
 		_sound = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_Heartbeat_01),

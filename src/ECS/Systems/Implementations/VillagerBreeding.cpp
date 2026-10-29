@@ -23,10 +23,6 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "3D/MapCoords.h"
-#include "Audio/AnimEffectKeys.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
@@ -67,6 +63,10 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Sound/AnimEffectKeys.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "VillagerAnimate.h"
 #include "VillagerBuild.h"
 #include "VillagerFood.h"
@@ -329,11 +329,11 @@ void StrollOn(LivingAction& action, entt::entity creche)
 /// The sound of children at play at the crèche
 void PlayCrecheSound(entt::entity creche)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().PlayAnimEffect(std::string(k_CrecheSoundBank), k_CrecheSound.ToArray(), creche,
-		                                       Entities().Get<const Transform>(creche).position,
-		                                       audio::CurrentSoundEffectConditions());
+		Locator::sounds::value().PlayAnimEffect(std::string(k_CrecheSoundBank), k_CrecheSound.ToArray(), creche,
+		                                        Entities().Get<const Transform>(creche).position,
+		                                        audio::CurrentSoundEffectConditions());
 	}
 }
 

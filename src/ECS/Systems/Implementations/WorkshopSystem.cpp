@@ -25,8 +25,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
-#include "Audio/GameSoundEffects.h"
-#include "Audio/Sound.h"
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -78,6 +76,8 @@
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/GameSoundEffects.h"
+#include "Sound/SoundId.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
