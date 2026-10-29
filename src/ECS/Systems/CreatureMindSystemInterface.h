@@ -185,10 +185,10 @@ public:
 	virtual void ChangeDesireSource(entt::entity /*creature*/, uint32_t /*type*/, float /*amount*/) {}
 	/// Plays an action at once, as stroking and slapping make it, unless the body is less than a share of the way through
 	/// what it plays. The action plays to its end and leaves the mind's plan as it was. Returns whether it played.
-	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, float interruptsAfter) = 0;
+	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) = 0;
 	/// Whether ForceAction would play the action now, with no change to the creature
 	[[nodiscard]] virtual bool CanForceAction(entt::entity /*creature*/, size_t /*animation*/, bool /*mirrored*/,
-	                                          float /*interruptsAfter*/) const
+	                                          double /*interruptsAfter*/) const
 	{
 		return false;
 	}

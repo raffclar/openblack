@@ -63,7 +63,7 @@ std::vector<Action> EachCommand()
 	    FightGround {.creature = Entity(19), .point = {-1.5f, 2.0f, 3.25f}, .replace = true},
 	    FightMove {.target = Entity(20), .kind = 6, .value = 0x01020304, .replace = false},
 	    FightCharge {.heldMs = 1200},
-	    CreatureReaction {.creature = Entity(21), .animation = 0x0A0B0C0D, .mirrored = true, .interruptsAfter = 0.25f},
+	    CreatureReaction {.creature = Entity(21), .animation = 0x0A0B0C0D, .mirrored = true, .interruptsAfter = 0.8},
 	    HandClick {.thing = Entity(22), .release = true, .hasPlace = true, .placeX = -5, .placeZ = 0x7FFFFFFF},
 	    SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = -1},
 	    HandPick {.object = Entity(23)},
@@ -135,6 +135,7 @@ Action RandomAction(std::mt19937& random)
 	std::uniform_int_distribution<uint32_t> bits;
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
+	const auto wide = [&]() { return (static_cast<uint64_t>(bits(random)) << 32U) | bits(random); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
 	switch (bits(random) % 45)
 	{
@@ -180,8 +181,10 @@ Action RandomAction(std::mt19937& random)
 	case 17:
 		return FightCharge {.heldMs = bits(random)};
 	case 18:
-		return CreatureReaction {
-		    .creature = entity(), .animation = bits(random), .mirrored = bits(random) % 2 == 0, .interruptsAfter = number()};
+		return CreatureReaction {.creature = entity(),
+		                         .animation = bits(random),
+		                         .mirrored = bits(random) % 2 == 0,
+		                         .interruptsAfter = std::bit_cast<double>(wide())};
 	case 22:
 		return HandPick {.object = entity()};
 	case 20:
@@ -363,7 +366,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 10, 18, 5,  49, 17, 5, 5,  5, 9, 12, 1, 18, 11, 5, 14, 15, 3,
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 10, 18, 5,  49, 17, 5, 5,  5, 9, 12, 1, 18, 11, 5, 18, 15, 3,
 	                                 5, 1, 2, 1, 61, 5, 2,  1,  13, 10, 18, 1, 50, 1, 5, 51, 5, 16, 7,  1, 1,  13};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());

@@ -62,6 +62,7 @@ public:
 	}
 	void Byte(uint8_t value) { _out.push_back(value); }
 	void Float(float value) { Number(std::bit_cast<uint32_t>(value)); }
+	void Double(double value) { Number(std::bit_cast<uint64_t>(value)); }
 	void Entity(entt::entity value) { Number(static_cast<uint32_t>(entt::to_integral(value))); }
 	void Vector(const glm::vec3& value)
 	{
@@ -103,6 +104,7 @@ public:
 	}
 	uint8_t Byte() { return Number<uint8_t>(); }
 	float Float() { return std::bit_cast<float>(Number<uint32_t>()); }
+	double Double() { return std::bit_cast<double>(Number<uint64_t>()); }
 	entt::entity Entity() { return static_cast<entt::entity>(Number<uint32_t>()); }
 	glm::vec3 Vector()
 	{
@@ -231,7 +233,7 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.creature);
 		               out.Number(command.animation);
 		               out.Byte(static_cast<uint8_t>(command.mirrored ? 1 : 0));
-		               out.Float(command.interruptsAfter);
+		               out.Double(command.interruptsAfter);
 	               },
 	               [](const PlayerLeft& /*command*/) {},
 	               [](const PlayerJoined& /*command*/) {},
@@ -499,7 +501,7 @@ DecodeError ReadAction(Reader& in, Action& action)
 		reaction.creature = in.Entity();
 		reaction.animation = in.Number<uint32_t>();
 		const auto mirrored = in.Byte();
-		reaction.interruptsAfter = in.Float();
+		reaction.interruptsAfter = in.Double();
 		if (mirrored > 1)
 		{
 			return DecodeError::Value;
@@ -892,7 +894,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
 	                   [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
 	                   [](const FightCharge& /*command*/) { return size_t {4}; },
-	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 1 + 4; },
+	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 1 + 8; },
 	                   [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
 	                   [](const SeedGesture& /*command*/) { return size_t {2}; },
 	                   [](const PlayerLeft& /*command*/) { return size_t {0}; },

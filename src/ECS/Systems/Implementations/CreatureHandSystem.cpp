@@ -518,7 +518,7 @@ void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigi
 }
 
 bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mirrored,
-                               std::optional<creature_face::Request> face, float interruptsAfter)
+                               std::optional<creature_face::Request> face, double interruptsAfter)
 {
 	// The face of a stroke shows at once, also when the body refuses the stroke. Only this computer shows it.
 	if (face.has_value())

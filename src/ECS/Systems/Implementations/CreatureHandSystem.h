@@ -52,7 +52,7 @@ public:
 	/// plays at once with no commands, else at a later turn on every computer. A reaction that the creature refuses does
 	/// nothing more. Returns whether the creature takes the reaction now.
 	bool React(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
-	           float interruptsAfter);
+	           double interruptsAfter);
 	[[nodiscard]] bool IsHeldByCommand() const override;
 	[[nodiscard]] std::optional<entt::entity> CreatureUnderCursor() const override;
 	[[nodiscard]] float GetFeedbackSum() const override;

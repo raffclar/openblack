@@ -90,12 +90,13 @@ TEST(CreatureSentReactions, AWaitingReactionStopsASlapAndAStroke)
 	EXPECT_FALSE(TakesReaction(false, creature_feedback::k_SlapInterruptsAfter, false));
 }
 
-TEST(CreatureSentReactions, AReactionWithNoLimitInterruptsAWaitingReaction)
+TEST(CreatureSentReactions, OnlyAReactionWithALimitBelowZeroInterruptsAWaitingReaction)
 {
-	// A reaction that interrupts an action at any point also interrupts one at its start
-	EXPECT_TRUE(TakesReaction(true, 0.0f, true));
+	// A waiting reaction is at its start. A limit of 0 refuses a share of 0.
+	EXPECT_FALSE(TakesReaction(true, 0.0, true));
+	EXPECT_TRUE(TakesReaction(true, -0.1, true));
 	// The body still has to take it
-	EXPECT_FALSE(TakesReaction(true, 0.0f, false));
+	EXPECT_FALSE(TakesReaction(true, -0.1, false));
 }
 
 TEST(CreatureShownFace, TheBodyShowsTheShownFaceInPlaceOfTheFaceOfTheWorld)

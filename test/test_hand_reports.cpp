@@ -25,6 +25,7 @@
 
 #include "Commands/PlayerCommands.h"
 #include "Creature/CreatureFace.h"
+#include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureLayers.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -165,7 +166,7 @@ public:
 	bool SitDown(entt::entity) override { return false; }
 	void StandUp(entt::entity) override {}
 	void ReceiveFeedback(entt::entity, float) override {}
-	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, float interruptsAfter) override
+	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, double interruptsAfter) override
 	{
 		forced.push_back(
 		    {.creature = creature, .animation = animation, .mirrored = mirrored, .interruptsAfter = interruptsAfter});
@@ -189,7 +190,7 @@ public:
 		entt::entity creature;
 		size_t animation;
 		bool mirrored;
-		float interruptsAfter;
+		double interruptsAfter;
 	};
 	std::vector<Forced> forced;
 	/// Whether the body takes a reaction now
@@ -277,12 +278,15 @@ TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
 	registry.Assign<ecs::components::CreatureAnimation>(creature);
 	ecs::systems::CreatureHandSystem creatures;
 	creatures.DoReaction(PlayerNames::PLAYER_TWO,
-	                     CreatureReaction {.creature = creature, .animation = 166, .mirrored = true, .interruptsAfter = 0.35f});
+	                     CreatureReaction {.creature = creature,
+	                                       .animation = 166,
+	                                       .mirrored = true,
+	                                       .interruptsAfter = creature_feedback::k_SlapInterruptsAfter});
 	ASSERT_EQ(minds.forced.size(), 1u);
 	EXPECT_EQ(minds.forced[0].creature, creature);
 	EXPECT_EQ(minds.forced[0].animation, 166u);
 	EXPECT_TRUE(minds.forced[0].mirrored);
-	EXPECT_EQ(minds.forced[0].interruptsAfter, 0.35f);
+	EXPECT_EQ(minds.forced[0].interruptsAfter, creature_feedback::k_SlapInterruptsAfter);
 	// The reaction of another computer's hand shows no face on this computer
 	EXPECT_FALSE(registry.AllOf<ecs::components::ShownCreatureFace>(creature));
 	EXPECT_EQ(registry.Get<const ecs::components::CreatureAnimation>(creature).face, creature_layers::FaceLayer {});
@@ -310,7 +314,7 @@ TEST_F(ReportedHands, AStrokeShowsItsFaceOnlyHereAndARefusedStrokeSendsNothing)
 	ecs::systems::CreatureHandSystem creatures;
 
 	minds.bodyTakes = false;
-	EXPECT_FALSE(creatures.React(creature, 158, false, grimace, 0.8f));
+	EXPECT_FALSE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter));
 	EXPECT_EQ(commands.PendingCount(), 0u);
 	const auto* shown = registry.TryGet<const ecs::components::ShownCreatureFace>(creature);
 	ASSERT_NE(shown, nullptr);
@@ -320,7 +324,7 @@ TEST_F(ReportedHands, AStrokeShowsItsFaceOnlyHereAndARefusedStrokeSendsNothing)
 
 	// The body takes the next stroke: the command has the body action, and the face stays on this computer
 	minds.bodyTakes = true;
-	EXPECT_TRUE(creatures.React(creature, 158, false, grimace, 0.8f));
+	EXPECT_TRUE(creatures.React(creature, 158, false, grimace, creature_feedback::k_StrokeInterruptsAfter));
 	EXPECT_EQ(commands.PendingCount(), 1u);
 	EXPECT_EQ(registry.Get<const ecs::components::CreatureAnimation>(creature).face, creature_layers::FaceLayer {});
 	EXPECT_TRUE(minds.forced.empty());

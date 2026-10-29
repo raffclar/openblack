@@ -237,7 +237,7 @@ struct CreatureReaction
 	uint32_t animation;
 	bool mirrored;
 	/// The share of the way through what the body plays that the reaction can stop it at
-	float interruptsAfter;
+	double interruptsAfter;
 };
 
 /// A click of the hand in a network game: the turn writes the click that the scripts read, so that the scripts of
