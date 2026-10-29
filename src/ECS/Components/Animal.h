@@ -78,7 +78,7 @@ enum class AnimalState : uint8_t
 	FinishEating,
 	/// A grazer going to its herd's sleeping place
 	SeekSleep,
-	/// A grazer asleep, standing, until its need to sleep runs out
+	/// A grazer asleep, standing, until its need to sleep runs out. A hunter sleeps in its sleeping clip
 	Sleeps,
 	/// A grazer giving birth to a young one that joins its herd
 	GivesBirth,
@@ -96,6 +96,8 @@ enum class AnimalState : uint8_t
 	LookingAtObject,
 	/// Going to food that interests it
 	GotoFood,
+	/// A wolf in its pack's lair, in its sleeping clip, until it is hungry at night
+	HideInLair,
 	/// At the food: it stops the reaction
 	ArrivesAtFood,
 	/// The empty state: the animal does nothing and plays its move clip. It goes into it when a reaction ends and the
@@ -205,11 +207,9 @@ struct SpellAnimal
 	[[nodiscard]] float Alpha() const { return fade.has_value() ? fade->Value() : magic::flock::k_FullAlpha; }
 };
 
-/// A spell wolf's run and hunt: where it is sent, the strip of land it hunts along, what it is after or eating
-struct SpellWolf
+/// A hunter's hunt: what it is after or eating, and where it last found prey
+struct HuntState
 {
-	glm::vec2 finalDestination {0.0f};
-	magic::flock::Corridor corridor;
 	entt::entity prey {entt::null};
 	/// The turn its chase started
 	uint32_t huntStart {0};
@@ -217,6 +217,24 @@ struct SpellWolf
 	std::optional<glm::vec2> remembered;
 	/// What it is eating. The mouthfuls left are the animal's count of turns.
 	entt::entity food {entt::null};
+};
+
+/// A spell wolf's run and hunt: where it is sent, the strip of land it hunts along, and its hunt
+struct SpellWolf
+{
+	glm::vec2 finalDestination {0.0f};
+	magic::flock::Corridor corridor;
+	HuntState hunt;
+};
+
+/// A wild hunter's own life: a lion, a tiger, a leopard or a wolf that the land or a script made. It has the needs of
+/// a grazer, its flock's sleeping place, and its hunt.
+struct Hunter
+{
+	animals::grazers::Needs needs;
+	/// The cell its flock's home was in when it was made, which it goes back to sleep at; none for none
+	std::optional<glm::ivec2> sleepingCell;
+	HuntState hunt;
 };
 
 /// How an animal is lit: by the land's light where it is, as most things are, or in a colour of its own

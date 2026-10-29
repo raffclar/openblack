@@ -27,6 +27,7 @@
 #include "Animals/AnimalRules.h"
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
+#include "Animals/HunterRules.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -184,6 +185,8 @@ inline size_t GameStateOf(AnimalState state)
 		return 49;
 	case AnimalState::GivesBirth:
 		return 50;
+	case AnimalState::HideInLair:
+		return 51;
 	case AnimalState::DecideWhatToDo:
 	default:
 		return 43;
@@ -246,6 +249,41 @@ inline AnimId GrazerClipFor(const Animal& animal, AnimalState state)
 	    {.walk = static_cast<uint16_t>(row.speedMaxWalk), .run = static_cast<uint16_t>(row.speedMaxRun)}, RandomWhole);
 }
 
+/// A wild hunter's clip of a state: it stands to decide, to give birth, while a script holds it and while it looks at a
+/// thing. It eats, settles down to eat, gets up from its food, sleeps and leaps. Otherwise it moves: it prowls, walks or
+/// runs by its speed
+inline AnimId HunterClipFor(const Animal& animal, AnimalState state, const animals::hunters::KindClips& clips)
+{
+	switch (state)
+	{
+	case AnimalState::DecideWhatToDo:
+	case AnimalState::InScript:
+	case AnimalState::FleeingAndLookingAtObject:
+	case AnimalState::LookingAtObject:
+	case AnimalState::InteractDecideWhatToDo:
+	case AnimalState::GivesBirth:
+		return clips.stand;
+	case AnimalState::Eat:
+		return clips.eat;
+	case AnimalState::StartToEat:
+		return clips.startToEat;
+	case AnimalState::FinishEating:
+		return clips.upFromEat;
+	case AnimalState::Sleeps:
+	case AnimalState::HideInLair:
+		return clips.sleep;
+	case AnimalState::Pounce:
+		return clips.pounce;
+	default:
+		break;
+	}
+	const auto& info = InfoOf(animal.type);
+	const auto& row =
+	    Locator::infoConstants::value().speedThreshold.at(static_cast<size_t>(animals::hunters::ThresholdRowOf(animal.type)));
+	return animals::hunters::MoveClip(clips, animal.move.speed, SpeedStateOf(info, animals::hunters::k_UsualSpeed),
+	                                  static_cast<uint16_t>(row.speedMaxRun));
+}
+
 /// The clip of a state that every kind of animal has: falling when brought down, lying dead, in a hand, flying and
 /// landed. Each kind has its own clips. A kind with no clip for the state keeps the clip that it plays. None for the
 /// other states
@@ -271,8 +309,8 @@ inline std::optional<AnimId> CommonStateClip(const Animal& animal, AnimalState s
 }
 
 /// The clip of a state: the miracle's doves always flap their clip and its bats theirs; its wolves stand to decide,
-/// leap, settle down to eat and eat, and run otherwise; the land's birds choose a flying clip afresh; the grazers take
-/// their own
+/// leap, settle down to eat and eat, and run otherwise; the land's birds choose a flying clip afresh; the grazers and
+/// the wild hunters take their own
 inline AnimId ClipFor(const Animal& animal, AnimalState state)
 {
 	const auto type = animal.type;
@@ -283,6 +321,10 @@ inline AnimId ClipFor(const Animal& animal, AnimalState state)
 	if (animals::grazers::IsGrazer(type))
 	{
 		return GrazerClipFor(animal, state);
+	}
+	if (const auto clips = animals::hunters::ClipsOf(type))
+	{
+		return HunterClipFor(animal, state, *clips);
 	}
 	if (animals::birds::IsLandBird(type))
 	{

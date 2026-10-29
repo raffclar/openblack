@@ -100,6 +100,10 @@ public:
 	/// belonging to a town, none for none. None for a kind that doesn't graze.
 	virtual entt::entity CreateGrazer(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock,
 	                                  entt::entity town) = 0;
+	/// One of the land's wild hunters (lions, tigers, leopards and wolves), as a land script makes it: on the land at a
+	/// point facing along +x, at an age (a random one for none), joining a flock, or one of its own for none. It belongs
+	/// to no town. None for another kind.
+	virtual entt::entity CreateHunter(AnimalInfo type, glm::vec2 position, uint32_t age, entt::entity flock) = 0;
 	/// An animal a challenge script makes: as a land script's animal on its own, at a random age, but in a flock of its own
 	/// that keeps within 2 m of where it was made, and held still for the script. None for a kind openblack can't make yet.
 	virtual entt::entity CreateScriptAnimal(AnimalInfo type, glm::vec2 position) = 0;
