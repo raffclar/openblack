@@ -47,6 +47,7 @@
 #include "Common/MainThreadQueue.h"
 #include "Common/StringUtils.h"
 #include "Debug/TestbedDispenserGrid.h"
+#include "ECS/Archetypes/CloudArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Mesh.h"
@@ -117,7 +118,7 @@
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleExteriorSystemInterface.h"
@@ -635,7 +636,7 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	Locator::playerSystem::value().RegisterPlayers();
 	Locator::playerSystem::value().EnsureAllPlayers();
 	Locator::handSystem::value().FindAfterLoad();
-	Locator::skySystem::value().FindAfterLoad();
+	Locator::skyClockSystem::value().FindAfterLoad();
 	Locator::cameraBookmarkSystem::value().FindAfterLoad();
 	if (Locator::appleBarrelSystem::has_value())
 	{
@@ -959,7 +960,7 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	}
 
 	// The sky goes on as it was: it is kept while every entity goes, and made again after
-	Locator::skySystem::value().KeepForNextLand();
+	Locator::skyClockSystem::value().KeepForNextLand();
 	// The turns go back to 0 as the land clears, before the script of the next land starts. Thus the buildings that the
 	// script makes are not made in play, and they get no path from their storage pit, as on the first land of a game.
 	Locator::time::value().RestartTurns();
@@ -975,7 +976,7 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	{
 		Locator::objectDrawListSystem::value().Reset();
 	}
-	Locator::skySystem::value().Initialize();
+	Locator::skyClockSystem::value().Initialize();
 	// TODO(#661): split entities that are permanent from map entities and move hand and camera to init
 	// We need a hand for the player
 	Locator::handSystem::value().Initialize();
@@ -1097,10 +1098,14 @@ void LandSystem::LoadLandscape(const std::filesystem::path& path)
 void LandSystem::SetUpLandscape()
 {
 	// A land starts at noon on the game's cycle of day and night, which its script may change, under new clouds
-	auto& sky = Locator::skySystem::value();
+	auto& sky = Locator::skyClockSystem::value();
 	sky.GetClock().Reset();
 	sky.SetTime(sky.GetClock().GetScriptTime());
-	Locator::cloudSystem::value().Reset();
+	archetypes::CloudArchetype::CreateSky();
+	if (Locator::cloudSystem::has_value())
+	{
+		Locator::cloudSystem::value().Reset();
+	}
 
 	// Before the land script runs, the land has the player of each of the seven god slots and the neutral player, in the
 	// order of their numbers. A slot that nobody plays has its player too, so the scripts and the turns find it.

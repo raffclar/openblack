@@ -74,7 +74,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
@@ -1342,7 +1342,7 @@ void FeatureScriptCommands::EditLevel()
 
 void FeatureScriptCommands::SetNighttime(float duration, float night, float change)
 {
-	Locator::skySystem::value().GetClock().SetCycleFromLand(duration, night, change);
+	Locator::skyClockSystem::value().GetClock().SetCycleFromLand(duration, night, change);
 }
 
 void FeatureScriptCommands::MakeLastObjectArtifact(int32_t townId, const std::string& player, float worth)

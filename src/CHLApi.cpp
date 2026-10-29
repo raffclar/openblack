@@ -228,7 +228,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -4941,7 +4941,8 @@ void MoveCameraToFaceObject() // 107 MOVE_CAMERA_TO_FACE_OBJECT
 void GetMoonPercentage() // 108 GET_MOON_PERCENTAGE
 {
 	// How full the moon was the last time it showed: 0 at the full moon, 1 at a new moon
-	const auto* moon = Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skySystem::value().GetMoon());
+	const auto* moon =
+	    Locator::entitiesRegistry::value().TryGet<ecs::components::Moon>(Locator::skyClockSystem::value().GetEntities().moon);
 	Pushf(graphics::moon::ScriptPercentage(moon != nullptr ? moon->phase : 0.0f));
 }
 
@@ -5029,12 +5030,12 @@ void RemoveReference() // 111 REMOVE_REFERENCE
 void SetGameTime() // 112 SET_GAME_TIME
 {
 	const auto time = Popf();
-	Locator::skySystem::value().SetTime(time);
+	Locator::skyClockSystem::value().SetTime(time);
 }
 
 void GetGameTime() // 113 GET_GAME_TIME
 {
-	Pushf(Locator::skySystem::value().GetClock().GetScriptTime());
+	Pushf(Locator::skyClockSystem::value().GetClock().GetScriptTime());
 }
 
 /// The local time of the player's computer now. In a game for more than one player, the game tells the script that
@@ -7766,14 +7767,14 @@ void MoveCameraPosFocLens() // 287 MOVE_CAMERA_POS_FOC_LENS
 void GameTimeOnOff() // 288 GAME_TIME_ON_OFF
 {
 	const auto enable = Pop().intVal != 0;
-	Locator::skySystem::value().GetClock().SetRunning(enable);
+	Locator::skyClockSystem::value().GetClock().SetRunning(enable);
 }
 
 void MoveGameTime() // 289 MOVE_GAME_TIME
 {
 	const auto duration = Popf();
 	const auto hourOfTheDay = Popf();
-	Locator::skySystem::value().GetClock().MoveScriptTime(hourOfTheDay, duration);
+	Locator::skyClockSystem::value().GetClock().MoveScriptTime(hourOfTheDay, duration);
 }
 
 void SetHighGraphicsDetail() // 290 SET_HIGH_GRAPHICS_DETAIL
@@ -9367,13 +9368,13 @@ void SetGameTimeProperties() // 407 SET_GAME_TIME_PROPERTIES
 	const auto percentageChange = Popf();
 	const auto percentageNight = Popf();
 	const auto duration = Popf();
-	Locator::skySystem::value().GetClock().SetCycle(duration, percentageNight, percentageChange);
+	Locator::skyClockSystem::value().GetClock().SetCycle(duration, percentageNight, percentageChange);
 }
 
 void ResetGameTimeProperties() // 408 RESET_GAME_TIME_PROPERTIES
 {
-	Locator::skySystem::value().GetClock().SetCycle(DayNightClock::k_DefaultDuration, DayNightClock::k_DefaultNight,
-	                                                DayNightClock::k_DefaultChange);
+	Locator::skyClockSystem::value().GetClock().SetCycle(DayNightClock::k_DefaultDuration, DayNightClock::k_DefaultNight,
+	                                                     DayNightClock::k_DefaultChange);
 }
 
 void SoundExists() // 409 SOUND_EXISTS

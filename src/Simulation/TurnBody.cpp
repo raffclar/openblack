@@ -99,7 +99,7 @@
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
-#include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
@@ -862,7 +862,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::TimeOfDay:
 		// The time of day moves on
-		Locator::skySystem::value().ProcessTurn();
+		Locator::skyClockSystem::value().ProcessTurn();
 		break;
 	case Step::WeatherThings:
 		// The weather things follow their storms, which the wind blows along if it can

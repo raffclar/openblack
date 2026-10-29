@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -19,7 +20,13 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Cloud.h"
+#include "ECS/Components/Sky.h"
+#include "ECS/Registry.h"
+#include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Graphics/HeadlessRenderer.h"
+#include "Locator.h"
 #include "Server/DedicatedServer.h"
 #include "TestTempFolder.h"
 
@@ -59,6 +66,8 @@ TEST(DedicatedServer, TheServerHasNoWindowNoDeviceAndNoAudio)
 	const auto config = ServerConfig(ServerSettings {.gamePath = "data", .seed = 7, .turns = 100});
 	EXPECT_EQ(config.graphicsBackend, openblack::GraphicsBackend::Noop);
 	EXPECT_TRUE(config.dedicatedServer);
+	// The resources keep only their data
+	EXPECT_EQ(config.resourceUploads, openblack::graphics::UploadMode::DataOnly);
 	EXPECT_TRUE(config.background);
 	EXPECT_FALSE(config.vsync);
 	EXPECT_EQ(config.resolution.x, 0);
@@ -163,4 +172,67 @@ TEST(DedicatedServer, TheServerWritesNothingInTheProfileFolderItIsGiven)
 		files.push_back(entry.path());
 	}
 	EXPECT_TRUE(files.empty());
+}
+
+TEST(DedicatedServer, TheServerMakesNoGraphicsObjects)
+{
+	// The objects that the graphics library makes for itself as it starts
+	uint32_t libraryObjects = 0;
+	{
+		const auto renderer = openblack::graphics::HeadlessRenderer::Create();
+		ASSERT_NE(renderer, nullptr);
+		libraryObjects = openblack::graphics::GraphicsObjectCount();
+	}
+	const openblack::test::TestTempFolder profileFolder;
+	std::vector<uint32_t> objects;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&objects](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    objects.push_back(openblack::graphics::GraphicsObjectCount());
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	ASSERT_FALSE(objects.empty());
+	EXPECT_TRUE(std::ranges::all_of(objects, [libraryObjects](uint32_t count) { return count == libraryObjects; }));
+}
+
+TEST(DedicatedServer, TheServerMakesTheSkysCloudsButNoSystemThatOnlyShowsTheWorld)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool shown = false;
+	size_t clouds = 0;
+	const std::atomic<bool> stop {false};
+	const auto exitCode = openblack::server::Run(
+	    MockSettings(profileFolder.Path()), stop, [&shown, &clouds](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    using openblack::Locator;
+		    shown = shown || Locator::oceanSystem::has_value() || Locator::mistSystem::has_value() ||
+		            Locator::cloudSystem::has_value() || Locator::villageLightSystem::has_value();
+		    // The clouds of the sky are entities of the world on every computer, so that each entity has the same id
+		    clouds = std::as_const(Locator::entitiesRegistry::value()).Size<const openblack::ecs::components::Cloud>();
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_FALSE(shown);
+	EXPECT_GT(clouds, 0u);
+}
+
+TEST(DedicatedServer, TheServerMovesTheSkysClockButDoesNotShowTheSky)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool shown = false;
+	bool clock = true;
+	size_t turns = 0;
+	const std::atomic<bool> stop {false};
+	const auto exitCode = openblack::server::Run(
+	    MockSettings(profileFolder.Path()), stop, [&shown, &clock, &turns](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    using openblack::Locator;
+		    ++turns;
+		    shown = shown || Locator::skySystem::has_value();
+		    // The clock of day and night, on the dome's entity, is part of the world on every computer
+		    clock = clock && Locator::skyClockSystem::has_value() &&
+		            std::as_const(Locator::entitiesRegistry::value())
+		                .AllOf<openblack::ecs::components::DayNightCycle>(Locator::skyClockSystem::value().GetEntities().dome);
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_GT(turns, 0u);
+	EXPECT_FALSE(shown);
+	EXPECT_TRUE(clock);
 }
