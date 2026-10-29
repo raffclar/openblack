@@ -4154,20 +4154,20 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 
 void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 {
-	// In the temple, without the interface or with a box on the screen, the camera does not read its keys
+	// In the temple, without the interface or while a box has the keyboard, the camera does not read its keys
+	auto& actions = Locator::gameActionSystem::value();
 	const bool interfaceActive =
 	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
 	if (!game_frame::CameraReadsKeys({
 	        .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
 	        .interfaceActive = interfaceActive,
-	        .boxShows = FrontEndBoxShows(),
+	        .boxHasKeyboard = actions.BoxHasKeyboard(),
 	    }))
 	{
 		return;
 	}
 	auto& camera = Locator::camera::value();
 	// The keys of the camera act after the camera moved, so that their steps move it in the next frame
-	auto& actions = Locator::gameActionSystem::value();
 	// A miracle's camera path keeps the camera until the player moves it with the movement keys or grips the land,
 	// which hand it straight back; meanwhile the player's other camera controls do nothing
 	auto& cameraPaths = Locator::cameraPathSystem::value();
@@ -4277,6 +4277,11 @@ bool Game::Initialize() noexcept
 		// If gui captures this input, do not propagate
 		if (!Locator::debugGui::value().ProcessEvents(event))
 		{
+			// At each key that goes down, a repeat of a held key too, the game finds again whether a box has the keyboard
+			if (event.type == SDL_KEYDOWN)
+			{
+				Locator::gameActionSystem::value().BoxKeyDown(_interface && _interface->BoxTakesKeyboard());
+			}
 			// A full-screen video takes Escape: it fades out, unless Shift or Ctrl is held
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
 			    Locator::videoSystem::value().Escape((event.key.keysym.mod & KMOD_SHIFT) != 0,

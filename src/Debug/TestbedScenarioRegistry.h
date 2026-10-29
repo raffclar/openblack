@@ -1053,6 +1053,12 @@ struct Command
 		/// makes the god of the player bring the creature of the mind file (mindFile) of the creature mind folder, as a
 		/// skirmish starts with the creature that the profile keeps. Needs no creature.
 		SkirmishBox,
+		/// The player puts a key (value, the key's scancode) down on the keyboard and holds it, the keyboard repeats the
+		/// held key, or the player lets go of it. Each goes through the queue of the window's events, as the real
+		/// keyboard's events do. Needs no creature.
+		PlainKeyDown,
+		PlainKeyRepeat,
+		PlainKeyUp,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
