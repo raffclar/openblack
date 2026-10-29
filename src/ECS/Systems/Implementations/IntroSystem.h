@@ -42,14 +42,10 @@ private:
 		Lifting = 12,
 	};
 
-	/// The hand's entity with its model, which the turns make, hidden until the frames show it
-	void MakeHiddenHand();
-	/// The hand shown with a clip from its start
-	void ShowHand(std::string_view clipFile);
-	/// The hand's entity, made if there is none, and shown with a clip
+	/// The frames make the hand in the drawn registry if it is not there, and show it with a clip from its start
 	void MakeHand(std::string_view clipFile);
-	/// The hand gone from view, its entity kept until the turns release it
-	void HideHand();
+	/// The frames do the requests of the scripts for the hand
+	void DoHandRequests();
 	void PlaceHand(const glm::vec3& position, float yaw);
 	void FreeHand();
 	/// The hand's clip moved on; true when it came round
@@ -67,7 +63,12 @@ private:
 	bool _lightDrawn {false};
 	bool _cameraChasing {false};
 	glm::vec3 _cameraOrigin {0.0f};
+	/// The hand in the drawn registry, while it shows
 	entt::entity _hand {entt::null};
+	/// The scripts ask for the hand that sets the boy down. The next frame makes it.
+	bool _setDownWanted {false};
+	/// The scripts tell the hand to let the boy go. The next frame moves its clip to the end.
+	bool _letGoWanted {false};
 	bool _handPlaying {false};
 	bool _holdingBoy {false};
 	/// Set once the light has gone, when the lifting clip may play

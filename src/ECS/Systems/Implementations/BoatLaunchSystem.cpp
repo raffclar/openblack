@@ -33,6 +33,7 @@
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -53,9 +54,10 @@ namespace
 constexpr entt::hashed_string k_SmokeSheet = entt::hashed_string("raw/smoke");
 constexpr entt::hashed_string k_SmokeSheetAlpha = entt::hashed_string("raw/smokea");
 
-auto& Entities()
+/// The things of the film are in the registry of the things that only the frames make, move and remove
+auto& Drawn()
 {
-	return Locator::entitiesRegistry::value();
+	return Locator::drawnRegistry::value();
 }
 
 /// A clip of the misc folder, loaded into the animation cache the first time
@@ -117,7 +119,7 @@ std::optional<glm::mat4> RootAt(entt::id_type clipId, int32_t time)
 /// A thing of the film posed in its clip at a time, which comes round at the clip's length
 void Pose(entt::entity entity, AnimId clipName, int32_t time)
 {
-	auto& registry = Entities();
+	auto& registry = Drawn();
 	auto& pose = registry.Get<AnimatedStaticPose>(entity);
 	auto& part = registry.Get<BoatFilmPart>(entity);
 	const auto* clip = ClipOf(ClipId(clipName));
@@ -148,7 +150,7 @@ void Pose(entt::entity entity, AnimId clipName, int32_t time)
 /// A thing of the film drawn by a matrix
 void Place(entt::entity entity, const glm::mat4& model)
 {
-	auto& registry = Entities();
+	auto& registry = Drawn();
 	registry.Get<DrawnMatrix>(entity).model = model;
 	auto& transform = registry.Get<Transform>(entity);
 	transform.position = glm::vec3(model[3]);
@@ -192,7 +194,7 @@ void BoatLaunchSystem::Play(const Places& places)
 {
 	// One plays at a time: a new film takes the place of one still playing
 	Stop();
-	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	if (!Locator::resources::has_value())
 	{
 		return;
 	}
@@ -201,12 +203,22 @@ void BoatLaunchSystem::Play(const Places& places)
 	_places = places;
 	_clocks = {};
 	_playing = true;
-	// The turn makes the things of both stages now. The frames show those of the stage that plays, and hide them all at
-	// the end. The turns remove them when the next film starts or the land closes.
+	// The next frame makes the things of both stages. The frames show those of the stage that plays, and hide them all at
+	// the end. They go when the next film starts or the land closes.
+	_partsWanted = true;
+	_boat = BoatMatrix();
+}
+
+void BoatLaunchSystem::MakeWantedParts()
+{
+	if (!_partsWanted)
+	{
+		return;
+	}
+	_partsWanted = false;
 	_launchParts = MakeParts(rules::Stage::Launch);
 	_sailingParts = MakeParts(rules::Stage::Sailing);
 	Show(_sailingParts, false);
-	_boat = BoatMatrix();
 	PlaceParts();
 }
 
@@ -214,6 +226,7 @@ void BoatLaunchSystem::Stop()
 {
 	FreeParts(_launchParts);
 	FreeParts(_sailingParts);
+	_partsWanted = false;
 	_playing = false;
 	_boat.reset();
 	_clocks = {};
@@ -240,11 +253,11 @@ const std::vector<entt::entity>& BoatLaunchSystem::StageParts() const
 
 void BoatLaunchSystem::Show(const std::vector<entt::entity>& parts, bool shown)
 {
-	if (parts.empty() || !Locator::entitiesRegistry::has_value())
+	if (parts.empty() || !Locator::drawnRegistry::has_value())
 	{
 		return;
 	}
-	auto& registry = Entities();
+	auto& registry = Drawn();
 	for (const auto entity : parts)
 	{
 		if (!registry.Valid(entity) || registry.AllOf<HiddenByState>(entity) != shown)
@@ -265,12 +278,12 @@ void BoatLaunchSystem::Show(const std::vector<entt::entity>& parts, bool shown)
 
 bool BoatLaunchSystem::Shown(const std::vector<entt::entity>& parts) const
 {
-	return !parts.empty() && Entities().Valid(parts.front()) && !Entities().AllOf<HiddenByState>(parts.front());
+	return !parts.empty() && Drawn().Valid(parts.front()) && !Drawn().AllOf<HiddenByState>(parts.front());
 }
 
 std::vector<entt::entity> BoatLaunchSystem::MakeParts(rules::Stage stage)
 {
-	auto& registry = Entities();
+	auto& registry = Drawn();
 	std::vector<entt::entity> parts;
 	const auto make = [&registry, &parts, stage](MeshId mesh, BoatFilmPart::Role role, size_t index, bool animated) {
 		const auto entity = registry.Create();
@@ -308,9 +321,9 @@ std::vector<entt::entity> BoatLaunchSystem::MakeParts(rules::Stage stage)
 
 void BoatLaunchSystem::FreeParts(std::vector<entt::entity>& parts)
 {
-	if (!parts.empty() && Locator::entitiesRegistry::has_value())
+	if (!parts.empty() && Locator::drawnRegistry::has_value())
 	{
-		auto& registry = Entities();
+		auto& registry = Drawn();
 		for (const auto entity : parts)
 		{
 			if (registry.Valid(entity) && registry.AllOf<BoatFilmPart>(entity))
@@ -383,7 +396,7 @@ void BoatLaunchSystem::PlaceParts()
 	{
 		return;
 	}
-	auto& registry = Entities();
+	auto& registry = Drawn();
 	Place(parts.front(), *_boat);
 	for (size_t i = 1; i < parts.size(); ++i)
 	{
@@ -408,10 +421,11 @@ void BoatLaunchSystem::PlaceParts()
 
 void BoatLaunchSystem::Update(uint32_t milliseconds)
 {
-	if (!_playing || !Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	if (!_playing || !Locator::drawnRegistry::has_value() || !Locator::resources::has_value())
 	{
 		return;
 	}
+	MakeWantedParts();
 	const auto* launch = ClipOf(_launchClip);
 	const auto* sailing = ClipOf(_sailingClip);
 	const rules::ClipLengths lengths {

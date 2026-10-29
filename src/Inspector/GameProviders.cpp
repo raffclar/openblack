@@ -1412,9 +1412,9 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			        wakes.push_back(phase);
 		        }
 		        Json parts = Json::array();
-		        if (const auto* registry = Registry(); registry != nullptr)
+		        if (const auto* registry = DrawnRegistry(); registry != nullptr)
 		        {
-			        // Only the things of the film that the frames show now
+			        // Only the things of the film that the frames show now, in the drawn registry
 			        registry->Each<const BoatFilmPart, const Transform>(
 			            [&parts, registry](entt::entity entity, const BoatFilmPart& part, const Transform& transform) {
 				            if (registry->AllOf<HiddenByState>(entity))

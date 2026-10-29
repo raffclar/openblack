@@ -5585,10 +5585,12 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 			{
 				return;
 			}
-			// The body in the pose of the clip it plays
+			// The body in the pose of the clip it plays. A thing with no entity of the land, as the boat of the film, rests.
 			const auto& rest = mesh->GetBoneMatrices();
 			std::span<const glm::mat4> pose = rest;
-			if (const auto* villagerPose = drawDesc.entities.TryGet<const ecs::components::VillagerPose>(draw.entity))
+			if (const auto* villagerPose = draw.entity != entt::null
+			                                   ? drawDesc.entities.TryGet<const ecs::components::VillagerPose>(draw.entity)
+			                                   : nullptr)
 			{
 				if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
 				{

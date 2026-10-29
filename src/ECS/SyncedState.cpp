@@ -155,11 +155,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Firefly", .field = "amplitude", .marker = ""},
     {.component = "Firefly", .field = "drawn", .marker = ""},
     {.component = "Transform", .field = "", .marker = "Firefly"},
-    // The opening's hand and the things of the explorers' boat film: the turns make and remove their entities, and the
-    // frames show, move, pose and hide them. The boy that the opening's hand holds is drawn in its grip, which only the
-    // draw and the script camera read.
-    {.component = "*", .field = "", .marker = "IntroHand"},
-    {.component = "*", .field = "", .marker = "BoatFilmPart"},
     // The rooms of the temple, their lights and the mist of the creature cave are not a part of the land. The temple
     // makes them for the player of this computer when the player goes into it, and removes them when the player leaves.
     {.component = "*", .field = "", .marker = "TempleInteriorPart"},
@@ -183,6 +178,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HeldLight", .field = "", .marker = ""},
     // The static of a creature that fizzes slides only in the frames that draw its body. Only the draw reads it.
     {.component = "CreatureSpells", .field = "staticScroll", .marker = ""},
+    // The frames draw the boy in the grip of the opening's hand. Only the draw and the script camera read the grip.
     {.component = "HighDetail", .field = "heldAt", .marker = ""},
     // The eyes of a villager that a script draws in high detail blink and look in the frames, by the local random
     // numbers. Only the draw reads them.
