@@ -203,6 +203,8 @@ enum class Step : uint8_t
 	CameraBookmarks,
 	ScriptHighlights,
 	Climates,
+	/// Every tenth turn the hand tells the player at this computer the belief that the towns gained in the player
+	BeliefGained,
 	/// Every tenth turn the advisors warn when a town of the player at this computer loses its belief in the player
 	LosingBelief,
 	HeldThing,
@@ -338,6 +340,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::CameraBookmarks, .stage = Stage::WeatherThings},
     {.step = Step::ScriptHighlights, .stage = Stage::Highlights},
     {.step = Step::Climates, .stage = Stage::Climates},
+    {.step = Step::BeliefGained, .stage = Stage::Climates},
     {.step = Step::LosingBelief, .stage = Stage::Climates},
     {.step = Step::HeldThing, .stage = Stage::Hand},
     {.step = Step::PlayerSparkles, .stage = Stage::Hand},

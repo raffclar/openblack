@@ -38,6 +38,19 @@ TEST(NeedFlag, AWorkshopWantsTheWoodOfAScaffoldThatItDoesNotHold)
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(NeedFlag, AWorkshopRequiresTheWoodOfTheScaffoldsThatItHasRoomFor)
+{
+	EXPECT_EQ(workshop::WoodRequired(3, 0, 200), 600u);
+	EXPECT_EQ(workshop::WoodRequired(2, 150, 200), 250u);
+	EXPECT_EQ(workshop::WoodRequired(1, 200, 200), 0u);
+	// No room: no wood required, whatever the workshop holds
+	EXPECT_EQ(workshop::WoodRequired(0, 0, 200), 0u);
+	EXPECT_EQ(workshop::WoodRequired(-1, 0, 200), 0u);
+	// More wood than the room needs goes below zero and wraps, as the game counts it
+	EXPECT_EQ(workshop::WoodRequired(1, 201, 200), 0xFFFFFFFFu);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(NeedFlag, AFlagShowsOnlyForANeedMoreThanTheLeastOfItsRow)
 {
 	EXPECT_FALSE(need_flag::Shows(0.0f, k_Wood));

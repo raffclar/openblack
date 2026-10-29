@@ -168,6 +168,11 @@ public:
 	/// A town's turn of belief, in its own turn: what its people were impressed by is believed, its wants that go unmet
 	/// cost its player belief, and the player it believes in most takes it at once
 	virtual void BelieveInTown(entt::entity /*town*/) {}
+	/// Each tenth turn, the belief that the towns gained in each player since the last time is added. The tallies of the
+	/// towns go back to nothing.
+	virtual void TownGainsTurn(uint32_t /*turn*/) {}
+	/// The number that the hand shows for the belief that the towns gained in a player at this turn, once
+	[[nodiscard]] virtual std::optional<float> TakeGainShown(PlayerNames /*player*/) { return std::nullopt; }
 	/// A town is given belief in a player by a thing, as by an artefact its people dance round: the symbol of it rises
 	/// from the thing, and the town's awe may be heard there
 	virtual void GiveTownBelief(entt::entity /*town*/, PlayerNames /*player*/, float /*amount*/, entt::entity /*from*/,

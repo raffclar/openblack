@@ -27,7 +27,9 @@ class FloatingNumberSystemInterface
 public:
 	virtual ~FloatingNumberSystemInterface() = default;
 	/// A number floats up from a point, written three wide with nothing after the point, in a colour (0xAARRGGBB)
-	virtual void Add(const glm::vec3& position, float value, uint32_t colour) = 0;
+	virtual void Add(const glm::vec3& position, float value, uint32_t colour) { AddWide(position, value, colour, 3); }
+	/// A number floats up from a point, written to a width with nothing after the point, in a colour (0xAARRGGBB)
+	virtual void AddWide(const glm::vec3& position, float value, uint32_t colour, int width) = 0;
 	/// Once a frame: the numbers rise, and those whose time is up go
 	virtual void Step(float seconds) = 0;
 	/// The numbers that float now

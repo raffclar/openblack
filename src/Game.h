@@ -974,6 +974,8 @@ private:
 	/// Once a game turn outside the temple: the hand's tooltip for what it is over, "Interact" over the player's own
 	/// creature
 	void ProcessHandToolTipTurn();
+	/// Each tenth turn: the hand shows the belief that the towns gained in the player at this computer
+	void ShowBeliefGained();
 	/// The tooltips that the hand submits this turn for what it holds and what is under the pointer
 	void SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entity> pointed);
 	void ProcessTurnCheering();

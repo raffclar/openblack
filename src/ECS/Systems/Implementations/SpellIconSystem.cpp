@@ -1054,6 +1054,60 @@ void SpellIconSystem::CancelChargesFor(entt::entity temple, PlayerNames charger)
 	}
 }
 
+bool SpellIconSystem::ChargesFor(entt::entity temple, PlayerNames charger) const
+{
+	auto& registry = Entities();
+	for (const auto site : SitesOfTemple(temple))
+	{
+		const auto* list = registry.TryGet<const SiteIcons>(site);
+		if (list == nullptr)
+		{
+			continue;
+		}
+		const bool charges = std::ranges::any_of(list->icons, [&registry, charger](entt::entity icon) {
+			const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+			return component != nullptr && component->charging && component->charger == charger;
+		});
+		if (charges)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool SpellIconSystem::CancelLatestChargeFor(entt::entity temple, PlayerNames charger)
+{
+	auto& registry = Entities();
+	// Only a charge that started after the first turn can stop, as the latest start begins at 0
+	WorshipIcon* latest = nullptr;
+	uint32_t latestStart = 0;
+	for (const auto site : SitesOfTemple(temple))
+	{
+		const auto* list = registry.TryGet<const SiteIcons>(site);
+		if (list == nullptr)
+		{
+			continue;
+		}
+		for (const auto icon : list->icons)
+		{
+			auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
+			if (component != nullptr && component->charging && component->charger == charger &&
+			    component->chargeStartTurn > latestStart)
+			{
+				latest = component;
+				latestStart = component->chargeStartTurn;
+			}
+		}
+	}
+	if (latest == nullptr)
+	{
+		return false;
+	}
+	CancelCharge(*latest);
+	return true;
+}
+
 entt::entity SpellIconSystem::IconInTemple(entt::entity temple, SpellSeedType seed) const
 {
 	for (const auto site : SitesOfTemple(temple))
