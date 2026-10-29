@@ -15,7 +15,6 @@
 #include <optional>
 
 #include "CameraDrag.h"
-#include "Help/TurnCheer.h"
 #include "Input/BindableActions.h"
 
 /// What the camera lets the player do, as the game's scripts allow it: the camera help's features. The tutorials take
@@ -59,10 +58,6 @@ struct CameraHelp
 	float handReach {k_DefaultHandReach};
 	/// The interface level that a script set last, none before a script sets one
 	std::optional<int32_t> interfaceLevel;
-	/// How fast the player turns the world camera, in radians a second, measured over the last frames
-	float turnSpeed {0.0f};
-	/// The advisors cheering the player's turning on, while a lesson asks for it
-	help::turn_cheer::Cheering turnCheering;
 
 	/// The features under the mask become those of the value
 	void Enable(uint32_t value, uint32_t mask) { features = (features & ~mask) | value; }

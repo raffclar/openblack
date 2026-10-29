@@ -7,13 +7,18 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#define LOCATOR_IMPLEMENTATIONS
+
 #include <limits>
+#include <optional>
 
 #include <gtest/gtest.h>
 
+#include "ECS/Systems/Implementations/TurnCheerSystem.h"
 #include "Help/TurnCheer.h"
 
 using namespace openblack::help::turn_cheer;
+using openblack::ecs::systems::TurnCheerSystem;
 
 namespace
 {
@@ -127,4 +132,38 @@ TEST(TurnCheer, StartingAgainForgetsTheTurns)
 	Start(cheering);
 	EXPECT_EQ(cheering.lastBestPraiseTurn, 0u);
 	EXPECT_EQ(ProcessTurn(cheering, k_FullSpeed, 1001, draws.Make()), k_BestPraise);
+}
+
+TEST(TurnCheerSystem, AStartMeasuresTheSpeedAgainFromStill)
+{
+	TurnCheerSystem cheer;
+	cheer.MeasureTurn(0.1f, 0.1f);
+	EXPECT_FLOAT_EQ(cheer.GetTurnSpeed(), 0.4f);
+	EXPECT_FALSE(cheer.GetCheering().on);
+	cheer.Start();
+	EXPECT_FLOAT_EQ(cheer.GetTurnSpeed(), 0.0f);
+	EXPECT_TRUE(cheer.GetCheering().on);
+	// A step with no turn slows the measure towards still
+	cheer.MeasureTurn(0.7f, 0.1f);
+	cheer.MeasureTurn(std::nullopt, 0.1f);
+	EXPECT_FLOAT_EQ(cheer.GetTurnSpeed(), SmoothSpeed(SmoothSpeed(0.0f, 0.7f, 0.1f), 0.0f, 0.1f));
+	cheer.Stop();
+	EXPECT_FALSE(cheer.GetCheering().on);
+}
+
+TEST(TurnCheerSystem, ATurnCheersAtTheMeasuredSpeed)
+{
+	TurnCheerSystem cheer;
+	FixedDraws draws;
+	// Nothing while the cheering is stopped
+	EXPECT_FALSE(cheer.ProcessTurn(1000, draws.Make()).has_value());
+	cheer.Start();
+	// The camera turns by a radian in each tenth of a second: that is faster than flat out
+	for (int step = 0; step < 20; ++step)
+	{
+		cheer.MeasureTurn(1.0f, 0.1f);
+	}
+	ASSERT_GE(cheer.GetTurnSpeed(), k_FullSpeed);
+	EXPECT_EQ(cheer.ProcessTurn(1000, draws.Make()), k_BestPraise);
+	EXPECT_EQ(cheer.GetCheering().lastBestPraiseTurn, 1000u);
 }

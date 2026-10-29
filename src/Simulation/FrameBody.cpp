@@ -14,6 +14,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Archetypes/VillageLightArchetype.h"
+#include "ECS/Systems/AdvisorVoiceSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
@@ -286,7 +287,12 @@ void PlayFrameEffects(FrameViewInterface& view)
 	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise. They act on
 	// the screen, so a world with no view has none.
 	view.UpdateAdvisors();
-	// The scripts' dialogue: the voices, the player's click and the newest text sliding in
+	// The advisors' voices that this computer plays: a line whose delay is over starts
+	if (Locator::advisorVoiceSystem::has_value())
+	{
+		Locator::advisorVoiceSystem::value().Update();
+	}
+	// The scripts' dialogue: the player's click and the newest text sliding in
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const bool clicked = view.TakeDialogueClick();
