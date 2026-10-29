@@ -16,7 +16,7 @@
 
 #include <glm/vec3.hpp>
 
-#include "Audio/GameMusic.h"
+#include "Sound/GameMusic.h"
 
 /// The chant of the worshippers at a worship site, which the camera hears near the site
 namespace openblack::ecs::worship_chant_music

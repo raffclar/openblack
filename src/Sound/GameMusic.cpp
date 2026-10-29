@@ -513,14 +513,14 @@ bool GameMusic::ProcessWorshipChant(const TurnInputs& inputs)
 	}
 	const auto& chant = *inputs.worshipChant;
 	const auto path = std::string(BankPath(chant.type));
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
 	if (!info)
 	{
 		return false;
 	}
 	SaveResumeChunks();
-	audio.MusicPlay(path, MusicPlayOptions {
+	audio.MusicPlay(path, MusicRequest {
 	                          .volume = k_FullVolume,
 	                          .startChunk = GetResumeChunk(info->groupId),
 	                          .sync = true,
