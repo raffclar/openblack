@@ -403,7 +403,7 @@ void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 		    .wantsWater = dominant == Desire::Water,
 		    .wantsToPoo = dominant == Desire::Poo,
 		    .carrying = Locator::creatureObjectActionSystem::has_value() &&
-		                Locator::creatureObjectActionSystem::value().GetHeld(creature).has_value(),
+		                Locator::creatureObjectActionSystem::value().GetCarried(creature).has_value(),
 		});
 		const auto seconds = info != nullptr ? info->helpTutorialSeconds : help::BodyThresholds {}.seconds;
 		if (const auto prompt = help::TutorialNow(memory, applies, turn, k_TurnsPerSecond, seconds); prompt.has_value())

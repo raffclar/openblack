@@ -148,7 +148,16 @@ public:
 	}
 	/// How far through its animations the action is, 0 to 1, while it plays them
 	[[nodiscard]] virtual std::optional<float> GetProgress(entt::entity creature) const = 0;
+	/// The thing in the hand of the creature, as the body shows it and lets it go
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld(entt::entity creature) const = 0;
+	/// The thing that the creature carries, as its mind, the scripts and the towns see it. This is the thing in the hand,
+	/// except while the creature prepares a throw: then it carries nothing.
+	[[nodiscard]] virtual std::optional<entt::entity> GetCarried(entt::entity creature) const { return GetHeld(creature); }
+	/// Whether the action of the hands took hold of its thing or hit it, and the body still plays the action
+	[[nodiscard]] virtual bool HandsTouched(entt::entity /*creature*/) const { return false; }
+	/// One turn of a stomp after its blow: a living thing on the map under the foot takes the crush of the stomp.
+	/// Returns whether the thing is on the map.
+	virtual bool CrushUnderFoot(entt::entity /*creature*/, entt::entity /*thing*/) { return false; }
 	/// What something is worth to eat, if anything
 	[[nodiscard]] virtual std::optional<float> FoodValueOf(entt::entity object) const = 0;
 	/// Whether a creature can pick something up from where it is: things and villagers, not the land's fixtures nor other

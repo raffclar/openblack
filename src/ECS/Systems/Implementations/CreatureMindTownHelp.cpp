@@ -192,7 +192,7 @@ void ecs::systems::mind_town_help::Situate(const ecs::Registry& registry, entt::
 	using creature_plan_actions::Build;
 	if (Locator::creatureObjectActionSystem::has_value())
 	{
-		if (const auto held = Locator::creatureObjectActionSystem::value().GetHeld(creature))
+		if (const auto held = Locator::creatureObjectActionSystem::value().GetCarried(creature))
 		{
 			const auto* animal = registry.TryGet<const Animal>(*held);
 			situation.holdingCow = animal != nullptr && creature_town_help::IsCowKind(animal->type);

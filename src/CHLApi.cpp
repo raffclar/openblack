@@ -146,6 +146,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipChants.h"
+#include "ECS/CreatureCarried.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/CreatureReactionNotice.h"
@@ -4381,10 +4382,11 @@ void InCreatureHand() // 076 IN_CREATURE_HAND
 		Pushb(false);
 		return;
 	}
-	const auto* held = registry.TryGet<const ecs::components::CreatureHeldObject>(creature);
+	// What the creature carries: while it prepares a throw, it carries nothing
+	const auto carried = ecs::creature_carried::CarriedBy(registry, creature);
 	const auto* action = registry.TryGet<const ecs::components::CreatureObjectAction>(creature);
 	const auto eating = action != nullptr && action->kind == creature_object_actions::Kind::Eat ? action->target : std::nullopt;
-	Pushb(script::property_rules::InCreatureHand(thing, held != nullptr ? held->object : entt::null, eating));
+	Pushb(script::property_rules::InCreatureHand(thing, carried.value_or(entt::null), eating));
 }
 
 /// Changes the desires of the creature a script names, telling the script when it names no creature
@@ -7502,7 +7504,7 @@ void GetObjectHeld273() // 273 GET_OBJECT_HELD
 		return;
 	}
 	const auto held = Locator::creatureObjectActionSystem::has_value()
-	                      ? Locator::creatureObjectActionSystem::value().GetHeld(creature)
+	                      ? Locator::creatureObjectActionSystem::value().GetCarried(creature)
 	                      : std::nullopt;
 	if (!held.has_value())
 	{
