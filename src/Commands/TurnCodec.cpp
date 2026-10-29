@@ -312,6 +312,7 @@ void WriteAction(Writer& out, const Action& action)
 	               },
 	               [](const QuickSave& /*command*/) {},
 	               [](const QuickLoad& /*command*/) {},
+	               [](const IconChargeStop& /*command*/) {},
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -712,6 +713,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::QuickLoad:
 		action = QuickLoad {};
 		return DecodeError::None;
+	case CommandTag::IconChargeStop:
+		action = IconChargeStop {};
+		return DecodeError::None;
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -864,6 +868,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const QuickSave& /*command*/) { return CommandTag::QuickSave; },
 	                      [](const QuickLoad& /*command*/) { return CommandTag::QuickLoad; },
 	                      [](const MusicMood& /*command*/) { return CommandTag::MusicMood; },
+	                      [](const IconChargeStop& /*command*/) { return CommandTag::IconChargeStop; },
 	                  },
 	                  action);
 }
@@ -920,6 +925,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const QuickSave& /*command*/) { return size_t {0}; },
 	                   [](const QuickLoad& /*command*/) { return size_t {0}; },
 	                   [](const MusicMood& /*command*/) { return k_Entity + 4 + 4; },
+	                   [](const IconChargeStop& /*command*/) { return size_t {0}; },
 	               },
 	               action);
 	return 1 + fields;

@@ -124,6 +124,11 @@ bool RemoveScaffold(components::Workshop& workshop, entt::entity scaffold, uint8
 /// scaffold that the workshop holds. A small amount added to the two counts keeps the division safe.
 [[nodiscard]] float WoodWant(uint32_t wood, uint32_t scaffoldWood);
 
+/// The wood that a workshop requires, as its flag shows it: the wood for the scaffolds that it has room for, less the
+/// wood that it holds. A workshop with no room requires no wood. The count is unsigned, thus a workshop that holds more
+/// wood than its room needs gives a very large number, as the game shows it.
+[[nodiscard]] uint32_t WoodRequired(int32_t room, uint32_t wood, uint32_t scaffoldWood);
+
 /// Whether a thing is the wood pile of a workshop. Such a pile is part of its workshop, as a pile of a storage pit is.
 [[nodiscard]] bool IsWoodPile(const Registry& registry, entt::entity pile);
 

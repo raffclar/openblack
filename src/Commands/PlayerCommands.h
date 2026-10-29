@@ -347,6 +347,12 @@ struct HandShakeOff
 {
 };
 
+/// A scribble of the empty hand stops the charge of an icon at a worship site of the player. Of the icons that charge a
+/// miracle for the hand of the player, the icon that started its charge last stops it.
+struct IconChargeStop
+{
+};
+
 /// Tools: the creature of the player starts a fight with the nearest creature, or a fight that it is in stops. Only a
 /// game server with its test commands on lets this command through.
 struct CreatureFightCheat
@@ -504,12 +510,13 @@ struct MusicMood
 };
 
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
-                            GripDust, HelpReport, HelpQuery, CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff,
-                            CreatureTattoo, LeashLength, ChatSpeech, ChatTaunt, QuickSave, QuickLoad, MusicMood>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
+                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
+                 CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
+                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop>;
 
 /// A command and the player that sent it
 struct Command

@@ -39,10 +39,28 @@ std::vector<Gained> magic::town_belief::Turn(Belief& town, float recentDecay)
 			continue;
 		}
 		gained.push_back({.player = static_cast<PlayerNames>(p), .amount = amount});
+		town.gainedSinceShown.at(p) += amount;
 		// Capped from above only: belief can fall below nothing
 		Set(town, static_cast<PlayerNames>(p), town.belief.at(p) + amount);
 		town.pending.at(p) = 0.0f;
 	}
+	return gained;
+}
+
+std::optional<float> magic::town_belief::GainShown(float gained)
+{
+	if (!(gained > k_LeastGainShown))
+	{
+		return std::nullopt;
+	}
+	return gained * k_GainShownScale;
+}
+
+std::array<float, k_PlayerCount> magic::town_belief::TakeGainedSinceShown(Belief& town)
+{
+	std::array<float, k_PlayerCount> gained {};
+	std::ranges::transform(town.gainedSinceShown, gained.begin(), [](float amount) { return amount > 0.0f ? amount : 0.0f; });
+	town.gainedSinceShown.fill(0.0f);
 	return gained;
 }
 

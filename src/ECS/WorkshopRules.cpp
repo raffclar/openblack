@@ -86,6 +86,15 @@ float workshop::WoodWant(uint32_t wood, uint32_t scaffoldWood)
 	return 1.0f - std::min(share, 1.0f);
 }
 
+uint32_t workshop::WoodRequired(int32_t room, uint32_t wood, uint32_t scaffoldWood)
+{
+	if (room <= 0)
+	{
+		return 0;
+	}
+	return static_cast<uint32_t>(room) * scaffoldWood - wood;
+}
+
 int32_t workshop::MakingTurns(float timeToMake)
 {
 	return map_coords::FtoL(timeToMake);

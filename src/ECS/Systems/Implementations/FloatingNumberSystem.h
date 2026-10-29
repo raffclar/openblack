@@ -25,9 +25,9 @@ namespace openblack::ecs::systems
 class FloatingNumberSystem final: public FloatingNumberSystemInterface
 {
 public:
-	void Add(const glm::vec3& position, float value, uint32_t colour) override
+	void AddWide(const glm::vec3& position, float value, uint32_t colour, int width) override
 	{
-		_numbers.push_back({.text = fixed_format::Fixed(value, 3, 0),
+		_numbers.push_back({.text = fixed_format::Fixed(value, width, 0),
 		                    .position = position,
 		                    .colour = colour,
 		                    .life = floating_number::k_LifeSeconds});

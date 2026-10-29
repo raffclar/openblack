@@ -43,6 +43,23 @@ Numbered PrayerEnergy(float stored)
 	return {.index = k_PrayerEnergy, .first = static_cast<double>(stored), .second = std::nullopt};
 }
 
+Numbered NeedsSign(NeedsRow row, float level, uint32_t woodRequired)
+{
+	switch (row)
+	{
+	case NeedsRow::Hunger:
+		return {.index = k_FoodDesire, .first = static_cast<double>(level * k_PercentScale), .second = std::nullopt};
+	case NeedsRow::Life:
+		return {.index = k_RestDesire, .first = static_cast<double>(level * k_PercentScale), .second = std::nullopt};
+	case NeedsRow::WorkshopWood:
+		return {
+		    .index = k_WoodRequired, .first = static_cast<double>(static_cast<float>(woodRequired)), .second = std::nullopt};
+	case NeedsRow::Hiding:
+		break;
+	}
+	return {.index = k_PickUp, .first = 0.0, .second = std::nullopt};
+}
+
 Numbered Population(uint32_t people, uint32_t places)
 {
 	return {.index = k_Population, .first = static_cast<double>(people), .second = static_cast<double>(places)};

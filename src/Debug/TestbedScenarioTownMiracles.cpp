@@ -31,6 +31,8 @@ constexpr float k_TownBelief = 1000.0f;
 constexpr int32_t k_FirstLand = 1;
 /// The part of its miracle's charge that each worship site icon holds
 constexpr float k_IconCharge = 0.45f;
+/// Where the storage pit stands from the town centre
+constexpr glm::vec2 k_StoragePit {25.0f, -5.0f};
 /// The temple's main room, the one the entrance leads to
 constexpr size_t k_MainRoom = 3;
 
@@ -204,6 +206,53 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	                  .delaySeconds = 3.0f,
 	                  .value = static_cast<size_t>(SpellSeedType::Heal),
 	                  .amount = k_IconCharge}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "hand.tooltips_belief_gained",
+	    .name = "The belief that the towns gained shows each tenth turn",
+	    .facet = Facet::Miracles,
+	    .description = "The town and temple of town.miracle_debug_given, with an empty Norse storage pit by the centre. "
+	                   "After three seconds the hand of the player pours 300 wood into the storage pit, and the town "
+	                   "gains belief in the player for the gift. Keep the hand over the land by the town.",
+	    .expected = "At the first turn that is a multiple of ten after the gift, the tooltip \"Got 12 Belief\" (with "
+	                "the gain in thousandths) shows at the hand at once, with no mouse button drawn. A yellow number "
+	                "of the same gain, four places wide, rises from the place under the hand. In the other turns no "
+	                "such tooltip or number shows.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {-25.0f, 30.0f, 0.0f}, .look = {10.0f, 2.0f, 35.0f}},
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back(
+		            {.type = AbodeInfo::NorseStoragePit, .offset = k_Centre + k_StoragePit, .storedFood = 0, .storedWood = 0});
+		        return objects;
+	        }(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::HandPour, .delaySeconds = 3.0f, .point = k_Centre + k_StoragePit, .value = 300}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "miracles.scribble_stops_icon_charge",
+	    .name = "A scribble of the empty hand stops the charge of a worship site's icon",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The town and temple of town.miracle_debug_given. When the site has its heal and water icons, the site "
+	        "is built and each icon holds 45% of the charge of its miracle. The hand draws a spiral, then a W, so that "
+	        "the water icon starts to charge for the hand. Then the empty hand draws a scribble.",
+	    .expected = "After the W, the water icon charges, and its charge goes up in its tooltip. The scribble shakes "
+	                "the hand, and no trail of the scribble shows on the land. At the next turn the water icon stops "
+	                "its charge, and the prayer power that it stored goes back to the site.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = k_IconCharge},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::Spiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 7.0f, .value = static_cast<size_t>(GestureType::WShape)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 6.0f, .value = static_cast<size_t>(GestureType::Scribble)}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});

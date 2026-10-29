@@ -905,6 +905,14 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::weatherSystem::value().ProcessClimates(turn);
 		}
 		break;
+	case Step::BeliefGained:
+		// The towns add the belief that they gained in each player. The view shows the sum to the player at this computer.
+		if (Locator::reactionSystem::has_value())
+		{
+			Locator::reactionSystem::value().TownGainsTurn(turn);
+		}
+		view.PlayViewStep(step, cameraPosition);
+		break;
 	case Step::LosingBelief:
 		if (Locator::guidanceSystem::has_value())
 		{

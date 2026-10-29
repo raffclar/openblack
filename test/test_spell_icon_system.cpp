@@ -516,6 +516,43 @@ TEST_F(SpellIconSystemTest, CancelChargesStopsOnlyTheChargesForTheHandAtTheTempl
 	EXPECT_TRUE(registry.Get<const WorshipIcon>(god).charging);
 }
 
+// A scribble of the empty hand stops only the charge for the hand that started last, at the sites of the temple
+TEST_F(SpellIconSystemTest, TheScribbleStopsTheChargeForTheHandThatStartedLast)
+{
+	auto& registry = Entities();
+	const auto made = MakeTemple(registry);
+	EXPECT_FALSE(_system.ChargesFor(made.temple, PlayerNames::PLAYER_ONE));
+	const auto first = Icon(made.first, SpellSeedType::Heal, entt::null);
+	const auto later = Icon(made.first, SpellSeedType::Water, entt::null);
+	const auto same = Icon(made.second, SpellSeedType::Food, entt::null);
+	const auto god = Icon(made.second, SpellSeedType::Wood, entt::null);
+	registry.Get<WorshipIcon>(first).chargeStartTurn = 10;
+	registry.Get<WorshipIcon>(later).chargeStartTurn = 30;
+	// The second site comes first in the order of the places
+	registry.Get<WorshipIcon>(same).chargeStartTurn = 30;
+	registry.Get<WorshipIcon>(god).chargeStartTurn = 90;
+	registry.Get<WorshipIcon>(god).charger = PlayerNames::PLAYER_TWO;
+
+	EXPECT_TRUE(_system.ChargesFor(made.temple, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(_system.ChargesFor(made.temple, PlayerNames::PLAYER_THREE));
+	EXPECT_TRUE(_system.CancelLatestChargeFor(made.temple, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(registry.Get<const WorshipIcon>(same).charging);
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(later).charging);
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(first).charging);
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(god).charging);
+
+	EXPECT_TRUE(_system.CancelLatestChargeFor(made.temple, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(registry.Get<const WorshipIcon>(later).charging);
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(first).charging);
+
+	// A charge that started on turn 0 counts as a charge, but the scribble does not stop it
+	registry.Get<WorshipIcon>(first).chargeStartTurn = 0;
+	EXPECT_TRUE(_system.ChargesFor(made.temple, PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(_system.CancelLatestChargeFor(made.temple, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(registry.Get<const WorshipIcon>(first).charging);
+	EXPECT_FALSE(_system.CancelLatestChargeFor(entt::null, PlayerNames::PLAYER_ONE));
+}
+
 // The icon of a seed comes from the first site in the order of the places round the temple
 TEST_F(SpellIconSystemTest, TheIconInATempleComesFromTheFirstPlaceThatHasIt)
 {
