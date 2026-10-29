@@ -159,6 +159,14 @@ TEST(GameTurnOrder, TheFieldsAndFishFarmsComeBeforeTheTracksAndTheFootpaths)
 	EXPECT_TRUE(recorder.Before(Step::Footpaths, Step::ForestGrowth));
 }
 
+// The puzzle games take their turn in the lists, after the tracks and before the footpaths
+TEST(GameTurnOrder, ThePuzzleGamesComeBeforeTheFootpaths)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::WalkPaths, Step::PuzzleGames));
+	EXPECT_TRUE(recorder.Before(Step::PuzzleGames, Step::Footpaths));
+}
+
 TEST(GameTurnOrder, TheAnimalsTakeTheirTurnWithTheLivingBeforeTheFires)
 {
 	const auto recorder = PlayOneTurn();

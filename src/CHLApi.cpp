@@ -83,7 +83,6 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/FeatureArchetype.h"
 #include "ECS/Archetypes/MobileStaticArchetype.h"
-#include "ECS/Archetypes/PuzzleGameArchetype.h"
 #include "ECS/Archetypes/ScriptMarkerArchetype.h"
 #include "ECS/Archetypes/SharkArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
@@ -128,7 +127,6 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
-#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -162,7 +160,6 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/PlayerTowns.h"
-#include "ECS/PuzzleGameRules.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
@@ -222,6 +219,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -744,13 +742,16 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 		return ScriptMarkerArchetype::Create(position);
 	case ObjectType::PuzzleGame:
 	{
-		// The puzzle game has no pieces yet, so the player cannot solve it. It is made only for the kinds whose answer
-		// before a solution is known.
+		// The system makes a puzzle game only for the kinds whose answer before a solution is known. Only the beach
+		// temple puzzle has pieces now.
 		const auto kind = static_cast<script::PuzzleGameType>(subtype);
-		if (subtype < static_cast<uint32_t>(script::PuzzleGameType::Last) &&
-		    ecs::puzzle_game::PlayedBeforeSolved(kind).has_value())
+		if (subtype < static_cast<uint32_t>(script::PuzzleGameType::Last) && Locator::puzzleGameSystem::has_value())
 		{
-			return PuzzleGameArchetype::Create(position, yAngleRadians, scale, kind);
+			const auto puzzle = Locator::puzzleGameSystem::value().Create(kind, position, yAngleRadians, scale);
+			if (puzzle != entt::null)
+			{
+				return puzzle;
+			}
 		}
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "CreateScriptObject not implemented for puzzle game kind {}", subtype);
 		return entt::null;
@@ -4063,11 +4064,14 @@ void Played() // 064 PLAYED
 		Pushb(played);
 		return;
 	}
-	if (const auto* puzzle = Locator::entitiesRegistry::value().TryGet<const ecs::components::PuzzleGame>(object))
+	if (Locator::puzzleGameSystem::has_value())
 	{
 		// A puzzle game has played once the player solves it
-		Pushb(ecs::puzzle_game::PlayedBeforeSolved(puzzle->type).value_or(false));
-		return;
+		if (const auto played = Locator::puzzleGameSystem::value().Played(object))
+		{
+			Pushb(*played);
+			return;
+		}
 	}
 	if (const auto* animal = Locator::entitiesRegistry::value().TryGet<const ecs::components::Animal>(object))
 	{
@@ -5456,11 +5460,13 @@ void GetObjectState() // 143 GET_OBJECT_STATE
 		return;
 	}
 	// A puzzle game that nobody has started gives whether it has played
-	if (const auto* puzzle = registry.TryGet<const ecs::components::PuzzleGame>(object))
+	if (Locator::puzzleGameSystem::has_value())
 	{
-		const bool played = ecs::puzzle_game::PlayedBeforeSolved(puzzle->type).value_or(false);
-		Pushi(static_cast<int32_t>(ecs::puzzle_game::StateBeforeStart(played)));
-		return;
+		if (const auto state = Locator::puzzleGameSystem::value().State(object))
+		{
+			Pushi(static_cast<int32_t>(*state));
+			return;
+		}
 	}
 	ScriptMessage("Thing not a known type for function");
 	Pushi(0);

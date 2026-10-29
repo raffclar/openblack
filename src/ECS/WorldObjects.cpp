@@ -48,6 +48,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
@@ -83,6 +84,7 @@
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/PuzzleGameSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -920,6 +922,11 @@ void world_objects::Remove(entt::entity object)
 	if (Locator::fireSystem::has_value())
 	{
 		Locator::fireSystem::value().Forget(object);
+	}
+	// A puzzle game that goes leaves its pieces with no puzzle
+	if (registry.AllOf<PuzzleGame>(object) && Locator::puzzleGameSystem::has_value())
+	{
+		Locator::puzzleGameSystem::value().Forget(object);
 	}
 	if (const auto* villager = registry.TryGet<const Villager>(object))
 	{

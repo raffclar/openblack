@@ -33,8 +33,10 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/FixedOutline.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -1144,6 +1146,62 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeMapProvider(MapSour
 		    }
 		    return QueryResult::Value(std::move(result));
 	    });
+	return provider;
+}
+
+std::unique_ptr<ProviderInterface> openblack::inspector::MakePuzzleProvider(WorldSources sources)
+{
+	auto provider = std::make_unique<FunctionProvider>("puzzle");
+	provider->Add(Query("list",
+	                    "The puzzle games: kind, their order, solved, started, calm turns, and each piece of the beach "
+	                    "temple puzzle with the pieces above and below it",
+	                    {}, ResultKind::List),
+	              [sources](const QueryContext& /*context*/) {
+		              const auto* registry = Registry(sources);
+		              if (registry == nullptr)
+		              {
+			              return QueryResult::Error(std::string(k_NoRegistry));
+		              }
+		              const auto pieceJson = [registry](entt::entity piece) {
+			              Json item = Json::object();
+			              item["id"] = ToId(piece);
+			              const auto* block = piece != entt::null && registry->Valid(piece)
+			                                      ? registry->TryGet<const HanoiBlock>(piece)
+			                                      : nullptr;
+			              if (block != nullptr)
+			              {
+				              item["above"] = ToId(block->above);
+				              item["below"] = ToId(block->below);
+				              item["altitude"] = block->home.altitude;
+				              item["fixed"] = block->fixed;
+				              item["cannotBePickedUp"] = registry->AllOf<CannotBePickedUp>(piece);
+			              }
+			              return item;
+		              };
+		              Json items = Json::array();
+		              registry->Each<const PuzzleGame>([&](entt::entity entity, const PuzzleGame& game) {
+			              auto item = ToListItem(entity, Describe(*registry, entity, Info(sources)));
+			              item["type"] = static_cast<int>(game.type);
+			              item["order"] = game.order;
+			              item["played"] = game.played;
+			              item["started"] = game.started;
+			              item["calmTurns"] = game.calmTurns;
+			              Json bases = Json::array();
+			              for (const auto base : game.bases)
+			              {
+				              bases.push_back(pieceJson(base));
+			              }
+			              Json rings = Json::array();
+			              for (const auto ring : game.rings)
+			              {
+				              rings.push_back(pieceJson(ring));
+			              }
+			              item["bases"] = std::move(bases);
+			              item["rings"] = std::move(rings);
+			              items.push_back(std::move(item));
+		              });
+		              return QueryResult::Value(std::move(items));
+	              });
 	return provider;
 }
 
