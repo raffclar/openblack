@@ -27,7 +27,6 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "Camera.h"
 #include "CameraKeys.h"
 #include "CameraLimits.h"
@@ -51,6 +50,7 @@
 #include "Locator.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Windowing/WindowingInterface.h"
 #include "ZoomToPlaces.h"
 

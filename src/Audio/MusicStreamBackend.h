@@ -21,7 +21,7 @@
 
 #include "AudioPlayerInterface.h"
 #include "MusicPlayer.h"
-#include "SoundDecoder.h"
+#include "Sound/SoundDecoder.h"
 
 namespace openblack::audio
 {

@@ -13,15 +13,10 @@
 
 #include <glm/vec2.hpp>
 
+#include "Visual/DisplayMode.h"
+
 namespace openblack::windowing
 {
-
-enum class DisplayMode : std::uint8_t
-{
-	Windowed,
-	Fullscreen,
-	Borderless
-};
 
 class WindowingInterface
 {

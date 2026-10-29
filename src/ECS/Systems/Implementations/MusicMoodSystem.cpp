@@ -16,8 +16,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/CustomMusicPlayerInterface.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Registry.h"
@@ -29,6 +27,8 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Sound/CustomMusicPlayerInterface.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -40,7 +40,7 @@ constexpr std::string_view k_CustomMusicFolder = "custom_music";
 
 audio::CustomMusicPlayerInterface* Player()
 {
-	return Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+	return Locator::sounds::has_value() ? Locator::sounds::value().GetCustomMusic() : nullptr;
 }
 } // namespace
 

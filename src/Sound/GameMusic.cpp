@@ -18,11 +18,11 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
-#include "AudioManagerInterface.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/X87Vector.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "Locator.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack::audio;
 
@@ -181,15 +181,15 @@ int32_t GameMusic::GetAlignmentIndex(float alignment)
 
 GameMusic::~GameMusic()
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().MusicStop(false);
+		Locator::sounds::value().MusicStop(false);
 	}
 }
 
 void GameMusic::RegisterBanks()
 {
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	for (const auto& type : k_MusicTypes)
 	{
 		if (!type.bank.empty())
@@ -201,7 +201,7 @@ void GameMusic::RegisterBanks()
 
 void GameMusic::Reset()
 {
-	Locator::audio::value().MusicStop(false);
+	Locator::sounds::value().MusicStop(false);
 	_playing = MusicType::None;
 	_landType = MusicType::None;
 	_blockedType = MusicType::None;
@@ -281,11 +281,11 @@ void GameMusic::AttachMusic(uint32_t thing, MusicType type)
 		found->type = type;
 		return;
 	}
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		if (const auto path = BankPath(type); !path.empty())
 		{
-			Locator::audio::value().MusicStopBank(std::string(path), false);
+			Locator::sounds::value().MusicStopBank(std::string(path), false);
 		}
 	}
 	_attached.insert(_attached.begin(), AttachedMusic {.thing = thing, .type = type});
@@ -313,13 +313,13 @@ bool GameMusic::IsAttachedMusicFinished(uint32_t thing) const
 void GameMusic::RestartAttachedMusic(uint32_t thing)
 {
 	const auto found = std::ranges::find(_attached, thing, &AttachedMusic::thing);
-	if (found == _attached.end() || !Locator::audio::has_value())
+	if (found == _attached.end() || !Locator::sounds::has_value())
 	{
 		return;
 	}
 	if (const auto path = BankPath(found->type); !path.empty())
 	{
-		Locator::audio::value().MusicStopBank(std::string(path), false);
+		Locator::sounds::value().MusicStopBank(std::string(path), false);
 	}
 }
 
@@ -382,7 +382,7 @@ void GameMusic::ProcessMusic(const TurnInputs& inputs)
 		return;
 	}
 	SaveResumeChunks();
-	Locator::audio::value().MusicStop(true);
+	Locator::sounds::value().MusicStop(true);
 	_playing = MusicType::None;
 	_landType = MusicType::None;
 }
@@ -415,14 +415,14 @@ bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
 	}
 	const auto type = SelectCitadelType(inputs);
 	const auto path = std::string(BankPath(type));
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto info = audio.GetMusicBankInfo(path);
 	if (!info)
 	{
 		return false;
 	}
 	SaveResumeChunks();
-	audio.MusicPlay(path, MusicPlayOptions {
+	audio.MusicPlay(path, MusicRequest {
 	                          .volume = k_FullVolume,
 	                          .startChunk = GetResumeChunk(info->groupId),
 	                          .sync = true,
@@ -436,7 +436,7 @@ bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
 // its end, so the music heard gives no calls back.
 bool GameMusic::ProcessScript(const TurnInputs::ScriptPiece& script)
 {
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	if (script.type == MusicType::None)
 	{
 		if (_scriptStarted)
@@ -466,7 +466,7 @@ bool GameMusic::ProcessScript(const TurnInputs::ScriptPiece& script)
 		return true;
 	}
 	SaveResumeChunks();
-	audio.MusicPlay(path, MusicPlayOptions {
+	audio.MusicPlay(path, MusicRequest {
 	                          .volume = k_FullVolume,
 	                          .startChunk = script.place->chunk,
 	                          .startFrame = script.place->frame,
@@ -487,14 +487,14 @@ bool GameMusic::ProcessCreatureFight(const TurnInputs& inputs)
 	}
 	const auto type = *inputs.creatureFight;
 	const auto path = std::string(BankPath(type));
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
 	if (!info)
 	{
 		return false;
 	}
 	SaveResumeChunks();
-	audio.MusicPlay(path, MusicPlayOptions {
+	audio.MusicPlay(path, MusicRequest {
 	                          .volume = k_FullVolume,
 	                          .startChunk = GetResumeChunk(info->groupId),
 	                          .fadeIn = true,
@@ -512,14 +512,14 @@ bool GameMusic::ProcessCreatureDance(const TurnInputs& inputs)
 	}
 	const auto& dance = *inputs.creatureDance;
 	const auto path = std::string(BankPath(dance.type));
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
 	if (!info)
 	{
 		return false;
 	}
 	SaveResumeChunks();
-	audio.MusicPlay(path, MusicPlayOptions {
+	audio.MusicPlay(path, MusicRequest {
 	                          .volume = k_FullVolume,
 	                          .startChunk = GetResumeChunk(info->groupId),
 	                          .sync = true,
@@ -536,7 +536,7 @@ bool GameMusic::ProcessAttached(const TurnInputs& inputs)
 	{
 		return false;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	struct Heard
 	{
 		std::string path;
@@ -567,7 +567,7 @@ bool GameMusic::ProcessAttached(const TurnInputs& inputs)
 	const auto& music = heard.at(*selected);
 	const auto groupId = music.info->groupId;
 	SaveResumeChunks();
-	audio.MusicPlay(music.path, MusicPlayOptions {
+	audio.MusicPlay(music.path, MusicRequest {
 	                                .volume = k_FullVolume,
 	                                .startChunk = GetResumeChunk(groupId),
 	                                .sync = groupId > 0,
@@ -599,7 +599,7 @@ bool GameMusic::ProcessLand(const TurnInputs& inputs)
 	}
 	_blockedType = MusicType::None;
 
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	const auto path = std::string(BankPath(type));
 	const auto info = audio.GetMusicBankInfo(path);
 	if (!info)
@@ -611,7 +611,7 @@ bool GameMusic::ProcessLand(const TurnInputs& inputs)
 		SaveResumeChunks();
 		const auto groupId = info->groupId;
 		const auto start = GetResumeChunk(groupId);
-		audio.MusicPlay(path, MusicPlayOptions {
+		audio.MusicPlay(path, MusicRequest {
 		                          .volume = k_LandVolume,
 		                          .startChunk = start,
 		                          // Starting past half way, the piece plays again from its start
@@ -690,14 +690,9 @@ MusicType GameMusic::SelectLandType(const TurnInputs& inputs)
 
 void GameMusic::SaveResumeChunks()
 {
-	const auto* music = Locator::audio::value().GetMusic();
-	if (music == nullptr)
+	for (const auto& channel : Locator::sounds::value().GetPlayingMusicChannels())
 	{
-		return;
-	}
-	for (const auto& channel : music->GetChannels())
-	{
-		if (channel.active && channel.groupId > 0)
+		if (channel.groupId > 0)
 		{
 			_resumeChunks[channel.groupId] = channel.playingChunk + k_ResumeAhead;
 		}

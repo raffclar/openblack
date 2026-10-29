@@ -23,7 +23,6 @@
 #include "3D/L3DMesh.h"
 #include "3D/TempleDoors.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "Camera.h"
 #include "CameraLens.h"
 #include "Common/MachineClock.h"
@@ -38,6 +37,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Temple/TempleHelpScripts.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -1462,7 +1462,7 @@ void TempleCameraModel::ChangeState()
 void TempleCameraModel::LookAtSubMesh(glm::vec3 position, glm::vec3 lookAt)
 {
 	// Looking at a scroll wooshes unless the camera is looking at something already
-	if (!_lookingAtSubMesh && Locator::audio::has_value())
+	if (!_lookingAtSubMesh && Locator::sounds::has_value())
 	{
 		constexpr std::array k_Wooshes {audio::SoundId::G_Woosh_01, audio::SoundId::G_Woosh_02, audio::SoundId::G_Woosh_03,
 		                                audio::SoundId::G_Woosh_04};

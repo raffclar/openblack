@@ -17,19 +17,20 @@
 
 #include <entt/fwd.hpp>
 
-#include "AnimEffectTable.h"
 #include "AudioDecoderInterface.h"
 #include "AudioPlayerInterface.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "MusicPlayer.h"
 #include "Sound.h"
+#include "Sound/AnimEffectTable.h"
 #include "Sound/EmitterFollow.h"
 #include "Sound/HearingRange.h"
 #include "Sound/ListenerFrame.h"
+#include "Sound/MusicRequest.h"
 #include "Sound/ScriptSoundEffect.h"
+#include "Sound/SoundGroup.h"
 #include "Sound/SoundRequestInterface.h"
 #include "Sound/VoiceOwner.h"
-#include "SoundGroup.h"
 
 namespace openblack
 {
@@ -49,15 +50,6 @@ namespace audio
 
 class AtmosPlayer;
 class CustomMusicPlayerInterface;
-
-/// A music bank's group, its number of samples and how far it carries
-struct MusicBankInfo
-{
-	int32_t groupId;
-	uint32_t chunkCount;
-	/// The first sample's far distance in its header, -1 for a bank without samples
-	float maxDistance {-1.0f};
-};
 
 class AudioManagerInterface
 {

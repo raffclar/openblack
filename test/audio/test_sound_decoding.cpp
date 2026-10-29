@@ -18,8 +18,8 @@
 #include <string>
 #include <vector>
 
-#include <Audio/SoundDecoder.h>
 #include <PackFile.h>
+#include <Sound/SoundDecoder.h>
 #include <gtest/gtest.h>
 
 using namespace openblack;

@@ -18,7 +18,7 @@
 
 #include <spdlog/spdlog.h>
 
-#include "SoundDecoder.h"
+#include "Sound/SoundDecoder.h"
 
 using namespace openblack::audio;
 

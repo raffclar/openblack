@@ -10,10 +10,13 @@
 #include "GameSoundRequests.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <spdlog/spdlog.h>
 
 #include "AudioManagerInterface.h"
+#include "ECS/Components/AudioEmitter.h"
+#include "ECS/Registry.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
@@ -282,6 +285,165 @@ Listener GameSoundRequests::GetListener() const
 {
 	const auto* const audio = Manager();
 	return audio != nullptr ? audio->GetListener() : CameraListener();
+}
+
+void GameSoundRequests::PlaceOwnedEmitters(const std::function<std::optional<glm::vec3>(entt::entity owner)>& placeOf)
+{
+	auto* const audio = Manager();
+	auto* const emitters = audio != nullptr ? audio->Emitters() : nullptr;
+	if (emitters == nullptr)
+	{
+		return;
+	}
+	emitters->Each<ecs::components::AudioEmitter>([&placeOf](ecs::components::AudioEmitter& emitter) {
+		if (emitter.owner == entt::null)
+		{
+			return;
+		}
+		if (const auto place = placeOf(emitter.owner); place.has_value())
+		{
+			emitter.position = *place;
+		}
+	});
+}
+
+void GameSoundRequests::StopAllSounds()
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->Stop();
+	}
+}
+
+void GameSoundRequests::ProcessAtmosphere(bool active)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->AtmosProcess(active);
+	}
+}
+
+MusicPlayOptions ToMusicPlayOptions(const MusicRequest& request)
+{
+	return {
+	    .bank = nullptr,
+	    .volume = request.volume,
+	    .startChunk = request.startChunk,
+	    .startFrame = request.startFrame,
+	    .loops = request.loops,
+	    .sync = request.sync,
+	    .fadeIn = request.fadeIn,
+	    .pitchPercent = request.pitchPercent,
+	    .position = request.position,
+	    .minDistance = request.minDistance,
+	    .maxDistance = request.maxDistance,
+	    .distanceScale = request.distanceScale,
+	    .onFinished = request.onFinished,
+	};
+}
+
+bool GameSoundRequests::MusicPlay(const std::string& bankPath, const MusicRequest& request)
+{
+	auto* const audio = Manager();
+	return audio != nullptr && audio->MusicPlay(bankPath, ToMusicPlayOptions(request));
+}
+
+void GameSoundRequests::MusicStop(bool fadeOut)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->MusicStop(fadeOut);
+	}
+}
+
+void GameSoundRequests::MusicStopBank(const std::string& bankPath, bool fadeOut)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->MusicStopBank(bankPath, fadeOut);
+	}
+}
+
+std::optional<MusicBankInfo> GameSoundRequests::GetMusicBankInfo(const std::string& bankPath)
+{
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->GetMusicBankInfo(bankPath) : std::nullopt;
+}
+
+std::vector<MusicChannelPlace> GameSoundRequests::GetPlayingMusicChannels() const
+{
+	std::vector<MusicChannelPlace> playing;
+	const auto* const audio = Manager();
+	const auto* const music = audio != nullptr ? audio->GetMusic() : nullptr;
+	if (music == nullptr)
+	{
+		return playing;
+	}
+	for (const auto& channel : music->GetChannels())
+	{
+		if (channel.active)
+		{
+			playing.push_back({.groupId = channel.groupId, .playingChunk = channel.playingChunk});
+		}
+	}
+	return playing;
+}
+
+CustomMusicPlayerInterface* GameSoundRequests::GetCustomMusic()
+{
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->GetCustomMusic() : nullptr;
+}
+
+void GameSoundRequests::AddMusicEntry(const std::string& name)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->AddMusicEntry(name);
+	}
+}
+
+void GameSoundRequests::CreateSoundGroup(const std::string& name)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->CreateSoundGroup(name);
+	}
+}
+
+void GameSoundRequests::AddToSoundGroup(const std::string& name, entt::id_type id)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->AddToSoundGroup(name, id);
+	}
+}
+
+void GameSoundRequests::AddAnimEffects(const std::string& bankName, AnimEffectTable table)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->AddAnimEffects(bankName, std::move(table));
+	}
+}
+
+const std::map<std::string, SoundGroup>& GameSoundRequests::GetSoundGroups()
+{
+	static const std::map<std::string, SoundGroup> k_NoGroups;
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->GetSoundGroups() : k_NoGroups;
+}
+
+float GameSoundRequests::GetSfxVolume()
+{
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->GetSfxVolume() : 0.0f;
+}
+
+float GameSoundRequests::GetMusicVolume()
+{
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->GetMusicVolume() : 0.0f;
 }
 
 } // namespace openblack::audio

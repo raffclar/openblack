@@ -65,7 +65,7 @@ list(
   OPENBLACK_SIM_SOURCES
   INCLUDE
   REGEX
-  "/src/(Animals|Blast|Commands|Common|Creature|ECS|FileSystem|Fire|Hand|LHScriptX|Magic|Nature|Parsers|Physics|Scenery|ScriptHeaders|Serializer|Simulation|Sound|Story)/|/src/(CHLApi|InfoConstants|Level|Profiler)[.]cpp$"
+  "/src/(Animals|Blast|Commands|Common|Creature|ECS|FileSystem|Fire|Hand|LHScriptX|Magic|Nature|Parsers|Physics|Scenery|ScriptHeaders|Serializer|Simulation|Sound|Story|Visual)/|/src/(CHLApi|InfoConstants|Level|Profiler)[.]cpp$"
 )
 if (NOT ANDROID)
   list(REMOVE_ITEM OPENBLACK_SOURCES ${OPENBLACK_SIM_SOURCES})

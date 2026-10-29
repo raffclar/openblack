@@ -15,9 +15,9 @@
 
 #include <gtest/gtest.h>
 
-#include "Audio/CustomMusicPlayerInterface.h"
 #include "Gui/CustomMusicControlsRules.h"
 #include "Gui/ScreenFit.h"
+#include "Sound/CustomMusicPlayerInterface.h"
 
 using namespace openblack;
 using namespace openblack::gui::custom_music_controls;

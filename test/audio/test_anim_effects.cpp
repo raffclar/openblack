@@ -15,8 +15,8 @@
 #include <chrono>
 #include <vector>
 
-#include <Audio/AnimEffectTable.h>
 #include <ECS/Systems/TreeRustle.h>
+#include <Sound/AnimEffectTable.h>
 #include <gtest/gtest.h>
 
 using namespace openblack::audio;

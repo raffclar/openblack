@@ -11,7 +11,7 @@
 
 #include <gtest/gtest.h>
 
-#include "Graphics/DetailLevel.h"
+#include "Visual/DetailLevel.h"
 
 using namespace openblack::graphics;
 

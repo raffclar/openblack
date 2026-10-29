@@ -158,7 +158,6 @@
 #include "Graphics/BoneBudget.h"
 #include "Graphics/CreatureReflection.h"
 #include "Graphics/DebugLines.h"
-#include "Graphics/DetailLevel.h"
 #include "Graphics/DrawOrder.h"
 #include "Graphics/DrawWindow.h"
 #include "Graphics/FizzDrawOrder.h"
@@ -201,6 +200,7 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/ObjectDrawList.h"
+#include "Visual/DetailLevel.h"
 #include "Windowing/WindowingInterface.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/WebPlatform.h"

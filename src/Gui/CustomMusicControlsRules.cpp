@@ -13,8 +13,8 @@
 
 #include <fmt/format.h>
 
-#include "Audio/CustomMusicPlayerInterface.h"
 #include "ScreenFit.h"
+#include "Sound/CustomMusicPlayerInterface.h"
 #include "TextDatabase.h"
 
 using namespace openblack::gui;

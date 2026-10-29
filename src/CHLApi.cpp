@@ -51,14 +51,14 @@
 #include "3D/Mists.h"
 #include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
-#include "Audio/GameMusic.h"
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Sound/GameMusic.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/ScriptSoundEffect.h"
 #include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
 #endif
@@ -3534,7 +3534,7 @@ static std::optional<std::string> LoadedSoundGroup(std::string_view file)
 			return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
 		});
 	};
-	for (const auto& name : Locator::audio::value().GetSoundGroups() | std::views::keys)
+	for (const auto& name : Locator::sounds::value().GetSoundGroups() | std::views::keys)
 	{
 		if (sameName(name))
 		{
@@ -3549,7 +3549,7 @@ static std::optional<std::string> LoadedSoundGroup(std::string_view file)
 static std::optional<entt::id_type> BankSound(int32_t bank, int32_t sample)
 {
 	const auto file = audio::ScriptSoundBankFile(bank);
-	if (!file.has_value() || !Locator::audio::has_value() || !Locator::resources::has_value())
+	if (!file.has_value() || !Locator::sounds::has_value() || !Locator::resources::has_value())
 	{
 		return std::nullopt;
 	}
@@ -3582,7 +3582,7 @@ void CHLApi::PlayBankSoundEffect(int32_t bank, int32_t sample, const audio::Soun
 	{
 		return;
 	}
-	Locator::audio::value().StartSoundEffect(id, options);
+	Locator::sounds::value().StartSoundEffect(id, options);
 }
 
 void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
@@ -9055,7 +9055,7 @@ void SetGameSound() // 357 SET_GAME_SOUND
 	const auto enable = Pop().intVal != 0;
 	if (!enable)
 	{
-		Locator::audio::value().StopAllSoundEffects();
+		Locator::sounds::value().StopAllSoundEffects();
 	}
 	Locator::chlapi::value().SetGameSoundOn(enable);
 }
@@ -9932,7 +9932,7 @@ void StopSoundEffect() // 424 STOP_SOUND_EFFECT
 	}
 	if (const auto sound = BankSound(bank, sample))
 	{
-		Locator::audio::value().StopSoundEffect(*sound);
+		Locator::sounds::value().StopSoundEffect(*sound);
 	}
 }
 
@@ -10289,7 +10289,7 @@ void GameSoundPlaying() // 450 GAME_SOUND_PLAYING
 	const auto bank = Pop().intVal;
 	const auto sample = Pop().intVal;
 	const auto sound = BankSound(bank, sample);
-	Pushb(sound.has_value() && Locator::audio::value().IsSoundEffectPlaying(*sound));
+	Pushb(sound.has_value() && Locator::sounds::value().IsSoundEffectPlaying(*sound));
 }
 
 /// A player's temple, the earliest made when there are several, none when the player has none

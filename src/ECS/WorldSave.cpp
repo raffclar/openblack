@@ -34,7 +34,6 @@
 
 #include "3D/CameraEdits.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/GameMusic.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
@@ -103,6 +102,7 @@
 #include "Game.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
+#include "Sound/GameMusic.h"
 #include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;

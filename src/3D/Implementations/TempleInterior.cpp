@@ -40,7 +40,6 @@
 #include "3D/TempleSaveGameRoom.h"
 #include "3D/TempleScrolls.h"
 #include "3D/TempleSigns.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/DefaultWorldCameraModel.h"
@@ -81,7 +80,6 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/DetailLevel.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
 #include "Gui/SaveGameBoxes.h"
@@ -95,9 +93,11 @@
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundId.h"
+#include "Sound/SoundRequestInterface.h"
 #include "Temple/TempleControlNames.h"
 #include "Temple/TempleHelpScripts.h"
 #include "Temple/TempleRoomAccess.h"
+#include "Visual/DetailLevel.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
@@ -227,7 +227,7 @@ std::optional<glm::vec3> CreatureCaveFire()
 void PlayDoorSound(entt::id_type sound)
 {
 	// The game plays the doors' sounds without a place. A door sound does not start again while it plays.
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(sound, {.voicePlayType = pack::AudioBankLoop::Once});
 	}
@@ -236,7 +236,7 @@ void PlayDoorSound(entt::id_type sound)
 void PlayToggleSound(entt::id_type sound, uint32_t pitchPercent)
 {
 	// The game plays the buttons' sounds without a place
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		audio::StartGameSoundEffect(sound, {.pitchPercent = pitchPercent});
 	}
@@ -748,7 +748,7 @@ void TempleInterior::ReplayChallenge(entt::entity record)
 	{
 		_interface->GetScreenFade().FadeThrough(glm::vec3(1.0f));
 	}
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
 		constexpr std::array k_Wooshes {audio::SoundId::G_Woosh_01, audio::SoundId::G_Woosh_02, audio::SoundId::G_Woosh_03,
 		                                audio::SoundId::G_Woosh_04};
@@ -1690,9 +1690,9 @@ void TempleInterior::Escape()
 
 void TempleInterior::StopCreatureCaveSounds()
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		auto& audio = Locator::audio::value();
+		auto& audio = Locator::sounds::value();
 		audio.StopSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_WaterCreatureCave_01));
 		audio.StopSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_FireCreatureCave_01));
 	}

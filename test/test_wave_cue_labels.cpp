@@ -7,7 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// audio::ReadWaveCueLabels (src/Audio/WaveCueLabels.h) on WAV files built by the test.
+// audio::ReadWaveCueLabels (src/Sound/WaveCueLabels.h) on WAV files built by the test.
 
 #include <cstdint>
 
