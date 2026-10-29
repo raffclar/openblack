@@ -57,6 +57,13 @@ struct Mending
 	return type == FeatureInfo::ArkDryDock;
 }
 
+/// A building is drawn going up while it has a built amount below all of it. The game draws its whole model at all of it,
+/// also before the building is finished. A feature is drawn going up only if the feature rule above allows it.
+[[nodiscard]] constexpr bool DrawnGoingUp(std::optional<float> built, std::optional<FeatureInfo> feature)
+{
+	return built.has_value() && *built < 1.0f && (!feature.has_value() || FeatureDrawnGoingUp(*feature));
+}
+
 /// A script asks a town to build what it planned at a place with a desire, and the building site takes five times it
 inline constexpr float k_ScriptDesireScale = 5.0f;
 [[nodiscard]] constexpr float SiteDesire(float scriptDesire)

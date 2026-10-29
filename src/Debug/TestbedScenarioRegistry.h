@@ -996,6 +996,9 @@ struct Command
 		/// The scenario's object, a building going up, is finished at once, as when its builders put on the last of
 		/// it. Needs no creature.
 		FinishBuilding,
+		/// The scenario's object, a building going up, gets all of its built amount, but it is not finished. The
+		/// inspector makes the same state when it sets the built amount. Needs no creature.
+		FillBuiltAmount,
 		/// A script native (script, by its name) runs at once with its arguments in order (scriptArguments). A position
 		/// is three numbers. Needs no creature.
 		CallNative,

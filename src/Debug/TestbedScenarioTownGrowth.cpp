@@ -49,6 +49,8 @@ constexpr std::array<glm::vec2, 2> k_Fields {{{55.0f, 40.0f}, {55.0f, 15.0f}}};
 /// A hut that is only a tenth built, and the foresters that build it
 constexpr float k_HutGoingUp = 0.1f;
 constexpr size_t k_SiteBuilders = 3;
+/// A hut that is half built, which then gets all of its built amount without the finish
+constexpr float k_HutHalfBuilt = 0.5f;
 } // namespace
 
 void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>& all)
@@ -941,5 +943,21 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                {.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, 20.0f}, .joinTown = true, .woodHeld = 300},
 	                {.type = VillagerInfo::CelticForesterMale, .offset = {4.0f, 20.0f}, .joinTown = true, .woodHeld = 300}},
 	    .townBeliefInPlayer = 1.0f,
+	});
+	// A hut that gets all of its built amount but is not finished
+	all.push_back({
+	    .id = "town.hut_all_built_not_finished",
+	    .name = "A hut with all of its built amount that is not finished",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic hut of no town that is half built stands alone, with no builders. After three seconds "
+	                   "the hut gets all of its built amount, but it is not finished. The inspector makes the same "
+	                   "state when it sets the built amount (BuildProgress built).",
+	    .expected = "At first the hut shows only up to half of its height. After three seconds the whole hut shows, as "
+	                "the game draws a building going up with all of it built. The hut keeps its built amount "
+	                "(the inspector's BuildProgress built is 1).",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Hut}, .distance = 0.3f},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f, .built = k_HutHalfBuilt}},
+	    .commands = {{.kind = Command::Kind::FillBuiltAmount, .delaySeconds = 3.0f, .object = 0}},
 	});
 }

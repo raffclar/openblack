@@ -2484,6 +2484,18 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		ecs::construction::SetBuilt(*object, 1.0f);
 		return "finished";
 	}
+	case Kind::FillBuiltAmount:
+	{
+		const auto object = ObjectAt(command.object);
+		auto* progress =
+		    object.has_value() ? Locator::entitiesRegistry::value().TryGet<ecs::components::BuildProgress>(*object) : nullptr;
+		if (progress == nullptr)
+		{
+			return "nothing going up";
+		}
+		progress->built = 1.0f;
+		return "all of it built, not finished";
+	}
 	case Kind::RemoveObject:
 	{
 		const auto object = ObjectAt(command.object);
@@ -3392,9 +3404,9 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey || command.kind == Kind::PlainKeyDown ||
 	    command.kind == Kind::PlainKeyRepeat || command.kind == Kind::PlainKeyUp ||
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
-	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::OwnGod ||
-	    command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::FillBuiltAmount || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
+	    command.kind == Kind::OwnGod || command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
 	    command.kind == Kind::ComputerUntaughtSends)
 	{
 		const auto result = GivePlayerCommand(command);
@@ -4295,6 +4307,7 @@ void Runner::Give(const Command& command)
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:
+	case Kind::FillBuiltAmount:
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
 	case Kind::RemoveTeleportStone:
