@@ -23,8 +23,12 @@
 using namespace openblack;
 using namespace openblack::graphics;
 
-Ocean::Ocean() noexcept
+Ocean::Ocean(graphics::UploadMode uploads) noexcept
 {
+	if (uploads == graphics::UploadMode::DataOnly)
+	{
+		return;
+	}
 	_reflectionFrameBuffer =
 	    std::make_unique<FrameBuffer>("Reflection", static_cast<uint16_t>(1024), static_cast<uint16_t>(1024),
 	                                  graphics::TextureFormat::RGBA8, graphics::TextureFormat::Depth24Stencil8);
@@ -34,6 +38,11 @@ Ocean::~Ocean() noexcept = default;
 
 void Ocean::ResizeReflectionFramebuffer(glm::u16vec2 size)
 {
+	// A sea with data only has no frame buffer to resize
+	if (_reflectionFrameBuffer == nullptr)
+	{
+		return;
+	}
 	uint16_t width = 0;
 	uint16_t height = 0;
 	_reflectionFrameBuffer->GetSize(width, height);

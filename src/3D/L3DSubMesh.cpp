@@ -9,9 +9,12 @@
 
 #include "L3DSubMesh.h"
 
+#include <cassert>
+
 #include <algorithm>
 #include <limits>
 #include <span>
+#include <vector>
 
 #include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -226,9 +229,10 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 		}
 	}
 
-	// Get vertices
-	const bgfx::Memory* verticesMem = PackVertices(l3d, meshIndex);
-	if (_flags.hasBones)
+	// The vertices of the graphics device
+	const bool device = _l3dMesh.GetUploadMode() == UploadMode::Device;
+	const bgfx::Memory* verticesMem = device ? PackVertices(l3d, meshIndex) : nullptr;
+	if (_flags.hasBones && device)
 	{
 		CreateBlendSource(verticesMem, nVertices);
 	}
@@ -239,8 +243,7 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 	}
 
 	// Get Indices
-	const bgfx::Memory* indicesMem = bgfx::alloc(sizeof(uint16_t) * nIndices);
-	auto* indices = reinterpret_cast<uint16_t*>(indicesMem->data);
+	std::vector<uint16_t> indices(nIndices);
 
 	uint16_t startIndex = 0;
 	uint16_t startVertex = 0;
@@ -314,7 +317,7 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 			                                     verticesSpan[i].position.z);
 			_bodyGeometry.uvs.emplace_back(verticesSpan[i].texCoord.x, verticesSpan[i].texCoord.y);
 		}
-		_bodyGeometry.indices.assign(indices, indices + nIndices);
+		_bodyGeometry.indices = indices;
 		_bodyGeometry.bones.clear();
 		if (_flags.hasBones)
 		{
@@ -355,7 +358,12 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 			_surface.uvs.emplace_back(verticesSpan[i].texCoord.x, verticesSpan[i].texCoord.y);
 			_surface.normals.emplace_back(verticesSpan[i].normal.x, verticesSpan[i].normal.y, verticesSpan[i].normal.z);
 		}
-		_surface.indices.assign(indices, indices + nIndices);
+		_surface.indices = indices;
+	}
+
+	if (!device)
+	{
+		return true;
 	}
 
 	VertexDecl decl;
@@ -375,6 +383,7 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 	}
 
 	// build our buffers
+	const auto* indicesMem = bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
 	auto* vertexBuffer = new VertexBuffer(_l3dMesh.GetDebugName(), verticesMem, decl, _l3dMesh.IsDynamic());
 	auto* indexBuffer = new IndexBuffer(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer, indexBuffer);
@@ -401,10 +410,13 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	{
 		return false;
 	}
-	const bgfx::Memory* verticesMem = bgfx::alloc(static_cast<uint32_t>(sizeof(EnhancedL3DVertex) * vertexCount));
-	const bgfx::Memory* indicesMem = bgfx::alloc(static_cast<uint32_t>(sizeof(uint16_t) * indexCount));
-	auto* vertices = reinterpret_cast<EnhancedL3DVertex*>(verticesMem->data);
-	auto* indices = reinterpret_cast<uint16_t*>(indicesMem->data);
+	_made = true;
+	const bool device = _l3dMesh.GetUploadMode() == UploadMode::Device;
+	const bgfx::Memory* verticesMem =
+	    device ? bgfx::alloc(static_cast<uint32_t>(sizeof(EnhancedL3DVertex) * vertexCount)) : nullptr;
+	const bgfx::Memory* indicesMem = device ? bgfx::alloc(static_cast<uint32_t>(sizeof(uint16_t) * indexCount)) : nullptr;
+	auto* vertices = device ? reinterpret_cast<EnhancedL3DVertex*>(verticesMem->data) : nullptr;
+	auto* indices = device ? reinterpret_cast<uint16_t*>(indicesMem->data) : nullptr;
 	_boundingBox.maxima = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 	_boundingBox.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
 	uint32_t firstVertex = 0;
@@ -414,15 +426,18 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 		for (const auto& vertex : primitive.vertices)
 		{
 			// The third index is 1 on a corner of a back face, which the snow reads by its front corner
-			vertices[firstVertex + (&vertex - primitive.vertices.data())] = {.pos = vertex.position,
-			                                                                 .uv = vertex.uv,
-			                                                                 .norm = vertex.normal,
-			                                                                 .index =
-			                                                                     glm::i16vec4(-1, -1, vertex.back ? 1 : 0, 0)};
+			if (device)
+			{
+				vertices[firstVertex + (&vertex - primitive.vertices.data())] = {
+				    .pos = vertex.position,
+				    .uv = vertex.uv,
+				    .norm = vertex.normal,
+				    .index = glm::i16vec4(-1, -1, vertex.back ? 1 : 0, 0)};
+			}
 			_boundingBox.maxima = glm::max(_boundingBox.maxima, vertex.position);
 			_boundingBox.minima = glm::min(_boundingBox.minima, vertex.position);
 		}
-		for (size_t i = 0; i < primitive.indices.size(); ++i)
+		for (size_t i = 0; device && i < primitive.indices.size(); ++i)
 		{
 			indices[firstIndex + i] = static_cast<uint16_t>(primitive.indices[i] + firstVertex);
 		}
@@ -436,6 +451,10 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 		firstVertex += static_cast<uint32_t>(primitive.vertices.size());
 		firstIndex += static_cast<uint32_t>(primitive.indices.size());
 	}
+	if (!device)
+	{
+		return true;
+	}
 
 	VertexDecl decl;
 	decl.reserve(4);
@@ -447,7 +466,6 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	auto* vertexBuffer = new VertexBuffer(_l3dMesh.GetDebugName(), verticesMem, decl);
 	auto* indexBuffer = new IndexBuffer(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer, indexBuffer);
-	_made = true;
 	return true;
 }
 
@@ -600,6 +618,11 @@ void L3DSubMesh::CreateBlendSource(const bgfx::Memory* vertices, uint32_t count)
 void L3DSubMesh::UpdateVertices(const l3d::L3DFile& l3d) noexcept
 {
 	BoundVertices(l3d, _meshIndex);
+	// A submesh that keeps only its data has no buffer to change
+	if (!_mesh)
+	{
+		return;
+	}
 	const auto* vertices = PackVertices(l3d, _meshIndex);
 	if (_flags.hasBones && _blendSource)
 	{
@@ -610,6 +633,7 @@ void L3DSubMesh::UpdateVertices(const l3d::L3DFile& l3d) noexcept
 
 Mesh& L3DSubMesh::GetMesh() const
 {
+	assert(_mesh != nullptr);
 	return *_mesh;
 }
 

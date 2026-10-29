@@ -26,6 +26,7 @@
 #include "Graphics/Mesh.h"
 #include "Graphics/ShaderProgram.h"
 #include "Graphics/TreeShadows.h"
+#include "Graphics/UploadMode.h"
 #include "L3DSkinTexels.h"
 #include "L3DSubMesh.h"
 #include "ScreenPick.h"
@@ -105,8 +106,9 @@ public:
 		SkinId skinID;
 		BeamMesh mesh;
 	};
-	/// A dynamic mesh's vertices and skins can be changed after it is loaded
-	explicit L3DMesh(std::string debugName = "", bool dynamic = false) noexcept;
+	/// A dynamic mesh's vertices and skins can be changed after it is loaded. A mesh that keeps only its data makes no
+	/// buffer or texture on the graphics device.
+	explicit L3DMesh(std::string debugName = "", bool dynamic = false, UploadMode upload = UploadMode::Device) noexcept;
 	virtual ~L3DMesh() noexcept;
 
 	bool Load(const l3d::L3DFile& l3d) noexcept;
@@ -123,6 +125,8 @@ public:
 	/// A dynamic mesh's skin takes its texels afresh
 	void UpdateSkin(SkinId skin, std::span<const uint16_t> texels) noexcept;
 	[[nodiscard]] bool IsDynamic() const { return _dynamic; }
+	/// What the mesh makes: its data and its objects on the graphics device, or its data only
+	[[nodiscard]] UploadMode GetUploadMode() const { return _upload; }
 
 	[[nodiscard]] uint8_t GetNumSubMeshes() const { return static_cast<uint8_t>(_subMeshes.size()); }
 	[[nodiscard]] const std::vector<std::unique_ptr<L3DSubMesh>>& GetSubMeshes() const { return _subMeshes; }
@@ -225,6 +229,7 @@ private:
 	l3d::L3DMeshFlags _flags;
 	std::string _debugName;
 	bool _dynamic;
+	UploadMode _upload;
 
 	std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>> _skins;
 	std::vector<SkinId> _skinOrder;
