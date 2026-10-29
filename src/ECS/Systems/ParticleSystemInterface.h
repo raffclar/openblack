@@ -146,6 +146,8 @@ public:
 	virtual void SetLiveHand(EffectId id, glm::vec3 hand) = 0;
 	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
 	virtual void SetInTemple(EffectId id) = 0;
+	/// A hidden effect continues to step but does not draw
+	virtual void SetHidden(EffectId /*id*/, bool /*hidden*/) {}
 	/// An effect that the world and the temple do not draw. Only CollectEffectDrawFrame draws it, as for the seeds
 	/// pictured over the gestures' hints.
 	virtual void SetDrawnAlone(EffectId /*id*/) {}

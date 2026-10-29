@@ -109,6 +109,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FightTranscriptNote.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -116,7 +117,6 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -132,6 +132,7 @@
 #include "Magic/MagicTables.h"
 #include "MagicLiving.h"
 #include "Particles/LightSheet.h"
+#include "Particles/ParticleDrawFrame.h"
 #include "Physics/TurnRules.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
@@ -1327,9 +1328,9 @@ void CreatureFightSystem::Reset()
 	_flightPlace.reset();
 	_screenCentre.reset();
 	_fightExit = true;
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().SetFightMarks({});
+		Locator::effectRequestSystem::value().SetFightMarks({});
 	}
 }
 
@@ -1369,9 +1370,9 @@ void CreatureFightSystem::DrawMarks(float realMs, const glm::vec3& eye)
 			}
 		}
 	}
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().SetFightMarks(std::move(drawn));
+		Locator::effectRequestSystem::value().SetFightMarks(std::move(drawn));
 	}
 }
 

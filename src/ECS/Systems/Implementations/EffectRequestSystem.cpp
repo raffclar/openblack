@@ -14,6 +14,8 @@
 #include <utility>
 
 #include "ECS/Reflection/BinaryArchive.h"
+#include "Particles/ParticleDrawFrame.h"
+#include "Particles/ParticleEffect.h"
 
 using namespace openblack::ecs::systems;
 
@@ -151,6 +153,103 @@ void EffectRequestSystem::AddPlasma(EffectHandle handle, const particles::Plasma
 	if (auto* server = ServerFor(handle))
 	{
 		server->AddPlasma(handle, command);
+	}
+}
+
+bool EffectRequestSystem::ShowsEffects() const
+{
+	return _findServer() != nullptr;
+}
+
+bool EffectRequestSystem::Step(EffectHandle handle, const particles::ProcessInfo& info, float seconds)
+{
+	auto* server = ServerFor(handle);
+	return server != nullptr && server->ProcessForSpell(handle, info, seconds);
+}
+
+void EffectRequestSystem::RestoreSink(EffectHandle handle, particles::SpellSink* sink)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->RestoreSink(handle, sink);
+	}
+}
+
+void EffectRequestSystem::SetHidden(EffectHandle handle, bool hidden)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetHidden(handle, hidden);
+	}
+}
+
+void EffectRequestSystem::SetDrawOffset(EffectHandle handle, glm::vec3 offset)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetDrawOffset(handle, offset);
+	}
+}
+
+void EffectRequestSystem::SetLiveHand(EffectHandle handle, glm::vec3 hand)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetLiveHand(handle, hand);
+	}
+}
+
+std::shared_ptr<openblack::particles::ShieldSphere> EffectRequestSystem::FindShield(glm::vec3 point, float margin) const
+{
+	const auto* server = _findServer();
+	return server != nullptr ? server->FindShield(point, margin) : nullptr;
+}
+
+void EffectRequestSystem::AddBeliefSprite(const particles::BeliefSprite& sprite)
+{
+	if (auto* server = _findServer())
+	{
+		server->AddBeliefSprite(sprite);
+	}
+}
+
+void EffectRequestSystem::AddHandManaPathSpark(const particles::mana_path::Spark& spark)
+{
+	if (auto* server = _findServer())
+	{
+		server->AddHandManaPathSpark(spark);
+	}
+}
+
+void EffectRequestSystem::AddStormBolt(glm::vec3 cloudPoint)
+{
+	if (auto* server = _findServer())
+	{
+		server->AddStormBolt(cloudPoint);
+	}
+}
+
+void EffectRequestSystem::SetFightMarks(std::vector<particles::draw::FightMark> marks)
+{
+	if (auto* server = _findServer())
+	{
+		server->SetFightMarks(std::move(marks));
+	}
+}
+
+void EffectRequestSystem::AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet)
+{
+	if (auto* server = _findServer())
+	{
+		server->AddLightSheet(sheet);
+	}
+}
+
+void EffectRequestSystem::SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> symbols)
+{
+	if (auto* server = _findServer())
+	{
+		server->SetPlayerSymbols(std::move(symbols));
 	}
 }
 

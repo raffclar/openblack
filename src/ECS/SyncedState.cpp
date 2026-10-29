@@ -212,12 +212,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SpellSeed", .field = "handEffect", .marker = ""},
     {.component = "Transform", .field = "position", .marker = "SpellSeed"},
     {.component = "Transform", .field = "rotation", .marker = "SpellSeed"},
-    // The number of a miracle's particle effect: each computer numbers its effects, and makes more of them for its own
-    // hand
+    // The numbers of the effects that the turns make, also the effect of a miracle. The simulation gives these numbers
+    // now, and the particles of this computer show each effect under its number. A game saved before has the numbers
+    // of the particles. The turns use a number only to find their effect on this computer.
     {.component = "Spell", .field = "effect", .marker = ""},
-    // The numbers of other effects that the turns make. The simulation gives these numbers now, and the particles of
-    // this computer show each effect under its number. A game saved before has the numbers of the particles. The turns
-    // use a number only to find their effect on this computer.
     {.component = "SpellDispenser", .field = "effect", .marker = ""},
     {.component = "TownArtefact", .field = "effect", .marker = ""},
     {.component = "MagicShield", .field = "effect", .marker = ""},

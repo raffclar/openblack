@@ -22,8 +22,8 @@
 #include <spdlog/spdlog.h>
 
 #include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
@@ -68,9 +68,9 @@ void CameraZoneSystem::PlaceForceField()
 	// Without the fence it is neither drawn nor fades
 	_forceField->SetHidden(!_zones.fenceOn);
 	// The particles keep the sheet until a new land or a load clears their list, so it is given to them again each time
-	if (Locator::particleSystem::has_value())
+	if (Locator::effectRequestSystem::has_value())
 	{
-		Locator::particleSystem::value().AddLightSheet(_forceField);
+		Locator::effectRequestSystem::value().AddLightSheet(_forceField);
 	}
 }
 

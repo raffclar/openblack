@@ -260,6 +260,7 @@ public:
 	bool Renumber(EffectId from, EffectId to) override;
 	void KeepOutOfSaves(EffectId id) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
+	void SetHidden(EffectId id, bool hidden) override;
 	void SetLiveHand(EffectId id, glm::vec3 hand) override;
 	void SetInTemple(EffectId id) override;
 	void SetDrawnAlone(EffectId id) override;
