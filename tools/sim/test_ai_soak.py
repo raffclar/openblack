@@ -339,6 +339,21 @@ class NetCheckHelpers(unittest.TestCase):
         self.assertEqual(recoveries, [0, 304, 422, 467])
         self.assertEqual(net_check.purposeful_part_left_out([301, 419, 464], recoveries, 300), [419, 464])
 
+    def test_the_session_counts_come_from_the_end_of_the_network_game(self):
+        if net_check is None:
+            self.skipTest("net_check needs the cryptography package")
+        with tempfile.TemporaryDirectory() as folder:
+            log = os.path.join(folder, "client.log")
+            with open(log, "w", encoding="utf-8") as file:
+                file.write("[game] [info] Network game: 17900 turns compared with the server, 17899 the same\n")
+                file.write("[game] [info] Back in the game at turn 9358\n")
+                file.write("[game] [info] [NetworkGameSystem.cpp:434] The network game ended (left): 17997 turns "
+                           "compared with the server, 17996 the same, 2 resumes\n")
+            self.assertEqual(net_check.session_counts(log), (17997, 17996, 1))
+            with open(log, "w", encoding="utf-8") as file:
+                file.write("[game] [info] Network game: 300 turns compared with the server, 300 the same\n")
+            self.assertEqual(net_check.session_counts(log), (300, 300, 0))
+
     def test_a_part_on_purpose_with_no_recovery_keeps_every_turn(self):
         self.assertEqual(net_check.purposeful_part_left_out([301, 302], [0], 300), [301, 302])
 
@@ -467,6 +482,81 @@ class AiLog(unittest.TestCase):
 
     def test_a_missing_log_tells_of_no_god(self):
         self.assertEqual(sim_report.ai_actions_in_file("no/such/file.log")["gods"], [])
+
+
+
+class ObserverPart(unittest.TestCase):
+    def test_each_game_gets_a_random_part_turn_that_is_the_same_each_time(self):
+        first = ai_soak.games_of(options(lands="TwoGods,ring32", turns=20000, part_observer=True, shuffle_seed=7))
+        again = ai_soak.games_of(options(lands="TwoGods,ring32", turns=20000, part_observer=True, shuffle_seed=7))
+        self.assertEqual(first, again)
+        low, high = ai_soak.part_turn_range(20000)
+        for game in first:
+            self.assertTrue(low <= game.part_observer_at <= high)
+            self.assertTrue(game.name.endswith(f"-p{game.part_observer_at}"))
+        other = ai_soak.games_of(options(lands="TwoGods,ring32", turns=20000, part_observer=True, shuffle_seed=8))
+        self.assertNotEqual([game.part_observer_at for game in first], [game.part_observer_at for game in other])
+
+    def test_the_part_turn_comes_before_the_end_of_a_short_game(self):
+        for turns in (2, 300, 2000, 20000):
+            low, high = ai_soak.part_turn_range(turns)
+            self.assertTrue(1 <= low <= high < turns, turns)
+
+    def test_the_last_observer_parts_on_purpose(self):
+        computer = ai_soak.Game("mpm_2p_1", 1, 1, "all-computer", 2, 20000, part_observer_at=1234)
+        arguments = ai_soak.net_check_arguments(computer, "out")
+        self.assertEqual(arguments[arguments.index("--part-client") + 1], "2")
+        self.assertEqual(arguments[arguments.index("--part-second-at") + 1], "1234")
+        human = ai_soak.Game("mpm_2p_1", 1, 1, "all-but-one", 2, 20000, part_observer_at=1234)
+        arguments = ai_soak.net_check_arguments(human, "out")
+        self.assertEqual(arguments[arguments.index("--part-client") + 1], "3")
+        plain = ai_soak.Game("mpm_2p_1", 1, 1, "all-computer", 2, 20000)
+        self.assertNotIn("--part-second-at", ai_soak.net_check_arguments(plain, "out"))
+
+    def test_a_fixed_part_turn_goes_to_every_game_and_the_repro_line_keeps_it(self):
+        games = ai_soak.games_of(options(lands="TwoGods,mpm_3p_1", part_observer_at=500))
+        self.assertEqual([game.part_observer_at for game in games], [500, 500])
+        line = ai_soak.repro_line(games[1])
+        parsed = ai_soak.build_parser().parse_args(line.replace('"', "").split()[2:])
+        self.assertEqual(ai_soak.games_of(parsed), [games[1]])
+
+    def test_a_part_needs_an_observer_and_a_turn_inside_the_game(self):
+        with self.assertRaises(ValueError):
+            ai_soak.games_of(options(modes="all-but-one", observers=0, part_observer=True))
+        with self.assertRaises(ValueError):
+            ai_soak.games_of(options(part_observer_at=2000))
+
+    def test_the_maps_are_every_land_of_the_soak(self):
+        games = ai_soak.games_of(options(maps=True))
+        self.assertEqual([game.land for game in games], list(ai_soak.LANDS))
+
+    def test_the_row_keeps_the_part_turn_and_each_game_gets_one_line(self):
+        game = ai_soak.Game("TwoGods", 1, 1, "all-computer", 2, 300, part_observer_at=150)
+        with tempfile.TemporaryDirectory() as day:
+            runner, calls = Playing.runner_of(None, [SAME])
+            row = ai_soak.play(game, day, options(), runner=runner)
+        self.assertEqual(row["part_observer_at"], 150)
+        row["parts"] = ["Animal"]
+        self.assertEqual(calls[0][calls[0].index("--part-second-at") + 1], "150")
+        part = dict(row, land="ring32", status="part", first_part_turn=212, parts=["ComputerPlayers"])
+        error = dict(row, land="mpm_4p_1", status="error")
+        lines = ai_soak.map_lines([row, part, error])
+        self.assertEqual(lines[0], "TwoGods      same  turns 2000 first part - parts - observer part 150")
+        self.assertEqual(lines[1], "ring32       PART  turns 2000 first part 212 parts ComputerPlayers observer part 150")
+        self.assertTrue(lines[2].startswith("mpm_4p_1     ERROR"))
+
+    def test_the_time_limit_goes_to_net_check_and_to_the_repro_line(self):
+        games = ai_soak.games_of(options(lands="mpm_2p_1", turns=20000, time_limit=40))
+        arguments = ai_soak.net_check_arguments(games[0], "out")
+        self.assertEqual(arguments[arguments.index("--time-limit") + 1], "40")
+        parsed = ai_soak.build_parser().parse_args(ai_soak.repro_line(games[0]).split()[2:])
+        self.assertEqual(ai_soak.games_of(parsed), games)
+        self.assertNotIn("--time-limit", ai_soak.net_check_arguments(ai_soak.games_of(options())[0], "out"))
+        with self.assertRaises(ValueError):
+            ai_soak.games_of(options(time_limit=0))
+
+    def test_the_injected_part_does_not_go_with_the_part_of_an_observer(self):
+        self.assertEqual(ai_soak.main(["--inject-part", "100", "--part-observer", "--dry-run"]), 2)
 
 
 if __name__ == "__main__":

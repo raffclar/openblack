@@ -5,6 +5,12 @@
 #   bash tools/sim/desync_soak.sh mac   [options]   from the PC: copy a commit to the Mac build box, build it there, soak
 #                                                   there, and fetch the results to the PC
 #   bash tools/sim/desync_soak.sh local [options]   soak on this computer (the PC or the Mac) with a build that exists
+#   bash tools/sim/desync_soak.sh maps  [options]   the soak of every map for the merge train: as mac, with every land
+#                                                   of ai_soak.py (--maps), all computer gods, 2 observers, 20000 turns,
+#                                                   seed 1, AI seed 1, a time limit of 40 minutes (so that the game
+#                                                   plays all its turns), the last observer parts on purpose at a random
+#                                                   turn and comes back, no server_check; it prints one line for each
+#                                                   land at the end (same or PART, turns, first different turn, parts)
 #   bash tools/sim/desync_soak.sh cross --out DAY --pc-bin DIR
 #                                                   play the server_checks of a fetched Mac soak (DAY is its date
 #                                                   folder on the PC) again on the PC and compare the checksums
@@ -19,12 +25,18 @@
 #   --ai-seeds A        the AI seeds (default 1,2; 0 is the built-in personalities)
 #   --modes M           all-computer, all-but-one or both, divided by commas (default all-computer; all-but-one has one
 #                       human client with a still hand)
+#   --time-limit M      the time limit of each network game in minutes (default the game's 30 minutes, which decides
+#                       the game after 18000 turns)
+#   --maps              every land of ai_soak.py (its --maps), in place of --lands
+#   --part-observer     the world of the last observer of each game parts on purpose at a random turn (from the shuffle
+#                       seed) and must come back in step from the server's world
 #   --pc-bin DIR        mac: after the soak, play each server_check of the Mac again on the PC with these programs and
 #                       compare the server checksums of the two computers turn by turn (checksum_compare.py)
 #   --observers O       the desktop observers of each game (default 2)
 #   --turns T           the turns of each game (default 20000)
 #   --server-turns T    the turns of each server_check run (default 5000; 0 for no server_check)
 #   --shuffle-seed N    the order of the games (default the day of the year, so that each night covers other games)
+#   --date D            the name of the folder of the results in --out (default the date of today)
 #   --out DIR           the results (default <runs>/desync-soak; the Mac uses ~/projects/openblack/sim-runs)
 #
 # Results: <out>/<date>/ai-soak (a folder for each game and summary.jsonl), <out>/<date>/server-check/<land>-s<seed>-ai<n>
@@ -58,13 +70,31 @@ TURNS=20000
 SERVER_TURNS=5000
 SHUFFLE=$((10#$(date +%j)))
 OUT=""
+DATE=$(date +%Y-%m-%d)
+PART_OBSERVER=""
+TIME_LIMIT=""
+LANDS_OPTION=(--lands "$LANDS")
+if [ "$MODE" = maps ]; then
+	# The soak of every map: one game of each land, long, with a part on purpose of an observer
+	NAME=mpsoakmaps
+	HOURS=24
+	SEEDS=1
+	AI_SEEDS=1
+	SERVER_TURNS=0
+	PART_OBSERVER=1
+	TIME_LIMIT=40
+	LANDS_OPTION=(--maps)
+fi
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--commit) COMMIT=$2; shift 2 ;;
 	--name) NAME=$2; shift 2 ;;
 	--bin) BIN=$2; shift 2 ;;
 	--hours) HOURS=$2; shift 2 ;;
-	--lands) LANDS=$2; shift 2 ;;
+	--lands) LANDS=$2; LANDS_OPTION=(--lands "$LANDS"); shift 2 ;;
+	--part-observer) PART_OBSERVER=1; shift ;;
+	--maps) LANDS_OPTION=(--maps); shift ;;
+	--time-limit) TIME_LIMIT=$2; shift 2 ;;
 	--seeds) SEEDS=$2; shift 2 ;;
 	--ai-seeds) AI_SEEDS=$2; shift 2 ;;
 	--modes) MODES=$2; shift 2 ;;
@@ -74,13 +104,18 @@ while [ $# -gt 0 ]; do
 	--server-turns) SERVER_TURNS=$2; shift 2 ;;
 	--shuffle-seed) SHUFFLE=$2; shift 2 ;;
 	--out) OUT=$2; shift 2 ;;
+	--date) DATE=$2; shift 2 ;;
 	*) echo "desync_soak: unknown option $1"; exit 2 ;;
 	esac
 done
 # The options that the mac mode gives to the local mode on the Mac
-PASS=(--hours "$HOURS" --lands "$LANDS" --seeds "$SEEDS" --ai-seeds "$AI_SEEDS" --modes "$MODES" --observers "$OBSERVERS" --turns "$TURNS"
-	--server-turns "$SERVER_TURNS" --shuffle-seed "$SHUFFLE")
-DATE=$(date +%Y-%m-%d)
+PASS=(--hours "$HOURS" "${LANDS_OPTION[@]}" --seeds "$SEEDS" --ai-seeds "$AI_SEEDS" --modes "$MODES" --observers "$OBSERVERS" --turns "$TURNS"
+	--server-turns "$SERVER_TURNS" --shuffle-seed "$SHUFFLE" --date "$DATE")
+[ -z "$PART_OBSERVER" ] || PASS+=(--part-observer)
+PART_ARGS=()
+[ -z "$PART_OBSERVER" ] || PART_ARGS=(--part-observer)
+[ -z "$TIME_LIMIT" ] || PASS+=(--time-limit "$TIME_LIMIT")
+[ -z "$TIME_LIMIT" ] || PART_ARGS+=(--time-limit "$TIME_LIMIT")
 MINUTES=$(awk -v h="$HOURS" 'BEGIN{printf "%d", h*60}')
 
 # The land arguments of server_check for a land of ai_soak.py
@@ -139,7 +174,7 @@ run_local() {
 	mkdir -p "$day/server-check"
 	echo "desync_soak: tree $TREE at $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null), programs $BIN, results $day"
 	local code=0
-	"$PY" "$TREE/tools/sim/ai_soak.py" --lands "$LANDS" --seeds "$SEEDS" --ai-seeds "$AI_SEEDS" --modes "$MODES" \
+	"$PY" "$TREE/tools/sim/ai_soak.py" "${LANDS_OPTION[@]}" "${PART_ARGS[@]}" --seeds "$SEEDS" --ai-seeds "$AI_SEEDS" --modes "$MODES" \
 		--observers "$OBSERVERS" --turns "$TURNS" --shuffle-seed "$SHUFFLE" --budget-minutes "$MINUTES" \
 		--bin "$BIN" --out "$day" --date ai-soak --nightly "$day/ai-soak.jsonl" >"$day/ai-soak.log" 2>&1 || code=1
 	# server_check of each land with computer gods: the game alone in the fast mode, then the server at its own pace
@@ -183,6 +218,12 @@ print(("same" if s.get("same") else "PART") + f", compared {compared}, same unti
 		echo "| Land | Seed | AI seed | Turns | Exit | Result |"
 		echo "|---|---|---|---|---|---|"
 		while IFS=$'\t' read -r l s a t r v; do echo "| $l | $s | $a | $t | $r | $v |"; done <"$sc_rows"
+		echo
+		echo "## One line for each game"
+		echo
+		echo '```'
+		"$PY" "$TREE/tools/sim/ai_soak.py" --lines "$day/ai-soak.jsonl"
+		echo '```'
 	} >"$day/report.md"
 	cat "$day/report.md"
 	exit $code
@@ -229,6 +270,10 @@ EOF
 		cross_check "$local_out/$DATE" || code=1
 	fi
 	cat "$local_out/$DATE/report.md" 2>/dev/null
+	if [ "$MODE" = maps ]; then
+		echo
+		python "$TREE/tools/sim/ai_soak.py" --lines "$local_out/$DATE/ai-soak.jsonl"
+	fi
 	return "$code"
 }
 
@@ -278,7 +323,7 @@ cross_check() {
 
 case "$MODE" in
 local) run_local ;;
-mac) run_mac ;;
+mac | maps) run_mac ;;
 cross)
 	[ -n "$PC_BIN" ] && [ -n "$OUT" ] && [ -d "$OUT/server-check" ] || { echo "desync_soak: cross needs --out DAY and --pc-bin"; exit 2; }
 	check_pc_bin || exit 2
