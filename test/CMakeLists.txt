@@ -2219,3 +2219,4 @@ add_test(NAME test_net_check_runs
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_runs.py
 )
 openblack_setup_and_add_test(test_hand_report_rules test_hand_report_rules.cpp)
+openblack_setup_and_add_test(test_server_snapshots online/test_server_snapshots.cpp)
