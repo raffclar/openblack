@@ -819,6 +819,67 @@ class ArgumentsTest(SessionBase):
         self.assertEqual(len(self.first.asked()), asked)
 
 
+class GestureTest(SessionBase):
+    """input.gesture draws the same path at each camera distance: the adapter sends the call as it is, after a camera
+    near the hand and after one far from it, and the tool tells how a drawing can be lost"""
+    OFFSET = (-35.0, 40.0, -35.0)
+    TARGET = (3600.7, 0.0, 3421.8)
+
+    def setUp(self):
+        super().setUp()
+        self.distances = []
+        self.camera = {}
+
+        def set_camera(request):
+            params = request["params"]
+            self.camera = params
+            return {"model": "world", "override": False}
+
+        def draw(request):
+            origin, focus = self.camera["position"], self.camera["focus"]
+            self.distances.append(sum((a - b) ** 2 for a, b in zip(origin, focus)) ** 0.5)
+            return {"gesture": request["params"]["name"], "hold_action": request["params"].get("hold_action", False),
+                    "pending": 0}
+
+        self.first.handlers["camera.set"] = set_camera
+        self.first.handlers["input.gesture"] = draw
+
+    def look_from(self, scale):
+        position = [t + o * scale for t, o in zip(self.TARGET, self.OFFSET)]
+        answer = self.session.call("camera_set", {"position": position, "focus": list(self.TARGET), "port": self.first.port})
+        self.assertTrue(answer["ok"], answer)
+
+    def test_a_circle_is_asked_for_the_same_way_near_and_far(self):
+        for scale in (1.0, 1.2, 1.3, 2.0, 3.0):
+            self.look_from(scale)
+            answer = self.session.call("input_gesture", {"name": "circle", "hold_action": True, "port": self.first.port})
+            self.assertTrue(answer["ok"], answer)
+            self.assertEqual(answer["result"], {"gesture": "circle", "hold_action": True, "pending": 0})
+        asked = [r for r in self.first.asked() if r["query"] == "input.gesture"]
+        self.assertEqual(len(asked), 5)
+        for request in asked:
+            self.assertEqual(request["params"], {"name": "circle", "hold_action": True})
+        near, far = self.distances[0], self.distances[-1]
+        self.assertAlmostEqual(far / near, 3.0, places=3)
+
+    def test_the_order_of_a_camera_and_a_drawing_is_kept(self):
+        self.look_from(1.0)
+        self.session.call("input_gesture", {"name": "circle", "port": self.first.port})
+        self.look_from(3.0)
+        self.session.call("input_gesture", {"name": "circle", "port": self.first.port})
+        queries = [r["query"] for r in self.first.asked()]
+        self.assertEqual(queries, ["camera.set", "input.gesture", "camera.set", "input.gesture"])
+
+    def test_the_tool_tells_how_a_drawing_is_lost_and_how_to_see_it_was_recognised(self):
+        description = mcp.TOOLS_BY_NAME["input_gesture"]["description"]
+        self.assertIn("camera", description)
+        self.assertIn("players.gestures", description)
+        self.assertIn("same at each camera distance", description)
+        entry = mcp.CATALOGUE["input.gesture"]
+        self.assertIn("players.gestures", entry["description"])
+        self.assertIn("camera moves", entry["description"])
+
+
 class SchemaTest(unittest.TestCase):
     """Tools' parameters come from the game's own descriptions of its queries"""
     BUILT_IN = {"describe", "writes"}

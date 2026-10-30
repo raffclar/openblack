@@ -503,7 +503,10 @@ TOOLS = [
     },
     {
         "name": "input_gesture",
-        "description": "Draws a gesture (input_names) through the recogniser as the hand would.",
+        "description": "Draws a gesture (input_names) through the recogniser as the hand would, in about a second. Its "
+                       "size on the screen is the same at each camera distance. The game forgets a path when the camera "
+                       "moves or the player's hand takes or lets go of a thing during the drawing: ask players.gestures "
+                       "(last_recognised, circle_seconds_left) afterwards, and draw again if nothing was recognised.",
         "inputSchema": schema({"name": {"type": "string"}, "hold_action": {"type": "boolean"}}, ["name"]),
         "query": "input.gesture",
         "params": ["name", "hold_action"],

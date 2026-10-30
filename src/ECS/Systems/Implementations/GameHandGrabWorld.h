@@ -65,6 +65,7 @@ public:
 	void CatchFirefly(entt::entity object) override;
 	void CountHelpEvent(uint32_t event) override;
 	void ForgetGesturePath() override;
+	[[nodiscard]] bool IsLocalHand() const override;
 	void HeatHeld(entt::entity object) override;
 	void HeldTurn(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
