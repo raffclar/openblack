@@ -48,6 +48,7 @@
 #include "ECS/Graveyards.h"
 #include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFlocks.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/GameEndSystemInterface.h"
@@ -1127,6 +1128,8 @@ uint32_t villager_fire::Dead(LivingAction& action)
 {
 	auto& registry = Entities();
 	const auto villager = EntityOf(action);
+	// A dead body leaves its flock, also a body that a script controls. A flock with no member left goes.
+	ecs::script_flocks::Remove(registry, villager, true);
 	auto* death = registry.TryGet<VillagerDeath>(villager);
 	if (death == nullptr)
 	{
