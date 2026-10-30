@@ -9,9 +9,12 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <chrono>
 #include <deque>
 #include <functional>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <optional>
@@ -151,11 +154,26 @@ public:
 	                  bool local) const;
 	/// Adds the things that only the effects of this computer use: the gesture trails that wait for their effect
 	void AddLocalThings(particles::SharedTables& localThings) const;
-	/// The running state of the world: its lists, and the sounds that the particles keep. The parts of the things in the
-	/// local tables are presentation values.
+	/// The forms of the parts of a save that the world reads
+	enum class SavedForm : uint8_t
+	{
+		/// The part of a save from before the split, or a part from before the move of the sound waits to this computer.
+		/// Each sound keeps its wait.
+		WaitWithSound,
+		/// The synced part keeps no value from the listener. The part of this computer keeps the waits of the sounds.
+		WaitOnThisComputer,
+	};
+	/// The synced running state of the world: its lists, and the sounds of the synced particles that live. The things
+	/// in the local tables stay out. LoadState also reads this part of an older save, which kept all the things.
 	void SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
 	               const particles::SharedTables& localThings) const;
-	bool LoadState(particles::EffectReader& in);
+	bool LoadState(particles::EffectReader& in, SavedForm form);
+	/// The running state of the world that only this computer uses: the gesture trails, the things of the local tables
+	/// with their places in the lists, and the sounds that travel to the listener. LoadLocalState puts them back after
+	/// LoadState.
+	void SaveLocalState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
+	                    const particles::SharedTables& localThings) const;
+	bool LoadLocalState(particles::EffectReader& in, SavedForm form);
 
 private:
 	/// A sound a particle started, and what plays it
@@ -169,14 +187,35 @@ private:
 		/// Let go of by its particle, and how it is fading out
 		bool letGo {false};
 		particles::SoundLetGo fade;
-		/// Seconds before it is heard, while it travels to the listener
+		/// Seconds before it is heard, while it travels to the listener. This value comes from the listener of this
+		/// computer.
 		float wait {0.0f};
+		/// Where the listener hears the sound start: where its particle was when it started the sound
+		glm::vec3 start {0.0f};
+	};
+	/// How a save keeps a sound
+	enum class SoundRecord : uint8_t
+	{
+		/// The sound of a synced particle in the synced part: only its link
+		Link,
+		/// A sound of an older save, with its wait
+		LinkAndWait,
+		/// A sound in the part of this computer, with its wait and the place where the listener hears it start
+		LinkWaitAndStart,
 	};
 	/// A sound that its particle let go of was dying away, and a sound whose particle is gone and that does not wait to
 	/// be heard is over: a load ends them
 	[[nodiscard]] static bool EndsWithLoad(const PlayingSound& sound);
 	/// Whether a save keeps the sound
 	[[nodiscard]] static bool Saved(const PlayingSound& sound, const LeftOutSounds& leftOut);
+	/// Whether the synced part keeps the sound: a kept sound of a synced particle that lives. A sound whose particle has
+	/// gone stays only while it travels to the listener of this computer, so the part of this computer keeps it.
+	[[nodiscard]] static bool InSyncedPart(const PlayingSound& sound, const LeftOutSounds& leftOut,
+	                                       const particles::SharedTables& localThings);
+	/// Writes a sound in the part of this computer
+	static void WriteSound(particles::EffectWriter& out, const PlayingSound& sound);
+	/// A sound of a save, none when the load ends it
+	[[nodiscard]] static std::optional<PlayingSound> ReadSound(particles::EffectReader& in, SoundRecord record);
 	void Play(PlayingSound& sound) const;
 	/// The particle let go of the sound: stopped at once, or, when its effect file soft-releases it, its loop released
 	/// and its first step quieter taken
@@ -300,8 +339,11 @@ public:
 	void ProcessTurn() override;
 	void Reset() override;
 	void SetFreshIdsAtNextReset() override { _freshIdsAtNextReset = true; }
+	/// The synced part of the save: the synced effects and the world that they use
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
+	[[nodiscard]] SavedStateInterface* LocalEffectsState() override { return &_localPart; }
+	[[nodiscard]] SavedStateInterface* OldSaveState() override { return &_oldPart; }
 
 	void ForEachDrawn(const std::function<void(const DrawnEffect&)>& visit) const override;
 	[[nodiscard]] std::optional<DrawnEffect> FindDrawn(EffectId id) const override;
@@ -384,6 +426,73 @@ private:
 	/// The sparks showers over objects move on by a frame's game time
 	void StepShowers(float gameSeconds);
 
+	/// The part of the save that keeps the effects of this computer
+	class LocalPart final: public SavedStateInterface
+	{
+	public:
+		explicit LocalPart(ParticleRuleSystem& rules)
+		    : _rules(&rules)
+		{
+		}
+		void SaveState(reflection::BinaryWriter& out) const override { _rules->SaveLocalState(out); }
+		bool LoadState(reflection::BinaryReader& in) override { return _rules->LoadLocalState(in); }
+
+	private:
+		ParticleRuleSystem* _rules;
+	};
+	/// The one part of the particles in a save from before the split. A save does not write it.
+	class OldPart final: public SavedStateInterface
+	{
+	public:
+		explicit OldPart(ParticleRuleSystem& rules)
+		    : _rules(&rules)
+		{
+		}
+		bool LoadState(reflection::BinaryReader& in) override { return _rules->LoadOldState(in); }
+
+	private:
+		ParticleRuleSystem* _rules;
+	};
+	struct SaveNumbering;
+	/// The things of the synced part of the last load, by their numbers. The part of this computer refers to them. The
+	/// part holds them weakly, so that the things that nothing holds go after the load as before.
+	struct LoadedSyncedThings
+	{
+		std::vector<std::weak_ptr<particles::ParticleSoundLink>> sounds;
+		std::vector<std::weak_ptr<particles::BoltShare>> bolts;
+		std::vector<std::weak_ptr<particles::ShieldSphere>> shields;
+		std::vector<std::weak_ptr<particles::LightSheet>> sheets;
+		std::vector<std::weak_ptr<particles::CarriedObject>> carried;
+		std::vector<std::weak_ptr<particles::GestureTrail>> trails;
+	};
+	enum class ReadResult
+	{
+		Read,
+		/// The file of the effect is gone, so the load leaves out the effect
+		Skipped,
+		Failed,
+	};
+
+	/// A synced effect that a save keeps
+	[[nodiscard]] static bool IsSynced(const Running& running) { return running.saved && running.effect->IsSynced(); }
+	/// An effect of this computer that a save keeps
+	[[nodiscard]] static bool IsLocal(const Running& running) { return running.saved && !running.effect->IsSynced(); }
+	/// Gives the numbers of the shared things to the two parts of a save
+	void NumberForSave(const reflection::BinaryWriter& out, SaveNumbering& numbering) const;
+	static void SaveRunning(reflection::BinaryWriter& bytes, particles::EffectWriter& effects, const Running& running);
+	static void WarnUnsaved(std::initializer_list<const reflection::BinaryWriter*> writers);
+	void SaveLocalState(reflection::BinaryWriter& out) const;
+	bool LoadLocalState(reflection::BinaryReader& in);
+	bool LoadOldState(reflection::BinaryReader& in);
+	/// Reads the tables, the effects and the world of the synced part, or of the one part of an old save
+	bool LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form);
+	ReadResult ReadRunning(reflection::BinaryReader& in, particles::EffectReader& reader, Running& running);
+	static void RestoreCarried(std::span<const std::shared_ptr<particles::CarriedObject>> carried);
+
+	LocalPart _localPart {*this};
+	OldPart _oldPart {*this};
+	/// The things of the synced part of the last load, for the part of this computer
+	std::optional<LoadedSyncedThings> _loadedSynced;
 	GameCreatorResources _resources;
 	particles::ParticleClassRegistry _classes;
 	GameParticleWorld _world;

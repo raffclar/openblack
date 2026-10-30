@@ -72,7 +72,7 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	// The device goes first: the renderer makes its buffers and textures on it. Its service is made before the services of
 	// the resources, so that it stays until the last texture and buffer of the resources is deleted.
 	Locator::graphicsDevice::emplace<graphics::BgfxGraphicsDevice>();
-	Locator::rendererInterface::reset(RendererInterface::Create(backend, vsync).release());
+	EmplaceRenderer(RendererInterface::Create(backend, vsync));
 	if (!Locator::rendererInterface::has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to create renderer");

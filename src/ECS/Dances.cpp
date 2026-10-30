@@ -18,6 +18,7 @@
 #include "ECS/DanceRules.h"
 #include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
+#include "PlayerSlots.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -156,7 +157,10 @@ void dances::ProcessTurn(Registry& registry, entt::entity entity, const TurnCont
 			if (hand.cameraAsked)
 			{
 				hand.cameraAsked = false;
-				context.cameraAsked(entity, static_cast<PlayerNames>(god));
+				if (const auto player = player_slots::PlayerOfSlot(god); player.has_value())
+				{
+					context.cameraAsked(entity, *player);
+				}
 			}
 		}
 	}

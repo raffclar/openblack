@@ -80,6 +80,8 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_turns.clear();
 	_playout.Reset();
 	_turnsDone = 0;
+	// A new session counts its blocks of commands from 0
+	_sent.Reset();
 	Open(false);
 }
 
@@ -243,6 +245,7 @@ void NetworkSession::Text(std::string_view text)
 			_turns.clear();
 			_playout.Reset();
 		}
+		SendKeptAgain();
 		SendWaiting();
 	}
 	else if (const auto* stop = std::get_if<game_socket::GameStop>(&*frame))
@@ -435,9 +438,40 @@ void NetworkSession::SendWaiting()
 	for (size_t i = 0; i < _waiting.size(); i += turn_codec::k_MostBlockCommands)
 	{
 		const auto count = std::min(turn_codec::k_MostBlockCommands, _waiting.size() - i);
-		_stream->SendCommands(_turnsDone, std::span(_waiting).subspan(i, count));
+		SendNewBlock(std::span(_waiting).subspan(i, count));
 	}
 	_waiting.clear();
+}
+
+bool NetworkSession::SendNewBlock(std::span<const player_commands::Action> actions)
+{
+	auto block = _sent.Make(_turnsDone, actions);
+	if (!_stream || !_stream->SendBlock(block))
+	{
+		return false;
+	}
+	// The server refuses the commands before the start, so the client keeps only the blocks of the game
+	_sent.Sent(std::move(block), _state == State::Playing);
+	return true;
+}
+
+void NetworkSession::SendKeptAgain()
+{
+	const auto& kept = _sent.Kept();
+	if (kept.empty() || !_stream || !_stream->IsOpen() || !_joined.has_value() || _joined->role != game_socket::Role::God)
+	{
+		return;
+	}
+	size_t sent = 0;
+	for (const auto& block : kept)
+	{
+		if (_stream->SendBlock(block))
+		{
+			++sent;
+		}
+	}
+	Log(spdlog::level::info, fmt::format("The client sends again {} blocks of commands that no turn holds (blocks {} to {})",
+	                                     sent, kept.front().sequence, kept.back().sequence));
 }
 
 void NetworkSession::Send(const player_commands::Action& action)
@@ -450,7 +484,7 @@ void NetworkSession::Send(const player_commands::Action& action)
 	if ((_state == State::Playing || _state == State::Waiting) && _stream && _stream->IsOpen())
 	{
 		const std::array actions {action};
-		if (_stream->SendCommands(_turnsDone, actions))
+		if (SendNewBlock(actions))
 		{
 			return;
 		}
@@ -498,7 +532,14 @@ std::vector<player_commands::Command> NetworkSession::TakeTurn(uint32_t turn)
 
 void NetworkSession::Turn(const turn_codec::TurnBundle& turn)
 {
-	if (turn.turn < _turnsDone || _turns.contains(turn.turn))
+	// The blocks of this player that the turn holds do not go again. A turn that the client had still tells this.
+	if (const auto god = OwnGod(); god.has_value())
+	{
+		_sent.HeldIn(turn, *god);
+	}
+	// While the world of the server comes, the session keeps the turns from the turn of that world. After a restart of the
+	// server, that turn can come before the turns that this computer did.
+	if (turn.turn < _worldTurn.value_or(_turnsDone) || _turns.contains(turn.turn))
 	{
 		return;
 	}

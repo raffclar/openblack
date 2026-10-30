@@ -61,6 +61,9 @@ public:
 	/// Sends a block of commands that the player made after a turn. Returns false when the socket is not open or the block
 	/// breaks a limit of the format.
 	bool SendCommands(uint32_t turn, std::span<const player_commands::Action> actions);
+	/// Sends a block of commands with the number that the block has. The count of this stream does not move on. Returns
+	/// false when the socket is not open or the block breaks a limit of the format.
+	bool SendBlock(const turn_codec::CommandBlock& block);
 	/// Sends the checksum of the synced world after a turn
 	bool SendChecksum(uint32_t turn, uint64_t checksum);
 	/// Sends a ping. Its answer gives the time of the round trip.

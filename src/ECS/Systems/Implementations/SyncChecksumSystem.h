@@ -52,6 +52,10 @@ public:
 		_byField = byField;
 	}
 	[[nodiscard]] std::optional<TurnChecksum> GetLast() const override { return _last; }
+	[[nodiscard]] const synced_state::Hash* GetHashOfTurn(uint32_t turn, bool byField) const override
+	{
+		return _lastHash.has_value() && _lastHash->turn == turn && _lastHash->byField == byField ? &_lastHash->hash : nullptr;
+	}
 	void SetTurnListener(std::function<void(const TurnChecksum&)> listener) override { _listener = std::move(listener); }
 	[[nodiscard]] std::function<void(const TurnChecksum&)> GetTurnListener() const override { return _listener; }
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -72,6 +76,14 @@ private:
 	std::optional<uint32_t> _dumpTurn;
 	std::vector<std::string> _dumpComponents;
 	std::optional<TurnChecksum> _last;
+	/// The hash of the synced world of the last checksum, for a tool that records the same world
+	struct TurnHash
+	{
+		uint32_t turn {0};
+		bool byField {false};
+		synced_state::Hash hash;
+	};
+	std::optional<TurnHash> _lastHash;
 	/// The unregistered components that the log already told of
 	synced_state::UnregisteredReporter _reported;
 	std::function<void(const TurnChecksum&)> _listener;

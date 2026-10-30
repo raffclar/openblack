@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs::components
 {
@@ -49,7 +50,7 @@ struct Town
 	/// How many of its people are hurt, their life under seven tenths
 	uint32_t injured {0};
 	/// What its people's deaths came to, by the player put down for each (by player number) and what killed them
-	std::array<std::array<float, static_cast<size_t>(DeathReason::_COUNT)>, 8> deathsByKiller {};
+	std::array<std::array<float, static_cast<size_t>(DeathReason::_COUNT)>, player_slots::k_PlayerNumbers> deathsByKiller {};
 	/// The forest of the lone trees about it, made as the land is laid out; a tree replanted near the town joins it
 	std::optional<uint32_t> scenicForest;
 	/// Where its scenic forest was made: the town's centre then

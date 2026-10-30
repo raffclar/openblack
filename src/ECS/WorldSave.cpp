@@ -86,6 +86,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
@@ -302,12 +303,40 @@ systems::SavedStateInterface* FindGameMusic()
 	return Locator::gameMusic::has_value() ? &Locator::gameMusic::value() : nullptr;
 }
 
+/// The part of the save of the particles that keeps the effects of this computer. Only a computer that draws the
+/// effects keeps this part, so a dedicated server does not write or read it.
+systems::SavedStateInterface* FindLocalParticles()
+{
+	if (!Locator::particleSystem::has_value() || !Locator::particleRuleSystem::has_value())
+	{
+		return nullptr;
+	}
+	return Locator::particleRuleSystem::value().LocalEffectsState();
+}
+
+/// The one section of the particles in a save from before the split
+systems::SavedStateInterface* FindOldParticles()
+{
+	return Locator::particleRuleSystem::has_value() ? Locator::particleRuleSystem::value().OldSaveState() : nullptr;
+}
+
+using SystemFinder = systems::SavedStateInterface* (*)();
+/// A section of the running state of a system
+struct SavedSystem
+{
+	std::string_view name;
+	SystemFinder find;
+	/// False for a section that only old saves have: the load reads it, but a save does not write it
+	bool written {true};
+};
+
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
-using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 41> k_SavedSystems {{
+constexpr std::array<SavedSystem, 43> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
-    {"particles", &FindSystem<Locator::particleRuleSystem>},
+    {"particles", &FindOldParticles, false},
+    {"syncedParticles", &FindSystem<Locator::particleRuleSystem>},
+    {"localParticles", &FindLocalParticles},
     {"effectRequests", &FindSystem<Locator::effectRequestSystem>},
     {"towns", &FindSystem<Locator::townSystem>},
     {"magic", &FindSystem<Locator::magicSystem>},
@@ -363,8 +392,10 @@ bool LoadSystems(const entt::meta_ctx& reflection, std::span<const uint8_t> byte
 	}
 	bool read = true;
 	const reflection::EntityRemap identity;
-	for (const auto& [name, find] : k_SavedSystems)
+	for (const auto& [name, find, written] : k_SavedSystems)
 	{
+		// A load reads also the sections that a save does not write
+		static_cast<void>(written);
 		auto* system = find();
 		const auto section = std::ranges::find(*sections, name, &reflection::NamedSection::name);
 		if (system == nullptr || section == sections->end())
@@ -427,9 +458,9 @@ void LogWorldReport(const reflection::WorldSaveReport& report)
 std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt::meta_ctx& reflection, bool valueEnds)
 {
 	std::vector<reflection::NamedSection> sections;
-	for (const auto& [name, find] : k_SavedSystems)
+	for (const auto& [name, find, written] : k_SavedSystems)
 	{
-		if (const auto* system = find(); system != nullptr)
+		if (const auto* system = written ? find() : nullptr; system != nullptr)
 		{
 			reflection::BinaryWriter out(reflection);
 			if (valueEnds)

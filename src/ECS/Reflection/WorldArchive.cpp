@@ -16,6 +16,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <span>
 #include <string>
 #include <string_view>
@@ -168,10 +169,37 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 	    WriteRows(out, component.name, component.type, rows, [&](size_t row) { return component.storage->value(rows[row]); });
 }
 
-/// The registered components of a registry, by their names, so that the same world always gives the same bytes
-[[nodiscard]] std::vector<ComponentStorage> RegisteredStorages(const entt::registry& registry, const entt::meta_ctx& context,
-                                                               std::vector<std::string>& unregistered)
+/// The name and the component type of a storage of the registry
+[[nodiscard]] HashMemo::Storage FindStorageType(entt::id_type id, const entt::type_info& info, const entt::meta_ctx& context)
 {
+	HashMemo::Storage found {.typeHash = info.hash(), .name = ShortTypeName(info), .type = {}, .registered = false};
+	const auto type = entt::resolve(context, info);
+	const ComponentInfo* component = type ? static_cast<const ComponentInfo*>(type.custom()) : nullptr;
+	// A storage with a name of its own is not the storage of the component
+	if (component == nullptr || id != info.hash())
+	{
+		return found;
+	}
+	found.registered = true;
+	// The world does not keep the drawn state that only this computer has
+	if (!component->localOnly)
+	{
+		found.type = type;
+	}
+	return found;
+}
+
+/// The registered components of a registry, by their names, so that the same world always gives the same bytes. A memo
+/// keeps the name and the type of each storage, so that the next call finds them with no search.
+[[nodiscard]] std::vector<ComponentStorage> RegisteredStorages(const entt::registry& registry, const entt::meta_ctx& context,
+                                                               std::vector<std::string>& unregistered, HashMemo* memo = nullptr)
+{
+	if (memo != nullptr && memo->context != &context)
+	{
+		memo->storages.clear();
+		memo->writers.clear();
+		memo->context = &context;
+	}
 	std::vector<ComponentStorage> components;
 	for (const auto& [id, storage] : registry.storage())
 	{
@@ -180,20 +208,30 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 		{
 			continue;
 		}
-		const auto type = entt::resolve(context, info);
-		const ComponentInfo* component = type ? static_cast<const ComponentInfo*>(type.custom()) : nullptr;
-		// A storage with a name of its own is not the storage of the component
-		if (component == nullptr || id != info.hash())
+		std::optional<HashMemo::Storage> local;
+		const HashMemo::Storage* found = nullptr;
+		if (memo != nullptr)
 		{
-			unregistered.push_back(ShortTypeName(info));
+			auto [kept, added] = memo->storages.try_emplace(id);
+			if (added || kept->second.typeHash != info.hash())
+			{
+				kept->second = FindStorageType(id, info, context);
+			}
+			found = &kept->second;
+		}
+		else
+		{
+			found = &local.emplace(FindStorageType(id, info, context));
+		}
+		if (!found->registered)
+		{
+			unregistered.push_back(found->name);
 			continue;
 		}
-		// The world does not keep the drawn state that only this computer has
-		if (component->localOnly)
+		if (found->type)
 		{
-			continue;
+			components.push_back({.name = found->name, .storage = &storage, .type = found->type});
 		}
-		components.push_back({.name = ShortTypeName(info), .storage = &storage, .type = type});
 	}
 	std::ranges::sort(components, {}, &ComponentStorage::name);
 	std::ranges::sort(unregistered);
@@ -330,9 +368,6 @@ void KeepLeftOutRows(const ComponentStorage& component, const TypeCodec* codec, 
 	out.Bytes().clear();
 }
 #endif
-
-/// The rows of a component that one thread saves at a time, when the threads share the rows of the component
-constexpr size_t k_RowsInAPart = 64;
 
 /// What the hash of the rows of one component needs, found one time for each component: how its rows save, what the
 /// hash leaves out of them, and the rows in the order of the hash
@@ -651,6 +686,16 @@ std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry&
 	return std::move(out.Bytes());
 }
 
+size_t openblack::ecs::reflection::RowsInAPart(size_t lastBytes, size_t lastRows)
+{
+	if (lastRows == 0 || lastBytes == 0)
+	{
+		return k_MostRowsInAPart;
+	}
+	const auto rowBytes = std::max<size_t>(lastBytes / lastRows, 1);
+	return std::clamp<size_t>(k_BytesInAPart / rowBytes, 1, k_MostRowsInAPart);
+}
+
 std::vector<std::string> openblack::ecs::reflection::UnregisteredStorages(const entt::registry& registry,
                                                                           const entt::meta_ctx& context)
 {
@@ -679,7 +724,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		hashes.entities = k_HashOffset;
 		MixBytes(hashes.entities, out.Bytes());
 	}
-	const auto components = RegisteredStorages(registry, context, hashes.unregistered);
+	const auto components = RegisteredStorages(registry, context, hashes.unregistered, memo);
 	std::vector<ComponentHash> results(components.size());
 	std::vector<RowLayout> layouts(components.size());
 	// The memo of each component, found before the threads share the components
@@ -695,10 +740,27 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 	// visitor of the tools must get the rows in order, so then this thread does all of them.
 	if (pool != nullptr && !visit)
 	{
-		std::vector<BinaryWriter> writers(pool->GetLaneCount(), BinaryWriter(context));
+		// The writers of the threads come from the memo when there is one, with their memory and the plans of the types
+		std::vector<BinaryWriter> ownWriters;
+		auto& writers = memo != nullptr ? memo->writers : ownWriters;
+		if (writers.size() != pool->GetLaneCount())
+		{
+			writers.assign(pool->GetLaneCount(), BinaryWriter(context));
+		}
+		std::ranges::for_each(writers, &BinaryWriter::ClearForNextWorld);
 		pool->ForEach(components.size(), [&](size_t index, size_t) { layouts[index] = LayoutOf(components[index], leaveOut); });
-		// A component with many rows saves its rows in parts on all the threads first, and then one thread mixes the
-		// parts in order. This is only for a hash with no hash of each field and no rows.
+		// The bytes of each component in the last hash. The threads take the largest work first, so that no thread
+		// starts a large component when the others are near the end.
+		std::vector<size_t> lastBytes(components.size(), 0);
+		for (size_t index = 0; index < components.size(); ++index)
+		{
+			if (memos[index] != nullptr)
+			{
+				lastBytes[index] = memos[index]->bytes.size();
+			}
+		}
+		// A component with many rows, or with large rows, saves its rows in parts on all the threads first. Then one
+		// thread mixes the parts in order. This is only for a hash with no hash of each field and no rows.
 		std::vector<std::vector<SavedRows>> parts(components.size());
 		if (!byField && rows == nullptr)
 		{
@@ -706,29 +768,42 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 			{
 				size_t component;
 				size_t part;
+				size_t first;
+				size_t last;
+				size_t bytes;
 			};
 			std::vector<Part> jobs;
 			for (size_t index = 0; index < components.size(); ++index)
 			{
 				const auto count = layouts[index].rows.size();
-				if (layouts[index].left.whole || count < 2 * k_RowsInAPart)
+				const auto lastRows = memos[index] != nullptr ? memos[index]->rows.size() : 0;
+				const auto inAPart = RowsInAPart(lastBytes[index], lastRows);
+				if (layouts[index].left.whole || count < 2 * inAPart)
 				{
 					continue;
 				}
-				parts[index].resize((count + k_RowsInAPart - 1) / k_RowsInAPart);
+				const auto rowBytes = lastRows > 0 ? lastBytes[index] / lastRows : 0;
+				parts[index].resize((count + inAPart - 1) / inAPart);
 				for (size_t part = 0; part < parts[index].size(); ++part)
 				{
-					jobs.push_back({.component = index, .part = part});
+					const auto first = part * inAPart;
+					const auto last = std::min(first + inAPart, count);
+					jobs.push_back(
+					    {.component = index, .part = part, .first = first, .last = last, .bytes = (last - first) * rowBytes});
 				}
 			}
+			std::ranges::stable_sort(jobs, std::ranges::greater {}, &Part::bytes);
 			pool->ForEach(jobs.size(), [&](size_t job, size_t lane) {
-				const auto& [index, part] = jobs[job];
-				const auto first = part * k_RowsInAPart;
-				const auto last = std::min(first + k_RowsInAPart, layouts[index].rows.size());
-				parts[index][part] = SaveRows(components[index], layouts[index], first, last, writers[lane]);
+				const auto& found = jobs[job];
+				parts[found.component][found.part] =
+				    SaveRows(components[found.component], layouts[found.component], found.first, found.last, writers[lane]);
 			});
 		}
-		pool->ForEach(components.size(), [&](size_t index, size_t lane) {
+		std::vector<size_t> order(components.size());
+		std::iota(order.begin(), order.end(), size_t {0});
+		std::ranges::stable_sort(order, std::ranges::greater {}, [&lastBytes](size_t index) { return lastBytes[index]; });
+		pool->ForEach(components.size(), [&](size_t job, size_t lane) {
+			const auto index = order[job];
 			results[index] = HashComponent(components[index], layouts[index], byField, visit, writers[lane], rows != nullptr,
 			                               memos[index], parts[index]);
 		});

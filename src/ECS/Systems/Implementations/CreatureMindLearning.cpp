@@ -2361,9 +2361,14 @@ const GTotemStatueInfo* TotemStatueInfo(const ecs::Registry& registry, entt::ent
 bool NoWayLately(const ecs::Registry& registry, const CreatureMindState& mind, entt::entity thing)
 {
 	const auto* belief = mind.beliefs.Find(thing);
+	// Only a creature that found no way to the thing asks if the thing is fixed in the land
+	if (belief == nullptr || !belief->blockedTurn.has_value())
+	{
+		return false;
+	}
 	const bool fixed = registry.AnyOf<Abode, Tree, Feature, Field, FishFarm, AnimatedStatic, Flowers, Temple, WorshipSite,
 	                                  WorshipAltar, VillageTotem>(thing);
-	return belief != nullptr && creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
+	return creature_object_beliefs::BlockedRecently(*belief, mind.turn, fixed);
 }
 
 /// A hungry creature does not eat a thing of a town for which it learnt a compassion worth more than this

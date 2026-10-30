@@ -26,6 +26,7 @@
 #include "Commands/TurnCommandSource.h"
 #include "Online/Backoff.h"
 #include "Online/ResyncRule.h"
+#include "Online/SentBlocks.h"
 #include "Online/TurnPlayout.h"
 #include "Online/TurnStream.h"
 #include "Online/WebSocketInterface.h"
@@ -176,6 +177,8 @@ public:
 	[[nodiscard]] std::optional<uint32_t> LastTurnReceived() const;
 	/// The number of times that the client came back after a loss or a resync
 	[[nodiscard]] uint32_t Resumes() const { return _resumes; }
+	/// The blocks of commands that went to the server, and that no turn holds yet
+	[[nodiscard]] const SentBlocks& Sent() const { return _sent; }
 
 	/// The server's world state at the start of a turn, once all its parts came
 	struct WorldState
@@ -206,6 +209,10 @@ private:
 	void FinishWith(End end);
 	void DropStream();
 	void SendWaiting();
+	/// Sends a block of commands with the next number of the session. False when the block did not go.
+	bool SendNewBlock(std::span<const player_commands::Action> actions);
+	/// After the client came back: sends again the blocks that no turn holds. The server leaves out the blocks that it had.
+	void SendKeptAgain();
 	/// Closes the socket and starts the attempts to come back
 	void ComeBack(bool resync);
 
@@ -228,6 +235,8 @@ private:
 	uint32_t _turnsDone {0};
 	/// The commands of the player that did not go yet, because the socket was not open
 	std::vector<player_commands::Action> _waiting;
+	/// The blocks of the session that went to the server
+	SentBlocks _sent;
 
 	std::map<uint32_t, uint64_t> _localChecksums;
 	std::map<uint32_t, uint64_t> _serverChecksums;

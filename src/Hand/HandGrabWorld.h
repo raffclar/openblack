@@ -156,6 +156,9 @@ public:
 	virtual void CountHelpEvent(uint32_t event) = 0;
 	/// The hand of the local player takes a thing or lets go of it: the hand forgets the path of the gesture it draws
 	virtual void ForgetGesturePath() {}
+	/// Whether the hand is the one that this computer moves, and so draws gestures: the hand of a computer god or of
+	/// another player is not
+	[[nodiscard]] virtual bool IsLocalHand() const { return true; }
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
 	/// The game turn of a held thing of its own, after the hand moved it: a scaffold looks for the building that it offers
@@ -165,7 +168,7 @@ public:
 	/// The hand taps a thing at a point, for a player, as a rock breaks when tapped; whether the thing took the tap
 	virtual bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) = 0;
 	/// Whether a thing takes a tap of the hand's player because of its kind: a building, a rock that breaks, a scroll, a
-	/// globe, a chest, an icon or the entrance of a temple
+	/// globe, a chest, an icon, the player's own leash post or the entrance of a temple
 	[[nodiscard]] virtual bool ValidToTap(entt::entity object) const = 0;
 	/// Whether what the hand holds can be given to a thing: none when the thing isn't a creature
 	[[nodiscard]] virtual std::optional<creature_giving::Verdict> GiveVerdict(entt::entity /*target*/,

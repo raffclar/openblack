@@ -118,16 +118,18 @@ void magic::town_belief::SetInPlayer(Belief& town, PlayerNames player, float val
 	Set(town, player, value);
 }
 
-std::optional<PlayerNames> magic::town_belief::Ownership(Belief& town, PlayerNames owner, float claimedMultiplier)
+std::optional<PlayerNames> magic::town_belief::Ownership(Belief& town, PlayerNames owner, float claimedMultiplier,
+                                                         size_t players)
 {
 	Set(town, PlayerNames::NEUTRAL, town.neutral);
-	if (static_cast<size_t>(owner) >= k_PlayerCount)
+	const auto count = std::min(player_slots::PlayerNumbersOf(players), k_PlayerCount);
+	if (static_cast<size_t>(owner) >= count)
 	{
 		return std::nullopt;
 	}
 	auto winner = static_cast<size_t>(owner);
 	float most = town.belief.at(winner);
-	for (size_t p = 0; p < k_PlayerCount; ++p)
+	for (size_t p = 0; p < count; ++p)
 	{
 		if (town.belief.at(p) >= most)
 		{

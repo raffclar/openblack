@@ -97,13 +97,12 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/WorldSave.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
-#include "Graphics/RendererInterface.h"
-#include "Gui/SavingBox.h"
+#include "Gui/SavingBoxRules.h"
 #include "Gui/TextDatabase.h"
 #include "LandChange.h"
 #include "Locator.h"
 #include "MainThreadWork.h"
+#include "Visual/RendererRequestsInterface.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1287,6 +1286,17 @@ bool SaveGameSystem::Load(uint32_t slot)
 
 std::vector<uint8_t> SaveGameSystem::WorldState()
 {
+	return WorldStateLater()();
+}
+
+void SaveGameSystem::PrepareWorldState()
+{
+	// The first copies of the world make the data that each later copy uses again. The function drops these copies.
+	std::ignore = WorldStateLater();
+}
+
+std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	gamesave::WorldFile world;
 	gamesave::GameChunk game {.land = LandNumber(),
@@ -1314,19 +1324,30 @@ std::vector<uint8_t> SaveGameSystem::WorldState()
 	}
 	const auto chunks = gamesave::ToChunks(saved);
 	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
-	// Then the whole world in openblack's own layout. This computer makes all the blocks now, with no writer thread.
+	// Then the whole world in openblack's own layout. The game thread takes what each block needs now, as for a save. The
+	// function makes the bytes of the blocks and of the file later.
 	ecs::world_save::SaveSummary summary;
-	for (const auto& pending : ecs::world_save::SaveWorld(Reflection(), summary))
-	{
-		world.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
-	}
+	auto whole =
+	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
 	// The land as it is now, which another computer must have to go on with the same world
+	std::optional<std::vector<uint8_t>> altitudes;
 	if (Locator::terrainSystem::has_value())
 	{
-		world.chunks.push_back({.tag = gamesave::k_AltitudesTag,
-		                        .bytes = land_reuse::WriteAltitudes(Locator::terrainSystem::value().ChangedAltitudes())});
+		altitudes = land_reuse::WriteAltitudes(Locator::terrainSystem::value().ChangedAltitudes());
 	}
-	return gamesave::Write(world);
+	return [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole,
+	        altitudes = std::make_shared<std::optional<std::vector<uint8_t>>>(std::move(altitudes))]() {
+		auto file = *world;
+		for (const auto& pending : *whole)
+		{
+			file.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
+		}
+		if (altitudes->has_value())
+		{
+			file.chunks.push_back({.tag = gamesave::k_AltitudesTag, .bytes = **altitudes});
+		}
+		return gamesave::Write(file);
+	};
 }
 
 bool SaveGameSystem::LoadWorldState(std::span<const uint8_t> bytes)
@@ -1973,7 +1994,7 @@ bool SaveGameSystem::AnyPictureWaiting() const
 
 void SaveGameSystem::AskForPicture(std::vector<uint32_t> slots)
 {
-	if (!Locator::rendererInterface::has_value())
+	if (!Locator::rendererRequests::has_value())
 	{
 		for (const auto slot : slots)
 		{
@@ -1981,10 +2002,10 @@ void SaveGameSystem::AskForPicture(std::vector<uint32_t> slots)
 		}
 		return;
 	}
-	auto name = std::format("{}save-picture/{}", graphics::ScreenPictures::k_Prefix, _pictureRequests++);
+	auto name = std::format("{}save-picture/{}", graphics::k_ScreenPicturePrefix, _pictureRequests++);
 	// The renderer takes the picture at the end of a draw, so the request goes to the main thread
 	PostToMainThread(MainThreadApi::Renderer, [name] {
-		Locator::rendererInterface::value().RequestScreenPicture(name, [](const graphics::ScreenView& screen) {
+		Locator::rendererRequests::value().RequestScreenPicture(name, [](const graphics::ScreenView& screen) {
 			return gamesave::SampleScreen({.width = screen.width,
 			                               .height = screen.height,
 			                               .pitch = screen.pitch,

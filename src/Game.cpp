@@ -327,6 +327,7 @@
 #include "Hand/HandFeel.h"
 #include "Hand/HandGrabRules.h"
 #include "Hand/HandReach.h"
+#include "Hand/HandReportRules.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
 #include "Hand/ScriptHandState.h"
@@ -2577,7 +2578,11 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 			std::ignore = TakeDialogueClick();
 			break;
 		}
-		ReportHand();
+		// A tool's run can keep the camera out of the commands, so that two runs give the same commands
+		if (!_simulation.has_value() || !_simulation->settings.noHandReports)
+		{
+			ReportHand();
+		}
 		ReportHelp();
 		SendDialogueClick();
 		Locator::playerCommandSystem::value().SendOpenBlock();
@@ -3128,7 +3133,7 @@ const std::filesystem::path& Game::GetLandscapePath() const noexcept
 
 void Game::ReportHand()
 {
-	// The report goes once a turn, after the turns of a frame that played one, and only when something in it changed
+	// The report goes once a turn, after the turns of a frame that played one, and only when a part of it moved enough
 	const auto turn = Locator::time::value().GetTurn();
 	if (_handReportTurn == turn)
 	{
@@ -3148,6 +3153,7 @@ void Game::ReportHand()
 	{
 		_reportedHand = hand;
 		_lastHandReport = {};
+		_handCollidePoint = glm::vec3(0.0f);
 		_lastHandPick = entt::null;
 		_lastViewReport.reset();
 	}
@@ -3164,28 +3170,34 @@ void Game::ReportHand()
 			Locator::playerCommandSystem::value().Submit(player_commands::HandPick {.object = object});
 		}
 	}
-	const auto& camera = Locator::camera::value();
-	auto [collidePoint, handPoint, cameraPoint, focus] = _lastHandReport;
-	handPoint = transform->position;
 	// The point that the interface picks under the cursor stays as it was while the cursor picks nothing
 	if (Locator::pickingSystem::has_value())
 	{
-		collidePoint = Locator::pickingSystem::value().GetPick().point.value_or(collidePoint);
+		_handCollidePoint = Locator::pickingSystem::value().GetPick().point.value_or(_handCollidePoint);
 	}
-	cameraPoint = camera.GetOrigin();
-	focus = camera.GetFocus();
-	const std::array report {collidePoint, handPoint, cameraPoint, focus};
-	if (report == _lastHandReport)
+	// The camera is the view that the last frame drew
+	const auto& camera = Locator::camera::value();
+	const player_commands::HandReport now {
+	    .collidePoint = _handCollidePoint,
+	    .handPoint = transform->position,
+	    .camera = camera.GetOrigin(Camera::Interpolation::Drawn),
+	    .focus = camera.GetFocus(Camera::Interpolation::Drawn),
+	};
+	const auto& [lastCollide, lastHand, lastCamera, lastFocus] = _lastHandReport;
+	const player_commands::HandReport last {
+	    .collidePoint = lastCollide,
+	    .handPoint = lastHand,
+	    .camera = lastCamera,
+	    .focus = lastFocus,
+	};
+	// Only a part that moved enough goes. The other part keeps the values that the player last sent.
+	const auto toSend = hand_report::ToSend(last, now);
+	if (!toSend.has_value())
 	{
 		return;
 	}
-	_lastHandReport = report;
-	const player_commands::HandReport sent {
-	    .collidePoint = collidePoint,
-	    .handPoint = handPoint,
-	    .camera = cameraPoint,
-	    .focus = focus,
-	};
+	const auto& sent = *toSend;
+	_lastHandReport = {sent.collidePoint, sent.handPoint, sent.camera, sent.focus};
 	Locator::playerCommandSystem::value().Submit(sent);
 	// The send time gives the latency of the report at the turn that does it
 	Locator::handSystem::value().ReportSent(sent);

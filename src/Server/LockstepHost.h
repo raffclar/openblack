@@ -14,6 +14,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
@@ -25,6 +26,8 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Server/ServerSnapshots.h"
+#include "Server/SessionHash.h"
 #include "Server/TicketCheck.h"
 #include "Server/WebSocketServerInterface.h"
 
@@ -60,6 +63,9 @@ struct HostSettings
 	/// Tests: the commands of the test tools (player_commands::CreatureFightCheat) go into the turns. Without this, the
 	/// server leaves them out.
 	bool testCommands {false};
+	/// Makes the salted hashes of the secrets of sessions, which the snapshots keep in place of the secrets. With none, a
+	/// restored room has no sessions, and no player can come back with a secret.
+	std::shared_ptr<const SessionHasherInterface> sessionHasher;
 };
 
 /// The game role of the server in a network game (authoritative lockstep, user decision MP-Q1). It lets in the players
@@ -101,7 +107,10 @@ public:
 	{
 		SeatState state {SeatState::Open};
 		std::optional<ConnectionId> connection;
+		/// The secret of the session. After a restore, it is empty until the player comes back with the secret.
 		std::string session;
+		/// The salted hash of the secret of the session
+		std::optional<SessionHash> sessionHash;
 		std::string account;
 		std::string name;
 		bool ready {false};
@@ -110,6 +119,15 @@ public:
 		uint32_t resumes {0};
 		/// The commands of the god that the server put in its turns, by the tag of the command
 		std::map<uint8_t, uint32_t> commands;
+		/// The number of the session of the player. Each new session of any seat gets the next number.
+		uint32_t sessionNumber {0};
+		/// The number of the last block of commands of the session that the server took. The server leaves out a block
+		/// that the client sends again after it came back (deviation 100).
+		std::optional<uint16_t> lastBlock;
+		/// The number of the last block of commands of the session that a closed turn holds
+		std::optional<uint16_t> lastBlockInTurn;
+		/// The blocks that the client sent again and that the server had, so left out
+		uint32_t blocksAgain {0};
 	};
 
 	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
@@ -117,6 +135,7 @@ public:
 	struct Watcher
 	{
 		std::string session;
+		std::optional<SessionHash> sessionHash;
 		/// None while the observer is away
 		std::optional<ConnectionId> connection;
 		int64_t awaySince {0};
@@ -137,6 +156,25 @@ public:
 	/// The server's world state at the start of the next turn, which a client whose world parted loads as it comes back
 	using WorldState = std::function<std::vector<uint8_t>()>;
 	void SetWorldState(WorldState worldState) { _worldState = std::move(worldState); }
+	/// Gets the bytes of each turn that the server closes, before the server sends them, and the last block of each god
+	/// that a closed turn holds. The snapshots of the server keep them in a journal (deviation 100).
+	using TurnJournal =
+	    std::function<void(uint32_t turn, std::span<const uint8_t> bytes, const snapshots::BlockSequences& blocks)>;
+	void SetTurnJournal(TurnJournal journal) { _turnJournal = std::move(journal); }
+	/// The room of the game, as a snapshot of the server keeps it
+	[[nodiscard]] snapshots::Room RoomRecord() const;
+	/// The number of the last block of commands of the session of each god slot that a closed turn holds
+	[[nodiscard]] snapshots::BlockSequences BlocksInTurns() const;
+	/// Continues a game from a snapshot, before any client connects. The world of the server is at the start of the turn
+	/// turnsDone. The gods of the room wait for their players, who come back with the secrets of their sessions. The
+	/// world turns the replayed turns first, with no player: these are the turns that the server sent before it stopped.
+	/// The server leaves out the blocks of commands up to the last block of each god that the sent turns hold.
+	void Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed,
+	             const snapshots::BlockSequences& blocks = {});
+	/// True while the world must turn the replayed turns of a restored game. The server reads no socket until then.
+	[[nodiscard]] bool Replaying() const { return !_replayed.empty(); }
+	/// The next turn that the server closes
+	[[nodiscard]] uint32_t TurnsDone() const { return _turnsDone; }
 	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
 	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
 	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
@@ -201,6 +239,12 @@ private:
 	/// Gives a new session to an observer on a connection, and returns its secret. With no secrets, the observer cannot
 	/// come back.
 	[[nodiscard]] std::string NewWatcher(ConnectionId connection);
+	/// The salted hash of a secret. None when the secret is empty or the host has no hasher.
+	[[nodiscard]] std::optional<SessionHash> HashOf(std::string_view secret) const;
+	/// True when the secret that a client gives is the secret of a session. A session that a restore gave has only the
+	/// hash of its secret.
+	[[nodiscard]] bool SessionMatches(std::string_view session, const std::optional<SessionHash>& hash,
+	                                  std::string_view given) const;
 	/// A join after the start: the player of a waiting god comes back into it, and any other player is an observer
 	void JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims);
 	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
@@ -220,6 +264,9 @@ private:
 	[[nodiscard]] std::vector<game_socket::God> Gods() const;
 	/// The connections of the gods with a player
 	[[nodiscard]] std::set<ConnectionId> GodConnections() const;
+	/// The commands of a replayed turn of a restored game. The server sends the turn again only to the players who come
+	/// back.
+	[[nodiscard]] std::vector<player_commands::Command> TakeReplayedTurn(uint32_t turn);
 	void SendTo(ConnectionId connection, const game_socket::Frame& frame);
 	void Broadcast(const game_socket::Frame& frame);
 	void BroadcastBinary(std::span<const uint8_t> bytes);
@@ -265,8 +312,17 @@ private:
 	uint32_t _turnsDone {0};
 	/// The last turn of the game, once the turns stopped
 	std::optional<uint32_t> _stoppedAfter;
+	/// A block that came since the last turn, with the god slot and the session that sent it
+	struct PendingBlock
+	{
+		turn_codec::StampedBlock block;
+		uint8_t seat {0};
+		uint32_t session {0};
+	};
 	/// The blocks that came since the last turn
-	std::vector<turn_codec::StampedBlock> _pending;
+	std::vector<PendingBlock> _pending;
+	/// The number of the last session that a god's player got
+	uint32_t _sessions {0};
 	/// The slots whose god leaves at the next turn
 	std::vector<uint8_t> _leaving;
 	/// The slots of the gods that get their hands at the first turn
@@ -280,6 +336,11 @@ private:
 	uint32_t _refusedBlocks {0};
 	WorldState _worldState;
 	PartListener _partListener;
+	TurnJournal _turnJournal;
+	/// The game continues from a snapshot of the server
+	bool _restored {false};
+	/// The turns that a restored game turns again, by turn
+	std::map<uint32_t, std::vector<uint8_t>> _replayed;
 	/// The account ids that the lobby banned from the server
 	std::set<int64_t> _bans;
 };

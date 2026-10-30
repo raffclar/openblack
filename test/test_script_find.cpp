@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <map>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -26,9 +27,12 @@
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
+#include "InfoConstants.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -294,4 +298,33 @@ TEST(ScriptFind, AWorshipSiteIsMeasuredFromItsAltar)
 	EXPECT_TRUE(script_find::MeasuredFrom(registry, tree) == tree);
 	registry.Destroy(altar);
 	EXPECT_TRUE(script_find::MeasuredFrom(registry, site) == site);
+}
+
+// A town's totem is a totem statue to the scripts, with the tribe of its town centre as its subtype. A recorded click on
+// the Norse totem names this type and subtype.
+TEST(ScriptFind, ATownTotemIsATotemStatueOfItsCentresTribe)
+{
+	// The tables are large: made on the heap
+	auto info = std::make_unique<InfoConstants>();
+	info->abode.at(static_cast<size_t>(AbodeInfo::NorseTownCentre)).tribeType = Tribe::NORSE;
+	Locator::infoConstants::emplace(*info);
+	Registry registry;
+	const auto centre = registry.Create();
+	registry.Assign<components::Abode>(centre).info = AbodeInfo::NorseTownCentre;
+	const auto totem = registry.Create();
+	registry.Assign<components::VillageTotem>(totem, components::VillageTotem {.townCentre = centre});
+	const auto lone = registry.Create();
+	registry.Assign<components::VillageTotem>(lone);
+
+	EXPECT_EQ(static_cast<int>(ScriptType::TotemStatue), 40);
+	const auto kind = script_find::KindOf(registry, totem);
+	ASSERT_TRUE(kind.has_value());
+	EXPECT_TRUE(script_find::Matches(*kind, ScriptType::TotemStatue, 7));
+	EXPECT_FALSE(script_find::Matches(*kind, ScriptType::TotemStatue, 6));
+	// A totem with no town centre has no tribe: it matches only any subtype
+	const auto loneKind = script_find::KindOf(registry, lone);
+	ASSERT_TRUE(loneKind.has_value());
+	EXPECT_EQ(loneKind->type, ScriptType::TotemStatue);
+	EXPECT_FALSE(loneKind->subtype.has_value());
+	Locator::infoConstants::reset();
 }

@@ -115,7 +115,7 @@ void openblack::ecs::reflection::RegisterFields_Components_t(entt::meta_ctx& con
 	    .Field<&components::Town::made>("made")
 	    .Field<&components::Town::countedAsNew>("countedAsNew")
 	    .Field<&components::Town::injured>("injured")
-	    .Field<&components::Town::deathsByKiller>("deathsByKiller", {std::span<const std::string_view> {}, k_DeathReasonNames})
+	    .Field<&components::Town::deathsByKiller>("deathsByKiller", {k_PlayerNamesNames, k_DeathReasonNames})
 	    .Field<&components::Town::scenicForest>("scenicForest")
 	    .Field<&components::Town::scenicForestCentre>("scenicForestCentre")
 	    .Field<&components::Town::playthings>("playthings")

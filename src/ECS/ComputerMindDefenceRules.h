@@ -18,6 +18,7 @@
 #include <span>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 /// The rules by which a computer god finds how much it wants to defend its temple and its towns against the other
 /// players. Pure functions of what the god sees.
@@ -62,24 +63,25 @@ struct DefendChoice
 /// larger wish wins. None when no attack counts.
 [[nodiscard]] std::optional<DefendChoice> ChooseDefence(std::span<const TownAttackFacts> attacks, uint32_t turn);
 
-/// The number of players whose belief gains a town looks at when it checks for an attack on its belief
+/// The number of players of a land whose belief gains a town looks at when it checks for an attack on its belief. The
+/// seventh god and the neutral player do not count. The gods after the seventh count (deviation 167).
 constexpr size_t k_BeliefAttackPlayers = 6;
 /// A belief gain must be more than this to be an attack on the belief of a town
 constexpr float k_LeastBeliefAttack = 0.008f;
 
-/// What a town believes in the players, and what each player gave it lately, by player number
+/// What a town believes in the players, and what each player gave it lately, by player number. A place for each player
+/// number of a network game: a player that the game does not have has 0.
 struct TownBeliefFacts
 {
-	std::array<float, static_cast<size_t>(PlayerNames::_COUNT)> belief {};
-	std::array<float, static_cast<size_t>(PlayerNames::_COUNT)> recent {};
+	std::array<float, player_slots::k_PlayerNumbers> belief {};
+	std::array<float, player_slots::k_PlayerNumbers> recent {};
 };
 
 /// How much a town of the god is under an attack on its belief: the belief in the player that gave the most belief
 /// lately, against the belief in the god, doubled and squared, no more than 1. The god, and the players that the god
-/// keeps as allies, do not count. 0 when no gain is more than k_LeastBeliefAttack, or when the town does not believe in
-/// the god.
-[[nodiscard]] float BeliefAttack(const TownBeliefFacts& town, PlayerNames god,
-                                 std::span<const bool, static_cast<size_t>(PlayerNames::_COUNT)> allies);
+/// keeps as allies, do not count. `allies` has a value for each player number; a number past its end is no ally. 0 when
+/// no gain is more than k_LeastBeliefAttack, or when the town does not believe in the god.
+[[nodiscard]] float BeliefAttack(const TownBeliefFacts& town, PlayerNames god, std::span<const bool> allies);
 
 /// The belief of a town in the god, less its largest belief in another player (0 when that is less than 0)
 [[nodiscard]] float BeliefMargin(const TownBeliefFacts& town, PlayerNames god);

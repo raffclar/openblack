@@ -18,6 +18,7 @@
 #include <entt/entity/entity.hpp>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs::components
 {
@@ -58,7 +59,7 @@ struct TownArtefact
 /// A town's last turns of giving each player belief for the artefacts of theirs its people dance round
 struct TownArtefactGifts
 {
-	std::array<uint32_t, static_cast<size_t>(PlayerNames::_COUNT)> lastGift {};
+	std::array<uint32_t, player_slots::k_PlayerNumbers> lastGift {};
 };
 
 } // namespace openblack::ecs::components

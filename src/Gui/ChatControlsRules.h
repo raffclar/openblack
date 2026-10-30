@@ -14,7 +14,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
-#include "DialogPainter.h"
+#include "DialogRect.h"
 #include "Enums.h"
 
 /// The layout, the pictures and the rules of the chat controls at the top right of the screen. The layout is in the front

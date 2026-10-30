@@ -16,7 +16,6 @@
 #include <utility>
 
 #include "3D/MapCoords.h"
-#include "Audio/AudioManagerInterface.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Hand.h"
@@ -36,6 +35,7 @@
 #include "ECS/WorldObjects.h"
 #include "Editor/EditorEntities.h"
 #include "Locator.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::inspector;
@@ -229,9 +229,9 @@ std::string GameWorldEdit::Remove(entt::entity entity, RemoveHow how)
 	{
 		Locator::dynamicsSystem::value().RemoveObject(entity, false, false);
 	}
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().StopOwnedSounds(entity);
+		Locator::sounds::value().StopOwnedSounds(entity);
 	}
 	editor::Remove(entity);
 	return {};

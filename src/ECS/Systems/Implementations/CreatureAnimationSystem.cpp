@@ -343,7 +343,7 @@ std::optional<uint32_t> DurationOf(const Animation* animation)
 /// Plays a head turning animation on top of the pose for how far the head is turned. When the head is straight, the
 /// animation plays only if the creature has a point to look at.
 void AddLook(std::vector<skeletal_animation::Pose>& poses, const Animation* look, float angle, float limit,
-             const CreatureAnimation& animation, std::span<const uint32_t> mirror)
+             const CreatureAnimation& animation, std::span<const uint32_t> mirror, skeletal_animation::KeyframeTurns& turns)
 {
 	if (look == nullptr || !creature_head_look::PlaysHeadClip(angle, animation.lookAt.has_value()))
 	{
@@ -351,13 +351,13 @@ void AddLook(std::vector<skeletal_animation::Pose>& poses, const Animation* look
 	}
 	const auto reference = (look->frames.size() - 1) / 2;
 	skeletal_animation::AddLayer(poses, *look, creature_layers::LookTime(angle, limit, look->duration), reference,
-	                             animation.skeleton, mirror);
+	                             animation.skeleton, mirror, &turns);
 }
 
 /// The swaying body leaning on top of the pose: for the lower body then the upper, its offset across the creature's own
 /// axes picks how far through the sideways and the front to back lean to draw, each relative to its middle frame
 void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimation& animation, const Transform& transform,
-             const auto& animationOf)
+             const auto& animationOf, skeletal_animation::KeyframeTurns& turns)
 {
 	if (!animation.sway.active)
 	{
@@ -383,7 +383,7 @@ void AddSway(std::vector<skeletal_animation::Pose>& poses, const CreatureAnimati
 		if (const auto* played = animationOf(clip))
 		{
 			skeletal_animation::AddLayer(poses, *played, creature_sway::LeanTime(amount, played->duration),
-			                             (played->frames.size() - 1) / 2, animation.skeleton);
+			                             (played->frames.size() - 1) / 2, animation.skeleton, {}, &turns);
 		}
 	};
 	for (const auto& [offset, sideClip, frontClip] :
@@ -488,11 +488,11 @@ creature_animation_log::Clip LogClip(creature_animation_log::Layer layer, size_t
 
 /// The body posed for this frame: its action or breathing, or its slots blended, then the arm that holds a thing, the
 /// head turned, the face and any gesture on top. The body's animations move on by bodyStepMs, the face by milliseconds.
-void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const CreatureRig& rig,
-              const creature_morph::Morph& morph, const Transform& transform, float size, float milliseconds, float seconds,
-              float bodyStepMs, const HeadLook& look, const std::function<uint32_t(uint32_t)>& random,
-              std::optional<HoldingHand> holding = std::nullopt, PoseReport* report = nullptr,
-              const ShownFacePose* shown = nullptr)
+void PoseBody(AdjustedAnimations& adjusted, skeletal_animation::KeyframeTurns& turns, CreatureAnimation& animation,
+              const CreatureRig& rig, const creature_morph::Morph& morph, const Transform& transform, float size,
+              float milliseconds, float seconds, float bodyStepMs, const HeadLook& look,
+              const std::function<uint32_t(uint32_t)>& random, std::optional<HoldingHand> holding = std::nullopt,
+              PoseReport* report = nullptr, const ShownFacePose* shown = nullptr)
 {
 	const auto* stand = AnimationOf(adjusted, animation, rig, morph, creature_layers::animations::k_Stand);
 	if (stand == nullptr)
@@ -570,7 +570,7 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 			                                                  : animationOf(slot.animation);
 			sampled.push_back(skeletal_animation::SampleCycle(
 			    played != nullptr ? *played : *stand, *stand, static_cast<uint32_t>(std::max(slot.timeMs, 0.0f)),
-			    animation.skeleton, slot.mirrored ? animation.mirror : std::span<const uint32_t> {}));
+			    animation.skeleton, slot.mirrored ? animation.mirror : std::span<const uint32_t> {}, &turns));
 			weights.push_back(slot.weight);
 			if (report != nullptr)
 			{
@@ -594,7 +594,7 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 	{
 		const auto time = creature_layers::DanceMoveTime(animation.body, played->duration);
 		poses = skeletal_animation::SampleCycle(*played, *stand, static_cast<uint32_t>(std::max(time, 0.0f)),
-		                                        animation.skeleton, mirror);
+		                                        animation.skeleton, mirror, &turns);
 		if (report != nullptr)
 		{
 			auto clip =
@@ -608,7 +608,7 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 	else
 	{
 		const auto time = creature_animation::BreathTime(animation.breathPhase, stand->duration);
-		poses = skeletal_animation::SampleCycle(*stand, *stand, time, animation.skeleton);
+		poses = skeletal_animation::SampleCycle(*stand, *stand, time, animation.skeleton, {}, &turns);
 		if (report != nullptr)
 		{
 			report->clips.push_back(LogClip(creature_animation_log::Layer::Body, creature_layers::animations::k_Stand,
@@ -622,9 +622,9 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 	// hand that holds the thing gets its size for the size of the creature again.
 	if (const auto* hold = holding.has_value() ? animationOf(creature_layers::animations::k_PickUpHold) : nullptr)
 	{
-		skeletal_animation::SetLayer(poses, *hold, hold->duration > 0 ? hold->duration - 1 : 0, animation.skeleton, nullptr,
-		                             holding->mirrored ? std::span<const uint32_t>(animation.mirror)
-		                                               : std::span<const uint32_t> {});
+		skeletal_animation::SetLayer(
+		    poses, *hold, hold->duration > 0 ? hold->duration - 1 : 0, animation.skeleton, nullptr,
+		    holding->mirrored ? std::span<const uint32_t>(animation.mirror) : std::span<const uint32_t> {}, &turns);
 		const std::array hand {creature_proportions::BoneScale {
 		    .bone = holding->bone, .factor = creature_proportions::Factor(creature_proportions::k_HandsAndFeet, size)}};
 		creature_proportions::Apply(poses, hand);
@@ -635,13 +635,13 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 	const bool sitting = creature_head_look::UsesSittingClips(look.pose);
 	AddLook(poses,
 	        animationOf(sitting ? creature_layers::animations::k_SitLookDownUp : creature_layers::animations::k_LookDownUp),
-	        animation.pitch.angle, creature_layers::k_PitchLimit, animation, mirror);
+	        animation.pitch.angle, creature_layers::k_PitchLimit, animation, mirror, turns);
 	AddLook(
 	    poses,
 	    animationOf(sitting ? creature_layers::animations::k_SitLookRightLeft : creature_layers::animations::k_LookRightLeft),
-	    mirror.empty() ? animation.yaw.angle : -animation.yaw.angle, creature_layers::k_YawLimit, animation, mirror);
+	    mirror.empty() ? animation.yaw.angle : -animation.yaw.angle, creature_layers::k_YawLimit, animation, mirror, turns);
 	// The sway leans the body between the head's turning and the face
-	AddSway(poses, animation, transform, animationOf);
+	AddSway(poses, animation, transform, animationOf, turns);
 	// The face, relative to its first frame
 	const auto addFace = [&](std::vector<skeletal_animation::Pose>& to, const creature_layers::FaceLayer& face,
 	                         PoseReport* log) {
@@ -656,8 +656,8 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 		}
 		if (const auto* played = animationOf(*face.current))
 		{
-			skeletal_animation::AddLayer(to, *played, static_cast<uint32_t>(std::max(face.timeMs, 0.0f)), 0,
-			                             animation.skeleton);
+			skeletal_animation::AddLayer(to, *played, static_cast<uint32_t>(std::max(face.timeMs, 0.0f)), 0, animation.skeleton,
+			                             {}, &turns);
 		}
 	};
 	// The gestures and a blow's wobble, relative to their first frames, on top of the face
@@ -672,7 +672,7 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 			if (const auto* gesture = animationOf(*animation.gesture.animation))
 			{
 				skeletal_animation::AddLayer(to, *gesture, static_cast<uint32_t>(std::max(animation.gesture.timeMs, 0.0f)), 0,
-				                             animation.skeleton);
+				                             animation.skeleton, {}, &turns);
 			}
 		}
 		// The wobble plays the way the body plays
@@ -686,7 +686,7 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 			if (const auto* wobble = animationOf(*animation.wobble.animation))
 			{
 				skeletal_animation::AddLayer(to, *wobble, static_cast<uint32_t>(std::max(animation.wobble.timeMs, 0.0f)), 0,
-				                             animation.skeleton, mirror);
+				                             animation.skeleton, mirror, &turns);
 			}
 		}
 	};
@@ -1357,9 +1357,11 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 		const auto shownPose =
 		    shown != nullptr ? std::optional<ShownFacePose>(ShownFacePose {.face = shown->face, .boneMatrices = shownMatrices})
 		                     : std::nullopt;
+		// The store of keyframe turns forgets its turns only here, when no pose uses them
+		_keyframeTurns.Trim();
 		PoseBody(
-		    _adjusted, *animation, rig, morph->drawn, *transform, ShownSize(*creature), static_cast<float>(turnMs),
-		    static_cast<float>(turnMs) / 1000.0f, static_cast<float>(stepMs), look,
+		    _adjusted, _keyframeTurns, *animation, rig, morph->drawn, *transform, ShownSize(*creature),
+		    static_cast<float>(turnMs), static_cast<float>(turnMs) / 1000.0f, static_cast<float>(stepMs), look,
 		    [this](uint32_t range) { return _random.GameRand(range); }, HoldingHandOf(registry, entity),
 		    report.has_value() ? &*report : nullptr, shownPose.has_value() ? &*shownPose : nullptr);
 		if (shown != nullptr && !creature_shown_face::StaysAfterPose(shown->face, animation->face))
@@ -1559,7 +1561,8 @@ void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, floa
 	animation->breathPhase = creature_animation::AdvanceBreath(animation->breathPhase, seconds, animation->breathPeriod);
 	if (rig != nullptr)
 	{
-		PoseBody(_adjusted, *animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
+		_keyframeTurns.Trim();
+		PoseBody(_adjusted, _keyframeTurns, *animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
 		         milliseconds * creature_layers::BodyRate(self->size, animation->realTime),
 		         HeadLookOfCopy(*animation, *transform, creature->species, self->size),
 		         [this](uint32_t range) { return _random.GameRand(range); });

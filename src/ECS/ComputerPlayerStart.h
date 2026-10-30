@@ -180,8 +180,8 @@ constexpr std::array<PlayerNames, 7> k_SlotGods {PlayerNames::PLAYER_ONE,  Playe
                                                  PlayerNames::PLAYER_SEVEN};
 
 /// At the start of a network game, all the humans of the network session join in the same turn. The game makes the
-/// player of each human when the land has none. Then, when the land waits for its humans, each slot with no player
-/// gets a computer god.
-void HumansJoin(SlotWorld& world, std::span<const PlayerNames> humans, bool landWaits);
+/// player of each human when the land has none. Then, when the land waits for its humans, each slot of the gods with no
+/// player gets a computer god.
+void HumansJoin(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans, bool landWaits);
 
 } // namespace openblack::computer_player

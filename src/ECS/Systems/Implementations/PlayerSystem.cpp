@@ -11,6 +11,8 @@
 
 #include "PlayerSystem.h"
 
+#include <algorithm>
+
 #include "Creature/PrimaryCreature.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Alignment.h"
@@ -49,6 +51,20 @@ void PlayerSystem::AddPlayer(entt::entity playerEntity)
 	_players.insert_or_assign(player.name, playerEntity);
 }
 
+size_t PlayerSystem::PlayerNumbersInGame() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	size_t count = 0;
+	for (const auto& [name, entity] : _players)
+	{
+		if (registry.Valid(entity))
+		{
+			count = std::max(count, static_cast<size_t>(name) + 1);
+		}
+	}
+	return player_slots::PlayerNumbersOf(count);
+}
+
 std::optional<entt::entity> PlayerSystem::FindPlayer(PlayerNames playerName) const
 {
 	const auto player = _players.find(playerName);
@@ -78,7 +94,10 @@ openblack::player_kind::Facts PlayerSystem::FactsOf(PlayerNames name) const
 		const auto* mind = registry.Valid(*player) ? registry.TryGet<const ComputerPlayer>(*player) : nullptr;
 		computerMind = mind != nullptr && mind->marked;
 	}
-	const bool hands = Locator::handSystem::has_value() && Locator::handSystem::value().GetHandsOf(name).has_value();
+	// Only a player of a network game with no computer mind is a person by its hands
+	const bool handsDecide = networkGame && !computerMind && name != PlayerNames::NEUTRAL;
+	const bool hands =
+	    handsDecide && Locator::handSystem::has_value() && Locator::handSystem::value().GetHandsOf(name).has_value();
 	return {.player = name, .networkGame = networkGame, .computerMind = computerMind, .hands = hands};
 }
 

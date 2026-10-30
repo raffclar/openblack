@@ -15,10 +15,10 @@
 #include <fmt/format.h>
 #include <glm/vec3.hpp>
 
-#include "Audio/AudioManagerInterface.h"
 #include "Gui/ScreenFade.h"
 #include "Locator.h"
 #include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack::video;
 
@@ -66,11 +66,11 @@ std::optional<FallingSpellSound> openblack::video::SoundOf(FallingSpellCue cue) 
 
 void FallingSpellAudio::Play(FallingSpellCue cue)
 {
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	switch (cue)
 	{
 	case FallingSpellCue::MusicFadeOut:

@@ -31,6 +31,7 @@
 #include "ScreenshotCapture.h"
 #include "Visual/RenderModes.h"
 #include "Visual/RenderPass.h"
+#include "Visual/RendererRequestsInterface.h"
 
 #include "../EngineConfig.h"
 
@@ -55,7 +56,8 @@ class FrameBuffer;
 class ShaderManager;
 class ShaderProgram;
 
-class RendererInterface
+/// The renderer of the game. The requests of the world to the renderer are in the base class.
+class RendererInterface: public RendererRequestsInterface
 {
 public:
 	struct DrawSceneDesc
@@ -294,12 +296,11 @@ public:
 
 	static std::unique_ptr<RendererInterface> Create(GraphicsBackend backend, bool vsync) noexcept;
 
-	virtual ~RendererInterface() noexcept = default;
+	~RendererInterface() noexcept override = default;
 
 	virtual void ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept = 0;
 	virtual void Reset(glm::u16vec2 resolution) const noexcept = 0;
 	virtual void DrawScene(const DrawSceneDesc& drawDesc) const noexcept = 0;
-	virtual void Frame() noexcept = 0;
 	/// Bakes the shadows of the things on the land into the land, as the next scene draw does. Call it behind the
 	/// loading screen, so that the first frame of a land does not do the bake of the whole island.
 	virtual void BakeLandShadows(bool drawVegetation) const noexcept = 0;
@@ -317,21 +318,10 @@ public:
 	virtual void ReleaseGpuWorkMemory() noexcept = 0;
 	/// Asks for the frame being made to be written to a PNG once drawn; the file appears whole once written
 	virtual void RequestScreenshot(const std::filesystem::path& filepath) noexcept = 0;
-	/// Why a picture asked for was given up, once; none while it may still come
-	[[nodiscard]] virtual std::optional<std::string> TakeScreenshotFailure(const std::filesystem::path& filepath) noexcept = 0;
-	/// Asks for a picture of the frame that the game makes now, kept in memory under a name. The name must start with
-	/// graphics::ScreenPictures::k_Prefix. The renderer calls picturer on its own thread when it reads the frame.
-	virtual void RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept = 0;
-	/// The picture made for a name, one time; none while it is not made
-	[[nodiscard]] virtual std::optional<std::vector<uint8_t>> TakeScreenPicture(const std::string& name) noexcept = 0;
 	/// How many pipelines the renderer made since it started. The renderer makes a pipeline the first time that a draw
 	/// uses a new set of program, state, vertex layouts and target formats, and that frame is slower.
 	[[nodiscard]] virtual uint32_t GetPipelinesMade() const noexcept = 0;
-	/// How many draws the last frame had. A renderer that draws nothing gives 0.
-	[[nodiscard]] virtual uint32_t GetDrawsOfLastFrame() const noexcept = 0;
-	[[nodiscard]] virtual bool GetDebug() const noexcept = 0;
 	virtual void SetDebug(bool value) noexcept = 0;
-	[[nodiscard]] virtual bool GetProfile() const noexcept = 0;
 	virtual void SetProfile(bool value) noexcept = 0;
 
 	// TODO: Remove this function. All renderables should be drawn through RenderingSystem with Components

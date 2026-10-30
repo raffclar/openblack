@@ -64,6 +64,10 @@ public:
 	void PlaceOwnedEmitters(const std::function<std::optional<glm::vec3>(entt::entity owner)>& placeOf) override;
 
 	[[nodiscard]] Listener GetListener() const override;
+	[[nodiscard]] std::optional<float> ListenerDistance(const glm::vec3& point) const override;
+
+	[[nodiscard]] entt::entity CreateSoundOwner() override;
+	void DestroySoundOwner(entt::entity owner) override;
 
 	void StopAllSounds() override;
 	void ProcessAtmosphere(bool active) override;
@@ -83,6 +87,14 @@ public:
 
 	[[nodiscard]] float GetSfxVolume() override;
 	[[nodiscard]] float GetMusicVolume() override;
+
+	[[nodiscard]] bool HasAudio() const override;
+	void SetListenerOverride(std::optional<Listener> listener) override;
+	[[nodiscard]] float GetGlobalVolume() override;
+	[[nodiscard]] bool IsMusicActive() const override;
+	[[nodiscard]] std::vector<MusicChannelState> GetMusicChannelStates() const override;
+	void SimulateDeviceLoss(bool lost) override;
+	[[nodiscard]] const ecs::Registry* GetEmitters() override;
 };
 
 /// The options of the music player for a music request of the world. The bank stays empty: the player finds the bank

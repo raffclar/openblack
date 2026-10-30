@@ -82,6 +82,7 @@ namespace graphics
 {
 class GraphicsDeviceInterface;
 class RendererInterface;
+class RendererRequestsInterface;
 } // namespace graphics
 
 namespace input
@@ -266,8 +267,12 @@ void InitializeSimulationCore();
 /// core services. Only the game's library has this function.
 bool InitializeEngine(GraphicsBackend backend, bool vsync) noexcept;
 /// The services of a world that nobody sees or hears, such as the dedicated server: a renderer that does not start the
-/// graphics library, no debug GUI and no audio device. Call it after the core services.
+/// graphics library, no debug GUI and no audio device. Call it after the core services. Only the library of the devices
+/// with no hardware (openblack_headless) has this function.
 bool InitializeHeadlessEngine() noexcept;
+/// Makes the renderer the renderer of the game and the receiver of the world's requests to the renderer
+/// (Locator::rendererRequests). Only the library of the devices with no hardware has this function.
+void EmplaceRenderer(std::unique_ptr<graphics::RendererInterface> renderer);
 /// The script machine and the systems of the world, which the game and the dedicated server share. The players' profiles
 /// are kept as the store says.
 bool InitializeSimulation(const player_profiles::Store& profiles) noexcept;
@@ -338,6 +343,8 @@ struct Locator
 	using inputDevice = entt::locator<input::InputDeviceInterface>;
 	using rendereringSystem = entt::locator<ecs::systems::RenderingSystemInterface>;
 	using rendererInterface = entt::locator<graphics::RendererInterface>;
+	/// The requests of the world and the tools to the renderer. It is the same object as rendererInterface.
+	using rendererRequests = entt::locator<graphics::RendererRequestsInterface>;
 	/// The device that makes the textures and buffers of the world. The dedicated server has no device.
 	using graphicsDevice = entt::locator<graphics::GraphicsDeviceInterface>;
 	using dynamicsSystem = entt::locator<ecs::systems::DynamicsSystemInterface>;

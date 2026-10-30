@@ -39,10 +39,10 @@
 #include "Debug/TestbedScenarioRunner.h"
 #include "ECS/ChallengePictures.h"
 #include "ECS/Components/Temple.h"
-#include "ECS/ComputerPlayerStart.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
+#include "ECS/SaveFileWriter.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/SyncedState.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
@@ -58,22 +58,22 @@
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/HeadlessRenderer.h"
-#include "Graphics/RendererInterface.h"
-#include "Gui/GameInterface.h"
 #include "Gui/GameTexts.h"
+#include "Gui/MenuSettings.h"
 #include "Gui/MultiplayerFrontEndRules.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapLand.h"
+#include "PlayerSlots.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "Simulation/CommandLog.h"
 #include "Simulation/FrameBody.h"
 #include "Simulation/ProfileMenu.h"
 #include "Simulation/TurnBody.h"
+#include "Visual/RendererRequestsInterface.h"
 
 // The game role has sockets and TLS, which only the desktop builds have
 #if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
@@ -105,8 +105,9 @@ class ServerWorld final:
     public simulation::TurnViewInterface
 {
 public:
-	explicit ServerWorld(const ServerSettings& settings)
+	ServerWorld(const ServerSettings& settings, StartDevices startDevices)
 	    : _settings(settings)
+	    , _startDevices(std::move(startDevices))
 	    , _simulation(SimulationFor(settings))
 	{
 	}
@@ -146,7 +147,9 @@ public:
 	[[nodiscard]] bool StartLand();
 	/// Plays one frame of the world. Gives false when the world is at its last turn.
 	[[nodiscard]] bool Frame();
-	/// The game role, which gives the turns of a network game
+	/// Loads the world of a snapshot of the server. The world waits at the start of the turn of the snapshot. Gives false
+	/// when the world does not load.
+	[[nodiscard]] bool LoadSnapshot(const snapshots::Snapshot& snapshot);
 	/// What the game role lets the world do in a frame
 	enum class NetworkStep : uint8_t
 	{
@@ -156,6 +159,8 @@ public:
 		/// time and no turn comes.
 		Wait,
 		Play,
+		/// The world does again a turn that the server sent before a restart. The frame does not wait for the wall clock.
+		Replay,
 	};
 	void SetNetwork(std::function<NetworkStep()> beforeTurns) { _beforeTurns = std::move(beforeTurns); }
 
@@ -174,6 +179,8 @@ public:
 
 private:
 	ServerSettings _settings;
+	/// Starts the renderer and the audio, which use no hardware
+	StartDevices _startDevices;
 	sim_run::Request _simulation;
 	std::filesystem::path _startMap;
 	bool _servicesStarted {false};
@@ -185,6 +192,8 @@ private:
 	statistics::FrameRateMeter _frameRate;
 	uint32_t _frameCount {0};
 	bool _reloaded {false};
+	/// The frame does again a turn that the server sent before a restart
+	bool _replaying {false};
 	std::chrono::steady_clock::time_point _frameStart;
 	/// The testbed scenario that the server plays, as the game's window of scenarios plays it
 	const testbed_scenarios::Scenario* _scenario {nullptr};
@@ -204,7 +213,7 @@ bool ServerWorld::Initialize()
 	// The services that the server shares with the game, then the renderer that does not start the graphics library
 	InitializeSimulationCore();
 	_servicesStarted = true;
-	if (!InitializeHeadlessEngine())
+	if (!_startDevices || !_startDevices())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
@@ -449,6 +458,7 @@ bool ServerWorld::Frame()
 		// While the world waits, its clock stands still and its frames take no game time, as the clocks of the clients
 		// stand still until the start. Thus the frames before the first turn are the same as theirs.
 		const bool wait = step == NetworkStep::Wait;
+		_replaying = step == NetworkStep::Replay;
 		if (clock.IsPaused() != wait)
 		{
 			clock.SetPaused(wait);
@@ -570,7 +580,7 @@ bool ServerWorld::Frame()
 
 	// What the loading threads finished goes into the caches, and the renderer with no device takes what they made
 	Locator::resources::value().UpdateLoading(simulation::k_FrameLoadBudget, simulation::k_FrameUploads);
-	auto& renderer = Locator::rendererInterface::value();
+	auto& renderer = Locator::rendererRequests::value();
 	renderer.Frame();
 	// The pictures that the world asked for come back with none: the server draws nothing
 	const auto take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); };
@@ -595,12 +605,13 @@ bool ServerWorld::Frame()
 	// The frame rate of the statistics uses the machine clock of the game. With a fixed frame time each run gets the
 	// same rate.
 	_frameRate.Frame(machine_clock::Ticks(), _frameCount);
-	// Unless the run is fast, the frame waits until it took its fixed game time in real time too
+	// Unless the run is fast, the frame waits until it took its fixed game time in real time too. The turns that the server
+	// does again after a restart come with no wait.
 	auto& simulation = Locator::simulation::value();
 	if (const auto wait = sim_run::PaceWait(
 	        simulation.GetSettings(), clock.GetFixedFrameTime(),
 	        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - _frameStart));
-	    wait.count() > 0)
+	    wait.count() > 0 && !_replaying)
 	{
 		std::this_thread::sleep_for(wait);
 	}
@@ -619,10 +630,145 @@ bool ServerWorld::Frame()
 	return true;
 }
 
+bool ServerWorld::LoadSnapshot(const snapshots::Snapshot& snapshot)
+{
+	const auto start = std::chrono::steady_clock::now();
+	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadWorldState(snapshot.world))
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The world of the snapshot of turn {} does not load", snapshot.turn);
+		return false;
+	}
+	// The world is still the world of a network game. It waits until the server turns again, as the world of a client
+	// that loads the server's world.
+	auto& clock = Locator::time::value();
+	clock.SetNetworkGame(true);
+	clock.SetPaused(true);
+	Locator::syncChecksumSystem::value().SetEnabled(true);
+	if (clock.GetTurn() != snapshot.turn)
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The world of the snapshot is at turn {}, not at turn {}", clock.GetTurn(),
+		                       snapshot.turn);
+		return false;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world of the snapshot of turn {} ({} bytes) loaded in {:.2f} ms",
+	                   snapshot.turn, snapshot.world.size(),
+	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+	return true;
+}
+
 #if defined(OPENBLACK_GAME_ROLE)
-/// Starts the game role after the land loaded: the clients start the same land with the same seed
+/// Keeps the snapshots of a network game on the server's disk (deviation 100). The game thread takes copies of the world
+/// at the start of a turn, and a writer thread makes the bytes and writes the file. Thus the turns do not wait for the
+/// disk. The journal keeps each turn that the server sends after the snapshot.
+class SnapshotKeeper
+{
+public:
+	explicit SnapshotKeeper(const snapshots::Settings& settings)
+	    : _settings(settings)
+	    , _store(settings.folder, settings.keep)
+	{
+	}
+
+	/// Makes the data of the world states ready after the land loaded, before the game turns. Thus the first snapshot
+	/// takes no more time than the next.
+	void Prepare() const
+	{
+		if (_settings.everyTurns > 0 && Locator::saveGameSystem::has_value())
+		{
+			Locator::saveGameSystem::value().PrepareWorldState();
+		}
+	}
+
+	SnapshotKeeper(const SnapshotKeeper&) = delete;
+	SnapshotKeeper& operator=(const SnapshotKeeper&) = delete;
+	SnapshotKeeper(SnapshotKeeper&&) = delete;
+	SnapshotKeeper& operator=(SnapshotKeeper&&) = delete;
+	~SnapshotKeeper() = default;
+
+	/// Once a frame, after the game role read the sockets and before the turn: a snapshot when one is due, else the room
+	/// in the journal when it changed
+	void BeforeTurn(const LockstepHost& host)
+	{
+		if (_ended || _settings.everyTurns == 0 || !host.Started() || host.Replaying() || !Locator::saveGameSystem::has_value())
+		{
+			return;
+		}
+		auto room = host.RoomRecord();
+		auto blocks = host.BlocksInTurns();
+		const auto turn = host.TurnsDone();
+		// The first turn brings the creatures from the files of the players, so the first snapshot comes after it
+		const bool due = turn >= 1 && (!_lastTurn.has_value() || turn >= *_lastTurn + _settings.everyTurns);
+		if (due && _writer->Pending() == 0)
+		{
+			const auto start = std::chrono::steady_clock::now();
+			auto make = Locator::saveGameSystem::value().WorldStateLater();
+			const auto takenMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+			if (!_store.OpenJournal(turn, room))
+			{
+				SPDLOG_LOGGER_WARN(spdlog::get("game"), "The journal of the snapshots cannot open in {}",
+				                   _store.Folder().generic_string());
+			}
+			_lastRoom = room;
+			_lastTurn = turn;
+			_writer->Queue(fmt::format("the snapshot of turn {}", turn), [store = &_store, make = std::move(make),
+			                                                              room = std::move(room), blocks = std::move(blocks),
+			                                                              turn, takenMs]() {
+				const auto writeStart = std::chrono::steady_clock::now();
+				const auto bytes = snapshots::EncodeSnapshot({.turn = turn, .room = room, .world = make(), .blocks = blocks});
+				const bool written = store->Write(turn, bytes);
+				SPDLOG_LOGGER_INFO(
+				    spdlog::get("game"),
+				    "The snapshot of turn {} ({} bytes): {:.2f} ms on the game thread, {:.2f} ms on the writer", turn,
+				    bytes.size(), takenMs,
+				    std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - writeStart).count());
+				return written;
+			});
+			return;
+		}
+		if (room != _lastRoom && _store.JournalOpen())
+		{
+			_store.AddRoom(room);
+			_lastRoom = std::move(room);
+		}
+	}
+
+	/// A turn that the server closed, before it sends the turn
+	void Turn(uint32_t turn, std::span<const uint8_t> bytes, const snapshots::BlockSequences& blocks)
+	{
+		if (!_ended)
+		{
+			_store.AddTurn(turn, bytes, blocks);
+		}
+	}
+
+	/// The game ended, so no server continues it: the snapshots go
+	void GameOver()
+	{
+		if (std::exchange(_ended, true))
+		{
+			return;
+		}
+		_writer->Flush();
+		_store.Clear();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ended: the server removed its snapshots");
+	}
+
+private:
+	snapshots::Settings _settings;
+	snapshots::Store _store;
+	std::optional<uint32_t> _lastTurn;
+	snapshots::Room _lastRoom;
+	bool _ended {false};
+	/// Last, so that it writes the snapshots that wait before the store goes
+	std::unique_ptr<ecs::save_files::BackgroundWriter> _writer {std::make_unique<ecs::save_files::BackgroundWriter>(
+	    [](const std::string& name) { SPDLOG_LOGGER_WARN(spdlog::get("game"), "The server did not write {}", name); })};
+};
+
+/// Starts the game role after the land loaded: the clients start the same land with the same seed. A server that
+/// continues a game from a snapshot restores the room of the game.
 bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::unique_ptr<GameRole>& network,
-                  const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn)
+                  const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn, SnapshotKeeper* keeper,
+                  const std::optional<snapshots::Restored>& restored)
 {
 	network = std::make_unique<GameRole>();
 	// The land goes as its path under the Scripts folder, so that each client finds it in its own game folder, and the
@@ -659,22 +805,36 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		}
 	}
 	// A land of a network game has a god slot for each citadel, as the room of the land has a team for each citadel. The
-	// other lands of the tools and the testbed keep the default slots.
+	// map for 32 gods has a slot for each of its citadels too. The other lands of the tools and the testbed keep the
+	// default slots.
 	uint8_t godSlots = k_DefaultGodSlots;
-	if (scriptLand && online_map_land::IsOnlineMap(settings.land))
+	if ((scriptLand && online_map_land::IsOnlineMap(settings.land)) || settings.godsRingMap)
 	{
-		std::array<bool, computer_player::k_SlotGods.size()> citadels {};
+		// Each god slot of the land, the slots after the seventh too (deviation 166)
+		std::array<bool, player_slots::k_MaxPlayers> citadels {};
 		Locator::entitiesRegistry::value().Each<const ecs::components::Temple>([&citadels](const auto& temple) {
-			const auto slot = std::ranges::find(computer_player::k_SlotGods, temple.owner);
-			if (slot != computer_player::k_SlotGods.end())
+			if (const auto slot = player_slots::SlotOfPlayer(temple.owner); slot.has_value() && *slot < citadels.size())
 			{
-				citadels.at(static_cast<size_t>(slot - computer_player::k_SlotGods.begin())) = true;
+				citadels.at(*slot) = true;
 			}
 		});
 		godSlots = GodSlotsOfLand(citadels);
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The room has {} god slots and starts with {} gods at least", godSlots,
 	                   settings.network->minGods);
+	// The game of a snapshot continues with the start that its clients got
+	if (restored.has_value())
+	{
+		const auto saved = game_socket::Parse(restored->room.start);
+		const auto* savedStart = saved.has_value() ? std::get_if<game_socket::Start>(&*saved) : nullptr;
+		if (savedStart == nullptr || !snapshots::SameGame(*savedStart, start))
+		{
+			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"),
+			                       "The snapshot is of another game than the land and the seed of this server");
+			return false;
+		}
+		start = *savedStart;
+	}
 	if (const auto error = network->Start(*settings.network, start, landChecksum, godSlots); error.has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The game role cannot start: {}", *error);
@@ -682,6 +842,17 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		return false;
 	}
 	auto& host = network->Host();
+	if (restored.has_value())
+	{
+		host.Restore(restored->room, restored->snapshot.turn, restored->turns, restored->blocks);
+	}
+	if (keeper != nullptr)
+	{
+		keeper->Prepare();
+		host.SetTurnJournal([keeper](uint32_t turn, std::span<const uint8_t> bytes, const snapshots::BlockSequences& blocks) {
+			keeper->Turn(turn, bytes, blocks);
+		});
+	}
 	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
 	Locator::playerCommandSystem::value().SetSource(&host);
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
@@ -694,12 +865,25 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	host.SetWorldState([] {
 		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
 	});
-	world.SetNetwork([&host, role = network.get()] {
+	world.SetNetwork([&host, role = network.get(), keeper] {
+		// After a restart, the world first does again the turns that the server sent. The server reads no socket until then.
+		if (host.Replaying())
+		{
+			return ServerWorld::NetworkStep::Replay;
+		}
 		role->Update();
 		if (host.GameOver())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every god left the game: the game ends");
+			if (keeper != nullptr)
+			{
+				keeper->GameOver();
+			}
 			return ServerWorld::NetworkStep::Stop;
+		}
+		if (keeper != nullptr)
+		{
+			keeper->BeforeTurn(host);
 		}
 		return host.HasTurn(Locator::time::value().GetTurn()) ? ServerWorld::NetworkStep::Play : ServerWorld::NetworkStep::Wait;
 	});
@@ -720,13 +904,53 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	return true;
 }
 #else
+/// A build with no game role keeps no snapshots
+class SnapshotKeeper
+{
+public:
+	explicit SnapshotKeeper(const snapshots::Settings& /*settings*/) {}
+};
+
 bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, std::unique_ptr<int>& /*network*/,
-                  const std::function<void(uint32_t turn, uint64_t checksum)>& /*onTurn*/)
+                  const std::function<void(uint32_t turn, uint64_t checksum)>& /*onTurn*/, SnapshotKeeper* /*keeper*/,
+                  const std::optional<snapshots::Restored>& /*restored*/)
 {
 	SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "This build has no game role");
 	return false;
 }
 #endif
+
+/// Loads the newest snapshot that reads, for a server that continues its game. With no snapshot, the server starts a new
+/// game. Gives false when the server cannot start.
+bool PrepareResume(const ServerSettings& settings, ServerWorld& world, std::optional<snapshots::Restored>& restored)
+{
+	if (settings.scenario.has_value())
+	{
+		// The testbed scenario keeps its state out of the world, so no snapshot can continue it
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "A game with a testbed scenario cannot continue from a snapshot");
+		return false;
+	}
+	const auto& snapshotSettings = settings.network->snapshots;
+	restored = snapshots::Store(snapshotSettings.folder, snapshotSettings.keep).LoadNewest();
+	if (!restored.has_value())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "No snapshot in {}: the server starts a new game",
+		                   snapshotSettings.folder.generic_string());
+		return true;
+	}
+	for (const auto& skipped : restored->skipped)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The snapshot {} does not read: the server uses an older snapshot", skipped);
+	}
+	if (restored->tornJournal)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The journal ends with a torn record: the server continues from the last whole turn");
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The server continues its game from the snapshot of turn {} and {} sent turns",
+	                   restored->snapshot.turn, restored->turns.size());
+	return world.LoadSnapshot(restored->snapshot);
+}
 
 } // namespace
 
@@ -826,10 +1050,10 @@ std::optional<std::pair<uint32_t, uint64_t>> ParseChecksumLine(std::string_view 
 	return std::pair {turn, checksum};
 }
 
-int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
-        const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn)
+int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop,
+                   const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn, const StartDevices& startDevices)
 {
-	auto world = std::make_unique<ServerWorld>(settings);
+	auto world = std::make_unique<ServerWorld>(settings, startDevices);
 	if (!world->Initialize())
 	{
 		return EXIT_FAILURE;
@@ -862,11 +1086,23 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 #else
 	std::unique_ptr<int> network;
 #endif
-	if (!world->StartLand())
+	// The game server keeps snapshots of its world, and can continue the game of the newest snapshot
+	std::unique_ptr<SnapshotKeeper> keeper;
+	std::optional<snapshots::Restored> restored;
+	if (settings.network.has_value() && settings.network->snapshots.everyTurns > 0)
+	{
+		keeper = std::make_unique<SnapshotKeeper>(settings.network->snapshots);
+	}
+	bool ready = world->StartLand();
+	if (ready && settings.network.has_value() && settings.network->snapshots.resume)
+	{
+		ready = PrepareResume(settings, *world, restored);
+	}
+	if (!ready)
 	{
 		exitCode = EXIT_FAILURE;
 	}
-	else if (settings.network.has_value() && !StartNetwork(settings, *world, network, onTurn))
+	else if (settings.network.has_value() && !StartNetwork(settings, *world, network, onTurn, keeper.get(), restored))
 	{
 		exitCode = EXIT_FAILURE;
 	}
@@ -882,6 +1118,8 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 		LogGraphicsLibrary();
 	}
 	checksums.SetTurnListener({});
+	// The writer of the snapshots finishes before the services of the world stop
+	keeper.reset();
 #if defined(OPENBLACK_GAME_ROLE)
 	if (network)
 	{

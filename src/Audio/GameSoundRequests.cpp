@@ -10,8 +10,10 @@
 #include "GameSoundRequests.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
+#include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "AudioManagerInterface.h"
@@ -301,6 +303,33 @@ Listener GameSoundRequests::GetListener() const
 	return audio != nullptr ? audio->GetListener() : CameraListener();
 }
 
+std::optional<float> GameSoundRequests::ListenerDistance(const glm::vec3& point) const
+{
+	const auto* const audio = Manager();
+	if (audio == nullptr)
+	{
+		return std::nullopt;
+	}
+	return glm::distance(audio->GetListener().origin, point);
+}
+
+entt::entity GameSoundRequests::CreateSoundOwner()
+{
+	auto* const audio = Manager();
+	auto* const emitters = audio != nullptr ? audio->Emitters() : nullptr;
+	return emitters != nullptr ? emitters->Create() : entt::null;
+}
+
+void GameSoundRequests::DestroySoundOwner(entt::entity owner)
+{
+	auto* const audio = Manager();
+	auto* const emitters = audio != nullptr ? audio->Emitters() : nullptr;
+	if (owner != entt::null && emitters != nullptr && emitters->Valid(owner))
+	{
+		emitters->Destroy(owner);
+	}
+}
+
 void GameSoundRequests::PlaceOwnedEmitters(const std::function<std::optional<glm::vec3>(entt::entity owner)>& placeOf)
 {
 	auto* const audio = Manager();
@@ -458,6 +487,68 @@ float GameSoundRequests::GetMusicVolume()
 {
 	auto* const audio = Manager();
 	return audio != nullptr ? audio->GetMusicVolume() : 0.0f;
+}
+
+bool GameSoundRequests::HasAudio() const
+{
+	return Manager() != nullptr;
+}
+
+void GameSoundRequests::SetListenerOverride(std::optional<Listener> listener)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->SetListenerOverride(listener);
+	}
+}
+
+float GameSoundRequests::GetGlobalVolume()
+{
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->GetGlobalVolume() : 0.0f;
+}
+
+bool GameSoundRequests::IsMusicActive() const
+{
+	const auto* const audio = Manager();
+	return audio != nullptr && audio->MusicIsActive();
+}
+
+std::vector<MusicChannelState> GameSoundRequests::GetMusicChannelStates() const
+{
+	std::vector<MusicChannelState> playing;
+	const auto* const audio = Manager();
+	const auto* const music = audio != nullptr ? audio->GetMusic() : nullptr;
+	if (music == nullptr)
+	{
+		return playing;
+	}
+	for (const auto& channel : music->GetChannels())
+	{
+		if (channel.active && channel.bank)
+		{
+			playing.push_back({
+			    .bank = channel.bank->path,
+			    .volume = channel.volume,
+			    .position = channel.placement ? std::optional(channel.placement->position) : std::nullopt,
+			});
+		}
+	}
+	return playing;
+}
+
+void GameSoundRequests::SimulateDeviceLoss(bool lost)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->SimulateDeviceLoss(lost);
+	}
+}
+
+const ecs::Registry* GameSoundRequests::GetEmitters()
+{
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->Emitters() : nullptr;
 }
 
 } // namespace openblack::audio

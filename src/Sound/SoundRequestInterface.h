@@ -37,6 +37,11 @@ namespace openblack::pack
 enum class AudioBankLoop : uint16_t;
 }
 
+namespace openblack::ecs
+{
+class Registry;
+}
+
 namespace openblack::audio
 {
 
@@ -193,6 +198,15 @@ public:
 
 	/// The place from which the player hears the placed sounds
 	[[nodiscard]] virtual Listener GetListener() const = 0;
+	/// The distance from the place from which the player hears to a point. The audio reads its own listener for it.
+	/// None when the computer has no audio manager.
+	[[nodiscard]] virtual std::optional<float> ListenerDistance(const glm::vec3& point) const = 0;
+
+	/// A new owner of sounds among the entities of the audio, not of the world. It tells the voice rules which sounds
+	/// are the same. Null when the audio has no entities.
+	[[nodiscard]] virtual entt::entity CreateSoundOwner() = 0;
+	/// The owner of sounds that CreateSoundOwner gave goes. Nothing happens when it is not there.
+	virtual void DestroySoundOwner(entt::entity owner) = 0;
 
 	/// Stops every sound: the music at once, with no fade, the atmosphere, and each sound and voice that plays
 	virtual void StopAllSounds() = 0;
@@ -223,6 +237,23 @@ public:
 	/// The volumes of the sound effects and of the music, as the audio keeps them
 	[[nodiscard]] virtual float GetSfxVolume() = 0;
 	[[nodiscard]] virtual float GetMusicVolume() = 0;
+
+	// The audio as the debug tools see and change it
+
+	/// Whether the computer has an audio manager. A manager that plays nothing counts.
+	[[nodiscard]] virtual bool HasAudio() const = 0;
+	/// The place from which the player hears the placed sounds, in place of the camera, or none to use the camera again
+	virtual void SetListenerOverride(std::optional<Listener> listener) = 0;
+	/// The volume of all the sounds, as the audio keeps it
+	[[nodiscard]] virtual float GetGlobalVolume() = 0;
+	/// Whether a music bank plays
+	[[nodiscard]] virtual bool IsMusicActive() const = 0;
+	/// The music channels that play now, with their banks, volumes and places. Empty when there is no music player.
+	[[nodiscard]] virtual std::vector<MusicChannelState> GetMusicChannelStates() const = 0;
+	/// Acts as if the audio device stops (true) or comes back (false)
+	virtual void SimulateDeviceLoss(bool lost) = 0;
+	/// The registry of the audio's emitters, null when the audio has none
+	[[nodiscard]] virtual const ecs::Registry* GetEmitters() = 0;
 };
 
 } // namespace openblack::audio

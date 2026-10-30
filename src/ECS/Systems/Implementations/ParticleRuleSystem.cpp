@@ -12,9 +12,12 @@
 #include "ParticleRuleSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <initializer_list>
 #include <memory>
 #include <ranges>
+#include <span>
 #include <string>
 #include <utility>
 #include <variant>
@@ -36,12 +39,10 @@
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/StringUtils.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
@@ -58,6 +59,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/DrawnPlace.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptSpotVisuals.h"
@@ -75,6 +77,7 @@
 #include "Particles/GestureTrail.h"
 #include "Particles/LightSheet.h"
 #include "Particles/LightningMaths.h"
+#include "Particles/ParticleArchive.h"
 #include "Particles/ParticleArchiveValues.h"
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleMiracleMaths.h"
@@ -82,8 +85,10 @@
 #include "Particles/ParticleTurnOrder.h"
 #include "Particles/ParticleTypes.h"
 #include "Particles/VolumeGlow.h"
+#include "PlayerSlots.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -158,9 +163,8 @@ float GameParticleWorld::LandHeightAtMap(int32_t x, int32_t z) const
 
 uint32_t GameParticleWorld::PlayerColour(int player) const
 {
-	return ecs::components::Player::k_Colours.at(static_cast<size_t>(player) &
-	                                             (ecs::components::Player::k_Colours.size() - 1)) &
-	       0xFFFFFFu;
+	// A god after the seventh has the land colour of its god slot (deviation 164)
+	return player_colour::Of(static_cast<PlayerNames>(player)) & 0xFFFFFFu;
 }
 
 std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf(entt::entity centre) const
@@ -196,7 +200,9 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	registry.Each<const Town, const TownImpression>([&belief, abode](const Town& town, const TownImpression& impression) {
 		if (town.id == abode->townId)
 		{
-			std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
+			// The symbols show only the players of a land. The table of the town has a place for each player of a
+			// network game
+			std::copy_n(impression.belief.belief.begin(), belief.beliefs.size(), belief.beliefs.begin());
 		}
 	});
 	return belief;
@@ -234,7 +240,7 @@ glm::vec3 GameParticleWorld::CameraPosition() const
 
 void GameParticleWorld::PlayListenerSound(uint32_t inGameSample, bool playsOnce)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value() && Locator::sounds::value().HasAudio())
 	{
 		const auto id = entt::hashed_string(fmt::format("InGame.sad/{}", inGameSample).c_str()).value();
 		const auto voicePlayType = playsOnce ? std::optional<pack::AudioBankLoop>(pack::AudioBankLoop::Once) : std::nullopt;
@@ -295,12 +301,15 @@ void GameParticleWorld::ClaimTarget(entt::entity target, bool claimed)
 void GameParticleWorld::StartSound(const particles::Effect& /*effect*/,
                                    const std::shared_ptr<particles::ParticleSoundLink>& sound)
 {
-	auto& playing = _sounds.emplace_back(PlayingSound {.link = sound});
+	auto& playing = _sounds.emplace_back(PlayingSound {.link = sound, .start = sound->position});
 	playing.owner = NewSoundOwner();
-	// Thunder is heard once it has come from the cloud
-	if (sound->sound.travelsAtSoundSpeed && Locator::audio::has_value())
+	// Thunder is heard once it has come from the cloud. The audio measures the distance from its own listener.
+	const auto distance = sound->sound.travelsAtSoundSpeed && Locator::sounds::has_value()
+	                          ? Locator::sounds::value().ListenerDistance(sound->position)
+	                          : std::nullopt;
+	if (distance.has_value())
 	{
-		playing.wait = glm::distance(Locator::audio::value().GetListener().origin, sound->position) / k_SpeedOfSound;
+		playing.wait = *distance / k_SpeedOfSound;
 		if (playing.wait > 0.0f)
 		{
 			return;
@@ -331,7 +340,7 @@ const std::map<std::string, int32_t, std::less<>>& GameParticleWorld::SoundActio
 
 void GameParticleWorld::Play(PlayingSound& sound) const
 {
-	if (!Locator::audio::has_value() || !Locator::camera::has_value())
+	if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio() || !Locator::camera::has_value())
 	{
 		return;
 	}
@@ -343,29 +352,38 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	}
 	const std::array<int32_t, 5> keys {sound.link->sound.size, sound.link->sound.alignment, k_SoundObject,
 	                                   sound.link->sound.surface, action->second};
-	const auto result = Locator::audio::value().PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner,
-	                                                           sound.link->position, audio::CurrentSoundEffectConditions());
+	auto& sounds = Locator::sounds::value();
+	const auto result = sounds.PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner, sound.start,
+	                                          audio::CurrentSoundEffectConditions());
 	if (result.emitter != entt::null)
 	{
 		sound.emitter = result.emitter;
 		// The sound moves with its particle each turn (see ProcessSounds), and the audio turn stops it when the camera
 		// goes too far
-		Locator::audio::value().SetEmitterFollows(result.emitter, audio::Follows::Place);
+		sounds.SetEmitterFollows(result.emitter, audio::Follows::Place);
 	}
 }
 
 void GameParticleWorld::ProcessSounds()
 {
-	auto* audio = Locator::audio::has_value() ? &Locator::audio::value() : nullptr;
-	// The sounds' entities are the audio's, apart from the world's
-	auto* registry = audio != nullptr ? audio->Emitters() : nullptr;
+	auto* sounds = Locator::sounds::has_value() ? &Locator::sounds::value() : nullptr;
 	const auto playing = [&](const PlayingSound& sound) {
-		return audio != nullptr && sound.emitter != entt::null && audio->EmitterExists(sound.emitter) &&
-		       audio->GetStatus(sound.emitter) != audio::AudioStatus::Stopped;
+		return sounds != nullptr && sound.emitter != entt::null && sounds->EmitterExists(sound.emitter) &&
+		       sounds->GetStatus(sound.emitter) != audio::AudioStatus::Stopped;
 	};
 	std::erase_if(_sounds, [&](PlayingSound& sound) {
 		auto& link = *sound.link;
-		// On its way to the listener: it plays when it gets there, wherever its particle has gone
+		// The place of the sound follows its particle on each turn, also while the sound travels to the listener. Thus
+		// all computers keep the same place, whatever the distance to their listeners.
+		if (link.atom != nullptr && link.atom->drawn)
+		{
+			link.position = link.atom->current.position;
+			if (link.sound.onLand)
+			{
+				link.position.y = LandHeight({link.position.x, link.position.z});
+			}
+		}
+		// On its way to the listener: it plays from its start when it gets there, wherever its particle has gone
 		if (sound.wait > 0.0f)
 		{
 			sound.wait -= k_TurnSeconds;
@@ -377,20 +395,10 @@ void GameParticleWorld::ProcessSounds()
 		}
 		if (link.atom != nullptr)
 		{
-			if (link.atom->drawn)
+			// The sounds of the particles lock no axis, so the emitter goes to the full position
+			if (sounds != nullptr && sound.emitter != entt::null)
 			{
-				link.position = link.atom->current.position;
-				if (link.sound.onLand)
-				{
-					link.position.y = LandHeight({link.position.x, link.position.z});
-				}
-			}
-			if (registry != nullptr && sound.emitter != entt::null && registry->Valid(sound.emitter))
-			{
-				if (auto* emitter = registry->TryGet<ecs::components::AudioEmitter>(sound.emitter))
-				{
-					emitter->position = link.position;
-				}
+				sounds->SetEmitterPosition(sound.emitter, link.position);
 			}
 			// The sound stays with its particle. It does not start again when the audio stops it, for example when
 			// the camera goes past its maximum distance or when it could not start.
@@ -416,11 +424,11 @@ void GameParticleWorld::ProcessSounds()
 void GameParticleWorld::LetGo(PlayingSound& sound)
 {
 	sound.letGo = true;
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	if (sound.emitter == entt::null || !audio.EmitterExists(sound.emitter))
 	{
 		return;
@@ -444,11 +452,11 @@ void GameParticleWorld::LetGo(PlayingSound& sound)
 
 void GameParticleWorld::Fade(PlayingSound& sound)
 {
-	if (sound.fade.fadeStep <= 0 || !Locator::audio::has_value())
+	if (sound.fade.fadeStep <= 0 || !Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	if (sound.emitter == entt::null || !audio.EmitterExists(sound.emitter))
 	{
 		return;
@@ -466,16 +474,14 @@ entt::entity GameParticleWorld::NewSoundOwner()
 {
 	// The sound's own owner only tells the audio which sounds are the same. It is an entity of the audio, not of the
 	// world, so that a computer with no sound keeps the same entities in the world.
-	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
-	return emitters != nullptr ? emitters->Create() : entt::null;
+	return Locator::sounds::has_value() ? Locator::sounds::value().CreateSoundOwner() : entt::null;
 }
 
 void GameParticleWorld::Forget(PlayingSound& sound)
 {
-	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
-	if (sound.owner != entt::null && emitters != nullptr && emitters->Valid(sound.owner))
+	if (sound.owner != entt::null && Locator::sounds::has_value())
 	{
-		emitters->Destroy(sound.owner);
+		Locator::sounds::value().DestroySoundOwner(sound.owner);
 	}
 	sound.owner = entt::null;
 }
@@ -802,7 +808,7 @@ GameParticleWorld::SurfacePoint GameParticleWorld::RandomSurfacePoint(entt::enti
 
 float GameParticleWorld::PlayerAlignment(int player) const
 {
-	if (!Locator::alignmentSystem::has_value() || player < 0 || player >= static_cast<int>(PlayerNames::_COUNT))
+	if (!Locator::alignmentSystem::has_value() || player < 0 || player >= static_cast<int>(player_slots::k_PlayerNumbers))
 	{
 		return 0.0f;
 	}
@@ -854,9 +860,10 @@ void GameParticleWorld::Reset()
 	// Every sound stops with the land, and its owner goes
 	for (auto& sound : _sounds)
 	{
-		if (Locator::audio::has_value() && sound.emitter != entt::null && Locator::audio::value().EmitterExists(sound.emitter))
+		if (Locator::sounds::has_value() && sound.emitter != entt::null &&
+		    Locator::sounds::value().EmitterExists(sound.emitter))
 		{
-			Locator::audio::value().StopEmitter(sound.emitter);
+			Locator::sounds::value().StopEmitter(sound.emitter);
 		}
 		Forget(sound);
 	}
@@ -1596,6 +1603,7 @@ void ParticleRuleSystem::Reset()
 	_gestureChain = k_NoEffect;
 	_selectionEffect = k_NoEffect;
 	_world.Reset();
+	_loadedSynced.reset();
 	if (std::exchange(_freshIdsAtNextReset, false))
 	{
 		_nextId = 1;
@@ -1731,25 +1739,9 @@ std::vector<std::string> ParticleRuleSystem::GetFileNames() const
 namespace
 {
 
-/// Writes a value of a save. A local value is a presentation value.
-void WriteMarked(particles::EffectWriter& out, bool local, auto&& write)
-{
-	if (local)
-	{
-		out.Out().BeginPresentation();
-	}
-	write();
-	if (local)
-	{
-		out.Out().EndPresentation();
-	}
-}
-
-/// The numbers of the live things of a list of weak holds, in the order of the list. The things of the effects of this
-/// computer are presentation values, and so is the count.
+/// The live things of a list of weak holds, in the order of the list
 template <typename Type>
-void WriteLive(particles::EffectWriter& out, const std::vector<std::weak_ptr<Type>>& list,
-               const particles::SharedTable<Type>& localThings)
+std::vector<std::shared_ptr<Type>> LiveItems(const std::vector<std::weak_ptr<Type>>& list)
 {
 	std::vector<std::shared_ptr<Type>> live;
 	for (const auto& weak : list)
@@ -1759,10 +1751,57 @@ void WriteLive(particles::EffectWriter& out, const std::vector<std::weak_ptr<Typ
 			live.push_back(std::move(item));
 		}
 	}
-	WriteMarked(out, true, [&]() { out.Out().WriteSize(live.size()); });
-	for (const auto& item : live)
+	return live;
+}
+
+/// The numbers of the live things of a list of weak holds that are not things of the effects of this computer, in the
+/// order of the list
+template <typename Type>
+void WriteSyncedLive(particles::EffectWriter& out, const std::vector<std::weak_ptr<Type>>& list,
+                     const particles::SharedTable<Type>& localThings)
+{
+	const auto live = LiveItems(list);
+	const auto synced = [&localThings](const std::shared_ptr<Type>& item) { return !localThings.Contains(item.get()); };
+	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(live, synced)));
+	for (const auto& item : live | std::views::filter(synced))
 	{
-		WriteMarked(out, localThings.Contains(item.get()), [&]() { out.WriteShared(item); });
+		out.WriteShared(item);
+	}
+}
+
+/// The live things of a list of weak holds that are things of the effects of this computer. Each thing goes with its
+/// place among the live things of the list, so that a load puts it back between the synced things.
+template <typename Type>
+void WriteLocalLive(particles::EffectWriter& out, const std::vector<std::weak_ptr<Type>>& list,
+                    const particles::SharedTable<Type>& localThings)
+{
+	const auto live = LiveItems(list);
+	const auto local = [&localThings](const std::shared_ptr<Type>& item) { return localThings.Contains(item.get()); };
+	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(live, local)));
+	for (size_t place = 0; place < live.size(); ++place)
+	{
+		if (local(live[place]))
+		{
+			out.Write(static_cast<uint32_t>(place));
+			out.WriteShared(live[place]);
+		}
+	}
+}
+
+/// Reads the things that WriteLocalLive wrote and puts each thing back at its place in the list
+template <typename Type>
+void ReadLocalLive(particles::EffectReader& in, std::vector<std::weak_ptr<Type>>& list)
+{
+	const auto size = in.ReadSize();
+	for (size_t i = 0; size.has_value() && i < *size && !in.Failed(); ++i)
+	{
+		uint32_t place = 0;
+		in.Read(place);
+		if (auto item = in.ReadShared<Type>())
+		{
+			const auto at = std::min(static_cast<size_t>(place), list.size());
+			list.insert(list.begin() + static_cast<std::ptrdiff_t>(at), item);
+		}
 	}
 }
 
@@ -1802,7 +1841,7 @@ void GameParticleWorld::NumberShared(particles::SharedTables& tables, const Left
 {
 	for (const auto& sound : _sounds)
 	{
-		if (Saved(sound, leftOut) && localThings.sounds.Contains(sound.link.get()) == local)
+		if (Saved(sound, leftOut) && InSyncedPart(sound, leftOut, localThings) != local)
 		{
 			tables.sounds.Add(sound.link);
 		}
@@ -1838,48 +1877,172 @@ bool GameParticleWorld::Saved(const PlayingSound& sound, const LeftOutSounds& le
 	return !EndsWithLoad(sound) && !leftOut.contains(sound.link.get());
 }
 
+bool GameParticleWorld::InSyncedPart(const PlayingSound& sound, const LeftOutSounds& leftOut,
+                                     const particles::SharedTables& localThings)
+{
+	return Saved(sound, leftOut) && sound.link->atom != nullptr && !localThings.sounds.Contains(sound.link.get());
+}
+
 void GameParticleWorld::SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
                                   const particles::SharedTables& localThings) const
 {
 	out.WriteValue(_claimed);
 	out.WriteValue(_arcsWaiting);
 	out.WritePlainList(_beliefSprites);
-	// The trails of the gestures of this computer are presentation values
-	WriteMarked(out, true, [&]() {
-		out.Out().WriteSize(_gestureTrails.size());
-		for (const auto& trail : _gestureTrails)
-		{
-			out.WriteShared(trail);
-		}
-	});
-	WriteLive(out, _lightSheets, localThings.sheets);
+	// The trails of the gestures are things of this computer. The part of the save for these effects keeps them.
+	out.Out().WriteSize(0);
+	WriteSyncedLive(out, _lightSheets, localThings.sheets);
 	out.WriteValue(_arcsWanted);
-	WriteLive(out, _bolts, localThings.bolts);
+	WriteSyncedLive(out, _bolts, localThings.bolts);
 	out.WriteValue(_boltOrder);
 	// A sound goes with the particle that keeps its record. The audio's own emitter and the sound's owner, an entity of
-	// the audio, are of this run only and do not go. A sound that a load ends at once does not go either. The sounds of
-	// the effects of this computer, and so the count, are presentation values.
-	const auto kept = [&leftOut](const PlayingSound& sound) { return Saved(sound, leftOut); };
-	WriteMarked(out, true, [&]() { out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, kept))); });
-	for (const auto& sound : _sounds | std::views::filter(kept))
+	// the audio, are of this run only and do not go. A sound that a load ends at once does not go either. The wait of a
+	// sound comes from the listener of this computer, so the part of this computer keeps it.
+	const auto synced = [&leftOut, &localThings](const PlayingSound& sound) {
+		return InSyncedPart(sound, leftOut, localThings);
+	};
+	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, synced)));
+	for (const auto& sound : _sounds | std::views::filter(synced))
 	{
-		WriteMarked(out, localThings.sounds.Contains(sound.link.get()), [&]() {
-			out.WriteShared(sound.link);
-			out.WriteValue(sound.letGo);
-			out.WritePlain(sound.fade);
-			out.WriteValue(sound.wait);
-		});
+		out.WriteShared(sound.link);
 	}
 	out.WriteValue(_rainStorms);
 	out.WriteValue(_nextRainStorm);
-	WriteLive(out, _shields, localThings.shields);
+	WriteSyncedLive(out, _shields, localThings.shields);
 	for (const auto& queue : _objectEffects.Queues())
 	{
 		out.WritePlainList(queue);
 	}
 }
 
-bool GameParticleWorld::LoadState(particles::EffectReader& in)
+void GameParticleWorld::SaveLocalState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
+                                       const particles::SharedTables& localThings) const
+{
+	out.Out().WriteSize(_gestureTrails.size());
+	for (const auto& trail : _gestureTrails)
+	{
+		out.WriteShared(trail);
+	}
+	WriteLocalLive(out, _lightSheets, localThings.sheets);
+	WriteLocalLive(out, _bolts, localThings.bolts);
+	// The sounds of the synced part that travel to the listener keep their waits here. The link of each sound has the
+	// number of the synced part.
+	const auto synced = [&leftOut, &localThings](const PlayingSound& sound) {
+		return InSyncedPart(sound, leftOut, localThings);
+	};
+	const auto syncedAndWaits = [&synced](const PlayingSound& sound) { return synced(sound) && sound.wait > 0.0f; };
+	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, syncedAndWaits)));
+	for (const auto& sound : _sounds | std::views::filter(syncedAndWaits))
+	{
+		out.WriteShared(sound.link);
+		out.WriteValue(sound.wait);
+		out.WriteValue(sound.start);
+	}
+	// Each other sound goes with its place among the sounds that the save keeps
+	const auto kept = [&leftOut](const PlayingSound& sound) { return Saved(sound, leftOut); };
+	const auto keptHere = [&kept, &synced](const PlayingSound& sound) { return kept(sound) && !synced(sound); };
+	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, keptHere)));
+	uint32_t place = 0;
+	for (const auto& sound : _sounds | std::views::filter(kept))
+	{
+		if (!synced(sound))
+		{
+			out.Write(place);
+			WriteSound(out, sound);
+		}
+		++place;
+	}
+	WriteLocalLive(out, _shields, localThings.shields);
+}
+
+void GameParticleWorld::WriteSound(particles::EffectWriter& out, const PlayingSound& sound)
+{
+	out.WriteShared(sound.link);
+	out.WriteValue(sound.letGo);
+	out.WritePlain(sound.fade);
+	out.WriteValue(sound.wait);
+	out.WriteValue(sound.start);
+}
+
+std::optional<GameParticleWorld::PlayingSound> GameParticleWorld::ReadSound(particles::EffectReader& in, SoundRecord record)
+{
+	PlayingSound sound;
+	sound.link = in.ReadShared<particles::ParticleSoundLink>();
+	// The sound gets an owner of this run's audio
+	sound.owner = NewSoundOwner();
+	if (record != SoundRecord::Link)
+	{
+		in.ReadValue(sound.letGo);
+		in.ReadPlain(sound.fade);
+		in.ReadValue(sound.wait);
+	}
+	// An older save did not move the place of a sound while the sound waited, so the place of its link is its start
+	if (sound.link != nullptr)
+	{
+		sound.start = sound.link->position;
+	}
+	if (record == SoundRecord::LinkWaitAndStart)
+	{
+		in.ReadValue(sound.start);
+	}
+	if (EndsWithLoad(sound))
+	{
+		Forget(sound);
+		return std::nullopt;
+	}
+	return sound;
+}
+
+bool GameParticleWorld::LoadLocalState(particles::EffectReader& in, SavedForm form)
+{
+	_gestureTrails.clear();
+	const auto trails = in.ReadSize();
+	for (size_t i = 0; trails.has_value() && i < *trails && !in.Failed(); ++i)
+	{
+		if (auto trail = in.ReadShared<particles::GestureTrail>())
+		{
+			_gestureTrails.push_back(std::move(trail));
+		}
+	}
+	ReadLocalLive(in, _lightSheets);
+	ReadLocalLive(in, _bolts);
+	if (form == SavedForm::WaitOnThisComputer)
+	{
+		// The waits of the sounds of the synced part. A sound that the load of the synced part ended has no link.
+		const auto waits = in.ReadSize();
+		for (size_t i = 0; waits.has_value() && i < *waits && !in.Failed(); ++i)
+		{
+			const auto link = in.ReadShared<particles::ParticleSoundLink>();
+			float wait = 0.0f;
+			glm::vec3 start {0.0f};
+			in.ReadValue(wait);
+			in.ReadValue(start);
+			const auto found = std::ranges::find_if(
+			    _sounds, [&link](const PlayingSound& sound) { return link != nullptr && sound.link == link; });
+			if (found != _sounds.end())
+			{
+				found->wait = wait;
+				found->start = start;
+			}
+		}
+	}
+	const auto record = form == SavedForm::WaitOnThisComputer ? SoundRecord::LinkWaitAndStart : SoundRecord::LinkAndWait;
+	const auto sounds = in.ReadSize();
+	for (size_t i = 0; sounds.has_value() && i < *sounds && !in.Failed(); ++i)
+	{
+		uint32_t place = 0;
+		in.Read(place);
+		if (auto sound = ReadSound(in, record))
+		{
+			const auto at = std::min(static_cast<size_t>(place), _sounds.size());
+			_sounds.insert(_sounds.begin() + static_cast<std::ptrdiff_t>(at), std::move(*sound));
+		}
+	}
+	ReadLocalLive(in, _shields);
+	return !in.Failed();
+}
+
+bool GameParticleWorld::LoadState(particles::EffectReader& in, SavedForm form)
 {
 	in.ReadValue(_claimed);
 	in.ReadValue(_arcsWaiting);
@@ -1898,22 +2061,14 @@ bool GameParticleWorld::LoadState(particles::EffectReader& in)
 	ReadLive(in, _bolts);
 	in.ReadValue(_boltOrder);
 	_sounds.clear();
+	const auto record = form == SavedForm::WaitOnThisComputer ? SoundRecord::Link : SoundRecord::LinkAndWait;
 	const auto sounds = in.In().ReadSize();
 	for (size_t i = 0; sounds.has_value() && i < *sounds && !in.Failed(); ++i)
 	{
-		PlayingSound sound;
-		sound.link = in.ReadShared<particles::ParticleSoundLink>();
-		// The sound gets an owner of this run's audio
-		sound.owner = NewSoundOwner();
-		in.ReadValue(sound.letGo);
-		in.ReadPlain(sound.fade);
-		in.ReadValue(sound.wait);
-		if (EndsWithLoad(sound))
+		if (auto sound = ReadSound(in, record))
 		{
-			Forget(sound);
-			continue;
+			_sounds.push_back(std::move(*sound));
 		}
-		_sounds.push_back(std::move(sound));
 	}
 	in.ReadValue(_rainStorms);
 	in.ReadValue(_nextRainStorm);
@@ -1942,110 +2097,161 @@ void ParticleRuleSystem::RestoreSink(EffectId id, particles::SpellSink* sink)
 	}
 }
 
-void ParticleRuleSystem::SaveState(reflection::BinaryWriter& out) const
+namespace
 {
-	reflection::SavePresentation(out, _nextId);
-	reflection::Save(out, _paused);
-	reflection::Save(out, _explodeObject);
-	reflection::Save(out, _stormBolts);
-	reflection::Save(out, _pendingStormBolts);
-	reflection::Save(out, _gestureTrails);
-	reflection::SavePresentation(out, _gestureChain);
-	reflection::SavePresentation(out, _selectionEffect);
-	// Only the hand of this computer starts the effect of its mana path, also in a frame
-	reflection::SavePresentation(out, _handManaPath);
-	reflection::Save(out, _beliefWanted);
-	reflection::SavePresentation(out, _chainScrollPace);
 
-	// The effects and the world go into writers of their own first, so that the tables have every shared thing in them
-	// when they are written
+/// The forms of the two parts of the save of the particles. A load refuses a part of another form.
+constexpr uint32_t k_SyncedPartVersion = 2;
+constexpr uint32_t k_LocalPartVersion = 2;
+/// The form of the two parts before the waits of the sounds went to the part of this computer. A load reads it too.
+constexpr uint32_t k_WaitWithSoundVersion = 1;
+
+/// The form of the world in a part of a save of a given version
+std::optional<GameParticleWorld::SavedForm> WorldForm(uint32_t version, uint32_t current)
+{
+	if (version == current)
+	{
+		return GameParticleWorld::SavedForm::WaitOnThisComputer;
+	}
+	if (version == k_WaitWithSoundVersion)
+	{
+		return GameParticleWorld::SavedForm::WaitWithSound;
+	}
+	return std::nullopt;
+}
+
+template <typename Type>
+std::vector<std::weak_ptr<Type>> WeakItems(const particles::SharedTable<Type>& table)
+{
+	return {table.items.begin(), table.items.end()};
+}
+
+/// Puts the things of the synced part back in a table with their numbers. A thing that has gone keeps its number.
+template <typename Type>
+void RestoreItems(particles::SharedTable<Type>& table, const std::vector<std::weak_ptr<Type>>& held)
+{
+	for (const auto& item : held)
+	{
+		table.Append(item.lock());
+	}
+}
+
+} // namespace
+
+/// What the two parts of a save number in the same way
+struct ParticleRuleSystem::SaveNumbering
+{
+	/// The sounds of the effects that the save leaves out
+	GameParticleWorld::LeftOutSounds leftOut;
+	/// The things that the effects of this computer use
+	particles::SharedTables localThings;
+	/// The tables of the synced part, with all their numbers
+	particles::SharedTables synced;
+};
+
+void ParticleRuleSystem::NumberForSave(const reflection::BinaryWriter& out, SaveNumbering& numbering) const
+{
 	// The sounds of the effects that the save leaves out stay out too: the effects make them again when their owners
 	// start them again
-	particles::SharedTables leftOutTables;
-	reflection::BinaryWriter leftOutBytes(out.Context());
-	particles::EffectWriter leftOutWriter(leftOutBytes, leftOutTables);
-	for (const auto& running : _effects)
 	{
-		if (!running.saved)
+		particles::SharedTables leftOutTables;
+		reflection::BinaryWriter leftOutBytes(out.Context());
+		particles::EffectWriter leftOutWriter(leftOutBytes, leftOutTables);
+		for (const auto& running : _effects | std::views::filter([](const Running& running) { return !running.saved; }))
 		{
 			running.effect->Save(leftOutWriter);
 		}
-	}
-	GameParticleWorld::LeftOutSounds leftOut;
-	for (const auto& link : leftOutTables.sounds.items)
-	{
-		leftOut.insert(link.get());
+		for (const auto& link : leftOutTables.sounds.items)
+		{
+			numbering.leftOut.insert(link.get());
+		}
 	}
 	// The effects of this computer draw their own random numbers, and only this computer steps them, also in the
-	// frames. The local tables keep the things that these effects share. Their parts of the save are presentation
-	// values.
-	const auto local = [](const Running& running) { return running.saved && !running.effect->IsSynced(); };
-	const auto synced = [](const Running& running) { return running.saved && running.effect->IsSynced(); };
-	particles::SharedTables localThings;
+	// frames. The local tables keep the things that these effects share.
 	{
 		reflection::BinaryWriter localBytes(out.Context());
-		particles::EffectWriter localWriter(localBytes, localThings);
-		for (const auto& running : _effects | std::views::filter(local))
+		particles::EffectWriter localWriter(localBytes, numbering.localThings);
+		for (const auto& running : _effects | std::views::filter(IsLocal))
 		{
 			running.effect->Save(localWriter);
 		}
-		_world.AddLocalThings(localThings);
+		_world.AddLocalThings(numbering.localThings);
 	}
-	// The synced things take the first numbers of each table, in the order that the save finds them. Thus the things of
-	// the effects of this computer do not change the numbers of the synced things.
-	particles::SharedTables tables;
-	_world.NumberShared(tables, leftOut, localThings, false);
+	// The synced things take their numbers in the order that the save finds them. A thing that a synced effect and an
+	// effect of this computer both use is a synced thing.
+	_world.NumberShared(numbering.synced, numbering.leftOut, numbering.localThings, false);
 	{
 		reflection::BinaryWriter syncedBytes(out.Context());
-		particles::EffectWriter syncedWriter(syncedBytes, tables);
-		for (const auto& running : _effects | std::views::filter(synced))
+		particles::EffectWriter syncedWriter(syncedBytes, numbering.synced);
+		for (const auto& running : _effects | std::views::filter(IsSynced))
 		{
 			running.effect->Save(syncedWriter);
 		}
 	}
-	tables.StartLocal();
-	_world.NumberShared(tables, leftOut, localThings, true);
-	reflection::BinaryWriter effectBytes(out.Context());
-	particles::EffectWriter effects(effectBytes, tables);
-	const auto saved = [](const Running& running) { return running.saved; };
-	effectBytes.BeginPresentation();
-	effectBytes.WriteSize(static_cast<size_t>(std::ranges::count_if(_effects, saved)));
-	effectBytes.EndPresentation();
-	for (const auto& running : _effects | std::views::filter(saved))
+	for (const auto& bolt : numbering.localThings.bolts.items)
 	{
-		const bool presentation = local(running);
-		if (presentation)
+		if (!numbering.synced.bolts.Contains(bolt.get()))
 		{
-			effectBytes.BeginPresentation();
-		}
-		reflection::Save(effectBytes, running.id);
-		reflection::Save(effectBytes, running.file);
-		reflection::Save(effectBytes, running.effect->IsSynced());
-		reflection::Save(effectBytes, running.ownedBySpell);
-		reflection::Save(effectBytes, running.everyFrame);
-		reflection::Save(effectBytes, running.inTemple);
-		reflection::Save(effectBytes, running.turnsLeft);
-		reflection::Save(effectBytes, running.owner);
-		reflection::Save(effectBytes, running.path);
-		reflection::Save(effectBytes, running.drawOffset);
-		const auto at = effectBytes.BeginLength();
-		running.effect->Save(effects);
-		effectBytes.EndLength(at);
-		if (presentation)
-		{
-			effectBytes.EndPresentation();
+			numbering.synced.boltsOfOtherPart.insert(bolt.get());
 		}
 	}
-	reflection::BinaryWriter worldBytes(out.Context());
-	particles::EffectWriter world(worldBytes, tables);
-	_world.SaveState(world, leftOut, localThings);
-	for (const auto* writer : {&effectBytes, &worldBytes})
+	particles::AddLinkedBolts(numbering.synced);
+}
+
+void ParticleRuleSystem::SaveRunning(reflection::BinaryWriter& bytes, particles::EffectWriter& effects, const Running& running)
+{
+	reflection::Save(bytes, running.id);
+	reflection::Save(bytes, running.file);
+	reflection::Save(bytes, running.effect->IsSynced());
+	reflection::Save(bytes, running.ownedBySpell);
+	reflection::Save(bytes, running.everyFrame);
+	reflection::Save(bytes, running.inTemple);
+	reflection::Save(bytes, running.turnsLeft);
+	reflection::Save(bytes, running.owner);
+	reflection::Save(bytes, running.path);
+	reflection::Save(bytes, running.drawOffset);
+	const auto at = bytes.BeginLength();
+	running.effect->Save(effects);
+	bytes.EndLength(at);
+}
+
+void ParticleRuleSystem::WarnUnsaved(std::initializer_list<const reflection::BinaryWriter*> writers)
+{
+	for (const auto* writer : writers)
 	{
 		for (const auto& unsaved : writer->Unsaved())
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: the save does not keep {} ({})", unsaved.place, unsaved.type);
 		}
 	}
+}
+
+void ParticleRuleSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	reflection::Save(out, k_SyncedPartVersion);
+	reflection::Save(out, _paused);
+	reflection::Save(out, _explodeObject);
+	reflection::Save(out, _stormBolts);
+	reflection::Save(out, _pendingStormBolts);
+	reflection::Save(out, _gestureTrails);
+	reflection::Save(out, _beliefWanted);
+
+	SaveNumbering numbering;
+	NumberForSave(out, numbering);
+	auto& tables = numbering.synced;
+	// The effects and the world go into writers of their own first, so that the tables have every shared thing in them
+	// when they are written
+	reflection::BinaryWriter effectBytes(out.Context());
+	particles::EffectWriter effects(effectBytes, tables);
+	effectBytes.WriteSize(static_cast<size_t>(std::ranges::count_if(_effects, IsSynced)));
+	for (const auto& running : _effects | std::views::filter(IsSynced))
+	{
+		SaveRunning(effectBytes, effects, running);
+	}
+	reflection::BinaryWriter worldBytes(out.Context());
+	particles::EffectWriter world(worldBytes, tables);
+	_world.SaveState(world, numbering.leftOut, numbering.localThings);
+	WarnUnsaved({&effectBytes, &worldBytes});
 
 	particles::EffectWriter tableWriter(out, tables);
 	particles::SaveSharedTables(tableWriter);
@@ -2053,24 +2259,147 @@ void ParticleRuleSystem::SaveState(reflection::BinaryWriter& out) const
 	out.Append(worldBytes);
 }
 
-bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
+void ParticleRuleSystem::SaveLocalState(reflection::BinaryWriter& out) const
 {
-	if (!Locator::gameRandom::has_value() || !Locator::resources::has_value())
-	{
-		return false;
-	}
-	reflection::Load(in, _nextId);
-	reflection::Load(in, _paused);
-	reflection::Load(in, _explodeObject);
-	reflection::Load(in, _stormBolts);
-	reflection::Load(in, _pendingStormBolts);
-	reflection::Load(in, _gestureTrails);
-	reflection::Load(in, _gestureChain);
-	reflection::Load(in, _selectionEffect);
-	reflection::Load(in, _handManaPath);
-	reflection::Load(in, _beliefWanted);
-	reflection::Load(in, _chainScrollPace);
+	// Only the frames of this computer change this part, so all of it is a presentation value
+	out.BeginPresentation();
+	reflection::Save(out, k_LocalPartVersion);
+	reflection::Save(out, _nextId);
+	reflection::Save(out, _gestureChain);
+	reflection::Save(out, _selectionEffect);
+	// Only the hand of this computer starts the effect of its mana path, also in a frame
+	reflection::Save(out, _handManaPath);
+	reflection::Save(out, _chainScrollPace);
 
+	SaveNumbering numbering;
+	NumberForSave(out, numbering);
+	// The things of this computer take the numbers after the numbers of the synced part
+	auto tables = std::move(numbering.synced);
+	tables.boltsOfOtherPart.clear();
+	tables.StartLocal();
+	_world.NumberShared(tables, numbering.leftOut, numbering.localThings, true);
+	// Each effect goes with its place among the effects that the save keeps, so that the load puts it back between the
+	// synced effects in the same order
+	reflection::BinaryWriter effectBytes(out.Context());
+	particles::EffectWriter effects(effectBytes, tables);
+	effectBytes.WriteSize(static_cast<size_t>(std::ranges::count_if(_effects, IsLocal)));
+	uint32_t place = 0;
+	for (const auto& running : _effects | std::views::filter([](const Running& running) { return running.saved; }))
+	{
+		if (IsLocal(running))
+		{
+			reflection::Save(effectBytes, place);
+			SaveRunning(effectBytes, effects, running);
+		}
+		++place;
+	}
+	reflection::BinaryWriter worldBytes(out.Context());
+	particles::EffectWriter world(worldBytes, tables);
+	_world.SaveLocalState(world, numbering.leftOut, numbering.localThings);
+	WarnUnsaved({&effectBytes, &worldBytes});
+
+	// A synced bolt can meet a bolt of this computer. The synced part has no number for that bolt, so this part keeps
+	// the link.
+	particles::AddLinkedBolts(tables);
+	const auto firstLocal = tables.bolts.firstLocal.value_or(0);
+	const auto localNumber = [&tables, firstLocal](const std::weak_ptr<particles::BoltShare>& link) -> uint32_t {
+		const auto bolt = link.lock();
+		const auto found = bolt != nullptr ? tables.bolts.numbers.find(bolt.get()) : tables.bolts.numbers.end();
+		return found != tables.bolts.numbers.end() && found->second > firstLocal ? found->second : 0;
+	};
+	std::vector<std::array<uint32_t, 3>> links;
+	for (size_t i = 0; i < firstLocal; ++i)
+	{
+		const auto& bolt = *tables.bolts.items[i];
+		const auto to = localNumber(bolt.linkedTo);
+		const auto from = localNumber(bolt.linkedFrom);
+		if (to != 0 || from != 0)
+		{
+			links.push_back({static_cast<uint32_t>(i + 1), to, from});
+		}
+	}
+
+	particles::EffectWriter tableWriter(out, tables);
+	particles::SaveSharedTables(tableWriter);
+	out.Append(effectBytes);
+	out.Append(worldBytes);
+	out.WriteSize(links.size());
+	for (const auto& link : links)
+	{
+		for (const auto number : link)
+		{
+			reflection::Save(out, number);
+		}
+	}
+	out.EndPresentation();
+}
+
+ParticleRuleSystem::ReadResult ParticleRuleSystem::ReadRunning(reflection::BinaryReader& in, particles::EffectReader& reader,
+                                                               Running& running)
+{
+	bool synced = true;
+	reflection::Load(in, running.id);
+	reflection::Load(in, running.file);
+	reflection::Load(in, synced);
+	reflection::Load(in, running.ownedBySpell);
+	reflection::Load(in, running.everyFrame);
+	reflection::Load(in, running.inTemple);
+	reflection::Load(in, running.turnsLeft);
+	reflection::Load(in, running.owner);
+	reflection::Load(in, running.path);
+	reflection::Load(in, running.drawOffset);
+	const auto length = in.ReadSize();
+	if (!length.has_value())
+	{
+		return ReadResult::Failed;
+	}
+	const auto end = in.Position() + *length;
+	const auto data = LoadFile(running.file);
+	if (data)
+	{
+		// The effect is made from its file as at its start, then takes the state it had
+		running.effect = std::make_unique<particles::Effect>(
+		    data, particles::EffectServices {_classes, _world, Locator::gameRandom::value(), _noise}, glm::vec3(0.0f), 1.0f,
+		    synced);
+		if (running.effect->Load(reader) && in.Position() == end)
+		{
+			AddSheetNames(*running.effect);
+			TellStarted(running.id);
+			return ReadResult::Read;
+		}
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: the saved effect {} does not read", running.file);
+		return ReadResult::Failed;
+	}
+	// An effect whose file is gone is left out
+	if (in.Position() > end)
+	{
+		return ReadResult::Failed;
+	}
+	[[maybe_unused]] const auto skipped = in.Take(end - in.Position());
+	return ReadResult::Skipped;
+}
+
+void ParticleRuleSystem::RestoreCarried(std::span<const std::shared_ptr<particles::CarriedObject>> carried)
+{
+	// A thing that a particle carries holds the same record as the particle again
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto& item : carried)
+	{
+		if (auto* holder = item != nullptr && registry.Valid(item->object)
+		                       ? registry.TryGet<ecs::components::CarriedByTornado>(item->object)
+		                       : nullptr)
+		{
+			holder->carried = item;
+		}
+	}
+}
+
+bool ParticleRuleSystem::LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form)
+{
 	particles::SharedTables tables;
 	particles::EffectReader reader(in, tables);
 	particles::LoadSharedTables(reader);
@@ -2083,64 +2412,174 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	for (size_t i = 0; count.has_value() && i < *count && !in.Failed(); ++i)
 	{
 		Running running;
-		bool synced = true;
-		reflection::Load(in, running.id);
-		reflection::Load(in, running.file);
-		reflection::Load(in, synced);
-		reflection::Load(in, running.ownedBySpell);
-		reflection::Load(in, running.everyFrame);
-		reflection::Load(in, running.inTemple);
-		reflection::Load(in, running.turnsLeft);
-		reflection::Load(in, running.owner);
-		reflection::Load(in, running.path);
-		reflection::Load(in, running.drawOffset);
-		const auto length = in.ReadSize();
-		if (!length.has_value())
+		const auto result = ReadRunning(in, reader, running);
+		if (result == ReadResult::Failed)
 		{
 			return false;
 		}
-		const auto end = in.Position() + *length;
-		const auto data = LoadFile(running.file);
-		if (data)
+		if (result == ReadResult::Read)
 		{
-			// The effect is made from its file as at its start, then takes the state it had
-			running.effect = std::make_unique<particles::Effect>(
-			    data, particles::EffectServices {_classes, _world, Locator::gameRandom::value(), _noise}, glm::vec3(0.0f), 1.0f,
-			    synced);
-			if (running.effect->Load(reader) && in.Position() == end)
-			{
-				AddSheetNames(*running.effect);
-				TellStarted(running.id);
-				_effects.push_back(std::move(running));
-				continue;
-			}
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Particles: the saved effect {} does not read", running.file);
-			return false;
+			_effects.push_back(std::move(running));
 		}
-		// An effect whose file is gone is left out
-		if (in.Position() > end)
-		{
-			return false;
-		}
-		[[maybe_unused]] const auto skipped = in.Take(end - in.Position());
 	}
-	if (in.Failed() || !_world.LoadState(reader))
+	if (in.Failed() || !_world.LoadState(reader, form))
 	{
 		return false;
 	}
-	// A thing that a particle carries holds the same record as the particle again
-	if (Locator::entitiesRegistry::has_value())
+	RestoreCarried(tables.carried.items);
+	_loadedSynced = LoadedSyncedThings {
+	    .sounds = WeakItems(tables.sounds),
+	    .bolts = WeakItems(tables.bolts),
+	    .shields = WeakItems(tables.shields),
+	    .sheets = WeakItems(tables.sheets),
+	    .carried = WeakItems(tables.carried),
+	    .trails = WeakItems(tables.trails),
+	};
+	return !in.Failed();
+}
+
+bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
+{
+	if (!Locator::gameRandom::has_value() || !Locator::resources::has_value())
 	{
-		auto& registry = Locator::entitiesRegistry::value();
-		for (const auto& carried : tables.carried.items)
+		return false;
+	}
+	uint32_t version = 0;
+	reflection::Load(in, version);
+	const auto form = WorldForm(version, k_SyncedPartVersion);
+	if (in.Failed() || !form.has_value())
+	{
+		return false;
+	}
+	reflection::Load(in, _paused);
+	reflection::Load(in, _explodeObject);
+	reflection::Load(in, _stormBolts);
+	reflection::Load(in, _pendingStormBolts);
+	reflection::Load(in, _gestureTrails);
+	reflection::Load(in, _beliefWanted);
+	// The effects of this computer come back with their own part of the save. Until then, this computer has none.
+	_gestureChain = k_NoEffect;
+	_selectionEffect = k_NoEffect;
+	_handManaPath = k_NoEffect;
+	_chainScrollPace = {};
+	if (!LoadSyncedBody(in, *form))
+	{
+		return false;
+	}
+	// The next number of an effect is after the numbers of the loaded effects. The part of this computer gives the
+	// number that the save kept.
+	_nextId = 1;
+	for (const auto& running : _effects)
+	{
+		if (running.id < k_FirstEffectHandle && running.id >= _nextId)
 		{
-			if (auto* holder = registry.Valid(carried->object)
-			                       ? registry.TryGet<ecs::components::CarriedByTornado>(carried->object)
-			                       : nullptr)
+			_nextId = running.id + 1;
+		}
+	}
+	return true;
+}
+
+bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
+{
+	if (!Locator::gameRandom::has_value() || !Locator::resources::has_value())
+	{
+		return false;
+	}
+	uint32_t version = 0;
+	reflection::Load(in, version);
+	const auto form = WorldForm(version, k_LocalPartVersion);
+	if (in.Failed() || !form.has_value())
+	{
+		return false;
+	}
+	reflection::Load(in, _nextId);
+	reflection::Load(in, _gestureChain);
+	reflection::Load(in, _selectionEffect);
+	reflection::Load(in, _handManaPath);
+	reflection::Load(in, _chainScrollPace);
+
+	// The things of this computer have the numbers after the numbers of the synced part
+	particles::SharedTables tables;
+	if (_loadedSynced.has_value())
+	{
+		RestoreItems(tables.sounds, _loadedSynced->sounds);
+		RestoreItems(tables.bolts, _loadedSynced->bolts);
+		RestoreItems(tables.shields, _loadedSynced->shields);
+		RestoreItems(tables.sheets, _loadedSynced->sheets);
+		RestoreItems(tables.carried, _loadedSynced->carried);
+		RestoreItems(tables.trails, _loadedSynced->trails);
+		_loadedSynced.reset();
+	}
+	tables.StartLocal();
+	particles::EffectReader reader(in, tables);
+	particles::LoadSharedTables(reader);
+	const auto count = in.ReadSize();
+	for (size_t i = 0; count.has_value() && i < *count && !in.Failed(); ++i)
+	{
+		uint32_t place = 0;
+		reflection::Load(in, place);
+		Running running;
+		const auto result = ReadRunning(in, reader, running);
+		if (result == ReadResult::Failed)
+		{
+			return false;
+		}
+		if (result == ReadResult::Read)
+		{
+			const auto at = std::min(static_cast<size_t>(place), _effects.size());
+			_effects.insert(_effects.begin() + static_cast<std::ptrdiff_t>(at), std::move(running));
+		}
+	}
+	if (in.Failed() || !_world.LoadLocalState(reader, *form))
+	{
+		return false;
+	}
+	// The links of the synced bolts to the bolts of this computer
+	const auto links = in.ReadSize();
+	for (size_t i = 0; links.has_value() && i < *links && !in.Failed(); ++i)
+	{
+		std::array<uint32_t, 3> link {};
+		for (auto& number : link)
+		{
+			reflection::Load(in, number);
+		}
+		if (const auto bolt = tables.bolts.At(link[0]); bolt != nullptr)
+		{
+			if (link[1] != 0)
 			{
-				holder->carried = carried;
+				bolt->linkedTo = tables.bolts.At(link[1]);
+			}
+			if (link[2] != 0)
+			{
+				bolt->linkedFrom = tables.bolts.At(link[2]);
 			}
 		}
 	}
+	const auto firstCarried = std::min(tables.carried.firstLocal.value_or(0), tables.carried.items.size());
+	RestoreCarried(std::span(tables.carried.items).subspan(firstCarried));
 	return !in.Failed();
+}
+
+bool ParticleRuleSystem::LoadOldState(reflection::BinaryReader& in)
+{
+	if (!Locator::gameRandom::has_value() || !Locator::resources::has_value())
+	{
+		return false;
+	}
+	// A save from before the split keeps the synced effects and the effects of this computer in one part, in the order
+	// of the effects
+	reflection::Load(in, _nextId);
+	reflection::Load(in, _paused);
+	reflection::Load(in, _explodeObject);
+	reflection::Load(in, _stormBolts);
+	reflection::Load(in, _pendingStormBolts);
+	reflection::Load(in, _gestureTrails);
+	reflection::Load(in, _gestureChain);
+	reflection::Load(in, _selectionEffect);
+	reflection::Load(in, _handManaPath);
+	reflection::Load(in, _beliefWanted);
+	reflection::Load(in, _chainScrollPace);
+	const bool read = LoadSyncedBody(in, GameParticleWorld::SavedForm::WaitWithSound);
+	_loadedSynced.reset();
+	return read;
 }

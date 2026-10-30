@@ -34,12 +34,14 @@
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureHelp.h"
+#include "Creature/LeashOwnership.h"
 #include "ECS/AltarOffering.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
@@ -66,6 +68,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
@@ -497,6 +500,11 @@ void GameHandGrabWorld::ForgetGesturePath()
 	}
 }
 
+bool GameHandGrabWorld::IsLocalHand() const
+{
+	return !Locator::handSystem::has_value() || HandPlayer() == Locator::handSystem::value().GetOwnPlayer();
+}
+
 void GameHandGrabWorld::HeatHeld(entt::entity object)
 {
 	if (Locator::fireSystem::has_value())
@@ -773,6 +781,11 @@ bool GameHandGrabWorld::ValidToTap(entt::entity object) const
 	{
 		return true;
 	}
+	// A leash post takes the taps of its own player only. This is also true when the leash does not hang on the post.
+	if (const auto* post = registry.TryGet<const LeashPost>(object); post != nullptr)
+	{
+		return creature_leash::MayTapPost(player, post->owner);
+	}
 	// Only the player of a chest opens it, until it is open
 	if (const auto* reward = registry.TryGet<const Reward>(object); reward != nullptr)
 	{
@@ -1032,11 +1045,12 @@ std::vector<PlayerNames> GameHandGrabWorld::OtherHandPlayers() const
 		return players;
 	}
 	const auto& hands = Locator::handSystem::value();
-	for (size_t i = 1; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	// Every player after the first
+	for (const auto player : ecs::game_players::All() | std::views::drop(1))
 	{
-		if (hands.GetHandsOf(static_cast<PlayerNames>(i)).has_value())
+		if (hands.GetHandsOf(player).has_value())
 		{
-			players.push_back(static_cast<PlayerNames>(i));
+			players.push_back(player);
 		}
 	}
 	return players;

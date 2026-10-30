@@ -40,21 +40,24 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
 #include "Common/EventManager.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameHeading.h"
 #include "Common/GameRandom.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
+#include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureFriendAgendas.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
+#include "Creature/CreatureScriptAgendas.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
@@ -251,7 +254,6 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "GameControls.h"
 #include "GameSeamInterface.h"
-#include "Graphics/RendererInterface.h"
 #include "Gui/ScreenFade.h"
 #include "Gui/ScriptTexts.h"
 #include "Gui/TextDatabase.h"
@@ -276,8 +278,10 @@
 #include "Sound/CustomMusicPlayerInterface.h"
 #include "Sound/GameMusic.h"
 #include "Sound/MusicMood.h"
+#include "Sound/SoundRequestInterface.h"
 #include "SystemProviders.h"
 #include "Temple/TemplePeople.h"
+#include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
 #include "WorldProviders.h"
 
@@ -325,6 +329,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"inputDevice", "players.input"},
     LocatorCoverage {"rendereringSystem", "engine.frame"},
     LocatorCoverage {"rendererInterface", "engine.frame"},
+    LocatorCoverage {"rendererRequests", "engine.frame"},
     // The device makes what the renderer draws, which engine.frame shows
     LocatorCoverage {"graphicsDevice", "engine.frame"},
     LocatorCoverage {"dynamicsSystem", "physics.state"},
@@ -791,10 +796,10 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 			              const auto size = Locator::windowing::value().GetSize();
 			              result["window"] = {size.x, size.y};
 		              }
-		              if (Locator::rendererInterface::has_value())
+		              if (Locator::rendererRequests::has_value())
 		              {
-			              result["renderer_debug"] = Locator::rendererInterface::value().GetDebug();
-			              result["renderer_profile"] = Locator::rendererInterface::value().GetProfile();
+			              result["renderer_debug"] = Locator::rendererRequests::value().GetDebug();
+			              result["renderer_profile"] = Locator::rendererRequests::value().GetProfile();
 		              }
 		              if (Locator::rendereringSystem::has_value())
 		              {
@@ -1890,7 +1895,7 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 	                                    "position) and the music moods: the record of each track and the current feelings"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
-		              auto* player = Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+		              auto* player = Locator::sounds::has_value() ? Locator::sounds::value().GetCustomMusic() : nullptr;
 		              if (player != nullptr)
 		              {
 			              Json tracks = Json::array();
@@ -4349,6 +4354,46 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	return provider;
 }
 
+/// Why the game ends an order to go to a thing at once, if it does: a cut scene of a script makes a creature that is free
+/// to think for itself look at the camera, again and again, so it drops the order on the next turn
+std::optional<std::string> CutSceneRefusal(const ecs::Registry& registry, entt::entity creature)
+{
+	if (registry.AllOf<ScriptControlled>(creature) || !Locator::cinematicDirectorSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	const bool barsIn = director.IsWideScreenOn();
+	if (!creature_mind::StartsLookAtCameraInCutScene(barsIn, barsIn ? director.GetWideScreenOwner() : 0u, false))
+	{
+		return std::nullopt;
+	}
+	return "a cut scene is playing: the game makes a creature that is free to think for itself look at the camera "
+	       "again on each turn, so it would drop the order at once. Give the order when the cut scene is over";
+}
+
+/// What can end an order to go to a thing after the creature took it. The creature sees a thing that is near; for one
+/// that is farther it walks to where it believes the thing is, and it gives up a walk in which it has not moved for 50
+/// turns, as it does while a long route is still searched.
+std::string FarThingWarning(const ecs::Registry& registry, entt::entity creature, entt::entity object)
+{
+	const auto* from = registry.TryGet<const Transform>(creature);
+	const auto* to = registry.TryGet<const Transform>(object);
+	if (from == nullptr || to == nullptr)
+	{
+		return {};
+	}
+	const auto distance = gutils::GetDistanceInMetres(from->position, to->position);
+	if (distance < creature_mind::k_SeenWithinMetres)
+	{
+		return {};
+	}
+	return fmt::format("the thing is {:.0f} m away: the creature may not see it and then walks to where it believes it is. It "
+	                   "gives up the order when it has not moved for {} turns, which a long route search can cause. Place "
+	                   "the creature near the thing first (edit.move) to be sure",
+	                   distance, creature_cast_moves::k_StallTurns);
+}
+
 /// The inspector's order to a creature, given as the game gives its own orders: a forced plan of the creature's mind,
 /// which its body does
 CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder& order)
@@ -4380,6 +4425,10 @@ CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder
 		{
 			return {.detail = "it holds that thing already"};
 		}
+		if (const auto refusal = CutSceneRefusal(registry, creature); refusal.has_value())
+		{
+			return {.detail = *refusal};
+		}
 		if (!hands.CanPickUp(creature, *order.object))
 		{
 			// Name the size or the weight when that is what stops it
@@ -4404,7 +4453,9 @@ CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder
 		                                                         .action = creature_leash_orders::k_HoldAction,
 		                                                         .object = order.object,
 		                                                         .ordered = true});
-		return {.taken = taken, .detail = taken ? "picks it up and holds it" : "its mind refused the plan"};
+		return {.taken = taken,
+		        .detail = taken ? "picks it up and holds it" : "its mind refused the plan",
+		        .warning = taken ? FarThingWarning(registry, creature, *order.object) : std::string()};
 	}
 	case Kind::PutDown:
 	case Kind::Throw:
@@ -4455,11 +4506,17 @@ CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder
 		{
 			return {.detail = "no eat action is called " + order.action};
 		}
+		if (const auto refusal = CutSceneRefusal(registry, creature); refusal.has_value())
+		{
+			return {.detail = *refusal};
+		}
 		const bool taken = minds.ForcePlan(creature, ForcedPlan {.desire = creature_desires::Desire::Hunger,
 		                                                         .action = executor->action,
 		                                                         .object = order.object,
 		                                                         .ordered = true});
-		return {.taken = taken, .detail = taken ? std::string(executor->action) : "its mind refused the plan"};
+		return {.taken = taken,
+		        .detail = taken ? std::string(executor->action) : "its mind refused the plan",
+		        .warning = taken ? FarThingWarning(registry, creature, *order.object) : std::string()};
 	}
 	}
 	return {.detail = "no such order"};
@@ -4685,15 +4742,15 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(MakeAudioProvider({
 	    .world = World(),
 	    .state = []() -> std::optional<AudioState> {
-		    if (!Locator::audio::has_value())
+		    if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio())
 		    {
 			    return std::nullopt;
 		    }
-		    auto& audio = Locator::audio::value();
+		    auto& audio = Locator::sounds::value();
 		    AudioState state {.globalVolume = audio.GetGlobalVolume(),
 		                      .sfxVolume = audio.GetSfxVolume(),
 		                      .musicVolume = audio.GetMusicVolume(),
-		                      .musicActive = audio.MusicIsActive(),
+		                      .musicActive = audio.IsMusicActive(),
 		                      .listener = audio.GetListener().origin};
 		    if (Locator::gameMusic::has_value())
 		    {
@@ -4717,32 +4774,26 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 				    state.scriptMusicMs = std::chrono::duration_cast<std::chrono::milliseconds>(*time).count();
 			    }
 		    }
-		    if (const auto* player = audio.GetMusic(); player != nullptr)
+		    for (auto& channel : audio.GetMusicChannelStates())
 		    {
-			    for (const auto& channel : player->GetChannels())
-			    {
-				    if (channel.active && channel.bank)
-				    {
-					    state.musicChannels.push_back({
-					        .bank = channel.bank->path,
-					        .volume = channel.volume,
-					        .position = channel.placement ? std::optional(channel.placement->position) : std::nullopt,
-					    });
-				    }
-			    }
+			    state.musicChannels.push_back({
+			        .bank = std::move(channel.bank),
+			        .volume = channel.volume,
+			        .position = channel.position,
+			    });
 		    }
 		    return state;
 	    },
 	    .simulateDeviceLoss =
 	        [](bool lost) {
-		        if (Locator::audio::has_value())
+		        if (Locator::sounds::has_value())
 		        {
-			        Locator::audio::value().SimulateDeviceLoss(lost);
+			        Locator::sounds::value().SimulateDeviceLoss(lost);
 		        }
 	        },
-	    .deviceLost = []() { return Locator::audio::has_value() && Locator::audio::value().IsDeviceLost(); },
+	    .deviceLost = []() { return Locator::sounds::has_value() && Locator::sounds::value().IsDeviceLost(); },
 	    .emitters = []() -> const ecs::Registry* {
-		    return Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
+		    return Locator::sounds::has_value() ? Locator::sounds::value().GetEmitters() : nullptr;
 	    },
 	}));
 

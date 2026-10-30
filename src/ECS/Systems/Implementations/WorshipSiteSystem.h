@@ -71,6 +71,7 @@ public:
 	void SetBuilt(entt::entity site, float built) override;
 	[[nodiscard]] bool IsBuilt(entt::entity site) const override;
 	[[nodiscard]] entt::entity TempleOf(PlayerNames player) const override;
+	[[nodiscard]] std::vector<entt::entity> TemplesOfPlayers(size_t count) const override;
 	[[nodiscard]] std::optional<glm::vec2> PlaceAt(entt::entity site, SitePlace place) const override;
 	[[nodiscard]] std::optional<glm::vec3> DancePosition(entt::entity site) const override;
 	[[nodiscard]] std::optional<float> StandingHeight(entt::entity site) const override;

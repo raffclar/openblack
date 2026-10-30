@@ -11,6 +11,9 @@
 
 #include <cstdint>
 
+#include <optional>
+#include <tuple>
+
 #include <entt/entity/entity.hpp>
 #include <entt/entity/helper.hpp>
 #include <entt/entity/registry.hpp>
@@ -141,6 +144,20 @@ public:
 	[[nodiscard]] decltype(auto) Each(Func func, Exclude... exclude) const
 	{
 		return _registry.view<Components...>(exclude...).each(func);
+	}
+	/// The first entity in the order of Each that has the components and that the test accepts, or none. The search stops
+	/// at that entity. The test takes the entity and its components, as the function of Each does.
+	template <typename... Components, typename Test>
+	[[nodiscard]] std::optional<entt::entity> FindFirst(Test test) const
+	{
+		for (const auto found : _registry.view<Components...>().each())
+		{
+			if (std::apply(test, found))
+			{
+				return std::get<0>(found);
+			}
+		}
+		return std::nullopt;
 	}
 	template <typename Component>
 	[[nodiscard]] decltype(auto) ToEntity(const Component& component) const
