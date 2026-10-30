@@ -2205,3 +2205,4 @@ add_test(NAME test_server_check
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_server_check.py
 )
 openblack_setup_and_add_test(test_script_object test_script_object.cpp)
+openblack_setup_and_add_test(test_player_slots test_player_slots.cpp)

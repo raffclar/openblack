@@ -55,6 +55,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "PlayerSlots.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/SoundId.h"
@@ -146,9 +147,9 @@ float TownBaseInfluence()
 }
 
 /// The first temple of each player, which is their citadel
-std::array<entt::entity, static_cast<size_t>(PlayerNames::_COUNT)> Citadels()
+std::array<entt::entity, player_slots::k_PlayerNumbers> Citadels()
 {
-	std::array<entt::entity, static_cast<size_t>(PlayerNames::_COUNT)> citadels {};
+	std::array<entt::entity, player_slots::k_PlayerNumbers> citadels {};
 	citadels.fill(entt::null);
 	Locator::entitiesRegistry::value().Each<const Temple>([&citadels](entt::entity entity, const Temple& temple) {
 		const auto index = static_cast<size_t>(temple.owner);

@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Online/StartRules.h"
+#include "PlayerSlots.h"
 #include "Server/LobbyBans.h"
 
 namespace openblack::server
@@ -36,6 +37,19 @@ void Log(spdlog::level::level_enum level, std::string_view text)
 	{
 		logger->log(level, "{}", text);
 	}
+}
+
+/// The player of a seat. The room has no more seats than the gods of a network game.
+[[nodiscard]] PlayerNames SeatPlayer(size_t seat)
+{
+	return player_slots::PlayerOfSlot(seat).value_or(PlayerNames::PLAYER_ONE);
+}
+
+/// The seat of a player, as the key of the start files. The neutral player has no seat.
+[[nodiscard]] std::optional<uint8_t> PlayerSeat(PlayerNames player)
+{
+	const auto slot = player_slots::SlotOfPlayer(player);
+	return slot.has_value() ? std::optional(static_cast<uint8_t>(*slot)) : std::nullopt;
 }
 
 } // namespace
@@ -64,7 +78,7 @@ LockstepHost::LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkT
     , _clock(std::move(clock))
     , _makeSecret(std::move(makeSecret))
     , _settings(std::move(settings))
-    , _seats(_settings.godSlots)
+    , _seats(std::min<size_t>(_settings.godSlots, player_slots::k_MaxPlayers))
 {
 	_sockets.SetHandlers(ServerSocketHandlers {
 	    .opened = [this](ConnectionId connection) { Opened(connection); },
@@ -517,9 +531,8 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 			{
 				++_seats[*peer.seat].commands[static_cast<uint8_t>(turn_codec::TagOf(action))];
 			}
-			_pending.push_back(turn_codec::StampedBlock {.sender = static_cast<PlayerNames>(*peer.seat),
-			                                             .sequence = block->sequence,
-			                                             .actions = std::move(block->actions)});
+			_pending.push_back(turn_codec::StampedBlock {
+			    .sender = SeatPlayer(*peer.seat), .sequence = block->sequence, .actions = std::move(block->actions)});
 		}
 	}
 	else if (const auto* checksum = std::get_if<turn_codec::TurnChecksum>(&*decoded.frame))
@@ -825,13 +838,15 @@ void LockstepHost::Send(const player_commands::Action& /*action*/) {}
 
 std::span<const uint8_t> LockstepHost::StartCreatureFile(PlayerNames god) const
 {
-	const auto file = _startCreatures.find(static_cast<uint8_t>(god));
+	const auto seat = PlayerSeat(god);
+	const auto file = seat.has_value() ? _startCreatures.find(*seat) : _startCreatures.end();
 	return file != _startCreatures.end() ? std::span<const uint8_t>(file->second) : std::span<const uint8_t> {};
 }
 
 std::optional<float> LockstepHost::StartAlignment(PlayerNames god) const
 {
-	const auto alignment = _startAlignments.find(static_cast<uint8_t>(god));
+	const auto seat = PlayerSeat(god);
+	const auto alignment = seat.has_value() ? _startAlignments.find(*seat) : _startAlignments.end();
 	return alignment != _startAlignments.end() ? std::optional<float>(alignment->second) : std::nullopt;
 }
 
@@ -890,13 +905,13 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 	for (const auto seat : _joining)
 	{
 		bundle.blocks.push_back(turn_codec::StampedBlock {
-		    .sender = static_cast<PlayerNames>(seat), .sequence = 0, .actions = {player_commands::PlayerJoined {}}});
+		    .sender = SeatPlayer(seat), .sequence = 0, .actions = {player_commands::PlayerJoined {}}});
 	}
 	_joining.clear();
 	for (const auto seat : _leaving)
 	{
-		bundle.blocks.push_back(turn_codec::StampedBlock {
-		    .sender = static_cast<PlayerNames>(seat), .sequence = 0, .actions = {player_commands::PlayerLeft {}}});
+		bundle.blocks.push_back(
+		    turn_codec::StampedBlock {.sender = SeatPlayer(seat), .sequence = 0, .actions = {player_commands::PlayerLeft {}}});
 	}
 	_leaving.clear();
 	for (auto& block : _pending)
