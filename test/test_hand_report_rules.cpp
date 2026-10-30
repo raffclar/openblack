@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "Hand/HandReportRules.h"
+#include "Hand/ViewReportRules.h"
 
 using namespace openblack;
 using namespace openblack::hand_report;
@@ -227,4 +228,100 @@ TEST(HandReportRules, AFlockNeedsAReportEachTurnWhileItMakesAnimals)
 	auto computer = flock;
 	computer.humanCasting = false;
 	EXPECT_FALSE(NeedsReportEachTurn(computer));
+}
+
+namespace
+{
+/// A view report of a camera that rests over the land of a network map
+player_commands::ViewReport RestingView()
+{
+	return {
+	    .eye = {2024.62256f, 194.08386f, 2271.5874f},
+	    .focus = {1988.58362f, 99.86731f, 2358.64062f},
+	    .lens = 1.0f,
+	    .nearClip = 1.0f,
+	    .screenWidth = 1280,
+	    .screenHeight = 1024,
+	    .aspect = 1.25f,
+	    .inclusionDistance = 30.0f,
+	    .cameraOrders = 2,
+	    .cameraArrived = true,
+	    .gripsLand = false,
+	    .otherButton = false,
+	};
+}
+} // namespace
+
+TEST(ViewReportRules, AViewThatDidNotChangeSendsNoReport)
+{
+	EXPECT_FALSE(view_report::ChangedEnough(RestingView(), RestingView()));
+}
+
+TEST(ViewReportRules, AnEyeOrAFocusThatMovesByVerySmallValuesSendsNoReport)
+{
+	const auto last = RestingView();
+	auto now = last;
+	// The focus of a resting camera moved by less than two thousandths at each turn
+	now.focus += glm::vec3(0.000122f, -0.001648f, 0.001465f);
+	now.eye += glm::vec3(0.0f, 0.009f, -0.009f);
+	EXPECT_FALSE(view_report::ChangedEnough(last, now));
+}
+
+TEST(ViewReportRules, TheEyeOrTheFocusSendsAReportWhenItMovesByMoreThanTheLimit)
+{
+	const auto last = RestingView();
+	const float over = std::nextafter(0.01f, 1.0f);
+	auto eye = last;
+	eye.eye.y = last.eye.y + 0.5f;
+	EXPECT_TRUE(view_report::ChangedEnough(last, eye));
+	auto focus = last;
+	focus.focus = glm::vec3(0.0f);
+	auto from = focus;
+	from.focus.z = over;
+	EXPECT_TRUE(view_report::ChangedEnough(focus, from));
+	from.focus.z = 0.01f;
+	EXPECT_FALSE(view_report::ChangedEnough(focus, from));
+}
+
+TEST(ViewReportRules, TheSmallMovesAddFromTheLastReportThatWent)
+{
+	// The rule compares with the last report that went, so small steps that add up to more than the limit send it
+	const auto last = RestingView();
+	auto now = last;
+	for (int step = 0; step < 6; ++step)
+	{
+		now.focus.x += 0.002f;
+	}
+	EXPECT_TRUE(view_report::ChangedEnough(last, now));
+}
+
+TEST(ViewReportRules, AChangeOfADifferentFieldSendsAReport)
+{
+	const auto last = RestingView();
+	std::vector<player_commands::ViewReport> changes(9, last);
+	changes[0].lens = 1.0001f;
+	changes[1].nearClip = 2.0f;
+	changes[2].screenWidth = 1920;
+	changes[3].screenHeight = 1080;
+	changes[4].aspect = 16.0f / 9.0f;
+	changes[5].inclusionDistance = 30.001f;
+	changes[6].cameraOrders = 3;
+	changes[7].cameraArrived = false;
+	changes[8].gripsLand = true;
+	for (const auto& now : changes)
+	{
+		EXPECT_TRUE(view_report::ChangedEnough(last, now));
+	}
+	auto other = last;
+	other.otherButton = true;
+	EXPECT_TRUE(view_report::ChangedEnough(last, other));
+}
+
+TEST(ViewReportRules, AFieldChangeSendsAReportWithASmallCameraMove)
+{
+	const auto last = RestingView();
+	auto now = last;
+	now.focus.x += 0.001f;
+	now.cameraArrived = false;
+	EXPECT_TRUE(view_report::ChangedEnough(last, now));
 }
