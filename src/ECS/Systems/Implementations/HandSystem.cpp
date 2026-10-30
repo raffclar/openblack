@@ -11,7 +11,11 @@
 
 #include "HandSystem.h"
 
+#include <algorithm>
+#include <array>
+#include <optional>
 #include <span>
+#include <vector>
 
 #include <L3DFile.h>
 #include <glm/gtc/constants.hpp>
@@ -30,8 +34,10 @@
 #include "ECS/Components/HeldDrawTrack.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerHands.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/HandPlayer.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -57,6 +63,65 @@ ReportedHand& ReportedOf(ecs::Registry& registry, entt::entity hand)
 		return *reported;
 	}
 	return registry.Assign<ReportedHand>(hand);
+}
+
+using Hands = std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>;
+
+/// The hands that the entity of a player links to. None when no entity of the player has a link.
+std::optional<Hands> LinkedHands(const ecs::Registry& registry, PlayerNames name)
+{
+	std::optional<Hands> found;
+	registry.Each<const Player, const PlayerHands>(
+	    [&found, name](entt::entity, const Player& player, const PlayerHands& hands) {
+		    if (player.name == name && !found.has_value())
+		    {
+			    found = Hands {hands.left, hands.right};
+		    }
+	    });
+	return found;
+}
+
+/// The hands that carry the mark of a player, by their side. The hands of the first player have no mark.
+Hands MarkedHands(const ecs::Registry& registry, PlayerNames name)
+{
+	Hands found {entt::null, entt::null};
+	registry.Each<const Hand>([&found, &registry, name](entt::entity entity, const Hand& hand) {
+		if (ecs::HandPlayer(registry, entity) == name)
+		{
+			const auto side = hand.rightHanded ? HandSystemInterface::Side::Right : HandSystemInterface::Side::Left;
+			found.at(static_cast<size_t>(side)) = entity;
+		}
+	});
+	return found;
+}
+
+/// True when the pair has a hand
+bool HasHand(const Hands& hands)
+{
+	return std::ranges::any_of(hands, [](entt::entity hand) { return hand != entt::null; });
+}
+
+/// The first entity of a player, or null
+entt::entity PlayerEntityOf(const ecs::Registry& registry, PlayerNames name)
+{
+	entt::entity found = entt::null;
+	registry.Each<const Player>([&found, name](entt::entity entity, const Player& player) {
+		if (player.name == name && found == entt::null)
+		{
+			found = entity;
+		}
+	});
+	return found;
+}
+
+/// The entity of a player links to the hands of the player. A player with no hands gets no link.
+void Link(ecs::Registry& registry, entt::entity playerEntity, const Hands& hands)
+{
+	if (!registry.Valid(playerEntity) || !HasHand(hands))
+	{
+		return;
+	}
+	registry.AssignOrReplace<PlayerHands>(playerEntity, PlayerHands {.left = hands[0], .right = hands[1]});
 }
 
 /// The entity of a player that has a start, or null
@@ -92,12 +157,15 @@ void StartHandAt(ecs::Registry& registry, entt::entity hand, const glm::vec3& po
 
 bool HandSystem::Initialize() noexcept
 {
-	_hands[static_cast<size_t>(Side::Left)] =
+	Hands hands {};
+	hands[static_cast<size_t>(Side::Left)] =
 	    HandArchetype::Create(glm::vec3(0.0f), glm::half_pi<float>(), 0.0f, glm::half_pi<float>(), 0.01f, false);
-	_hands[static_cast<size_t>(Side::Right)] =
+	hands[static_cast<size_t>(Side::Right)] =
 	    HandArchetype::Create(glm::vec3(0.0f), glm::half_pi<float>(), 0.0f, glm::half_pi<float>(), 0.01f, true);
-	// The gods of the other players get their hands from the game server's command
-	_godHands.clear();
+	// Usually the land makes its players after the hands. A first player that is there already gets the link now.
+	// The gods of the other players get their hands from the command of the game server.
+	auto& registry = Locator::entitiesRegistry::value();
+	Link(registry, PlayerEntityOf(registry, PlayerNames::PLAYER_ONE), hands);
 
 	return false;
 }
@@ -105,12 +173,25 @@ bool HandSystem::Initialize() noexcept
 std::optional<std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>>
 HandSystem::GetHandsOf(PlayerNames player) const noexcept
 {
-	if (player == PlayerNames::PLAYER_ONE)
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (auto linked = LinkedHands(registry, player); linked.has_value())
 	{
-		return _hands;
+		return linked;
 	}
-	const auto found = _godHands.find(player);
-	return found != _godHands.end() ? std::optional(found->second) : std::nullopt;
+	// Before the land makes the entity of the player, the hands of the player are the hands with its mark
+	const auto marked = MarkedHands(registry, player);
+	return player == PlayerNames::PLAYER_ONE || HasHand(marked) ? std::optional(marked) : std::nullopt;
+}
+
+void HandSystem::LinkHandsOf(entt::entity playerEntity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* player = registry.Valid(playerEntity) ? registry.TryGet<const Player>(playerEntity) : nullptr;
+	if (player == nullptr || registry.AllOf<PlayerHands>(playerEntity))
+	{
+		return;
+	}
+	Link(registry, playerEntity, MarkedHands(registry, player->name));
 }
 
 std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)> HandSystem::MakeHandsOf(PlayerNames player)
@@ -130,7 +211,7 @@ std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>
 	{
 		registry.Assign<GodHand>(hand, player);
 	}
-	_godHands[player] = hands;
+	Link(registry, PlayerEntityOf(registry, player), hands);
 	// Hands that the game makes after the citadel of their player start at the citadel
 	if (const auto started = StartedPlayer(registry, player); started != entt::null)
 	{
@@ -172,21 +253,19 @@ void HandSystem::StartAtCitadel(PlayerNames owner, const glm::vec3& point)
 
 void HandSystem::FindAfterLoad()
 {
-	_hands = {entt::null, entt::null};
-	_godHands.clear();
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const Hand>([this, &registry](entt::entity entity, const Hand& hand) {
-		const auto side = static_cast<size_t>(hand.rightHanded ? Side::Right : Side::Left);
-		if (const auto* god = registry.TryGet<const GodHand>(entity))
-		{
-			auto [found, made] = _godHands.try_emplace(god->player, std::array<entt::entity, 2> {entt::null, entt::null});
-			found->second.at(side) = entity;
-			return;
-		}
-		_hands.at(side) = entity;
-	});
+	// A world from an older save has no links from the players to their hands. The load makes them from the marks.
+	std::vector<entt::entity> unlinked;
+	registry.Each<const Player>([&unlinked](entt::entity entity, const Player&) { unlinked.push_back(entity); },
+	                            entt::exclude<PlayerHands>);
+	// The links come in the order in which the game made the players, as in a new game
+	std::ranges::sort(unlinked, {}, [](entt::entity entity) { return entt::to_integral(entity); });
+	for (const auto entity : unlinked)
+	{
+		LinkHandsOf(entity);
+	}
 	// A world from an older save can have a hand with no miracle effects. The load gives them to the hand.
-	if (const auto left = _hands.at(static_cast<size_t>(Side::Left));
+	if (const auto left = GetPlayerHands().at(static_cast<size_t>(Side::Left));
 	    registry.Valid(left) && !registry.AllOf<HandMiracleFx>(left))
 	{
 		registry.Assign<HandMiracleFx>(left);
@@ -209,10 +288,13 @@ void HandSystem::ProcessTurn()
 			hand_stillness::Step(*stillness, reported->handPoint);
 		}
 	};
-	step(_hands[static_cast<size_t>(Side::Left)]);
-	for (const auto& [player, hands] : _godHands)
+	// The first player first, then the other gods in the order of their player numbers
+	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
 	{
-		step(hands[static_cast<size_t>(Side::Left)]);
+		if (const auto hands = GetHandsOf(static_cast<PlayerNames>(number)); hands.has_value())
+		{
+			step((*hands)[static_cast<size_t>(Side::Left)]);
+		}
 	}
 }
 
@@ -375,7 +457,7 @@ uint32_t HandSystem::GetHandStillTurnsOf(PlayerNames player) const noexcept
 
 std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)> HandSystem::GetPlayerHands() const noexcept
 {
-	return _hands;
+	return GetHandsOf(PlayerNames::PLAYER_ONE).value_or(Hands {entt::null, entt::null});
 }
 
 namespace
@@ -404,7 +486,7 @@ PositionsOf(std::span<const entt::entity, static_cast<size_t>(HandSystemInterfac
 std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
 HandSystem::GetPlayerHandPositions() const noexcept
 {
-	return PositionsOf(_hands);
+	return PositionsOf(GetPlayerHands());
 }
 
 std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
