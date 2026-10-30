@@ -266,6 +266,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::HeldByCreature::Drawn>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HeldByCreature::Drawn::position>("position")
 	    .Field<&openblack::ecs::components::HeldByCreature::Drawn::rotation>("rotation");
+	Reflect<openblack::ecs::components::HeldByCreature::Taken>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::HeldByCreature::Taken::position>("position")
+	    .Field<&openblack::ecs::components::HeldByCreature::Taken::place>("place");
 	Reflect<openblack::ecs::components::InHand::Drawn>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::InHand::Drawn::position>("position")
 	    .Field<&openblack::ecs::components::InHand::Drawn::rotation>("rotation");

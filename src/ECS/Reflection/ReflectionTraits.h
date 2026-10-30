@@ -30,6 +30,8 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 
+#include "Common/SavedPresentation.h"
+
 // The handles of the graphics library. Each one is a number that names a resource of one run only.
 namespace bgfx
 {
@@ -259,5 +261,12 @@ inline constexpr bool k_IsDuration<std::chrono::duration<Rep, Period>> = true;
 /// VisitSaved(self, visitor). The binary archive keeps such a value as these values. Private data stays private.
 template <typename Type>
 inline constexpr bool k_IsVisited = requires(Type& value) { Type::VisitSaved(value, [](auto & ...) {}); };
+
+/// A presentation part of a saved value (openblack::SavedPresentation). The binary archive keeps the part as it keeps
+/// a presentation value of a system.
+template <typename>
+inline constexpr bool k_IsSavedPresentation = false;
+template <typename Type>
+inline constexpr bool k_IsSavedPresentation<SavedPresentation<Type>> = true;
 
 } // namespace openblack::ecs::reflection::detail

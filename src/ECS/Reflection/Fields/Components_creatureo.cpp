@@ -80,5 +80,6 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	Reflect<components::TossHandVelocity>(context).Field<&components::TossHandVelocity::velocity>("velocity");
 	Reflect<components::HeldByCreature>(context)
 	    .Field<&components::HeldByCreature::creature>("creature")
-	    .Field<&components::HeldByCreature::drawn>("drawn");
+	    .Field<&components::HeldByCreature::drawn>("drawn")
+	    .Field<&components::HeldByCreature::takenFrom>("takenFrom");
 }

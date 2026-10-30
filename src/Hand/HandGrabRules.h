@@ -144,6 +144,14 @@ struct Gate
 };
 /// Whether a press on a thing takes it; otherwise the press is a tap
 [[nodiscard]] bool PassesGate(const Gate& gate);
+/// Whether a press on a thing that the hand does not take clicks the thing and taps it at once. This is true for a thing
+/// that the hand could hold (a valid kind that a script does not stop), for a thing that takes taps, and for any thing
+/// while the leash is loose in the hand. A press on another thing is a press on the land, and only the release clicks
+/// the thing.
+[[nodiscard]] constexpr bool PressTapsThing(const Gate& gate, bool validToTap, bool leashHeldLoose)
+{
+	return (gate.valid && !gate.cannotBePickedUp) || validToTap || leashHeldLoose;
+}
 /// Why a press on a thing doesn't take it, in a few words; empty when it does
 [[nodiscard]] std::string_view GateRefusal(const Gate& gate);
 

@@ -35,6 +35,7 @@ public:
 
 	void StopVoices() override;
 	void Update(const Frame& frame) override;
+	void TakeClick(bool click, bool skipKey) override;
 	void ProcessTurn(uint32_t milliseconds) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;
 	bool RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction) override;
@@ -70,8 +71,7 @@ private:
 	TextChoices _textChoices;
 	/// The advisors' line as the scripts time it on their clock: from its start delay, for the length of its sample
 	std::optional<audio::SilentPlayback> _scriptAdvisorLine;
-	bool _inTemple {false};
-	/// The player's click and key of the frames since the last turn
+	/// The player's click and key that came since the last turn of the dialogue
 	bool _pendingClick {false};
 	bool _pendingSkipKey {false};
 };

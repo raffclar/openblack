@@ -329,6 +329,7 @@
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
 #include "Hand/ScriptHandState.h"
+#include "Help/DialogueText.h"
 #include "Help/HelpProfile.h"
 #include "Help/SingAlong.h"
 #include "Help/Spirits.h"
@@ -2566,10 +2567,12 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 			{
 				std::ignore = Locator::helpProfileSystem::value().MakeReport(false, std::nullopt, false);
 			}
+			std::ignore = TakeDialogueClick();
 			break;
 		}
 		ReportHand();
 		ReportHelp();
+		SendDialogueClick();
 		Locator::playerCommandSystem::value().SendOpenBlock();
 		break;
 	case Step::FrameTime:
@@ -3387,6 +3390,33 @@ void Game::UpdateAdvisors()
 	    .tickMs = machine_clock::Ticks(),
 	    .wideScreen = Locator::cinematicDirectorSystem::value().IsWideScreenOn(),
 	});
+}
+
+void Game::SendDialogueClick()
+{
+	// Nor can the player click or key through the advisors' lines while a hand demonstration plays
+	const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying();
+	const bool click = TakeDialogueClick() && !demoPlaying;
+	const bool skipKey = !demoPlaying && DialogueSkipKeyDown();
+	if (!click && !skipKey)
+	{
+		return;
+	}
+	// In a game alone the world's turns stop in the temple, so the temple's own turns take the click
+	const bool templeTakes = help::TempleTurnsTakeTheClick({
+	    .networkGame = Locator::time::value().IsNetworkGame(),
+	    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+	    .templeGoesIn = Locator::temple::has_value() && Locator::temple::value().GoesInAfterFrame(),
+	});
+	if (templeTakes)
+	{
+		if (Locator::helpTextSystem::has_value())
+		{
+			Locator::helpTextSystem::value().TakeClick(click, skipKey);
+		}
+		return;
+	}
+	Locator::playerCommandSystem::value().Submit(player_commands::DialogueClick {.click = click, .skipKey = skipKey});
 }
 
 bool Game::TakeDialogueClick()

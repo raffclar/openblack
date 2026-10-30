@@ -45,6 +45,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
@@ -415,6 +416,14 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::helpProfileSystem::has_value() && PlayerOfThisComputer(command.player))
 			    {
 				    openblack::Locator::helpProfileSystem::value().DoReport(action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, DialogueClick>)
+		    {
+			    // The dialogue of the help texts is of this computer: only the computer of the player takes the click
+			    if (openblack::Locator::helpTextSystem::has_value() && PlayerOfThisComputer(command.player))
+			    {
+				    openblack::Locator::helpTextSystem::value().TakeClick(action.click, action.skipKey);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HelpQuery>)

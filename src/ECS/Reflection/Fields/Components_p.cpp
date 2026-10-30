@@ -16,6 +16,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerCreatures.h"
+#include "ECS/Components/PlayerHands.h"
 #include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Poisoned.h"
@@ -61,6 +62,9 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::Player::windResistance>("windResistance")
 	    .Field<&components::Player::miracles>("miracles");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");
+	Reflect<components::PlayerHands>(context)
+	    .Field<&components::PlayerHands::left>("left")
+	    .Field<&components::PlayerHands::right>("right");
 	Reflect<components::PlayerAllies>(context).Field<&components::PlayerAllies::strength>("strength", {k_PlayerNamesNames});
 	Reflect<components::ComputerAttitudes>(context).Field<&components::ComputerAttitudes::kept>("kept", {k_PlayerNamesNames});
 	Reflect<components::PlayerInfluencePower>(context)

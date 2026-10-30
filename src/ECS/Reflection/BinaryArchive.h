@@ -670,6 +670,10 @@ void Save(BinaryWriter& out, const Type& value)
 	{
 		Save(out, value.count());
 	}
+	else if constexpr (detail::k_IsSavedPresentation<Type>)
+	{
+		SavePresentation(out, *value.value);
+	}
 	else if constexpr (detail::k_IsVisited<Type>)
 	{
 		Type::VisitSaved(value, [&out](const auto&... fields) { (Save(out, fields), ...); });
@@ -933,6 +937,10 @@ void Load(BinaryReader& in, Type& value)
 		typename Type::rep count {};
 		Load(in, count);
 		value = Type(count);
+	}
+	else if constexpr (detail::k_IsSavedPresentation<Type>)
+	{
+		Load(in, *value.value);
 	}
 	else if constexpr (detail::k_IsVisited<Type>)
 	{

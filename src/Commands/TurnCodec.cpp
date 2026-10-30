@@ -320,6 +320,9 @@ void WriteAction(Writer& out, const Action& action)
 	               [](const QuickSave& /*command*/) {},
 	               [](const QuickLoad& /*command*/) {},
 	               [](const IconChargeStop& /*command*/) {},
+	               [&out](const DialogueClick& command) {
+		               out.Byte(static_cast<uint8_t>((command.click ? 1u : 0u) | (command.skipKey ? 2u : 0u)));
+	               },
 	               [&out](const MusicMood& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.track);
@@ -723,6 +726,16 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::IconChargeStop:
 		action = IconChargeStop {};
 		return DecodeError::None;
+	case CommandTag::DialogueClick:
+	{
+		const auto flags = in.Byte();
+		if (flags > 3)
+		{
+			return DecodeError::Value;
+		}
+		action = DialogueClick {.click = (flags & 1u) != 0, .skipKey = (flags & 2u) != 0};
+		return DecodeError::None;
+	}
 	case CommandTag::MusicMood:
 	{
 		const auto creature = in.Entity();
@@ -875,6 +888,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const QuickLoad& /*command*/) { return CommandTag::QuickLoad; },
 	                      [](const MusicMood& /*command*/) { return CommandTag::MusicMood; },
 	                      [](const IconChargeStop& /*command*/) { return CommandTag::IconChargeStop; },
+	                      [](const DialogueClick& /*command*/) { return CommandTag::DialogueClick; },
 	                  },
 	                  action);
 }
@@ -932,6 +946,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const QuickLoad& /*command*/) { return size_t {0}; },
 	                   [](const MusicMood& /*command*/) { return k_Entity + 4 + 4; },
 	                   [](const IconChargeStop& /*command*/) { return size_t {0}; },
+	                   [](const DialogueClick& /*command*/) { return size_t {1}; },
 	               },
 	               action);
 	return 1 + fields;
