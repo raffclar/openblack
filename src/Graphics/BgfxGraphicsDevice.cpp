@@ -50,26 +50,61 @@ uint16_t IndexFlags(bool wide)
 {
 	return wide ? BGFX_BUFFER_INDEX32 : BGFX_BUFFER_NONE;
 }
+
+// The world gives the flags and the handles of the graphics library with its own constants
+static_assert(texture_flags::k_None == BGFX_TEXTURE_NONE);
+static_assert(texture_flags::k_MirrorU == BGFX_SAMPLER_U_MIRROR);
+static_assert(texture_flags::k_ClampU == BGFX_SAMPLER_U_CLAMP);
+static_assert(texture_flags::k_BorderU == BGFX_SAMPLER_U_BORDER);
+static_assert(texture_flags::k_MirrorV == BGFX_SAMPLER_V_MIRROR);
+static_assert(texture_flags::k_ClampV == BGFX_SAMPLER_V_CLAMP);
+static_assert(texture_flags::k_BorderV == BGFX_SAMPLER_V_BORDER);
+static_assert(texture_flags::k_Point == BGFX_SAMPLER_POINT);
+static_assert(k_InvalidHandleId == bgfx::kInvalidHandle);
+
+/// The memory of the graphics library that device memory is. The device gives the memory of the graphics library as
+/// device memory, so the conversion gives back the first pointer.
+const bgfx::Memory* ToBgfx(const DeviceMemory* memory)
+{
+	return reinterpret_cast<const bgfx::Memory*>(memory);
+}
+
+const DeviceMemory* FromBgfx(const bgfx::Memory* memory)
+{
+	return reinterpret_cast<const DeviceMemory*>(memory);
+}
 } // namespace
 
-const bgfx::Memory* BgfxGraphicsDevice::Copy(const void* data, uint32_t size) const
+const DeviceMemory* BgfxGraphicsDevice::Copy(const void* data, uint32_t size) const
 {
-	return bgfx::copy(data, size);
+	return FromBgfx(bgfx::copy(data, size));
 }
 
-const bgfx::Memory* BgfxGraphicsDevice::Alloc(uint32_t size) const
+const DeviceMemory* BgfxGraphicsDevice::Alloc(uint32_t size) const
 {
-	return bgfx::alloc(size);
+	return FromBgfx(bgfx::alloc(size));
 }
 
-const bgfx::Memory* BgfxGraphicsDevice::Reference(const void* data, uint32_t size) const
+const DeviceMemory* BgfxGraphicsDevice::Reference(const void* data, uint32_t size) const
 {
-	return bgfx::makeRef(data, size);
+	return FromBgfx(bgfx::makeRef(data, size));
 }
 
-const bgfx::Caps* BgfxGraphicsDevice::GetCaps() const
+std::span<uint8_t> BgfxGraphicsDevice::Bytes(const DeviceMemory* memory) const
 {
-	return bgfx::getCaps();
+	const auto* bgfxMemory = ToBgfx(memory);
+	return {bgfxMemory->data, bgfxMemory->size};
+}
+
+bool BgfxGraphicsDevice::HasTextureFormat(TextureFormat format, TextureUse use) const
+{
+	const auto flag = use == TextureUse::VertexTexture ? BGFX_CAPS_FORMAT_TEXTURE_VERTEX : BGFX_CAPS_FORMAT_TEXTURE_2D;
+	return (bgfx::getCaps()->formats[toBgfx(format)] & flag) != 0;
+}
+
+uint32_t BgfxGraphicsDevice::MaxTextureSize() const
+{
+	return bgfx::getCaps()->limits.maxTextureSize;
 }
 
 void BgfxGraphicsDevice::Frame() const
@@ -78,15 +113,15 @@ void BgfxGraphicsDevice::Frame() const
 }
 
 TextureHandle BgfxGraphicsDevice::CreateTexture2D(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format,
-                                                  uint64_t flags, const bgfx::Memory* texels) const
+                                                  uint64_t flags, const DeviceMemory* texels) const
 {
-	return fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags, texels));
+	return fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags, ToBgfx(texels)));
 }
 
 void BgfxGraphicsDevice::UpdateTexture2D(TextureHandle texture, uint16_t layer, glm::u16vec2 origin, glm::u16vec2 size,
-                                         const bgfx::Memory* texels) const
+                                         const DeviceMemory* texels) const
 {
-	bgfx::updateTexture2D(toBgfx(texture), layer, 0, origin.x, origin.y, size.x, size.y, texels);
+	bgfx::updateTexture2D(toBgfx(texture), layer, 0, origin.x, origin.y, size.x, size.y, ToBgfx(texels));
 }
 
 void BgfxGraphicsDevice::ReadTexture(TextureHandle texture, uint16_t layer, void* texels) const
@@ -107,15 +142,15 @@ void BgfxGraphicsDevice::Destroy(TextureHandle texture) const
 	bgfx::destroy(toBgfx(texture));
 }
 
-VertexBufferHandle BgfxGraphicsDevice::CreateVertexBuffer(const bgfx::Memory* vertices, const VertexDecl& decl) const
+VertexBufferHandle BgfxGraphicsDevice::CreateVertexBuffer(const DeviceMemory* vertices, const VertexDecl& decl) const
 {
-	return fromBgfx(bgfx::createVertexBuffer(vertices, LayoutOf(decl)));
+	return fromBgfx(bgfx::createVertexBuffer(ToBgfx(vertices), LayoutOf(decl)));
 }
 
-DynamicVertexBufferHandle BgfxGraphicsDevice::CreateDynamicVertexBuffer(const bgfx::Memory* vertices,
+DynamicVertexBufferHandle BgfxGraphicsDevice::CreateDynamicVertexBuffer(const DeviceMemory* vertices,
                                                                         const VertexDecl& decl) const
 {
-	return fromBgfx(bgfx::createDynamicVertexBuffer(vertices, LayoutOf(decl)));
+	return fromBgfx(bgfx::createDynamicVertexBuffer(ToBgfx(vertices), LayoutOf(decl)));
 }
 
 VertexLayoutHandle BgfxGraphicsDevice::CreateVertexLayout(const VertexDecl& decl) const
@@ -123,9 +158,9 @@ VertexLayoutHandle BgfxGraphicsDevice::CreateVertexLayout(const VertexDecl& decl
 	return fromBgfx(bgfx::createVertexLayout(LayoutOf(decl)));
 }
 
-void BgfxGraphicsDevice::Update(DynamicVertexBufferHandle buffer, uint32_t firstVertex, const bgfx::Memory* vertices) const
+void BgfxGraphicsDevice::Update(DynamicVertexBufferHandle buffer, uint32_t firstVertex, const DeviceMemory* vertices) const
 {
-	bgfx::update(toBgfx(buffer), firstVertex, vertices);
+	bgfx::update(toBgfx(buffer), firstVertex, ToBgfx(vertices));
 }
 
 void BgfxGraphicsDevice::SetName(VertexBufferHandle buffer, std::string_view name) const
@@ -148,14 +183,14 @@ void BgfxGraphicsDevice::Destroy(VertexLayoutHandle layout) const
 	bgfx::destroy(toBgfx(layout));
 }
 
-IndexBufferHandle BgfxGraphicsDevice::CreateIndexBuffer(const bgfx::Memory* indices, bool wide) const
+IndexBufferHandle BgfxGraphicsDevice::CreateIndexBuffer(const DeviceMemory* indices, bool wide) const
 {
-	return fromBgfx(bgfx::createIndexBuffer(indices, IndexFlags(wide)));
+	return fromBgfx(bgfx::createIndexBuffer(ToBgfx(indices), IndexFlags(wide)));
 }
 
-DynamicIndexBufferHandle BgfxGraphicsDevice::CreateSharedIndexBuffer(const bgfx::Memory* indices, bool wide) const
+DynamicIndexBufferHandle BgfxGraphicsDevice::CreateSharedIndexBuffer(const DeviceMemory* indices, bool wide) const
 {
-	return fromBgfx(bgfx::createDynamicIndexBuffer(indices, IndexFlags(wide)));
+	return fromBgfx(bgfx::createDynamicIndexBuffer(ToBgfx(indices), IndexFlags(wide)));
 }
 
 void BgfxGraphicsDevice::SetName(IndexBufferHandle buffer, std::string_view name) const

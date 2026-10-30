@@ -17,6 +17,7 @@
 #include <glm/common.hpp>
 
 #include "InjectedInput.h"
+#include "InputDeviceInterface.h"
 
 using namespace openblack::input;
 
@@ -26,13 +27,14 @@ namespace
 /// The events waiting in the window's queue, left there
 std::vector<SDL_Event> PeekQueue()
 {
-	const auto count = SDL_PeepEvents(nullptr, 0, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+	auto& device = Device();
+	const auto count = device.PeepEvents({}, SDL_PEEKEVENT);
 	if (count <= 0)
 	{
 		return {};
 	}
 	std::vector<SDL_Event> events(static_cast<size_t>(count));
-	const auto peeked = SDL_PeepEvents(events.data(), count, SDL_PEEKEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+	const auto peeked = device.PeepEvents(events, SDL_PEEKEVENT);
 	events.resize(static_cast<size_t>(std::max(peeked, 0)));
 	return events;
 }
@@ -121,11 +123,11 @@ void openblack::input::PumpQueued(std::optional<ScriptedPointer>& pointer, glm::
 		return;
 	}
 	// Every event is taken out and put back in its place, the scripted mouse's written as the window reports them now
-	const auto taken =
-	    SDL_PeepEvents(queued.data(), static_cast<int>(queued.size()), SDL_GETEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+	auto& device = Device();
+	const auto taken = device.PeepEvents(queued, SDL_GETEVENT);
 	queued.resize(static_cast<size_t>(std::max(taken, 0)));
 	PumpAll(pointer, queued, windowSize);
-	SDL_PeepEvents(queued.data(), static_cast<int>(queued.size()), SDL_ADDEVENT, SDL_FIRSTEVENT, SDL_LASTEVENT);
+	device.PeepEvents(queued, SDL_ADDEVENT);
 }
 
 ScriptedPointer openblack::input::QueuedAhead(ScriptedPointer pointer, glm::ivec2 windowSize)

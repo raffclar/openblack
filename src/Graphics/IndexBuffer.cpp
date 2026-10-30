@@ -14,12 +14,10 @@
 #include <string>
 #include <utility>
 
-#include <bgfx/bgfx.h>
 #include <spdlog/spdlog.h>
 
 #include "Common/MainThreadQueue.h"
 #include "GraphicsDeviceInterface.h"
-#include "GraphicsHandleBgfx.h"
 #include "Locator.h"
 #include "MainThreadWork.h"
 #include "Visual/UploadPacer.h"
@@ -30,8 +28,8 @@ IndexBuffer::IndexBuffer(std::string name, const void* indices, uint32_t indexCo
     : _name(std::move(name))
     , _count(indexCount)
     , _type(type)
-    , _handle(BGFX_INVALID_HANDLE)
-    , _sharedHandle(BGFX_INVALID_HANDLE)
+    , _handle(InvalidHandle<IndexBufferHandle>())
+    , _sharedHandle(InvalidHandle<DynamicIndexBufferHandle>())
 {
 	assert(indices != nullptr);
 	assert(indexCount > 0);
@@ -46,12 +44,12 @@ IndexBuffer::IndexBuffer(std::string name, const void* indices, uint32_t indexCo
 IndexBuffer::IndexBuffer(std::string name, const void* mem, Type type, Storage storage)
     : _name(std::move(name))
     , _type(type)
-    , _handle(BGFX_INVALID_HANDLE)
-    , _sharedHandle(BGFX_INVALID_HANDLE)
+    , _handle(InvalidHandle<IndexBufferHandle>())
+    , _sharedHandle(InvalidHandle<DynamicIndexBufferHandle>())
     , _storage(storage)
 {
-	const auto* memBgfx = static_cast<const bgfx::Memory*>(mem);
-	_count = memBgfx->size / sizeof(uint16_t);
+	const auto* memBgfx = static_cast<const DeviceMemory*>(mem);
+	_count = static_cast<uint32_t>(Locator::graphicsDevice::value().Bytes(memBgfx).size() / sizeof(uint16_t));
 	Make(memBgfx);
 }
 
@@ -59,23 +57,23 @@ void IndexBuffer::Make(const void* memory)
 {
 	// The graphics library makes the buffer on the main thread: a turn on another thread gives that work to the main
 	// thread, which makes the buffer before the next draw
-	const auto* memBgfx = static_cast<const bgfx::Memory*>(memory);
+	const auto* memBgfx = static_cast<const DeviceMemory*>(memory);
 	PostToMainThread(MainThreadApi::Graphics, [this, memBgfx] {
-		UploadPacer::Pace(memBgfx->size);
+		UploadPacer::Pace(static_cast<uint32_t>(Locator::graphicsDevice::value().Bytes(memBgfx).size()));
 		const bool wide = _type == Type::Uint32;
 		const auto& device = Locator::graphicsDevice::value();
 		if (_storage == Storage::Shared)
 		{
 			// bgfx gives a part of its shared buffer. A name is only for a buffer of its own.
 			_sharedHandle = device.CreateSharedIndexBuffer(memBgfx, wide);
-			if (!bgfx::isValid(toBgfx(_sharedHandle)))
+			if (!IsValidHandle(_sharedHandle))
 			{
 				SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
 			}
 			return;
 		}
 		_handle = device.CreateIndexBuffer(memBgfx, wide);
-		if (!bgfx::isValid(toBgfx(_handle)))
+		if (!IsValidHandle(_handle))
 		{
 			// Out of handles, setting a name would write past bgfx's own arrays; the buffer is left empty and isn't drawn
 			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
@@ -88,11 +86,11 @@ void IndexBuffer::Make(const void* memory)
 IndexBuffer::~IndexBuffer()
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "IndexBuffer::~IndexBuffer");
-	if (bgfx::isValid(toBgfx(_handle)))
+	if (IsValidHandle(_handle))
 	{
 		Locator::graphicsDevice::value().Destroy(_handle);
 	}
-	if (_storage == Storage::Shared && bgfx::isValid(toBgfx(_sharedHandle)))
+	if (_storage == Storage::Shared && IsValidHandle(_sharedHandle))
 	{
 		Locator::graphicsDevice::value().Destroy(_sharedHandle);
 	}
@@ -125,5 +123,5 @@ uint32_t IndexBuffer::GetTypeSize(Type type)
 
 bool IndexBuffer::IsValid() const noexcept
 {
-	return _storage == Storage::Shared ? bgfx::isValid(toBgfx(_sharedHandle)) : bgfx::isValid(toBgfx(_handle));
+	return _storage == Storage::Shared ? IsValidHandle(_sharedHandle) : IsValidHandle(_handle);
 }

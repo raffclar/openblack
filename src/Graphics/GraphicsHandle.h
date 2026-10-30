@@ -64,4 +64,21 @@ struct ProgramHandle
 	uint32_t id = 0;
 };
 
+/// The number of a handle that the device did not make, for example when it has no free handles
+constexpr uint32_t k_InvalidHandleId = 0xFFFF;
+
+/// A handle that the device did not make
+template <typename Handle>
+[[nodiscard]] constexpr Handle InvalidHandle() noexcept
+{
+	return Handle {k_InvalidHandleId};
+}
+
+/// Whether the device made the handle. The device keeps the number of a handle in 16 bits.
+template <typename Handle>
+[[nodiscard]] constexpr bool IsValidHandle(Handle handle) noexcept
+{
+	return static_cast<uint16_t>(handle.id) != k_InvalidHandleId;
+}
+
 } // namespace openblack::graphics
