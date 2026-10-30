@@ -42,6 +42,8 @@ import sim_run  # noqa: E402
 
 # The slots of the three saves of a saved-game round trip: none of them is an autosave slot
 SLOTS = (10, 11, 12)
+# How long a step of the turns before a check can take, in seconds
+STEP_WAIT = 120.0
 # How long the tool waits for the writer of the game to put a save in its slot, in seconds
 WRITE_TIMEOUT = 60.0
 
@@ -136,6 +138,21 @@ def scenario_ids(game, wanted):
             return ids
 
 
+def play_turns(game, turns):
+    """Plays some turns and holds the game there: whether the turns went by. A scenario that holds the clock, as the
+    temple does, plays no turn; the game is then held where it is after a short wait."""
+    game.call("game.step", {"turns": turns})
+    deadline = time.monotonic() + STEP_WAIT
+    while time.monotonic() < deadline:
+        if game.process.poll() is not None:
+            raise RuntimeError("the game stopped in a step")
+        if game.call("game.state").get("stepping") is None:
+            return True
+        time.sleep(0.05)
+    game.call("game.pause")
+    return False
+
+
 def start(options):
     game = sim_run.Game(options.exe, game_arguments(options), options.out)
     game.connect()
@@ -158,13 +175,17 @@ def sweep(options, record):
                 record.write(json.dumps(results[-1]) + "\n")
                 record.flush()
             return results
-        for scenario in scenario_ids(game, options.scenarios):
+        scenarios = scenario_ids(game, options.scenarios)
+        if options.start_at:
+            scenarios = scenarios[scenarios.index(options.start_at):]
+        for scenario in scenarios:
             try:
                 game.call("game.scenario", {"id": scenario})
                 game.wait_ready()
-                if options.turns > 0:
-                    game.step_turns(options.turns)
+                played = play_turns(game, options.turns) if options.turns > 0 else True
                 entry = check(game, options, scenario)
+                if not played:
+                    entry["held"] = True
             except (RuntimeError, OSError, inspector.GameError) as error:
                 entry = {"check": scenario, "error": str(error)}
                 if game.process.poll() is not None:
@@ -191,6 +212,7 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--scenarios", default="all", help="'all' or a comma list of scenario ids")
     parser.add_argument("--turns", type=int, default=100, help="the turns each scenario plays before its check")
+    parser.add_argument("--start-at", default=None, help="start at this scenario of the list")
     parser.add_argument("--land", default=None, help="check a land, as Land1.txt, in place of the scenarios")
     parser.add_argument("--opening", default=None, help="with --land: the opening to skip, as cow")
     parser.add_argument("--at", default="0,500,2000", help="with --land: the turns of the checks")
