@@ -68,12 +68,6 @@ using creature_desires::Desire;
 namespace
 {
 
-constexpr auto k_PlayerCount = static_cast<size_t>(PlayerNames::_COUNT);
-/// The players whose attacks a town keeps for the threat to it
-constexpr size_t k_ThreatPlayers = computer_mind_rules::k_TownAttackPlayers;
-/// The players in the game that a town looks at when it finds a close rival of the god
-constexpr size_t k_RivalPlayers = 7;
-
 /// The game turn now
 uint32_t Turn()
 {
@@ -233,9 +227,10 @@ computer_mind_rules::TownBeliefFacts BeliefOf(entt::entity town)
 	computer_mind_rules::TownBeliefFacts facts;
 	if (const auto* impression = Entities().TryGet<const TownImpression>(town))
 	{
-		// The rules of the mind look at the players of a land
-		std::copy_n(impression->belief.belief.begin(), facts.belief.size(), facts.belief.begin());
-		std::copy_n(impression->belief.recent.begin(), facts.recent.size(), facts.recent.begin());
+		// The rules of the mind look at each player of the game (deviation 167)
+		const auto players = std::min(ecs::game_players::Count(), facts.belief.size());
+		std::copy_n(impression->belief.belief.begin(), players, facts.belief.begin());
+		std::copy_n(impression->belief.recent.begin(), players, facts.recent.begin());
 	}
 	return facts;
 }
@@ -399,10 +394,10 @@ float CheckTownForProtection(RuleContext& context, computer_mind::Mind& mind, ui
 /// town is the node's object.
 float CheckTownsForBeliefAttack(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 {
-	std::array<bool, k_PlayerCount> allies {};
-	for (size_t number = 0; number < k_PlayerCount; ++number)
+	std::array<bool, player_slots::k_PlayerNumbers> allies {};
+	for (const auto player : ecs::game_players::All())
 	{
-		allies.at(number) = KeepsAsAlly(context.player, static_cast<PlayerNames>(number));
+		allies.at(static_cast<size_t>(player)) = KeepsAsAlly(context.player, player);
 	}
 	const auto towns = TownsOf(context.player);
 	std::vector<float> attacks;
@@ -499,12 +494,12 @@ float CastSpellToDefendAgainstBelief(RuleContext& context, computer_mind::Mind& 
 	{
 		const auto belief = BeliefOf(town);
 		std::vector<float> rivals;
-		for (size_t number = 0; number < k_RivalPlayers; ++number)
+		// The gods of the game are the rivals, also the gods after the seventh (deviation 167)
+		for (const auto other : ecs::game_players::Gods())
 		{
-			const auto other = static_cast<PlayerNames>(number);
 			if (other != context.player && InGame(other) && !KeepsAsAlly(context.player, other))
 			{
-				rivals.push_back(belief.belief.at(number));
+				rivals.push_back(belief.belief.at(static_cast<size_t>(other)));
 			}
 		}
 		share = computer_mind_rules::CloseRivalShare(belief.belief.at(static_cast<size_t>(context.player)), rivals);
@@ -537,20 +532,24 @@ bool PerformDefendAgainstBelief(RuleContext& context, computer_mind::Mind& mind,
 
 std::optional<computer_mind_rules::TownThreat> computer_world::ThreatToTown(entt::entity town, uint32_t turn)
 {
-	std::array<computer_mind_rules::TownAttack, k_ThreatPlayers> attacks {};
-	if (const auto* aggression = Entities().TryGet<const TownAggression>(town))
+	// The town keeps the attacks of each god of the game, also of the gods after the seventh (deviation 167)
+	std::array<computer_mind_rules::TownAttack, player_slots::k_PlayerNumbers> attacks {};
+	size_t count = 0;
+	const auto* aggression = Entities().TryGet<const TownAggression>(town);
+	for (const auto god : ecs::game_players::Gods())
 	{
-		const auto& record = aggression->record;
-		for (size_t number = 0; number < k_ThreatPlayers; ++number)
+		auto& attack = attacks.at(count++);
+		if (aggression != nullptr)
 		{
-			const auto& harm = record.lastHarms.at(number);
-			attacks.at(number) = {.turn = record.lastTurns.at(number),
-			                      .miracleHarm = harm.burn,
-			                      .thingHarm = harm.crush,
-			                      .otherThingHarm = harm.hit};
+			const auto number = static_cast<size_t>(god);
+			const auto& harm = aggression->record.lastHarms.at(number);
+			attack = {.turn = aggression->record.lastTurns.at(number),
+			          .miracleHarm = harm.burn,
+			          .thingHarm = harm.crush,
+			          .otherThingHarm = harm.hit};
 		}
 	}
-	return computer_mind_rules::ThreatOf(attacks, turn);
+	return computer_mind_rules::ThreatOf(std::span(attacks).first(count), turn);
 }
 
 float computer_world::ShieldForTown(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
