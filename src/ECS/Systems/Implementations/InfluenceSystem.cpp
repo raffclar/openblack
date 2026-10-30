@@ -163,6 +163,18 @@ std::array<entt::entity, player_slots::k_PlayerNumbers> Citadels()
 	return citadels;
 }
 
+/// The citadel of one player: the first temple of the player, as Citadels finds it, or none
+entt::entity CitadelOf(PlayerNames player)
+{
+	if (static_cast<size_t>(player) >= player_slots::k_PlayerNumbers)
+	{
+		return entt::null;
+	}
+	return Locator::entitiesRegistry::value()
+	    .FindFirst<const Temple>([player](entt::entity, const Temple& temple) { return temple.owner == player; })
+	    .value_or(entt::null);
+}
+
 /// The reach of a citadel's heart for the land that is played now
 float HeartReachForLand()
 {
@@ -516,7 +528,7 @@ void InfluenceSystem::NoteInfluencePower(PlayerNames player)
 		return;
 	}
 	float citadelReach = 0.0f;
-	if (const auto citadel = Citadels().at(static_cast<size_t>(player)); citadel != entt::null)
+	if (const auto citadel = CitadelOf(player); citadel != entt::null)
 	{
 		citadelReach = CitadelReach(citadel);
 	}
@@ -818,7 +830,8 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	};
 	// In a network game a player with no temple has no influence at all. A developer tool's network game on the testbed,
 	// which has no temples, is the exception: its hands could do nothing else.
-	const bool hasTemple = Citadels().at(static_cast<size_t>(player)) != entt::null;
+	const auto citadel = CitadelOf(player);
+	const bool hasTemple = citadel != entt::null;
 	const bool testbed = Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed();
 	if (!openblack::influence_rules::CanHaveInfluence(
 	        Locator::time::has_value() && Locator::time::value().IsNetworkGame() && !testbed, hasTemple))
@@ -847,7 +860,7 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	}
 	float sum = 0.0f;
 	// The citadel's reach, where it reaches
-	if (const auto citadel = Citadels().at(static_cast<size_t>(player)); citadel != entt::null)
+	if (hasTemple)
 	{
 		const float reach = CitadelReach(citadel);
 		if (const auto* transform = registry.TryGet<const Transform>(citadel);

@@ -10,6 +10,7 @@
 #include "SkeletalAnimation.h"
 
 #include <cmath>
+#include <cstring>
 
 #include <algorithm>
 #include <array>
@@ -235,13 +236,105 @@ uint32_t Destination(std::span<const uint32_t> mirror, uint32_t joint)
 	return joint < mirror.size() ? mirror[joint] : joint;
 }
 
+/// A keyframe rotation between the turns of two frames, blended on the matrices' elements and made unit again
+Matrix BlendTurns(const Matrix& from, const Matrix& to, float t)
+{
+	return NormaliseRows(Lerp(from, to, t));
+}
+
 /// A keyframe rotation between two frames, blended on the matrices' elements and made unit again
 Matrix BlendKeyframes(const glm::vec3& from, const glm::vec3& to, float t, bool mirrored)
 {
-	return NormaliseRows(
-	    Lerp(RotationYXZ(mirrored ? MirrorEuler(from) : from), RotationYXZ(mirrored ? MirrorEuler(to) : to), t));
+	return BlendTurns(RotationYXZ(mirrored ? MirrorEuler(from) : from), RotationYXZ(mirrored ? MirrorEuler(to) : to), t);
 }
+
+/// The turns of the turned bones of two frames of an animation. They come from a store when the caller gives one.
+class FramePairTurns
+{
+public:
+	FramePairTurns(KeyframeTurns* turns, const Animation& animation, size_t from, size_t to, bool mirrored)
+	    : _animation(animation)
+	    , _from(from)
+	    , _to(to)
+	    , _mirrored(mirrored)
+	{
+		if (turns != nullptr)
+		{
+			_fromTurns = turns->Of(animation, from, mirrored);
+			_toTurns = turns->Of(animation, to, mirrored);
+		}
+	}
+
+	/// The turn of a turned bone between the two frames
+	[[nodiscard]] Matrix Blend(size_t slot, float t) const
+	{
+		if (slot < _fromTurns.size() && slot < _toTurns.size())
+		{
+			return BlendTurns(_fromTurns[slot], _toTurns[slot], t);
+		}
+		return BlendKeyframes(_animation.frames[_from].eulerAngles[slot], _animation.frames[_to].eulerAngles[slot], t,
+		                      _mirrored);
+	}
+
+	/// The turn of a turned bone in the first of the two frames
+	[[nodiscard]] Matrix First(size_t slot) const
+	{
+		if (slot < _fromTurns.size())
+		{
+			return _fromTurns[slot];
+		}
+		const auto& euler = _animation.frames[_from].eulerAngles[slot];
+		return RotationYXZ(_mirrored ? MirrorEuler(euler) : euler);
+	}
+
+private:
+	const Animation& _animation;
+	size_t _from;
+	size_t _to;
+	bool _mirrored;
+	std::span<const Matrix> _fromTurns;
+	std::span<const Matrix> _toTurns;
+};
+
 } // namespace
+
+std::span<const Matrix> KeyframeTurns::Of(const Animation& animation, size_t frame, bool mirrored)
+{
+	auto& frames = _animations[&animation];
+	if (frames.size() != animation.frames.size())
+	{
+		frames.assign(animation.frames.size(), {});
+	}
+	auto& kept = frames[frame];
+	const auto& angles = animation.frames[frame].eulerAngles;
+	// The bits of the angles must be the same. Thus the store does not give the turn of minus zero for plus zero.
+	const bool same =
+	    kept.angles.size() == angles.size() &&
+	    (angles.empty() || std::memcmp(kept.angles.data(), angles.data(), angles.size() * sizeof(glm::vec3)) == 0);
+	if (!same)
+	{
+		kept.angles = angles;
+		kept.turns.clear();
+		kept.mirroredTurns.clear();
+	}
+	auto& turns = mirrored ? kept.mirroredTurns : kept.turns;
+	if (turns.size() != angles.size())
+	{
+		turns.resize(angles.size());
+		std::ranges::transform(angles, turns.begin(), [mirrored](const glm::vec3& euler) {
+			return RotationYXZ(mirrored ? MirrorEuler(euler) : euler);
+		});
+	}
+	return turns;
+}
+
+void KeyframeTurns::Trim()
+{
+	if (_animations.size() > k_MostAnimations)
+	{
+		_animations.clear();
+	}
+}
 
 namespace
 {
@@ -328,12 +421,12 @@ std::vector<Pose> MirrorPoses(std::span<const Pose> poses, const Skeleton& skele
 }
 
 std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand, uint32_t timeMs, const Skeleton& skeleton,
-                              std::span<const uint32_t> mirror)
+                              std::span<const uint32_t> mirror, KeyframeTurns* turns)
 {
 	// Played left to right, the pose is the animation's reflected across the body
 	if (!mirror.empty())
 	{
-		return MirrorPoses(SampleCycle(animation, stand, timeMs, skeleton, {}), skeleton, mirror);
+		return MirrorPoses(SampleCycle(animation, stand, timeMs, skeleton, {}, turns), skeleton, mirror);
 	}
 	const auto count = skeleton.parents.size();
 	std::vector<Pose> poses(count, Pose {.rotation = k_Identity, .translation = glm::vec3(0.0f)});
@@ -347,6 +440,8 @@ std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand
 	const JointSlots rotated(animation.rotatedJoints, count);
 	const JointSlots translated(animation.translatedJoints, count);
 	const auto [from, to, t] = FindFrames(animation, timeMs);
+	const FramePairTurns keyframes(turns, animation, from, to, false);
+	const auto standTurns = turns != nullptr && standFrame != nullptr ? turns->Of(stand, 0, false) : std::span<const Matrix> {};
 
 	for (uint32_t joint = 0; joint < count; ++joint)
 	{
@@ -356,12 +451,12 @@ std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand
 		Matrix rotation = k_Identity;
 		if (const auto slot = rotated[joint])
 		{
-			rotation =
-			    BlendKeyframes(animation.frames[from].eulerAngles[*slot], animation.frames[to].eulerAngles[*slot], t, false);
+			rotation = keyframes.Blend(*slot, t);
 		}
 		else if (standFrame != nullptr && standRotated[joint])
 		{
-			rotation = RotationYXZ(standFrame->eulerAngles[*standRotated[joint]]);
+			const auto standSlot = *standRotated[joint];
+			rotation = standSlot < standTurns.size() ? standTurns[standSlot] : RotationYXZ(standFrame->eulerAngles[standSlot]);
 		}
 		pose.rotation = Multiply(skeleton.restRotations[joint], rotation);
 		if (joint != 0 && parent != k_NoParent)
@@ -388,7 +483,7 @@ namespace
 /// Sets the turns of the bones that an animation turns, played left to right: each bone's keyframes go to its mirror bone,
 /// reflected across the body. The bones that it does not turn keep their poses.
 void SetMirroredLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t timeMs, const Skeleton& skeleton,
-                      std::span<const uint32_t> mirror)
+                      std::span<const uint32_t> mirror, KeyframeTurns* turns)
 {
 	const auto count = std::min(poses.size(), skeleton.parents.size());
 	if (animation.frames.empty() || count == 0)
@@ -396,6 +491,7 @@ void SetMirroredLayer(std::vector<Pose>& poses, const Animation& animation, uint
 		return;
 	}
 	const auto [from, to, t] = FindFrames(animation, timeMs);
+	const FramePairTurns keyframes(turns, animation, from, to, true);
 	for (size_t slot = 0; slot < animation.rotatedJoints.size(); ++slot)
 	{
 		const auto destination = Destination(mirror, animation.rotatedJoints[slot]);
@@ -404,9 +500,7 @@ void SetMirroredLayer(std::vector<Pose>& poses, const Animation& animation, uint
 			continue;
 		}
 		const auto parent = skeleton.parents[destination];
-		auto rotation =
-		    Multiply(skeleton.restRotations[destination],
-		             BlendKeyframes(animation.frames[from].eulerAngles[slot], animation.frames[to].eulerAngles[slot], t, true));
+		auto rotation = Multiply(skeleton.restRotations[destination], keyframes.Blend(slot, t));
 		if (destination != 0 && parent != k_NoParent && parent < count)
 		{
 			rotation = Multiply(rotation, skeleton.inverseRestRotations[parent]);
@@ -417,11 +511,11 @@ void SetMirroredLayer(std::vector<Pose>& poses, const Animation& animation, uint
 } // namespace
 
 void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t timeMs, const Skeleton& skeleton,
-              const Animation* fill, std::span<const uint32_t> mirror)
+              const Animation* fill, std::span<const uint32_t> mirror, KeyframeTurns* turns)
 {
 	if (!mirror.empty())
 	{
-		SetMirroredLayer(poses, animation, timeMs, skeleton, mirror);
+		SetMirroredLayer(poses, animation, timeMs, skeleton, mirror, turns);
 		return;
 	}
 	const auto count = std::min(poses.size(), skeleton.parents.size());
@@ -439,6 +533,12 @@ void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t tim
 	const JointSlots rotated(animation.rotatedJoints, count);
 	const JointSlots translated(animation.translatedJoints, count);
 	const auto [from, to, t] = FindFrames(animation, timeMs);
+	const FramePairTurns keyframes(turns, animation, from, to, false);
+	std::optional<FramePairTurns> fillTurns;
+	if (fillFrame != nullptr)
+	{
+		fillTurns.emplace(turns, *fill, 0, 0, false);
+	}
 
 	for (uint32_t joint = 0; joint < count; ++joint)
 	{
@@ -447,12 +547,11 @@ void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t tim
 		std::optional<Matrix> rotation;
 		if (const auto slot = rotated[joint])
 		{
-			rotation =
-			    BlendKeyframes(animation.frames[from].eulerAngles[*slot], animation.frames[to].eulerAngles[*slot], t, false);
+			rotation = keyframes.Blend(*slot, t);
 		}
 		else if (fillFrame != nullptr && fillRotated[joint])
 		{
-			rotation = RotationYXZ(fillFrame->eulerAngles[*fillRotated[joint]]);
+			rotation = fillTurns->First(*fillRotated[joint]);
 		}
 		if (rotation)
 		{
@@ -560,7 +659,7 @@ std::vector<Pose> WeightedSumInMeshSpace(std::span<const std::vector<Pose>> pose
 }
 
 void AddLayer(std::vector<Pose>& poses, const Animation& layer, uint32_t timeMs, size_t referenceFrame,
-              const Skeleton& skeleton, std::span<const uint32_t> mirror)
+              const Skeleton& skeleton, std::span<const uint32_t> mirror, KeyframeTurns* turns)
 {
 	if (layer.frames.empty() || poses.empty())
 	{
@@ -568,8 +667,11 @@ void AddLayer(std::vector<Pose>& poses, const Animation& layer, uint32_t timeMs,
 	}
 	const bool mirrored = !mirror.empty();
 	const auto count = std::min(poses.size(), skeleton.parents.size());
-	const auto& reference = layer.frames[std::min(referenceFrame, layer.frames.size() - 1)];
+	const auto referenceIndex = std::min(referenceFrame, layer.frames.size() - 1);
+	const auto& reference = layer.frames[referenceIndex];
 	const auto [from, to, t] = FindFrames(layer, timeMs);
+	const FramePairTurns keyframes(turns, layer, from, to, mirrored);
+	const FramePairTurns referenceTurns(turns, layer, referenceIndex, referenceIndex, mirrored);
 
 	for (size_t slot = 0; slot < layer.rotatedJoints.size(); ++slot)
 	{
@@ -579,9 +681,7 @@ void AddLayer(std::vector<Pose>& poses, const Animation& layer, uint32_t timeMs,
 		{
 			continue;
 		}
-		const auto keyframe =
-		    BlendKeyframes(layer.frames[from].eulerAngles[slot], layer.frames[to].eulerAngles[slot], t, mirrored);
-		const auto referenceEuler = mirrored ? MirrorEuler(reference.eulerAngles[slot]) : reference.eulerAngles[slot];
+		const auto keyframe = keyframes.Blend(slot, t);
 		// A bone's keyframe rotation sits just before its parent's inverse rest rotation; the layer's turn away from its
 		// reference goes in straight after the keyframe
 		const auto parent = skeleton.parents[destination];
@@ -591,7 +691,7 @@ void AddLayer(std::vector<Pose>& poses, const Animation& layer, uint32_t timeMs,
 		{
 			rotation = Multiply(rotation, skeleton.restRotations[parent]);
 		}
-		rotation = Multiply(Multiply(rotation, Transpose(RotationYXZ(referenceEuler))), keyframe);
+		rotation = Multiply(Multiply(rotation, Transpose(referenceTurns.First(slot))), keyframe);
 		if (hasParent)
 		{
 			rotation = Multiply(rotation, skeleton.inverseRestRotations[parent]);

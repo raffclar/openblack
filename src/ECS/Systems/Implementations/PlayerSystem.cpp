@@ -94,7 +94,10 @@ openblack::player_kind::Facts PlayerSystem::FactsOf(PlayerNames name) const
 		const auto* mind = registry.Valid(*player) ? registry.TryGet<const ComputerPlayer>(*player) : nullptr;
 		computerMind = mind != nullptr && mind->marked;
 	}
-	const bool hands = Locator::handSystem::has_value() && Locator::handSystem::value().GetHandsOf(name).has_value();
+	// Only a player of a network game with no computer mind is a person by its hands
+	const bool handsDecide = networkGame && !computerMind && name != PlayerNames::NEUTRAL;
+	const bool hands =
+	    handsDecide && Locator::handSystem::has_value() && Locator::handSystem::value().GetHandsOf(name).has_value();
 	return {.player = name, .networkGame = networkGame, .computerMind = computerMind, .hands = hands};
 }
 
