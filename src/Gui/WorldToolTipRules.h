@@ -50,6 +50,8 @@ enum class Subject : uint8_t
 	Altar,
 	/// A sign that shows what a thing needs, for example the wood flag of a workshop
 	NeedsSign,
+	/// A built workshop: how much of its scaffold it made
+	Workshop,
 };
 
 /// Whether the hand shows its tooltip over a thing only while the hand is within the player's influence. A temple's
@@ -71,6 +73,7 @@ enum class Subject : uint8_t
 	case Subject::DesireFlag:
 	case Subject::OthersCreature:
 	case Subject::Altar:
+	case Subject::Workshop:
 		return true;
 	}
 	return true;
@@ -105,6 +108,8 @@ constexpr uint32_t k_ScaffoldValue = 116;
 constexpr uint32_t k_TempleHealth = 117;
 /// "Prayer Energy: %3.0f", over the altar of a worship site with the hand empty
 constexpr uint32_t k_PrayerEnergy = 118;
+/// "Production Completed: %3.0f%%", over a built workshop with the hand in the influence
+constexpr uint32_t k_ProductionCompleted = 128;
 /// "Stored - Food: %3.0f Wood: %3.0f", over a village store
 constexpr uint32_t k_Stored = 134;
 /// "Population: %3.0f", written as "Population:  12/34": its people over the room of its homes
@@ -183,6 +188,12 @@ struct Wording
 
 /// The prayer power that a worship site stores, as its altar shows it
 [[nodiscard]] Numbered PrayerEnergy(float stored);
+
+/// The part of its scaffold that a built workshop made, as a whole percent. The turns that are left are a share of the
+/// time to make a scaffold, and the percent is what is left of 100. The game cuts the result to a whole number below 100,
+/// so a workshop that makes no scaffold shows 0. A workshop that has damage has no number: the hand shows the words of the
+/// tooltip as they are written.
+[[nodiscard]] std::optional<Numbered> ProductionCompleted(bool repaired, int32_t makingTurns, float productionTime);
 
 /// The tooltip of a sign that shows a need. The hunger and the life show their level as a percentage. The wood flag
 /// shows the wood that its workshop requires. The sign of the people that hide shows "Pick Up".

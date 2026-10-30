@@ -64,6 +64,8 @@ public:
 	virtual void AddIncomingMessages(Json& result) const = 0;
 	/// Adds the state of the chat controls to the answer of a query
 	virtual void AddChatControls(Json& result) const = 0;
+	/// Adds the tooltip that the hand shows to the answer of a query
+	virtual void AddToolTip(Json& result) const = 0;
 };
 
 } // namespace openblack::inspector

@@ -26,6 +26,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/TownHomes.h"
 #include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
@@ -136,6 +137,18 @@ std::vector<Submission> Over(entt::entity object, bool handInInfluence)
 			const auto& stores = Locator::resourceStoreSystem::value();
 			submissions.push_back({.numbers = Stored(stores.GetResource(object, ResourceType::Food),
 			                                         stores.GetResource(object, ResourceType::Wood))});
+		}
+		else if (const auto* workshop = registry.TryGet<const Workshop>(object);
+		         workshop != nullptr && ecs::construction::IsBuilt(object) && Shows(Subject::Workshop, handInInfluence))
+		{
+			// A built workshop shows how much of its scaffold it made. With damage, it shows only the words.
+			const auto* info = ecs::world_objects::AbodeInfoOf(object);
+			const bool repaired = ecs::world_objects::LifeOf(object) >= 1.0f;
+			const auto made = ProductionCompleted(repaired && info != nullptr, workshop->makingTurns,
+			                                      info != nullptr ? info->timeEachMobileObjectTakesToProduce : 0.0f);
+			submissions.push_back(
+			    {.numbers = made.value_or(Numbered {.index = k_ProductionCompleted, .first = 0.0, .second = std::nullopt}),
+			     .wordsOnly = !made.has_value()});
 		}
 		return submissions;
 	}
