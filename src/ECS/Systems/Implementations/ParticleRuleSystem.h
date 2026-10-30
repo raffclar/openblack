@@ -45,7 +45,6 @@ namespace openblack::particles
 class EffectWriter;
 class EffectReader;
 struct SharedTables;
-struct LightSheet;
 } // namespace openblack::particles
 
 namespace openblack::ecs::systems
