@@ -21,6 +21,7 @@
 #include <glm/mat4x4.hpp>
 
 #include "Extent.h"
+#include "LandReuse.h"
 
 namespace openblack
 {
@@ -65,6 +66,9 @@ public:
 	/// Puts each cell corner back to the altitude that it had when the land was built. Only the blocks that change are
 	/// made again, as for CommitAltitudeChanges. Returns the count of the block cells that changed.
 	virtual size_t RestoreBuiltAltitudes() { return 0; }
+	/// The cell corners whose altitude is not the altitude of the land as the game built it, with their altitudes now.
+	/// A corner on the edge of a block can come once for each block that keeps a copy of it.
+	[[nodiscard]] virtual std::vector<land_reuse::CellAltitude> ChangedAltitudes() const { return {}; }
 
 	// Debug
 	virtual void DumpTextures() const = 0;

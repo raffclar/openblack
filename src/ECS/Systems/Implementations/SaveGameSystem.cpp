@@ -50,6 +50,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "3D/LandReuse.h"
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -378,6 +379,28 @@ float AlignmentToSave(const Creature& body)
 	const auto& variables = vm.GetVariables();
 	const auto found = std::ranges::find(variables, std::string_view {"OriginalAlignmentOfMyCreature"}, &lhvm::VMVar::name);
 	return found != variables.end() ? found->value.floatVal : 0.0f;
+}
+
+/// Gives back the altitudes of the land that a world state keeps. A world state of an older build keeps none.
+void LoadChangedAltitudes(const gamesave::WorldFile& world)
+{
+	const auto chunk = std::ranges::find(world.chunks, gamesave::k_AltitudesTag, &gamesave::Chunk::tag);
+	if (chunk == world.chunks.end() || !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	const auto altitudes = land_reuse::ReadAltitudes(chunk->bytes);
+	if (!altitudes.has_value())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The altitudes of the land in the world state do not read");
+		return;
+	}
+	auto& land = Locator::terrainSystem::value();
+	for (const auto& corner : *altitudes)
+	{
+		land.SetCellAltitude({corner.x, corner.z}, corner.altitude);
+	}
+	land.CommitAltitudeChanges();
 }
 
 /// The whole record of the creature as openblack writes it from the creature now, its player's leash on it, and the
@@ -1297,6 +1320,12 @@ std::vector<uint8_t> SaveGameSystem::WorldState()
 	{
 		world.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
 	}
+	// The land as it is now, which another computer must have to go on with the same world
+	if (Locator::terrainSystem::has_value())
+	{
+		world.chunks.push_back({.tag = gamesave::k_AltitudesTag,
+		                        .bytes = land_reuse::WriteAltitudes(Locator::terrainSystem::value().ChangedAltitudes())});
+	}
 	return gamesave::Write(world);
 }
 
@@ -1359,7 +1388,14 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	}
 	const bool loaded = Locator::landSystem::value().LoadSavedLand(
 	    game.landscape, game.landscapeFile,
-	    [&reflection, &world, kind]() { return ecs::world_save::LoadEntities(reflection, world, kind).has_value(); },
+	    [&reflection, &world, kind]() {
+		    // The land of a world state comes back as it was, before the things on it
+		    if (kind == ecs::world_save::LoadKind::WorldState)
+		    {
+			    LoadChangedAltitudes(world);
+		    }
+		    return ecs::world_save::LoadEntities(reflection, world, kind).has_value();
+	    },
 	    kind == ecs::world_save::LoadKind::WorldState ? LandSystemInterface::SavedLandUse::WorldState
 	                                                  : LandSystemInterface::SavedLandUse::SavedGame);
 	if (!loaded)

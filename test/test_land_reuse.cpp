@@ -120,3 +120,41 @@ TEST(LandReuse, TheChangedCellsComeInTheOrderOfTheBlock)
 	cells.at(17 + 1).altitude = 21;
 	EXPECT_EQ(land_reuse::ChangedCells(cells, built), (std::vector<uint16_t> {5, 18, 275}));
 }
+
+TEST(LandReuse, TheChangedCornersOfABlockTakeTheirMapCells)
+{
+	auto cells = Cells(20);
+	cells.at(5).altitude = 7;
+	cells.at(16 * 17 + 3).altitude = 9;
+	const std::vector<uint16_t> changed {5, 16 * 17 + 3};
+	EXPECT_EQ(land_reuse::CornersOfBlock(32, 48, changed, cells),
+	          (std::vector<land_reuse::CellAltitude> {{.x = 32, .z = 53, .altitude = 7}, {.x = 48, .z = 51, .altitude = 9}}));
+}
+
+TEST(LandReuse, TheAltitudesComeBackInTheOrderOfTheMapAndOnceForEachCorner)
+{
+	// The second block keeps a copy of the first corner of the third
+	const std::vector<land_reuse::CellAltitude> altitudes {
+	    {.x = 48, .z = 3, .altitude = 9}, {.x = 2, .z = 300, .altitude = 1}, {.x = 48, .z = 3, .altitude = 9}};
+	const auto bytes = land_reuse::WriteAltitudes(altitudes);
+	EXPECT_EQ(bytes.size(), 4u + 2u * 5u);
+	const auto read = land_reuse::ReadAltitudes(bytes);
+	ASSERT_TRUE(read.has_value());
+	EXPECT_EQ(*read,
+	          (std::vector<land_reuse::CellAltitude> {{.x = 2, .z = 300, .altitude = 1}, {.x = 48, .z = 3, .altitude = 9}}));
+}
+
+TEST(LandReuse, NoChangedAltitudeIsOnlyTheCount)
+{
+	const auto bytes = land_reuse::WriteAltitudes({});
+	EXPECT_EQ(bytes, (std::vector<uint8_t> {0, 0, 0, 0}));
+	EXPECT_EQ(land_reuse::ReadAltitudes(bytes), std::vector<land_reuse::CellAltitude> {});
+}
+
+TEST(LandReuse, AltitudesThatAreNotWholeDoNotRead)
+{
+	auto bytes = land_reuse::WriteAltitudes({{.x = 1, .z = 2, .altitude = 3}});
+	bytes.pop_back();
+	EXPECT_FALSE(land_reuse::ReadAltitudes(bytes).has_value());
+	EXPECT_FALSE(land_reuse::ReadAltitudes(std::vector<uint8_t> {1, 0}).has_value());
+}
