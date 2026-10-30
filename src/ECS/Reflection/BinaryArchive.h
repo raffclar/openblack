@@ -124,6 +124,17 @@ public:
 		_size = 0;
 		_open = true;
 	}
+	/// Removes all the bytes and the ranges of the presentation values. The writer keeps its memory and the plans of the
+	/// types, so that a writer that writes the same types again costs less.
+	void ClearForNextWorld()
+	{
+		Clear();
+		_depth = 0;
+		_valueEnds.clear();
+		_presentationDepth = 0;
+		_presentationStart = 0;
+		_presentation.clear();
+	}
 
 	void Write(std::span<const uint8_t> bytes)
 	{
