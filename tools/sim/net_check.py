@@ -394,6 +394,17 @@ def server_checksums(log):
     return turns
 
 
+def server_against_run(server_turns, other_turns, last_turn):
+    """Compares the server checksums of this run with the server checksums of another run, from turn 1 to the last
+    turn of the clients. The turns after it are left out: each client stops at its own time, so the turn that its god
+    leaves at is not the same in two runs."""
+    compared = [turn for turn in sorted(server_turns) if 1 <= turn <= last_turn and turn in other_turns]
+    different = [turn for turn in compared if server_turns[turn] != other_turns[turn]]
+    return {"compared": len(compared), "same_turns": len(compared) - len(different),
+            "first_different": different[0] if different else None, "last_different": different[-1] if different else None,
+            "same": bool(compared) and compared[0] == 1 and compared[-1] == last_turn and not different}
+
+
 def record_checksums(record):
     turns = {}
     if not os.path.exists(record):
@@ -1704,6 +1715,13 @@ def main():
                         "Escape, Exit Online Game and Leave Game")
     parser.add_argument("--box-back", help="CLIENT:TURN: at the turn the client (from 0) clicks Back in the information "
                         "box of the land, and the player leaves the network game")
+    parser.add_argument("--no-hand-reports", action="store_true",
+                        help="the desktop clients send no report of their hands and views (--sim-no-hand-reports). The "
+                             "reports carry each client's camera, which moves at each frame, so without this two runs "
+                             "of the same seed give other server checksums until the cameras stop")
+    parser.add_argument("--same-server-as", action="append", default=[], metavar="FOLDER",
+                        help="the output folder of another net_check run of the same land and seed: the server "
+                             "checksums of this run must be the same from turn 1 to the last turn (repeat for more runs)")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     parser.add_argument("--client-args", default="",
@@ -1926,6 +1944,8 @@ def main():
             command += sim_report.gods_need_no_temple_args(False, **land_kind)
             if leaver == index:
                 command += ["--sim-info-box-back-at" if options.box_back else "--sim-leave-at", str(leave_turn)]
+            if options.no_hand_reports:
+                command.append("--sim-no-hand-reports")
             if options.hash_fields:
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
@@ -2280,6 +2300,17 @@ def main():
         banned_result["bans_with_each_report"] = lobby.counts["status"] > 0 and lobby.counts["bans"] >= lobby.counts["status"] - 1
         summary["banned"] = banned_result
         all_same = all_same and banned_result["refused"] and banned_result["bans_with_each_report"]
+    if options.same_server_as:
+        summary["server_against_runs"] = []
+        for other in options.same_server_as:
+            other_log = os.path.join(other, "server", "server.log")
+            result = server_against_run(server_turns, server_checksums(other_log) if os.path.exists(other_log) else {},
+                                        options.turns)
+            result["run"] = other
+            summary["server_against_runs"].append(result)
+            if not result["same"]:
+                print(f"the server checksums are not the same as the run in {other}: {json.dumps(result)}")
+                all_same = False
     summary["same"] = all_same
     with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)
