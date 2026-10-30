@@ -223,7 +223,6 @@ void DynamicsSystem::SaveState(reflection::BinaryWriter& out) const
 
 bool DynamicsSystem::LoadState(reflection::BinaryReader& in)
 {
-	auto& registry = Entities();
 	_entries.clear();
 	reflection::Load(in, _capacity);
 	size_t count = 0;
@@ -302,19 +301,7 @@ bool DynamicsSystem::LoadState(reflection::BinaryReader& in)
 		}
 	}
 	std::erase_if(_entries, [this](const std::unique_ptr<PhysicsEntry>& entry) { return !IsAvailable(entry->entity); });
-	// What a save of an older build had in flight, with no body, stays where it was
-	std::vector<entt::entity> lost;
-	for (const auto object : registry.Underlying().view<InPhysics>())
-	{
-		if (!IndexOf(object).has_value())
-		{
-			lost.push_back(object);
-		}
-	}
-	for (const auto object : lost)
-	{
-		registry.Remove<InPhysics>(object);
-	}
+	// A thing can be in the physics with no body, as a thing that a vortex draws in. It stays so after the load.
 	return complete;
 }
 
