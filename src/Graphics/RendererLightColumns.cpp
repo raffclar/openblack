@@ -27,6 +27,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -58,7 +59,7 @@ constexpr uint64_t k_PulseState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_G
 
 uint32_t ColourOf(PlayerNames player)
 {
-	return ecs::components::Player::k_Colours.at(static_cast<size_t>(player)) & 0xFFFFFFu;
+	return player_colour::Of(player) & 0xFFFFFFu;
 }
 } // namespace
 

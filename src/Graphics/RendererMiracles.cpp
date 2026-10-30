@@ -40,6 +40,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/RewardOpening.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -73,7 +74,7 @@ namespace
 uint32_t OwnColour()
 {
 	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
-	return ecs::components::Player::k_Colours.at(static_cast<size_t>(own));
+	return player_colour::Of(own);
 }
 constexpr float k_ByteMax = 255.0f;
 /// The freeze phial's creature takes its spell in this way
@@ -457,7 +458,7 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 			return;
 		}
 		const auto ring = meshes.Handle(ecs::components::OneOffSpellSeed::k_RingMeshId.value());
-		const auto colour = ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(player)));
+		const auto colour = ColourOf(player_colour::Of(player));
 		const float alpha = static_cast<float>(magic::visuals::RingAlpha(std::numeric_limits<uint8_t>::max())) / k_ByteMax;
 		for (int i = 0; i < rings; ++i)
 		{
