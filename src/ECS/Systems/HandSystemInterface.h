@@ -122,6 +122,8 @@ public:
 	{
 		return GetPlayerHands();
 	}
+	/// The game made the entity of a player. The entity gets the link to the hands of its player, if they are there.
+	virtual void LinkHandsOf([[maybe_unused]] entt::entity playerEntity) {}
 	/// A land script made the citadel of a player at a point. The reported hand, the camera and the computer mind of
 	/// the player start at the citadel. The hands and the mind that the game makes later start there too.
 	virtual void StartAtCitadel([[maybe_unused]] PlayerNames owner, [[maybe_unused]] const glm::vec3& point) {}

@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include <map>
 #include <optional>
 
 #include <entt/entity/entity.hpp>
@@ -43,6 +42,7 @@ public:
 	[[nodiscard]] std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
 	GetHandsOf(PlayerNames player) const noexcept override;
 	std::array<entt::entity, static_cast<size_t>(Side::_Count)> MakeHandsOf(PlayerNames player) override;
+	void LinkHandsOf(entt::entity playerEntity) override;
 	void StartAtCitadel(PlayerNames owner, const glm::vec3& point) override;
 	void ReportSent(const player_commands::HandReport& report) override;
 	[[nodiscard]] uint32_t GetReportLatencyMs() const noexcept override { return _reportLatency.Milliseconds(); }
@@ -62,9 +62,6 @@ public:
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
 
 private:
-	std::array<entt::entity, 2> _hands {entt::null, entt::null};
-	/// The hands of the gods of the other players of a network game, by player
-	std::map<PlayerNames, std::array<entt::entity, 2>> _godHands;
 	/// None on the game server and on an observer's computer
 	std::optional<PlayerNames> _ownPlayer {PlayerNames::PLAYER_ONE};
 	/// The latency of the reports of this computer's hand. It is not part of the world.

@@ -14,6 +14,7 @@
 #include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "Locator.h"
@@ -40,6 +41,11 @@ entt::entity PlayerArchetype::Create(PlayerNames name)
 	if (Locator::playerSystem::has_value())
 	{
 		Locator::playerSystem::value().TakeUpKept(entity);
+	}
+	// A player made after its hands gets the link to them
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().LinkHandsOf(entity);
 	}
 	// A player made after the land made its towns may cast what its towns offer
 	if (Locator::spellIconSystem::has_value())

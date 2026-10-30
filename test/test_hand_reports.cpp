@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -19,6 +20,7 @@
 #include <vector>
 
 #include <MindFile.h>
+#include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
@@ -34,9 +36,13 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandStillness.h"
+#include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerHands.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ShownCreatureFace.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Reflection/WorldArchive.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 #include "Simulation/CommandLog.h"
@@ -465,6 +471,90 @@ TEST_F(ReportedHands, AfterALoadTheHandsOfEachGodAreFoundByTheirPlayer)
 	EXPECT_EQ(loaded.GetPlayerHands()[0], _hand);
 	EXPECT_EQ(loaded.GetHandsOf(PlayerNames::PLAYER_THREE), made);
 	EXPECT_FALSE(loaded.GetHandsOf(PlayerNames::PLAYER_TWO).has_value());
+}
+
+namespace
+{
+/// A player entity of a name, as the land makes it
+entt::entity MakePlayer(PlayerNames name)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = registry.Create();
+	registry.Assign<ecs::components::Player>(entity, name);
+	return entity;
+}
+
+/// The hands that the entity of a player links to
+std::array<entt::entity, 2> LinkOf(entt::entity player)
+{
+	const auto& hands = Locator::entitiesRegistry::value().Get<const ecs::components::PlayerHands>(player);
+	return {hands.left, hands.right};
+}
+} // namespace
+
+// The hands of each god are a component of its player entity, whether the player or the hands come first
+TEST_F(ReportedHands, ThePlayerEntityLinksToTheHandsOfItsGod)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The first player comes after its hands, as on a new land
+	const auto first = MakePlayer(PlayerNames::PLAYER_ONE);
+	EXPECT_FALSE(registry.AllOf<ecs::components::PlayerHands>(first));
+	_hands.LinkHandsOf(first);
+	EXPECT_EQ(LinkOf(first), _hands.GetPlayerHands());
+	EXPECT_EQ(LinkOf(first)[0], _hand);
+
+	// The second god gets its hands after its player
+	const auto second = MakePlayer(PlayerNames::PLAYER_TWO);
+	_hands.LinkHandsOf(second);
+	EXPECT_FALSE(registry.AllOf<ecs::components::PlayerHands>(second));
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(LinkOf(second), made);
+	EXPECT_EQ(_hands.GetHandsOf(PlayerNames::PLAYER_TWO), made);
+
+	// The world finds the hands from the link
+	registry.Remove<ecs::components::GodHand>(made[0]);
+	registry.Remove<ecs::components::GodHand>(made[1]);
+	EXPECT_EQ(_hands.GetHandsOf(PlayerNames::PLAYER_TWO), made);
+	EXPECT_EQ(_hands.GetPlayerHands()[0], _hand);
+}
+
+// The link is part of the saved world. A world from an older save gets the links at the load.
+TEST_F(ReportedHands, TheLinkToTheHandsIsSavedAndAnOlderSaveGetsItAtTheLoad)
+{
+	const auto first = MakePlayer(PlayerNames::PLAYER_ONE);
+	const auto second = MakePlayer(PlayerNames::PLAYER_TWO);
+	const auto third = MakePlayer(PlayerNames::PLAYER_THREE);
+	_hands.LinkHandsOf(first);
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	const auto firstHands = _hands.GetPlayerHands();
+	entt::meta_ctx context;
+	ecs::reflection::RegisterComponents(context);
+
+	const auto load = [&context](const std::vector<uint8_t>& bytes) {
+		Locator::entitiesRegistry::emplace<ecs::Registry>();
+		auto& loaded = Locator::entitiesRegistry::value().Underlying();
+		ASSERT_TRUE(ecs::reflection::LoadWorld(loaded, context, bytes, ecs::reflection::WorldLoadMode::Exact).has_value());
+		ecs::systems::HandSystem hands;
+		hands.FindAfterLoad();
+	};
+
+	// A save of this build keeps the links
+	const auto saved = ecs::reflection::SaveWorld(Locator::entitiesRegistry::value().Underlying(), context);
+	load(saved);
+	EXPECT_EQ(LinkOf(first), firstHands);
+	EXPECT_EQ(LinkOf(second), made);
+	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<ecs::components::PlayerHands>(third));
+	EXPECT_EQ(ecs::reflection::SaveWorld(Locator::entitiesRegistry::value().Underlying(), context), saved);
+
+	// A save of an older build has no links. The load makes them from the hands of each player.
+	auto& older = Locator::entitiesRegistry::value();
+	older.Remove<ecs::components::PlayerHands>(first);
+	older.Remove<ecs::components::PlayerHands>(second);
+	load(ecs::reflection::SaveWorld(older.Underlying(), context));
+	EXPECT_EQ(LinkOf(first), firstHands);
+	EXPECT_EQ(LinkOf(second), made);
+	EXPECT_FALSE(Locator::entitiesRegistry::value().AllOf<ecs::components::PlayerHands>(third));
+	EXPECT_EQ(ecs::reflection::SaveWorld(Locator::entitiesRegistry::value().Underlying(), context), saved);
 }
 
 TEST_F(ReportedHands, TheWorldHasNoCameraBeforeTheFirstReport)
