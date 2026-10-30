@@ -31,6 +31,7 @@ import glob
 import json
 import os
 import sys
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -44,8 +45,10 @@ import sim_run  # noqa: E402
 
 # The slots of the three saves of a saved-game round trip: none of them is an autosave slot
 SLOTS = (10, 11, 12)
-# How long a step of the turns before a check can take, in seconds
-STEP_WAIT = 120.0
+# How long a step waits for the next turn before it holds the game where it is, in seconds
+STILL_WAIT = 10.0
+# How long one scenario and its check can take before the tool stops that game and starts a new one, in seconds
+SCENARIO_WAIT = 600.0
 # How long the tool waits for the writer of the game to put a save in its slot, in seconds
 WRITE_TIMEOUT = 60.0
 
@@ -143,14 +146,19 @@ def scenario_ids(game, wanted):
 
 def play_turns(game, turns):
     """Plays some turns and holds the game there: whether the turns went by. A scenario that holds the clock, as the
-    temple does, plays no turn; the game is then held where it is after a short wait."""
+    temple does, plays no turn; the game is then held where it is once no turn went by for a short time."""
     game.call("game.step", {"turns": turns})
-    deadline = time.monotonic() + STEP_WAIT
-    while time.monotonic() < deadline:
+    turn = None
+    moved = time.monotonic()
+    while time.monotonic() - moved < STILL_WAIT:
         if game.process.poll() is not None:
             raise RuntimeError("the game stopped in a step")
-        if game.call("game.state").get("stepping") is None:
+        state = game.call("game.state")
+        if state.get("stepping") is None:
             return True
+        if state.get("turn") != turn:
+            turn = state.get("turn")
+            moved = time.monotonic()
         time.sleep(0.05)
     game.call("game.pause")
     return False
@@ -182,6 +190,9 @@ def sweep(options, record):
         if options.start_at:
             scenarios = scenarios[scenarios.index(options.start_at):]
         for scenario in scenarios:
+            # A game that does not answer is stopped, and the next scenario starts in a new game
+            watchdog = threading.Timer(SCENARIO_WAIT, game.process.kill)
+            watchdog.start()
             try:
                 game.call("game.scenario", {"id": scenario})
                 game.wait_ready()
@@ -195,6 +206,8 @@ def sweep(options, record):
                     entry["exit_code"] = game.process.returncode
                 game.stop()
                 game = start(options)
+            finally:
+                watchdog.cancel()
             results.append(entry)
             record.write(json.dumps(entry) + "\n")
             record.flush()
