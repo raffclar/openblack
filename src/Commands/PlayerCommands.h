@@ -353,6 +353,17 @@ struct IconChargeStop
 {
 };
 
+/// The player clicked the dialogue of the help texts, or held the key that cuts a text short (the keypad's Enter), in
+/// the frames since the last command. The help is of this computer only: only the computer of the player gives them to
+/// its dialogue, at the turn. Thus the scripts see the click at the same turn at all frame rates.
+struct DialogueClick
+{
+	bool click {false};
+	bool skipKey {false};
+
+	bool operator==(const DialogueClick& other) const = default;
+};
+
 /// Tools: the creature of the player starts a fight with the nearest creature, or a fight that it is in stops. Only a
 /// game server with its test commands on lets this command through.
 struct CreatureFightCheat
@@ -516,7 +527,7 @@ using Action =
                  FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
                  MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery,
                  CreatureFightCheat, ViewReport, TempleLeashOff, GiveCallOff, CreatureTattoo, LeashLength, ChatSpeech,
-                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop>;
+                 ChatTaunt, QuickSave, QuickLoad, MusicMood, IconChargeStop, DialogueClick>;
 
 /// A command and the player that sent it
 struct Command
