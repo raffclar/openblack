@@ -161,11 +161,11 @@ int main(int argc, char* argv[])
 			const std::filesystem::path out(result["write-gods-ring-map"].as<std::string>());
 			if (const auto error = openblack::server::WriteGodsRingMap(settings.gamePath, out); error.has_value())
 			{
-				std::cerr << "openblack-server: " << *error << '
-'; return EXIT_FAILURE;
+				std::cerr << "openblack-server: " << *error << '\n';
+				return EXIT_FAILURE;
 			}
-			std::cout << "openblack-server: wrote the map for 32 gods to " << out.generic_string() << '
-'; return EXIT_SUCCESS;
+			std::cout << "openblack-server: wrote the map for 32 gods to " << out.generic_string() << '\n';
+			return EXIT_SUCCESS;
 		}
 		settings.soak.allComputerGods = result.count("all-computer-gods") != 0;
 		if (result.count("ai-seed") != 0)

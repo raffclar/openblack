@@ -67,7 +67,7 @@ public:
 	void Find(std::string file, uint64_t checksum, FoundCallback done) override
 	{
 		const auto found = files.find(file);
-		done(found != files.end() && start_rules::LandChecksum(found->second) == checksum);
+		done(found != files.end() && online::start_rules::LandChecksum(found->second) == checksum);
 	}
 	[[nodiscard]] std::optional<std::vector<uint8_t>> Read(std::string_view file) const override
 	{
@@ -178,7 +178,7 @@ TEST(OnlineMapStore, TheFolderStoreKeepsMapsInTheProfileFolder)
 	files.SetGamePath(folder.Path() / "game");
 	online::FolderMapStore store(files, folder.Path() / "profile");
 	const auto bytes = Bytes("map bytes");
-	const auto checksum = start_rules::LandChecksum(bytes);
+	const auto checksum = online::start_rules::LandChecksum(bytes);
 
 	std::optional<bool> found;
 	store.Find("obm_32p_1.map", checksum, [&found](bool answer) { found = answer; });
@@ -236,7 +236,7 @@ TEST(MapDownload, AMapInTheStoreIsReadyWithNoDownload)
 	store.files["obm_32p_1.map"] = Bytes("abc");
 	FakeFetch fetch;
 	online::MapDownload download(store, fetch.Function());
-	download.Start(Map(start_rules::LandChecksum(Bytes("abc"))));
+	download.Start(Map(online::start_rules::LandChecksum(Bytes("abc"))));
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Ready);
 	EXPECT_TRUE(fetch.asked.empty());
 }
@@ -248,7 +248,7 @@ TEST(MapDownload, AMissingMapComesFromTheLobbyAndGoesInTheStore)
 	store.files["obm_32p_1.map"] = Bytes("old");
 	FakeFetch fetch;
 	online::MapDownload download(store, fetch.Function());
-	download.Start(Map(start_rules::LandChecksum(Bytes("new"))));
+	download.Start(Map(online::start_rules::LandChecksum(Bytes("new"))));
 	EXPECT_EQ(download.GetState(), online::MapDownload::State::Downloading);
 	ASSERT_EQ(fetch.asked, (std::vector<std::string> {std::string(k_Hash)}));
 	fetch.Answer(Bytes("new"));
