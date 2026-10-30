@@ -64,9 +64,12 @@ public:
 	/// Whether a shield keeps a reaction from someone standing under it: they stand within a shield's reach on the
 	/// ground and what made the reaction is not inside that shield
 	[[nodiscard]] virtual bool KeepsReactionOff(glm::vec3 /*watcher*/, glm::vec3 /*initiator*/) const { return false; }
-	/// The first shield whose reach on the ground a point is strictly within, of either kind, as a script asks for a
-	/// shield miracle at a point
+	/// The miracle of the first shield whose reach on the ground a point is strictly within, of either kind, as a script
+	/// asks for a shield miracle at a point. A dome that fades after the end of its miracle has no miracle and does not
+	/// count.
 	[[nodiscard]] virtual std::optional<entt::entity> ShieldAt(glm::vec3 /*point*/) const { return std::nullopt; }
+	/// A script deletes a shield miracle: the object of the miracle goes at once with it and does not fade
+	virtual void RemoveWithSpell(entt::entity /*spell*/) {}
 
 	/// A dome as it is drawn this frame
 	struct DomeDraw

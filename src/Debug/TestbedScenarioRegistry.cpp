@@ -10446,6 +10446,28 @@ void AddMind(std::vector<Scenario>& all)
 	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
 	});
 
+	// A physical shield stands in the physics as a solid dome from the turn that it goes up
+	all.push_back({
+	    .id = "miracles.physical_shield_stops_boulders",
+	    .name = "A physical shield stops thrown boulders",
+	    .facet = Facet::Miracles,
+	    .description = "A hand casts a physical shield over a point 40 metres north. 3 seconds after the start a hand "
+	                   "throws a boulder north at the shield from 50 metres south of it. The throw occurs again "
+	                   "every 6 seconds.",
+	    .expected = "The dome rises and spins. Each boulder hits the side of the dome and bounces back or rolls off it. "
+	                "No boulder goes through the dome or lands in it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, -10.0f}, {0.0f, 70.0f}}},
+	    .objects = {{.type = MobileStaticInfo::Boulder1Chalk, .offset = {0.0f, -10.0f}}},
+	    .miracles = {{.type = MagicType::PhysicalShield, .point = {0.0f, 40.0f}, .delaySeconds = 0.5f}},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2 {0.0f, -10.0f},
+	                .height = 6.0f,
+	                .velocity = {0.0f, 6.0f, 25.0f},
+	                .delaySeconds = 3.0f,
+	                .repeatSeconds = 6.0f}},
+	});
+
 	// A save while sounds, script music and an advisor's line play: a load brings back only what the game keeps
 	all.push_back({
 	    .id = "saves.sounds_music_help_back",
