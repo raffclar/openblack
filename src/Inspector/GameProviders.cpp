@@ -51,7 +51,10 @@
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureMorph.h"
+#include "Creature/CreaturePlanActions.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/LeashOrders.h"
 #include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
@@ -4329,6 +4332,97 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 	return provider;
 }
 
+/// The inspector's order to a creature, given as the game gives its own orders: a forced plan of the creature's mind,
+/// which its body does
+CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder& order)
+{
+	if (!Locator::creatureMindSystem::has_value() || !Locator::creatureObjectActionSystem::has_value())
+	{
+		return {.detail = "the game has no creature mind or hands"};
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr)
+	{
+		return {.detail = "that is not a creature"};
+	}
+	auto& minds = Locator::creatureMindSystem::value();
+	const auto& hands = Locator::creatureObjectActionSystem::value();
+	using ForcedPlan = ecs::systems::CreatureMindSystemInterface::ForcedPlan;
+	using Kind = CreatureOrder::Kind;
+	const auto carried = hands.GetCarried(creature);
+	switch (order.kind)
+	{
+	case Kind::PickUp:
+	{
+		if (!order.object.has_value() || !registry.Valid(*order.object))
+		{
+			return {.detail = "the thing is gone"};
+		}
+		if (carried == order.object)
+		{
+			return {.detail = "it holds that thing already"};
+		}
+		if (!hands.CanPickUp(creature, *order.object))
+		{
+			return {.detail = "it cannot pick that thing up"};
+		}
+		// As a leash order on a thing it can lift when its desires choose nothing else
+		const bool taken = minds.ForcePlan(creature, ForcedPlan {.desire = creature_desires::Desire::Curiosity,
+		                                                         .action = creature_leash_orders::k_HoldAction,
+		                                                         .object = order.object,
+		                                                         .ordered = true});
+		return {.taken = taken, .detail = taken ? "picks it up and holds it" : "its mind refused the plan"};
+	}
+	case Kind::PutDown:
+	case Kind::Throw:
+	{
+		if (!carried.has_value())
+		{
+			return {.detail = "it carries nothing"};
+		}
+		if (!order.point.has_value())
+		{
+			const bool taken = minds.ForcePlan(
+			    creature, ForcedPlan {.desire = creature_desires::Desire::ObeyPlayer, .action = "PutDown", .ordered = true});
+			return {.taken = taken, .detail = taken ? "puts it down where it stands" : "its mind refused the plan"};
+		}
+		// As a leash order on the land while it carries something
+		const auto height = creature_morph::k_HeightAtSizeOne * ShownSize(*body);
+		const bool throws = order.kind == Kind::Throw;
+		const bool taken =
+		    minds.ForcePlan(creature, ForcedPlan {.desire = creature_desires::Desire::ObeyPlayer,
+		                                          .action = creature_leash_orders::k_MoveAction,
+		                                          .agenda = throws ? creature_leash_orders::ThrowAt(*order.point, height)
+		                                                           : creature_leash_orders::PutDownAt(*order.point, height),
+		                                          .ordered = true,
+		                                          .walksBack = true});
+		return {.taken = taken,
+		        .detail = !taken   ? "its mind refused the plan"
+		                  : throws ? "carries it near the point and throws it there"
+		                           : "carries it to the point and puts it down"};
+	}
+	case Kind::Eat:
+	{
+		if (!order.object.has_value() || !registry.Valid(*order.object))
+		{
+			return {.detail = "the thing is gone"};
+		}
+		const auto* executor = creature_plan_actions::For(order.action);
+		if (executor == nullptr || executor->activity != creature_mind::Activity::Eat)
+		{
+			return {.detail = "no eat action is called " + order.action};
+		}
+		const bool taken = minds.ForcePlan(creature, ForcedPlan {.desire = creature_desires::Desire::Hunger,
+		                                                         .action = executor->action,
+		                                                         .object = order.object,
+		                                                         .ordered = true});
+		return {.taken = taken, .detail = taken ? std::string(executor->action) : "its mind refused the plan"};
+	}
+	}
+	return {.detail = "no such order"};
+}
+
 } // namespace
 
 Json openblack::inspector::OwnHandsJson(const ecs::systems::HandSystemInterface& hands)
@@ -4481,6 +4575,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			        Locator::creatureAnimationLog::value().Clear();
 		        }
 	        },
+	    .order = &GiveCreatureOrder,
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),

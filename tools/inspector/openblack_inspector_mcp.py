@@ -587,6 +587,33 @@ TOOLS = [
         "query": "creature.set_reactions",
         "params": ["id", "notice"],
     },
+    # Orders to a creature, carried out by its own mind and body as the game's orders are (never a move of the thing)
+    {
+        "name": "creature_pick_up",
+        "description": "The creature walks to a thing, picks it up and holds it (as a leash order on a thing it can "
+                       "lift), facing the player for 40 to 50 s. Refused when it cannot lift the thing.",
+        "inputSchema": schema({"id": {"type": "integer"}, "object": {"type": "integer"}}, ["object"]),
+        "query": "creature.pick_up",
+        "params": ["id", "object"],
+    },
+    {
+        "name": "creature_put_down",
+        "description": "The creature lets go of what it carries: puts it down where it stands, or carries it to point "
+                       "[x, z] and puts it down there, or (throw true) throws it at the point.",
+        "inputSchema": schema({"id": {"type": "integer"}, "point": {"type": "array", "items": {"type": "number"}},
+                               "throw": {"type": "boolean"}}),
+        "query": "creature.put_down",
+        "params": ["id", "point", "throw"],
+    },
+    {
+        "name": "creature_eat",
+        "description": "The creature walks to a thing and eats from it: a storage pit (give the pit, not its food "
+                       "pile), a field, a tree or food itself; action names another eat action (e.g. EatAlive).",
+        "inputSchema": schema({"id": {"type": "integer"}, "object": {"type": "integer"},
+                               "action": {"type": "string"}}, ["object"]),
+        "query": "creature.eat",
+        "params": ["id", "object", "action"],
+    },
     {
         "name": "creature_plan",
         "description": "A creature's plan (desire, action, object, priority), activity and next agenda steps.",
