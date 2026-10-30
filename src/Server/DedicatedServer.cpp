@@ -39,7 +39,6 @@
 #include "Debug/TestbedScenarioRunner.h"
 #include "ECS/ChallengePictures.h"
 #include "ECS/Components/Temple.h"
-#include "ECS/ComputerPlayerStart.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
@@ -67,6 +66,7 @@
 #include "Locator.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapLand.h"
+#include "PlayerSlots.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "Simulation/CommandLog.h"
@@ -660,16 +660,17 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		}
 	}
 	// A land of a network game has a god slot for each citadel, as the room of the land has a team for each citadel. The
-	// other lands of the tools and the testbed keep the default slots.
+	// map for 32 gods has a slot for each of its citadels too. The other lands of the tools and the testbed keep the
+	// default slots.
 	uint8_t godSlots = k_DefaultGodSlots;
-	if (scriptLand && online_map_land::IsOnlineMap(settings.land))
+	if ((scriptLand && online_map_land::IsOnlineMap(settings.land)) || settings.godsRingMap)
 	{
-		std::array<bool, computer_player::k_SlotGods.size()> citadels {};
+		// Each god slot of the land, the slots after the seventh too (deviation 166)
+		std::array<bool, player_slots::k_MaxPlayers> citadels {};
 		Locator::entitiesRegistry::value().Each<const ecs::components::Temple>([&citadels](const auto& temple) {
-			const auto slot = std::ranges::find(computer_player::k_SlotGods, temple.owner);
-			if (slot != computer_player::k_SlotGods.end())
+			if (const auto slot = player_slots::SlotOfPlayer(temple.owner); slot.has_value() && *slot < citadels.size())
 			{
-				citadels.at(static_cast<size_t>(slot - computer_player::k_SlotGods.begin())) = true;
+				citadels.at(*slot) = true;
 			}
 		});
 		godSlots = GodSlotsOfLand(citadels);

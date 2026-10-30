@@ -65,6 +65,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
@@ -982,11 +983,12 @@ std::vector<PlayerNames> GameHandGrabWorld::OtherHandPlayers() const
 		return players;
 	}
 	const auto& hands = Locator::handSystem::value();
-	for (size_t i = 1; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	// Every player after the first
+	for (const auto player : ecs::game_players::All() | std::views::drop(1))
 	{
-		if (hands.GetHandsOf(static_cast<PlayerNames>(i)).has_value())
+		if (hands.GetHandsOf(player).has_value())
 		{
-			players.push_back(static_cast<PlayerNames>(i));
+			players.push_back(player);
 		}
 	}
 	return players;

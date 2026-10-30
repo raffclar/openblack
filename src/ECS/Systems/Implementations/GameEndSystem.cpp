@@ -31,6 +31,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -73,9 +74,8 @@ public:
 	[[nodiscard]] std::vector<PlayerNames> ActiveGods() const override
 	{
 		std::vector<PlayerNames> gods;
-		for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::NEUTRAL); ++number)
+		for (const auto player : ecs::game_players::Gods())
 		{
-			const auto player = static_cast<PlayerNames>(number);
 			if (IsHuman(player) || IsComputer(player))
 			{
 				gods.push_back(player);
@@ -111,9 +111,9 @@ public:
 		// The game sums the influence of every player and the neutral player, in their order
 		const auto& influence = Locator::influenceSystem::value();
 		float total = 0.0f;
-		for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+		for (const auto each : ecs::game_players::All())
 		{
-			total = x87::Add(influence.InfluencePower(static_cast<PlayerNames>(number)), total);
+			total = x87::Add(influence.InfluencePower(each), total);
 		}
 		constexpr int32_t k_FirstLand = 1;
 		if (_registry.Context().mapScriptGlobals.landNumber == k_FirstLand || total == 0.0f)

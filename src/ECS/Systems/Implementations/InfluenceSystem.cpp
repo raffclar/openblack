@@ -40,7 +40,9 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/InfluenceRules.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -420,10 +422,9 @@ void InfluenceSystem::DrawBorders()
 	const auto citadels = Citadels();
 	const auto ground = LandHeight();
 	// Every player's but the neutral one's: a circle about their citadel, then one about each of their towns
-	for (size_t player = 0; player < static_cast<size_t>(PlayerNames::NEUTRAL); ++player)
+	for (const auto name : ecs::game_players::Gods())
 	{
-		const auto name = static_cast<PlayerNames>(player);
-		if (const auto citadel = citadels.at(player); citadel != entt::null)
+		if (const auto citadel = citadels.at(static_cast<size_t>(name)); citadel != entt::null)
 		{
 			auto& fixed = FixCitadelReach(citadel);
 			const float reach = CitadelReach(citadel);
@@ -678,7 +679,7 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	    scale.has_value() && Locator::effectRequestSystem::has_value() && Locator::terrainSystem::has_value())
 	{
 		const auto& land = Locator::terrainSystem::value();
-		const auto colour = Player::k_Colours.at(static_cast<size_t>(player) & (Player::k_Colours.size() - 1));
+		const auto colour = player_colour::Of(player);
 		Locator::effectRequestSystem::value().AddHandManaPathSpark({
 		    .from = map_coords::ToWorld(land, handCoords),
 		    .to = map_coords::ToWorld(land, *shown.manaPathStart),

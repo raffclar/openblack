@@ -12,6 +12,8 @@
 #include <array>
 #include <string>
 
+#include "PlayerSlots.h"
+
 namespace openblack::end_game_box
 {
 
@@ -131,8 +133,10 @@ std::u16string GodName(PlayerNames god, std::optional<std::u16string_view> human
 	{
 		return std::u16string(*humanName);
 	}
+	// The god's place in the order of the god slots, from 1: the gods after the neutral player come after the seventh
+	const auto place = player_slots::SlotOfPlayer(god).value_or(static_cast<size_t>(god)) + 1;
 	std::u16string name = u"Player[";
-	for (const auto digit : std::to_string(static_cast<int>(god) + 1))
+	for (const auto digit : std::to_string(place))
 	{
 		name += static_cast<char16_t>(digit);
 	}

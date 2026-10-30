@@ -196,7 +196,9 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	registry.Each<const Town, const TownImpression>([&belief, abode](const Town& town, const TownImpression& impression) {
 		if (town.id == abode->townId)
 		{
-			std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
+			// The symbols show only the players of a land. The table of the town has a place for each player of a
+			// network game
+			std::copy_n(impression.belief.belief.begin(), belief.beliefs.size(), belief.beliefs.begin());
 		}
 	});
 	return belief;

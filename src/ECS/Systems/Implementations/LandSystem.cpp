@@ -466,6 +466,15 @@ bool LandSystem::LoadGodsRingMap()
 	View().ShowLoadingFrame();
 
 	const auto slots = gods_ring_map::LayOutSlots(gods_ring_land::k_MapMiddle);
+	// The map has a god in each of its 32 slots (deviation 166). The land has the 8 players of a land; the gods after the
+	// seventh get their players before the script, in the order of their numbers, as each slot of a land has its player.
+	for (const auto& slot : slots)
+	{
+		if (slot.god.has_value() && !player_slots::IsLandPlayer(*slot.god))
+		{
+			Locator::playerSystem::value().EnsurePlayer(*slot.god);
+		}
+	}
 	try
 	{
 		lhscriptx::Script script;

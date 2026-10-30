@@ -287,9 +287,12 @@ class Index:
         self.constants = {}
         self.aliases = {}
         headers = sorted(SOURCES.rglob("*.h")) + [header for folder in LIBRARY_HEADERS for header in sorted(folder.glob("*.h"))]
+        self.constant_aliases = {}
         for header in headers:
             text = strip_preprocessor(strip_comments(header.read_text(encoding="utf-8", errors="replace")))
             self.read_scope(text, [], header, None)
+        # A table for each player number of a network game: the player names name its first places, the numbers the rest
+        self.constants["openblack::player_slots::k_PlayerNumbers"] = ("PlayerNames", ["openblack"])
 
     def read_scope(self, body, scope, header, owner):
         for statement in scope_statements(body):
@@ -320,6 +323,10 @@ class Index:
                                  bare)
             if constant is not None:
                 self.constants["::".join(scope + [constant.group(1)])] = (constant.group(2), scope)
+                continue
+            same = re.search(r"\bconstexpr\b[^=]*\b(k_\w+)\s*=\s*((?:\w+::)*k_\w+)\s*;?$", bare)
+            if same is not None and owner is None:
+                self.constant_aliases["::".join(scope + [same.group(1)])] = (same.group(2), scope)
                 continue
             alias = re.match(r"^using\s+([A-Za-z_]\w*)\s*=\s*(.+?)\s*;?$", bare, flags=re.S)
             if alias is not None:
@@ -381,6 +388,9 @@ class Index:
                     enum_name, enum_scope = self.constants[candidate]
                     found = self.resolve(enum_name, enum_scope)
                     break
+                if candidate in self.constant_aliases:
+                    # A constant that is another constant counts what that one counts
+                    return self.enum_of_size(*self.constant_aliases[candidate])
         else:
             found = None
         if found is None or self.types[found].enumerators is None:

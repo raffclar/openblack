@@ -124,6 +124,7 @@
 #include "ECS/DrawnPlace.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/MovingShadowCasters.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/SwimmerRules.h"
@@ -3506,7 +3507,7 @@ void Renderer::DrawInfluenceBorder(const DrawSceneDesc& desc) const
 		const auto indices = std::span(reinterpret_cast<uint16_t*>(indexBuffer.data), indexCount);
 		// The player's colour; only the middle row shows, the ground and top fading out to it, and not where the
 		// circle is inside another of the player's. A hidden closing column fades to white, as the game's does.
-		const auto rgb = influence::k_PlayerColours.at(static_cast<size_t>(circle.player) & 7u);
+		const auto rgb = player_colour::FromTable(influence::k_PlayerColours, circle.player);
 		const auto abgr = ((rgb & 0xFFu) << 16u) | (rgb & 0xFF00u) | ((rgb >> 16u) & 0xFFu);
 		const auto lastColumn = circle.Columns() - 1;
 		for (size_t i = 0; i < vertices.size(); ++i)

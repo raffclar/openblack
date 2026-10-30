@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -31,9 +32,8 @@ std::vector<float> LentInfluence(PlayerNames player, const map_coords::MapCoords
 	const auto& players = Locator::playerSystem::value();
 	const auto& influence = Locator::influenceSystem::value();
 	// Every place of a player, the neutral player too, in the order of the numbers
-	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+	for (const auto ally : game_players::All())
 	{
-		const auto ally = static_cast<PlayerNames>(number);
 		if (player_relations::LendsInfluence(players.AllyStrength(player, ally)))
 		{
 			lent.push_back(influence.PlayerInfluence(ally, place));

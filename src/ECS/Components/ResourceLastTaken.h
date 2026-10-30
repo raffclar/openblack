@@ -15,6 +15,7 @@
 #include <optional>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs::components
 {
@@ -23,7 +24,7 @@ namespace openblack::ecs::components
 /// for less belief for a while
 struct ResourceLastTaken
 {
-	std::array<std::array<std::optional<uint32_t>, 2>, static_cast<size_t>(PlayerNames::_COUNT)> turn {};
+	std::array<std::array<std::optional<uint32_t>, 2>, player_slots::k_PlayerNumbers> turn {};
 };
 
 } // namespace openblack::ecs::components

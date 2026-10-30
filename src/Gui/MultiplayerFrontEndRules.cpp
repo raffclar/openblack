@@ -15,6 +15,7 @@
 
 #include <fmt/format.h>
 
+#include "ECS/PlayerColour.h"
 #include "Online/OnlineMapLand.h"
 #include "PingDisplay.h"
 
@@ -55,15 +56,8 @@ char16_t Lower(char16_t c)
 
 /// The observers' grey, as 0xAARRGGBB
 constexpr uint32_t k_ObserverColour = 0xFF808080;
-/// The chat colour of each of the 32 gods, as 0xAARRGGBB. The first four are the game room's team colours: red, green,
-/// blue and yellow. The others are far from each other, from the grey of the observers and from the player's own lines,
-/// and bright enough to read on the dark chat box. A god earlier in the list is further from the colours before it.
-constexpr std::array<uint32_t, 32> k_GodColours = {
-    0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFFFFFF00, 0xFFFF33BB, 0xFF3377EE, 0xFF11FFBB, 0xFF559900,
-    0xFFDD5566, 0xFFEEFF99, 0xFFEEAAFF, 0xFF00BBFF, 0xFFDD11FF, 0xFF119977, 0xFF66FFFF, 0xFFAA55DD,
-    0xFFAAFF55, 0xFF778844, 0xFFFF7700, 0xFFEEAA88, 0xFFFFCC33, 0xFF00FF77, 0xFFBB7799, 0xFFAAEEBB,
-    0xFF2299AA, 0xFFFF0077, 0xFF7788CC, 0xFFFF77BB, 0xFF00AA55, 0xFFBBCC33, 0xFFFF0044, 0xFF00BB00,
-};
+/// The chat colour of each of the 32 gods, as 0xAARRGGBB: the colours that the gods after the seventh also have on the land
+constexpr const auto& k_GodColours = player_colour::k_GodChatColours;
 /// The player's own chat lines
 constexpr uint32_t k_OwnLine = 0xFFC8C8C8;
 

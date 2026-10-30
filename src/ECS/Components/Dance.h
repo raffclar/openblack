@@ -23,6 +23,7 @@
 
 #include "3D/MapCoords.h"
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::dance
 {
@@ -123,8 +124,9 @@ struct DanceHand
 	bool cameraAsked {false};
 };
 
-/// The gods that a dance counts a hand for: every player, but not the neutral player
-inline constexpr std::size_t k_DanceHandGods = static_cast<std::size_t>(PlayerNames::NEUTRAL);
+/// The gods that a dance counts a hand for: every player, but not the neutral player. The dance keeps a place for each
+/// god slot of a network game with the most gods; the god slots of a land have the numbers of its gods.
+inline constexpr std::size_t k_DanceHandGods = player_slots::k_MaxPlayers;
 
 /// A dance villagers gather to dance about a place: the one at each worship site, a town's, or one a script makes. Its
 /// dancers dance in groups as its dance file sets out, on the dance's clock.
@@ -168,7 +170,7 @@ struct Dance
 	uint32_t onTheirWay {0};
 	/// The turn its first dancer came, once one has
 	std::optional<uint32_t> firstDancerTurn;
-	/// The hand count and the camera of each god, in the order of the players. A game with one player counts only the
+	/// The hand count and the camera of each god, by god slot. A game with one player counts only the
 	/// hand of the first player. A network game counts the hand of each god for that god.
 	std::array<DanceHand, k_DanceHandGods> hands {};
 	/// Its groups, their order of choosing and its dancers

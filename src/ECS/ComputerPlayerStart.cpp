@@ -178,7 +178,7 @@ void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::sp
 	}
 }
 
-void HumansJoin(SlotWorld& world, std::span<const PlayerNames> humans, bool landWaits)
+void HumansJoin(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans, bool landWaits)
 {
 	for (const auto human : humans)
 	{
@@ -186,7 +186,7 @@ void HumansJoin(SlotWorld& world, std::span<const PlayerNames> humans, bool land
 	}
 	if (landWaits)
 	{
-		FillEmptySlots(world, k_SlotGods, humans);
+		FillEmptySlots(world, gods, humans);
 	}
 }
 

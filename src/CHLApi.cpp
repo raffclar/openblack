@@ -54,6 +54,7 @@
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
+#include "ECS/GamePlayers.h"
 #include "Sound/GameMusic.h"
 #include "Sound/GameSoundEffects.h"
 #include "Sound/ScriptSoundEffect.h"
@@ -315,6 +316,13 @@ namespace openblack::chlapi
 using namespace openblack::ecs::archetypes;
 
 PlayerNames ScriptPlayerName(int32_t scriptPlayer);
+
+/// Whether a player that a script names is a player of this game. The players of a land are the 8 of the game. A
+/// network game with more gods has the gods after the seventh too: the script numbers 9 to 33 name them (deviation 165).
+[[nodiscard]] static bool ScriptNamesPlayer(PlayerNames player)
+{
+	return static_cast<size_t>(player) < openblack::ecs::game_players::Count();
+}
 
 using openblack::Locator;
 using openblack::MobileStaticInfo;
@@ -3983,7 +3991,7 @@ void Snapshot() // 057 SNAPSHOT
 /// The player that these natives name by its place in the game's player list, from 0. None past the last player.
 std::optional<PlayerNames> ScriptPlayerByIndex(uint32_t index)
 {
-	if (index >= static_cast<uint32_t>(PlayerNames::_COUNT))
+	if (index >= ecs::game_players::Count())
 	{
 		return std::nullopt;
 	}
@@ -4025,7 +4033,7 @@ void SetAlignment() // 059 SET_ALIGNMENT
 /// a player there isn't.
 static entt::entity CreateScriptInfluence(uint32_t player, float radius, bool anti, glm::vec3 position, entt::entity follows)
 {
-	if (player >= static_cast<uint32_t>(PlayerNames::_COUNT))
+	if (player >= ecs::game_players::Count())
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Could not make influence ring!");
 		return entt::null;
@@ -4073,7 +4081,7 @@ void GetInfluence() // 062 GET_INFLUENCE
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	// A player who isn't in the game has no influence anywhere
 	std::optional<float> influence;
-	if (player < PlayerNames::_COUNT && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
+	if (ScriptNamesPlayer(player) && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
 	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().FindPlayer(player).value_or(entt::null)))
 	{
 		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
@@ -7216,7 +7224,7 @@ void BeliefForPlayer() // 247 BELIEF_FOR_PLAYER
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	const auto object = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
-	if (object == entt::null || !registry.Valid(object) || player >= PlayerNames::_COUNT)
+	if (object == entt::null || !registry.Valid(object) || !ScriptNamesPlayer(player))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object or player no longer valid");
 		Pushf(0.0f);
@@ -7385,15 +7393,14 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 	const auto amount = Popf();
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	auto* impression = ScriptTownImpression(PopObject());
-	if (impression == nullptr || player >= PlayerNames::_COUNT)
+	if (impression == nullptr || !ScriptNamesPlayer(player))
 	{
 		return;
 	}
 	// The players that play and the neutral player take part. A player that nobody plays does not.
 	std::vector<PlayerNames> inGame;
-	for (size_t p = 0; p < static_cast<size_t>(PlayerNames::_COUNT); ++p)
+	for (const auto name : ecs::game_players::All())
 	{
-		const auto name = static_cast<PlayerNames>(p);
 		if (name == PlayerNames::NEUTRAL ||
 		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().PlaysInGame(name)))
 		{
@@ -8496,7 +8503,7 @@ void SetPlayerBelief() // 325 SET_PLAYER_BELIEF
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	const auto object = PopObject();
 	auto* impression = ScriptTownImpression(object);
-	if (impression == nullptr || player >= PlayerNames::_COUNT)
+	if (impression == nullptr || !ScriptNamesPlayer(player))
 	{
 		return;
 	}
@@ -9286,7 +9293,7 @@ void SetComputerPlayerAttitude() // 378 SET_COMPUTER_PLAYER_ATTITUDE
 	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	// The mind of the first player now thinks this of the second; a number that names no player does nothing
-	if (player < PlayerNames::_COUNT && other < PlayerNames::_COUNT && Locator::computerPlayerSystem::has_value())
+	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().SetAttitude(player, other, attitude);
 	}
@@ -9298,7 +9305,7 @@ void GetComputerPlayerAttitude() // 379 GET_COMPUTER_PLAYER_ATTITUDE
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	// A number that names no player gives 0
 	float attitude = 0.0f;
-	if (player < PlayerNames::_COUNT && other < PlayerNames::_COUNT && Locator::computerPlayerSystem::has_value())
+	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::computerPlayerSystem::has_value())
 	{
 		attitude = Locator::computerPlayerSystem::value().Attitude(player, other);
 	}
@@ -9310,7 +9317,7 @@ void LoadComputerPlayerPersonality() // 380 LOAD_COMPUTER_PLAYER_PERSONALITY
 	const auto file = PopString();
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	// The mind of the player gets the weights of the file. A missing file or a number that names no player does nothing.
-	if (player < PlayerNames::_COUNT && Locator::computerPlayerSystem::has_value())
+	if (ScriptNamesPlayer(player) && Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().LoadPersonality(player, file);
 	}
@@ -9321,7 +9328,7 @@ void SaveComputerPlayerPersonality() // 381 SAVE_COMPUTER_PLAYER_PERSONALITY
 	const auto file = PopString();
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	// The file gets the weights of the mind of the player. A number that names no player does nothing.
-	if (player < PlayerNames::_COUNT && Locator::computerPlayerSystem::has_value())
+	if (ScriptNamesPlayer(player) && Locator::computerPlayerSystem::has_value())
 	{
 		Locator::computerPlayerSystem::value().SavePersonality(player, file);
 	}
@@ -9333,7 +9340,7 @@ void SetPlayerAlly() // 382 SET_PLAYER_ALLY
 	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	// The two players are allies of each other with this strength; a number that names no player does nothing
-	if (player < PlayerNames::_COUNT && other < PlayerNames::_COUNT && Locator::playerSystem::has_value())
+	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::playerSystem::has_value())
 	{
 		Locator::playerSystem::value().SetAlly(other, player, strength);
 	}
@@ -9603,7 +9610,7 @@ void GetPlayerAlly() // 398 GET_PLAYER_ALLY
 	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
 	// The strength that the second player keeps for the first; a number that names no player gives 0
 	float strength = 0.0f;
-	if (player < PlayerNames::_COUNT && other < PlayerNames::_COUNT && Locator::playerSystem::has_value())
+	if (ScriptNamesPlayer(player) && ScriptNamesPlayer(other) && Locator::playerSystem::has_value())
 	{
 		strength = Locator::playerSystem::value().AllyStrength(other, player);
 	}

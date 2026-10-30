@@ -60,6 +60,16 @@ TEST(ComputerMindConquest, RivalBeliefOfTheOwnerOrTheStrongestRival)
 	EXPECT_FLOAT_EQ(RivalBelief(equal, 0, 0), 0.4f);
 }
 
+TEST(ComputerMindConquest, AGodAfterTheSeventhFindsItsRivalsInTheBeliefOfTheGame)
+{
+	// A game of 10 player numbers: the god is player 9 and the town believes most in player 8
+	const std::array<float, 10> belief {0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.2f, 0.6f, 0.3f};
+	EXPECT_FLOAT_EQ(RivalBelief(belief, 9, 9), 0.6f);
+	EXPECT_FLOAT_EQ(RivalBelief(belief, 9, 8), 0.6f);
+	// A player that the belief has no place for gets none
+	EXPECT_FLOAT_EQ(RivalBelief(belief, 0, 12), 0.0f);
+}
+
 TEST(ComputerMindConquest, TownWorthParts)
 {
 	const std::array<TownMiracleFacts, 3> miracles {

@@ -96,7 +96,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::creaturesMade>("creaturesMade")
 	    .Field<&openblack::ecs::RegistryContext::nextTownGained>("nextTownGained")
 	    .Field<&openblack::ecs::RegistryContext::nextTownMade>("nextTownMade")
-	    .Field<&openblack::ecs::RegistryContext::peopleCountedInTurn>("peopleCountedInTurn")
+	    .Field<&openblack::ecs::RegistryContext::peopleCountedInTurn>("peopleCountedInTurn", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::RegistryContext::landAvoid>("landAvoid")
 	    .Field<&openblack::ecs::RegistryContext::creatureBoneReach>("creatureBoneReach")
 	    .Field<&openblack::ecs::RegistryContext::namedVillagersUsed>("namedVillagersUsed")

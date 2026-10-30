@@ -89,6 +89,7 @@
 #include "ECS/CreatureSight.h"
 #include "ECS/GameEndConditions.h"
 #include "ECS/GamePhysicsHooksWorld.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -1672,9 +1673,8 @@ void MagicSystem::ProcessTurn()
 	KeepCreatureBeams();
 
 	// The seed in the hand of each player waits until it is ready
-	for (uint8_t i = 0; i < static_cast<uint8_t>(PlayerNames::NEUTRAL); ++i)
+	for (const auto player : ecs::game_players::Gods())
 	{
-		const auto player = static_cast<PlayerNames>(i);
 		if (HeldOf(player).has_value())
 		{
 			const ActingAs acting(*this, player);
@@ -2123,9 +2123,8 @@ std::optional<PlayerNames> MagicSystem::HolderOf(entt::entity seed) const
 	{
 		return std::nullopt;
 	}
-	for (uint8_t i = 0; i < static_cast<uint8_t>(PlayerNames::NEUTRAL); ++i)
+	for (const auto player : ecs::game_players::Gods())
 	{
-		const auto player = static_cast<PlayerNames>(i);
 		if (HeldOf(player) == seed)
 		{
 			return player;

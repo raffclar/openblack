@@ -23,6 +23,7 @@
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Reflection/ComponentReflection.h"
+#include "Enums.h"
 
 namespace components = openblack::ecs::components;
 
@@ -30,6 +31,16 @@ namespace openblack::ecs::reflection
 {
 void RegisterFields_Components_p(entt::meta_ctx& context);
 }
+
+namespace
+{
+
+// The names of the enumerations indexing lists, which the lists' elements are read and set by
+constexpr std::array<std::string_view, 8> k_PlayerNamesNames {"PLAYER_ONE",  "PLAYER_TWO", "PLAYER_THREE", "PLAYER_FOUR",
+                                                              "PLAYER_FIVE", "PLAYER_SIX", "PLAYER_SEVEN", "NEUTRAL"};
+static_assert(static_cast<size_t>(openblack::PlayerNames::_COUNT) == k_PlayerNamesNames.size());
+
+} // namespace
 
 void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& context)
 {
@@ -44,14 +55,14 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	Reflect<components::Player>(context)
 	    .Field<&components::Player::name>("name")
 	    .Field<&components::Player::handTookFrom>("handTookFrom")
-	    .Field<&components::Player::damageFrom>("damageFrom")
+	    .Field<&components::Player::damageFrom>("damageFrom", {k_PlayerNamesNames})
 	    .Field<&components::Player::lastCast>("lastCast")
 	    .Field<&components::Player::lastSeedGained>("lastSeedGained")
 	    .Field<&components::Player::windResistance>("windResistance")
 	    .Field<&components::Player::miracles>("miracles");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");
-	Reflect<components::PlayerAllies>(context).Field<&components::PlayerAllies::strength>("strength");
-	Reflect<components::ComputerAttitudes>(context).Field<&components::ComputerAttitudes::kept>("kept");
+	Reflect<components::PlayerAllies>(context).Field<&components::PlayerAllies::strength>("strength", {k_PlayerNamesNames});
+	Reflect<components::ComputerAttitudes>(context).Field<&components::ComputerAttitudes::kept>("kept", {k_PlayerNamesNames});
 	Reflect<components::PlayerInfluencePower>(context)
 	    .Field<&components::PlayerInfluencePower::power>("power")
 	    .Field<&components::PlayerInfluencePower::average>("average");

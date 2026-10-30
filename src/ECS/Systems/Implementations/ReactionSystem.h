@@ -12,6 +12,7 @@
 #include <array>
 
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "Magic/TownBelief.h"
 #include "VillagerReactions.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -115,7 +116,7 @@ private:
 	/// The things' and the miracles' balances of impressiveness
 	std::array<float, 3> _landBalances {1.0f, 1.0f, 1.0f};
 	/// For each player, the number for the belief that the towns gained, which the hand shows at this turn
-	std::array<std::optional<float>, static_cast<size_t>(PlayerNames::_COUNT)> _gainShown {};
+	std::array<std::optional<float>, magic::town_belief::k_PlayerCount> _gainShown {};
 };
 
 } // namespace openblack::ecs::systems

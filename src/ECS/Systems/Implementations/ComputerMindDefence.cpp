@@ -45,6 +45,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/ComputerMindCreatureRules.h"
 #include "ECS/ComputerMindDefenceRules.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -227,8 +228,9 @@ computer_mind_rules::TownBeliefFacts BeliefOf(entt::entity town)
 	computer_mind_rules::TownBeliefFacts facts;
 	if (const auto* impression = Entities().TryGet<const TownImpression>(town))
 	{
-		facts.belief = impression->belief.belief;
-		facts.recent = impression->belief.recent;
+		// The rules of the mind look at the players of a land
+		std::copy_n(impression->belief.belief.begin(), facts.belief.size(), facts.belief.begin());
+		std::copy_n(impression->belief.recent.begin(), facts.recent.size(), facts.recent.begin());
 	}
 	return facts;
 }
@@ -330,9 +332,9 @@ float DefendTown(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 	for (size_t index = 0; index < towns.size(); ++index)
 	{
 		const auto* aggression = registry.TryGet<const TownAggression>(towns[index]);
-		for (size_t number = 0; number < k_PlayerCount; ++number)
+		for (const auto attacker : ecs::game_players::All())
 		{
-			const auto attacker = static_cast<PlayerNames>(number);
+			const auto number = static_cast<size_t>(attacker);
 			if (!InGame(attacker) || attacker == context.player)
 			{
 				continue;

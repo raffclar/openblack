@@ -18,6 +18,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DrawnOnScreen.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -101,7 +102,7 @@ void SpellIconSystem::ShowCharge(entt::entity entity, const WorshipIcon& icon, i
 	}
 	const auto& transform = registry.Get<const Transform>(entity);
 	const auto model = PlacedMatrix(transform.position, transform.rotation, transform.scale);
-	const auto playerRgb = Player::k_Colours.at(static_cast<size_t>(site->player) & (Player::k_Colours.size() - 1)) & k_RgbMask;
+	const auto playerRgb = player_colour::Of(site->player) & k_RgbMask;
 	auto& look = _looks[entity];
 
 	// The game draws the model with the shine of the last frame that drew it, then works out the new shine
