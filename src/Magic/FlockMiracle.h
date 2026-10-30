@@ -23,6 +23,7 @@ public:
 	void ProcessTurn(SpellServicesInterface& services, ecs::components::Spell& spell) override;
 	[[nodiscard]] bool AnimalsLeft(const ecs::components::Spell& spell) const override;
 	[[nodiscard]] bool FollowsHand(SpellServicesInterface& services, const ecs::components::Spell& spell) const override;
+	[[nodiscard]] bool MakesAnimals(SpellServicesInterface& services, const ecs::components::Spell& spell) const override;
 
 private:
 	/// The animals made this turn along the hand's sweep

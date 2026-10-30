@@ -818,6 +818,8 @@ private:
 	std::array<glm::vec3, 4> _lastHandReport {};
 	/// The point that the interface picked last under the cursor. It stays while the cursor picks nothing.
 	glm::vec3 _handCollidePoint {0.0f};
+	/// The turns that the hand report still waits after its last send
+	uint8_t _handReportWait {0};
 	entt::entity _reportedHand {entt::null};
 	/// The thing under the cursor that the last player_commands::HandPick sent
 	entt::entity _lastHandPick {entt::null};

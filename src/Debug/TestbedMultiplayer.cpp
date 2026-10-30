@@ -476,6 +476,11 @@ public:
 		    .ticket = std::move(join.ticket),
 		    .gamePassword = std::move(join.gamePassword),
 		    .name = std::move(join.name),
+		    .readLand = {},
+		    .readCreature = {},
+		    .readAlignment = {},
+		    .parts = {},
+		    .origin = join.origin,
 		});
 		return true;
 	}

@@ -599,6 +599,10 @@ void MultiplayerFrontEnd::RoomOpened(std::string ticket, std::u16string password
 	    .name = lanName,
 	    .testAuthorities = std::nullopt,
 	    .fromCommandLine = false,
+	    .partAt = std::nullopt,
+	    .partAgain = false,
+	    .testCreatureFile = std::nullopt,
+	    .origin = _flow.kind == LobbyKind::Lan ? online::GameOrigin::Lan : online::GameOrigin::InternetLobby,
 	});
 	if (!_joining)
 	{
