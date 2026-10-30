@@ -306,6 +306,13 @@ std::string HandGrabSystem::WhyNotTake(entt::entity object) const
 	return std::string(hand_grab::GateRefusal(GateOf(object)));
 }
 
+bool HandGrabSystem::WouldScoop(entt::entity object) const
+{
+	// The interface of this computer asks about its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	return _world->Entities().Valid(object) && !IsBusy() && Scoopable(object);
+}
+
 float HandGrabSystem::HangOf(entt::entity object) const
 {
 	return HoldOfObject(object).loweringMultiplier * _world->SizeOf(object).height;

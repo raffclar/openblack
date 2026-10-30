@@ -1156,6 +1156,23 @@ TEST_F(HandGrabSystemWithWorld, ItSaysWhyAThingWouldntBeTaken)
 	EXPECT_NE(system->WhyNotTake(rock).find("busy"), std::string::npos);
 }
 
+TEST_F(HandGrabSystemWithWorld, ItSaysThatAPressOnAPileScoopsFromIt)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->sizes[pile] = {.radius = 2.0f, .height = 3.0f};
+	EXPECT_TRUE(system->WouldScoop(pile));
+	EXPECT_FALSE(system->WouldScoop(world->AddRock({5.0f, 0.0f, 0.0f})));
+	// Not out of the influence
+	world->influence = false;
+	EXPECT_FALSE(system->WouldScoop(pile));
+	world->influence = true;
+	// Not from an empty pile
+	world->registry.Get<Pot>(pile).amount = 0;
+	EXPECT_FALSE(system->WouldScoop(pile));
+}
+
 TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});

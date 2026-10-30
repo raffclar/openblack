@@ -545,8 +545,11 @@ Json GameInput::State() const
 		// the land
 		if (pick.object.has_value() && Locator::handGrabSystem::has_value())
 		{
-			const auto why = Locator::handGrabSystem::value().WhyNotTake(*pick.object);
-			state["pick"]["grab"] = {{"takes", why.empty()}, {"button", "right"}};
+			const auto& hand = Locator::handGrabSystem::value();
+			// A press on a pile, a field or a fish farm takes a handful out of it
+			const bool scoops = hand.WouldScoop(*pick.object);
+			const auto why = scoops ? std::string() : hand.WhyNotTake(*pick.object);
+			state["pick"]["grab"] = {{"takes", why.empty()}, {"button", "right"}, {"scoops", scoops}};
 			if (!why.empty())
 			{
 				state["pick"]["grab"]["why_not"] = why;
