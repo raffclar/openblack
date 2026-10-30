@@ -246,10 +246,9 @@
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
 #include "Gestures/GesturePaths.h"
 #include "Graphics/RendererInterface.h"
-#include "Gui/GameInterface.h"
+#include "Gui/GameTexts.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Help/HelpProfileFile.h"
@@ -699,22 +698,6 @@ std::string GiveOwnTattooPicture(size_t design)
 	return fmt::format("design {} has the player's own picture", design + 1);
 }
 
-/// The game's menu opens on its Players page, and the tattoo editor over it as the page's Edit Tattoo button opens it
-std::string OpenTattooMenu()
-{
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr || !Locator::tattooMenuSystem::has_value())
-	{
-		return "failed: no menu";
-	}
-	auto& interface = *game->GetInterface();
-	interface.OpenMenu();
-	interface.GetMenu().ShowPage(gui::GameMenu::Page::Players);
-	Locator::tattooMenuSystem::value().Open();
-	return Locator::tattooMenuSystem::value().IsOpen() ? "the tattoo editor shows its creature over the menu"
-	                                                   : "failed: the editor did not open";
-}
-
 /// The made-up round trip of the ping line in microseconds: 40 ms, then 8 ms more each second to 64 ms, then 40 ms
 /// again
 [[nodiscard]] uint64_t DemoRoundTrip(float seconds)
@@ -723,45 +706,6 @@ std::string OpenTattooMenu()
 	constexpr uint64_t k_Step = 8'000;
 	constexpr uint64_t k_Steps = 4;
 	return k_First + (k_Step * (static_cast<uint64_t>(seconds) % k_Steps));
-}
-
-/// The tattoo editor works as in a network game, or as in a game alone
-std::string TattooEditorAsNetworkGame(bool asNetworkGame)
-{
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr)
-	{
-		return "failed: no interface";
-	}
-	game->GetInterface()->SetTattooEditorAsNetworkGame(asNetworkGame);
-	return asNetworkGame ? "OK warns about a change first" : "OK closes the editor";
-}
-
-/// The game's menu opens on its Controls page, picks a row and double clicks it, as the player does to bind it anew
-std::string OpenControlsBox(size_t row)
-{
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr)
-	{
-		return "failed: no menu";
-	}
-	auto& interface = *game->GetInterface();
-	interface.OpenMenu();
-	auto& menu = interface.GetMenu();
-	menu.ShowPage(gui::GameMenu::Page::Controls);
-	const auto& list = menu.GetControls();
-	for (int y = list.rect.min.y; y < list.rect.max.y; ++y)
-	{
-		if (list.ItemAt(y) == row)
-		{
-			const glm::ivec2 point {list.rect.Centre().x, y + 4};
-			menu.MouseDown(point);
-			menu.MouseUp(point);
-			menu.DoubleClick(point);
-			break;
-		}
-	}
-	return menu.IsCapturing() ? fmt::format("the box asks for the new input of row {}", row) : "failed: no box";
 }
 
 /// A message comes into the list of incoming messages: the message of the real weather with a picture, a chat line or an
@@ -791,10 +735,9 @@ std::string AddIncomingMessage(size_t value, std::string_view text)
 }
 
 /// The chat of a network game: a god says a line, or the chat of this computer opens with a line in it
-std::string Chat(PlayerNames player, size_t value, std::string_view text)
+std::string Chat(GameStageInterface* stage, PlayerNames player, size_t value, std::string_view text)
 {
-	auto* game = Game::Instance();
-	if (!Locator::chatSystem::has_value() || game == nullptr || game->GetInterface() == nullptr)
+	if (!Locator::chatSystem::has_value() || stage == nullptr || !stage->HasInterface())
 	{
 		return "failed: no chat";
 	}
@@ -813,9 +756,7 @@ std::string Chat(PlayerNames player, size_t value, std::string_view text)
 	const auto line = gui::ToUtf16(text);
 	if (value == k_ChatTypes)
 	{
-		auto& controls = game->GetInterface()->GetChatControls();
-		controls.Open();
-		controls.TextInput(line);
+		stage->OpenChat(line);
 		return fmt::format("the chat opens with \"{}\"", text);
 	}
 	if (value != k_ChatSays)
@@ -839,60 +780,6 @@ std::string Chat(PlayerNames player, size_t value, std::string_view text)
 	}
 	chat.Receive(player, player_commands::ChatSpeech {.recipients = {}, .text = line});
 	return fmt::format("god {} says \"{}\"", static_cast<int>(player), text);
-}
-
-/// The multiplayer front end opens over the temple's future room with the demonstration lobby, on its way to a stage
-std::string OpenMultiplayerBox(size_t stage)
-{
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr || stage >= static_cast<size_t>(testbed_multiplayer::Stage::_Count))
-	{
-		return "failed: no interface";
-	}
-	auto maps = gui::ReadOnlineMapTexts();
-	auto frontEnd = testbed_multiplayer::MakeDemoFrontEnd(static_cast<testbed_multiplayer::Stage>(stage), u"Alice",
-	                                                      std::move(maps.localMaps), std::move(maps.conditionTemplate));
-	if (!game->OpenMultiplayerFrontEnd(std::move(frontEnd)))
-	{
-		return "failed: no temple";
-	}
-	return fmt::format("the front end goes to stage {}", stage);
-}
-
-/// The game's menu opens on a page. Without sound, the menu shows what a game with no sound shows.
-std::string OpenMenuPage(size_t page, bool noSound)
-{
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr || page >= static_cast<size_t>(gui::GameMenu::Page::_Count))
-	{
-		return "failed: no menu";
-	}
-	auto& interface = *game->GetInterface();
-	interface.OpenMenu();
-	auto& menu = interface.GetMenu();
-	if (noSound)
-	{
-		menu.SetSoundInstalled(false);
-	}
-	menu.ShowPage(static_cast<gui::GameMenu::Page>(page));
-	return fmt::format("the menu shows page {}{}", page, noSound ? " as with no sound" : "");
-}
-
-/// A key pressed in the game's menu, as the keyboard gives it
-std::string PressMenuKey(size_t key, bool shift)
-{
-	auto* game = Game::Instance();
-	if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetMenu().IsOpen())
-	{
-		return "failed: the menu is not open";
-	}
-	auto& menu = game->GetInterface()->GetMenu();
-	const auto action = static_cast<int>(key) == SDLK_ESCAPE ? menu.Escape() : menu.KeyDown(static_cast<int>(key), shift);
-	if (action == gui::GameMenu::Action::Continue)
-	{
-		menu.Close();
-	}
-	return fmt::format("key {}{} pressed", key, shift ? " with Shift" : "");
 }
 
 /// The game writes the help record of the player to their folder in the profile folder, then reads it again
@@ -1099,9 +986,9 @@ void Runner::Start(const Scenario& scenario)
 	// players
 	if (scenario.environment.symbolsAfterLandScript)
 	{
-		if (auto* game = Game::Instance(); game != nullptr)
+		if (_stage != nullptr)
 		{
-			game->MakePlayersSymbols(scenario.environment.profileSymbol);
+			_stage->MakePlayersSymbols(scenario.environment.profileSymbol);
 		}
 	}
 	if (scenario.objectsAfterLandScript)
@@ -1277,9 +1164,9 @@ void Runner::Stop()
 	}
 	_running = false;
 	// The ping line belongs to the network game again
-	if (_demoPingSince.has_value() && Game::Instance() != nullptr)
+	if (_demoPingSince.has_value() && _stage != nullptr)
 	{
-		Game::Instance()->SetDemoRoundTrip(std::nullopt);
+		_stage->SetDemoRoundTrip(std::nullopt);
 	}
 	_demoPingSince.reset();
 	// The debug option's bonus creatures are as they were
@@ -1518,9 +1405,9 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	}
 	if (environment.profileSymbol.has_value())
 	{
-		if (auto* game = Game::Instance(); game != nullptr)
+		if (_stage != nullptr)
 		{
-			game->MakePlayersSymbols(environment.profileSymbol);
+			_stage->MakePlayersSymbols(environment.profileSymbol);
 		}
 	}
 	if (environment.drawFootpaths && Locator::config::has_value())
@@ -1579,7 +1466,7 @@ void Runner::SetUpEnvironment(const Environment& environment)
 	if (environment.cursor && Locator::windowing::has_value())
 	{
 		const auto size = glm::vec2(Locator::windowing::value().GetSize());
-		Game::Instance()->SetMousePosition(glm::ivec2(*environment.cursor * size));
+		_stage->SetMousePosition(glm::ivec2(*environment.cursor * size));
 	}
 }
 
@@ -2102,7 +1989,7 @@ void Runner::PointAtBody(entt::entity creature) const
 	glm::vec3 pixel;
 	if (Locator::camera::value().ProjectWorldToScreen(middle, {0.0f, 0.0f, size.x, size.y}, pixel))
 	{
-		Game::Instance()->SetMousePosition(glm::ivec2(glm::round(glm::vec2(pixel))));
+		_stage->SetMousePosition(glm::ivec2(glm::round(glm::vec2(pixel))));
 	}
 }
 
@@ -3443,15 +3330,16 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::OpenTattooMenu)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenTattooMenu()));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->OpenTattooMenu() : "failed: no menu")));
 		return;
 	}
 	if (command.kind == Kind::ShowDemoPing)
 	{
 		_demoPingSince = command.value != 0 ? std::optional(_seconds) : std::nullopt;
-		if (!_demoPingSince.has_value() && Game::Instance() != nullptr)
+		if (!_demoPingSince.has_value() && _stage != nullptr)
 		{
-			Game::Instance()->SetDemoRoundTrip(std::nullopt);
+			_stage->SetDemoRoundTrip(std::nullopt);
 		}
 		UpdateDemoPing();
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _demoPingSince.has_value() ? "shown" : "gone"));
@@ -3459,27 +3347,26 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::TattooEditorAsNetworkGame)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), TattooEditorAsNetworkGame(command.value != 0)));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->TattooEditorAsNetworkGame(command.value != 0) : "failed: no interface")));
 		return;
 	}
 	if (command.kind == Kind::OpenControlsBox)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->OpenControlsBox(command.value) : "failed: no menu")));
 		return;
 	}
 	if (command.kind == Kind::JoinOnline)
 	{
-		auto* game = Game::Instance();
-		if (game != nullptr)
-		{
-			game->RequestJoinOnline();
-		}
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), game != nullptr ? "asked" : "failed: no game"));
+		const bool asked = _stage != nullptr && _stage->RequestJoinOnline();
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), asked ? "asked" : "failed: no game"));
 		return;
 	}
 	if (command.kind == Kind::Chat)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), Chat(command.player, command.value, command.action)));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                Chat(_stage, command.player, command.value, command.action)));
 		return;
 	}
 	if (command.kind == Kind::AddIncomingMessage)
@@ -3489,40 +3376,20 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::OpenMultiplayerBox)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMultiplayerBox(command.value)));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->OpenMultiplayerBox(command.value) : "failed: no interface")));
 		return;
 	}
 	if (command.kind == Kind::SkirmishBox)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (_stage == nullptr || !_stage->HasInterface())
 		{
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
 			return;
 		}
 		if (command.value == 1 || command.value == 4)
 		{
-			auto& menu = game->GetInterface()->GetMenu();
-			menu.SetSkirmish(true);
-			game->GetInterface()->OpenMenu();
-			if (command.value == 4)
-			{
-				// A click on Leave Skirmish Game: the menu asks whether to leave
-				const auto controls = menu.GetNamedControls();
-				const auto leave = std::ranges::find_if(controls, [&game](const gui::Dialog::NamedControl& control) {
-					return control.name == game->GetInterface()->GetTexts().Get("HELP_TEXT_DIALOG_ADDITION_170");
-				});
-				if (leave != controls.end())
-				{
-					const auto middle = (leave->rect.min + leave->rect.max) / 2;
-					menu.MouseDown(middle);
-					[[maybe_unused]] const auto action = menu.MouseUp(middle);
-				}
-				Log(fmt::format("{:.1f}s: {}: the main menu of a skirmish {}", _seconds, Name(command.kind),
-				                menu.IsAskingToQuit() ? "asks to leave the skirmish" : "did not ask"));
-				return;
-			}
-			Log(fmt::format("{:.1f}s: {}: the main menu of a skirmish opens", _seconds, Name(command.kind)));
+			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenSkirmishMenu(command.value == 4)));
 			return;
 		}
 		if (command.value == 3)
@@ -3554,65 +3421,40 @@ void Runner::Give(const Command& command)
 			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
 			return;
 		}
-		// The box holds the game, so that the scenario's clock stops while it is up
-		const bool opened = game->OpenSkirmishBoxOverGame();
-		if (opened && command.value == 2)
-		{
-			game->GetInterface()->GetSkirmishBox().Select(1);
-		}
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
-		                opened ? fmt::format("the box shows {} lands", game->GetSkirmishLands().size()) : "failed"));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenSkirmishBox(command.value == 2)));
 		return;
 	}
 	if (command.kind == Kind::EndBox)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (_stage == nullptr || !_stage->HasInterface())
 		{
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
 			return;
 		}
-		if (command.value == 3)
-		{
-			game->GetInterface()->GetMenu().SetNetworkGame(true);
-			game->GetInterface()->OpenMenu();
-			Log(fmt::format("{:.1f}s: {}: the main menu of a network game opens", _seconds, Name(command.kind)));
-			return;
-		}
-		if (command.value == 0)
-		{
-			game->AskToLeaveNetworkGame();
-			Log(fmt::format("{:.1f}s: {}: the question to leave opens", _seconds, Name(command.kind)));
-			return;
-		}
-		const bool opened = game->GetInterface()->GetEndGameBox().OpenTab(command.value);
-		Log(fmt::format("{:.1f}s: {}: tab {} {}", _seconds, Name(command.kind), command.value,
-		                opened ? "opens its box" : "does not open"));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenEndBox(command.value)));
 		return;
 	}
 	if (command.kind == Kind::OpenMenuPage)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMenuPage(command.value, command.ctrl)));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                (_stage != nullptr ? _stage->OpenMenuPage(command.value, command.ctrl) : "failed: no menu")));
 		return;
 	}
 	if (command.kind == Kind::PressMenuKey)
 	{
-		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PressMenuKey(command.value, command.ctrl)));
+		Log(fmt::format(
+		    "{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		    (_stage != nullptr ? _stage->PressMenuKey(command.value, command.ctrl) : "failed: the menu is not open")));
 		return;
 	}
 	if (command.kind == Kind::ShowCustomMusicControls)
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || game->GetInterface() == nullptr)
+		if (_stage == nullptr || !_stage->HasInterface())
 		{
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
 			return;
 		}
-		auto& controls = game->GetInterface()->GetMusicControls();
-		controls.ShowControls(command.value >= 1, command.value >= 2);
-		Log(fmt::format("{:.1f}s: {}: buttons {}, play list {}, the controls {}", _seconds, Name(command.kind),
-		                controls.GetPanel().controlsShown ? "shown" : "hidden",
-		                controls.GetPanel().playListShown ? "shown" : "hidden", controls.IsActive() ? "show" : "hide now"));
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->ShowCustomMusicControls(command.value)));
 		return;
 	}
 	if (command.kind == Kind::StartScriptMusic)
@@ -3724,17 +3566,16 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::PlayLogoEffect)
 	{
-		if (auto* game = Game::Instance(); game != nullptr)
+		if (_stage != nullptr)
 		{
-			game->PlayLogoEffect();
+			_stage->PlayLogoEffect();
 		}
 		Log(fmt::format("{:.1f}s: the logo effect played", _seconds));
 		return;
 	}
 	if (command.kind == Kind::ContinueGame)
 	{
-		auto* game = Game::Instance();
-		const bool loaded = game != nullptr && game->ContinueFromExitSave();
+		const bool loaded = _stage != nullptr && _stage->ContinueFromExitSave();
 		Log(fmt::format("{:.1f}s: continue from the save on exit: {}", _seconds,
 		                loaded ? "loaded, the menu shows" : "a new game"));
 		return;
@@ -4742,9 +4583,9 @@ void Runner::UpdateCamera()
 
 void Runner::UpdateDemoPing() const
 {
-	if (_demoPingSince.has_value() && Game::Instance() != nullptr)
+	if (_demoPingSince.has_value() && _stage != nullptr)
 	{
-		Game::Instance()->SetDemoRoundTrip(DemoRoundTrip(_seconds - *_demoPingSince));
+		_stage->SetDemoRoundTrip(DemoRoundTrip(_seconds - *_demoPingSince));
 	}
 }
 
@@ -6109,9 +5950,9 @@ void Runner::Measure()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Benchmark {}: frame mean {:.2f} ms p95 {:.2f} max {:.2f}; results {}",
 		                   _scenario->id, _liveResults.frame.average, _liveResults.frame.p95, _liveResults.frame.max,
 		                   written.has_value() ? written->generic_string() : "not written");
-		if (auto* game = Game::Instance(); game != nullptr)
+		if (_stage != nullptr)
 		{
-			game->RequestQuit();
+			_stage->RequestQuit();
 		}
 	}
 }
@@ -6233,9 +6074,8 @@ std::string Runner::RecordChallenge(const Command& command) const
 	snapshot.quest = command.ctrl;
 	// The title is the number of a help text. The dedicated server has no game interface, so it reads the names from
 	// the same text scripts. Thus the server and the game record the same title.
-	auto* game = Game::Instance();
-	const auto* shown = game != nullptr && game->GetInterface() != nullptr ? &game->GetInterface()->GetTexts() : nullptr;
-	const auto loaded = shown == nullptr ? std::optional(gui::GameInterface::LoadTexts()) : std::nullopt;
+	const auto* shown = _stage != nullptr ? _stage->GetTexts() : nullptr;
+	const auto loaded = shown == nullptr ? std::optional(gui::LoadGameTexts()) : std::nullopt;
 	const auto& texts = shown != nullptr ? *shown : *loaded;
 	if (const auto number = HelpTextNumber(texts.GetHelpNames(), command.title); number.has_value())
 	{

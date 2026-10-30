@@ -502,7 +502,7 @@ TEST(InspectorCoverage, EveryLocatorServiceHasAQuery)
 	StillRunTarget run;
 	GameWorldEdit world;
 	GameInput input;
-	GameControlSet controls(input);
+	GameControlSet controls(input, nullptr);
 	Inspector inspector;
 	AddGameProviders(inspector, reflection, run, world, controls.View());
 	// The inspector's system adds the run record's provider itself
@@ -530,7 +530,7 @@ TEST(InspectorCoverage, EveryQueryAnswersWithNoGame)
 	StillRunTarget run;
 	GameWorldEdit world;
 	GameInput input;
-	GameControlSet controls(input);
+	GameControlSet controls(input, nullptr);
 	Inspector inspector;
 	AddGameProviders(inspector, reflection, run, world, controls.View());
 
@@ -566,7 +566,7 @@ TEST(InspectorCoverage, TheAdaptersCatalogueOfQueriesIsUpToDate)
 	StillRunTarget run;
 	GameWorldEdit world;
 	GameInput input;
-	GameControlSet controls(input);
+	GameControlSet controls(input, nullptr);
 	Inspector inspector;
 	// The providers the game's inspector has, as its system adds them
 	AddGameProviders(inspector, reflection, run, world, controls.View());

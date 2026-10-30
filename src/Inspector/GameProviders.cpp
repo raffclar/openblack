@@ -244,10 +244,10 @@
 #include "EngineConfig.h"
 #include "FightProviders.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
 #include "GameControls.h"
+#include "GameSeamInterface.h"
 #include "Graphics/RendererInterface.h"
-#include "Gui/GameInterface.h"
+#include "Gui/ScreenFade.h"
 #include "Gui/ScriptTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Hand/HandTrace.h"
@@ -313,10 +313,13 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"audio", "audio.state"},
     // The sound requests keep no state of their own. They go to the audio at once, and audio.state shows the audio.
     LocatorCoverage {"sounds", "audio.state"},
+    LocatorCoverage {"gameMusic", "audio.state"},
     LocatorCoverage {"camera", "camera.state"},
     LocatorCoverage {"gameActionSystem", "players.input"},
     LocatorCoverage {"rendereringSystem", "engine.frame"},
     LocatorCoverage {"rendererInterface", "engine.frame"},
+    // The device makes what the renderer draws, which engine.frame shows
+    LocatorCoverage {"graphicsDevice", "engine.frame"},
     LocatorCoverage {"dynamicsSystem", "physics.state"},
     LocatorCoverage {"pickingSystem", "players.pick"},
     LocatorCoverage {"cameraBookmarkSystem", "view.bookmarks"},
@@ -446,6 +449,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"syncChecksumSystem", "players.checksum"},
     LocatorCoverage {"landSystem", "level.current"},
     LocatorCoverage {"videoSystem", "view.video"},
+    LocatorCoverage {"screenFade", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},
@@ -2698,7 +2702,8 @@ std::unique_ptr<ProviderInterface> TempleProvider()
 
 // The camera's helpers, the editor and the cinematics
 
-std::unique_ptr<ProviderInterface> ViewProvider()
+/// The seam is the game on the player's computer, or null with none
+std::unique_ptr<ProviderInterface> ViewProvider(const GameSeamInterface* seam)
 {
 	auto provider = std::make_unique<FunctionProvider>("view");
 	provider->Add(Query("pause_text", "The words of the pause and the speed: which words show (paused, slower, faster or "
@@ -2725,7 +2730,7 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 	    Query("incoming_messages",
 	          "The incoming messages at the bottom left of the screen: the list in order (kind, text, weather picture, the "
 	          "real time it started to show), the real time now, and whether the button shows with its look"),
-	    [](const QueryContext& /*c*/) {
+	    [seam](const QueryContext& /*c*/) {
 		    Json result = {{"count", 0}, {"messages", Json::array()}, {"shown", false}};
 		    if (!Locator::incomingMessageSystem::has_value())
 		    {
@@ -2746,18 +2751,9 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 			                                  {"since", top->since}});
 			    copy.Dismiss(top->since);
 		    }
-		    if (auto* game = Game::Instance(); game != nullptr && game->GetInterface() != nullptr)
+		    if (seam != nullptr)
 		    {
-			    const auto& strip = game->GetInterface()->GetIncomingMessages();
-			    result["shown"] = strip.IsActive();
-			    if (const auto& look = strip.GetLook(); look.has_value())
-			    {
-				    constexpr std::array<std::string_view, 5> k_Looks {"speech", "speech_arrow", "envelope", "envelope_arrow",
-				                                                       "weather"};
-				    result["look"] = k_Looks.at(static_cast<size_t>(look->look));
-				    result["look_picture"] = look->picture;
-			    }
-			    result["line"] = gui::ToUtf8(strip.GetText());
+			    seam->AddIncomingMessages(result);
 		    }
 		    return QueryResult::Value(std::move(result));
 	    });
@@ -2766,7 +2762,7 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 	                    "players that get them, text or taunt, shown in the incoming messages), the speech bubbles over "
 	                    "the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, "
 	                    "the typed line, the list of players and who gets a line)"),
-	              [](const QueryContext& /*c*/) {
+	              [seam](const QueryContext& /*c*/) {
 		              Json result = {{"names", Json::object()}, {"received", Json::array()}, {"bubbles", Json::array()}};
 		              if (!Locator::chatSystem::has_value())
 		              {
@@ -2803,29 +2799,9 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 			                                           {"display_time", bubble.displayTime},
 			                                           {"scroll", bubble.scroll}});
 		              }
-		              if (auto* game = Game::Instance(); game != nullptr && game->GetInterface() != nullptr)
+		              if (seam != nullptr)
 		              {
-			              const auto& controls = game->GetInterface()->GetChatControls();
-			              Json players = Json::array();
-			              for (const auto& person : controls.GetPeople().players)
-			              {
-				              players.push_back({{"slot", static_cast<int>(person.slot)},
-				                                 {"name", gui::ToUtf8(person.name)},
-				                                 {"selected", person.selected}});
-			              }
-			              Json recipients = Json::array();
-			              for (const auto player : controls.Recipients())
-			              {
-				              recipients.push_back(static_cast<int>(player));
-			              }
-			              result["controls"] = {{"shown", controls.IsActive()},
-			                                    {"open", controls.IsOpen()},
-			                                    {"quick_chat", controls.IsQuickChatOpen()},
-			                                    {"line", gui::ToUtf8(controls.GetLine())},
-			                                    {"expanded", controls.GetPeople().expanded},
-			                                    {"messages_on", controls.GetPeople().messagesOn},
-			                                    {"players", std::move(players)},
-			                                    {"recipients", std::move(recipients)}};
+			              seam->AddChatControls(result);
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
@@ -2833,6 +2809,12 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 	                             "creature and its effects, whether films are on, and the 16-bit surface of the films"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
+		              // The fade of the whole screen, which the video fades to white at its end
+		              if (Locator::screenFade::has_value())
+		              {
+			              const auto& fade = Locator::screenFade::value();
+			              result["screen_fade"] = {{"amount", fade.GetAmount()}, {"turns", fade.GetTurns()}};
+		              }
 		              if (Locator::videoSystem::has_value())
 		              {
 			              const auto& videos = Locator::videoSystem::value();
@@ -4551,9 +4533,9 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		                      .musicVolume = audio.GetMusicVolume(),
 		                      .musicActive = audio.MusicIsActive(),
 		                      .listener = audio.GetListener().origin};
-		    if (const auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		    if (Locator::gameMusic::has_value())
 		    {
-			    const auto& music = *game->GetGameMusic();
+			    const auto& music = Locator::gameMusic::value();
 			    state.musicPlaying = audio::GetMusicTypeName(music.GetPlaying());
 			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
 			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
@@ -4608,7 +4590,7 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(PlayersProvider());
 	inspector.Add(MagicProvider());
 	inspector.Add(TempleProvider());
-	inspector.Add(ViewProvider());
+	inspector.Add(ViewProvider(controls.seam));
 	inspector.Add(AdvisorsProvider());
 	inspector.Add(CreaturesProvider());
 	inspector.Add(ScriptProvider(controls.scripts));

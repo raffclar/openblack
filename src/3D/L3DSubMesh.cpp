@@ -22,6 +22,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/MeshDetail.h"
@@ -29,6 +30,7 @@
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
 #include "L3DMesh.h"
+#include "Locator.h"
 #include "MeshBounds.h"
 #include "VertexBlend.h"
 #include "Visual/RenderModes.h"
@@ -384,7 +386,8 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 	}
 
 	// build our buffers
-	const auto* indicesMem = bgfx::copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
+	const auto* indicesMem =
+	    Locator::graphicsDevice::value().Copy(indices.data(), static_cast<uint32_t>(indices.size() * sizeof(indices[0])));
 	auto* vertexBuffer = new VertexBuffer(_l3dMesh.GetDebugName(), verticesMem, decl, _l3dMesh.IsDynamic());
 	auto* indexBuffer = new IndexBuffer(_l3dMesh.GetDebugName(), indicesMem, IndexBuffer::Type::Uint16);
 	_mesh = std::make_unique<graphics::Mesh>(vertexBuffer, indexBuffer);
@@ -414,8 +417,10 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	_made = true;
 	const bool device = _l3dMesh.GetUploadMode() == UploadMode::Device;
 	const bgfx::Memory* verticesMem =
-	    device ? bgfx::alloc(static_cast<uint32_t>(sizeof(EnhancedL3DVertex) * vertexCount)) : nullptr;
-	const bgfx::Memory* indicesMem = device ? bgfx::alloc(static_cast<uint32_t>(sizeof(uint16_t) * indexCount)) : nullptr;
+	    device ? Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(sizeof(EnhancedL3DVertex) * vertexCount))
+	           : nullptr;
+	const bgfx::Memory* indicesMem =
+	    device ? Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(sizeof(uint16_t) * indexCount)) : nullptr;
 	auto* vertices = device ? reinterpret_cast<EnhancedL3DVertex*>(verticesMem->data) : nullptr;
 	auto* indices = device ? reinterpret_cast<uint16_t*>(indicesMem->data) : nullptr;
 	_boundingBox.maxima = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
@@ -531,7 +536,7 @@ const bgfx::Memory* L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t m
 	}
 
 	const auto stride = _hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
-	const bgfx::Memory* verticesMem = bgfx::alloc(static_cast<uint32_t>(stride * nVertices));
+	const bgfx::Memory* verticesMem = Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(stride * nVertices));
 	const auto vertexAt = [verticesMem, stride](uint32_t i) {
 		return reinterpret_cast<EnhancedL3DVertex*>(verticesMem->data + (stride * i));
 	};
@@ -592,7 +597,7 @@ void L3DSubMesh::CreateBlendSource(const bgfx::Memory* vertices, uint32_t count)
 {
 	_hasBlends = false;
 	const auto stride = _hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
-	const auto* caps = bgfx::getCaps();
+	const auto* caps = Locator::graphicsDevice::value().GetCaps();
 	if (count == 0 || caps == nullptr || count > caps->limits.maxTextureSize ||
 	    (caps->formats[bgfx::TextureFormat::RGBA32F] & BGFX_CAPS_FORMAT_TEXTURE_VERTEX) == 0)
 	{

@@ -38,6 +38,7 @@ class FightAutopilot;
 class GameInput;
 class GameProvider;
 struct GameControlSet;
+class GameSeamInterface;
 class InputProvider;
 class ScreenshotProvider;
 class SimProvider;
@@ -54,7 +55,8 @@ namespace openblack::ecs::systems
 class InspectorSystem final: public InspectorSystemInterface
 {
 public:
-	explicit InspectorSystem(std::unique_ptr<inspector::Server> server);
+	/// The seam is the game on the player's computer, or null on the dedicated server
+	InspectorSystem(std::unique_ptr<inspector::Server> server, std::unique_ptr<inspector::GameSeamInterface> seam);
 	~InspectorSystem() override;
 	InspectorSystem(const InspectorSystem&) = delete;
 	InspectorSystem& operator=(const InspectorSystem&) = delete;
@@ -86,6 +88,8 @@ private:
 	void RequestQueuedScenario();
 
 	std::unique_ptr<inspector::Server> _server;
+	/// The game on the player's computer, or null with none
+	std::unique_ptr<inspector::GameSeamInterface> _seam;
 	/// The components' reflection, the inspector's own rather than the library's shared one
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	std::unique_ptr<inspector::RunTargetInterface> _runTarget;

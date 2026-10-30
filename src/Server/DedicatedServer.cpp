@@ -61,6 +61,7 @@
 #include "Graphics/HeadlessRenderer.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
+#include "Gui/GameTexts.h"
 #include "Gui/MultiplayerFrontEndRules.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
@@ -89,15 +90,10 @@ namespace
 constexpr std::string_view k_TurnWord = "turn ";
 constexpr std::string_view k_ChecksumWord = " checksum ";
 
-/// Logs that the graphics library did not start. The server does not start the library. A part of the world that started
-/// it is an error.
+/// Logs that the server ran with no graphics library. The server program does not contain the library, so no part of
+/// the world can start it.
 void LogGraphicsLibrary()
 {
-	if (graphics::GraphicsLibraryStarted())
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The graphics library started on the server. It must not start.");
-		return;
-	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The server ran with no graphics library");
 }
 
@@ -264,7 +260,10 @@ bool ServerWorld::Initialize()
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
 		return false;
 	}
-	InitializeClient(profiles);
+	// The input of the player, the online services, the editor and the videos. The server draws nothing, so it has no
+	// drawing of the world.
+	InitializePlayerInput();
+	InitializeOnlineAndTools(profiles);
 	auto& land = Locator::landSystem::value();
 	land.SetView(&_landView);
 	land.SetNewGameStart(_settings.opening);
@@ -413,7 +412,7 @@ const gui::TextDatabase* ServerWorld::MakeInterface()
 {
 	// The server has no menu, but the world uses the options that the profile keeps, and the help reads the texts
 	simulation::ApplyPlayerSettings(gui::ToProfileSettings(simulation::ProfileMenuSettings().settings));
-	_texts = gui::GameInterface::LoadTexts();
+	_texts = gui::LoadGameTexts();
 	return &*_texts;
 }
 

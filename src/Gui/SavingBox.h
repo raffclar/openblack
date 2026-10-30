@@ -14,6 +14,7 @@
 #include <array>
 #include <string_view>
 
+#include <SaveSlots.h>
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
@@ -48,7 +49,10 @@ inline constexpr uint32_t k_TextColour = 0xFFFFFFFF;
 inline constexpr DialogRect k_TextRect {.min = {100, 200}, .max = {700, 400}};
 
 /// Whether the box makes the screen darker: not for the slots of the automatic saves
-[[nodiscard]] bool DarkensScreen(uint32_t slot);
+[[nodiscard]] constexpr bool DarkensScreen(uint32_t slot)
+{
+	return slot < gamesave::k_FirstAutosaveSlot || slot > gamesave::k_LastAutosaveSlot;
+}
 
 /// A part of the box with four corners in the dialog space, and the colours of the corners: top left, top right, bottom
 /// right and bottom left

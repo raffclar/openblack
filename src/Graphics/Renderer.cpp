@@ -817,9 +817,9 @@ void Renderer::Reset(glm::u16vec2 resolution) const noexcept
 	SetSceneViewRects(RenderPass::Reflection, resolution);
 }
 
-graphics::ShaderManager& Renderer::GetShaderManager() const noexcept
+graphics::ShaderManager* Renderer::GetShaderManager() const noexcept
 {
-	return *_shaderManager;
+	return _shaderManager.get();
 }
 
 const Texture2D* GetTexture(uint32_t skinID, const std::unordered_map<SkinId, std::unique_ptr<graphics::Texture2D>>& meshSkins)
