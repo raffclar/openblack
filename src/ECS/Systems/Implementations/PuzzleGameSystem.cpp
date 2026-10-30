@@ -29,6 +29,7 @@
 #include "ECS/Archetypes/PuzzleGameArchetype.h"
 #include "ECS/Archetypes/StreetLanternArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
@@ -167,12 +168,31 @@ void ReplaceAndMakeAgain(entt::entity puzzle, PuzzleGame& game, size_t slot)
 	MakeAgain(puzzle, game, slot, last);
 }
 
+/// Where the creature took the piece, while a creature holds it. The map keeps the piece there until the creature lets
+/// it go, so the puzzle sees it there too.
+const HeldByCreature::Taken* TakenFrom(const Registry& registry, entt::entity piece)
+{
+	const auto* holder = registry.TryGet<const HeldByCreature>(piece);
+	return holder != nullptr && holder->takenFrom.has_value() ? &*holder->takenFrom : nullptr;
+}
+
 /// Whether the piece is where the puzzle put it
 bool AtPlace(const Registry& registry, entt::entity piece)
 {
 	const auto& block = registry.Get<const HanoiBlock>(piece);
+	if (const auto* taken = TakenFrom(registry, piece))
+	{
+		return taken->position == block.placedAt;
+	}
 	const auto* transform = registry.TryGet<const Transform>(piece);
 	return transform != nullptr && transform->position == block.placedAt;
+}
+
+/// Where the piece is on the map
+map_coords::MapCoords PlaceOf(const Registry& registry, entt::entity piece)
+{
+	const auto* taken = TakenFrom(registry, piece);
+	return taken != nullptr ? taken->place : ecs::thing_map_place::Of(registry, piece);
 }
 
 /// The top piece of the first stack that the search meets within reach of a place, in a spiral of map cells out from
@@ -592,7 +612,7 @@ void ProcessHanoi(entt::entity puzzle, PuzzleGame& game)
 			continue;
 		}
 		const auto kind = KindOf(registry, piece);
-		const auto at = ecs::thing_map_place::Of(registry, piece);
+		const auto at = PlaceOf(registry, piece);
 		const auto top = FindStack(registry, at, at, piece);
 		bool remake = false;
 		if (top != entt::null && hanoi::MayRestOn(kind, KindOf(registry, top)))

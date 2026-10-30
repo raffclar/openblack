@@ -19,6 +19,7 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureReach.h"
 
@@ -189,6 +190,15 @@ struct HeldByCreature
 	};
 	/// Empty: the thing is drawn where its Transform puts it
 	std::optional<Drawn> drawn;
+	/// Where the thing was when the creature took it. The thing is out of the map while the creature holds it, and the
+	/// map keeps it at this place until the creature lets it go.
+	struct Taken
+	{
+		glm::vec3 position;
+		map_coords::MapCoords place;
+	};
+	/// Empty: the creature took it before this record was kept, for example in a loaded game
+	std::optional<Taken> takenFrom;
 };
 
 } // namespace openblack::ecs::components
