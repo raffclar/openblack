@@ -27,7 +27,8 @@ void openblack::ecs::reflection::RegisterFields_Values_creatureo(entt::meta_ctx&
 {
 	Reflect<openblack::creature_object_actions::ApproachStall>(context, ValueOnly {})
 	    .Field<&openblack::creature_object_actions::ApproachStall::turns>("turns")
-	    .Field<&openblack::creature_object_actions::ApproachStall::note>("note");
+	    .Field<&openblack::creature_object_actions::ApproachStall::note>("note")
+	    .Field<&openblack::creature_object_actions::ApproachStall::searchedFor>("searchedFor");
 	Reflect<openblack::creature_object_beliefs::Belief>(context, ValueOnly {})
 	    .Field<&openblack::creature_object_beliefs::Belief::thing>("thing")
 	    .Field<&openblack::creature_object_beliefs::Belief::kind>("kind")
