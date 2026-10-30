@@ -8102,6 +8102,26 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.walk_back_on_the_way",
+	    .name = "Walked back while on the way",
+	    .facet = Facet::Leash,
+	    .description = "A tiger starts in the middle of the testbed. It is kept within 400 units of where it stands, as "
+	                   "a young creature is kept near its home. After one second its player orders it to look at its "
+	                   "reflection, and it walks north to the shore of the lake. After six seconds, on its way, the "
+	                   "area that holds it becomes 10 units wide.",
+	    .expected = "When the area becomes small, the tiger is out of it. It turns at once and walks back to where it "
+	                "started. It does not walk on to the lake first.",
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, -20.0f}, {60.0f, 160.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 0.0f},
+	    }},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.1f, .radius = 400.0f},
+	                 {.kind = Kind::ForceAction, .delaySeconds = 1.0f, .action = "LookAtReflection"},
+	                 {.kind = Kind::ConfineToHome, .delaySeconds = 6.0f, .radius = 10.0f}},
+	});
+
+	all.push_back({
 	    .id = "leash.tied",
 	    .name = "Tied to a tree and a rock",
 	    .facet = Facet::Leash,
@@ -12697,8 +12717,10 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 
 	// The tiger and a second loose scaffold stand inside the shot of objects.scaffold_starts_building, away from the
 	// hand's way, so that the shot and the hand's input stay the same. The tiger stays still until the input is over.
+	// The second scaffold is far from the village centre: the creature walks round the centre, and a scaffold near its
+	// edge is out of the creature's reach from there.
 	constexpr glm::vec2 k_SiteWatcher {-32.0f, 47.0f};
-	constexpr glm::vec2 k_SecondScaffold {-14.0f, 44.0f};
+	constexpr glm::vec2 k_SecondScaffold {-24.0f, 42.0f};
 	constexpr float k_WatcherWaits = 20.0f;
 	all.push_back({
 	    .id = "objects.creature_scaffold_on_site",
