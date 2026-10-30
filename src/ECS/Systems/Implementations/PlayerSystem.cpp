@@ -11,6 +11,8 @@
 
 #include "PlayerSystem.h"
 
+#include <algorithm>
+
 #include "Creature/PrimaryCreature.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Alignment.h"
@@ -47,6 +49,20 @@ void PlayerSystem::AddPlayer(entt::entity playerEntity)
 	const auto& player = registry.Get<components::Player>(playerEntity);
 	// A player made for a new land takes the place of the one of that name on the last land
 	_players.insert_or_assign(player.name, playerEntity);
+}
+
+size_t PlayerSystem::PlayerNumbersInGame() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	size_t count = 0;
+	for (const auto& [name, entity] : _players)
+	{
+		if (registry.Valid(entity))
+		{
+			count = std::max(count, static_cast<size_t>(name) + 1);
+		}
+	}
+	return player_slots::PlayerNumbersOf(count);
 }
 
 std::optional<entt::entity> PlayerSystem::FindPlayer(PlayerNames playerName) const

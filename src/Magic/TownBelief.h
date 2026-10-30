@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 // A town's belief in each player. What its people are impressed by waits as pending belief until the town's next turn,
 // when all of it, times the town's belief scale, is believed at once, no more than the town's cap for the player; a
@@ -28,7 +29,9 @@
 namespace openblack::magic::town_belief
 {
 
-inline constexpr size_t k_PlayerCount = static_cast<size_t>(PlayerNames::_COUNT);
+/// A town keeps its belief in each player number of a network game with the most players. A town of a land uses the
+/// first 8 places.
+inline constexpr size_t k_PlayerCount = player_slots::k_PlayerNumbers;
 /// Belief in a player is capped at this until a script sets another cap
 inline constexpr float k_DefaultCap = 10.0f;
 /// The number of things a town can want
@@ -119,9 +122,9 @@ void LoseBeliefToDesires(Belief& town, PlayerNames owner, std::span<const float,
 
 /// Who the town belongs to after its turn. Its belief in the neutral player is set back to what it keeps for them;
 /// then the player it believes in most takes it, starting from its owner and going through every player in player
-/// order, the neutral player last, a later player taking a tie. A new owner's belief is multiplied by the claimed-town
-/// multiplier. None while its owner keeps it.
-[[nodiscard]] std::optional<PlayerNames> Ownership(Belief& town, PlayerNames owner, float claimedMultiplier);
+/// order (the players of the game, `players` of them), a later player taking a tie. A new owner's belief is multiplied
+/// by the claimed-town multiplier. None while its owner keeps it.
+[[nodiscard]] std::optional<PlayerNames> Ownership(Belief& town, PlayerNames owner, float claimedMultiplier, size_t players);
 
 /// A player has lost a town: every town they still hold (the lost one among them) believes in them less, by the
 /// lost-town multiplier and the land's lost-town scale

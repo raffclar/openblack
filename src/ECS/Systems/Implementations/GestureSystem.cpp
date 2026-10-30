@@ -11,6 +11,7 @@
 
 #include "GestureSystem.h"
 
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 
@@ -101,8 +102,9 @@ void SendRequest(player_commands::Action request)
 	}
 }
 
-/// The shape a gesture's trail takes on the land, from its symbol's file; the circle's for a gesture without one
-std::optional<gesture::TrailSymbol> TrailSymbolOf(GestureType gesture)
+} // namespace
+
+std::optional<gesture::TrailSymbol> GestureSystem::TrailSymbolOf(GestureType gesture) const
 {
 	if (!Locator::resources::has_value())
 	{
@@ -117,17 +119,23 @@ std::optional<gesture::TrailSymbol> TrailSymbolOf(GestureType gesture)
 			continue;
 		}
 		const auto path = paths.Handle(entt::hashed_string(id.c_str()));
+		// The symbol comes only from the points of the path, so a path that made a symbol before gives the same symbol.
+		// The kept handle holds the path, so a new path never has the address of a kept one.
+		const auto kept = std::ranges::find(_symbols, &*path, [](const KeptSymbol& each) { return &*each.path; });
+		if (kept != _symbols.end())
+		{
+			return kept->symbol;
+		}
 		std::vector<glm::vec3> points;
 		points.reserve(path->GetPoints().size());
 		for (const auto& point : path->GetPoints())
 		{
 			points.push_back(point.position);
 		}
-		return gesture::MakeTrailSymbol(points);
+		return _symbols.emplace_back(KeptSymbol {.path = path, .symbol = gesture::MakeTrailSymbol(points)}).symbol;
 	}
 	return std::nullopt;
 }
-} // namespace
 
 GestureSystem::GestureSystem() = default;
 
@@ -858,7 +866,7 @@ void GestureSystem::RefreshHints()
 	{
 		return;
 	}
-	const auto shapeOf = [](GestureType gesture) -> std::optional<gesture_hints::Shape> {
+	const auto shapeOf = [this](GestureType gesture) -> std::optional<gesture_hints::Shape> {
 		const auto symbol = TrailSymbolOf(gesture);
 		if (!symbol.has_value())
 		{

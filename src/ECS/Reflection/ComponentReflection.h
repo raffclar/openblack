@@ -520,7 +520,8 @@ public:
 				}
 			};
 			info.saveFrom = [](const void* owner, BinaryWriter& out) {
-				Save(out, static_cast<Value>(std::invoke(Getter, *static_cast<const Type*>(owner))));
+				// A getter that gives a reference saves the value where it is, with no copy
+				Save(out, static_cast<const Value&>(std::invoke(Getter, *static_cast<const Type*>(owner))));
 			};
 			info.load = [](const entt::meta_data& data, entt::meta_any& instance, BinaryReader& in) {
 				Value value {};

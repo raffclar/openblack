@@ -31,6 +31,9 @@ constexpr std::array<std::string_view, 10> k_DeathReasonNames {
     "None",      "Starving",   "Spell", "Animal", "Chant", "PlayerInteraction", "PlayerInteractionDrown",
     "Sacrifice", "Exhaustion", "OldAge"};
 static_assert(static_cast<size_t>(openblack::DeathReason::_COUNT) == k_DeathReasonNames.size());
+constexpr std::array<std::string_view, 8> k_PlayerNamesNames {"PLAYER_ONE",  "PLAYER_TWO", "PLAYER_THREE", "PLAYER_FOUR",
+                                                              "PLAYER_FIVE", "PLAYER_SIX", "PLAYER_SEVEN", "NEUTRAL"};
+static_assert(static_cast<size_t>(openblack::PlayerNames::_COUNT) == k_PlayerNamesNames.size());
 
 } // namespace
 
@@ -39,7 +42,7 @@ void openblack::ecs::reflection::RegisterFields_Values_v(entt::meta_ctx& context
 	Reflect<openblack::villager_death::DeathCounts>(context, ValueOnly {})
 	    .Field<&openblack::villager_death::DeathCounts::lastDeathTurn>("lastDeathTurn")
 	    .Field<&openblack::villager_death::DeathCounts::total>("total")
-	    .Field<&openblack::villager_death::DeathCounts::byPlayer>("byPlayer")
+	    .Field<&openblack::villager_death::DeathCounts::byPlayer>("byPlayer", {k_PlayerNamesNames})
 	    .Field<&openblack::villager_death::DeathCounts::byReason>("byReason", {k_DeathReasonNames});
 	Reflect<openblack::virtual_influence::Shown>(context, ValueOnly {})
 	    .Field<&openblack::virtual_influence::Shown::soundFraction>("soundFraction")

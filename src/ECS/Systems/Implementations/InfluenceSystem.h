@@ -17,6 +17,7 @@
 
 #include "Common/VirtualInfluence.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "PlayerSlots.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -58,7 +59,8 @@ public:
 	[[nodiscard]] std::span<const influence::Ripple> GetRipples() const override { return _ripples; }
 
 private:
-	static constexpr size_t k_Players = 8;
+	/// A place for each player number of a network game with the most players
+	static constexpr size_t k_Players = player_slots::k_PlayerNumbers;
 
 	void ProcessCitadels();
 	void DrawBorders();

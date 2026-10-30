@@ -171,7 +171,8 @@ void FrameStatsLog::Frame(FrameTime time, const openblack::Profiler& profiler, u
 		_records.push_back({.milliseconds = milliseconds,
 		                    .processorMilliseconds = static_cast<float>(onCpuMilliseconds.value_or(0.0)),
 		                    .turn = time.turn,
-		                    .played = turnFrame});
+		                    .played = turnFrame,
+		                    .workMilliseconds = time.workMilliseconds});
 	}
 	std::string spikeStages;
 

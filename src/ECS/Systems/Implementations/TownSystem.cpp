@@ -56,6 +56,7 @@
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/GameEndConditions.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -843,9 +844,9 @@ void NeglectAbode(entt::entity town, entt::entity abode)
 
 void TownSystem::ProcessTurn()
 {
-	for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+	for (const auto player : ecs::game_players::All())
 	{
-		for (const auto town : TownsInGainedOrder(static_cast<PlayerNames>(player)))
+		for (const auto town : TownsInGainedOrder(player))
 		{
 			ProcessTownBuildings(town);
 			ProcessTownTurn(town);

@@ -25,6 +25,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageLight.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "GameTempleDestructionWorld.h"
 #include "Graphics/TempleHeartLook.h"
@@ -420,8 +421,8 @@ void TempleDestructionSystem::ProcessPlayerTurn(PlayerNames player)
 void TempleDestructionSystem::ProcessTurn()
 {
 	StartTurn();
-	for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+	for (const auto player : ecs::game_players::All())
 	{
-		ProcessPlayerTurn(static_cast<PlayerNames>(player));
+		ProcessPlayerTurn(player);
 	}
 }

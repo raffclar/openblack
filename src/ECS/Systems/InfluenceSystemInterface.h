@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <span>
 
@@ -63,6 +64,31 @@ struct PlayerInfluenceAt
 		}
 	}
 	return most;
+}
+/// Whether a player is the player of most influence at a place, as MostInfluentialPlayer finds it with the players in
+/// their order. The function asks for the influence of the player first. It asks for the influence of another player
+/// only while the answer can change.
+template <typename InfluenceOf>
+[[nodiscard]] bool IsMostInfluentialPlayer(PlayerNames player, std::span<const PlayerNames> players, InfluenceOf&& influenceOf)
+{
+	if (std::ranges::find(players, player) == players.end())
+	{
+		return false;
+	}
+	const float own = influenceOf(player);
+	if (!(own > 0.0f))
+	{
+		return false;
+	}
+	// An earlier player with the same influence keeps the place. A later player must have more influence to take it.
+	return std::ranges::none_of(players, [player, own, &influenceOf](PlayerNames other) {
+		if (other == player)
+		{
+			return false;
+		}
+		const float influence = influenceOf(other);
+		return other < player ? influence >= own : influence > own;
+	});
 }
 } // namespace influence_rules
 

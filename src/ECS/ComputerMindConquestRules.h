@@ -21,7 +21,7 @@
 namespace openblack::computer_mind_rules
 {
 
-/// The players of a town's belief, the neutral player last
+/// The players of a town's belief on a land, the neutral player last
 constexpr size_t k_BeliefPlayers = 8;
 
 /// The god holds the town less when the town believes in another player: the belief is multiplied by this
@@ -50,8 +50,8 @@ constexpr float k_OwnTownFeedScale = 10.0f;
 [[nodiscard]] float TownHold(float rivalBelief, bool ownTown);
 /// What the town believes in the strongest player against the god. In a town of another player, its belief in that
 /// player. In a town of the god's own, its belief in the other player whose belief is the most above the god's, the
-/// neutral player too; 0 when none is above -9999.
-[[nodiscard]] float RivalBelief(std::span<const float, k_BeliefPlayers> belief, size_t god, size_t owner);
+/// neutral player too; 0 when none is above -9999. The belief has a place for each player of the game, by number.
+[[nodiscard]] float RivalBelief(std::span<const float> belief, size_t god, size_t owner);
 
 /// What the god knows of a miracle that a town offers
 struct TownMiracleFacts

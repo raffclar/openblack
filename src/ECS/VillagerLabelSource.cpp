@@ -28,6 +28,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -79,7 +80,7 @@ std::optional<glm::u8vec3> OwnerColour(const Registry& registry, entt::entity to
 	}
 	const auto land = registry.Context().mapScriptGlobals.landNumber;
 	const auto index = labels::PlayerColourIndex(static_cast<uint8_t>(owned->owner), land);
-	const auto argb = components::Player::k_Colours.at(index & 7u);
+	const auto argb = player_colour::LaterGodColour(owned->owner).value_or(components::Player::k_Colours.at(index & 7u));
 	return glm::u8vec3((argb >> 16u) & 0xFFu, (argb >> 8u) & 0xFFu, argb & 0xFFu);
 }
 } // namespace

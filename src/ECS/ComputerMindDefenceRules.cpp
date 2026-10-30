@@ -77,15 +77,16 @@ std::optional<DefendChoice> computer_mind_rules::ChooseDefence(std::span<const T
 	return choice;
 }
 
-float computer_mind_rules::BeliefAttack(const TownBeliefFacts& town, PlayerNames god,
-                                        std::span<const bool, static_cast<size_t>(PlayerNames::_COUNT)> allies)
+float computer_mind_rules::BeliefAttack(const TownBeliefFacts& town, PlayerNames god, std::span<const bool> allies)
 {
 	const auto own = static_cast<size_t>(god);
 	float most = k_LeastBeliefAttack;
 	size_t attacker = 0;
-	for (size_t i = 0; i < k_BeliefAttackPlayers; ++i)
+	for (size_t i = 0; i < town.recent.size(); ++i)
 	{
-		if (i == own || allies[i])
+		// The first gods of a land count, then the gods after the seventh. The seventh god and the neutral player do not.
+		const bool landPlayerOut = i >= k_BeliefAttackPlayers && i < player_slots::k_LandSlots;
+		if (landPlayerOut || i == own || (i < allies.size() && allies[i]))
 		{
 			continue;
 		}

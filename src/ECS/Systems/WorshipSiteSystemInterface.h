@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <optional>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
@@ -114,6 +115,9 @@ public:
 	[[nodiscard]] virtual bool IsBuilt(entt::entity site) const = 0;
 	/// The temple of a player, none without one
 	[[nodiscard]] virtual entt::entity TempleOf(PlayerNames player) const = 0;
+	/// The temple of each player number below the count, as TempleOf gives it, with one walk of the temples. The list is
+	/// in the order of the player numbers.
+	[[nodiscard]] virtual std::vector<entt::entity> TemplesOfPlayers(size_t count) const = 0;
 
 	// Worshippers
 

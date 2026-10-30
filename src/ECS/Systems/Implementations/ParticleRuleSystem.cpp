@@ -61,6 +61,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/DrawnPlace.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptSpotVisuals.h"
@@ -86,6 +87,7 @@
 #include "Particles/ParticleTurnOrder.h"
 #include "Particles/ParticleTypes.h"
 #include "Particles/VolumeGlow.h"
+#include "PlayerSlots.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
 
@@ -162,9 +164,8 @@ float GameParticleWorld::LandHeightAtMap(int32_t x, int32_t z) const
 
 uint32_t GameParticleWorld::PlayerColour(int player) const
 {
-	return ecs::components::Player::k_Colours.at(static_cast<size_t>(player) &
-	                                             (ecs::components::Player::k_Colours.size() - 1)) &
-	       0xFFFFFFu;
+	// A god after the seventh has the land colour of its god slot (deviation 164)
+	return player_colour::Of(static_cast<PlayerNames>(player)) & 0xFFFFFFu;
 }
 
 std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf(entt::entity centre) const
@@ -200,7 +201,9 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	registry.Each<const Town, const TownImpression>([&belief, abode](const Town& town, const TownImpression& impression) {
 		if (town.id == abode->townId)
 		{
-			std::ranges::copy(impression.belief.belief, belief.beliefs.begin());
+			// The symbols show only the players of a land. The table of the town has a place for each player of a
+			// network game
+			std::copy_n(impression.belief.belief.begin(), belief.beliefs.size(), belief.beliefs.begin());
 		}
 	});
 	return belief;
@@ -806,7 +809,7 @@ GameParticleWorld::SurfacePoint GameParticleWorld::RandomSurfacePoint(entt::enti
 
 float GameParticleWorld::PlayerAlignment(int player) const
 {
-	if (!Locator::alignmentSystem::has_value() || player < 0 || player >= static_cast<int>(PlayerNames::_COUNT))
+	if (!Locator::alignmentSystem::has_value() || player < 0 || player >= static_cast<int>(player_slots::k_PlayerNumbers))
 	{
 		return 0.0f;
 	}

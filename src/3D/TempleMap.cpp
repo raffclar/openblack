@@ -15,6 +15,7 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
+#include "ECS/PlayerColour.h"
 #include "Gui/VillagerLabels.h"
 
 using namespace openblack;
@@ -148,6 +149,10 @@ glm::u8vec3 TempleMap::MarkerColour(std::optional<PlayerNames> player, int32_t l
 	const auto index = player.has_value() ? gui::villager_labels::PlayerColourIndex(static_cast<uint8_t>(*player), landNumber)
 	                                      : static_cast<uint8_t>(k_PlayerColours.size());
 	auto colour = index < k_PlayerColours.size() ? k_PlayerColours.at(index) : glm::u8vec3(0xFF);
+	if (const auto later = player.has_value() ? player_colour::LaterGodColour(*player) : std::nullopt; later.has_value())
+	{
+		colour = {(*later >> 16u) & 0xFFu, (*later >> 8u) & 0xFFu, *later & 0xFFu};
+	}
 	if (colour == glm::u8vec3(0))
 	{
 		colour = glm::u8vec3(0xFF);

@@ -67,6 +67,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/FightWatchRules.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/ListOrder.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
@@ -1757,7 +1758,8 @@ void ReactionSystem::BelieveInTown(entt::entity entity)
 		                                        info.belief.minimumThreshold);
 	}
 	// The player it believes in most takes it; a player losing it believes less in every town they hold
-	const auto taker = magic::town_belief::Ownership(impression.belief, town->owner, info.belief.claimedTownBeliefMultiplier);
+	const auto taker = magic::town_belief::Ownership(impression.belief, town->owner, info.belief.claimedTownBeliefMultiplier,
+	                                                 ecs::game_players::Count());
 	if (!taker.has_value())
 	{
 		return;
@@ -2066,7 +2068,7 @@ void ReactionSystem::TownGainsTurn(uint32_t turn)
 		return;
 	}
 	// Each player adds what each town gained in them, in the order of the towns. Every tally goes back to nothing.
-	std::array<float, static_cast<size_t>(PlayerNames::_COUNT)> gained {};
+	std::array<float, magic::town_belief::k_PlayerCount> gained {};
 	Locator::entitiesRegistry::value().Each<const Town, TownImpression>(
 	    [&gained](entt::entity, const Town&, TownImpression& impression) {
 		    const auto town = magic::town_belief::TakeGainedSinceShown(impression.belief);

@@ -258,7 +258,7 @@ struct TownAttack
 	float otherThingHarm {0.0f};
 };
 
-/// The number of players whose attacks a town keeps
+/// The number of players of a land whose attacks a town keeps: the gods of the land
 constexpr size_t k_TownAttackPlayers = 7;
 /// The share of the memory of an attack that the town loses each turn: it forgets the attack after 600 turns
 constexpr float k_AttackMemoryShare = std::bit_cast<float>(0x3ADA740Eu);
@@ -272,8 +272,9 @@ struct TownThreat
 	/// The two parts of the harm of the things that hit the town, added
 	float thingHarm {0.0f};
 };
-/// The threat to a town from the attack that it fears most. None when that attack did no harm.
-[[nodiscard]] std::optional<TownThreat> ThreatOf(std::span<const TownAttack, k_TownAttackPlayers> attacks, uint32_t turn);
+/// The threat to a town from the attack that it fears most, from the attacks of the gods in the order of their numbers.
+/// The first attack of the most fear wins. None when that attack did no harm.
+[[nodiscard]] std::optional<TownThreat> ThreatOf(std::span<const TownAttack> attacks, uint32_t turn);
 
 /// The shield that protects a town against a threat: the miracle shield when the harm of miracles is the larger, else
 /// the physical shield

@@ -14,6 +14,7 @@
 #include <array>
 
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 // How a town remembers being attacked. Each harm done to it adds to the aggression it holds against whoever did it,
 // the first harm by a player more; the more often it is attacked the less each attack adds. Each turn the aggression
@@ -37,8 +38,8 @@ struct Harm
 struct Record
 {
 	/// The aggression held against each player, and the turn each last attacked
-	std::array<float, static_cast<size_t>(PlayerNames::_COUNT)> aggression {};
-	std::array<uint32_t, static_cast<size_t>(PlayerNames::_COUNT)> lastTurns {};
+	std::array<float, player_slots::k_PlayerNumbers> aggression {};
+	std::array<uint32_t, player_slots::k_PlayerNumbers> lastTurns {};
 	/// The last attacker, and the turn it attacked; none before any attack
 	PlayerNames lastAggressor {PlayerNames::NEUTRAL};
 	uint32_t lastTurn {0};
@@ -50,7 +51,7 @@ struct Record
 	float mercy {0.0f};
 	/// The harm of the last attack of each player. Last in the record so that a save of an older build still reads the
 	/// fields before it.
-	std::array<Harm, static_cast<size_t>(PlayerNames::_COUNT)> lastHarms {};
+	std::array<Harm, player_slots::k_PlayerNumbers> lastHarms {};
 };
 
 /// The town is attacked by a player with an amount of harm: the first harm a player does adds a bonus; it counts by

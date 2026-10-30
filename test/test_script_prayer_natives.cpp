@@ -146,6 +146,15 @@ public:
 	{
 		return player == PlayerNames::PLAYER_TWO ? temple : entt::null;
 	}
+	[[nodiscard]] std::vector<entt::entity> TemplesOfPlayers(size_t count) const override
+	{
+		std::vector<entt::entity> temples(count, static_cast<entt::entity>(entt::null));
+		for (size_t player = 0; player < count; ++player)
+		{
+			temples[player] = TempleOf(static_cast<PlayerNames>(player));
+		}
+		return temples;
+	}
 	[[nodiscard]] std::optional<glm::vec2> PlaceAt(entt::entity, SitePlace) const override { return std::nullopt; }
 	[[nodiscard]] std::optional<float> StandingHeight(entt::entity) const override { return std::nullopt; }
 	void AddWorshipper(entt::entity, entt::entity) override {}

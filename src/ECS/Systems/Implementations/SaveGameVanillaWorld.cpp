@@ -191,11 +191,12 @@ void PutBelief(ecs::Registry& registry, entt::entity entity, const world_import:
 		return;
 	}
 	const auto& file = *imported.belief;
-	belief.belief = file.belief;
-	belief.recent = file.recent;
-	belief.cap = file.cap;
-	belief.pending = file.pending;
-	belief.gainedSinceShown = file.gainedSinceShown;
+	// The 8 players of the file fill the start of each table
+	std::ranges::copy(file.belief, belief.belief.begin());
+	std::ranges::copy(file.recent, belief.recent.begin());
+	std::ranges::copy(file.cap, belief.cap.begin());
+	std::ranges::copy(file.pending, belief.pending.begin());
+	std::ranges::copy(file.gainedSinceShown, belief.gainedSinceShown.begin());
 	belief.desireLevel = file.desireLevel;
 	// A kind of reaction that the town has never seen has a weariness of 1, as a kind that the town does not list
 	impression.boredom.clear();

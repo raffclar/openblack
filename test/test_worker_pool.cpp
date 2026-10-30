@@ -11,6 +11,8 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <numeric>
 #include <vector>
 
@@ -68,6 +70,23 @@ TEST(WorkerPool, ManyCallsInTurnAllFinish)
 	}
 	// The sum of the squares from 0 to 36, once for each call
 	EXPECT_EQ(total, uint64_t {2'000} * 16'206);
+}
+
+TEST(WorkerPool, CallsOfFewJobsAfterOneAnotherRunEachJobOnce)
+{
+	// The calls are short, so many threads wake after the caller returned. A late thread must not do a job twice or
+	// do a job of the next call.
+	WorkerPool pool(6);
+	for (size_t call = 0; call < 5'000; ++call)
+	{
+		const size_t count = 2 + call % 5;
+		std::array<std::atomic<int>, 8> runs {};
+		pool.ForEach(count, [&runs](size_t index, size_t /*lane*/) { runs[index].fetch_add(1); });
+		for (size_t index = 0; index < runs.size(); ++index)
+		{
+			ASSERT_EQ(runs[index].load(), index < count ? 1 : 0) << "call " << call << " index " << index;
+		}
+	}
 }
 
 TEST(WorkerPool, WithNoThreadsTheCallerDoesEveryJob)

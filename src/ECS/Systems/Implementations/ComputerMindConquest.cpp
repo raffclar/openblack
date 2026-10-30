@@ -58,6 +58,7 @@
 #include "ECS/ComputerMind.h"
 #include "ECS/ComputerMindConquestRules.h"
 #include "ECS/ComputerMindCreatureRules.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/PlayerRelations.h"
@@ -158,10 +159,10 @@ uint32_t PeopleOf(entt::entity town)
 	return stats != nullptr ? stats->adults + stats->children : 0;
 }
 
-/// The belief of the town in each player, the neutral player last
-std::array<float, computer_mind_rules::k_BeliefPlayers> BeliefOf(entt::entity town)
+/// The belief of the town in each player of the game, by number. A land has 8 players, the neutral player last.
+std::vector<float> BeliefOf(entt::entity town)
 {
-	std::array<float, computer_mind_rules::k_BeliefPlayers> belief {};
+	std::vector<float> belief(ecs::game_players::Count(), 0.0f);
 	if (const auto* impression = Entities().TryGet<const TownImpression>(town); impression != nullptr)
 	{
 		for (size_t player = 0; player < belief.size() && player < impression->belief.belief.size(); ++player)
@@ -278,9 +279,8 @@ float ExpandInfluence(RuleContext& context, computer_mind::Mind& mind, uint16_t 
 {
 	float best = 0.0f;
 	entt::entity chosen = entt::null;
-	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+	for (const auto name : ecs::game_players::All())
 	{
-		const auto name = static_cast<PlayerNames>(number);
 		if (name == context.player)
 		{
 			continue;
@@ -318,9 +318,9 @@ float FeedFactorOf(const RuleContext& context, entt::entity town)
 	const auto belief = BeliefOf(town);
 	const auto god = PlayerEntity(context.player);
 	float strongest = 0.0f;
-	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::NEUTRAL); ++number)
+	for (const auto name : ecs::game_players::Gods())
 	{
-		const auto name = static_cast<PlayerNames>(number);
+		const auto number = static_cast<size_t>(name);
 		// Only the players that play are rivals
 		if (name == context.player || PlayerEntity(name) == entt::null || !PlaysInGame(name) || KeepsAsAlly(god, name))
 		{

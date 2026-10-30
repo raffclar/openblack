@@ -587,6 +587,11 @@ void GuidanceSystem::LosingBeliefTurn()
 	}
 	// The towns of the player at this computer, in the order of the player's list
 	const auto player = OwnPlayer();
+	// The rule knows the belief of the players of a land only, so a god after the seventh gets no remark
+	if (static_cast<size_t>(player) >= guidance::k_BeliefPlayers)
+	{
+		return;
+	}
 	const auto towns = ecs::player_towns::InOrder(registry, player);
 	std::vector<guidance::TownBeliefs> beliefs;
 	beliefs.reserve(towns.size());
@@ -596,7 +601,7 @@ void GuidanceSystem::LosingBeliefTurn()
 		auto& belief = beliefs.emplace_back();
 		if (impression != nullptr)
 		{
-			std::ranges::copy(impression->belief.belief, belief.begin());
+			std::copy_n(impression->belief.belief.begin(), belief.size(), belief.begin());
 		}
 	}
 	const auto margin = Locator::infoConstants::value().belief.beliefLeftWhenHelpSpritesWarn;

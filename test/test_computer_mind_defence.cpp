@@ -22,6 +22,7 @@
 #include "ECS/ComputerMindDomains.h"
 #include "ECS/ComputerMindRules.h"
 #include "ECS/TownAggression.h"
+#include "PlayerSlots.h"
 
 using namespace openblack;
 using namespace openblack::computer_mind;
@@ -118,6 +119,34 @@ TEST(ComputerMindDefenceRules, BeliefAttackFromTheRecentGainOfARival)
 	town.recent.at(1) = 1.0f;
 	town.belief.at(0) = 0.0f;
 	EXPECT_EQ(BeliefAttack(town, PlayerNames::PLAYER_ONE, allies), 0.0f);
+}
+
+TEST(ComputerMindDefenceRules, TheGodsAfterTheSeventhCountInTheBeliefOfATown)
+{
+	// A network game of 32 gods: the gods after the seventh attack and defend belief as the first gods (deviation 167)
+	constexpr auto k_EighthGod = static_cast<PlayerNames>(8);
+	constexpr auto k_LastGod = static_cast<PlayerNames>(32);
+	TownBeliefFacts town;
+	town.belief.at(0) = 4.0f;
+	town.belief.at(32) = 1.0f;
+	town.recent.at(32) = 0.5f;
+	const std::array<bool, k_Players> landAllies {};
+	// The last god gave the most lately: (1 / 4) * 2, squared. The allies of a land have no value for it.
+	EXPECT_EQ(BeliefAttack(town, PlayerNames::PLAYER_ONE, landAllies), 0.25f);
+	std::array<bool, player_slots::k_PlayerNumbers> allies {};
+	allies.at(32) = true;
+	EXPECT_EQ(BeliefAttack(town, PlayerNames::PLAYER_ONE, allies), 0.0f);
+	// The eighth god sees the attack of the first god on its town
+	TownBeliefFacts later;
+	later.belief.at(8) = 2.0f;
+	later.belief.at(0) = 1.0f;
+	later.recent.at(0) = 1.0f;
+	EXPECT_EQ(BeliefAttack(later, k_EighthGod, landAllies), 1.0f);
+	EXPECT_EQ(BeliefMargin(later, k_EighthGod), 1.0f);
+	// The largest belief of another god is the last god's
+	later.belief.at(32) = 1.5f;
+	EXPECT_EQ(BeliefMargin(later, k_EighthGod), 0.5f);
+	EXPECT_EQ(BeliefMargin(later, k_LastGod), -0.5f);
 }
 
 TEST(ComputerMindDefenceRules, BeliefMarginAndTheChoiceOfTown)
