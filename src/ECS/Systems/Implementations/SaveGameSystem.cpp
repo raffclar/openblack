@@ -1271,7 +1271,7 @@ std::vector<uint8_t> SaveGameSystem::WorldState()
 	                          .landscape = {},
 	                          .knownLeashes = 0,
 	                          .creatureInTemple = 0,
-	                          .lastAutosaveTurn = _lastAutosaveTurn,
+	                          .lastAutosaveTurn = _autosaveTurnToSave,
 	                          .lastQuickSaveTurn = _lastQuickSaveTurn};
 	if (Locator::landSystem::has_value())
 	{

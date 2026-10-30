@@ -178,7 +178,7 @@ def main(argv=None):
     parser.add_argument("--scenarios", default="all", help="'all' or a comma list of scenario ids")
     parser.add_argument("--turns", type=int, default=100, help="the turns each scenario plays before its check")
     parser.add_argument("--land", default=None, help="check a land, as Land1.txt, in place of the scenarios")
-    parser.add_argument("--opening", default="cow", help="with --land: the opening to skip")
+    parser.add_argument("--opening", default=None, help="with --land: the opening to skip, as cow")
     parser.add_argument("--at", default="0,500,2000", help="with --land: the turns of the checks")
     parser.add_argument("--keep", action="store_true", help="keep the text report of each difference")
     parser.add_argument("extra", nargs="*", help="more arguments for the game, after --")
