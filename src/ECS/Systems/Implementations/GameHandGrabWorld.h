@@ -69,6 +69,7 @@ public:
 	void HeldTurn(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
+	[[nodiscard]] bool ValidToTap(entt::entity object) const override;
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override;
 	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override;
 	void PuzzlePieceIntoHand(entt::entity piece) override;

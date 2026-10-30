@@ -487,8 +487,10 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 	}
 	if (!object.has_value() || !MayTake(*object))
 	{
-		// A press the hand can't take clicks the thing, and is a tap on it (clicking and activating)
-		if (object.has_value())
+		// A press that the hand can't take clicks the thing and taps it, if the thing could go to the hand or takes taps.
+		// A press on another thing, such as a stone that a script fixed in place, is a press on the land.
+		if (object.has_value() &&
+		    hand_grab::PressTapsThing(GateOf(*object), _world->ValidToTap(*object), _world->HoldsLooseLeash()))
 		{
 			ClickThing(*object);
 			Tap(*object);

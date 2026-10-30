@@ -47,6 +47,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
@@ -732,6 +733,55 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		return Locator::spellIconSystem::value().Tap(object, player);
 	}
 	// Other things' taps are the clicking and activating of the interface
+	return false;
+}
+
+bool GameHandGrabWorld::ValidToTap(entt::entity object) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object))
+	{
+		return false;
+	}
+	const auto player = HandPlayer();
+	// A rock tall enough breaks
+	if (object_physics::CanTapRock(object))
+	{
+		return true;
+	}
+	// Each building of a town takes the knock, but the village centre does not. A miracle dispenser is such a building.
+	if (registry.AllOf<SpellDispenser>(object))
+	{
+		return true;
+	}
+	if (registry.AllOf<Abode>(object))
+	{
+		const auto* info = ecs::world_objects::AbodeInfoOf(object);
+		return info == nullptr || info->abodeType != AbodeType::TownCentre;
+	}
+	// The entrance of a temple takes the tap in a network game, or when the scripts let the player go in
+	if (registry.AllOf<TempleEntrance>(object))
+	{
+		return IsNetworkGame() || registry.Context().scriptLetsTempleBeEntered;
+	}
+	if (const auto* highlight = registry.TryGet<const ScriptHighlight>(object); highlight != nullptr)
+	{
+		return script_highlights::ValidToTap(highlight->kind, highlight->scriptId, highlight->active);
+	}
+	// A one-shot miracle's globe and a fireball take every tap
+	if (registry.AnyOf<OneOffSpellSeed, MagicFireBall>(object))
+	{
+		return true;
+	}
+	// Only the player of a chest opens it, until it is open
+	if (const auto* reward = registry.TryGet<const Reward>(object); reward != nullptr)
+	{
+		return reward->player == player && reward->state != Reward::State::Opened;
+	}
+	if (Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsIcon(object))
+	{
+		return Locator::spellIconSystem::value().ValidToTap(object, player);
+	}
 	return false;
 }
 
