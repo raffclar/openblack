@@ -106,7 +106,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -941,7 +941,7 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	Locator::reactionSystem::value().Reset();
 	Locator::teleportSystem::value().Reset();
 	Locator::gestureEvents::value().Reset();
-	Locator::particleSystem::value().Reset();
+	Locator::particleRuleSystem::value().Reset();
 	// The effects that the turns and the scripts ask for take numbers from the first again, on every computer
 	if (Locator::effectRequestSystem::has_value())
 	{

@@ -1736,7 +1736,7 @@ void ReactionSystem::BelieveInTown(entt::entity entity)
 		return;
 	}
 	// The belief gained rises as a symbol from the town centre's foot, in the believer's colour
-	if (!gained.empty() && Locator::particleSystem::has_value())
+	if (!gained.empty() && Locator::particleRuleSystem::has_value())
 	{
 		if (const auto centre = TownCentreOf(registry, town->id); centre.has_value())
 		{

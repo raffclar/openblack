@@ -22,6 +22,7 @@
 
 #include "3D/WaterRings.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "Enums.h"
 #include "Particles/LiquidParticles.h"
@@ -58,7 +59,7 @@ private:
 	SkySources _sources;
 };
 
-using ParticleEffectInfo = ecs::systems::ParticleSystemInterface::EffectInfo;
+using ParticleEffectInfo = ecs::systems::ParticleRuleSystemInterface::EffectInfo;
 
 /// The splashes there are as list items: the rings on the water, and the particle effects whose files are splashes
 [[nodiscard]] Json SplashItems(std::span<const water_rings::Ring> rings, std::span<const ParticleEffectInfo> effects);
@@ -72,7 +73,7 @@ using ParticleEffectInfo = ecs::systems::ParticleSystemInterface::EffectInfo;
 [[nodiscard]] Json LiquidSummary(std::span<const liquid_particles::Particle> particles);
 
 /// The symbols of belief that rose last: where, how much and in which colour, the newest first, with the count of all
-[[nodiscard]] Json BeliefSummary(const ecs::systems::ParticleSystemInterface::BeliefSpritesSeen& seen);
+[[nodiscard]] Json BeliefSummary(const ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen& seen);
 
 /// The effects that the turns and the scripts asked for: the number that the next one gets, none without the requests,
 /// and how many of the running effects have a number that the simulation gave
@@ -86,9 +87,11 @@ struct ParticleSources
 	/// The sparkles at the camera of another player
 	std::function<std::span<const liquid_particles::Particle>(PlayerNames)> playerLiquids;
 	/// The symbols of belief that rose last
-	std::function<ecs::systems::ParticleSystemInterface::BeliefSpritesSeen()> belief;
+	std::function<ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen()> belief;
 	/// The number that the next effect a turn or a script asks for gets
 	std::function<std::optional<ecs::systems::EffectHandle>()> nextRequest;
+	/// What the last frame of the draw of the effects drew, none on a computer that does not draw them
+	std::function<std::optional<ecs::systems::ParticleSystemInterface::DrawStats>()> drawn;
 };
 
 ///   particles.splash   near, radius          the splashes within the radius, nearest first, with their state
@@ -97,6 +100,7 @@ struct ParticleSources
 ///   particles.liquid                         the pool of liquid particles: counts by kind, drops on the land
 ///   particles.belief                         the symbols of belief that rose last, the newest first
 ///   particles.requests                       the effects that the turns and the scripts asked for
+///   particles.drawn                          what the last frame of the draw of the effects drew
 class ParticlesProvider final: public ProviderInterface
 {
 public:

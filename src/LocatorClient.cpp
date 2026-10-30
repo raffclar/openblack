@@ -31,6 +31,7 @@
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/Implementations/AdvisorVoiceSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
+#include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
@@ -47,6 +48,7 @@ using namespace openblack::audio;
 using openblack::debug::gui::DebugGuiInterface;
 using openblack::ecs::systems::AdvisorVoiceSystem;
 using openblack::ecs::systems::CloudSystem;
+using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::RenderingSystemTemple;
 using openblack::ecs::systems::TurnCheerSystem;
@@ -110,6 +112,12 @@ void openblack::InitializePresentation()
 	Locator::advisorVoiceSystem::emplace<AdvisorVoiceSystem>();
 	// The measure of how fast this computer's camera turns, and the advisors' cheers at it
 	Locator::turnCheerSystem::emplace<TurnCheerSystem>();
+	// The draw of the particle effects, which reads the effects from their rules
+	Locator::particleSystem::emplace<ParticleSystem>(
+	    []() -> const ecs::systems::ParticleRuleSystemInterface* {
+		    return Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
+	    },
+	    &ParticleSystem::TextureStemsOnDisk);
 }
 
 void openblack::InitializeClient(const player_profiles::Store& profiles)

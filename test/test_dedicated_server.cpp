@@ -224,6 +224,23 @@ TEST(DedicatedServer, TheServerKeepsTheSkysCloudsOutOfTheWorldAndMakesNoSystemTh
 	EXPECT_GT(drawnClouds, 0u);
 }
 
+TEST(DedicatedServer, TheServerStepsTheRulesOfTheParticlesButDoesNotDrawThem)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool rules = true;
+	bool drawn = false;
+	const std::atomic<bool> stop {false};
+	const auto exitCode = openblack::server::Run(MockSettings(profileFolder.Path()), stop,
+	                                             [&rules, &drawn](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		                                             using openblack::Locator;
+		                                             rules = rules && Locator::particleRuleSystem::has_value();
+		                                             drawn = drawn || Locator::particleSystem::has_value();
+	                                             });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_TRUE(rules);
+	EXPECT_FALSE(drawn);
+}
+
 TEST(DedicatedServer, TheServerMovesTheSkysClockButDoesNotShowTheSky)
 {
 	const openblack::test::TestTempFolder profileFolder;

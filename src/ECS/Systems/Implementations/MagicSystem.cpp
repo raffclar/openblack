@@ -113,7 +113,7 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -1763,15 +1763,15 @@ void MagicSystem::UpdateDispenserFrame(const ObjectDrawListSystemInterface& draw
                                        std::chrono::milliseconds frameGameTime, bool landDrawn)
 {
 	const auto seconds = particles::drawn_steps::StepSeconds(_swirlPace, frameRealTime, frameGameTime, landDrawn);
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::particleRuleSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	const auto& registry = EntityRegistry();
 	const auto stepSwirl = [&](entt::entity entity) {
 		const auto* dispenser = registry.TryGet<const SpellDispenser>(entity);
-		if (dispenser == nullptr || dispenser->effect == ParticleSystemInterface::k_NoEffect)
+		if (dispenser == nullptr || dispenser->effect == ParticleRuleSystemInterface::k_NoEffect)
 		{
 			return;
 		}

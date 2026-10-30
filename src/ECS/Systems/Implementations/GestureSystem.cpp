@@ -37,7 +37,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -174,9 +174,9 @@ void GestureSystem::Reset()
 	// and the seeds pictured go, with their effects
 	for (const auto& [magic, picture] : _hints.seeds)
 	{
-		if (picture.holderEffect.has_value() && Locator::particleSystem::has_value())
+		if (picture.holderEffect.has_value() && Locator::particleRuleSystem::has_value())
 		{
-			Locator::particleSystem::value().Delete(*picture.holderEffect);
+			Locator::particleRuleSystem::value().Delete(*picture.holderEffect);
 		}
 	}
 	_hints.seeds.clear();
@@ -604,7 +604,7 @@ bool GestureSystem::RepeatMiracleByKey(PlayerNames player)
 
 void GestureSystem::LayTrail(GestureType gesture, const gesture::Match& match, const Frame& frame) const
 {
-	if (!Locator::particleSystem::has_value() || !frame.view.trailPointUnder)
+	if (!Locator::particleRuleSystem::has_value() || !frame.view.trailPointUnder)
 	{
 		return;
 	}
@@ -623,13 +623,13 @@ void GestureSystem::LayTrail(GestureType gesture, const gesture::Match& match, c
 	                                 {.cameraForward = frame.view.cameraForward, .pointUnder = frame.view.trailPointUnder});
 	if (trail.has_value())
 	{
-		Locator::particleSystem::value().AddGestureTrail(std::make_shared<particles::GestureTrail>(std::move(*trail)));
+		Locator::particleRuleSystem::value().AddGestureTrail(std::make_shared<particles::GestureTrail>(std::move(*trail)));
 	}
 }
 
 void GestureSystem::ShowGestureOnLand(GestureType gesture, glm::vec3 corner, float size)
 {
-	if (gesture == GestureType::None || !Locator::particleSystem::has_value())
+	if (gesture == GestureType::None || !Locator::particleRuleSystem::has_value())
 	{
 		return;
 	}
@@ -641,7 +641,7 @@ void GestureSystem::ShowGestureOnLand(GestureType gesture, glm::vec3 corner, flo
 	const auto landHeight = [](float x, float z) {
 		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({x, z}) : 0.0f;
 	};
-	Locator::particleSystem::value().AddGestureTrail(
+	Locator::particleRuleSystem::value().AddGestureTrail(
 	    std::make_shared<particles::GestureTrail>(gesture::LandGestureTrail(*symbol, corner, size, landHeight)));
 }
 
@@ -880,7 +880,7 @@ void GestureSystem::RefreshHints()
 void GestureSystem::StepHints(float seconds, bool wordsShowing)
 {
 	const auto* info = Locator::infoConstants::has_value() ? &Locator::infoConstants::value() : nullptr;
-	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 	const bool shows = gesture_hints::Fade(_hints.alpha, seconds, wordsShowing) > 0.0f;
 	// The first hint of a miracle makes its seed picture, unturned. The picture is the player's at this computer, and
 	// its holder's effect starts at full size above the world's origin.
@@ -902,7 +902,7 @@ void GestureSystem::StepHints(float seconds, bool wordsShowing)
 			{
 				const auto effect =
 				    particles->Start(seedInfo.holderParticle, glm::vec3(0.0f, seedInfo.holderHeight, 0.0f), 1.0f);
-				if (effect != ParticleSystemInterface::k_NoEffect)
+				if (effect != ParticleRuleSystemInterface::k_NoEffect)
 				{
 					particles->SetDrawnAlone(effect);
 					particles->SetPlayer(effect, static_cast<int>(Locator::handSystem::has_value()

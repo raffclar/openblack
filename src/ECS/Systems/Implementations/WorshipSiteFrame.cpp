@@ -24,7 +24,7 @@
 #include "ECS/NeedFlagRules.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/WorshipSites.h"
 #include "InfoConstants.h"
@@ -77,7 +77,7 @@ void WorshipSiteSystem::UpdateFrame(std::chrono::milliseconds gameTime, std::chr
 		UpdateRing(site, IsBuilt(site) && DrawnThisFrame(site), realMilliseconds);
 	}
 	// Then the miracles draw: each site throbs while it strains, and its motes are as clear as its throb
-	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 	for (const auto site : sites)
 	{
 		const auto* chants = registry.TryGet<const WorshipChants>(site);
@@ -185,9 +185,9 @@ void WorshipSiteSystem::UpdateRing(entt::entity site, bool drawn, int32_t realMi
 		look.ring->SetSpread(looks::k_RingSpread);
 		look.ring->SetOwnClock(true);
 		look.ringCentre = centre;
-		if (Locator::particleSystem::has_value())
+		if (Locator::particleRuleSystem::has_value())
 		{
-			Locator::particleSystem::value().AddLightSheet(look.ring);
+			Locator::particleRuleSystem::value().AddLightSheet(look.ring);
 		}
 	}
 	// It is as strong as the site's store of prayer power is full, in its player's colour, throbbing and sliding as the
@@ -201,8 +201,8 @@ void WorshipSiteSystem::UpdateRing(entt::entity site, bool drawn, int32_t realMi
 	look.ring->SetHidden(false);
 	look.ring->Update(looks::FrameSeconds(realMilliseconds));
 	// The particles keep the sheet until a new land or a load clears their list, so it is given to them again each time
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
-		Locator::particleSystem::value().AddLightSheet(look.ring);
+		Locator::particleRuleSystem::value().AddLightSheet(look.ring);
 	}
 }

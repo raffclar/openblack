@@ -47,19 +47,33 @@ public:
 	/// The number that the particles give an effect that only this computer shows
 	EffectHandle ownNumber {7};
 
+	void SetLifeListener(EffectLifeListener* lifeListener) override { listener = lifeListener; }
 	EffectHandle Serve(const EffectRequest& request, EffectHandle handle) override
 	{
 		served.emplace_back(request, handle);
 		const auto number = handle != k_NoEffectHandle ? handle : ownNumber++;
 		running.push_back(number);
+		if (listener != nullptr)
+		{
+			listener->EffectStarted(number);
+		}
 		return number;
 	}
 	void Move(EffectHandle handle, glm::vec3 position) override { moved.emplace_back(handle, position); }
 	void Stop(EffectHandle handle) override { stopped.push_back(handle); }
-	void Remove(EffectHandle handle) override { removed.push_back(handle); }
-	[[nodiscard]] bool IsRunning(EffectHandle handle) const override
+	void Remove(EffectHandle handle) override
 	{
-		return std::ranges::find(running, handle) != running.end();
+		removed.push_back(handle);
+		End(handle);
+	}
+	[[nodiscard]] bool IsRunning(EffectHandle handle) const { return std::ranges::find(running, handle) != running.end(); }
+	/// The rules of the effect end it, and it goes
+	void End(EffectHandle handle)
+	{
+		if (std::erase(running, handle) > 0 && listener != nullptr)
+		{
+			listener->EffectEnded(handle);
+		}
 	}
 	void SetPlayer(EffectHandle handle, int /*player*/) override { changes.emplace_back("player", handle); }
 	void SetPower(EffectHandle handle, float /*power*/) override { changes.emplace_back("power", handle); }
@@ -89,7 +103,7 @@ public:
 		// The effect ends at this step: it goes
 		if (endsAtNextStep == handle)
 		{
-			std::erase(running, handle);
+			End(handle);
 			return false;
 		}
 		return IsRunning(handle);
@@ -118,7 +132,25 @@ public:
 	{
 		shared.emplace_back("playerSymbols " + std::to_string(symbols.size()));
 	}
+	void SetShown(EffectHandle handle, bool shown) override { changes.emplace_back(shown ? "shown" : "notShown", handle); }
+	bool Renumber(EffectHandle from, EffectHandle to) override
+	{
+		const auto it = std::ranges::find(running, from);
+		if (it == running.end() || IsRunning(to))
+		{
+			return false;
+		}
+		*it = to;
+		if (listener != nullptr)
+		{
+			listener->EffectEnded(from);
+			listener->EffectStarted(to);
+		}
+		return true;
+	}
 
+	/// The record that hears of each start and end
+	EffectLifeListener* listener {nullptr};
 	/// The effect that ends at its next step
 	EffectHandle endsAtNextStep {k_NoEffectHandle};
 	particles::SpellSink* restoredSink {nullptr};
@@ -356,4 +388,96 @@ TEST(EffectRequests, TheAddsToTheEffectsThatRunAllTheTimeGoToThePresentation)
 	EXPECT_EQ(server.shared, expected);
 	EXPECT_TRUE(server.served.empty());
 	EXPECT_EQ(shown.NextHandle(), k_FirstEffectHandle);
+}
+
+TEST(EffectRequests, TheTurnsReadTheRecordThatTheParticlesTellOfEachStartAndEnd)
+{
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	ASSERT_EQ(server.listener, &effects);
+	const auto beam = effects.Start({.type = SpotVisualType::MagicBeamOnCitadel, .turns = -1});
+	const auto glow = effects.Start({.type = SpotVisualType::MagicFxOnObject});
+	EXPECT_TRUE(effects.IsRunning(beam));
+	EXPECT_TRUE(effects.IsRunning(glow));
+	// The rules of the particles end the glow: the record hears of it, and the beam still runs
+	server.End(glow);
+	EXPECT_FALSE(effects.IsRunning(glow));
+	EXPECT_TRUE(effects.IsRunning(beam));
+	// An effect that the particles start by themselves is in the record too
+	effects.EffectStarted(42);
+	EXPECT_TRUE(effects.IsRunning(42));
+	// A new land or a load ends every effect at the same time
+	effects.EffectsCleared();
+	EXPECT_FALSE(effects.IsRunning(beam));
+	EXPECT_FALSE(effects.IsRunning(42));
+	// The load of the effects tells the record of each effect that the save kept
+	effects.EffectStarted(beam);
+	EXPECT_TRUE(effects.IsRunning(beam));
+	EXPECT_FALSE(effects.IsRunning(k_NoEffectHandle));
+}
+
+TEST(EffectRequests, ARequestThatStartsNoEffectIsNotInTheRecord)
+{
+	EffectRequestSystem unshown([]() -> EffectServerInterface* { return nullptr; });
+	const auto handle = unshown.Start({.type = SpotVisualType::MagicBeam});
+	EXPECT_FALSE(unshown.IsRunning(handle));
+	// A new land numbers from the first again, but only the particles end the effects
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	const auto first = effects.Start({.type = SpotVisualType::MagicBeam});
+	effects.Reset();
+	EXPECT_TRUE(effects.IsRunning(first));
+	effects.Remove(first);
+	EXPECT_FALSE(effects.IsRunning(first));
+}
+
+TEST(EffectRequests, TheRecordStopsToListenWhenTheSystemGoes)
+{
+	FakeServer server;
+	{
+		const EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+		EXPECT_NE(server.listener, nullptr);
+	}
+	EXPECT_EQ(server.listener, nullptr);
+}
+
+TEST(EffectRequests, AnEffectOfThisComputerTakesTheNumberOfTheSaveAgain)
+{
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	const auto own = effects.StartHere({.type = ParticleType::LandscapeVortexInBefore, .synced = false, .saved = false});
+	ASSERT_EQ(own, 7u);
+	// The owner starts the effect again after a load and gives it the number of the save
+	EXPECT_TRUE(effects.Renumber(own, 3));
+	EXPECT_FALSE(effects.IsRunning(own));
+	EXPECT_TRUE(effects.IsRunning(3));
+	// No effect has the first number, and no number is not a number
+	EXPECT_FALSE(effects.Renumber(own, 4));
+	EXPECT_FALSE(effects.Renumber(3, k_NoEffectHandle));
+	EXPECT_TRUE(effects.IsRunning(3));
+	// The request keeps what a save does with the effect and how the effect draws
+	ASSERT_EQ(server.served.size(), 1u);
+	EXPECT_FALSE(server.served.front().first.saved);
+	EXPECT_FALSE(server.served.front().first.drawPath.has_value());
+}
+
+TEST(EffectRequests, TheFramesShowAnEffectOnlyWhileTheyDrawItsThing)
+{
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	const auto glow = effects.StartHere({.type = ParticleType::LandscapeVortexInBefore, .synced = false});
+	effects.SetShown(glow, false);
+	effects.SetShown(glow, true);
+	// No effect: no call
+	effects.SetShown(k_NoEffectHandle, true);
+	const std::vector<std::pair<std::string, EffectHandle>> expected {{"notShown", glow}, {"shown", glow}};
+	EXPECT_EQ(server.changes, expected);
+}
+
+TEST(EffectRequests, NoRenumberOnAComputerThatShowsNothing)
+{
+	EffectRequestSystem effects([]() -> EffectServerInterface* { return nullptr; });
+	EXPECT_FALSE(effects.Renumber(7, 3));
+	effects.SetShown(7, true);
+	EXPECT_FALSE(effects.IsRunning(3));
 }
