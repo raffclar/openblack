@@ -25,6 +25,7 @@
 
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
+#include "Server/ServerSnapshots.h"
 #include "Server/TicketCheck.h"
 #include "Server/WebSocketServerInterface.h"
 
@@ -137,6 +138,20 @@ public:
 	/// The server's world state at the start of the next turn, which a client whose world parted loads as it comes back
 	using WorldState = std::function<std::vector<uint8_t>()>;
 	void SetWorldState(WorldState worldState) { _worldState = std::move(worldState); }
+	/// Gets the bytes of each turn that the server closes, before the server sends them. The snapshots of the server keep
+	/// them in a journal (deviation 100).
+	using TurnJournal = std::function<void(uint32_t turn, std::span<const uint8_t> bytes)>;
+	void SetTurnJournal(TurnJournal journal) { _turnJournal = std::move(journal); }
+	/// The room of the game, as a snapshot of the server keeps it
+	[[nodiscard]] snapshots::Room RoomRecord() const;
+	/// Continues a game from a snapshot, before any client connects. The world of the server is at the start of the turn
+	/// turnsDone. The gods of the room wait for their players, who come back with the secrets of their sessions. The
+	/// world turns the replayed turns first, with no player: these are the turns that the server sent before it stopped.
+	void Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed);
+	/// True while the world must turn the replayed turns of a restored game. The server reads no socket until then.
+	[[nodiscard]] bool Replaying() const { return !_replayed.empty(); }
+	/// The next turn that the server closes
+	[[nodiscard]] uint32_t TurnsDone() const { return _turnsDone; }
 	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
 	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
 	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
@@ -220,6 +235,9 @@ private:
 	[[nodiscard]] std::vector<game_socket::God> Gods() const;
 	/// The connections of the gods with a player
 	[[nodiscard]] std::set<ConnectionId> GodConnections() const;
+	/// The commands of a replayed turn of a restored game. The server sends the turn again only to the players who come
+	/// back.
+	[[nodiscard]] std::vector<player_commands::Command> TakeReplayedTurn(uint32_t turn);
 	void SendTo(ConnectionId connection, const game_socket::Frame& frame);
 	void Broadcast(const game_socket::Frame& frame);
 	void BroadcastBinary(std::span<const uint8_t> bytes);
@@ -280,6 +298,11 @@ private:
 	uint32_t _refusedBlocks {0};
 	WorldState _worldState;
 	PartListener _partListener;
+	TurnJournal _turnJournal;
+	/// The game continues from a snapshot of the server
+	bool _restored {false};
+	/// The turns that a restored game turns again, by turn
+	std::map<uint32_t, std::vector<uint8_t>> _replayed;
 	/// The account ids that the lobby banned from the server
 	std::set<int64_t> _bans;
 };

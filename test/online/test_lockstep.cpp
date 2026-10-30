@@ -13,9 +13,12 @@
 #include <algorithm>
 #include <array>
 #include <initializer_list>
+#include <iterator>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -253,6 +256,45 @@ protected:
 		return stopper.session.StoppedAfter().value_or(0);
 	}
 
+	/// The server keeps each turn that it sends in a journal, as the snapshots of the game server do
+	void KeepJournal()
+	{
+		host->SetTurnJournal(
+		    [this](uint32_t turn, std::span<const uint8_t> bytes) { journal[turn].assign(bytes.begin(), bytes.end()); });
+	}
+
+	/// The server stops with no warning. A new server continues the game from the room and the world of a snapshot, and
+	/// does again the turns of the journal after the snapshot, less the last turns that the journal lost.
+	void RestartFrom(const server::snapshots::Room& room, uint32_t turn, const FakeWorld& world,
+	                 const std::vector<Computer*>& computers, uint32_t lostTurns = 0)
+	{
+		for (auto* computer : computers)
+		{
+			network.Cut(computer->sockets->Ids().back());
+		}
+		host.reset();
+		MakeHost(2);
+		GiveWorldState();
+		serverWorld = world;
+		auto replayed = journal;
+		for (uint32_t i = 0; i < lostTurns && !replayed.empty(); ++i)
+		{
+			replayed.erase(std::prev(replayed.end()));
+		}
+		const auto savedRoom = server::snapshots::DecodeRoom(server::snapshots::EncodeRoom(room));
+		ASSERT_TRUE(savedRoom.has_value());
+		host->Restore(*savedRoom, turn, std::move(replayed));
+		KeepJournal();
+		while (host->Replaying())
+		{
+			const auto next = serverWorld.turns;
+			ASSERT_TRUE(host->HasTurn(next));
+			const auto commands = host->TakeTurn(next);
+			host->TurnChecksum(next + 1, serverWorld.Play(next, commands));
+		}
+	}
+
+	std::map<uint32_t, std::vector<uint8_t>> journal;
 	int64_t now {1'000'000};
 	int secrets {0};
 	LoopbackSockets network;
@@ -1294,4 +1336,107 @@ TEST_F(LockstepTest, TheGodsAfterTheSeventhTakeTheNumbersAfterTheNeutralPlayer)
 	EXPECT_TRUE(serverWorld.players.contains(static_cast<PlayerNames>(9)));
 	EXPECT_FALSE(serverWorld.players.contains(PlayerNames::NEUTRAL));
 	EXPECT_EQ(gods[8]->world.players, serverWorld.players);
+}
+
+TEST_F(LockstepTest, AServerThatRestartsFromItsSnapshotGetsItsPlayersBackWithNoStepBack)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	// The snapshot of the server, then more turns with a command of a player
+	const auto room = host->RoomRecord();
+	const auto snapshotTurn = host->TurnsDone();
+	const auto snapshotWorld = serverWorld;
+	alice.session.Send(HandTap {.object = Entity(5)});
+	Frames({&alice, &bob}, 20);
+	const auto lastTurn = host->TurnsDone();
+	const auto lastHash = serverWorld.hash;
+
+	RestartFrom(room, snapshotTurn, snapshotWorld, {&alice, &bob});
+	// The new server did again every turn that the old server sent, with the same commands
+	EXPECT_EQ(host->TurnsDone(), lastTurn);
+	EXPECT_EQ(serverWorld.hash, lastHash);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Away);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	EXPECT_FALSE(host->HasTurn(lastTurn));
+
+	// The players come back with the secrets of their sessions and get only the turns that they missed
+	Frames({&alice, &bob}, 40);
+	for (const auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->session.GetState(), NetworkSession::State::Playing);
+		EXPECT_EQ(computer->session.Resumes(), 1u);
+		EXPECT_EQ(computer->loads, 0u);
+		EXPECT_EQ(computer->world.hash, serverWorld.hash);
+		EXPECT_EQ(computer->world.turns, serverWorld.turns);
+		EXPECT_EQ(computer->session.GetCompares().compared, computer->session.GetCompares().same);
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
+	EXPECT_GT(serverWorld.turns, lastTurn + 20);
+}
+
+TEST_F(LockstepTest, AClientAheadOfTheRestoredServerGetsTheWorldOfTheServer)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto room = host->RoomRecord();
+	const auto snapshotTurn = host->TurnsDone();
+	const auto snapshotWorld = serverWorld;
+	Frames({&alice, &bob}, 20);
+	const auto lastTurn = host->TurnsDone();
+
+	// The journal lost its last turns, so the clients are at turns after the turn of the new server
+	RestartFrom(room, snapshotTurn, snapshotWorld, {&alice, &bob}, 5);
+	EXPECT_EQ(host->TurnsDone(), lastTurn - 5);
+	Frames({&alice, &bob}, 40);
+	for (const auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->session.GetState(), NetworkSession::State::Playing);
+		EXPECT_EQ(computer->loads, 1u);
+		EXPECT_EQ(computer->world.hash, serverWorld.hash);
+		EXPECT_EQ(computer->world.turns, serverWorld.turns);
+	}
+}
+
+TEST_F(LockstepTest, AGodWhoseProgramStoppedWithTheServerComesBackWithANewTicket)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god:alice");
+	auto bob = std::make_unique<Computer>(network, now, "god:bob");
+	Frames({&alice, bob.get()}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto room = host->RoomRecord();
+	const auto snapshotTurn = host->TurnsDone();
+	const auto snapshotWorld = serverWorld;
+	Frames({&alice, bob.get()}, 10);
+
+	// Bob's program stopped with the server. He starts it again with a new ticket of the same account.
+	network.Cut(bob->sockets->Ids().back());
+	bob.reset();
+	RestartFrom(room, snapshotTurn, snapshotWorld, {&alice});
+	Computer again(network, now, "god:bob");
+	Frames({&alice, &again}, 40);
+	ASSERT_TRUE(again.session.GetJoined().has_value());
+	EXPECT_EQ(again.session.GetJoined()->slot, std::optional<uint8_t>(1));
+	EXPECT_EQ(again.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(again.world.hash, serverWorld.hash);
+	// Alice came back with the secret of her session and stays in step with the server
+	EXPECT_GT(alice.session.GetCompares().same, 60u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(alice.loads, 0u);
+	EXPECT_EQ(alice.session.Resumes(), 1u);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
 }

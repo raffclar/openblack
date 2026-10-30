@@ -1264,6 +1264,11 @@ bool SaveGameSystem::Load(uint32_t slot)
 
 std::vector<uint8_t> SaveGameSystem::WorldState()
 {
+	return WorldStateLater()();
+}
+
+std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
+{
 	auto& registry = Locator::entitiesRegistry::value();
 	gamesave::WorldFile world;
 	gamesave::GameChunk game {.land = LandNumber(),
@@ -1289,13 +1294,19 @@ std::vector<uint8_t> SaveGameSystem::WorldState()
 	}
 	const auto chunks = gamesave::ToChunks(saved);
 	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
-	// Then the whole world in openblack's own layout. This computer makes all the blocks now, with no writer thread.
+	// Then the whole world in openblack's own layout. The game thread takes what each block needs now, as for a save. The
+	// function makes the bytes of the blocks and of the file later.
 	ecs::world_save::SaveSummary summary;
-	for (const auto& pending : ecs::world_save::SaveWorld(Reflection(), summary))
-	{
-		world.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
-	}
-	return gamesave::Write(world);
+	auto whole =
+	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
+	return [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole]() {
+		auto file = *world;
+		for (const auto& pending : *whole)
+		{
+			file.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
+		}
+		return gamesave::Write(file);
+	};
 }
 
 bool SaveGameSystem::LoadWorldState(std::span<const uint8_t> bytes)

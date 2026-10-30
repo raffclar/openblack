@@ -94,6 +94,12 @@ public:
 	/// The whole world at the end of the last turn, as the bytes of a world file in openblack's own layout, with no file
 	/// and no picture. The game server sends it to a player who comes back to a network game.
 	[[nodiscard]] virtual std::vector<uint8_t> WorldState() { return {}; }
+	/// The same bytes as WorldState, in two parts. The game thread takes copies of the world now. The function that it
+	/// gives makes the bytes from the copies later, on another thread, while the world turns.
+	[[nodiscard]] virtual std::function<std::vector<uint8_t>()> WorldStateLater()
+	{
+		return [] { return std::vector<uint8_t> {}; };
+	}
 	/// Puts back the whole world from the bytes that WorldState gave. The land of the bytes starts again, and the world
 	/// goes on from the turn of the bytes. Returns whether the world loaded.
 	virtual bool LoadWorldState(std::span<const uint8_t> /*bytes*/) { return false; }
