@@ -62,6 +62,7 @@
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/FootpathRules.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -138,14 +139,16 @@ std::tuple<Tribe, VillagerNumber> GetVillagerTribeAndNumber(const std::string& v
 	}
 }
 
-/// The player a land's script names, in any case; a name that is no player's is the neutral player
+/// The player a land's script names, in any case; a name that is no player's is the neutral player. A god after the
+/// seventh is PLAYER_ and its number.
 PlayerNames GetPlayerName(const std::string& name)
 {
-	if (const auto player = k_PlayerLookup.find(string_utils::UpperCase(name)); player != k_PlayerLookup.end())
+	const auto upper = string_utils::UpperCase(name);
+	if (const auto player = k_PlayerLookup.find(upper); player != k_PlayerLookup.end())
 	{
 		return player->second;
 	}
-	return PlayerNames::NEUTRAL;
+	return player_slots::PlayerOfScriptName(upper).value_or(PlayerNames::NEUTRAL);
 }
 
 /// The hands and the camera of the owner of a citadel start at the citadel when the script makes it. The citadel is at
@@ -938,7 +941,7 @@ void FeatureScriptCommands::CreateInfluenceRing(glm::vec3 position, int32_t play
 {
 	// A ring of influence that stays at the place, for the player of the number, as a script makes one. A last value
 	// other than 0 makes it an anti-influence: the player then has no influence at all within it.
-	if (player < 0 || player >= static_cast<int32_t>(PlayerNames::_COUNT))
+	if (player < 0 || static_cast<size_t>(player) >= ecs::game_players::Count())
 	{
 		return;
 	}

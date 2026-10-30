@@ -45,6 +45,7 @@
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -689,5 +690,8 @@ void ComputerPlayerSystem::HumansJoined(std::span<const PlayerNames> humans)
 	// The slots fill one time on the land
 	const bool waits = std::exchange(Locator::entitiesRegistry::value().Context().slotsWaitForHumans, false);
 	GameSlotWorld world(*this);
-	computer_player::HumansJoin(world, humans, waits);
+	// The gods of the slots of the game: the 7 of a land, or more on a land with more god slots
+	auto all = ecs::game_players::Gods();
+	const std::vector<PlayerNames> gods(all.begin(), all.end());
+	computer_player::HumansJoin(world, gods, humans, waits);
 }

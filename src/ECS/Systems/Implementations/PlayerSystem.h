@@ -33,6 +33,7 @@ class PlayerSystem final: public PlayerSystemInterface
 public:
 	void RegisterPlayers() override;
 	void AddPlayer(entt::entity playerEntity) override;
+	[[nodiscard]] size_t PlayerNumbersInGame() const override;
 	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames playerName) const override;
 	entt::entity EnsurePlayer(PlayerNames playerName) override;
 	void AddCreature(entt::entity creature) override;
@@ -56,7 +57,7 @@ private:
 	struct Kept
 	{
 		std::optional<components::Alignment> alignment;
-		std::array<float, 8> damageFrom {};
+		decltype(components::Player::damageFrom) damageFrom {};
 		uint32_t windResistance {0};
 		components::Player::Miracles miracles;
 		/// What their hand keeps of their influence past the border, and whether a script switched it off

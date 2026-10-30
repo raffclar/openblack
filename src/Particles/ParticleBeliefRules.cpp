@@ -226,6 +226,11 @@ public:
 			slot.data = *centre;
 			for (const auto player : world.PlayersInGame())
 			{
+				// A god after the seventh has no symbol: the village keeps the belief of the players of a land only
+				if (static_cast<size_t>(player) >= town_belief::k_PlayerCount)
+				{
+					continue;
+				}
 				auto& atom = effect.NewAtom(collection, &symbol, nextGroups);
 				atom.baseScale = k_SymbolBaseScale;
 				atom.player = player;
@@ -247,7 +252,7 @@ public:
 		for (auto& atom : collection.atoms)
 		{
 			const auto found = atom->data.find(this);
-			if (found == atom->data.end() || atom->player < 0)
+			if (found == atom->data.end() || atom->player < 0 || static_cast<size_t>(atom->player) >= belief->beliefs.size())
 			{
 				continue;
 			}

@@ -49,21 +49,22 @@ float computer_mind_rules::TownHold(float rivalBelief, bool ownTown)
 	return !(hold >= 1.0f) ? hold : 1.0f;
 }
 
-float computer_mind_rules::RivalBelief(std::span<const float, k_BeliefPlayers> belief, size_t god, size_t owner)
+float computer_mind_rules::RivalBelief(std::span<const float> belief, size_t god, size_t owner)
 {
 	if (owner != god)
 	{
-		return belief[owner];
+		return owner < belief.size() ? belief[owner] : 0.0f;
 	}
+	const float own = god < belief.size() ? belief[god] : 0.0f;
 	float most = k_NoRivalBelief;
 	float found = 0.0f;
-	for (size_t player = 0; player < k_BeliefPlayers; ++player)
+	for (size_t player = 0; player < belief.size(); ++player)
 	{
 		if (player == god)
 		{
 			continue;
 		}
-		const float difference = belief[player] - belief[god];
+		const float difference = belief[player] - own;
 		if (difference > most)
 		{
 			most = difference;

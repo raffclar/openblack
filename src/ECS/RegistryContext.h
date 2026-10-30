@@ -30,6 +30,7 @@
 #include "ECS/GameEndRules.h"
 #include "ECS/StatisticsRules.h"
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs
 {
@@ -62,7 +63,7 @@ struct RegistryContext
 	uint32_t scriptCameraOrders {0};
 	/// Each player's temple entrances take the cursor from the first turn a temple of theirs stands fully built on this
 	/// land, until the land is left
-	std::array<bool, static_cast<size_t>(PlayerNames::_COUNT)> templeEntrancesTakeCursor {};
+	std::array<bool, player_slots::k_PlayerNumbers> templeEntrancesTakeCursor {};
 	/// The game is over: the local player's temple is being destroyed
 	bool gameOver {false};
 	/// A skirmish: a playground land played rather than the story's. Losing a temple doesn't end it. openblack plays no
@@ -88,7 +89,7 @@ struct RegistryContext
 	uint32_t nextTownMade {0};
 	/// The people of each player's towns as the players' turn counts them, by player number, the neutral player last:
 	/// none at the start of a player's turn, and each town adds its people after its own turn
-	std::array<uint32_t, 8> peopleCountedInTurn {};
+	std::array<uint32_t, player_slots::k_PlayerNumbers> peopleCountedInTurn {};
 	/// Where creatures may go on the land, worked out once the land is there and first asked for
 	std::optional<land_avoid::Map> landAvoid;
 	/// How far the bones of each species reach from its middle. The first request measures it from the model, and later

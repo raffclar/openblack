@@ -309,7 +309,7 @@ float computer_mind_rules::DamageNeed(float share)
 	return 1.0f - share * share;
 }
 
-std::optional<TownThreat> computer_mind_rules::ThreatOf(std::span<const TownAttack, k_TownAttackPlayers> attacks, uint32_t turn)
+std::optional<TownThreat> computer_mind_rules::ThreatOf(std::span<const TownAttack> attacks, uint32_t turn)
 {
 	TownThreat threat;
 	float most = 0.0f;

@@ -9,10 +9,16 @@
 
 #pragma once
 
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
+#include <iterator>
 #include <optional>
+#include <ranges>
+#include <string>
+#include <string_view>
 
 #include "Enums.h"
 
@@ -72,6 +78,65 @@ static_assert(k_PlayerNumbers <= 0xFFu, "A player number fits in the type of the
 [[nodiscard]] constexpr bool IsLandPlayer(PlayerNames player) noexcept
 {
 	return static_cast<size_t>(player) < k_LandSlots;
+}
+
+/// The count of the player numbers of a game: the player slots of a land, or more when a network game has more gods.
+/// The count is never more than the player numbers of a network game with the most players.
+[[nodiscard]] constexpr size_t PlayerNumbersOf(size_t count) noexcept
+{
+	return std::clamp(count, k_LandSlots, k_PlayerNumbers);
+}
+
+/// Each player of a game with the given count of player numbers, in the order of their numbers. The neutral player
+/// comes after the gods of a land and before the later gods.
+[[nodiscard]] constexpr auto Players(size_t count)
+{
+	return std::views::iota(size_t {0}, PlayerNumbersOf(count)) |
+	       std::views::transform([](size_t number) { return static_cast<PlayerNames>(number); });
+}
+
+/// Each god of a game with the given count of player numbers, in the order of their numbers: each player but the
+/// neutral player
+[[nodiscard]] constexpr auto Gods(size_t count)
+{
+	return Players(count) | std::views::filter([](PlayerNames player) { return player != PlayerNames::NEUTRAL; });
+}
+
+/// The first part of the name of a god after the seventh in a land's script: PLAYER_ and the player number
+inline constexpr std::string_view k_LaterGodNameStart = "PLAYER_";
+
+/// The name of a player in a land's script. The players of a land have the names of the game (PLAYER_ONE to
+/// PLAYER_SEVEN and NEUTRAL). A god after the seventh is PLAYER_ and its number: PLAYER_8 to PLAYER_32 (deviation 165).
+[[nodiscard]] inline std::string ScriptNameOf(PlayerNames player)
+{
+	if (IsLandPlayer(player))
+	{
+		return std::string(k_PlayerNamesStrs.at(static_cast<size_t>(player)));
+	}
+	return std::string(k_LaterGodNameStart) + std::to_string(static_cast<size_t>(player));
+}
+
+/// The player that a name of a land's script names, in upper case as the scripts write it. None for a name that is no
+/// player's.
+[[nodiscard]] inline std::optional<PlayerNames> PlayerOfScriptName(std::string_view name)
+{
+	if (const auto land = std::ranges::find(k_PlayerNamesStrs, name); land != k_PlayerNamesStrs.end())
+	{
+		return static_cast<PlayerNames>(std::distance(k_PlayerNamesStrs.begin(), land));
+	}
+	if (!name.starts_with(k_LaterGodNameStart))
+	{
+		return std::nullopt;
+	}
+	const auto digits = name.substr(k_LaterGodNameStart.size());
+	size_t number = 0;
+	const auto [end, error] = std::from_chars(digits.data(), digits.data() + digits.size(), number);
+	if (digits.empty() || error != std::errc {} || end != digits.data() + digits.size() || number < k_LandSlots ||
+	    number >= k_PlayerNumbers || digits.front() == '0')
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(number);
 }
 
 } // namespace openblack::player_slots

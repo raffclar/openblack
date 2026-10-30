@@ -13,12 +13,15 @@
 
 #include <array>
 
+#include "PlayerSlots.h"
+
 namespace openblack::ecs::components
 {
 
 /// The number of players that a record of each player has a place for. A network land can have 32 gods, so each record
-/// keeps 32 places, by player number. The game kept 8 (deviation 150).
-inline constexpr size_t k_PlayerRecordSize = 32;
+/// keeps a place for each player number of such a game: the 32 gods and the neutral player. The game kept 8 (deviation
+/// 150).
+inline constexpr size_t k_PlayerRecordSize = player_slots::k_PlayerNumbers;
 
 /// How strongly the player is the ally of each player, by player number. A script sets the strength of an alliance
 /// for the two players together. A strength above 0 makes an ally, and an ally above 0.1 lends its influence.

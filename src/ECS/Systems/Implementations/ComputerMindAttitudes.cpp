@@ -27,6 +27,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/ComputerMind.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -61,9 +62,8 @@ std::vector<KnownPlayer> PlayersInOrder(bool withNeutral)
 		return players;
 	}
 	auto& registry = Entities();
-	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::_COUNT); ++number)
+	for (const auto name : ecs::game_players::All())
 	{
-		const auto name = static_cast<PlayerNames>(number);
 		if (name == PlayerNames::NEUTRAL ? !withNeutral : !Locator::playerSystem::value().PlaysInGame(name))
 		{
 			continue;

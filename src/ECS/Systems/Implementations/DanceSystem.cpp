@@ -40,6 +40,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
@@ -210,11 +211,15 @@ void DanceSystem::ProcessTurn()
 	if (Locator::handSystem::has_value())
 	{
 		const auto& handSystem = Locator::handSystem::value();
-		const auto gods = networkGame ? hands.size() : 1;
-		for (std::size_t god = 0; god < gods; ++god)
+		// Each god of the game by its slot; a game with one player has only the first
+		for (const auto player : ecs::game_players::Gods())
 		{
-			hands.at(god) = handSystem.GetHandPositionsOf(static_cast<PlayerNames>(god))
-			                    .at(static_cast<size_t>(HandSystemInterface::Side::Left));
+			const auto god = player_slots::SlotOfPlayer(player);
+			if (!god.has_value() || *god >= hands.size() || (!networkGame && *god > 0))
+			{
+				continue;
+			}
+			hands.at(*god) = handSystem.GetHandPositionsOf(player).at(static_cast<size_t>(HandSystemInterface::Side::Left));
 		}
 	}
 	const auto handsNear = [&hands](const Dance& dance) {

@@ -44,6 +44,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
 #include "ECS/NeedFlagRules.h"
@@ -577,9 +578,9 @@ entt::entity WorkshopSystem::TownForBuilding(glm::vec3 place) const
 	// do not count.
 	entt::entity found = entt::null;
 	float best = k_TownReach;
-	for (uint8_t index = 0; index < static_cast<uint8_t>(PlayerNames::NEUTRAL); ++index)
+	for (const auto player : ecs::game_players::Gods())
 	{
-		for (const auto town : ecs::town_turns::TownsInGainedOrder(registry, static_cast<PlayerNames>(index)))
+		for (const auto town : ecs::town_turns::TownsInGainedOrder(registry, player))
 		{
 			const auto* transform = registry.TryGet<const Transform>(town);
 			if (transform == nullptr)

@@ -417,7 +417,7 @@ TEST(ComputerPlayerStart, TheHumansWhoJoinGetTheirPlayersAndTheSlotsOfAWaitingLa
 	                  {PlayerNames::PLAYER_THREE, true},
 	                  {PlayerNames::NEUTRAL, true}};
 	const std::vector humans {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE};
-	HumansJoin(world, humans, true);
+	HumansJoin(world, k_SlotGods, humans, true);
 
 	EXPECT_EQ(world.players, humans);
 	// Only the god of slot 2 has a citadel and no human; the neutral player is not a god of a slot
@@ -431,12 +431,26 @@ TEST(ComputerPlayerStart, ALandThatDoesNotWaitForItsHumansFillsNoSlotWhenTheyJoi
 	FakeSlotWorld world;
 	world.citadels = {{PlayerNames::PLAYER_ONE, true}, {PlayerNames::PLAYER_TWO, true}};
 	const std::vector humans {PlayerNames::PLAYER_ONE};
-	HumansJoin(world, humans, false);
+	HumansJoin(world, k_SlotGods, humans, false);
 
 	EXPECT_EQ(world.players, humans);
 	EXPECT_TRUE(world.rangesAsked.empty());
 	EXPECT_TRUE(world.switchedOn.empty());
 	EXPECT_TRUE(world.made.empty());
+}
+
+TEST(ComputerPlayerStart, AnEmptySlotAfterTheSeventhGetsAComputerGodAsTheSlotsBeforeIt)
+{
+	FakeSlotWorld world;
+	const auto ninth = static_cast<PlayerNames>(9);
+	world.citadels = {{PlayerNames::PLAYER_ONE, true}, {ninth, true}, {PlayerNames::NEUTRAL, true}};
+	const std::vector gods {PlayerNames::PLAYER_ONE, ninth};
+	const std::vector humans {PlayerNames::PLAYER_ONE};
+	HumansJoin(world, gods, humans, true);
+
+	EXPECT_EQ(world.switchedOn, (std::vector {ninth}));
+	ASSERT_EQ(world.made.size(), 1);
+	EXPECT_EQ(world.made[0].player, ninth);
 }
 
 TEST(ComputerPlayerStart, TheGodsOfTheSlotsAreTheSevenPlayersInOrder)
