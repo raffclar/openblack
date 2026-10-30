@@ -2338,6 +2338,26 @@
   "writes": true
  },
  {
+  "description": "Makes the world state that a game server sends, loads it at once and makes it again, with no frame and no turn between. Writes the two states to the files first and again. The two must have the same bytes (tools/sim/save_diff.py compares the two files)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The file of the first state",
+    "name": "first",
+    "required": true,
+    "type": "string"
+   },
+   {
+    "description": "The file of the state after the load",
+    "name": "again",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "saves.world_state_round_trip",
+  "writes": true
+ },
+ {
   "description": "After a load of a slot of the game itself: each creature of the game's file, and whether the record that a save writes for it now has the same bytes as the file's record",
   "kind": "list",
   "parameters": [],

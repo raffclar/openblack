@@ -4030,6 +4030,34 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		                           {"slot", static_cast<uint32_t>(*slot)},
 		                           {"into", static_cast<uint32_t>(*into)}});
 	});
+	auto worldStateRoundTrip =
+	    Query("world_state_round_trip",
+	          "Makes the world state that a game server sends, loads it at once and makes it again, with no frame and no turn "
+	          "between. Writes the two states to the files first and again. The two must have the same bytes "
+	          "(tools/sim/save_diff.py compares the two files)",
+	          {{.name = "first", .type = "string", .description = "The file of the first state", .required = true},
+	           {.name = "again", .type = "string", .description = "The file of the state after the load", .required = true}});
+	worldStateRoundTrip.writes = true;
+	provider->Add(std::move(worldStateRoundTrip), [](const QueryContext& context) {
+		const auto firstPath = StringMember(context.params, "first");
+		const auto againPath = StringMember(context.params, "again");
+		if (!Locator::saveGameSystem::has_value() || !Locator::filesystem::has_value() || !firstPath.has_value() ||
+		    !againPath.has_value())
+		{
+			return QueryResult::Error("saves.world_state_round_trip needs a game and the two files");
+		}
+		auto& saves = Locator::saveGameSystem::value();
+		auto& files = Locator::filesystem::value();
+		const auto first = saves.WorldState();
+		const bool loaded = !first.empty() && saves.LoadWorldState(first);
+		const auto again = loaded ? saves.WorldState() : std::vector<uint8_t> {};
+		const bool written = files.WriteAll(std::filesystem::path(*firstPath), first) &&
+		                     (!loaded || files.WriteAll(std::filesystem::path(*againPath), again));
+		return QueryResult::Value({{"loaded", loaded},
+		                           {"written", written},
+		                           {"same", loaded && first == again},
+		                           {"bytes", {first.size(), again.size()}}});
+	});
 	provider->Add(Query("vanilla_check",
 	                    "After a load of a slot of the game itself: each creature of the game's file, and whether the record "
 	                    "that a save writes for it now has the same bytes as the file's record",
