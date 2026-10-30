@@ -160,7 +160,7 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	it->effect->SetProcessInfo({.handPosition = hand.position, .enabled = hand.gesturing});
 	if (StepEffect(*it->effect, gameSeconds))
 	{
-		_effects.erase(FindRunning(_gestureChain));
+		Forget(FindRunning(_gestureChain));
 	}
 	StepSelectionEffect(gameSeconds, hand);
 }
@@ -188,7 +188,7 @@ void ParticleSystem::StepSelectionEffect(float gameSeconds, const HandFrame& han
 	it->effect->SetProcessInfo({.handPosition = hand.position, .power = hand.size, .enabled = hand.selecting});
 	if (StepEffect(*it->effect, gameSeconds))
 	{
-		_effects.erase(FindRunning(_selectionEffect));
+		Forget(FindRunning(_selectionEffect));
 	}
 }
 

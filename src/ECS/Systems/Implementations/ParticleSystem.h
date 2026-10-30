@@ -142,10 +142,17 @@ public:
 	void Reset();
 	/// The sounds of the particles of effects that a save does not keep, which the save leaves out too
 	using LeftOutSounds = std::set<const particles::ParticleSoundLink*>;
-	/// The things that the world shares with the effects go first in the tables of a save, in the order of the world
-	void NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut) const;
-	/// The running state of the world: its lists, and the sounds that the particles keep
-	void SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut) const;
+	/// The things that the world shares with the effects go first in the tables of a save, in the order of the world.
+	/// The local tables hold the things of the effects of this computer. With local false, these things stay out. With
+	/// local true, only these things go in.
+	void NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut, const particles::SharedTables& localThings,
+	                  bool local) const;
+	/// Adds the things that only the effects of this computer use: the gesture trails that wait for their effect
+	void AddLocalThings(particles::SharedTables& localThings) const;
+	/// The running state of the world: its lists, and the sounds that the particles keep. The parts of the things in the
+	/// local tables are presentation values.
+	void SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
+	               const particles::SharedTables& localThings) const;
 	bool LoadState(particles::EffectReader& in);
 
 private:
@@ -262,6 +269,7 @@ public:
 	void KeepOutOfSaves(EffectId id) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
 	void SetHidden(EffectId id, bool hidden) override;
+	void SetLifeListener(EffectLifeListener* listener) override { _lifeListener = listener; }
 	void SetLiveHand(EffectId id, glm::vec3 hand) override;
 	void SetInTemple(EffectId id) override;
 	void SetDrawnAlone(EffectId id) override;
@@ -355,6 +363,10 @@ private:
 	void AddRunning(const Running& running, float turnFraction, particles::draw::Frame& frame,
 	                const particles::draw::Sources& sources) const;
 	std::deque<Running>::iterator FindRunning(EffectId id);
+	/// The effect ends and goes. The record of the simulation hears of it.
+	void Forget(std::deque<Running>::iterator effect);
+	/// Tells the record of the simulation, if any, of the start of an effect
+	void TellStarted(EffectId id) const;
 	[[nodiscard]] std::deque<Running>::const_iterator FindRunning(EffectId id) const;
 	/// Steps an effect; true once it has ended
 	bool StepEffect(particles::Effect& effect, float seconds);
@@ -378,6 +390,8 @@ private:
 	/// Newest first, as they are stepped and drawn
 	std::deque<Running> _effects;
 	EffectId _nextId {1};
+	/// The record of the simulation that hears of each start and end of an effect
+	EffectLifeListener* _lifeListener {nullptr};
 	/// The number that the simulation gave the next effect to start, none when the particles give their own
 	EffectId _givenId {k_NoEffect};
 	bool _freshIdsAtNextReset {false};
