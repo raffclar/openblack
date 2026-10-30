@@ -16,6 +16,8 @@
 #include <span>
 #include <vector>
 
+#include <WorldFile.h>
+
 namespace openblack::lnd
 {
 struct LNDCell;
@@ -69,5 +71,12 @@ struct CellAltitude
 
 /// The changed altitudes that WriteAltitudes wrote; nothing when the bytes are not whole
 [[nodiscard]] std::optional<std::vector<CellAltitude>> ReadAltitudes(std::span<const uint8_t> bytes);
+
+/// The block that keeps the changed altitudes. A saved game of openblack and a world state keep the same block.
+[[nodiscard]] gamesave::Chunk AltitudesChunk(std::vector<CellAltitude> altitudes);
+
+/// The changed altitudes that a saved game or a world state keeps. A file of an older build has no block, which gives
+/// no altitudes. A block that is not whole gives nothing.
+[[nodiscard]] std::optional<std::vector<CellAltitude>> KeptAltitudes(const gamesave::WorldFile& world);
 
 } // namespace openblack::land_reuse

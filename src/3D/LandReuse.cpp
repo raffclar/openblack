@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 
 #include <LNDFile.h>
 
@@ -125,6 +126,21 @@ std::optional<std::vector<CellAltitude>> ReadAltitudes(std::span<const uint8_t> 
 		                     .altitude = static_cast<uint8_t>(get(at + 4, 1))});
 	}
 	return altitudes;
+}
+
+gamesave::Chunk AltitudesChunk(std::vector<CellAltitude> altitudes)
+{
+	return {.tag = gamesave::k_AltitudesTag, .bytes = WriteAltitudes(std::move(altitudes))};
+}
+
+std::optional<std::vector<CellAltitude>> KeptAltitudes(const gamesave::WorldFile& world)
+{
+	const auto bytes = gamesave::FindChunk(world, gamesave::k_AltitudesTag);
+	if (!bytes.has_value())
+	{
+		return std::vector<CellAltitude> {};
+	}
+	return ReadAltitudes(*bytes);
 }
 
 } // namespace openblack::land_reuse

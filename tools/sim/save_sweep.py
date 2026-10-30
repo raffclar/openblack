@@ -18,8 +18,8 @@ At each check the game is held, and three round trips follow with no frame and n
     saved game    the game saves (A), loads A and saves (B), loads B and saves (C). Each load of a saved game starts a
                   game, as the game does: the player takes the alignment that the profile keeps, and the statistics
                   note the start again (see save_diff.GAME_START_VALUES). B and C must have the same bytes; A and B can
-                  differ only by the start of a game, and by the land of the file when the world changed the land
-                  (vanilla-bugs 778: a saved game does not keep the altitudes).
+                  differ only by the start of a game. A saved game keeps the altitudes that the world changed (the
+                  LALT block, deviation 168), as a world state does.
 
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/sweep --scenarios all --turns 100
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/land1 --land Land1.txt --at 0,500,2000
@@ -127,8 +127,7 @@ def check(game, options, name):
     b, c = results[second_slot], results[third_slot]
     game_start = save_diff.compare_files(a, b)
     again = save_diff.compare_files(b, c)
-    # A saved game brings back the land of its file (vanilla-bugs 778)
-    unexplained = save_diff.not_game_start(game_start, land_from_file=altitudes > 0)
+    unexplained = save_diff.not_game_start(game_start)
     entry["saved_game"] = {"same": not again and not unexplained, "parts": save_diff.differing_parts(again),
                            "game_start": save_diff.differing_parts(game_start), "not_game_start": unexplained}
     if options.keep:

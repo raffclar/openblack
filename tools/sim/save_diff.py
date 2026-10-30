@@ -282,7 +282,8 @@ GAME_START_CONTEXT_BYTES = 4
 
 
 def changed_altitudes(data):
-    """The count of the land's corners whose altitude the world changed, as a world state keeps them (LALT block)"""
+    """The count of the land's corners whose altitude the world changed, as a saved game or a world state keeps them
+    (LALT block)"""
     _, blocks = read_world(data)
     for tag, block in blocks:
         if tag == "LALT" and len(block) >= 4:
@@ -290,14 +291,11 @@ def changed_altitudes(data):
     return 0
 
 
-def not_game_start(result, land_from_file=False):
-    """The parts of a comparison of a save with the save after its load that the start of a game does not explain.
-    With land_from_file, the land had altitudes that the world changed: a saved game does not keep them (vanilla-bugs
-    778), so the heights of the creatures above the ground in the OBJS block can change."""
+def not_game_start(result):
+    """The parts of a comparison of a save with the save after its load that the start of a game does not explain. A
+    saved game keeps the altitudes that the world changed (deviation 168), so the land does not explain a difference."""
     left = []
     for key, value in result.items():
-        if key == "OBJS" and land_from_file:
-            continue
         if key == "RCTX":
             size = value["bytes"]
             if size["sizes"][0] == size["sizes"][1] and size["first"] >= size["sizes"][0] - GAME_START_CONTEXT_BYTES:

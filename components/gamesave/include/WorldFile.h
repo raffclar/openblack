@@ -58,8 +58,8 @@ inline constexpr Tag k_ScriptTag {'L', 'H', 'V', 'M'};
 inline constexpr Tag k_ScriptObjectsTag {'S', 'O', 'B', 'J'};
 /// The running state that the systems of the game keep beside the entities, one section for each system by its name
 inline constexpr Tag k_SystemsTag {'S', 'Y', 'S', 'T'};
-/// The altitudes of the land that the world changed. Only a world state keeps them: the land of a saved game comes
-/// back from its file.
+/// The altitudes of the land that the world changed. A saved game of openblack and a world state keep them. A saved game
+/// of the game itself does not keep them, so its land comes back from the landscape file.
 inline constexpr Tag k_AltitudesTag {'L', 'A', 'L', 'T'};
 
 struct Chunk

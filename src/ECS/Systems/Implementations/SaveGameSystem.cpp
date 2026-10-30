@@ -380,18 +380,27 @@ float AlignmentToSave(const Creature& body)
 	return found != variables.end() ? found->value.floatVal : 0.0f;
 }
 
-/// Gives back the altitudes of the land that a world state keeps. A world state of an older build keeps none.
+/// The block of the land altitudes that the game changed, for a saved game or a world state. Nothing when no land is open.
+std::optional<gamesave::Chunk> ChangedAltitudesChunk()
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return land_reuse::AltitudesChunk(Locator::terrainSystem::value().ChangedAltitudes());
+}
+
+/// Gives back the altitudes of the land that a saved game or a world state keeps. A file of an older build keeps none.
 void LoadChangedAltitudes(const gamesave::WorldFile& world)
 {
-	const auto chunk = std::ranges::find(world.chunks, gamesave::k_AltitudesTag, &gamesave::Chunk::tag);
-	if (chunk == world.chunks.end() || !Locator::terrainSystem::has_value())
+	if (!Locator::terrainSystem::has_value())
 	{
 		return;
 	}
-	const auto altitudes = land_reuse::ReadAltitudes(chunk->bytes);
+	const auto altitudes = land_reuse::KeptAltitudes(world);
 	if (!altitudes.has_value())
 	{
-		SPDLOG_LOGGER_WARN(Log(), "The altitudes of the land in the world state do not read");
+		SPDLOG_LOGGER_WARN(Log(), "The altitudes of the land in the file do not read");
 		return;
 	}
 	auto& land = Locator::terrainSystem::value();
@@ -971,6 +980,8 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	ecs::world_save::SaveSummary summary;
 	auto whole =
 	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
+	// The land as it is now, so that a load gives back the ground that the game changed
+	auto altitudes = ChangedAltitudesChunk();
 	const auto worldBlocksDone = std::chrono::steady_clock::now();
 	// A game that came from a file of the game also goes back into that file's layout: the file as it was, with the
 	// records of its creatures and their leashes as openblack has them now
@@ -1002,12 +1013,17 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	files.world = slotFolder / gamesave::WorldFileName(slot);
 	// The writer makes the last blocks and puts the blocks together into the file on its own thread
 	files.worldFiles = [path = files.world, world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole,
+	                    altitudes = std::make_shared<std::optional<gamesave::Chunk>>(std::move(altitudes)),
 	                    vanilla = std::make_shared<std::vector<ecs::save_files::SaveFile>>(std::move(vanilla)), scriptCopy]() {
 		for (const auto& pending : *whole)
 		{
 			world->chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
 		}
 		whole->clear();
+		if (altitudes->has_value())
+		{
+			world->chunks.push_back(**altitudes);
+		}
 		std::vector<ecs::save_files::SaveFile> written {{.path = path, .bytes = gamesave::Write(*world)}};
 		std::ranges::move(*vanilla, std::back_inserter(written));
 		if (scriptCopy.has_value())
@@ -1330,13 +1346,8 @@ std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 	auto whole =
 	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
 	// The land as it is now, which another computer must have to go on with the same world
-	std::optional<std::vector<uint8_t>> altitudes;
-	if (Locator::terrainSystem::has_value())
-	{
-		altitudes = land_reuse::WriteAltitudes(Locator::terrainSystem::value().ChangedAltitudes());
-	}
-	return [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole,
-	        altitudes = std::make_shared<std::optional<std::vector<uint8_t>>>(std::move(altitudes))]() {
+	auto altitudes = std::make_shared<std::optional<gamesave::Chunk>>(ChangedAltitudesChunk());
+	return [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole, altitudes]() {
 		auto file = *world;
 		for (const auto& pending : *whole)
 		{
@@ -1344,7 +1355,7 @@ std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 		}
 		if (altitudes->has_value())
 		{
-			file.chunks.push_back({.tag = gamesave::k_AltitudesTag, .bytes = **altitudes});
+			file.chunks.push_back(**altitudes);
 		}
 		return gamesave::Write(file);
 	};
@@ -1410,11 +1421,8 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	const bool loaded = Locator::landSystem::value().LoadSavedLand(
 	    game.landscape, game.landscapeFile,
 	    [&reflection, &world, kind]() {
-		    // The land of a world state comes back as it was, before the things on it
-		    if (kind == ecs::world_save::LoadKind::WorldState)
-		    {
-			    LoadChangedAltitudes(world);
-		    }
+		    // The land comes back as it was at the save, before the things on it
+		    LoadChangedAltitudes(world);
 		    return ecs::world_save::LoadEntities(reflection, world, kind).has_value();
 	    },
 	    kind == ecs::world_save::LoadKind::WorldState ? LandSystemInterface::SavedLandUse::WorldState

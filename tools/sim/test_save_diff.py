@@ -150,10 +150,10 @@ class SaveDiffTests(unittest.TestCase):
         self.assertEqual(save_diff.changed_altitudes(world([("LALT", u32(3) + b"\x00" * 15)])), 3)
         self.assertEqual(save_diff.changed_altitudes(world([("TIME", b"\x00")])), 0)
 
-    def test_the_land_of_the_file_explains_the_creature_records_only_when_the_land_changed(self):
+    def test_the_start_of_a_game_does_not_explain_the_creature_records(self):
+        # A saved game keeps the changed altitudes, so the heights of the creatures stay the same after a load
         result = save_diff.compare_files(world([("OBJS", b"\x00")]), world([("OBJS", b"\x01")]))
         self.assertEqual(save_diff.not_game_start(result), ["OBJS"])
-        self.assertEqual(save_diff.not_game_start(result, land_from_file=True), [])
 
 
 if __name__ == "__main__":
