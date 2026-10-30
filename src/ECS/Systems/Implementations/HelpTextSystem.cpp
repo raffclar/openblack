@@ -27,6 +27,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundDecoder.h"
 #include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
