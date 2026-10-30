@@ -262,6 +262,7 @@ public:
 	void KeepOutOfSaves(EffectId id) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
 	void SetHidden(EffectId id, bool hidden) override;
+	void SetLifeListener(EffectLifeListener* listener) override { _lifeListener = listener; }
 	void SetLiveHand(EffectId id, glm::vec3 hand) override;
 	void SetInTemple(EffectId id) override;
 	void SetDrawnAlone(EffectId id) override;
@@ -355,6 +356,10 @@ private:
 	void AddRunning(const Running& running, float turnFraction, particles::draw::Frame& frame,
 	                const particles::draw::Sources& sources) const;
 	std::deque<Running>::iterator FindRunning(EffectId id);
+	/// The effect ends and goes. The record of the simulation hears of it.
+	void Forget(std::deque<Running>::iterator effect);
+	/// Tells the record of the simulation, if any, of the start of an effect
+	void TellStarted(EffectId id) const;
 	[[nodiscard]] std::deque<Running>::const_iterator FindRunning(EffectId id) const;
 	/// Steps an effect; true once it has ended
 	bool StepEffect(particles::Effect& effect, float seconds);
@@ -378,6 +383,8 @@ private:
 	/// Newest first, as they are stepped and drawn
 	std::deque<Running> _effects;
 	EffectId _nextId {1};
+	/// The record of the simulation that hears of each start and end of an effect
+	EffectLifeListener* _lifeListener {nullptr};
 	/// The number that the simulation gave the next effect to start, none when the particles give their own
 	EffectId _givenId {k_NoEffect};
 	bool _freshIdsAtNextReset {false};

@@ -10,6 +10,7 @@
 #pragma once
 
 #include <functional>
+#include <unordered_set>
 
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 
@@ -26,7 +27,13 @@ public:
 	/// Finds the side that shows the effects, none on a computer that shows nothing
 	using FindServer = std::function<EffectServerInterface*()>;
 
+	/// Tells the side that shows the effects, if any, to tell this record of each start and end of an effect
 	explicit EffectRequestSystem(FindServer findServer);
+	~EffectRequestSystem() override;
+	EffectRequestSystem(const EffectRequestSystem&) = delete;
+	EffectRequestSystem& operator=(const EffectRequestSystem&) = delete;
+	EffectRequestSystem(EffectRequestSystem&&) = delete;
+	EffectRequestSystem& operator=(EffectRequestSystem&&) = delete;
 
 	EffectHandle Start(const EffectRequest& request) override;
 	void Show(const EffectRequest& request) override;
@@ -61,6 +68,10 @@ public:
 	void Reset() override;
 	[[nodiscard]] EffectHandle NextHandle() const override { return _next; }
 
+	void EffectStarted(EffectHandle handle) override { _running.insert(handle); }
+	void EffectEnded(EffectHandle handle) override { _running.erase(handle); }
+	void EffectsCleared() override { _running.clear(); }
+
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
@@ -70,6 +81,9 @@ private:
 
 	FindServer _findServer;
 	EffectHandle _next {k_FirstEffectHandle};
+	/// The effects that run, as the side that steps them told. A save does not keep the record: the load of the
+	/// effects tells it again.
+	std::unordered_set<EffectHandle> _running;
 };
 
 } // namespace openblack::ecs::systems

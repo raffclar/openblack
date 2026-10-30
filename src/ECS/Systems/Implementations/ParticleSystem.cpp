@@ -979,6 +979,24 @@ std::deque<ParticleSystem::Running>::const_iterator ParticleSystem::FindRunning(
 	return std::ranges::find(_effects, id, &Running::id);
 }
 
+void ParticleSystem::Forget(std::deque<Running>::iterator effect)
+{
+	const auto id = effect->id;
+	_effects.erase(effect);
+	if (_lifeListener != nullptr)
+	{
+		_lifeListener->EffectEnded(id);
+	}
+}
+
+void ParticleSystem::TellStarted(EffectId id) const
+{
+	if (_lifeListener != nullptr)
+	{
+		_lifeListener->EffectStarted(id);
+	}
+}
+
 ParticleSystemInterface::EffectId ParticleSystem::Start(std::string_view file, glm::vec3 origin, float magnitude, bool synced)
 {
 	if (file.empty() || !Locator::resources::has_value() || !Locator::gameRandom::has_value())
@@ -1004,6 +1022,7 @@ ParticleSystemInterface::EffectId ParticleSystem::Start(std::string_view file, g
 	// An effect that the simulation asked for takes the number that the simulation gave it
 	const auto effectId = _givenId != k_NoEffect ? std::exchange(_givenId, k_NoEffect) : _nextId++;
 	_effects.push_front({.id = effectId, .file = std::string(file), .effect = std::move(effect)});
+	TellStarted(effectId);
 	return effectId;
 }
 
@@ -1087,7 +1106,7 @@ bool ParticleSystem::ProcessForSpell(EffectId id, const particles::ProcessInfo& 
 	// Its step may start other effects, such as a blast's spot visuals, so it is found again after
 	if (StepEffect(*it->effect, seconds))
 	{
-		_effects.erase(FindRunning(id));
+		Forget(FindRunning(id));
 		return false;
 	}
 	return true;
@@ -1107,7 +1126,7 @@ bool ParticleSystem::ProcessByFrame(EffectId id, float seconds)
 	}
 	if (StepEffect(*it->effect, seconds))
 	{
-		_effects.erase(FindRunning(id));
+		Forget(FindRunning(id));
 		return false;
 	}
 	return true;
@@ -1431,6 +1450,11 @@ bool ParticleSystem::Renumber(EffectId from, EffectId to)
 	{
 		_nextId = from;
 	}
+	if (_lifeListener != nullptr)
+	{
+		_lifeListener->EffectEnded(from);
+		_lifeListener->EffectStarted(to);
+	}
 	return true;
 }
 
@@ -1446,7 +1470,7 @@ void ParticleSystem::Delete(EffectId id)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
 	{
-		_effects.erase(it);
+		Forget(it);
 	}
 }
 
@@ -1524,14 +1548,8 @@ void ParticleSystem::ProcessTurn()
 		}
 		if (StepEffect(effect, k_TurnSeconds))
 		{
-			_effects.erase(FindRunning(id));
+			Forget(FindRunning(id));
 		}
-	}
-	// A visual a script holds as a thing takes its thing with it when it ends
-	if (Locator::entitiesRegistry::has_value())
-	{
-		ecs::script_spot_visuals::RemoveEnded(Locator::entitiesRegistry::value(),
-		                                      [this](EffectId effect) { return IsRunning(effect); });
 	}
 	_world.ProcessSounds();
 	_world.ProcessGlows();
@@ -1557,6 +1575,10 @@ void ParticleSystem::Reset()
 	_beliefSpriteCount = 0;
 	_fightMarks.clear();
 	_effects.clear();
+	if (_lifeListener != nullptr)
+	{
+		_lifeListener->EffectsCleared();
+	}
 	_explodeObject = k_NoEffect;
 	_stormBolts = k_NoEffect;
 	_pendingStormBolts.clear();
@@ -2049,6 +2071,10 @@ bool ParticleSystem::LoadState(reflection::BinaryReader& in)
 	particles::EffectReader reader(in, tables);
 	particles::LoadSharedTables(reader);
 	_effects.clear();
+	if (_lifeListener != nullptr)
+	{
+		_lifeListener->EffectsCleared();
+	}
 	const auto count = in.ReadSize();
 	for (size_t i = 0; count.has_value() && i < *count && !in.Failed(); ++i)
 	{
@@ -2080,6 +2106,7 @@ bool ParticleSystem::LoadState(reflection::BinaryReader& in)
 			if (running.effect->Load(reader) && in.Position() == end)
 			{
 				ResolveTextures(*running.effect);
+				TellStarted(running.id);
 				_effects.push_back(std::move(running));
 				continue;
 			}
