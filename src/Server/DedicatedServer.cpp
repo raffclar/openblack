@@ -97,6 +97,15 @@ void LogGraphicsLibrary()
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The server ran with no graphics library");
 }
 
+/// The server has no view of a player. At the end of each load of a land it makes the creatures' maps of the land, as
+/// the game does at the end of its loading screen.
+class ServerLandView final: public ecs::systems::NoLandView
+{
+public:
+	void EndLoadingScreen() override { simulation::PrepareLandMaps(); }
+	void EndLoadWithoutScreen() override { simulation::PrepareLandMaps(); }
+};
+
 /// The world of the server. It starts the services of the world, loads the land and plays the frames of the world,
 /// with no window and no view of a player.
 class ServerWorld final:
@@ -186,7 +195,7 @@ private:
 	bool _servicesStarted {false};
 	/// The texts of the game, which the help's dialogue reads
 	std::optional<gui::TextDatabase> _texts;
-	ecs::systems::NoLandView _landView;
+	ServerLandView _landView;
 	simulation::NoFrameView _frameView;
 	/// The frame rate that the statistics of the game keep, by the clock of the machine as the game reads it
 	statistics::FrameRateMeter _frameRate;
@@ -412,8 +421,6 @@ bool ServerWorld::StartLand()
 	{
 		return false;
 	}
-	// The game makes the creatures' maps of the land at the end of its loading screen, before its first turn
-	simulation::PrepareLandMaps();
 	simulation::BeginPlay(false, _simulation.frameTime.has_value(), *this);
 	_frameStart = std::chrono::steady_clock::now();
 	return true;

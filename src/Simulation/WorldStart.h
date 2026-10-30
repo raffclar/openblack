@@ -129,8 +129,8 @@ public:
 /// every resource loads before the first frame. A game that continued from a save keeps the time of the save.
 void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view);
 /// Makes the maps of the land that the creatures use: where they can walk, and where they may go in a fight. The game
-/// makes them at the end of the loading screen. The game server calls this at the same point, before the first turn,
-/// so that each computer makes the maps from the same land.
+/// makes them at the end of the loading screen. The game server calls this at the end of each load of a land, so that
+/// each computer makes the maps from the same land.
 void PrepareLandMaps();
 /// Loads every resource that waits, as the loading screen does, before the next frame. A thing that waits for its
 /// picture or its model then starts after the same frames on each run and on each computer of a network game.
