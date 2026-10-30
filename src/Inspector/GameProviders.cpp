@@ -196,6 +196,7 @@
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
@@ -399,7 +400,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"abodeKnockSystem", "view.state"},
     LocatorCoverage {"influenceSystem", "influence.hand"},
     LocatorCoverage {"townDesireSystem", "living.town_desires"},
-    LocatorCoverage {"particleSystem", "particles.effects"},
+    LocatorCoverage {"particleRuleSystem", "particles.effects"},
+    LocatorCoverage {"particleSystem", "particles.drawn"},
     LocatorCoverage {"effectRequestSystem", "particles.requests"},
     LocatorCoverage {"magicSystem", "magic.state"},
     LocatorCoverage {"gestureEvents", "players.gestures"},
@@ -4498,11 +4500,11 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    return Locator::waterRingSystem::value().GetRings();
 	    },
 	    .effects = []() -> std::vector<ParticleEffectInfo> {
-		    if (!Locator::particleSystem::has_value())
+		    if (!Locator::particleRuleSystem::has_value())
 		    {
 			    return {};
 		    }
-		    return Locator::particleSystem::value().GetEffects();
+		    return Locator::particleRuleSystem::value().GetEffects();
 	    },
 	    .liquids = []() -> std::span<const liquid_particles::Particle> {
 		    if (!Locator::liquidParticleSystem::has_value())
@@ -4518,12 +4520,12 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    }
 		    return Locator::liquidParticleSystem::value().PlayerParticles(player);
 	    },
-	    .belief = []() -> ecs::systems::ParticleSystemInterface::BeliefSpritesSeen {
-		    if (!Locator::particleSystem::has_value())
+	    .belief = []() -> ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen {
+		    if (!Locator::particleRuleSystem::has_value())
 		    {
 			    return {};
 		    }
-		    return Locator::particleSystem::value().GetBeliefSpritesSeen();
+		    return Locator::particleRuleSystem::value().GetBeliefSpritesSeen();
 	    },
 	    .nextRequest = []() -> std::optional<ecs::systems::EffectHandle> {
 		    if (!Locator::effectRequestSystem::has_value())
@@ -4531,6 +4533,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return std::nullopt;
 		    }
 		    return Locator::effectRequestSystem::value().NextHandle();
+	    },
+	    .drawn = []() -> std::optional<ecs::systems::ParticleSystemInterface::DrawStats> {
+		    if (!Locator::particleSystem::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    return Locator::particleSystem::value().GetDrawStats();
 	    },
 	}));
 

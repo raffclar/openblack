@@ -2201,6 +2201,8 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_icon_charge_looks test_icon_charge_looks.cpp)
 openblack_setup_and_add_test(test_boat_film_boat test_boat_film_boat.cpp)
 openblack_setup_and_add_test(test_input_device input/test_input_device.cpp)
+openblack_setup_and_add_test(test_particle_system_draw test_particle_system_draw.cpp)
+target_link_libraries(test_particle_system_draw PRIVATE psys)
 add_test(NAME test_server_check
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_server_check.py

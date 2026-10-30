@@ -21,7 +21,7 @@
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
-#include "ParticleSystem.h"
+#include "ParticleRuleSystem.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 

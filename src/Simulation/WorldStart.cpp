@@ -76,7 +76,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -1127,9 +1127,9 @@ void ApplyPlayerSettings(const player_profiles::Settings& settings)
 void PrepareNetworkLand(uint32_t seed)
 {
 	Locator::entitiesRegistry::value().SetFreshIdsAtNextReset();
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
-		Locator::particleSystem::value().SetFreshIdsAtNextReset();
+		Locator::particleRuleSystem::value().SetFreshIdsAtNextReset();
 	}
 	if (Locator::reactionSystem::has_value())
 	{

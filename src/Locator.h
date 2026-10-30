@@ -219,6 +219,7 @@ class VegetationInterface;
 class SkyClockSystemInterface;
 class SkySystemInterface;
 class WeatherSystemInterface;
+class ParticleRuleSystemInterface;
 class ParticleSystemInterface;
 class EffectRequestSystemInterface;
 class MagicSystemInterface;
@@ -449,6 +450,9 @@ struct Locator
 	using abodeKnockSystem = entt::locator<ecs::systems::AbodeKnockSystemInterface>;
 	using influenceSystem = entt::locator<ecs::systems::InfluenceSystemInterface>;
 	using townDesireSystem = entt::locator<ecs::systems::TownDesireSystemInterface>;
+	/// The rules of the particle effects, which the simulation steps
+	using particleRuleSystem = entt::locator<ecs::systems::ParticleRuleSystemInterface>;
+	/// The draw of the particle effects, in the presentation
 	using particleSystem = entt::locator<ecs::systems::ParticleSystemInterface>;
 	/// The particle effects that the turns and the scripts ask for, by numbers that the simulation gives
 	using effectRequestSystem = entt::locator<ecs::systems::EffectRequestSystemInterface>;

@@ -69,7 +69,7 @@
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -1245,11 +1245,11 @@ void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landD
 	// The symbols step by a whole turn's time at the pace of the screen's refresh
 	const auto step =
 	    particles::drawn_steps::TurnStepSeconds(_beliefPace, frameRealTime, TimeSystemInterface::k_TurnDuration, landDrawn);
-	if (!Locator::particleSystem::has_value() || _registry == nullptr)
+	if (!Locator::particleRuleSystem::has_value() || _registry == nullptr)
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	// A centre gone takes its symbols with it
 	std::erase_if(_beliefSymbols, [this, &particles](const auto& entry) {
 		if (_registry->Valid(entry.first))
@@ -1274,7 +1274,7 @@ void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landD
 		if (found == _beliefSymbols.end() || !particles.IsRunning(found->second))
 		{
 			const auto effect = particles.Start(ParticleType::TownBelief, glm::vec3(0.0f), 1.0f);
-			if (effect == ParticleSystemInterface::k_NoEffect)
+			if (effect == ParticleRuleSystemInterface::k_NoEffect)
 			{
 				return;
 			}
