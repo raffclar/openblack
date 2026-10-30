@@ -594,7 +594,9 @@ TOOLS = [
     {
         "name": "creature_pick_up",
         "description": "The creature walks to a thing, picks it up and holds it (as a leash order on a thing it can "
-                       "lift), facing the player for 40 to 50 s. Refused when it cannot lift the thing.",
+                       "lift), facing the player for 40 to 50 s. Refused when it cannot lift the thing or while a cut "
+                       "scene plays. Give it for a thing that is near: the creature gives up when it has not moved for "
+                       "50 turns on its way (a long route search can cause it), and the answer warns of a far thing.",
         "inputSchema": schema({"id": {"type": "integer"}, "object": {"type": "integer"}}, ["object"]),
         "query": "creature.pick_up",
         "params": ["id", "object"],
@@ -611,7 +613,8 @@ TOOLS = [
     {
         "name": "creature_eat",
         "description": "The creature walks to a thing and eats from it: a storage pit (give the pit, not its food "
-                       "pile), a field, a tree or food itself; action names another eat action (e.g. EatAlive).",
+                       "pile), a field, a tree or food itself; action names another eat action (e.g. EatAlive). The "
+                       "same limits as creature_pick_up hold: a near thing, and no cut scene.",
         "inputSchema": schema({"id": {"type": "integer"}, "object": {"type": "integer"},
                                "action": {"type": "string"}}, ["object"]),
         "query": "creature.eat",

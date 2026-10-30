@@ -15,13 +15,6 @@ endif ()
 
 function(openblack_check_sim_includes config)
   include(${config})
-  # Files that other work changes now: each pair is "<file>><header>", with the reason
-  set(allowed
-      # The particle systems play their sounds through the audio manager. The work on the particle systems moves these
-      # sounds to the sound requests. The rules of the particles are in the simulation, the particle system draws.
-      "ECS/Systems/Implementations/ParticleSystem.cpp>Audio/AudioManagerInterface.h"
-      "ECS/Systems/Implementations/ParticleRuleSystem.cpp>Audio/AudioManagerInterface.h"
-  )
 
   file(GLOB_RECURSE files RELATIVE ${SOURCE_DIR} "${SOURCE_DIR}/*.h"
        "${SOURCE_DIR}/*.cpp" "${SOURCE_DIR}/*.mm"
@@ -69,11 +62,7 @@ function(openblack_check_sim_includes config)
         set(header "${included}")
       endif ()
       if (header AND NOT kind_${header} STREQUAL "sim")
-        if (NOT "${file}>${header}" IN_LIST allowed)
-          list(APPEND problems
-               "${file} includes ${header} (${kind_${header}})"
-          )
-        endif ()
+        list(APPEND problems "${file} includes ${header} (${kind_${header}})")
       endif ()
     endforeach ()
   endforeach ()

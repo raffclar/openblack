@@ -10,8 +10,10 @@
 #include "GameSoundRequests.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
+#include <glm/geometric.hpp>
 #include <spdlog/spdlog.h>
 
 #include "AudioManagerInterface.h"
@@ -299,6 +301,33 @@ Listener GameSoundRequests::GetListener() const
 {
 	const auto* const audio = Manager();
 	return audio != nullptr ? audio->GetListener() : CameraListener();
+}
+
+std::optional<float> GameSoundRequests::ListenerDistance(const glm::vec3& point) const
+{
+	const auto* const audio = Manager();
+	if (audio == nullptr)
+	{
+		return std::nullopt;
+	}
+	return glm::distance(audio->GetListener().origin, point);
+}
+
+entt::entity GameSoundRequests::CreateSoundOwner()
+{
+	auto* const audio = Manager();
+	auto* const emitters = audio != nullptr ? audio->Emitters() : nullptr;
+	return emitters != nullptr ? emitters->Create() : entt::null;
+}
+
+void GameSoundRequests::DestroySoundOwner(entt::entity owner)
+{
+	auto* const audio = Manager();
+	auto* const emitters = audio != nullptr ? audio->Emitters() : nullptr;
+	if (owner != entt::null && emitters != nullptr && emitters->Valid(owner))
+	{
+		emitters->Destroy(owner);
+	}
 }
 
 void GameSoundRequests::PlaceOwnedEmitters(const std::function<std::optional<glm::vec3>(entt::entity owner)>& placeOf)

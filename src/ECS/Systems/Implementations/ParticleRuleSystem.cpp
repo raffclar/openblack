@@ -39,12 +39,10 @@
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/StringUtils.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
@@ -90,6 +88,7 @@
 #include "PlayerSlots.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -241,7 +240,7 @@ glm::vec3 GameParticleWorld::CameraPosition() const
 
 void GameParticleWorld::PlayListenerSound(uint32_t inGameSample, bool playsOnce)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value() && Locator::sounds::value().HasAudio())
 	{
 		const auto id = entt::hashed_string(fmt::format("InGame.sad/{}", inGameSample).c_str()).value();
 		const auto voicePlayType = playsOnce ? std::optional<pack::AudioBankLoop>(pack::AudioBankLoop::Once) : std::nullopt;
@@ -304,10 +303,13 @@ void GameParticleWorld::StartSound(const particles::Effect& /*effect*/,
 {
 	auto& playing = _sounds.emplace_back(PlayingSound {.link = sound});
 	playing.owner = NewSoundOwner();
-	// Thunder is heard once it has come from the cloud
-	if (sound->sound.travelsAtSoundSpeed && Locator::audio::has_value())
+	// Thunder is heard once it has come from the cloud. The audio measures the distance from its own listener.
+	const auto distance = sound->sound.travelsAtSoundSpeed && Locator::sounds::has_value()
+	                          ? Locator::sounds::value().ListenerDistance(sound->position)
+	                          : std::nullopt;
+	if (distance.has_value())
 	{
-		playing.wait = glm::distance(Locator::audio::value().GetListener().origin, sound->position) / k_SpeedOfSound;
+		playing.wait = *distance / k_SpeedOfSound;
 		if (playing.wait > 0.0f)
 		{
 			return;
@@ -338,7 +340,7 @@ const std::map<std::string, int32_t, std::less<>>& GameParticleWorld::SoundActio
 
 void GameParticleWorld::Play(PlayingSound& sound) const
 {
-	if (!Locator::audio::has_value() || !Locator::camera::has_value())
+	if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio() || !Locator::camera::has_value())
 	{
 		return;
 	}
@@ -350,25 +352,24 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	}
 	const std::array<int32_t, 5> keys {sound.link->sound.size, sound.link->sound.alignment, k_SoundObject,
 	                                   sound.link->sound.surface, action->second};
-	const auto result = Locator::audio::value().PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner,
-	                                                           sound.link->position, audio::CurrentSoundEffectConditions());
+	auto& sounds = Locator::sounds::value();
+	const auto result = sounds.PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner, sound.link->position,
+	                                          audio::CurrentSoundEffectConditions());
 	if (result.emitter != entt::null)
 	{
 		sound.emitter = result.emitter;
 		// The sound moves with its particle each turn (see ProcessSounds), and the audio turn stops it when the camera
 		// goes too far
-		Locator::audio::value().SetEmitterFollows(result.emitter, audio::Follows::Place);
+		sounds.SetEmitterFollows(result.emitter, audio::Follows::Place);
 	}
 }
 
 void GameParticleWorld::ProcessSounds()
 {
-	auto* audio = Locator::audio::has_value() ? &Locator::audio::value() : nullptr;
-	// The sounds' entities are the audio's, apart from the world's
-	auto* registry = audio != nullptr ? audio->Emitters() : nullptr;
+	auto* sounds = Locator::sounds::has_value() ? &Locator::sounds::value() : nullptr;
 	const auto playing = [&](const PlayingSound& sound) {
-		return audio != nullptr && sound.emitter != entt::null && audio->EmitterExists(sound.emitter) &&
-		       audio->GetStatus(sound.emitter) != audio::AudioStatus::Stopped;
+		return sounds != nullptr && sound.emitter != entt::null && sounds->EmitterExists(sound.emitter) &&
+		       sounds->GetStatus(sound.emitter) != audio::AudioStatus::Stopped;
 	};
 	std::erase_if(_sounds, [&](PlayingSound& sound) {
 		auto& link = *sound.link;
@@ -392,12 +393,10 @@ void GameParticleWorld::ProcessSounds()
 					link.position.y = LandHeight({link.position.x, link.position.z});
 				}
 			}
-			if (registry != nullptr && sound.emitter != entt::null && registry->Valid(sound.emitter))
+			// The sounds of the particles lock no axis, so the emitter goes to the full position
+			if (sounds != nullptr && sound.emitter != entt::null)
 			{
-				if (auto* emitter = registry->TryGet<ecs::components::AudioEmitter>(sound.emitter))
-				{
-					emitter->position = link.position;
-				}
+				sounds->SetEmitterPosition(sound.emitter, link.position);
 			}
 			// The sound stays with its particle. It does not start again when the audio stops it, for example when
 			// the camera goes past its maximum distance or when it could not start.
@@ -423,11 +422,11 @@ void GameParticleWorld::ProcessSounds()
 void GameParticleWorld::LetGo(PlayingSound& sound)
 {
 	sound.letGo = true;
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	if (sound.emitter == entt::null || !audio.EmitterExists(sound.emitter))
 	{
 		return;
@@ -451,11 +450,11 @@ void GameParticleWorld::LetGo(PlayingSound& sound)
 
 void GameParticleWorld::Fade(PlayingSound& sound)
 {
-	if (sound.fade.fadeStep <= 0 || !Locator::audio::has_value())
+	if (sound.fade.fadeStep <= 0 || !Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	if (sound.emitter == entt::null || !audio.EmitterExists(sound.emitter))
 	{
 		return;
@@ -473,16 +472,14 @@ entt::entity GameParticleWorld::NewSoundOwner()
 {
 	// The sound's own owner only tells the audio which sounds are the same. It is an entity of the audio, not of the
 	// world, so that a computer with no sound keeps the same entities in the world.
-	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
-	return emitters != nullptr ? emitters->Create() : entt::null;
+	return Locator::sounds::has_value() ? Locator::sounds::value().CreateSoundOwner() : entt::null;
 }
 
 void GameParticleWorld::Forget(PlayingSound& sound)
 {
-	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
-	if (sound.owner != entt::null && emitters != nullptr && emitters->Valid(sound.owner))
+	if (sound.owner != entt::null && Locator::sounds::has_value())
 	{
-		emitters->Destroy(sound.owner);
+		Locator::sounds::value().DestroySoundOwner(sound.owner);
 	}
 	sound.owner = entt::null;
 }
@@ -861,9 +858,10 @@ void GameParticleWorld::Reset()
 	// Every sound stops with the land, and its owner goes
 	for (auto& sound : _sounds)
 	{
-		if (Locator::audio::has_value() && sound.emitter != entt::null && Locator::audio::value().EmitterExists(sound.emitter))
+		if (Locator::sounds::has_value() && sound.emitter != entt::null &&
+		    Locator::sounds::value().EmitterExists(sound.emitter))
 		{
-			Locator::audio::value().StopEmitter(sound.emitter);
+			Locator::sounds::value().StopEmitter(sound.emitter);
 		}
 		Forget(sound);
 	}
