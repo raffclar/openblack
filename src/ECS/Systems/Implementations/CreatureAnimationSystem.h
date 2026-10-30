@@ -44,6 +44,7 @@ public:
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	void MorphTurn(entt::entity creature) override;
 	void ShapeBodies() override;
+	void PrepareFirstPoses() override;
 	void PoseTurn(entt::entity creature) override;
 	void PoseTurns() override;
 	void HoldTurnPose(entt::entity creature) override;

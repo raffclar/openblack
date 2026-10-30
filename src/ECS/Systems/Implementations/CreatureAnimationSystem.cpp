@@ -1207,6 +1207,19 @@ void CreatureAnimationSystem::ShapeBodies()
 	}
 }
 
+void CreatureAnimationSystem::PrepareFirstPoses()
+{
+	std::vector<entt::entity> unposed;
+	Locator::entitiesRegistry::value().Each<const Creature, const CreatureAnimation>(
+	    [&unposed](entt::entity entity, const Creature& /*creature*/, const CreatureAnimation& animation) {
+		    if (animation.newerTurnPose.empty())
+		    {
+			    unposed.push_back(entity);
+		    }
+	    });
+	PrepareFirstBlends(unposed);
+}
+
 void CreatureAnimationSystem::PrepareFirstBlends(std::span<const entt::entity> creatures)
 {
 	auto& registry = Locator::entitiesRegistry::value();
