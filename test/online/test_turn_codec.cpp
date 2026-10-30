@@ -372,8 +372,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 10, 18, 5,  49, 17, 5, 5,  5, 9, 12, 1, 18, 11, 5, 18, 15, 3,
-	                                 5, 1, 2, 1, 61, 5, 2,  1,  13, 10, 18, 1, 50, 1, 5, 51, 5, 16, 7,  1, 1,  13, 1};
+	const std::vector<size_t> sizes {2, 5, 9, 5,  53, 5, 10, 18, 5,  49, 17, 5,  5, 5, 9,  12, 1,  18, 11, 5, 18, 15, 3, 5,
+	                                 1, 2, 1, 61, 5,  2, 1,  13, 10, 18, 1,  50, 1, 5, 51, 5,  16, 7,  1,  1, 13, 1,  2};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
