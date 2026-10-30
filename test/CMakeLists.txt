@@ -2218,3 +2218,4 @@ target_link_libraries(test_particle_save_parts PRIVATE psys)
 add_test(NAME test_net_check_runs
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_runs.py
 )
+openblack_setup_and_add_test(test_hand_report_rules test_hand_report_rules.cpp)
