@@ -1037,9 +1037,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
 	case Step::SyncChecksum:
+	{
 		// When a network game asks for it, the checksum of the synced world as this turn left it
+		auto checksum = profiler.BeginScoped(Profiler::Stage::SyncChecksum);
 		Locator::syncChecksumSystem::value().ProcessTurn();
 		break;
+	}
 	case Step::RunRecord:
 		// A tool that records the run reads the world as the turn left it. The turn count moved on at the start of the
 		// turn, so the number is the turn after this one.
