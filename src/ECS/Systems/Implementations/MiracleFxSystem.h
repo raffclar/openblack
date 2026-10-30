@@ -42,7 +42,7 @@ public:
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
-	void SetInterface(const gui::GameInterface* interface) override { _interface = interface; }
+	void SetInterface(const TempleScreenInterface* interface) override { _interface = interface; }
 	void StartTribalPowerRing(Tribe tribe) override;
 	void StopTribalPowerRing() override;
 	void ReleaseTribalPowerRing(Tribe tribe, glm::vec3 handPosition) override;
@@ -72,7 +72,7 @@ private:
 	std::unordered_map<entt::entity, uint32_t> _holderEffects;
 	/// When the effects in the globes take their next step
 	frame_pace::Pace _holderPace;
-	const gui::GameInterface* _interface {nullptr};
+	const TempleScreenInterface* _interface {nullptr};
 	/// The tribes' names spinning in the world, and the one ringing this computer's hand among them
 	std::vector<std::unique_ptr<magic::tribal_spin::Runner>> _runners;
 	magic::tribal_spin::Runner* _ring {nullptr};

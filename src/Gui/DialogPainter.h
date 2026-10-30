@@ -20,6 +20,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "DialogRect.h"
+
 namespace openblack::graphics
 {
 class Texture2D;
@@ -30,22 +32,6 @@ namespace openblack::gui
 
 class Canvas;
 class GameFont;
-
-/// A rectangle in the dialogs' 800 by 600 space, from min up to but not including max
-struct DialogRect
-{
-	glm::ivec2 min;
-	glm::ivec2 max;
-
-	[[nodiscard]] bool Contains(glm::ivec2 point) const noexcept
-	{
-		return point.x >= min.x && point.y >= min.y && point.x < max.x && point.y < max.y;
-	}
-	[[nodiscard]] glm::ivec2 Centre() const noexcept { return (min + max) / 2; }
-	[[nodiscard]] int Width() const noexcept { return max.x - min.x; }
-	[[nodiscard]] int Height() const noexcept { return max.y - min.y; }
-	[[nodiscard]] bool operator==(const DialogRect&) const = default;
-};
 
 /// Draws dialogs the way the game's front end does.
 ///
@@ -78,7 +64,7 @@ public:
 		Right,
 	};
 
-	static constexpr glm::ivec2 k_Size {800, 600};
+	static constexpr glm::ivec2 k_Size = k_DialogSize;
 
 	/// The text colours of the dialogs' controls
 	static constexpr glm::vec4 k_TextColour {208.0f / 255.0f, 208.0f / 255.0f, 208.0f / 255.0f, 1.0f};

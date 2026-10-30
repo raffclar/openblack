@@ -39,7 +39,7 @@ constexpr float k_Margin = 16.0f;
 /// The lessons shown each way
 constexpr size_t k_Lessons = 8;
 
-std::string Text(const GameInterface* interface, std::string_view name, std::string_view otherwise)
+std::string Text(const TempleScreenInterface* interface, std::string_view name, std::string_view otherwise)
 {
 	if (interface == nullptr)
 	{
@@ -51,7 +51,7 @@ std::string Text(const GameInterface* interface, std::string_view name, std::str
 
 /// A scroll's text, a line at a time: the scrolls end their lines with "<N>" and their text with "<E>", and keep the
 /// spaces they mustn't break at as a hidden character
-void DrawScroll(const GameInterface& interface, TempleScrolls::Content content, const TempleScrolls::Facts& facts)
+void DrawScroll(const TempleScreenInterface& interface, TempleScrolls::Content content, const TempleScrolls::Facts& facts)
 {
 	auto text = TempleScrolls::Write(content, interface.GetTexts(), interface.GetFont(), facts);
 	if (!text.has_value())
@@ -122,7 +122,7 @@ void DrawMiracles(const creature_cave::Snapshot& snapshot)
 	}
 }
 
-void DrawTattoos(ecs::systems::CreatureCaveSystemInterface& cave, const GameInterface* interface)
+void DrawTattoos(ecs::systems::CreatureCaveSystemInterface& cave, const TempleScreenInterface* interface)
 {
 	auto& screen = cave.GetScreen();
 	ImGui::TextWrapped(

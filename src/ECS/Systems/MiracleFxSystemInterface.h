@@ -19,10 +19,10 @@
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
-namespace openblack::gui
+namespace openblack
 {
-class GameInterface;
-} // namespace openblack::gui
+class TempleScreenInterface;
+} // namespace openblack
 
 namespace openblack::graphics
 {
@@ -73,7 +73,7 @@ public:
 	virtual void Reset() = 0;
 
 	/// The interface whose font a tribe's power is written in, none while there is none
-	virtual void SetInterface(const gui::GameInterface* /*interface*/) {}
+	virtual void SetInterface(const TempleScreenInterface* /*interface*/) {}
 	/// A tribe's power is behind the miracle that came to this computer's hand: the tribe's name rings the hand
 	virtual void StartTribalPowerRing(Tribe /*tribe*/) {}
 	/// The miracle left the hand: a ring still round it goes

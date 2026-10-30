@@ -20,7 +20,7 @@
 #include <ChallengePictureFiles.h>
 #include <entt/entity/fwd.hpp>
 
-#include "Graphics/ScreenshotCapture.h"
+#include "Visual/ScreenView.h"
 
 namespace openblack::ecs
 {

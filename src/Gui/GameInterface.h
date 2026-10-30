@@ -275,8 +275,8 @@ public:
 	/// For the testbed: the tattoo editor works as in a network game, also in a game alone
 	void SetTattooEditorAsNetworkGame(bool asNetworkGame) noexcept { _tattooEditorAsNetworkGame = asNetworkGame; }
 	/// The mouse buttons held down while the tattoo editor takes the mouse: the left one, and any of them
-	[[nodiscard]] bool IsTattooEditorLeftHeld() const noexcept { return _leftButtonDown; }
-	[[nodiscard]] bool IsTattooEditorButtonHeld() const noexcept { return _leftButtonDown || _otherButtonsDown != 0; }
+	[[nodiscard]] bool IsTattooEditorLeftHeld() const noexcept override { return _leftButtonDown; }
+	[[nodiscard]] bool IsTattooEditorButtonHeld() const noexcept override { return _leftButtonDown || _otherButtonsDown != 0; }
 	[[nodiscard]] const TextDatabase& GetTexts() const noexcept override { return _texts; }
 	/// The dialogs' font, which the temple's scrolls are written in too
 	[[nodiscard]] const GameFont& GetFont() const noexcept override { return _font; }

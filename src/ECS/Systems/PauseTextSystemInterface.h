@@ -22,12 +22,8 @@
 namespace openblack
 {
 class Camera;
+class TempleScreenInterface;
 } // namespace openblack
-
-namespace openblack::gui
-{
-class GameInterface;
-} // namespace openblack::gui
 
 namespace openblack::graphics
 {
@@ -46,7 +42,7 @@ public:
 	virtual ~PauseTextSystemInterface() = default;
 
 	/// The interface whose texts and font the words come from, none while there is none
-	virtual void SetInterface(const gui::GameInterface* interface) = 0;
+	virtual void SetInterface(const TempleScreenInterface* interface) = 0;
 	/// The frame that the game draws next, some real milliseconds after the last one
 	virtual void Update(const gui::pause_text::Situation& situation, uint32_t milliseconds) = 0;
 	/// The words to draw at this frame, none while nothing shows

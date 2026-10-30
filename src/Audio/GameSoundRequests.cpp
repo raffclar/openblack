@@ -460,4 +460,66 @@ float GameSoundRequests::GetMusicVolume()
 	return audio != nullptr ? audio->GetMusicVolume() : 0.0f;
 }
 
+bool GameSoundRequests::HasAudio() const
+{
+	return Manager() != nullptr;
+}
+
+void GameSoundRequests::SetListenerOverride(std::optional<Listener> listener)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->SetListenerOverride(listener);
+	}
+}
+
+float GameSoundRequests::GetGlobalVolume()
+{
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->GetGlobalVolume() : 0.0f;
+}
+
+bool GameSoundRequests::IsMusicActive() const
+{
+	const auto* const audio = Manager();
+	return audio != nullptr && audio->MusicIsActive();
+}
+
+std::vector<MusicChannelState> GameSoundRequests::GetMusicChannelStates() const
+{
+	std::vector<MusicChannelState> playing;
+	const auto* const audio = Manager();
+	const auto* const music = audio != nullptr ? audio->GetMusic() : nullptr;
+	if (music == nullptr)
+	{
+		return playing;
+	}
+	for (const auto& channel : music->GetChannels())
+	{
+		if (channel.active && channel.bank)
+		{
+			playing.push_back({
+			    .bank = channel.bank->path,
+			    .volume = channel.volume,
+			    .position = channel.placement ? std::optional(channel.placement->position) : std::nullopt,
+			});
+		}
+	}
+	return playing;
+}
+
+void GameSoundRequests::SimulateDeviceLoss(bool lost)
+{
+	if (auto* const audio = Manager(); audio != nullptr)
+	{
+		audio->SimulateDeviceLoss(lost);
+	}
+}
+
+const ecs::Registry* GameSoundRequests::GetEmitters()
+{
+	auto* const audio = Manager();
+	return audio != nullptr ? audio->Emitters() : nullptr;
+}
+
 } // namespace openblack::audio
