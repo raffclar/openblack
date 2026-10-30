@@ -222,3 +222,33 @@ TEST_F(GameSoundRequestsTest, TheOwnedEmittersGoToThePlaceOfTheirOwner)
 	EXPECT_EQ(audio.emitters.Get<ecs::components::AudioEmitter>(stays).position, glm::vec3(0.0f));
 	EXPECT_EQ(audio.emitters.Get<ecs::components::AudioEmitter>(ownerless).position, glm::vec3(0.0f));
 }
+
+// The distance to the listener comes from the audio's own listener. With no audio manager, there is no distance.
+TEST_F(GameSoundRequestsTest, TheListenerDistanceComesFromTheAudiosListener)
+{
+	GameSoundRequests requests;
+	EXPECT_FALSE(requests.ListenerDistance(glm::vec3(1.0f)).has_value());
+	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
+	audio.SetListenerOverride(Listener {.origin = glm::vec3(1.0f, 2.0f, 3.0f)});
+	const auto distance = requests.ListenerDistance(glm::vec3(4.0f, 6.0f, 3.0f));
+	ASSERT_TRUE(distance.has_value());
+	EXPECT_FLOAT_EQ(*distance, 5.0f);
+	EXPECT_TRUE(audio.calls.empty());
+}
+
+// An owner of sounds is an entity of the audio. It goes when it is destroyed, and a second destroy does nothing.
+TEST_F(GameSoundRequestsTest, AnOwnerOfSoundsIsAnEntityOfTheAudio)
+{
+	GameSoundRequests requests;
+	EXPECT_TRUE(requests.CreateSoundOwner() == entt::null);
+	requests.DestroySoundOwner(k_Placed);
+	auto& audio = static_cast<RecordingAudio&>(Locator::audio::emplace<RecordingAudio>());
+	const auto owner = requests.CreateSoundOwner();
+	ASSERT_TRUE(owner != entt::null);
+	EXPECT_TRUE(audio.emitters.Valid(owner));
+	requests.DestroySoundOwner(owner);
+	EXPECT_FALSE(audio.emitters.Valid(owner));
+	requests.DestroySoundOwner(owner);
+	requests.DestroySoundOwner(entt::null);
+	EXPECT_TRUE(audio.calls.empty());
+}
