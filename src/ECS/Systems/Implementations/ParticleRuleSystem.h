@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <functional>
@@ -144,6 +145,11 @@ public:
 	/// Once a game turn: the glows nothing lights any more go
 	void ProcessGlows();
 	[[nodiscard]] size_t SoundCount() const { return _sounds.size(); }
+	/// The sounds that travel to the listener and do not play yet
+	[[nodiscard]] size_t WaitingSoundCount() const
+	{
+		return static_cast<size_t>(std::ranges::count_if(_sounds, [](const PlayingSound& sound) { return sound.wait > 0.0f; }));
+	}
 	void Reset();
 	/// The sounds of the particles of effects that a save does not keep, which the save leaves out too
 	using LeftOutSounds = std::set<const particles::ParticleSoundLink*>;
@@ -315,6 +321,7 @@ public:
 	void SetDrawnAlone(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
 	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
+	[[nodiscard]] size_t GetWaitingSoundCount() const override { return _world.WaitingSoundCount(); }
 	void AddTarget(EffectId id, entt::entity target) override;
 	void AddTargetPosition(EffectId id, glm::vec3 position) override;
 	void AddPlasma(EffectId id, const particles::PlasmaCommand& command) override;

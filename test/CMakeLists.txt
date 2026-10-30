@@ -2220,3 +2220,4 @@ add_test(NAME test_net_check_runs
 )
 openblack_setup_and_add_test(test_hand_report_rules test_hand_report_rules.cpp)
 openblack_setup_and_add_test(test_server_snapshots online/test_server_snapshots.cpp)
+openblack_setup_and_add_test(test_world_state_at_turn test_world_state_at_turn.cpp)

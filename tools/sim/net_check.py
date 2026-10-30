@@ -136,6 +136,7 @@ import os
 import re
 import shutil
 import socket
+import struct
 import subprocess
 import sys
 import time
@@ -156,6 +157,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sim_report  # noqa: E402
 import row_dump  # noqa: E402
+import save_diff  # noqa: E402
 import sim_paths  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -410,6 +412,40 @@ def server_against_run(server_turns, other_turns, last_turn):
     return {"compared": len(compared), "same_turns": len(compared) - len(different),
             "first_different": different[0] if different else None, "last_different": different[-1] if different else None,
             "same": bool(compared) and compared[0] == 1 and compared[-1] == last_turn and not different}
+
+
+# The folder in the folder of the server and of each client where it writes its world states (--world-states)
+WORLD_STATES_FOLDER = "world-states"
+
+
+def world_state_turns(text):
+    """The turns of a list such as "250" or "100,250", as the game reads it; None when the text is not such a list"""
+    items = text.split(",")
+    if not all(item.isdigit() and item.isascii() and int(item) < 2 ** 32 for item in items):
+        return None
+    return [int(item) for item in items]
+
+
+def world_states_against_server(server_folder, client_folder, turns):
+    """Compares the synced parts of the world state of a client with the world state of the server at each turn
+    (save_diff.compare_synced). A turn whose world state one of them did not write is not the same."""
+    results = []
+    for turn in turns:
+        name = f"world-{turn}.obsav"
+        paths = [os.path.join(folder, WORLD_STATES_FOLDER, name) for folder in (server_folder, client_folder)]
+        missing = [who for who, path in zip(("server", "client"), paths) if not os.path.exists(path)
+                   or not os.path.exists(os.path.splitext(path)[0] + ".json")]
+        if missing:
+            results.append({"turn": turn, "same": False, "missing": missing})
+            continue
+        maps = [save_diff.read_state(path)[1] for path in paths]
+        try:
+            difference = save_diff.compare_synced_files(*paths)
+        except (ValueError, struct.error) as error:
+            difference = {"unread": str(error)}
+        results.append({"turn": turn, "same": not difference, "difference": difference or None,
+                        "waiting_sounds": [mapping.get("waitingSounds") for mapping in maps]})
+    return {"same": all(result["same"] for result in results), "turns": results}
 
 
 def record_checksums(record):
@@ -1609,6 +1645,10 @@ def main():
                         help="the server and each client keep the rows of the synced world of the last turns and write "
                         "the rows of a turn at which a client parts (server/rows.txt, clientN/rows.txt); the summary "
                         "names the first different entity, component and field of each client (row_dump.py)")
+    parser.add_argument("--world-states", metavar="TURNS",
+                        help="the server and each desktop client write their world state at the end of these turns "
+                             "(such as 250 or 100,250), and the synced parts of each client must be the same as the "
+                             "server's (save_diff.py --synced)")
     parser.add_argument("--row-dump-turn", type=int,
                         help="with --row-dump, the server and the clients also write the rows of this turn")
     parser.add_argument("--input3", help="recorded input for the third client's hand")
@@ -1757,6 +1797,9 @@ def main():
         # The game does not start with another frame time, and the run would only say that the first client did not join
         parser.error("--frame-ms takes 0 (the real frame time of the clients) or 1 to 1000 milliseconds, as the game's --sim-frame-ms")
     options.hash_parts = options.hash_parts or options.hash_fields
+    state_turns = world_state_turns(options.world_states) if options.world_states else []
+    if state_turns is None:
+        parser.error("--world-states takes a list of turns such as 250 or 100,250")
     if options.all_computer_gods:
         options.clients = 0
     if not 1 <= options.turns <= MOST_TURNS:
@@ -1881,6 +1924,9 @@ def main():
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
         if options.hash_fields:
             server_command.append("--record-fields")
+    if state_turns:
+        server_command += ["--world-states", os.path.join(server_dir, WORLD_STATES_FOLDER),
+                           "--world-state-turns", options.world_states]
     if options.row_dump:
         server_command += ["--row-dump", os.path.join(server_dir, "rows.txt")]
         if options.row_dump_turn is not None:
@@ -1941,6 +1987,9 @@ def main():
             command += options.all_clients_arg
             if options.trace_draws:
                 command += ["--sim-trace-draws", os.path.join(client_dir, "draws.tsv")]
+            if state_turns:
+                command += ["--sim-world-states", os.path.join(client_dir, WORLD_STATES_FOLDER),
+                            "--sim-world-state-turns", options.world_states]
             if options.row_dump:
                 command += ["--sim-row-dump", os.path.join(client_dir, "rows.txt")]
                 if options.row_dump_turn is not None:
@@ -2304,6 +2353,19 @@ def main():
         if not summary["box_back"]["same"]:
             print("the client that clicked Back in the information box of the land did not leave as Leave Game does")
             all_same = False
+    # The synced parts of the world state of each desktop client at each turn of --world-states are the server's
+    if state_turns:
+        summary["world_states"] = {}
+        for index, client_dir in enumerate(client_dirs):
+            states = world_states_against_server(server_dir, client_dir, state_turns)
+            summary["world_states"][str(index + 1)] = states
+            for result in states["turns"]:
+                print(f"world state of turn {result['turn']}, client {index + 1}: "
+                      f"{'same synced parts' if result['same'] else 'DIFFERENT'}"
+                      f"{'' if result['same'] else ' ' + json.dumps(result.get('difference') or result)[:600]}"
+                      f", sounds that wait (server, client): {result.get('waiting_sounds')}")
+            if not states["same"]:
+                all_same = False
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the",
                                                 "turns of the game stop", "leaves the game"])
     # A component with no registration is left out of the checksum: a change in it would never show here

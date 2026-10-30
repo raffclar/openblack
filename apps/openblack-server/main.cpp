@@ -82,6 +82,8 @@ int main(int argc, char* argv[])
 		("row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world of a client parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("row-dump-turn", "Tools: with --row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
 		("row-dump-keep", "Tools: with --row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("64"))
+		("world-states", "Tools: write the world state of the server to this folder at the end of each turn of --world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
+		("world-state-turns", "Tools: with --world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
 #endif
 		("listen", "The game role: listen for the clients on this IPv4 address and TCP port, such as 127.0.0.1:0 (0 for a free port).", cxxopts::value<std::string>())
 		("tls-cert", "The PEM file of the certificate chain of the game socket (wss). Without it, the socket speaks plain WebSocket on a loopback address only, behind a proxy that does the TLS.", cxxopts::value<std::string>())
@@ -216,6 +218,19 @@ int main(int argc, char* argv[])
 			{
 				settings.rowDump.atTurn = result["row-dump-turn"].as<uint32_t>();
 			}
+		}
+		if (result.count("world-states") != 0)
+		{
+			const auto turns = result.count("world-state-turns") != 0
+			                       ? openblack::world_state_at_turn::ParseTurns(result["world-state-turns"].as<std::string>())
+			                       : std::nullopt;
+			if (!turns.has_value())
+			{
+				std::cerr << "--world-states needs --world-state-turns with a list such as 100,250" << std::endl;
+				return EXIT_FAILURE;
+			}
+			settings.worldStates = openblack::world_state_at_turn::Settings {
+			    .turns = *turns, .folder = std::filesystem::path(result["world-states"].as<std::string>())};
 		}
 #endif
 		if (result.count("reload-at") != 0)

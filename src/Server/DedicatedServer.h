@@ -148,6 +148,8 @@ struct ServerSettings
 	/// client parts from the server's world, and at the turn of the settings.
 	std::optional<std::filesystem::path> rowDumpPath;
 	row_dump::Settings rowDump;
+	/// Tools: the turns at which the server writes its world state, and the folder of the files
+	std::optional<world_state_at_turn::Settings> worldStates;
 #endif
 	/// The file of the log, or "stdout"
 	/// The game role. With none, the server plays the world alone, as the tools use it.
