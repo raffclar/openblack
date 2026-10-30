@@ -119,7 +119,21 @@ def check(game, options, name):
 def scenario_ids(game, wanted):
     if wanted != "all":
         return [item for item in wanted.split(",") if item]
-    return [item["id"] for item in game.call("game.scenarios")]
+    # The list comes in pages
+    ids = []
+    cursor = None
+    while True:
+        request = {"query": "game.scenarios", "params": {}, "fields": ["id"], "limit": 1000}
+        if cursor is not None:
+            request["cursor"] = cursor
+        answer = game.connection.request(request)
+        if not answer.get("ok"):
+            raise RuntimeError(f"game.scenarios: {answer.get('error')}")
+        page = answer.get("result") or {}
+        ids += [item["id"] for item in page.get("items", [])]
+        cursor = page.get("next_cursor")
+        if cursor is None:
+            return ids
 
 
 def start(options):
