@@ -66,6 +66,28 @@ TEST(WorldToolTips, PrayerEnergyIsWhatTheSiteStores)
 	EXPECT_EQ(Compose(energy.index, u"Prayer Energy: %3.0f", PrayerEnergy(0.0f).first, std::nullopt), u"Prayer Energy:   0");
 }
 
+// A built workshop shows the part of its scaffold that it made, cut to a whole percent below 100. The hand shows it only
+// in the influence. A workshop with damage has no number.
+TEST(WorldToolTips, AWorkshopShowsThePartOfItsScaffoldThatItMade)
+{
+	const auto half = ProductionCompleted(true, 100, 200.0f);
+	ASSERT_TRUE(half.has_value());
+	EXPECT_EQ(half->index, k_ProductionCompleted);
+	EXPECT_DOUBLE_EQ(half->first, 50.0);
+	EXPECT_FALSE(half->second.has_value());
+	// The game cuts 99.6 to 99, and 57.14 to 57
+	EXPECT_DOUBLE_EQ(ProductionCompleted(true, 1, 250.0f)->first, 99.0);
+	EXPECT_DOUBLE_EQ(ProductionCompleted(true, 3, 7.0f)->first, 57.0);
+	// A new scaffold shows 0. A workshop that makes no scaffold also shows 0, because 100 becomes 0.
+	EXPECT_DOUBLE_EQ(ProductionCompleted(true, 200, 200.0f)->first, 0.0);
+	EXPECT_DOUBLE_EQ(ProductionCompleted(true, 0, 200.0f)->first, 0.0);
+	EXPECT_FALSE(ProductionCompleted(false, 100, 200.0f).has_value());
+	EXPECT_EQ(Compose(k_ProductionCompleted, u"Production Completed: %3.0f%%", half->first, std::nullopt),
+	          u"Production Completed:  50%");
+	EXPECT_FALSE(Shows(Subject::Workshop, false));
+	EXPECT_TRUE(Shows(Subject::Workshop, true));
+}
+
 // A sign of a need shows the level of the hunger and of the life as a percentage, and the wood that a workshop requires.
 // The sign of the people that hide has no words of its own and shows "Pick Up".
 TEST(WorldToolTips, ASignOfANeedShowsItsLevelOrTheWoodRequired)

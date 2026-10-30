@@ -43,6 +43,20 @@ Numbered PrayerEnergy(float stored)
 	return {.index = k_PrayerEnergy, .first = static_cast<double>(stored), .second = std::nullopt};
 }
 
+std::optional<Numbered> ProductionCompleted(bool repaired, int32_t makingTurns, float productionTime)
+{
+	if (!repaired)
+	{
+		return std::nullopt;
+	}
+	constexpr int32_t k_Percent = 100;
+	// The turns that are left go in hundreds, and the share of the time is a float, as the game calculates it. The
+	// whole number is cut toward zero, and then only the part below 100 stays.
+	const float left = static_cast<float>(static_cast<int64_t>(makingTurns) * k_Percent) / productionTime;
+	const auto made = static_cast<int32_t>(k_PercentScale - left);
+	return Numbered {.index = k_ProductionCompleted, .first = static_cast<double>(made % k_Percent), .second = std::nullopt};
+}
+
 Numbered NeedsSign(NeedsRow row, float level, uint32_t woodRequired)
 {
 	switch (row)
