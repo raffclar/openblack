@@ -1204,6 +1204,17 @@ void HandGrabSystem::SendTake(HandGrab& grab, entt::entity object)
 
 void HandGrabSystem::DoTake(PlayerNames player, entt::entity object)
 {
+	TakeAtTurn(player, object, true);
+}
+
+void HandGrabSystem::DoComputerTake(PlayerNames player, entt::entity object)
+{
+	// The steps of a computer god put the thing into its hand with no test of the influence
+	TakeAtTurn(player, object, false);
+}
+
+void HandGrabSystem::TakeAtTurn(PlayerNames player, entt::entity object, bool askInfluence)
+{
 	// The command acts with the hand of its player
 	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
 	// Every computer takes the thing into the hand, whatever the hand of this computer does now. Only a hand that holds
@@ -1221,7 +1232,7 @@ void HandGrabSystem::DoTake(PlayerNames player, entt::entity object)
 		}
 		return;
 	}
-	Take(*grab, object, true, false);
+	Take(*grab, object, true, false, askInfluence);
 	if (Holds(*grab) && grab->object == object)
 	{
 		LogHandDeed(player, "takes", object);
