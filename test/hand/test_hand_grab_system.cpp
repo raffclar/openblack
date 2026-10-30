@@ -310,6 +310,8 @@ public:
 	{
 		startsAsked.emplace_back(object, alignToSlope);
 		leadsAsked.push_back(leadTurns);
+		const auto* inHand = registry.TryGet<const InHand>(object);
+		drawnAtStart.push_back(inHand != nullptr && inHand->drawn.has_value());
 		return {.start = throwStart, .velocity = ledVelocity.value_or(velocity), .flight = flight};
 	}
 	[[nodiscard]] uint32_t ReportLatencyMs() const override { return reportLatencyMs; }
@@ -545,6 +547,8 @@ public:
 	/// The start that the world gives for a throw, and the starts that the hand asked for and used
 	player_commands::ThrowStart throwStart;
 	std::vector<std::pair<entt::entity, bool>> startsAsked;
+	/// For each start asked for, whether the thing had a drawn place in the hand
+	std::vector<bool> drawnAtStart;
 	/// The lead of each throw: the latency of the reports, the turns that the hand asked for, the velocity and the
 	/// flight after the lead, and where the frames drew the thrown thing
 	uint32_t reportLatencyMs {0};
@@ -728,6 +732,29 @@ TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
 	ASSERT_FALSE(world->reactions.empty());
 	EXPECT_EQ(world->reactions.front().type, Reaction::ReactToHandPickUp);
 	EXPECT_EQ(world->reactions.front().initiator, world->hand);
+}
+
+// The debug tools let go at once with no command. In a network game, each computer does this let go in its own turn, so
+// the start must not come from the place that one computer drew.
+TEST_F(HandGrabSystemWithWorld, InANetworkGameTheLetGoOfTheToolsDoesNotStartFromTheDrawnPlace)
+{
+	world->networkGame = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	ASSERT_TRUE(system->TakeIntoHand(rock));
+	world->registry.Get<InHand>(rock).drawn = InHand::Drawn {.position = {1.0f, 2.0f, 3.0f}, .rotation = glm::mat3(1.0f)};
+	ASSERT_TRUE(system->LetGoAt(glm::vec3(0.0f)));
+	ASSERT_EQ(world->drawnAtStart.size(), 1u);
+	EXPECT_FALSE(world->drawnAtStart.front());
+}
+
+TEST_F(HandGrabSystemWithWorld, InAGameAloneTheLetGoOfTheToolsStartsFromTheDrawnPlace)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	ASSERT_TRUE(system->TakeIntoHand(rock));
+	world->registry.Get<InHand>(rock).drawn = InHand::Drawn {.position = {1.0f, 2.0f, 3.0f}, .rotation = glm::mat3(1.0f)};
+	ASSERT_TRUE(system->LetGoAt(glm::vec3(0.0f)));
+	ASSERT_EQ(world->drawnAtStart.size(), 1u);
+	EXPECT_TRUE(world->drawnAtStart.front());
 }
 
 // The hand does not hold a creature as a thing. Because of this, the hand never gives a creature to a creature.

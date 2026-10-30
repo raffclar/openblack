@@ -244,3 +244,17 @@ TEST(DedicatedServer, TheServerMovesTheSkysClockButDoesNotShowTheSky)
 	EXPECT_FALSE(shown);
 	EXPECT_TRUE(clock);
 }
+
+// The scripts fade the mists and the turns step the fades, thus the server has the mist system too
+TEST(DedicatedServer, TheServerHasTheMistSystemThatTheScriptsAndTheTurnsUse)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool mists = true;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&mists](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    mists = mists && openblack::Locator::mistSystem::has_value();
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_TRUE(mists);
+}

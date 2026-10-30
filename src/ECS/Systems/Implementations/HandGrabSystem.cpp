@@ -2070,6 +2070,15 @@ bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
 	{
 		EndScoop(*grab);
 	}
+	// In a network game, each computer does this let go in its turn and sends no command. Thus the thing starts from
+	// the place that the turns keep, which is the same on each computer. It does not start from the drawn place.
+	if (_world->IsNetworkGame())
+	{
+		if (auto* inHand = _world->Entities().TryGet<InHand>(grab->object))
+		{
+			inHand->drawn.reset();
+		}
+	}
 	// This let go does not wait for a turn, thus it has no lead
 	const auto led = ThrowStartOf(grab->object, velocity, 0);
 	LetGo(*grab, led.velocity, led.start);
