@@ -3174,6 +3174,16 @@ void Game::ReportHand()
 	{
 		_handCollidePoint = Locator::pickingSystem::value().GetPick().point.value_or(_handCollidePoint);
 	}
+	// After a send the report waits for some turns. A miracle of this player that follows the hand stops the wait.
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const auto origin = session != nullptr ? std::optional(session->Origin()) : std::nullopt;
+	const bool spellNeedsReport = _handReportWait != 0 && Locator::magicSystem::has_value() &&
+	                              Locator::magicSystem::value().SpellNeedsHandReportEachTurn();
+	if (hand_report::WaitsThisTurn(_handReportWait, spellNeedsReport))
+	{
+		_handReportWait = hand_report::TurnsToWaitAfter(_handReportWait, true, false, origin);
+		return;
+	}
 	// The camera is the view that the last frame drew
 	const auto& camera = Locator::camera::value();
 	const player_commands::HandReport now {
@@ -3191,6 +3201,7 @@ void Game::ReportHand()
 	};
 	// Only a part that moved enough goes. The other part keeps the values that the player last sent.
 	const auto toSend = hand_report::ToSend(last, now);
+	_handReportWait = hand_report::TurnsToWaitAfter(_handReportWait, false, toSend.has_value(), origin);
 	if (!toSend.has_value())
 	{
 		return;
