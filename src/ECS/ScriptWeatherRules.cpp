@@ -226,6 +226,11 @@ script_weather::LandStorm script_weather::ParseLandStorm(std::string_view shape,
 	return storm;
 }
 
+void script_weather::EndStorm(components::Storm& storm)
+{
+	storm.dead = true;
+}
+
 script_weather::ThingAfterTurn script_weather::AfterTurn(bool stormLives, bool heldByScript)
 {
 	if (stormLives)

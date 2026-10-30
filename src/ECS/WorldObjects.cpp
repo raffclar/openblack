@@ -65,6 +65,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/Weather.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
@@ -89,6 +90,7 @@
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingModel.h"
@@ -963,6 +965,11 @@ void world_objects::Remove(entt::entity object)
 	    workshop != nullptr && registry.Valid(workshop->woodPile))
 	{
 		world_objects::Remove(workshop->woodPile);
+	}
+	// A weather thing that goes ends its storm at once
+	if (registry.AllOf<WeatherThing>(object) && Locator::weatherSystem::has_value())
+	{
+		Locator::weatherSystem::value().EndWeatherThing(object);
 	}
 	// A graveyard going hands its town's dead over to another of the town's graveyards
 	graveyards::Lost(object);

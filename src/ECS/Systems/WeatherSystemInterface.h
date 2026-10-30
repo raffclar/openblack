@@ -142,6 +142,8 @@ public:
 	/// How fast a weather thing's storm travels to where it is going, metres a second; false for a thing that is no
 	/// weather thing. A storm that has ended takes no notice.
 	virtual bool SetWeatherThingSpeed(entt::entity thing, float speed) = 0;
+	/// A weather thing goes: its storm ends at once. A thing that is no weather thing does not change.
+	virtual void EndWeatherThing(entt::entity thing) = 0;
 
 	/// At the start of a game turn: the storms move on, then every cell of the atmosphere is stale
 	virtual void ProcessStorms(uint32_t turn) = 0;

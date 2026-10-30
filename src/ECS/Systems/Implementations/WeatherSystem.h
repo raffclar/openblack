@@ -71,6 +71,7 @@ public:
 	bool ChangeWeatherThing(entt::entity thing, const std::function<void(components::Storm&)>& change) override;
 	bool MoveWeatherThing(entt::entity thing, glm::vec3 destination) override;
 	bool SetWeatherThingSpeed(entt::entity thing, float speed) override;
+	void EndWeatherThing(entt::entity thing) override;
 	bool SetWeatherThingAffectedByWind(entt::entity thing, bool affected) override;
 
 	void ProcessStorms(uint32_t turn) override;
