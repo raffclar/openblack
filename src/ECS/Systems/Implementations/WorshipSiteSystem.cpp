@@ -45,6 +45,8 @@
 #include "ECS/ComputerMindWorshipRules.h"
 #include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
+#include "ECS/GamePlayers.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/PlayerTowns.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -453,9 +455,9 @@ void WorshipSiteSystem::ProcessChants()
 	auto& registry = _world->Entities();
 	const auto here = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	// Every player in turn, the neutral player last, each site of their temple by its place round it
-	for (size_t player = 0; player < static_cast<size_t>(PlayerNames::_COUNT); ++player)
+	for (const auto player : ecs::game_players::All())
 	{
-		const auto temple = TempleOf(static_cast<PlayerNames>(player));
+		const auto temple = TempleOf(player);
 		if (temple == entt::null)
 		{
 			continue;
@@ -557,7 +559,7 @@ void WorshipSiteSystem::AddMote(entt::entity site, glm::vec3 from, glm::vec3 to)
 		registry.Get<WorshipSite>(site).manaPath = started;
 	}
 	const auto& component = registry.Get<const WorshipSite>(site);
-	const auto rgb = Player::k_Colours.at(static_cast<size_t>(component.player) & (Player::k_Colours.size() - 1));
+	const auto rgb = player_colour::Of(component.player);
 	_world->AddMote(component.manaPath, from, to, rgb & 0xFFFFFFu);
 }
 
@@ -676,6 +678,21 @@ entt::entity WorshipSiteSystem::TempleOf(PlayerNames player) const
 		    if (temple.owner == player && (found == entt::null || entity < found))
 		    {
 			    found = entity;
+		    }
+	    });
+	return found;
+}
+
+std::vector<entt::entity> WorshipSiteSystem::TemplesOfPlayers(size_t count) const
+{
+	// The first temple made for each player
+	std::vector<entt::entity> found(count, static_cast<entt::entity>(entt::null));
+	_world->Entities().Each<const Temple, const CitadelWorship>(
+	    [&found](entt::entity entity, const Temple& temple, const CitadelWorship& /*unused*/) {
+		    const auto player = static_cast<size_t>(temple.owner);
+		    if (player < found.size() && (found[player] == entt::null || entity < found[player]))
+		    {
+			    found[player] = entity;
 		    }
 	    });
 	return found;

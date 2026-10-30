@@ -166,6 +166,21 @@ TEST(ComputerMindRules, TownForgetsOldAttacksAndHarmlessOnes)
 	EXPECT_FALSE(ThreatOf(attacks, 700).has_value());
 }
 
+TEST(ComputerMindRules, TownFearsTheAttackOfAGodAfterTheSeventh)
+{
+	// The attacks of the 32 gods of a network game in the order of their numbers (deviation 167)
+	std::array<TownAttack, 32> attacks {};
+	attacks[1] = {.turn = 700, .miracleHarm = 5.0f};
+	attacks[31] = {.turn = 900, .thingHarm = 3.0f};
+	const auto threat = ThreatOf(attacks, 1000);
+	ASSERT_TRUE(threat.has_value());
+	EXPECT_EQ(threat->thingHarm, 3.0f);
+	EXPECT_EQ(ShieldAgainst(*threat), MagicType::PhysicalShield);
+	// The first attack of the most fear wins
+	attacks[1].turn = 900;
+	EXPECT_EQ(ThreatOf(attacks, 1000)->miracleHarm, 5.0f);
+}
+
 TEST(ComputerMindRules, ImpressPlaceCountsTheVillagersNearTheHand)
 {
 	EXPECT_EQ(ImpressPlaceValue(0, 10.0f), 0.0f);

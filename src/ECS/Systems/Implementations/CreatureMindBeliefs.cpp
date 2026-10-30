@@ -19,6 +19,7 @@
 #include <chrono>
 #include <limits>
 #include <optional>
+#include <ranges>
 #include <utility>
 #include <vector>
 
@@ -96,6 +97,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureExplorationLand.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/PlayerTowns.h"
@@ -237,9 +239,13 @@ entt::entity NearestTemple(const ecs::Registry& registry, const map_coords::MapC
 	}
 	entt::entity nearest = entt::null;
 	auto within = std::numeric_limits<float>::max();
-	for (uint8_t player = 0; player < static_cast<uint8_t>(PlayerNames::_COUNT); ++player)
+	const auto players = ecs::game_players::All();
+	const auto temples =
+	    Locator::worshipSiteSystem::value().TemplesOfPlayers(static_cast<size_t>(std::ranges::distance(players)));
+	for (const auto player : players)
 	{
-		const auto temple = Locator::worshipSiteSystem::value().TempleOf(static_cast<PlayerNames>(player));
+		const auto index = static_cast<size_t>(player);
+		const auto temple = index < temples.size() ? temples[index] : entt::null;
 		const auto* at = temple != entt::null ? registry.TryGet<const Transform>(temple) : nullptr;
 		if (at == nullptr)
 		{

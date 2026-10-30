@@ -429,8 +429,12 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	           Optional("frames", "integer", "Frames for each point (1 by default)"),
 	           timing}),
 	    Write("gesture",
-	          "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen; first "
-	          "lets go of a creature that sim.feedback holds",
+	          "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen, in about a "
+	          "second, with the same size on the screen at each camera distance; first lets go of a creature that "
+	          "sim.feedback holds. The game forgets a path in the middle of the drawing, as it does for the player, when "
+	          "the camera moves or when the hand of the player takes or lets go of a thing or a leash changes: then no "
+	          "gesture is recognised. Ask players.gestures (last_recognised, circle_seconds_left) after the drawing to "
+	          "see that it was recognised, and draw again if it was not",
 	          {{.name = "name", .type = "string", .description = "The gesture's name, from input.names", .required = true},
 	           Optional("hold_action", "boolean", "The Action button held throughout, as a circle readying a miracle")}),
 	    Write("release", "Lets go of every button and of a creature that sim.feedback holds, and hands the mouse back to the "

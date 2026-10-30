@@ -24,6 +24,11 @@
 #include "Debug/RowDump.h"
 #endif
 
+namespace openblack::synced_state
+{
+struct Hash;
+} // namespace openblack::synced_state
+
 namespace openblack::ecs::systems
 {
 
@@ -60,6 +65,10 @@ public:
 	virtual void SetDump(uint32_t turn, std::vector<std::string> components) = 0;
 	/// The checksum of the last turn that it made one for
 	[[nodiscard]] virtual std::optional<TurnChecksum> GetLast() const = 0;
+	/// Tools: the hash of the synced world that the system made at a turn, with or without the hash of each field. None
+	/// when the last checksum was for another turn or of the other kind. A tool that records the same world at the same
+	/// turn uses it and does not hash the world again.
+	[[nodiscard]] virtual const synced_state::Hash* GetHashOfTurn(uint32_t turn, bool byField) const = 0;
 	/// A function that gets the checksum of each turn as the system makes it, as the dedicated server logs it. An empty
 	/// function removes it.
 	virtual void SetTurnListener(std::function<void(const TurnChecksum&)> listener) = 0;

@@ -138,7 +138,7 @@ public:
 		// The store forgets them in the order of their kinds and places. The order of the index is different on each
 		// C++ library, and the marker of the oldest belief moves on as each belief goes.
 		std::vector<std::pair<BeliefPlace, entt::entity>> forgotten;
-		for (const auto& [thing, at] : _index)
+		for (const auto& [thing, at] : _contents.index)
 		{
 			if (gone(thing))
 			{
@@ -181,18 +181,16 @@ public:
 	[[nodiscard]] std::vector<const Belief*> HeldInListOrder() const;
 	/// How many beliefs it holds of a kind, and in all
 	[[nodiscard]] size_t Count(uint32_t kind) const;
-	[[nodiscard]] size_t Size() const { return _index.size(); }
+	[[nodiscard]] size_t Size() const { return _contents.index.size(); }
 	/// Every belief, kind by kind, each kind in the order of its places
 	[[nodiscard]] std::vector<Belief> All() const;
 
 	/// Everything that the store holds, for a saved world
-	[[nodiscard]] StoreContents Contents() const { return {.pools = _pools, .index = _index, .made = _made}; }
+	[[nodiscard]] const StoreContents& Contents() const { return _contents; }
 	/// Puts back what a saved world holds
 	void SetContents(const StoreContents& contents)
 	{
-		_pools = contents.pools;
-		_index = contents.index;
-		_made = contents.made;
+		_contents = contents;
 		_lookedAt = {};
 	}
 
@@ -200,10 +198,9 @@ private:
 	using Place = BeliefPlace;
 	using Pool = BeliefPool;
 
-	std::array<Pool, k_KindCount> _pools {};
-	std::unordered_map<entt::entity, Place> _index;
-	/// How many beliefs the store made
-	uint64_t _made {0};
+	/// The places of each kind, the place of the belief about each thing, and how many beliefs the store made. A saved
+	/// world reads them where they are, with no copy.
+	StoreContents _contents;
 	/// The count of the things gone from the world when the store last looked for beliefs about gone things. A copy of a
 	/// store has not looked yet, as it can go to another world.
 	struct LookedAt

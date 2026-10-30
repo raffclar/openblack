@@ -43,6 +43,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/ChatSystemInterface.h"
@@ -2278,6 +2279,10 @@ void GameInterface::DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse)
 	const auto viewProjection = Locator::camera::value().GetViewProjectionMatrix();
 	// The colour of a god in the world: none for a number that has no colour
 	const auto colourOf = [](PlayerNames god) -> std::optional<uint32_t> {
+		if (const auto later = player_colour::LaterGodColour(god); later.has_value())
+		{
+			return later;
+		}
 		const auto index = static_cast<size_t>(god);
 		if (index >= ecs::components::Player::k_Colours.size())
 		{

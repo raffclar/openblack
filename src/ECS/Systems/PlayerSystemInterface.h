@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <optional>
@@ -17,6 +18,7 @@
 
 #include "ECS/PlayerKind.h"
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs::systems
 {
@@ -31,6 +33,10 @@ public:
 	/// The entity of the player. The game makes the player when the land has none yet. Every god slot and the neutral
 	/// player have a player from the start of the game, also before the humans of a network game join.
 	virtual entt::entity EnsurePlayer(PlayerNames name) = 0;
+	/// The count of the player numbers of this game: one more than the largest number of a player that the game has, and
+	/// at least the player slots of a land. Every land and every game of up to 7 gods has 8. The walks of each player use
+	/// this count, so a table for each player has places for more players than the game has.
+	[[nodiscard]] virtual size_t PlayerNumbersInGame() const { return player_slots::k_LandSlots; }
 	/// Makes the player of each god slot and the neutral player, in the order of their numbers, when the land has none of
 	/// that name. Each land has all eight players from its start, also when nobody plays a slot.
 	void EnsureAllPlayers()

@@ -16,6 +16,7 @@
 
 #include "3D/AllMeshes.h"
 #include "Enums.h"
+#include "PlayerSlots.h"
 
 /// The rules of what follows a villager's death: who hears of it, how its player's alignment moves, how its town
 /// counts it, how the people about it notice, point, go to look and mourn, and how its soul rises and fades. Free of
@@ -147,7 +148,7 @@ struct DeathCounts
 	uint32_t lastDeathTurn {0};
 	uint32_t total {0};
 	/// By the player put down for each, by player number
-	std::array<uint32_t, 8> byPlayer {};
+	std::array<uint32_t, player_slots::k_PlayerNumbers> byPlayer {};
 	/// By what killed them
 	std::array<uint32_t, static_cast<size_t>(DeathReason::_COUNT)> byReason {};
 };

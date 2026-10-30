@@ -156,6 +156,9 @@ public:
 	virtual void CountHelpEvent(uint32_t event) = 0;
 	/// The hand of the local player takes a thing or lets go of it: the hand forgets the path of the gesture it draws
 	virtual void ForgetGesturePath() {}
+	/// Whether the hand is the one that this computer moves, and so draws gestures: the hand of a computer god or of
+	/// another player is not
+	[[nodiscard]] virtual bool IsLocalHand() const { return true; }
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
 	/// The game turn of a held thing of its own, after the hand moved it: a scaffold looks for the building that it offers

@@ -25,6 +25,7 @@
 
 #include "3D/GodsRingLand.h"
 #include "Online/GodsRingMap.h"
+#include "PlayerSlots.h"
 
 using namespace openblack;
 using namespace openblack::gods_ring_map;
@@ -128,19 +129,20 @@ TEST(GodsRingMap, EachSlotIsTheLastSlotTurnedByTheSameAngle)
 	}
 }
 
-TEST(GodsRingMap, TheSlotsTakeTheGodsOfALandInOrder)
+TEST(GodsRingMap, EachSlotHasAGod)
 {
 	for (size_t i = 0; i < 7; ++i)
 	{
 		EXPECT_EQ(GodOfSlot(i), static_cast<PlayerNames>(i));
 	}
-	// The neutral player is not a god, and the land has no more gods
+	// The neutral player is not a god: the later slots take the numbers after it
 	for (size_t i = 7; i < k_Slots; ++i)
 	{
-		EXPECT_FALSE(GodOfSlot(i).has_value()) << i;
+		EXPECT_EQ(GodOfSlot(i), static_cast<PlayerNames>(i + 1)) << i;
 	}
+	EXPECT_FALSE(GodOfSlot(k_Slots).has_value());
 	const auto slots = LayOutSlots(k_Middle);
-	EXPECT_EQ(std::ranges::count_if(slots, [](const Slot& slot) { return slot.god.has_value(); }), 7);
+	EXPECT_EQ(std::ranges::count_if(slots, [](const Slot& slot) { return slot.god.has_value(); }), 32);
 }
 
 TEST(GodsRingMap, EveryCitadelStandsOnTheFlatPartOfTheIsland)
@@ -258,7 +260,9 @@ TEST(GodsRingMap, ASlotWithNoGodHasANeutralVillageThatBelievesInNoGod)
 	const auto village = Template();
 	const auto slots = LayOutSlots(k_Middle);
 	const std::array gods {PlayerNames::PLAYER_ONE};
-	const auto lines = VillageInSlot(village, slots.at(20), gods);
+	auto slot = slots.at(20);
+	slot.god.reset();
+	const auto lines = VillageInSlot(village, slot, gods);
 	EXPECT_EQ(Find(lines, "CREATE_TOWN")->arguments.at(2).text, "NEUTRAL");
 	EXPECT_EQ(Find(lines, "CREATE_CITADEL")->arguments.at(2).text, "NEUTRAL");
 	EXPECT_EQ(Find(lines, "SET_TOWN_BELIEF"), nullptr);
@@ -360,12 +364,12 @@ TEST(GodsRingMap, TheMapScriptHasTheSettingsAVillageInEachSlotAndTheWeather)
 		}
 	}
 	EXPECT_EQ(towns.size(), 32u);
-	// Each town has a cap for each of the seven gods
-	EXPECT_EQ(std::ranges::count_if(lines, [](const Line& l) { return l.command == "SET_TOWN_BELIEF_CAP"; }), 32 * 7);
-	// Each god has one citadel
-	for (size_t god = 0; god < 7; ++god)
+	// Each town has a cap for each of the 32 gods
+	EXPECT_EQ(std::ranges::count_if(lines, [](const Line& l) { return l.command == "SET_TOWN_BELIEF_CAP"; }), 32 * 32);
+	// Each god has one citadel: the gods after the seventh are PLAYER_8 to PLAYER_32
+	for (size_t slot = 0; slot < k_Slots; ++slot)
 	{
-		const auto name = k_PlayerNamesStrs.at(god);
+		const auto name = player_slots::ScriptNameOf(*player_slots::PlayerOfSlot(slot));
 		EXPECT_EQ(std::ranges::count_if(
 		              lines, [name](const Line& l) { return l.command == "CREATE_CITADEL" && l.arguments.at(2).text == name; }),
 		          1)

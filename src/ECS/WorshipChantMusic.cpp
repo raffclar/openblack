@@ -21,6 +21,7 @@
 #include "Creature/CreatureDance.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
@@ -83,9 +84,9 @@ std::optional<audio::GameMusic::TurnInputs::CreatureDance> Heard(glm::vec3 camer
 	// The temples of every player, the neutral player last
 	std::vector<entt::entity> temples;
 	std::vector<glm::vec3> places;
-	for (size_t player = 0; player < static_cast<size_t>(PlayerNames::_COUNT); ++player)
+	for (const auto player : ecs::game_players::All())
 	{
-		const auto temple = sites.TempleOf(static_cast<PlayerNames>(player));
+		const auto temple = sites.TempleOf(player);
 		if (temple == entt::null || !registry.Valid(temple) || !registry.AllOf<Transform, CitadelWorship>(temple))
 		{
 			continue;

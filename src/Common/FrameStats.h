@@ -38,7 +38,7 @@ struct Summary
 /// A frame that takes this time or more is too slow for 100 frames a second
 constexpr float k_SlowMilliseconds = 10.0f;
 
-/// One frame of a run: how long it took, its time on the processor, and the game turn at its end
+/// One frame of a run: how long it took, its time on the processor, the game turn at its end, and its work time
 struct FrameRecord
 {
 	float milliseconds {0.0f};
@@ -46,6 +46,8 @@ struct FrameRecord
 	uint32_t turn {0};
 	/// The frame played a game turn
 	bool played {false};
+	/// The time that the game thread did the work of the frame, without a wait for the display frame or for the pace
+	float workMilliseconds {0.0f};
 };
 
 /// The frames of a run as CSV text: a line of names, then a line for each frame, numbered from 1
