@@ -70,15 +70,14 @@ using Hands = std::array<entt::entity, static_cast<size_t>(HandSystemInterface::
 /// The hands that the entity of a player links to. None when no entity of the player has a link.
 std::optional<Hands> LinkedHands(const ecs::Registry& registry, PlayerNames name)
 {
-	std::optional<Hands> found;
-	registry.Each<const Player, const PlayerHands>(
-	    [&found, name](entt::entity, const Player& player, const PlayerHands& hands) {
-		    if (player.name == name && !found.has_value())
-		    {
-			    found = Hands {hands.left, hands.right};
-		    }
-	    });
-	return found;
+	const auto player = registry.FindFirst<const Player, const PlayerHands>(
+	    [name](entt::entity, const Player& self, const PlayerHands&) { return self.name == name; });
+	if (!player.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& hands = registry.Get<const PlayerHands>(*player);
+	return Hands {hands.left, hands.right};
 }
 
 /// The hands that carry the mark of a player, by their side. The hands of the first player have no mark.

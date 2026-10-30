@@ -15,6 +15,7 @@
 #include <iterator>
 #include <optional>
 #include <random>
+#include <span>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -635,5 +636,163 @@ TEST(SkeletalAnimation, ManyBonesAndATwiceListedBoneSample)
 			}
 		}
 		EXPECT_FLOAT_EQ(poses[0].translation.x, 0.0f) << count;
+	}
+}
+
+namespace
+{
+/// A chain of four bones with turned rest poses, and an animation that turns three of them and moves two
+struct TurnsFixture
+{
+	skeletal_animation::Skeleton skeleton;
+	Animation animation;
+	Animation stand;
+	std::vector<uint32_t> mirror {0, 2, 1, 3};
+
+	explicit TurnsFixture(uint32_t seed)
+	{
+		std::mt19937 random(seed);
+		std::uniform_real_distribution<float> angle(-4.0f, 4.0f);
+		const std::vector<uint32_t> parents {skeletal_animation::k_NoParent, 0, 0, 1};
+		std::vector<glm::mat4> rest;
+		for (size_t bone = 0; bone < parents.size(); ++bone)
+		{
+			auto matrix = glm::mat4(glm::eulerAngleYXZ(angle(random), angle(random), angle(random)));
+			matrix[3] = glm::vec4(static_cast<float>(bone), 1.0f, -0.5f * static_cast<float>(bone), 1.0f);
+			rest.push_back(matrix);
+		}
+		skeleton = skeletal_animation::Skeleton::FromRestMatrices(parents, rest);
+		const auto make = [&](std::vector<uint32_t> rotated, std::vector<uint32_t> translated, size_t frames) {
+			Animation made {
+			    .duration = 900, .looping = true, .rotatedJoints = rotated, .translatedJoints = translated, .frames = {}};
+			for (size_t frame = 0; frame < frames; ++frame)
+			{
+				Animation::Frame keyframe;
+				for (size_t i = 0; i < rotated.size(); ++i)
+				{
+					keyframe.eulerAngles.emplace_back(angle(random), angle(random), angle(random));
+				}
+				for (size_t i = 0; i < translated.size(); ++i)
+				{
+					keyframe.translations.emplace_back(angle(random), angle(random), angle(random));
+				}
+				made.frames.push_back(keyframe);
+			}
+			return made;
+		};
+		animation = make({1, 2, 3}, {0, 3}, 7);
+		// The zeros of both signs must keep their own turns
+		animation.frames[2].eulerAngles[0] = glm::vec3(0.0f, -0.0f, 0.0f);
+		animation.frames[3].eulerAngles[0] = glm::vec3(-0.0f, 0.0f, -0.0f);
+		stand = make({0, 1, 2, 3}, {0, 1, 2, 3}, 2);
+	}
+};
+
+bool SameBits(const std::vector<skeletal_animation::Pose>& a, const std::vector<skeletal_animation::Pose>& b)
+{
+	return a.size() == b.size() &&
+	       std::equal(a.begin(), a.end(), b.begin(), [](const skeletal_animation::Pose& x, const skeletal_animation::Pose& y) {
+		       return std::memcmp(&x.rotation, &y.rotation, sizeof(x.rotation)) == 0 &&
+		              std::memcmp(&x.translation, &y.translation, sizeof(x.translation)) == 0;
+	       });
+}
+} // namespace
+
+TEST(KeyframeTurns, TheStoreGivesTheBitsOfANewTurn)
+{
+	const TurnsFixture fixture(7);
+	skeletal_animation::KeyframeTurns turns;
+	for (size_t frame = 0; frame < fixture.animation.frames.size(); ++frame)
+	{
+		for (const bool mirrored : {false, true, false})
+		{
+			const auto kept = turns.Of(fixture.animation, frame, mirrored);
+			ASSERT_EQ(kept.size(), fixture.animation.rotatedJoints.size());
+			for (size_t slot = 0; slot < kept.size(); ++slot)
+			{
+				auto euler = fixture.animation.frames[frame].eulerAngles[slot];
+				if (mirrored)
+				{
+					euler.y = -euler.y;
+					euler.z = -euler.z;
+				}
+				const auto made = skeletal_animation::RotationYXZ(euler);
+				EXPECT_EQ(std::memcmp(&kept[slot], &made, sizeof(made)), 0) << frame << " " << slot << " " << mirrored;
+			}
+		}
+	}
+}
+
+TEST(KeyframeTurns, TheStoreMakesTheTurnsAgainWhenTheAnglesChange)
+{
+	TurnsFixture fixture(11);
+	skeletal_animation::KeyframeTurns turns;
+	const auto before = turns.Of(fixture.animation, 2, false)[0];
+	// Plus zero for minus zero changes the bits of the angles, and so the turn
+	fixture.animation.frames[2].eulerAngles[0].y = 0.0f;
+	const auto zero = turns.Of(fixture.animation, 2, false)[0];
+	const auto made = skeletal_animation::RotationYXZ(fixture.animation.frames[2].eulerAngles[0]);
+	EXPECT_EQ(std::memcmp(&zero, &made, sizeof(made)), 0);
+	fixture.animation.frames[2].eulerAngles[0] = glm::vec3(0.5f, 1.0f, -1.5f);
+	const auto after = turns.Of(fixture.animation, 2, false)[0];
+	const auto madeAfter = skeletal_animation::RotationYXZ(glm::vec3(0.5f, 1.0f, -1.5f));
+	EXPECT_EQ(std::memcmp(&after, &madeAfter, sizeof(madeAfter)), 0);
+	EXPECT_NE(std::memcmp(&after, &before, sizeof(before)), 0);
+	// Another count of frames at the same place in memory starts the store of the animation again
+	fixture.animation.frames.pop_back();
+	EXPECT_EQ(turns.Of(fixture.animation, 0, false).size(), fixture.animation.rotatedJoints.size());
+}
+
+TEST(KeyframeTurns, TrimRemovesTheTurnsOnlyAboveTheLimit)
+{
+	const TurnsFixture fixture(3);
+	std::vector<Animation> copies(skeletal_animation::KeyframeTurns::k_MostAnimations + 1, fixture.animation);
+	skeletal_animation::KeyframeTurns turns;
+	for (size_t i = 0; i + 1 < copies.size(); ++i)
+	{
+		static_cast<void>(turns.Of(copies[i], 0, false));
+	}
+	turns.Trim();
+	EXPECT_EQ(turns.Size(), skeletal_animation::KeyframeTurns::k_MostAnimations);
+	static_cast<void>(turns.Of(copies.back(), 0, false));
+	turns.Trim();
+	EXPECT_EQ(turns.Size(), 0u);
+}
+
+TEST(KeyframeTurns, PosesHaveTheSameBitsWithTheStore)
+{
+	for (const uint32_t seed : {1u, 2u, 3u, 4u})
+	{
+		const TurnsFixture fixture(seed);
+		skeletal_animation::KeyframeTurns turns;
+		// Two passes: the first makes the turns, the second takes them from the store
+		for (int pass = 0; pass < 2; ++pass)
+		{
+			for (uint32_t time = 0; time < 1000; time += 37)
+			{
+				for (const bool mirrored : {false, true})
+				{
+					const auto mirror = mirrored ? std::span<const uint32_t>(fixture.mirror) : std::span<const uint32_t> {};
+					const auto plain =
+					    skeletal_animation::SampleCycle(fixture.animation, fixture.stand, time, fixture.skeleton, mirror);
+					const auto kept = skeletal_animation::SampleCycle(fixture.animation, fixture.stand, time, fixture.skeleton,
+					                                                  mirror, &turns);
+					EXPECT_TRUE(SameBits(plain, kept)) << seed << " sample " << time << " " << mirrored;
+
+					auto layered = plain;
+					auto layeredKept = plain;
+					skeletal_animation::AddLayer(layered, fixture.animation, time, 3, fixture.skeleton, mirror);
+					skeletal_animation::AddLayer(layeredKept, fixture.animation, time, 3, fixture.skeleton, mirror, &turns);
+					EXPECT_TRUE(SameBits(layered, layeredKept)) << seed << " layer " << time << " " << mirrored;
+
+					auto set = plain;
+					auto setKept = plain;
+					skeletal_animation::SetLayer(set, fixture.animation, time, fixture.skeleton, &fixture.stand, mirror);
+					skeletal_animation::SetLayer(setKept, fixture.animation, time, fixture.skeleton, &fixture.stand, mirror,
+					                             &turns);
+					EXPECT_TRUE(SameBits(set, setKept)) << seed << " set " << time << " " << mirrored;
+				}
+			}
+		}
 	}
 }

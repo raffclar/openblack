@@ -13,6 +13,7 @@
 
 #include <array>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
 #include <glm/mat4x4.hpp>
@@ -87,6 +88,36 @@ struct Skeleton
 /// Each row made unit length again, as keyframe rotations are after being blended
 [[nodiscard]] Matrix NormaliseRows(Matrix m);
 
+/// The keyframe turns of animations, each turn made one time. A turn comes only from its three angles, thus a kept turn
+/// has the same bits as a new one. The store keeps the turns of a frame while the angles of the frame stay the same. It
+/// compares the bits of the angles each time, so an animation that changes or that takes the memory of another animation
+/// gets new turns.
+class KeyframeTurns
+{
+public:
+	/// The turns of the turned bones of one frame of an animation, in the order of its turned bones. With mirrored, the
+	/// turns of the angles that play left to right. The span stays valid until the next call for the same animation
+	/// with another count of frames, or until Trim removes the store.
+	[[nodiscard]] std::span<const Matrix> Of(const Animation& animation, size_t frame, bool mirrored);
+	/// Removes all the turns when the store keeps more animations than its limit. Call it only when no span from Of is
+	/// in use.
+	void Trim();
+	[[nodiscard]] size_t Size() const { return _animations.size(); }
+
+	/// The most animations that the store keeps after Trim
+	static constexpr size_t k_MostAnimations = 4096;
+
+private:
+	struct FrameTurns
+	{
+		/// The angles of the frame when the store made its turns
+		std::vector<glm::vec3> angles;
+		std::vector<Matrix> turns;
+		std::vector<Matrix> mirroredTurns;
+	};
+	std::unordered_map<const Animation*, std::vector<FrameTurns>> _animations;
+};
+
 /// The two keyframes around a time and how far between them it is. Cycles wrap from their last frame to the first,
 /// pose ranges end on their last frame.
 struct FrameSpan
@@ -103,8 +134,11 @@ struct FrameSpan
 ///
 /// Given a mirror (see MirrorJoints), the animation plays left to right: the pose is reflected across the body, as
 /// MirrorPoses does.
+///
+/// Given a store of keyframe turns, the turns come from the store. The pose has the same bits with and without it.
 [[nodiscard]] std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand, uint32_t timeMs,
-                                            const Skeleton& skeleton, std::span<const uint32_t> mirror = {});
+                                            const Skeleton& skeleton, std::span<const uint32_t> mirror = {},
+                                            KeyframeTurns* turns = nullptr);
 
 /// Poses reflected across the body's x = 0 plane: each bone bends away from its rest pose as its mirror bone did,
 /// reflected, and stands where its mirror bone stood, reflected. Whatever frames the bones' own rest poses are in, the
@@ -127,14 +161,14 @@ struct FrameSpan
 /// from a reference keyframe of the same animation. Turning the head to look about, the face's expressions and
 /// gestures such as nodding are layered this way. A mirror flips the layer as SampleCycle does.
 void AddLayer(std::vector<Pose>& poses, const Animation& layer, uint32_t timeMs, size_t referenceFrame,
-              const Skeleton& skeleton, std::span<const uint32_t> mirror = {});
+              const Skeleton& skeleton, std::span<const uint32_t> mirror = {}, KeyframeTurns* turns = nullptr);
 
 /// Sets the bones an animation moves to its pose at a time, in place. The bones it doesn't move keep their poses, or,
 /// given a fill animation, take its first frame where it moves them: the advisors' stand pose under the rest of their
 /// clips. Given a mirror (see MirrorJoints), the animation plays left to right: each bone that it turns gives its turn to
 /// its mirror bone, reflected across the body. Then only turns are set, and no fill is used.
 void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t timeMs, const Skeleton& skeleton,
-              const Animation* fill = nullptr, std::span<const uint32_t> mirror = {});
+              const Animation* fill = nullptr, std::span<const uint32_t> mirror = {}, KeyframeTurns* turns = nullptr);
 
 /// Two animations set over the same poses, each without a fill, and blended by t in the mesh's space, every element of
 /// each bone's matrix moved from the first towards the second, then made relative to the parents again
