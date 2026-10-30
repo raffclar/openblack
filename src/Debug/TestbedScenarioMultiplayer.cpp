@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 18> boxes = {{
+	const std::array<BoxScenario, 19> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -103,6 +103,14 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The list of the winning conditions is empty, because the game has no conditions. \"Time Limit "
 	     "(Hours:Minutes):\" shows with 0:30, and \"View Chat\" is at the right. \"Condition Value:\" does not show. The "
 	     "Ready box is at the bottom left."},
+	    {"multiplayer.conditions_picked", "The multiplayer front end: the winning conditions that the server picked",
+	     Stage::ConditionsPicked,
+	     "The player joins Bob's game and clicks Next. The server of Bob's game picked three winning conditions and a "
+	     "time limit of an hour and a half.",
+	     "The list shows three lines, from the top: \"Number of trees grown (100)\", \"Amount of food in storage pit "
+	     "(9000)\" and \"Number of houses built by a player in a town (20)\". The game adds each condition at the top of "
+	     "the list, so the last condition shows first. \"Time Limit (Hours:Minutes):\" shows with 1:30. No check box "
+	     "and no arrows show."},
 	    {"multiplayer.waiting_for_start", "The multiplayer front end: joined and waiting for the start", Stage::WaitingForStart,
 	     "The player joins Bob's game, goes to the conditions and ticks Ready. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
