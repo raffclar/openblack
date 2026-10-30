@@ -302,6 +302,57 @@ TEST(GameEnd, TheTimeLimitDecidesByTheShareAndThenTheInfluence)
 	EXPECT_EQ(events[0].god, k_Two);
 }
 
+// At the time limit, the gods take their places by their share: the worst first, the winner last
+TEST(GameEnd, TheTimeLimitRanksTheGodsByTheirShare)
+{
+	auto world = TwoHumans();
+	world.gods[k_Three] = {.human = true};
+	world.gods[k_One].standing.conditions[0] = WinCondition {.current = 1, .target = 5, .completed = false};
+	world.gods[k_Two].standing.conditions[0] = WinCondition {.current = 3, .target = 5, .completed = false};
+	world.gods[k_Three].standing.conditions[0] = WinCondition {.current = 2, .target = 5, .completed = false};
+	State state;
+	Facts facts = k_Network;
+	facts.conditionCount = 1;
+	facts.timeLimitTurn = facts.turn;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::Won);
+	EXPECT_EQ(events[0].god, k_Two);
+	EXPECT_TRUE(state.decided);
+	EXPECT_FALSE(world.gods[k_Two].standing.out);
+	EXPECT_TRUE(world.gods[k_One].standing.out);
+	EXPECT_TRUE(world.gods[k_Three].standing.out);
+	// The worst god takes the first place. Each count of a god out when one god is left also gives the winner the next
+	// place, so the winner has the last place.
+	EXPECT_EQ(world.gods[k_One].standing.place, 1);
+	EXPECT_EQ(world.gods[k_Three].standing.place, 3);
+	EXPECT_EQ(world.gods[k_Two].standing.place, 4);
+	// The winner saw the two other gods defeated
+	EXPECT_EQ(world.gods[k_Two].godsDefeated, 2u);
+}
+
+// Two gods with the same share and the same share of the influence: the first god in the order of the players is better
+TEST(GameEnd, AFullTieGoesToTheFirstGod)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].influence = 0.5f;
+	world.gods[k_Two].influence = 0.5f;
+	State state;
+	Facts facts = k_Network;
+	facts.timeLimitTurn = facts.turn;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].god, k_One);
+	// The larger share of the influence wins a tie of the share, also when it is the second god
+	auto again = TwoHumans();
+	again.gods[k_One].influence = 0.5f;
+	again.gods[k_Two].influence = 0.50001f;
+	State second;
+	const auto won = ProcessTurn(again, facts, second);
+	ASSERT_EQ(won.size(), 1u);
+	EXPECT_EQ(won[0].god, k_Two);
+}
+
 TEST(GameEnd, ASkirmishHasNoTimeLimit)
 {
 	auto world = TwoHumans();

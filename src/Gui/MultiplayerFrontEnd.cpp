@@ -150,6 +150,7 @@ void MultiplayerFrontEnd::FollowSession()
 		_busy = false;
 		_joined = true;
 		_observer = session->GetJoined()->role == game_socket::Role::Observer;
+		TakeHostPicks(session->GetJoined()->start);
 		_flow.box = Box::Room;
 		_tab = RoomTab::Chat;
 		_chat.clear();
@@ -608,6 +609,22 @@ void MultiplayerFrontEnd::RoomOpened(std::string ticket, std::u16string password
 	{
 		_busy = false;
 		Show(JoinFailureMessage({}, _flow.kind));
+	}
+}
+
+void MultiplayerFrontEnd::TakeHostPicks(const std::optional<game_socket::Start>& start)
+{
+	_timeLimit = multiplayer::k_DefaultTimeLimitMinutes;
+	_conditionPicks.clear();
+	if (!start.has_value())
+	{
+		return;
+	}
+	_timeLimit = start->timeLimit.value_or(multiplayer::k_DefaultTimeLimitMinutes);
+	for (const auto& each : start->conditions)
+	{
+		_conditionPicks.push_back(
+		    {.condition = static_cast<game_end::Condition>(each.condition), .value = static_cast<int32_t>(each.value)});
 	}
 }
 
