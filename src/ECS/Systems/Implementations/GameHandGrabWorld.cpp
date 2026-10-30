@@ -497,6 +497,11 @@ void GameHandGrabWorld::ForgetGesturePath()
 	}
 }
 
+bool GameHandGrabWorld::IsLocalHand() const
+{
+	return !Locator::handSystem::has_value() || HandPlayer() == Locator::handSystem::value().GetOwnPlayer();
+}
+
 void GameHandGrabWorld::HeatHeld(entt::entity object)
 {
 	if (Locator::fireSystem::has_value())

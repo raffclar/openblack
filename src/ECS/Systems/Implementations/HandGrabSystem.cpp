@@ -1284,8 +1284,12 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	_world->CatchFirefly(object);
 	// The help counts each thing that the hand takes. A thing that the hand catches as it flies counts the same.
 	_world->CountHelpEvent(help::profile::k_PickUp);
-	// The hand starts the path of its gesture again
-	_world->ForgetGesturePath();
+	// The hand starts the path of its gesture again. Only the local hand draws a gesture: the hand of a computer god or of
+	// another player leaves the path of the local player as it is.
+	if (_world->IsLocalHand())
+	{
+		_world->ForgetGesturePath();
+	}
 
 	// The thing's own part of going into the hand
 	if (registry.AllOf<Villager>(object))
@@ -1373,8 +1377,12 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, const std::option
 	_world->SpreadReactionsAgain(object);
 	// The help counts each thing that the hand lets go of, also a pour or a drop that the hand must do
 	_world->CountHelpEvent(help::profile::k_Throw);
-	// The hand starts the path of its gesture again. A thing that is gone when the hand lets go does not do this.
-	_world->ForgetGesturePath();
+	// The hand starts the path of its gesture again. A thing that is gone when the hand lets go does not do this, and the
+	// hand of a computer god or of another player never does.
+	if (_world->IsLocalHand())
+	{
+		_world->ForgetGesturePath();
+	}
 	if (start.has_value())
 	{
 		// It starts from the start that the player's computer sent
