@@ -62,10 +62,10 @@
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -160,7 +160,6 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	// Until a script says otherwise, the animals that come out gather at the vortex itself
 	vortex.arrival.gatheringPlace = centre;
 	StartEffects(vortex);
-	KeepEffectsOutOfSaves(vortex);
 	if (type == VortexType::In)
 	{
 		StartCrossingFile(entity);
@@ -174,66 +173,67 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 
 void VortexSystem::StartEffects(Vortex& vortex)
 {
-	if (!Locator::particleRuleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
 	const auto* info = InfoOf(vortex.type);
-	auto& particles = Locator::particleRuleSystem::value();
+	auto& effects = Locator::effectRequestSystem::value();
 	// The swirl starts on the ground under the middle, the others at the middle itself
 	const auto ground = Locator::terrainSystem::value().GetHeightAt({vortex.centre.x, vortex.centre.z});
 	const glm::vec3 onGround {vortex.centre.x, ground, vortex.centre.z};
-	const auto start = [&particles](ParticleType type, glm::vec3 origin) {
-		return type == ParticleType::None ? ParticleRuleSystemInterface::k_NoEffect : particles.Start(type, origin, 1.0f);
-	};
-	const auto startStepped = [&particles](ParticleType type, glm::vec3 origin, bool synced) {
-		return type == ParticleType::None ? ParticleRuleSystemInterface::k_NoEffect
-		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle, synced);
-	};
 	// The vortex steps the effect that draws things in itself, each turn just after it has handed it what it takes. A
 	// loaded vortex keeps the effect of the save, with the things that it carries. Its random numbers are the shared
-	// ones, because the turns step it.
-	if (vortex.objectMoverEffect == ParticleRuleSystemInterface::k_NoEffect)
+	// ones, because the turns step it. It takes its number from the simulation, the same on every computer.
+	if (vortex.objectMoverEffect == k_NoEffectHandle && info->particleTypeObjectMover != ParticleType::None)
 	{
-		vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre, true);
+		vortex.objectMoverEffect = effects.Start({
+		    .type = info->particleTypeObjectMover,
+		    .position = vortex.centre,
+		    .synced = true,
+		    .direction = glm::vec3(0.0f),
+		    .sink = &g_noMiracle,
+		});
+		if (!effects.IsRunning(vortex.objectMoverEffect))
+		{
+			vortex.objectMoverEffect = k_NoEffectHandle;
+		}
 	}
 	// The frames step the swirl and the effect over the land. Their random numbers are only this computer's, so that the
-	// frames of each computer do not change the world.
-	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround, false);
-	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre, false);
-	vortex.lightMapEffect = start(info->particleTypeLightMap, vortex.centre);
+	// frames of each computer do not change the world. A save does not keep them: the vortex starts them again after a
+	// load.
+	const auto startHere = [&effects](ParticleType type, glm::vec3 origin, bool ownerSteps,
+	                                  std::optional<particles::draw::DrawPath> path) {
+		if (type == ParticleType::None)
+		{
+			return k_NoEffectHandle;
+		}
+		auto request = EffectRequest {.type = type, .position = origin, .synced = false, .drawPath = path, .saved = false};
+		if (ownerSteps)
+		{
+			request.direction = glm::vec3(0.0f);
+			request.sink = &g_noMiracle;
+		}
+		return effects.StartHere(request);
+	};
 	// The swirl is drawn before the land, which covers it but where the vortex opens its hole
-	if (vortex.beforeLandEffect != ParticleRuleSystemInterface::k_NoEffect)
-	{
-		particles.SetDrawPath(vortex.beforeLandEffect, particles::draw::DrawPath::BeforeLand);
-	}
-}
-
-void VortexSystem::KeepEffectsOutOfSaves(const Vortex& vortex)
-{
-	if (!Locator::particleRuleSystem::has_value())
-	{
-		return;
-	}
-	auto& particles = Locator::particleRuleSystem::value();
-	for (const auto effect : {vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect})
-	{
-		particles.KeepOutOfSaves(effect);
-	}
+	vortex.beforeLandEffect = startHere(info->particleTypePreLandscape, onGround, true, particles::draw::DrawPath::BeforeLand);
+	vortex.afterLandEffect = startHere(info->particleTypePostLandscape, vortex.centre, true, std::nullopt);
+	vortex.lightMapEffect = startHere(info->particleTypeLightMap, vortex.centre, false, std::nullopt);
 }
 
 void VortexSystem::DeleteEffects(const Vortex& vortex)
 {
-	if (!Locator::particleRuleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleRuleSystem::value();
+	auto& effects = Locator::effectRequestSystem::value();
 	for (const auto effect : {vortex.objectMoverEffect, vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect})
 	{
-		if (effect != ParticleRuleSystemInterface::k_NoEffect)
+		if (effect != k_NoEffectHandle)
 		{
-			particles.Delete(effect);
+			effects.Remove(effect);
 		}
 	}
 }
@@ -244,8 +244,8 @@ void VortexSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, std::chr
 	// The swirls step at the pace of the screen's refresh
 	const auto effectStep = particles::drawn_steps::StepSeconds(_effectPace, frameRealTime, frameGameTime, landDrawn);
 	auto& registry = Locator::entitiesRegistry::value();
-	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
-	registry.Each<Vortex>([this, effectStep, particles](entt::entity /*entity*/, Vortex& vortex) {
+	auto* effects = Locator::effectRequestSystem::has_value() ? &Locator::effectRequestSystem::value() : nullptr;
+	registry.Each<Vortex>([this, effectStep, effects](entt::entity /*entity*/, Vortex& vortex) {
 		const auto seconds = SecondsInState(vortex, ReadIn::Frame);
 		const auto openness = vortex::Openness(vortex.state, seconds);
 		if (openness != 0.0f)
@@ -262,21 +262,21 @@ void VortexSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, std::chr
 				});
 			}
 		}
-		if (particles == nullptr)
+		if (effects == nullptr)
 		{
 			return;
 		}
 		// The swirl grows with the openness, stepped by the game time since its last step; it rises towards the ground as
 		// the land is levelled
 		const particles::ProcessInfo info {.power = openness, .enabled = true};
-		if (effectStep.has_value() && openness != 0.0f && vortex.beforeLandEffect != ParticleRuleSystemInterface::k_NoEffect)
+		if (effectStep.has_value() && openness != 0.0f && vortex.beforeLandEffect != k_NoEffectHandle)
 		{
 			const auto ground = Locator::terrainSystem::value().GetHeightAt({vortex.centre.x, vortex.centre.z});
 			const auto depth = vortex::SwirlDepth(vortex::LevelAmount(vortex.state, seconds));
-			particles->SetOrigin(vortex.beforeLandEffect, {vortex.centre.x, ground - depth, vortex.centre.z});
-			if (!particles->ProcessForSpell(vortex.beforeLandEffect, info, *effectStep))
+			effects->Move(vortex.beforeLandEffect, {vortex.centre.x, ground - depth, vortex.centre.z});
+			if (!effects->Step(vortex.beforeLandEffect, info, *effectStep))
 			{
-				vortex.beforeLandEffect = ParticleRuleSystemInterface::k_NoEffect;
+				vortex.beforeLandEffect = k_NoEffectHandle;
 			}
 		}
 	});
@@ -287,11 +287,11 @@ void VortexSystem::UpdateDrawnFrame(ObjectDrawListSystemInterface& drawList, std
 {
 	// The effects over the land step at the pace of the screen's refresh
 	const auto effectStep = particles::drawn_steps::StepSeconds(_drawnEffectPace, frameRealTime, frameGameTime, landDrawn);
-	if (!Locator::particleRuleSystem::has_value())
+	if (!Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleRuleSystem::value();
+	auto& effects = Locator::effectRequestSystem::value();
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto update = [&](entt::entity entity) {
 		auto* vortex = registry.TryGet<Vortex>(entity);
@@ -301,8 +301,8 @@ void VortexSystem::UpdateDrawnFrame(ObjectDrawListSystemInterface& drawList, std
 		}
 		// The effect over the land and the glow show only in the frames that draw their vortex
 		const bool drawn = drawList.Drawn(registry, entity);
-		particles.SetShown(vortex->afterLandEffect, drawn);
-		particles.SetShown(vortex->lightMapEffect, drawn);
+		effects.SetShown(vortex->afterLandEffect, drawn);
+		effects.SetShown(vortex->lightMapEffect, drawn);
 		if (!drawn)
 		{
 			return;
@@ -316,16 +316,16 @@ void VortexSystem::UpdateDrawnFrame(ObjectDrawListSystemInterface& drawList, std
 		const auto openness = vortex::Openness(vortex->state, seconds);
 		// The effect over the land grows with the openness, stepped by the game time since its last step
 		const particles::ProcessInfo info {.power = openness, .enabled = true};
-		if (effectStep.has_value() && openness != 0.0f && vortex->afterLandEffect != ParticleRuleSystemInterface::k_NoEffect &&
-		    !particles.ProcessForSpell(vortex->afterLandEffect, info, *effectStep))
+		if (effectStep.has_value() && openness != 0.0f && vortex->afterLandEffect != k_NoEffectHandle &&
+		    !effects.Step(vortex->afterLandEffect, info, *effectStep))
 		{
-			vortex->afterLandEffect = ParticleRuleSystemInterface::k_NoEffect;
+			vortex->afterLandEffect = k_NoEffectHandle;
 		}
 		// The glow on the ground is as bright as the vortex's state has it
-		if (auto* lightMap = particles.Find(vortex->lightMapEffect))
+		if (vortex->lightMapEffect != k_NoEffectHandle)
 		{
 			const auto glow = vortex::GlowBrightness(vortex->state, seconds);
-			lightMap->SetGlobalAlpha(static_cast<float>(static_cast<int>(glow * 255.0f)));
+			effects.SetAlpha(vortex->lightMapEffect, static_cast<float>(static_cast<int>(glow * 255.0f)));
 		}
 	};
 	std::vector<entt::entity> vortices;
@@ -393,7 +393,7 @@ void VortexSystem::ProcessTurn()
 	std::vector<entt::entity> gone;
 	bool levelled = false;
 	std::vector<ecs::land_followers::Follower> followers;
-	auto* effects = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
+	auto* effects = Locator::effectRequestSystem::has_value() ? &Locator::effectRequestSystem::value() : nullptr;
 	registry.Each<Vortex>([&gone, &levelled, &followers, effects](entt::entity entity, Vortex& vortex) {
 		// What is in it is dealt with first, as it stood before this turn's step of its fade
 		if (vortex.type == VortexType::In && vortex.state == VortexStateType::Active)
@@ -405,10 +405,10 @@ void VortexSystem::ProcessTurn()
 			ThrowOut(entity, vortex);
 		}
 		// Then its effect drawing things in steps, taking what it was just handed
-		if (effects != nullptr && vortex.objectMoverEffect != ParticleRuleSystemInterface::k_NoEffect &&
-		    !effects->ProcessForSpell(vortex.objectMoverEffect, {.power = 1.0f, .enabled = true}, k_TurnSeconds))
+		if (effects != nullptr && vortex.objectMoverEffect != k_NoEffectHandle &&
+		    !effects->Step(vortex.objectMoverEffect, {.power = 1.0f, .enabled = true}, k_TurnSeconds))
 		{
-			vortex.objectMoverEffect = ParticleRuleSystemInterface::k_NoEffect;
+			vortex.objectMoverEffect = k_NoEffectHandle;
 		}
 		const auto seconds = SecondsInState(vortex, ReadIn::Turn);
 		switch (vortex::Advance(vortex.state, seconds))
@@ -511,13 +511,13 @@ void VortexSystem::Pull(entt::entity entity, const Vortex& vortex)
 void VortexSystem::HandOver(entt::entity vortexEntity, const Vortex& vortex, entt::entity thing,
                             const std::optional<DrawnIntoVortex::Flight>& flight)
 {
-	if (vortex.objectMoverEffect == ParticleRuleSystemInterface::k_NoEffect || !Locator::particleRuleSystem::has_value())
+	if (vortex.objectMoverEffect == k_NoEffectHandle || !Locator::effectRequestSystem::has_value())
 	{
 		return;
 	}
 	Locator::entitiesRegistry::value().AssignOrReplace<DrawnIntoVortex>(
 	    thing, DrawnIntoVortex {.vortex = vortexEntity, .flight = flight});
-	Locator::particleRuleSystem::value().AddTarget(vortex.objectMoverEffect, thing);
+	Locator::effectRequestSystem::value().AddTarget(vortex.objectMoverEffect, thing);
 }
 
 void VortexSystem::TakeFromPile(entt::entity vortexEntity, const Vortex& vortex, entt::entity pile)
@@ -872,16 +872,16 @@ bool VortexSystem::LoadState(reflection::BinaryReader& in)
 
 void VortexSystem::StartAgainAfterLoad()
 {
-	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
+	auto* effects = Locator::effectRequestSystem::has_value() ? &Locator::effectRequestSystem::value() : nullptr;
 	bool levelled = false;
-	Locator::entitiesRegistry::value().Each<Vortex>([&levelled, particles](Vortex& vortex) {
+	Locator::entitiesRegistry::value().Each<Vortex>([&levelled, effects](Vortex& vortex) {
 		if (const auto amount = vortex::LevelAfterLoad(vortex.type, vortex.levelApplied, vortex.groundHeights.size()))
 		{
 			// The things about the vortex came back where they were on the levelled land, so none of them moves
 			LevelGround(vortex, *amount);
 			levelled = true;
 		}
-		if (particles == nullptr)
+		if (effects == nullptr)
 		{
 			return;
 		}
@@ -890,24 +890,24 @@ void VortexSystem::StartAgainAfterLoad()
 		const std::array saved {vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect};
 		for (auto* effect : {&vortex.beforeLandEffect, &vortex.afterLandEffect, &vortex.lightMapEffect})
 		{
-			if (*effect != ParticleRuleSystemInterface::k_NoEffect)
+			if (*effect != k_NoEffectHandle)
 			{
-				particles->Delete(*effect);
-				*effect = ParticleRuleSystemInterface::k_NoEffect;
+				effects->Remove(*effect);
+				*effect = k_NoEffectHandle;
 			}
 		}
-		if (particles->Find(vortex.objectMoverEffect) == nullptr)
+		// The record of the running effects knows the effects of the save
+		if (!effects->IsRunning(vortex.objectMoverEffect))
 		{
-			vortex.objectMoverEffect = ParticleRuleSystemInterface::k_NoEffect;
+			vortex.objectMoverEffect = k_NoEffectHandle;
 		}
 		StartEffects(vortex);
-		KeepEffectsOutOfSaves(vortex);
 		// Each new effect takes the number that the save has for it, the last one made first, so that the numbers of
 		// the next effects are as before the load
 		const std::array made {&vortex.beforeLandEffect, &vortex.afterLandEffect, &vortex.lightMapEffect};
 		for (size_t i = made.size(); i-- > 0;)
 		{
-			if (*made.at(i) != ParticleRuleSystemInterface::k_NoEffect && particles->Renumber(*made.at(i), saved.at(i)))
+			if (*made.at(i) != k_NoEffectHandle && effects->Renumber(*made.at(i), saved.at(i)))
 			{
 				*made.at(i) = saved.at(i);
 			}
