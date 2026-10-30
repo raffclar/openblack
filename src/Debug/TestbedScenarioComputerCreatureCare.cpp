@@ -88,6 +88,16 @@ Command FreeFromWorshippers()
 	        .amount = 0.0f};
 }
 
+/// At the start, the god of player two gets the weight 0 for the need to look after the desires of its towns. Else it
+/// can tie the compassion leash of its creature to the town, and that leash holds the hunger of the creature down.
+Command FreeFromTownDesires()
+{
+	return {.kind = Command::Kind::ComputerPersonality,
+	        .player = PlayerNames::PLAYER_TWO,
+	        .action = "AttendTownDesires",
+	        .amount = 0.0f};
+}
+
 } // namespace
 
 void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario>& all)
@@ -98,7 +108,8 @@ void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario
 	    .facet = Facet::Mind,
 	    .description = "The land of the food miracle scenario, with two ripe wheat fields to the east of the town. The "
 	                   "tiger of player two stands between the temple and the town. It is very hungry, but its energy "
-	                   "is not low. At the start, the god gets the weight 0 for the need to look after its worshippers.",
+	                   "is not low. At the start, the god gets the weight 0 for the need to look after its worshippers and the "
+	                   "desires of its towns.",
 	    .expected = "The god looks after its creature. Its hand takes food from a field and drops it on the tiger, or "
 	                "the worshippers chant for the food miracle and the hand casts the miracle on the tiger. The "
 	                "players.list query shows the need of the creature and the steps of the hand.",
@@ -106,7 +117,7 @@ void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario
 	    .creatures = {GodCreature({30.0f, -30.0f}, {.energy = 0.6f}, {{.desire = Desire::Hunger, .fraction = 1.0f}})},
 	    .objects = FieldsByTheTown(),
 	    .landScript = k_ComputerGodTownScript,
-	    .commands = {FreeFromWorshippers()},
+	    .commands = {FreeFromWorshippers(), FreeFromTownDesires()},
 	    .worshipShare = 0.5f,
 	    .objectsAfterLandScript = true,
 	});
@@ -114,16 +125,18 @@ void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario
 	    .id = "mind.computer_god_creature_starving",
 	    .name = "A computer god that throws food to its starving creature",
 	    .facet = Facet::Mind,
-	    .description = "The land of the food miracle scenario, with two ripe wheat fields to the east of the town. The "
-	                   "tiger of player two stands between the temple and the town. It is very hungry and its energy is "
-	                   "almost gone. At the start, the god gets the weight 0 for the need to look after its worshippers.",
+	    .description =
+	        "The land of the food miracle scenario, with two ripe wheat fields to the east of the town. The "
+	        "tiger of player two stands between the temple and the town. It is very hungry and its energy is "
+	        "almost gone. At the start, the god gets the weight 0 for the need to look after its worshippers and the "
+	        "desires of its towns.",
 	    .expected = "The god reacts to the emergency of its creature. Its hand takes food from a field, moves to the "
 	                "tiger and throws the food to it in an arc. The food lands at the tiger.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(140.0f, 100.0f)}},
 	    .creatures = {GodCreature({30.0f, -30.0f}, {.energy = 0.05f}, {{.desire = Desire::Hunger, .fraction = 1.0f}})},
 	    .objects = FieldsByTheTown(),
 	    .landScript = k_ComputerGodTownScript,
-	    .commands = {FreeFromWorshippers()},
+	    .commands = {FreeFromWorshippers(), FreeFromTownDesires()},
 	    .worshipShare = 0.5f,
 	    .objectsAfterLandScript = true,
 	});

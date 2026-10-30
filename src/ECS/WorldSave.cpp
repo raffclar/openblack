@@ -40,6 +40,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Creature/CreatureHandGlow.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
+#include "ECS/Components/Cloud.h"
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
@@ -543,6 +544,8 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 			SPDLOG_LOGGER_WARN(Log(), "The context of the saved world does not read; the land keeps a new context");
 		}
 	}
+	// An older save keeps the sky's clouds as things of the land. The land laid out its own clouds when it loaded.
+	RemoveSavedSkyClouds(registry.Underlying());
 	// Things the save does not keep go back to their start. A world state keeps them.
 	if (kind == LoadKind::SavedGame)
 	{
@@ -676,6 +679,12 @@ void world_save::ForgetUnsavedState(entt::registry& registry)
 	// The mind of each computer god starts again. It keeps only the parts that a saved game keeps.
 	registry.view<components::ComputerPlayer>().each(
 	    [](components::ComputerPlayer& player) { computer_player::StartAgainAfterLoad(player); });
+}
+
+void world_save::RemoveSavedSkyClouds(entt::registry& registry)
+{
+	const auto clouds = registry.view<const components::Cloud>();
+	registry.destroy(clouds.begin(), clouds.end());
 }
 
 void world_save::TakeDanceFilesAgain(entt::registry& registry,

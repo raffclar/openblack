@@ -30,6 +30,7 @@
 #include "3D/PhysicsDrawMatrix.h"
 #include "Camera/Camera.h"
 #include "Creature/CreatureFizzLook.h"
+#include "ECS/BoatFilmBoat.h"
 #include "ECS/BoatLaunchRules.h"
 #include "ECS/BuildingConstruction.h"
 #include "ECS/Components/Abode.h"
@@ -1415,15 +1416,9 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 	const auto view = camera != nullptr ? std::optional(ViewPoint::Of(*camera)) : std::nullopt;
 	const float modelDetail = Locator::config::value().detail.modelDetail;
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
-	// The matrix of the explorers' boat, if its film plays. The parts on its deck take the land's light of its place.
-	// While the boat sails, the hidden boat of the launch can give this matrix.
-	std::optional<glm::mat4> filmBoat;
-	drawn.Each<const BoatFilmPart, const DrawnMatrix>([&filmBoat](const BoatFilmPart& part, const DrawnMatrix& matrix) {
-		if (part.role == BoatFilmPart::Role::Boat)
-		{
-			filmBoat = matrix.model;
-		}
-	});
+	// The matrix of the explorers' boat that the frame shows, if its film plays. The parts on its deck take the land's
+	// light of its place.
+	const auto filmBoat = openblack::ecs::boat_film::ShownBoatMatrix(drawn);
 	// A thing of the drawn registry has only its model, its place and its look: the systems of the land know nothing of
 	// it, so it takes nothing from them
 	drawn.Each<const Mesh, const Transform>(

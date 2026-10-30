@@ -487,8 +487,10 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 	}
 	if (!object.has_value() || !MayTake(*object))
 	{
-		// A press the hand can't take clicks the thing, and is a tap on it (clicking and activating)
-		if (object.has_value())
+		// A press that the hand can't take clicks the thing and taps it, if the thing could go to the hand or takes taps.
+		// A press on another thing, such as a stone that a script fixed in place, is a press on the land.
+		if (object.has_value() &&
+		    hand_grab::PressTapsThing(GateOf(*object), _world->ValidToTap(*object), _world->HoldsLooseLeash()))
 		{
 			ClickThing(*object);
 			Tap(*object);
@@ -2069,6 +2071,15 @@ bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
 	if (grab->scoopSource != entt::null)
 	{
 		EndScoop(*grab);
+	}
+	// In a network game, each computer does this let go in its turn and sends no command. Thus the thing starts from
+	// the place that the turns keep, which is the same on each computer. It does not start from the drawn place.
+	if (_world->IsNetworkGame())
+	{
+		if (auto* inHand = _world->Entities().TryGet<InHand>(grab->object))
+		{
+			inHand->drawn.reset();
+		}
 	}
 	// This let go does not wait for a turn, thus it has no lead
 	const auto led = ThrowStartOf(grab->object, velocity, 0);

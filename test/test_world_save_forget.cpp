@@ -14,6 +14,8 @@
 #include <entt/entity/registry.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Archetypes/CloudArchetype.h"
+#include "ECS/Components/Cloud.h"
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
@@ -21,6 +23,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerMind.h"
+#include "ECS/Registry.h"
 #include "ECS/WorldSave.h"
 
 using namespace openblack;
@@ -62,6 +65,35 @@ TEST(WorldSaveForget, ALoadRemovesTheRoomsOfTheTempleAndKeepsTheLand)
 	{
 		EXPECT_TRUE(registry.valid(villager));
 	}
+}
+
+// A save from an older version keeps the sky's clouds as things of the land. The load removes them and keeps every
+// other thing of the land.
+TEST(WorldSaveForget, ALoadRemovesTheSkysCloudsOfAnOlderSave)
+{
+	entt::registry registry;
+	const auto villager = registry.create();
+	registry.emplace<ecs::components::Villager>(villager);
+	for (int i = 0; i < 3; ++i)
+	{
+		registry.emplace<ecs::components::Cloud>(registry.create());
+	}
+	ecs::world_save::RemoveSavedSkyClouds(registry);
+	EXPECT_TRUE(registry.view<ecs::components::Cloud>().empty());
+	EXPECT_TRUE(registry.valid(villager));
+}
+
+// A load of a saved game removes the things of the drawn registry, but the sky's clouds that the land laid out stay
+TEST(WorldSaveForget, ALoadKeepsTheSkysCloudsOfTheDrawnRegistry)
+{
+	ecs::Registry drawn;
+	const auto cloud = drawn.Create();
+	drawn.Assign<ecs::components::Cloud>(cloud);
+	const auto mark = drawn.Create();
+	drawn.Assign<ecs::components::Villager>(mark);
+	ecs::archetypes::CloudArchetype::RemoveAllButTheSky(drawn);
+	EXPECT_TRUE(drawn.Valid(cloud));
+	EXPECT_FALSE(drawn.Valid(mark));
 }
 
 // Inside the temple the camera of the world stays where the player left it. A save keeps that camera, so a load puts

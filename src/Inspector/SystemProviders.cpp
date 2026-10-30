@@ -31,6 +31,7 @@
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/FixedOutline.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MiracleImpression.h"
@@ -38,8 +39,10 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Tree.h"
 #include "ECS/Components/Wonder.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
@@ -138,6 +141,125 @@ std::variant<entt::entity, std::string> CreatureParam(const ecs::Registry& regis
 		return creatures.front();
 	}
 	return std::string(creatures.empty() ? "there is no creature" : "there are several creatures: give an id (creature.list)");
+}
+
+/// Gives the order to the creature that the request names, and answers what came of it
+QueryResult GiveOrder(const CreatureSources& sources, const Json& params, const CreatureOrder& order)
+{
+	const auto* registry = Registry(sources.world);
+	if (registry == nullptr)
+	{
+		return QueryResult::Error(std::string(k_NoRegistry));
+	}
+	if (!sources.order)
+	{
+		return QueryResult::Error("this game cannot give orders to a creature");
+	}
+	const auto creature = CreatureParam(*registry, params);
+	if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+	{
+		return QueryResult::Error(*problem);
+	}
+	const auto entity = std::get<entt::entity>(creature);
+	const auto result = sources.order(entity, order);
+	if (!result.taken)
+	{
+		return QueryResult::Error("the creature did not take the order: " + result.detail);
+	}
+	return QueryResult::Value({{"id", ToId(entity)}, {"taken", true}, {"doing", result.detail}});
+}
+
+/// The thing that a request names by its object parameter, if it exists
+std::variant<entt::entity, std::string> ObjectParam(const ecs::Registry& registry, const Json& params)
+{
+	const auto object = EntityParam(registry, params, "object");
+	if (!object.has_value())
+	{
+		return std::string("give object: the entity id of a thing that exists");
+	}
+	return *object;
+}
+
+/// The queries that order a creature to lift a thing, to put it on the land or throw it, and to eat
+void AddCreatureOrders(FunctionProvider& provider, const CreatureSources& sources, const ParameterDescription& id)
+{
+	auto pickUp = Query("pick_up",
+	                    "The creature goes to a thing, picks it up and holds it, as a leash order does on a thing that it "
+	                    "can lift: the first times it holds a thing of that sort it plays with it, then it holds it facing "
+	                    "the player for 40 to 50 seconds. Give it creature.put_down to let go before that",
+	                    {id, Parameter("object", "integer", "The thing to pick up", true)});
+	pickUp.writes = true;
+	provider.Add(std::move(pickUp), [sources](const QueryContext& context) {
+		const auto* registry = Registry(sources.world);
+		if (registry == nullptr)
+		{
+			return QueryResult::Error(std::string(k_NoRegistry));
+		}
+		const auto object = ObjectParam(*registry, context.params);
+		if (const auto* problem = std::get_if<std::string>(&object); problem != nullptr)
+		{
+			return QueryResult::Error(*problem);
+		}
+		return GiveOrder(sources, context.params,
+		                 {.kind = CreatureOrder::Kind::PickUp, .object = std::get<entt::entity>(object)});
+	});
+
+	auto putDown = Query("put_down",
+	                     "The creature lets go of what it carries. With no point it puts it down where it stands with the "
+	                     "game's put-down action. With a point it carries it there and puts it down at rest, as a leash "
+	                     "order on the land does while it carries something. Where it cannot stand, or with throw true, it "
+	                     "throws it at the point from near enough instead",
+	                     {id, Parameter("point", "point", "Where it takes the thing, [x, z] or [x, y, z]", false),
+	                      Parameter("throw", "boolean", "It throws the thing at the point (false by default)", false)});
+	putDown.writes = true;
+	provider.Add(std::move(putDown), [sources](const QueryContext& context) {
+		const auto at = context.params.find("point");
+		const auto point = at == context.params.end() ? std::nullopt : ReadPoint(*at);
+		if (at != context.params.end() && !point.has_value())
+		{
+			return QueryResult::Error("give point as [x, z] or [x, y, z]");
+		}
+		const auto throwParam = context.params.find("throw");
+		const bool throws = throwParam != context.params.end() && throwParam->is_boolean() && throwParam->get<bool>();
+		if (throws && !point.has_value())
+		{
+			return QueryResult::Error("a throw needs a point");
+		}
+		CreatureOrder order {.kind = throws ? CreatureOrder::Kind::Throw : CreatureOrder::Kind::PutDown};
+		if (point.has_value())
+		{
+			order.point = glm::vec2(static_cast<float>((*point)[0]), static_cast<float>((*point)[2]));
+		}
+		return GiveOrder(sources, context.params, order);
+	});
+
+	auto eat = Query("eat",
+	                 "The creature goes to a thing and eats from it as its own plan to eat does: from a storage pit "
+	                 "(EatFromStoragePit), a field (EatFromContainer), a tree (EatFromTree) or the thing itself "
+	                 "(EatAfterExamining), or with the eat action given",
+	                 {id, Parameter("object", "integer", "The thing to eat from: give a storage pit, not its food pile", true),
+	                  Parameter("action", "string", "An eat action of the game's table, e.g. EatAlive", false)});
+	eat.writes = true;
+	provider.Add(std::move(eat), [sources](const QueryContext& context) {
+		const auto* registry = Registry(sources.world);
+		if (registry == nullptr)
+		{
+			return QueryResult::Error(std::string(k_NoRegistry));
+		}
+		const auto object = ObjectParam(*registry, context.params);
+		if (const auto* problem = std::get_if<std::string>(&object); problem != nullptr)
+		{
+			return QueryResult::Error(*problem);
+		}
+		const auto thing = std::get<entt::entity>(object);
+		const auto action = context.params.find("action");
+		return GiveOrder(sources, context.params,
+		                 {.kind = CreatureOrder::Kind::Eat,
+		                  .object = thing,
+		                  .action = action != context.params.end() && action->is_string()
+		                                ? action->get<std::string>()
+		                                : std::string(EatActionFor(*registry, thing))});
+	});
 }
 
 std::string_view StepKindName(creature_mind::Step::Kind kind)
@@ -529,6 +651,23 @@ Json openblack::inspector::AnimationEntryJson(const creature_animation_log::Entr
 	return json;
 }
 
+std::string_view openblack::inspector::EatActionFor(const ecs::Registry& registry, entt::entity thing)
+{
+	if (registry.AllOf<StoragePit>(thing))
+	{
+		return "EatFromStoragePit";
+	}
+	if (registry.AllOf<Field>(thing))
+	{
+		return "EatFromContainer";
+	}
+	if (registry.AllOf<Tree>(thing))
+	{
+		return "EatFromTree";
+	}
+	return "EatAfterExamining";
+}
+
 std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(CreatureSources sources)
 {
 	auto provider = std::make_unique<FunctionProvider>("creature");
@@ -635,6 +774,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		return QueryResult::Value(
 		    {{"id", ToId(entity)}, {"notice", ecs::creature_reaction_notice::TakesNotice(*registry, entity)}});
 	});
+	AddCreatureOrders(*provider, sources, id);
 	provider->Add(
 	    Query("known", "The ordinary skills and miracles a creature knows, and how often it has seen each miracle", {id}),
 	    [sources](const QueryContext& context) {

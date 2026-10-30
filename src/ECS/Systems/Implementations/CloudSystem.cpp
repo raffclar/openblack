@@ -25,6 +25,7 @@
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 
@@ -40,7 +41,7 @@ void CloudSystem::Reset()
 
 void CloudSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
-	Locator::entitiesRegistry::value().Each<Cloud, Mist, Transform>([gameTime](Cloud& cloud, Mist& mist, Transform& transform) {
+	Locator::drawnRegistry::value().Each<Cloud, Mist, Transform>([gameTime](Cloud& cloud, Mist& mist, Transform& transform) {
 		cloud.track = clouds::Move(cloud.track, cloud.pinned, gameTime.count());
 		transform.position = clouds::WorldPosition(cloud.track);
 		mist.colour = static_cast<uint32_t>(clouds::EdgeAlpha(cloud.track, cloud.pinned)) << 24u;

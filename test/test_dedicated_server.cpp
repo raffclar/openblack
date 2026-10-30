@@ -22,6 +22,7 @@
 
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -192,28 +193,35 @@ TEST(DedicatedServer, TheServerDoesNotStartTheGraphicsLibrary)
 	EXPECT_FALSE(openblack::graphics::GraphicsLibraryStarted());
 }
 
-TEST(DedicatedServer, TheServerMakesTheSkysCloudsButNoSystemThatOnlyShowsTheWorld)
+TEST(DedicatedServer, TheServerKeepsTheSkysCloudsOutOfTheWorldAndMakesNoSystemThatOnlyShowsTheWorld)
 {
 	const openblack::test::TestTempFolder profileFolder;
 	bool shown = false;
 	bool mists = true;
-	size_t clouds = 0;
+	size_t worldClouds = 1;
+	size_t drawnClouds = 0;
 	const std::atomic<bool> stop {false};
-	const auto exitCode = openblack::server::Run(
-	    MockSettings(profileFolder.Path()), stop, [&shown, &mists, &clouds](uint32_t /*turn*/, uint64_t /*checksum*/) {
-		    using openblack::Locator;
-		    shown = shown || Locator::oceanSystem::has_value() || Locator::cloudSystem::has_value() ||
-		            Locator::villageLightSystem::has_value() || Locator::advisorVoiceSystem::has_value() ||
-		            Locator::turnCheerSystem::has_value() || Locator::rendereringSystem::has_value();
-		    // The scripts fade the mists, and the turns change their size on every computer
-		    mists = mists && Locator::mistSystem::has_value();
-		    // The clouds of the sky are entities of the world on every computer, so that each entity has the same id
-		    clouds = std::as_const(Locator::entitiesRegistry::value()).Size<const openblack::ecs::components::Cloud>();
-	    });
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop,
+	                           [&shown, &mists, &worldClouds, &drawnClouds](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		                           using openblack::Locator;
+		                           using openblack::ecs::components::Cloud;
+		                           shown = shown || Locator::oceanSystem::has_value() || Locator::cloudSystem::has_value() ||
+		                                   Locator::villageLightSystem::has_value() ||
+		                                   Locator::advisorVoiceSystem::has_value() || Locator::turnCheerSystem::has_value() ||
+		                                   Locator::rendereringSystem::has_value();
+		                           // The scripts fade the mists, and the turns change their size on every computer
+		                           mists = mists && Locator::mistSystem::has_value();
+		                           // Every computer draws the numbers of the sky's clouds at the start of the land, but
+		                           // the clouds are things of the drawn registry and take no entity numbers of the world
+		                           worldClouds = std::as_const(Locator::entitiesRegistry::value()).Size<const Cloud>();
+		                           drawnClouds = std::as_const(Locator::drawnRegistry::value()).Size<const Cloud>();
+	                           });
 	EXPECT_EQ(exitCode, EXIT_SUCCESS);
 	EXPECT_FALSE(shown);
 	EXPECT_TRUE(mists);
-	EXPECT_GT(clouds, 0u);
+	EXPECT_EQ(worldClouds, 0u);
+	EXPECT_GT(drawnClouds, 0u);
 }
 
 TEST(DedicatedServer, TheServerMovesTheSkysClockButDoesNotShowTheSky)
@@ -237,4 +245,18 @@ TEST(DedicatedServer, TheServerMovesTheSkysClockButDoesNotShowTheSky)
 	EXPECT_GT(turns, 0u);
 	EXPECT_FALSE(shown);
 	EXPECT_TRUE(clock);
+}
+
+// The scripts fade the mists and the turns step the fades, thus the server has the mist system too
+TEST(DedicatedServer, TheServerHasTheMistSystemThatTheScriptsAndTheTurnsUse)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool mists = true;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&mists](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    mists = mists && openblack::Locator::mistSystem::has_value();
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_TRUE(mists);
 }

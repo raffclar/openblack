@@ -16,6 +16,7 @@
 #include "3D/Mists.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
 
@@ -25,9 +26,14 @@ using namespace openblack::ecs::components;
 
 void MistSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
-	// The game moves a mist on only while it is in view; every mist moves on here, which looks the same
-	Locator::entitiesRegistry::value().Each<Mist>(
-	    [gameTime](Mist& mist) { mists::Advance(mist.counter, mist.counterRemainder, gameTime.count()); });
+	// The game moves a mist on only while it is in view; every mist moves on here, which looks the same. The mists of the
+	// land move first, then the sky's clouds, which are things of the drawn registry.
+	const auto advance = [gameTime](Mist& mist) { mists::Advance(mist.counter, mist.counterRemainder, gameTime.count()); };
+	Locator::entitiesRegistry::value().Each<Mist>(advance);
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().Each<Mist>(advance);
+	}
 }
 
 namespace

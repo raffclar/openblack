@@ -147,6 +147,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
+#include "ECS/Components/Vortex.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/Workshop.h"
@@ -3382,6 +3383,26 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::SkirmishBox)
 	{
+		if (command.value == 5 || command.value == 6)
+		{
+			// The game's own mind file takes the place of the creature that the profile keeps. This needs no interface, thus
+			// the dedicated server brings the creature too.
+			const auto path =
+			    Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
+			auto mind = std::make_shared<creaturemind::MindFileData>();
+			const bool read = creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success;
+			const auto brought = ecs::creature_from_file::BringKept(PlayerNames::PLAYER_ONE, read ? mind : nullptr);
+			// With 6, the profile also keeps the new creature in its file. Thus a load of a saved skirmish brings it again.
+			if (command.value == 6 && brought.creature.has_value() && Locator::creatureCarryOverSystem::has_value())
+			{
+				Locator::creatureCarryOverSystem::value().KeepCreature(*brought.creature);
+			}
+			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+			                brought.creature.has_value()
+			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))
+			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
+			return;
+		}
 		if (_stage == nullptr || !_stage->HasInterface())
 		{
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
@@ -3400,25 +3421,6 @@ void Runner::Give(const Command& command)
 			lands.ShowLandMessage(
 			    {.kind = land_message::Message::Kind::AddLine, .text = "Battle another god for this realm", .number = 2});
 			Log(fmt::format("{:.1f}s: {}: the land information box shows", _seconds, Name(command.kind)));
-			return;
-		}
-		if (command.value == 5 || command.value == 6)
-		{
-			// The game's own mind file takes the place of the creature that the profile keeps
-			const auto path =
-			    Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
-			auto mind = std::make_shared<creaturemind::MindFileData>();
-			const bool read = creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success;
-			const auto brought = ecs::creature_from_file::BringKept(PlayerNames::PLAYER_ONE, read ? mind : nullptr);
-			// With 6, the profile also keeps the new creature in its file. Thus a load of a saved skirmish brings it again.
-			if (command.value == 6 && brought.creature.has_value() && Locator::creatureCarryOverSystem::has_value())
-			{
-				Locator::creatureCarryOverSystem::value().KeepCreature(*brought.creature);
-			}
-			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
-			                brought.creature.has_value()
-			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))
-			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
 			return;
 		}
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _stage->OpenSkirmishBox(command.value == 2)));
@@ -5216,6 +5218,14 @@ void Runner::UpdateVortices()
 				WriteCrossingFile(setup.crossingLines);
 			}
 			running.vortex = vortices.Create({point.x, 0.0f, point.y}, setup.type, 0.0f);
+			if (!setup.crossingLines.empty() && running.vortex != entt::null)
+			{
+				// The scenario also gives its crossing lines to the vortex. Thus a world with no profile, such as the
+				// server, throws out the same things. These lines are the same as the lines that the game read from the
+				// file.
+				auto& lines = Locator::entitiesRegistry::value().Get<ecs::components::Vortex>(running.vortex).throwingOut.lines;
+				lines.assign(setup.crossingLines.begin(), setup.crossingLines.end());
+			}
 			if (setup.crowdForSeconds.has_value() && Locator::scriptObjects::has_value())
 			{
 				// A script makes the crowd at the vortex and keeps it in a variable, as the Land 2 arrival does

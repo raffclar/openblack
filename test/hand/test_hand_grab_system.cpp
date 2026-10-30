@@ -189,6 +189,7 @@ public:
 		tapped.push_back(object);
 		return true;
 	}
+	[[nodiscard]] bool ValidToTap(entt::entity object) const override { return tappable.contains(object); }
 	[[nodiscard]] std::optional<creature_giving::Verdict> GiveVerdict(entt::entity target, entt::entity) const override
 	{
 		const auto found = creatures.find(target);
@@ -310,6 +311,8 @@ public:
 	{
 		startsAsked.emplace_back(object, alignToSlope);
 		leadsAsked.push_back(leadTurns);
+		const auto* inHand = registry.TryGet<const InHand>(object);
+		drawnAtStart.push_back(inHand != nullptr && inHand->drawn.has_value());
 		return {.start = throwStart, .velocity = ledVelocity.value_or(velocity), .flight = flight};
 	}
 	[[nodiscard]] uint32_t ReportLatencyMs() const override { return reportLatencyMs; }
@@ -520,6 +523,7 @@ public:
 	std::vector<std::pair<entt::entity, PlayerNames>> scaffoldsTaken;
 	std::vector<uint32_t> samples;
 	std::vector<entt::entity> tapped;
+	std::set<entt::entity> tappable;
 	std::vector<entt::entity> villagersInHand;
 	std::vector<entt::entity> uprooted;
 	std::vector<std::pair<entt::entity, entt::entity>> treesGiven;
@@ -545,6 +549,8 @@ public:
 	/// The start that the world gives for a throw, and the starts that the hand asked for and used
 	player_commands::ThrowStart throwStart;
 	std::vector<std::pair<entt::entity, bool>> startsAsked;
+	/// For each start asked for, whether the thing had a drawn place in the hand
+	std::vector<bool> drawnAtStart;
 	/// The lead of each throw: the latency of the reports, the turns that the hand asked for, the velocity and the
 	/// flight after the lead, and where the frames drew the thrown thing
 	uint32_t reportLatencyMs {0};
@@ -730,6 +736,29 @@ TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
 	EXPECT_EQ(world->reactions.front().initiator, world->hand);
 }
 
+// The debug tools let go at once with no command. In a network game, each computer does this let go in its own turn, so
+// the start must not come from the place that one computer drew.
+TEST_F(HandGrabSystemWithWorld, InANetworkGameTheLetGoOfTheToolsDoesNotStartFromTheDrawnPlace)
+{
+	world->networkGame = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	ASSERT_TRUE(system->TakeIntoHand(rock));
+	world->registry.Get<InHand>(rock).drawn = InHand::Drawn {.position = {1.0f, 2.0f, 3.0f}, .rotation = glm::mat3(1.0f)};
+	ASSERT_TRUE(system->LetGoAt(glm::vec3(0.0f)));
+	ASSERT_EQ(world->drawnAtStart.size(), 1u);
+	EXPECT_FALSE(world->drawnAtStart.front());
+}
+
+TEST_F(HandGrabSystemWithWorld, InAGameAloneTheLetGoOfTheToolsStartsFromTheDrawnPlace)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	ASSERT_TRUE(system->TakeIntoHand(rock));
+	world->registry.Get<InHand>(rock).drawn = InHand::Drawn {.position = {1.0f, 2.0f, 3.0f}, .rotation = glm::mat3(1.0f)};
+	ASSERT_TRUE(system->LetGoAt(glm::vec3(0.0f)));
+	ASSERT_EQ(world->drawnAtStart.size(), 1u);
+	EXPECT_TRUE(world->drawnAtStart.front());
+}
+
 // The hand does not hold a creature as a thing. Because of this, the hand never gives a creature to a creature.
 TEST_F(HandGrabSystemWithWorld, TheHandNeverTakesACreature)
 {
@@ -901,6 +930,7 @@ TEST_F(HandGrabSystemWithWorld, ThingsOutOfTheInfluenceOrHeldByAScriptAreLeft)
 	world->registry.Remove<CannotBePickedUp>(rock);
 	// A rock wider than the hand can lift
 	const auto boulder = world->AddRock({5.0f, 0.0f, 0.0f}, 4.0f);
+	world->tappable.insert(boulder);
 	world->underCursor = boulder;
 	EXPECT_FALSE(Press());
 	// Out of the influence or held by a script nothing is tapped; a boulder the hand can't lift is tapped at once
@@ -1139,6 +1169,48 @@ TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
 	EXPECT_EQ(clicked->thing, rock);
 	EXPECT_EQ(clicked->thingTurn, now / 100);
 	EXPECT_TRUE(world->tapped.empty());
+}
+
+TEST_F(HandGrabSystemWithWorld, APressOnAThingAScriptFixedInPlaceIsAPressOnTheLand)
+{
+	const auto stone = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->registry.Assign<CannotBePickedUp>(stone);
+	world->underCursor = stone;
+	commandTurn = now / 100;
+	EXPECT_FALSE(Press());
+	// The press does not click or tap the stone, in the influence or out of it
+	EXPECT_FALSE(world->registry.AllOf<HandClicked>(world->hand) &&
+	             world->registry.Get<HandClicked>(world->hand).thing != entt::null);
+	world->influence = false;
+	EXPECT_FALSE(Press());
+	EXPECT_FALSE(world->registry.AllOf<HandClicked>(world->hand) &&
+	             world->registry.Get<HandClicked>(world->hand).thing != entt::null);
+	EXPECT_TRUE(world->tapped.empty());
+	// Only the release clicks it, so one click of the button clicks it once
+	system->ClickReleased();
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
+	// A thing that takes taps, or any thing with the leash loose in the hand, is clicked by the press
+	world->registry.Get<HandClicked>(world->hand).thing = entt::null;
+	world->tappable.insert(stone);
+	EXPECT_FALSE(Press());
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
+	world->tappable.erase(stone);
+	world->registry.Get<HandClicked>(world->hand).thing = entt::null;
+	world->looseLeash = true;
+	EXPECT_FALSE(Press());
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, stone);
+}
+
+TEST(HandGrabRules, APressTapsAThingTheHandCouldHoldOrThatTakesTaps)
+{
+	const hand_grab::Gate holdable {.valid = true};
+	const hand_grab::Gate fixed {.valid = true, .cannotBePickedUp = true};
+	const hand_grab::Gate notHoldable {.valid = false};
+	EXPECT_TRUE(hand_grab::PressTapsThing(holdable, false, false));
+	EXPECT_FALSE(hand_grab::PressTapsThing(fixed, false, false));
+	EXPECT_FALSE(hand_grab::PressTapsThing(notHoldable, false, false));
+	EXPECT_TRUE(hand_grab::PressTapsThing(fixed, true, false));
+	EXPECT_TRUE(hand_grab::PressTapsThing(notHoldable, false, true));
 }
 
 TEST_F(HandGrabSystemWithWorld, ATapClicksWhatIsUnderTheHandAsItIsLetGo)
@@ -2157,6 +2229,8 @@ TEST_F(HandGrabSystemWithWorld, TheHandLocksOntoAFieldOnlyWhenItsCropCanGiveFood
 	const auto field = world->registry.Create();
 	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 	world->fields[field] = {.food = 1000, .lockable = false};
+	// A field is a building of its town, which takes taps
+	world->tappable.insert(field);
 	world->underCursor = field;
 	EXPECT_FALSE(Press());
 	EXPECT_FALSE(system->GetHeld().has_value());
