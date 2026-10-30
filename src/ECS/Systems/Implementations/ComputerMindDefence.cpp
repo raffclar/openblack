@@ -227,10 +227,9 @@ computer_mind_rules::TownBeliefFacts BeliefOf(entt::entity town)
 	computer_mind_rules::TownBeliefFacts facts;
 	if (const auto* impression = Entities().TryGet<const TownImpression>(town))
 	{
-		// The rules of the mind look at each player of the game (deviation 167)
-		const auto players = std::min(ecs::game_players::Count(), facts.belief.size());
-		std::copy_n(impression->belief.belief.begin(), players, facts.belief.begin());
-		std::copy_n(impression->belief.recent.begin(), players, facts.recent.begin());
+		// The rules of the mind look at each player number (deviation 167). A player that the game does not have has 0.
+		facts.belief = impression->belief.belief;
+		facts.recent = impression->belief.recent;
 	}
 	return facts;
 }
