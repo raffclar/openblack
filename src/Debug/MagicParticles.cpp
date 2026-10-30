@@ -26,6 +26,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "Locator.h"
 #include "Magic.h"
@@ -76,12 +77,12 @@ glm::vec3 Magic::SpawnPoint() const noexcept
 
 void Magic::DrawParticles() noexcept
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::particleRuleSystem::has_value())
 	{
 		ImGui::TextUnformatted("No particle system");
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	if (_particleFiles.empty())
 	{
 		_particleFiles = particles.GetFileNames();
@@ -163,7 +164,7 @@ void Magic::DrawParticles() noexcept
 		particles.SetPlayer(id, _player);
 		particles.SetDrawPath(id, _drawPath);
 		GiveNearestTargets(id, point);
-		if (id != ecs::systems::ParticleSystemInterface::k_NoEffect && _closeAfter > 0.0f)
+		if (id != ecs::systems::ParticleRuleSystemInterface::k_NoEffect && _closeAfter > 0.0f)
 		{
 			_timedEffects.push_back({id, _closeAfter});
 		}
@@ -197,6 +198,10 @@ void Magic::DrawParticles() noexcept
 
 void Magic::DrawParticleStats() const noexcept
 {
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
 	const auto stats = Locator::particleSystem::value().GetDrawStats();
 	ImGui::Text("Drawn: %zu sprites, %zu ribbons, %zu models, %zu mists, %zu light maps, from %zu effects", stats.sprites,
 	            stats.chains, stats.meshes, stats.mists, stats.lightStamps, stats.effects);
@@ -226,13 +231,13 @@ void Magic::GiveNearestTargets(uint32_t effect, const glm::vec3& origin) const n
 	// The rules take the last given first: the nearest goes last
 	for (size_t i = count; i > 0; --i)
 	{
-		Locator::particleSystem::value().AddTarget(effect, nearest.at(i - 1).second);
+		Locator::particleRuleSystem::value().AddTarget(effect, nearest.at(i - 1).second);
 	}
 }
 
 void Magic::DrawRunningEffects() noexcept
 {
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	const auto effects = particles.GetEffects();
 	ImGui::Text("%zu running", effects.size());
 	if (!ImGui::BeginTable("ParticleEffects", 7, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY))
@@ -312,11 +317,11 @@ void Magic::DrawRunningEffects() noexcept
 
 void Magic::UpdateTimedEffects(float seconds) noexcept
 {
-	if (!Locator::particleSystem::has_value() || _timedEffects.empty())
+	if (!Locator::particleRuleSystem::has_value() || _timedEffects.empty())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	std::erase_if(_timedEffects, [&](TimedEffect& timed) {
 		if (!particles.IsRunning(timed.id))
 		{

@@ -23,7 +23,6 @@
 #include <vector>
 
 #include <LNDFile.h>
-#include <bgfx/bgfx.h>
 #include <glm/common.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
@@ -274,15 +273,18 @@ void LandIsland::Build(const LandData& data)
 	{
 		_blockTextures->Create(side, side, static_cast<uint16_t>(_landBlocks.size()), TextureFormat::RGBA8, Wrapping::ClampEdge,
 		                       Filter::Linear, nullptr);
-		// Threads that live as long as the build paint the blocks, each straight into the memory that bgfx then takes
-		std::vector<const bgfx::Memory*> painted(_landBlocks.size());
+		// Threads that live as long as the build paint the blocks, each straight into the memory that the device then takes
+		std::vector<const graphics::DeviceMemory*> painted(_landBlocks.size());
 		const auto blockBytes = static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution));
 		std::ranges::generate(painted, [blockBytes] { return Locator::graphicsDevice::value().Alloc(blockBytes); });
+		std::vector<std::span<uint8_t>> paintedBytes(painted.size());
+		std::ranges::transform(painted, paintedBytes.begin(),
+		                       [](const auto* memory) { return Locator::graphicsDevice::value().Bytes(memory); });
 		WorkerPool painters(WorkerPool::DefaultThreadCount());
 		block_texture::BuildBlocks(
 		    _landBlocks.size(),
 		    [this](size_t block) { return std::span<const lnd::LNDCell>(_landBlocks[block].GetLndBlock()->cells); }, sources,
-		    painters, [&painted](size_t block) { return std::span<uint8_t>(painted[block]->data, painted[block]->size); });
+		    painters, [&paintedBytes](size_t block) { return paintedBytes[block]; });
 		for (size_t block = 0; block < painted.size(); ++block)
 		{
 			_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), painted[block]);
@@ -347,7 +349,8 @@ void LandIsland::Build(const LandData& data)
 		const auto vertexCount = _landBlocks.size() * LandBlock::k_VertexCount;
 		const auto* vertexMemory =
 		    Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(vertexCount * sizeof(LandVertex)));
-		const auto vertices = std::span(reinterpret_cast<LandVertex*>(vertexMemory->data), vertexCount);
+		const auto vertices =
+		    std::span(reinterpret_cast<LandVertex*>(Locator::graphicsDevice::value().Bytes(vertexMemory).data()), vertexCount);
 		for (size_t i = 0; i < _landBlocks.size(); ++i)
 		{
 			_landBlocks[i].BuildMesh(*this, vertices.subspan(i * LandBlock::k_VertexCount, LandBlock::k_VertexCount));
@@ -572,7 +575,8 @@ void LandIsland::CommitAltitudeChanges()
 		}
 		const auto* vertexMemory =
 		    Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(LandBlock::k_VertexCount * sizeof(LandVertex)));
-		_landBlocks[i].BuildMesh(*this, std::span(reinterpret_cast<LandVertex*>(vertexMemory->data), LandBlock::k_VertexCount));
+		auto* vertexBytes = Locator::graphicsDevice::value().Bytes(vertexMemory).data();
+		_landBlocks[i].BuildMesh(*this, std::span(reinterpret_cast<LandVertex*>(vertexBytes), LandBlock::k_VertexCount));
 		_blockVertices->Update(static_cast<uint32_t>(i * LandBlock::k_VertexCount), vertexMemory);
 		// The ground's materials follow the height, so the changed cells are painted again. A block's texture has a
 		// row for each texel along x, so x is the texture's height and z its width.

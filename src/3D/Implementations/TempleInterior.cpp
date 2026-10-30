@@ -22,7 +22,6 @@
 
 #include <InstantSaves.h>
 #include <PackFile.h>
-#include <SDL_keyboard.h>
 #include <SaveSlots.h>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
@@ -70,7 +69,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/LeashSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -86,6 +85,7 @@
 #include "Gui/ToolTips.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/InputDeviceInterface.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
@@ -568,7 +568,7 @@ void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t 
 	default:
 		break;
 	}
-	SDL_StartTextInput();
+	input::Device().StartTextInput();
 }
 
 void TempleInterior::UpdateSaveGameRoom()
@@ -1206,7 +1206,7 @@ void TempleInterior::UpdateCaveTrophies(float gameSeconds)
 		    miracle.has_value() ? magic::FindFirstSpellSeedForMagicType(info, static_cast<MagicType>(*miracle)) : std::nullopt;
 		seeds.at(i) = seed.value_or(SpellSeedType::None);
 	}
-	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 	const auto made = SeedsToMake(shown, seeds);
 	for (size_t i = 0; i < k_BestMiracles; ++i)
 	{
@@ -1217,14 +1217,14 @@ void TempleInterior::UpdateCaveTrophies(float gameSeconds)
 		}
 		const auto at = glm::vec3(temple * points[point][3]);
 		CaveSeedPlace place {.seed = {.seed = *made.at(i), .point = at, .spin = 0.0f, .phialPhase = 0.0f, .phialFrame = 0.0f},
-		                     .holderEffect = ecs::systems::ParticleSystemInterface::k_NoEffect};
+		                     .holderEffect = ecs::systems::ParticleRuleSystemInterface::k_NoEffect};
 		// Its holder's effect plays above it at its full size, in the colours of the player at this computer
 		const auto& seedInfo = magic::GetSpellSeedInfo(info, place.seed.seed);
 		if (particles != nullptr && seedInfo.holderParticle != ParticleType::None)
 		{
 			place.holderEffect =
 			    particles->Start(seedInfo.holderParticle, at + glm::vec3(0.0f, seedInfo.holderHeight, 0.0f), 1.0f);
-			if (place.holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect)
+			if (place.holderEffect != ecs::systems::ParticleRuleSystemInterface::k_NoEffect)
 			{
 				particles->SetInTemple(place.holderEffect);
 				particles->SetPlayer(place.holderEffect, static_cast<int>(Locator::handSystem::has_value()
@@ -1254,7 +1254,7 @@ void TempleInterior::UpdateCaveTrophies(float gameSeconds)
 		seed.spin = turn.spin;
 		seed.phialFrame = turn.phialFrame;
 		seed.phialPhase = turn.phialPhase;
-		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect &&
+		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleRuleSystemInterface::k_NoEffect &&
 		    _caveEffectStep.has_value())
 		{
 			particles->ProcessByFrame(place->holderEffect, *_caveEffectStep);
@@ -1267,10 +1267,10 @@ void TempleInterior::ClearCaveSeeds()
 {
 	for (auto& place : _caveSeedPlaces)
 	{
-		if (place.has_value() && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect &&
-		    Locator::particleSystem::has_value())
+		if (place.has_value() && place->holderEffect != ecs::systems::ParticleRuleSystemInterface::k_NoEffect &&
+		    Locator::particleRuleSystem::has_value())
 		{
-			Locator::particleSystem::value().Delete(place->holderEffect);
+			Locator::particleRuleSystem::value().Delete(place->holderEffect);
 		}
 		place.reset();
 	}
@@ -1349,7 +1349,7 @@ namespace
 class MapSpellEffects final: public TempleMapSpells::Effects
 {
 public:
-	explicit MapSpellEffects(ecs::systems::ParticleSystemInterface* particles)
+	explicit MapSpellEffects(ecs::systems::ParticleRuleSystemInterface* particles)
 	    : _particles(particles)
 	{
 	}
@@ -1361,7 +1361,7 @@ public:
 			return std::nullopt;
 		}
 		const auto effect = _particles->Start(type, point, scale);
-		if (effect == ecs::systems::ParticleSystemInterface::k_NoEffect)
+		if (effect == ecs::systems::ParticleRuleSystemInterface::k_NoEffect)
 		{
 			return std::nullopt;
 		}
@@ -1388,12 +1388,12 @@ public:
 	}
 
 private:
-	ecs::systems::ParticleSystemInterface* _particles;
+	ecs::systems::ParticleRuleSystemInterface* _particles;
 };
 
 MapSpellEffects GameMapSpellEffects()
 {
-	return MapSpellEffects(Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr);
+	return MapSpellEffects(Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr);
 }
 } // namespace
 

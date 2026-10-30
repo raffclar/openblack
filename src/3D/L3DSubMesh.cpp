@@ -16,7 +16,6 @@
 #include <span>
 #include <vector>
 
-#include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/component_wise.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -234,7 +233,7 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 
 	// The vertices of the graphics device
 	const bool device = _l3dMesh.GetUploadMode() == UploadMode::Device;
-	const bgfx::Memory* verticesMem = device ? PackVertices(l3d, meshIndex) : nullptr;
+	const graphics::DeviceMemory* verticesMem = device ? PackVertices(l3d, meshIndex) : nullptr;
 	if (_flags.hasBones && device)
 	{
 		CreateBlendSource(verticesMem, nVertices);
@@ -416,13 +415,14 @@ bool L3DSubMesh::LoadMade(std::span<const MadePrimitive> primitives) noexcept
 	}
 	_made = true;
 	const bool device = _l3dMesh.GetUploadMode() == UploadMode::Device;
-	const bgfx::Memory* verticesMem =
+	const graphics::DeviceMemory* verticesMem =
 	    device ? Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(sizeof(EnhancedL3DVertex) * vertexCount))
 	           : nullptr;
-	const bgfx::Memory* indicesMem =
+	const graphics::DeviceMemory* indicesMem =
 	    device ? Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(sizeof(uint16_t) * indexCount)) : nullptr;
-	auto* vertices = device ? reinterpret_cast<EnhancedL3DVertex*>(verticesMem->data) : nullptr;
-	auto* indices = device ? reinterpret_cast<uint16_t*>(indicesMem->data) : nullptr;
+	auto* vertices =
+	    device ? reinterpret_cast<EnhancedL3DVertex*>(Locator::graphicsDevice::value().Bytes(verticesMem).data()) : nullptr;
+	auto* indices = device ? reinterpret_cast<uint16_t*>(Locator::graphicsDevice::value().Bytes(indicesMem).data()) : nullptr;
 	_boundingBox.maxima = glm::vec3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 	_boundingBox.minima = glm::vec3(FLT_MAX, FLT_MAX, FLT_MAX);
 	uint32_t firstVertex = 0;
@@ -523,7 +523,7 @@ void L3DSubMesh::BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex)
 	}
 }
 
-const bgfx::Memory* L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex) const
+const graphics::DeviceMemory* L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex) const
 {
 	const auto& verticesSpan = l3d.GetVertexSpan(meshIndex);
 	const auto& vertexGroupSpans = l3d.GetVertexGroupSpan(meshIndex);
@@ -536,10 +536,10 @@ const bgfx::Memory* L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t m
 	}
 
 	const auto stride = _hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
-	const bgfx::Memory* verticesMem = Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(stride * nVertices));
-	const auto vertexAt = [verticesMem, stride](uint32_t i) {
-		return reinterpret_cast<EnhancedL3DVertex*>(verticesMem->data + (stride * i));
-	};
+	const graphics::DeviceMemory* verticesMem =
+	    Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(stride * nVertices));
+	auto* bytes = Locator::graphicsDevice::value().Bytes(verticesMem).data();
+	const auto vertexAt = [bytes, stride](uint32_t i) { return reinterpret_cast<EnhancedL3DVertex*>(bytes + (stride * i)); };
 	for (uint32_t i = 0; i < nVertices; ++i)
 	{
 		auto& vertex = *vertexAt(i);
@@ -593,21 +593,22 @@ const bgfx::Memory* L3DSubMesh::PackVertices(const l3d::L3DFile& l3d, uint32_t m
 	return verticesMem;
 }
 
-void L3DSubMesh::CreateBlendSource(const bgfx::Memory* vertices, uint32_t count)
+void L3DSubMesh::CreateBlendSource(const graphics::DeviceMemory* vertices, uint32_t count)
 {
 	_hasBlends = false;
 	const auto stride = _hasLightmapCoordinates ? sizeof(LightmappedL3DVertex) : sizeof(EnhancedL3DVertex);
-	const auto* caps = Locator::graphicsDevice::value().GetCaps();
-	if (count == 0 || caps == nullptr || count > caps->limits.maxTextureSize ||
-	    (caps->formats[bgfx::TextureFormat::RGBA32F] & BGFX_CAPS_FORMAT_TEXTURE_VERTEX) == 0)
+	const auto& device = Locator::graphicsDevice::value();
+	if (count == 0 || count > device.MaxTextureSize() ||
+	    !device.HasTextureFormat(graphics::TextureFormat::RGBA32F, graphics::TextureUse::VertexTexture))
 	{
 		_blendSource.reset();
 		return;
 	}
 	std::vector<glm::vec4> texels(count);
+	const auto* bytes = device.Bytes(vertices).data();
 	for (uint32_t i = 0; i < count; ++i)
 	{
-		const auto& vertex = *reinterpret_cast<const EnhancedL3DVertex*>(vertices->data + (stride * i));
+		const auto& vertex = *reinterpret_cast<const EnhancedL3DVertex*>(bytes + (stride * i));
 		texels[i] = glm::vec4(vertex.pos, static_cast<float>(std::max<int16_t>(vertex.index.x, 0)));
 		_hasBlends = _hasBlends || vertex.index.y >= 0;
 	}

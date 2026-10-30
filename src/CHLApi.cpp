@@ -228,7 +228,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
@@ -3721,7 +3721,7 @@ void ObjectDelete() // 048 OBJECT_DELETE
 		return;
 	case script_delete::Step::BreakUpThenRemove:
 		// The pieces fly out from the place where it stood
-		Locator::particleSystem::value().ExplodeObject(object, position, script_delete::k_ExplodeSpeed);
+		Locator::particleRuleSystem::value().ExplodeObject(object, position, script_delete::k_ExplodeSpeed);
 		DeleteNow(object);
 		return;
 	case script_delete::Step::StartTempleDestruction:
@@ -3732,7 +3732,7 @@ void ObjectDelete() // 048 OBJECT_DELETE
 		break;
 	case script_delete::Step::BreakUpTemple:
 		// The temple stays until its destruction ends
-		Locator::particleSystem::value().ExplodeObject(object, position, script_delete::k_TempleExplodeSpeed);
+		Locator::particleRuleSystem::value().ExplodeObject(object, position, script_delete::k_TempleExplodeSpeed);
 		break;
 	case script_delete::Step::ClearPuzzle:
 		// TODO(puzzle-games): the puzzle game removes its pieces. The stand-in puzzle game has no pieces

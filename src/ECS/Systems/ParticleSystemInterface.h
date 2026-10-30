@@ -9,48 +9,23 @@
 
 #pragma once
 
-#include <cstdint>
+#include <cstddef>
 
-#include <chrono>
-#include <memory>
-#include <optional>
-#include <span>
-#include <string>
-#include <string_view>
 #include <vector>
 
-#include <entt/core/fwd.hpp>
-#include <entt/entity/entity.hpp>
-#include <glm/vec3.hpp>
-
-#include "ECS/Systems/EffectRequestSystemInterface.h"
-#include "ECS/Systems/SavedStateInterface.h"
-#include "Enums.h"
-#include "Particles/ManaPathMaths.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "Particles/ParticleDrawFrame.h"
-#include "Particles/ParticleSpellLink.h"
-#include "Particles/PlasmaCommand.h"
-
-namespace openblack::particles
-{
-class Effect;
-struct GestureTrail;
-class LightSheet;
-struct ShieldSphere;
-} // namespace openblack::particles
 
 namespace openblack::ecs::systems
 {
 
-/// The running particle effects: those miracles own and step themselves, the spot visuals scripts and the game place for
-/// a time, and any other effect, stepped once a game turn. What they draw is gathered between the turns. It also shows
-/// the effects that the turns and the scripts ask for through the effect requests.
-class ParticleSystemInterface: public SavedStateInterface, public EffectServerInterface
+/// The draw of the particle effects, in the presentation. The rules of the simulation step the effects. This system only
+/// reads them and collects what they draw between the turns. A computer that shows nothing, such as the dedicated
+/// server, does not have it.
+class ParticleSystemInterface
 {
 public:
-	/// A running effect, by a number that is never reused
-	using EffectId = uint32_t;
-	static constexpr EffectId k_NoEffect = 0;
+	using EffectId = ParticleRuleSystemInterface::EffectId;
 
 	/// How many things the last collected frame drew, for the debug window
 	struct DrawStats
@@ -63,190 +38,20 @@ public:
 		size_t effects;
 	};
 
-	/// What the debug window shows of an effect
-	struct EffectInfo
-	{
-		EffectId id;
-		std::string file;
-		glm::vec3 origin;
-		float age;
-		size_t atoms;
-		size_t collections;
-		bool closing;
-		bool ownedBySpell;
-		particles::draw::DrawPath path;
-		/// Objects given to it that its rules haven't taken yet
-		size_t targets;
-		/// Seconds left of a spot visual's life, none for one that lasts until it is closed
-		std::optional<float> secondsLeft;
-		std::vector<std::string> unportedClasses;
-		/// The object it follows and ends with, if any
-		entt::entity owner {entt::null};
-	};
-
 	virtual ~ParticleSystemInterface() = default;
 
-	/// An effect from a particle file by its name (such as "SF_Smoke"), at a point and a magnitude; k_NoEffect if there
-	/// is no such file. Its random numbers are the shared ones when synced.
-	virtual EffectId Start(std::string_view file, glm::vec3 origin, float magnitude, bool synced = false) = 0;
-	/// The effect of a particle type; k_NoEffect for a type without a file
-	virtual EffectId Start(ParticleType type, glm::vec3 origin, float magnitude, bool synced = false) = 0;
-	/// Loads the files of all the particle types, and the models and light maps that they use. Call it behind the
-	/// loading screen, so that the first start of an effect does not read files in a frame.
-	virtual void LoadAllTypes() {}
-	/// An effect a miracle owns and steps itself with ProcessForSpell; it is told the effect started. Its random numbers
-	/// are the shared ones unless it is only this computer's, such as the one shown in the hand
-	virtual EffectId StartForSpell(ParticleType type, glm::vec3 origin, glm::vec3 direction, float magnitude,
-	                               particles::SpellSink& sink, bool synced = true) = 0;
-	/// One step of a miracle's effect; false once it has ended, and then it is gone
-	virtual bool ProcessForSpell(EffectId id, const particles::ProcessInfo& info, float seconds) = 0;
-	/// Steps an effect that is stepped as it is drawn, by the frame's game time, rather than each turn; false once it has
-	/// gone
-	virtual bool ProcessByFrame(EffectId /*id*/, float /*seconds*/) { return false; }
-	/// An effect that only ProcessByFrame steps, never the turn, as the draw of its thing moves it on. Its random numbers
-	/// are only this computer's.
-	virtual EffectId StartByFrame(ParticleType type, glm::vec3 origin, float magnitude)
-	{
-		return Start(type, origin, magnitude, false);
-	}
-	/// An effect that its owner steps each turn with ProcessForSpell, never the particles' own turn. Its random numbers
-	/// are the shared ones.
-	virtual EffectId StartOwned(ParticleType type, glm::vec3 origin, float magnitude)
-	{
-		return Start(type, origin, magnitude, true);
-	}
-	/// Whether an effect that its thing draws shows in this frame: it shows only while the frame draws its thing
-	virtual void SetShown(EffectId /*id*/, bool /*shown*/) {}
-	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
-	/// when negative), staying where it was made, and ending when its owner object (if any) goes. Its random numbers are
-	/// the shared ones, unless it shows only what the hand of this computer did.
-	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
-	                                 float magnitude = 1.0f, bool synced = true) = 0;
-
-	/// Gives a running effect another number, as an effect that its owner starts again after a load takes the number that
-	/// the save has for it. When the effect had the newest number, the next effect gets that number again. Returns false,
-	/// and changes nothing, when no effect has the first number or an effect has the second.
-	virtual bool Renumber(EffectId /*from*/, EffectId /*to*/) { return false; }
-	/// A save does not keep the effect: its owner starts it again after a load
-	virtual void KeepOutOfSaves(EffectId /*id*/) {}
-
-	virtual void SetOrigin(EffectId id, glm::vec3 origin) = 0;
-	virtual void SetPlayer(EffectId id, int player) = 0;
-	/// How strong an effect is drawn from now on, which the strength its rules read follows: a glowing artefact's magic
-	/// is as strong as the artefact is worth
-	virtual void SetPower(EffectId /*id*/, float /*power*/) {}
-	/// The players' symbols to draw by themselves from now on, as each worthy artefact shows its owner's; each frame's
-	/// list replaces the last
-	virtual void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> /*symbols*/) {}
-	/// The sparkles marking the player's queued fight moves, drawn every frame until replaced
-	virtual void SetFightMarks(std::vector<particles::draw::FightMark> /*marks*/) {}
-	/// The marks over the creatures that learn, drawn with the world's effects until set again
+	/// Finds the names of the texture sheets on the disk. Call it behind the loading screen, so that the first draw of an
+	/// effect does not read the folder in a frame.
+	virtual void LoadTextures() {}
+	/// The marks over the creatures that learn, drawn with the effects of the world until set again
 	virtual void SetLearningMarks(std::vector<particles::draw::LearningMark> /*marks*/) {}
-	/// How the effect is drawn: sorted with everything else that blends unless told otherwise
-	virtual void SetDrawPath(EffectId id, particles::draw::DrawPath path) = 0;
-	/// Everything the effect draws is moved by this from where its last step left it, as the miracle in the hand follows
-	/// the hand between turns
-	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
-	/// The point where this computer draws its hand this frame, for a miracle that this computer casts from the hand.
-	/// The draw moves the atoms of the effect that follow the live hand by it.
-	virtual void SetLiveHand(EffectId id, glm::vec3 hand) = 0;
-	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
-	virtual void SetInTemple(EffectId id) = 0;
-	/// A hidden effect continues to step but does not draw
-	virtual void SetHidden(EffectId /*id*/, bool /*hidden*/) {}
-	/// An effect that the world and the temple do not draw. Only CollectEffectDrawFrame draws it, as for the seeds
-	/// pictured over the gestures' hints.
-	virtual void SetDrawnAlone(EffectId /*id*/) {}
-	/// The live shield holding a point, its sphere grown by a margin, if any
-	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
-	/// How many particle sounds are playing or dying away, for the debug window
-	[[nodiscard]] virtual size_t GetSoundCount() const = 0;
-	/// An object for the effect's rules to act on, such as a person for the heal miracle's chakra
-	virtual void AddTarget(EffectId id, entt::entity target) = 0;
-	/// A point of the world for the effect's rules to act on, such as where a spot visual's beam ends
-	virtual void AddTargetPosition(EffectId /*id*/, glm::vec3 /*position*/) {}
-	/// A plasma beam for the effect to fire, as a temple heart's spot visual fires one at what takes a blow for it
-	virtual void AddPlasma(EffectId /*id*/, const particles::PlasmaCommand& /*command*/) {}
-	/// A spark for the mana path effect to carry, as a worship site sends its motes
-	virtual void AddManaPathSpark(EffectId /*id*/, const particles::mana_path::Spark& /*spark*/) {}
-	/// A symbol of belief rises from something that gained it, in the effect every symbol rises in, kept running once
-	/// wanted; no more than a few hundred wait
-	virtual void AddBeliefSprite(const particles::BeliefSprite& /*sprite*/) {}
-	/// A spark of the mana path the hand lets out past the border, in the effect every such spark runs in, started
-	/// once wanted and kept running
-	virtual void AddHandManaPathSpark(const particles::mana_path::Spark& /*spark*/) {}
-	/// A storm's forked bolt, let down from a point of light under its cloud, in the effect every storm's bolts come down
-	/// in, which runs all the time; it comes down when the particles next step
-	virtual void AddStormBolt(glm::vec3 /*cloudPoint*/) {}
-	/// The model of an object breaks into pieces where it stands. The pieces fly out from the origin at the speed, in the
-	/// effect that throws the pieces of all broken objects, which runs all the time. The pieces start when the particles
-	/// next step. An object without a model gives no pieces.
-	virtual void ExplodeObject(entt::entity /*object*/, glm::vec3 /*origin*/, float /*speed*/) {}
-
-	/// This computer's hand in a frame, for the chain that follows it while it gestures
-	struct HandFrame
-	{
-		glm::vec3 position {0.0f};
-		/// How big the hand is drawn
-		float size {1.0f};
-		glm::vec3 cameraPosition {0.0f};
-		/// It is drawing a gesture that shows the chain: one that powers up the miracle in it, the circle that sizes it,
-		/// or a gesture of the miracle selection
-		bool gesturing {false};
-		/// The miracle selection or the leash picker is open: the effect of a selection shows round the hand
-		bool selecting {false};
-	};
-	/// A recognised gesture's trail to show on the land, in the effect every trail shows in, which runs all the time
-	virtual void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) = 0;
-	/// A sheet of light standing on the land, drawn and moved on by time for as long as its owner keeps it and doesn't
-	/// hide it
-	virtual void AddLightSheet(const std::shared_ptr<particles::LightSheet>& /*sheet*/) {}
-	/// Once a frame, by the frame's game time (none while the game is paused): the trails' sheets of light move on, and
-	/// the chain behind the hand steps
-	virtual void UpdateFrame(float gameSeconds, const HandFrame& hand) = 0;
-	/// Once a frame, by the frame's real and game time: the textures of the ribbons that show slide along them. They step
-	/// no more often than 60 times a second, and each step takes all the game time since the last.
-	virtual void ScrollChains(std::chrono::milliseconds /*frameRealTime*/, std::chrono::milliseconds /*frameGameTime*/) {}
-	/// The effect stops making particles and fades out as its file has it, or goes at once
-	virtual void CloseDown(EffectId id) = 0;
-	/// Puts back the miracle behind an effect after a load, with no event to the miracle
-	virtual void RestoreSink(EffectId /*id*/, particles::SpellSink* /*sink*/) {}
-	virtual void Delete(EffectId id) = 0;
-	[[nodiscard]] virtual bool IsRunning(EffectId id) const = 0;
-	[[nodiscard]] virtual particles::Effect* Find(EffectId id) = 0;
-
-	/// Once a game turn: every effect not owned by a miracle steps, newest first, and the spot visuals count down
-	virtual void ProcessTurn() = 0;
-	/// A new land: every effect goes
-	virtual void Reset() = 0;
-	/// The next Reset also numbers the effects after it from the first number again, as a new program does. Every
-	/// computer of a network game loads its land this way, because the world keeps the numbers of some effects.
-	virtual void SetFreshIdsAtNextReset() = 0;
-
 	/// Everything the effects draw this frame, t of the way through the game turn, into a frame that is cleared first.
-	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple
-	/// only the temple's effects are drawn, and outside it only the world's.
+	/// The frame does not depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple
+	/// only the effects of the temple draw, and outside it only the effects of the world.
 	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const = 0;
 	/// Clears the frame and fills it with what one effect draws, none if the effect does not run
-	virtual void CollectEffectDrawFrame(EffectId /*id*/, float /*turnFraction*/, particles::draw::Frame& frame) const
-	{
-		frame.Clear();
-	}
+	virtual void CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const = 0;
 	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
-	[[nodiscard]] virtual std::vector<EffectInfo> GetEffects() const = 0;
-	/// The symbols of belief that rose last, the newest first, and the count of all symbols since the land started. Only
-	/// the inspector reads these.
-	struct BeliefSpritesSeen
-	{
-		std::vector<particles::BeliefSprite> recent;
-		uint64_t count {0};
-	};
-	[[nodiscard]] virtual BeliefSpritesSeen GetBeliefSpritesSeen() const { return {}; }
-	/// The particle files' names, for the debug window
-	[[nodiscard]] virtual std::vector<std::string> GetFileNames() const = 0;
-	/// Stops stepping effects, for looking at them in the debug window
-	virtual void SetPaused(bool paused) = 0;
-	[[nodiscard]] virtual bool IsPaused() const = 0;
 };
 
 } // namespace openblack::ecs::systems

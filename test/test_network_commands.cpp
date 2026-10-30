@@ -30,7 +30,7 @@
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "Locator.h"
 
 #define LOCATOR_IMPLEMENTATIONS
@@ -49,7 +49,7 @@ entt::entity Entity(uint32_t value)
 }
 
 /// The particle effects for the test: it keeps the spot visuals that the turns start
-class FakeParticles final: public ecs::systems::ParticleSystemInterface
+class FakeParticles final: public ecs::systems::ParticleRuleSystemInterface
 {
 public:
 	struct SpotVisual
@@ -122,8 +122,6 @@ public:
 	void ProcessTurn() override {}
 	void Reset() override {}
 	void SetFreshIdsAtNextReset() override {}
-	void CollectDrawFrame(float /*turnFraction*/, particles::draw::Frame& /*frame*/, bool /*inTemple*/) const override {}
-	[[nodiscard]] DrawStats GetDrawStats() const override { return {}; }
 	[[nodiscard]] std::vector<EffectInfo> GetEffects() const override { return {}; }
 	[[nodiscard]] std::vector<std::string> GetFileNames() const override { return {}; }
 	void SetPaused(bool /*paused*/) override {}
@@ -367,7 +365,7 @@ TEST_F(NetworkCommands, TheLeaveOfTheServerDefeatsTheGodOfThePlayerAtTheTurn)
 
 TEST_F(NetworkCommands, TheGripOfAnotherComputerMakesItsDustAtTheTurnOfTheServer)
 {
-	auto& particles = static_cast<FakeParticles&>(Locator::particleSystem::emplace<FakeParticles>());
+	auto& particles = static_cast<FakeParticles&>(Locator::particleRuleSystem::emplace<FakeParticles>());
 	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>(
 	    [&particles]() -> ecs::systems::EffectServerInterface* { return &particles; });
 	_commands.SetSource(&_source);
@@ -388,7 +386,7 @@ TEST_F(NetworkCommands, TheGripOfAnotherComputerMakesItsDustAtTheTurnOfTheServer
 	EXPECT_EQ(dust.magnitude, 1.0f);
 	_commands.SetSource(nullptr);
 	Locator::effectRequestSystem::reset();
-	Locator::particleSystem::reset();
+	Locator::particleRuleSystem::reset();
 }
 
 TEST_F(NetworkCommands, TheJoinOfTheServerGivesTheGodOfThePlayerItsHandsAtTheTurn)
@@ -432,7 +430,7 @@ TEST_F(NetworkCommands, TheHumansOfTheFirstTurnJoinTogether)
 
 TEST_F(NetworkCommands, TheHumansAndTheSlotsOfTheFirstTurnJoinBeforeTheOtherCommandsOfTheTurn)
 {
-	auto& particles = static_cast<FakeParticles&>(Locator::particleSystem::emplace<FakeParticles>());
+	auto& particles = static_cast<FakeParticles&>(Locator::particleRuleSystem::emplace<FakeParticles>());
 	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>(
 	    [&particles]() -> ecs::systems::EffectServerInterface* { return &particles; });
 	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
@@ -455,7 +453,7 @@ TEST_F(NetworkCommands, TheHumansAndTheSlotsOfTheFirstTurnJoinBeforeTheOtherComm
 	Locator::computerPlayerSystem::reset();
 	Locator::handSystem::reset();
 	Locator::effectRequestSystem::reset();
-	Locator::particleSystem::reset();
+	Locator::particleRuleSystem::reset();
 }
 
 TEST_F(NetworkCommands, TheLeashOffOfTheTempleGoesToTheLeashOfTheSenderAtTheTurn)

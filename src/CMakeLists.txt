@@ -67,8 +67,8 @@ set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
     "Editor/(EditorMath|EditorEntities|EditorPalette)"
     "Graphics/(HandLight|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize)"
     "Gui/(ChatControlsRules|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips)"
-    "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer)"
-    "Windowing/(SystemPointer|WindowFit|WindowPixels)"
+    "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer|NoInputDevice)"
+    "Windowing/(WindowFit|WindowPixels)"
     "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
     "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProviders|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|SimRecorder|SystemProviders|WorldProviders)"
 )
@@ -76,6 +76,15 @@ list(JOIN OPENBLACK_SIM_IN_CLIENT_FOLDERS "|" OPENBLACK_SIM_IN_CLIENT_FOLDERS)
 list(FILTER OPENBLACK_CLIENT_SOURCES EXCLUDE REGEX
      "/src/(${OPENBLACK_SIM_IN_CLIENT_FOLDERS})[.]cpp$"
 )
+# The files in the folders of the simulation that only the game uses: they show a message box of the system or open a
+# page in the browser of the system
+set(OPENBLACK_CLIENT_IN_SIM_FOLDERS "Common/FatalMessage" "Online/OpenPage")
+list(JOIN OPENBLACK_CLIENT_IN_SIM_FOLDERS "|" OPENBLACK_CLIENT_IN_SIM_FOLDERS)
+set(OPENBLACK_CLIENT_IN_SIM_SOURCES ${OPENBLACK_SOURCES})
+list(FILTER OPENBLACK_CLIENT_IN_SIM_SOURCES INCLUDE REGEX
+     "/src/(${OPENBLACK_CLIENT_IN_SIM_FOLDERS})[.]cpp$"
+)
+list(APPEND OPENBLACK_CLIENT_SOURCES ${OPENBLACK_CLIENT_IN_SIM_SOURCES})
 
 # The simulation library, openblack_sim, has the world that the game and the dedicated server (apps/openblack-server)
 # share: the ECS and its components, the turn, the script machine, the physics, the creatures' minds, the land's data,
@@ -464,11 +473,16 @@ target_compile_options(
 
 # The simulation and its systems library are built with the same options as the game's library: they take each build
 # property of that library, so a property added above reaches all three. They link the same libraries as the game's
-# library, but not the graphics library or the game's library itself. The two simulation libraries use each other's
-# symbols, which static libraries may do; the game's library uses both, and they do not use it.
+# library, but not the graphics library, the window system (SDL), the debug windows (Dear ImGui), the audio device
+# (OpenAL) or the game's library itself. The two simulation libraries use each other's symbols, which static libraries may do; the game's library uses
+# both, and they do not use it.
 if (NOT ANDROID)
-  # The libraries of the client only
-  set(OPENBLACK_CLIENT_ONLY_LIBRARIES bgfx::bgfx)
+  # The libraries of the client only, and a pattern for the window system, which the game's library links by a
+  # generator expression
+  set(OPENBLACK_CLIENT_ONLY_LIBRARIES bgfx::bgfx imgui::imgui imgui_user
+                                      OpenAL::OpenAL
+  )
+  set(OPENBLACK_CLIENT_ONLY_PATTERN "SDL2::")
   add_library(openblack_systems STATIC ${OPENBLACK_SYSTEM_SOURCES})
   add_library(openblack_sim STATIC ${OPENBLACK_SIM_SOURCES})
   # The version of the build is a part of the simulation: the server and the game both write it
@@ -496,25 +510,38 @@ if (NOT ANDROID)
     endforeach ()
     get_target_property(libraries openblack_lib LINK_LIBRARIES)
     list(REMOVE_ITEM libraries ${OPENBLACK_CLIENT_ONLY_LIBRARIES})
+    list(FILTER libraries EXCLUDE REGEX "${OPENBLACK_CLIENT_ONLY_PATTERN}")
     target_link_libraries(${target} PUBLIC ${libraries})
   endforeach ()
-  # The simulation uses the types of the graphics library in its headers, but not the library: it takes the include
-  # folders and the definitions of the library and its two parts, and links none of them
-  add_library(openblack_bgfx_headers INTERFACE)
-  foreach (part bgfx::bgfx bgfx::bx bgfx::bimg)
+  # The simulation uses the types and the key codes of the window system and the types of the audio device in its
+  # headers, but not the libraries: it takes their include folders and definitions, and links none of them. The world
+  # reaches the input of the window system through input::InputDeviceInterface, and the sounds through
+  # audio::SoundRequestInterface.
+  add_library(openblack_client_headers INTERFACE)
+  set(OPENBLACK_SDL_TARGET SDL2::SDL2)
+  if (NOT TARGET SDL2::SDL2)
+    set(OPENBLACK_SDL_TARGET SDL2::SDL2-static)
+  endif ()
+  foreach (part ${OPENBLACK_SDL_TARGET} OpenAL::OpenAL)
     if (TARGET ${part})
       target_include_directories(
-        openblack_bgfx_headers
+        openblack_client_headers
         INTERFACE $<TARGET_PROPERTY:${part},INTERFACE_INCLUDE_DIRECTORIES>
       )
       target_compile_definitions(
-        openblack_bgfx_headers
+        openblack_client_headers
         INTERFACE $<TARGET_PROPERTY:${part},INTERFACE_COMPILE_DEFINITIONS>
       )
     endif ()
   endforeach ()
-  target_link_libraries(openblack_systems PUBLIC openblack_bgfx_headers)
-  target_link_libraries(openblack_sim PUBLIC openblack_bgfx_headers)
+  target_link_libraries(openblack_systems PUBLIC openblack_client_headers)
+  target_link_libraries(openblack_sim PUBLIC openblack_client_headers)
+  if (APPLE)
+    # The folder of the user's data comes from the application support folder of Foundation
+    target_link_libraries(openblack_sim PUBLIC "-framework Foundation")
+  endif ()
+  # The simulation uses no header of the graphics library: it has the include folders of neither the library nor its two
+  # parts. The world reaches the device through graphics::GraphicsDeviceInterface, with its own handles and flags.
   target_link_libraries(openblack_sim PUBLIC openblack_systems)
   target_link_libraries(openblack_systems PUBLIC openblack_sim)
   target_link_libraries(openblack_lib PUBLIC openblack_sim openblack_systems)
