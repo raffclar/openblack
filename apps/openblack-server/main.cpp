@@ -95,6 +95,10 @@ int main(int argc, char* argv[])
 		("client-key", "The PEM file of the key of --client-cert.", cxxopts::value<std::string>())
 		("room-name", "The name of the room in the list of the lobby.", cxxopts::value<std::string>()->default_value("Game"))
 		("lobby-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test lobby on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
+		("snapshot-folder", "The folder of the snapshots of the game server: the shared world, on the server's own disk, for a restart after a crash.", cxxopts::value<std::string>()->default_value(std::string(openblack::server::snapshots::k_DefaultFolder)))
+		("snapshot-every", "The turns between two snapshots of the game server (10 turns a second). 0 stops the snapshots.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::snapshots::k_DefaultEveryTurns)))
+		("snapshot-keep", "The snapshots that the folder keeps, at least 1.", cxxopts::value<uint32_t>()->default_value(std::to_string(openblack::server::snapshots::k_DefaultKeep)))
+		("resume-snapshot", "At its start, the game server continues the game of the newest snapshot that reads. With no snapshot, it starts a new game.")
 		("come-back-seconds", "How long a god's player can be away before the god is defeated.", cxxopts::value<uint32_t>()->default_value("300"))
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
@@ -267,6 +271,12 @@ int main(int argc, char* argv[])
 				network.clientKey = std::filesystem::path(result["client-key"].as<std::string>());
 			}
 			network.roomName = result["room-name"].as<std::string>();
+			network.snapshots = openblack::server::snapshots::Settings {
+			    .folder = std::filesystem::path(result["snapshot-folder"].as<std::string>()),
+			    .everyTurns = result["snapshot-every"].as<uint32_t>(),
+			    .keep = result["snapshot-keep"].as<uint32_t>(),
+			    .resume = result.count("resume-snapshot") != 0,
+			};
 			if (result.count("lobby-test-ca") != 0)
 			{
 				network.lobbyTestAuthorities = std::filesystem::path(result["lobby-test-ca"].as<std::string>());

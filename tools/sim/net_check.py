@@ -59,6 +59,13 @@ the server from the test authority). The fake lobby takes the status reports of 
 that account. Before the other clients, a client with a god's ticket of that account tries to join; the server must
 refuse it with "kicked" while the other clients play in step.
 
+With --restart-server-at N the script stops the game server by its own process id once the server did turn N, as a
+crash does, and starts it again with --resume-snapshot on the same port (deviation 100). The new server loads its newest
+snapshot and does again the turns of its journal; the clients come back, and the checksums of the turns that both
+servers did must be the same. Compare the server checksums with a run with no restart to show an unbroken game:
+
+    python tools/sim/net_check.py --land "Online Maps/mpm_2p_1.map" --turns 1500 --restart-server-at 1000
+
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
 
@@ -392,6 +399,17 @@ def server_checksums(log):
             if match:
                 turns[int(match.group(1))] = match.group(2)
     return turns
+
+
+def server_against_run(server_turns, other_turns, last_turn):
+    """Compares the server checksums of this run with the server checksums of another run, from turn 1 to the last
+    turn of the clients. The turns after it are left out: each client stops at its own time, so the turn that its god
+    leaves at is not the same in two runs."""
+    compared = [turn for turn in sorted(server_turns) if 1 <= turn <= last_turn and turn in other_turns]
+    different = [turn for turn in compared if server_turns[turn] != other_turns[turn]]
+    return {"compared": len(compared), "same_turns": len(compared) - len(different),
+            "first_different": different[0] if different else None, "last_different": different[-1] if different else None,
+            "same": bool(compared) and compared[0] == 1 and compared[-1] == last_turn and not different}
 
 
 def record_checksums(record):
@@ -1651,6 +1669,8 @@ def main():
                              "give the option more times for more arguments")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
+    parser.add_argument("--restart-server-at", type=int,
+                        help="stop the server by its process id after this turn, and start it again from its snapshots")
     parser.add_argument("--ban-account", type=int,
                         help="a fake lobby bans this account id; a client of that account must be refused before the "
                              "start (the other clients use the ids 100 and up)")
@@ -1704,6 +1724,13 @@ def main():
                         "Escape, Exit Online Game and Leave Game")
     parser.add_argument("--box-back", help="CLIENT:TURN: at the turn the client (from 0) clicks Back in the information "
                         "box of the land, and the player leaves the network game")
+    parser.add_argument("--no-hand-reports", action="store_true",
+                        help="the desktop clients send no report of their hands and views (--sim-no-hand-reports). The "
+                             "reports carry each client's camera, which moves at each frame, so without this two runs "
+                             "of the same seed give other server checksums until the cameras stop")
+    parser.add_argument("--same-server-as", action="append", default=[], metavar="FOLDER",
+                        help="the output folder of another net_check run of the same land and seed: the server "
+                             "checksums of this run must be the same from turn 1 to the last turn (repeat for more runs)")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     parser.add_argument("--client-args", default="",
@@ -1809,7 +1836,7 @@ def main():
     # The server ends when every god left; its last turn is only a limit for a run that goes wrong
     server_command = [server_exe, "-g", options.game_path] + where + [
         "--seed", str(options.seed), "-n", str(options.turns + 3000), "-l", server_log, "--log-checksums",
-        "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
+        "--listen", f"127.0.0.1:{free_port() if options.restart_server_at is not None else 0}", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
         "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--come-back-seconds", str(options.come_back_seconds)]
     # The fewest gods that start the game: each client by default, and in a room of computer gods the observers to wait
     # for. The old name --gods also works on an older server.
@@ -1926,6 +1953,8 @@ def main():
             command += sim_report.gods_need_no_temple_args(False, **land_kind)
             if leaver == index:
                 command += ["--sim-info-box-back-at" if options.box_back else "--sim-leave-at", str(leave_turn)]
+            if options.no_hand_reports:
+                command.append("--sim-no-hand-reports")
             if options.hash_fields:
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
@@ -1986,6 +2015,8 @@ def main():
                     print(f"the camera of client {index + 1} was not set; see {client_dirs[index]}")
                     return 1
         started = time.monotonic()
+        restarted_log = None
+        killed_at = None
         stopped_second = False
         holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
         held = {index for index in holds if index >= len(clients)}
@@ -1997,6 +2028,21 @@ def main():
         tattooed = set()
         cameras_again = set()
         while time.monotonic() - started < run_limit_seconds(options.turns):
+            if (options.restart_server_at is not None and restarted_log is None
+                    and max(server_checksums(server_log), default=0) >= options.restart_server_at):
+                # The server stops with no warning, as in a crash, and a new server continues from its snapshots
+                stop(server)
+                killed_at = max(server_checksums(server_log), default=0)
+                restarted_log = os.path.join(server_dir, "server-restarted.log")
+                if os.path.exists(restarted_log):
+                    os.remove(restarted_log)
+                command = list(server_command)
+                command[command.index("-l") + 1] = restarted_log
+                server = start(command + ["--resume-snapshot"], server_dir)
+                processes.append(server)
+                if wait_for_port(restarted_log, server) != port:
+                    print(f"the restarted server did not listen on port {port}; see {restarted_log}")
+                    return 1
             if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
                     and (web_process is None or web_process.poll() is not None)
                     and (web_folder is None or not options.web_remote or web_remote_done(web_folder))):
@@ -2059,6 +2105,17 @@ def main():
             lobby.close()
 
     server_turns = server_checksums(server_log)
+    restart = None
+    if options.restart_server_at is not None:
+        # The turns that both servers did must have the same checksums. The new server goes on after them.
+        again = server_checksums(restarted_log) if restarted_log is not None and os.path.exists(restarted_log) else {}
+        both = sorted(set(server_turns) & set(again))
+        resumed = lines_with(restarted_log, ["continues its game from the snapshot"]) if again else []
+        restart = {"killed_at": killed_at, "resumed": resumed[-1:], "restarted_turns": len(again),
+                   "overlap": len(both), "overlap_same": all(server_turns[turn] == again[turn] for turn in both),
+                   "snapshots": lines_with(server_log, ["The snapshot of turn"])[-2:],
+                   "last_turn": max(again, default=None)}
+        server_turns.update(again)
     summary = {"turns": options.turns, "server_turns": len(server_turns), "clients": []}
     # A decided game: the server stops its turns after one turn, and every computer must stop at that turn. The stop
     # lines name the last turn by the number of the world, as the records and the line of the decision do.
@@ -2280,6 +2337,24 @@ def main():
         banned_result["bans_with_each_report"] = lobby.counts["status"] > 0 and lobby.counts["bans"] >= lobby.counts["status"] - 1
         summary["banned"] = banned_result
         all_same = all_same and banned_result["refused"] and banned_result["bans_with_each_report"]
+    if options.same_server_as:
+        summary["server_against_runs"] = []
+        for other in options.same_server_as:
+            other_log = os.path.join(other, "server", "server.log")
+            result = server_against_run(server_turns, server_checksums(other_log) if os.path.exists(other_log) else {},
+                                        options.turns)
+            result["run"] = other
+            summary["server_against_runs"].append(result)
+            if not result["same"]:
+                print(f"the server checksums are not the same as the run in {other}: {json.dumps(result)}")
+                all_same = False
+    if restart is not None:
+        summary["restart"] = restart
+        summary["server"] += lines_with(restarted_log, ["Network game:", "is back", "comes back", "continues its game",
+                                                        "did again"]) if restart["restarted_turns"] else []
+        if not restart["restarted_turns"] or not restart["overlap_same"] or not restart["resumed"]:
+            print(f"the restarted server did not continue the game in step: {json.dumps(restart)}")
+            all_same = False
     summary["same"] = all_same
     with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)

@@ -233,6 +233,13 @@ public:
 	/// computer of a network game loads its land this way, because the world keeps the numbers of some effects.
 	virtual void SetFreshIdsAtNextReset() = 0;
 
+	/// The save keeps the particles in two parts. SaveState and LoadState keep the synced part: the synced effects and
+	/// the world that they use. The part below keeps the effects of this computer. Only a computer that draws the
+	/// effects keeps it, and the load reads it after the synced part. None when the rules keep no such part.
+	[[nodiscard]] virtual SavedStateInterface* LocalEffectsState() { return nullptr; }
+	/// Reads the one part of the particles in a save from before the split. None when the rules cannot read it.
+	[[nodiscard]] virtual SavedStateInterface* OldSaveState() { return nullptr; }
+
 	/// What the draw reads: each running effect, the newest first, in the order of the draw
 	virtual void ForEachDrawn(const std::function<void(const DrawnEffect&)>& /*visit*/) const {}
 	/// What the draw reads of one running effect, none if the effect does not run

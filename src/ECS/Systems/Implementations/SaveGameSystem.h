@@ -48,6 +48,8 @@ public:
 	bool Save(uint32_t slot, std::u16string_view name) override;
 	bool Load(uint32_t slot) override;
 	[[nodiscard]] std::vector<uint8_t> WorldState() override;
+	void PrepareWorldState() override;
+	[[nodiscard]] std::function<std::vector<uint8_t>()> WorldStateLater() override;
 	bool LoadWorldState(std::span<const uint8_t> bytes) override;
 	bool Delete(uint32_t slot) override;
 	[[nodiscard]] std::optional<std::vector<uint8_t>> ReadPictureFile(std::string_view name) const override;

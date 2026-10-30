@@ -816,6 +816,8 @@ private:
 	/// The last report of the hand and the camera that this computer sent, its hand and its turn
 	/// The values are as in player_commands::HandReport: the collide point, the hand, the camera and its focus
 	std::array<glm::vec3, 4> _lastHandReport {};
+	/// The point that the interface picked last under the cursor. It stays while the cursor picks nothing.
+	glm::vec3 _handCollidePoint {0.0f};
 	entt::entity _reportedHand {entt::null};
 	/// The thing under the cursor that the last player_commands::HandPick sent
 	entt::entity _lastHandPick {entt::null};

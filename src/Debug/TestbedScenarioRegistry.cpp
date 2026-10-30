@@ -10649,6 +10649,43 @@ void AddMind(std::vector<Scenario>& all)
 	                .repeatSeconds = 6.0f}},
 	});
 
+	// Two rocks fall fast on a small physical shield, as the rocks of Khazar's Shield Challenge fall on the shield over
+	// his hut: the dome is light and soft, so it holds the smaller rock and lets the larger rock through
+	all.push_back({
+	    .id = "miracles.small_shield_and_falling_rocks",
+	    .name = "A small physical shield and two falling rocks",
+	    .facet = Facet::Miracles,
+	    .description = "A script casts a physical shield of radius 15.6 over a point 40 metres north. 3 seconds after "
+	                   "the start a rock of scale 0.6 falls from 50 metres above a point 22 metres east and 21 metres "
+	                   "south of the shield's middle. It falls toward the middle and arrives there after 2 seconds, as "
+	                   "the challenge's rocks do. 6 seconds later a rock of scale 0.7 falls in the same way. The falls "
+	                   "occur again every 12 seconds.",
+	    .expected = "The dome rises and spins. Each rock hits the dome at about 30 metres a second. The rock of scale "
+	                "0.6 sinks a little into the dome, then rolls off it to the land outside. The rock of scale 0.7 "
+	                "sinks into the dome, goes through it and lands near its middle, as in the original game: the "
+	                "small dome is too soft for a rock of more than 5 tonnes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, 20.0f}, {30.0f, 60.0f}}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {22.0f, 19.0f}, .scale = 0.6f},
+	                {.type = MobileStaticInfo::Rock, .offset = {28.0f, 19.0f}, .scale = 0.7f}},
+	    .miracles = {{.type = MagicType::PhysicalShield,
+	                  .point = {0.0f, 40.0f},
+	                  .delaySeconds = 0.5f,
+	                  .script = ScriptSpell {.radius = 15.6f, .seconds = 600.0f, .curl = 0.0f}}},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2 {22.0f, 19.0f},
+	                .height = 50.0f,
+	                .velocity = {-11.0f, -15.19f, 10.5f},
+	                .delaySeconds = 3.0f,
+	                .repeatSeconds = 12.0f},
+	               {.object = 1,
+	                .from = glm::vec2 {22.0f, 19.0f},
+	                .height = 50.0f,
+	                .velocity = {-11.0f, -15.19f, 10.5f},
+	                .delaySeconds = 9.0f,
+	                .repeatSeconds = 12.0f}},
+	});
+
 	// A save while sounds, script music and an advisor's line play: a load brings back only what the game keeps
 	all.push_back({
 	    .id = "saves.sounds_music_help_back",

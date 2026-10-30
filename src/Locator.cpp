@@ -138,7 +138,6 @@
 #include "ECS/Systems/Implementations/MistSystem.h"
 #include "ECS/Systems/Implementations/MusicMoodSystem.h"
 #include "ECS/Systems/Implementations/ParticleRuleSystem.h"
-#include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
 #include "ECS/Systems/Implementations/PauseTextSystem.h"
 #include "ECS/Systems/Implementations/PickingSystem.h"
@@ -304,7 +303,6 @@ using openblack::ecs::systems::MusicMoodSystem;
 using openblack::ecs::systems::NetworkGameSystem;
 using openblack::ecs::systems::ObjectDrawListSystem;
 using openblack::ecs::systems::ParticleRuleSystem;
-using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PauseTextSystem;
 using openblack::ecs::systems::PickingSystem;

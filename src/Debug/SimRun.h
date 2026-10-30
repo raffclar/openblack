@@ -76,6 +76,10 @@ struct Settings
 	/// The hand stays where it starts and does not follow the pointer: the player gives no input with the hand. The
 	/// frames ease the hand to the pointer, so a hand that moves gives other places at other frame rates.
 	bool stillHand {false};
+	/// Tools: the player's computer sends no report of its hand, its view or the thing under its hand. The reports
+	/// carry the camera, and the camera moves at each frame. So two runs give other reports at other turns, and the
+	/// shared worlds of two runs with the same seed and land are different until the camera stops.
+	bool noHandReports {false};
 	/// Tests: the loss of a temple at a turn
 	std::optional<TempleLoss> templeLoss;
 	/// Tests: a god with no temple stays in a network game. For tool runs of a land that makes no temple at its start,
