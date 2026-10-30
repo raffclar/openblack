@@ -803,15 +803,21 @@ void world_objects::Destroy(entt::entity object)
 void world_objects::LeaveGhost(entt::entity object)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto* mesh = registry.TryGet<const Mesh>(object);
 	const auto* transform = registry.TryGet<const Transform>(object);
-	if (mesh == nullptr || transform == nullptr)
+	if (transform == nullptr || !Locator::explosionSystem::has_value())
 	{
 		return;
 	}
 	auto model = glm::translate(glm::mat4(1.0f), transform->position) * glm::mat4(transform->rotation);
 	model = glm::scale(model, transform->scale);
-	if (Locator::explosionSystem::has_value())
+	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(object))
+	{
+		// The ghost of a one-shot globe is its dome, turned as the last frame drew it
+		Locator::explosionSystem::value().AddGhost(
+		    DestructionGhost {.mesh = OneOffSpellSeed::k_MeshId, .model = globe->drawnModel.value_or(model)});
+		return;
+	}
+	if (const auto* mesh = registry.TryGet<const Mesh>(object))
 	{
 		Locator::explosionSystem::value().AddGhost(DestructionGhost {.mesh = mesh->id, .model = model});
 	}

@@ -172,6 +172,7 @@
 #include "ECS/ScriptDelete.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
+#include "ECS/ScriptObject.h"
 #include "ECS/ScriptPoison.h"
 #include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
@@ -581,11 +582,15 @@ std::string PopString()
 }
 
 /// Whether a thing is one of the world's objects, which a miracle can be cast on, rather than something with only a place,
-/// such as a town or a miracle: anything with a model but the hand, a creature, or a field
+/// such as a town or a miracle
 bool IsScriptObject(const ecs::Registry& registry, entt::entity thing)
 {
-	return (registry.AnyOf<ecs::components::Mesh>(thing) && !registry.AnyOf<ecs::components::Hand>(thing)) ||
-	       registry.AnyOf<ecs::components::Creature, ecs::components::Field>(thing);
+	return ecs::script_object::IsObject({.model = registry.AnyOf<ecs::components::Mesh>(thing),
+	                                     .hand = registry.AnyOf<ecs::components::Hand>(thing),
+	                                     .creature = registry.AnyOf<ecs::components::Creature>(thing),
+	                                     .field = registry.AnyOf<ecs::components::Field>(thing),
+	                                     .globe = registry.AnyOf<ecs::components::OneOffSpellSeed>(thing),
+	                                     .seed = registry.AnyOf<ecs::components::SpellSeed>(thing)});
 }
 
 /// A football made by a script goes to the nearest town, however far, for its people to play with; a town that already
