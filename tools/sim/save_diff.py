@@ -264,12 +264,14 @@ def differing_parts(result):
 # - the player takes the alignment that the profile keeps;
 # - the statistics note the alignments and the towns at the start again (the towns are the last value of the RCTX block);
 # - the creatures' minds forget what a saved game does not keep;
-# - the sounds do not come back, and a creature's creed powers come back one by one with no glow placed yet.
+# - the sounds do not come back, and a creature's creed powers come back one by one with no glow placed yet;
+# - the mind of each computer god starts again, with no player for the size of its creature and a free hand.
 GAME_START_VALUES = {
     "Alignment": {"value"},
     "PlayerStatistics": {"startAlignment", "startCreatureAlignment"},
     "CreatureMindState": {"leftAreaActions", "agendaRefused"},
     "CreatureHandGlows": {"placed", "motion"},
+    "ComputerPlayer": {"mind", "creatureLike", "hand"},
 }
 # The components whose rows a load of a saved game can add or remove
 GAME_START_ROWS = {"PlayerStatistics": "only_b", "SoundTag": "only_a"}
@@ -317,6 +319,17 @@ def not_game_start(result):
                 if not explained:
                     left.append(f"{key}:{component}")
     return left
+
+
+# A load of a world state ends the visit of this computer's player to the temple: the temple, its help text and its
+# dialogue close. These sections differ only when the player was in the temple at the save.
+TEMPLE_VISIT_SECTIONS = {"temple", "helpText", "dialogueControl"}
+
+
+def not_temple_visit(result):
+    """The parts of a world state round trip that the end of a visit to the temple does not explain"""
+    return [part for part in differing_parts(result)
+            if not (part.startswith("SYST:") and part[len("SYST:"):] in TEMPLE_VISIT_SECTIONS)]
 
 
 def text_report(result):

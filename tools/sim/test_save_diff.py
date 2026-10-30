@@ -128,6 +128,24 @@ class SaveDiffTests(unittest.TestCase):
         result = save_diff.compare_files(world([("ECSW", first)]), world([("ECSW", third)]))
         self.assertIn("ECSW:Tag", save_diff.not_game_start(result))
 
+    def test_the_start_of_a_game_explains_the_mind_of_a_computer_god(self):
+        first = entities_block([1], [("ComputerPlayer", ["mind", "speed"], [(1, [b"\x01", b"\x00"])])])
+        second = entities_block([1], [("ComputerPlayer", ["mind", "speed"], [(1, [b"\x02", b"\x00"])])])
+        result = save_diff.compare_files(world([("ECSW", first)]), world([("ECSW", second)]))
+        self.assertEqual(save_diff.not_game_start(result), [])
+        third = entities_block([1], [("ComputerPlayer", ["mind", "speed"], [(1, [b"\x01", b"\x01"])])])
+        result = save_diff.compare_files(world([("ECSW", first)]), world([("ECSW", third)]))
+        self.assertEqual(save_diff.not_game_start(result), ["ECSW:ComputerPlayer"])
+
+    def test_the_end_of_a_temple_visit_explains_only_the_temple_sections(self):
+        first = sections_block([("temple", b"\x01"), ("helpText", b"\x01"), ("fire", b"\x00")])
+        second = sections_block([("temple", b"\x00"), ("helpText", b"\x00"), ("fire", b"\x00")])
+        result = save_diff.compare_files(world([("SYST", first)]), world([("SYST", second)]))
+        self.assertEqual(save_diff.not_temple_visit(result), [])
+        third = sections_block([("temple", b"\x00"), ("helpText", b"\x01"), ("fire", b"\x01")])
+        result = save_diff.compare_files(world([("SYST", first)]), world([("SYST", third)]))
+        self.assertEqual(save_diff.not_temple_visit(result), ["SYST:fire"])
+
 
 if __name__ == "__main__":
     unittest.main()

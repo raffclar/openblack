@@ -12,7 +12,8 @@
 At each check the game is held, and three round trips follow with no frame and no turn between:
 
     world state   the world state that a game server sends is made, loaded and made again (saves.world_state_round_trip).
-                  The two states must have the same bytes: a server snapshot and a rejoin load world states.
+                  The two states must have the same bytes: a server snapshot and a rejoin load world states. The one
+                  exception is a player in the temple: the load ends the visit (see save_diff.TEMPLE_VISIT_SECTIONS).
     saved game    the game saves (A), loads A and saves (B), loads B and saves (C). Each load of a saved game starts a
                   game, as the game does: the player takes the alignment that the profile keeps, and the statistics
                   note the start again (see save_diff.GAME_START_VALUES). B and C must have the same bytes; A and B can
@@ -87,13 +88,21 @@ def check(game, options, name):
     os.makedirs(folder, exist_ok=True)
     first_path = os.path.abspath(os.path.join(folder, "first.obsav"))
     again_path = os.path.abspath(os.path.join(folder, "again.obsav"))
+    # A load of a world state ends a visit of the player to the temple. A server never visits the temple.
+    try:
+        in_temple = bool(game.call("temple.interior").get("active"))
+    except RuntimeError:
+        # A game with no temple has no visit
+        in_temple = False
     answer = game.call("saves.world_state_round_trip", {"first": first_path, "again": again_path})
     if not answer.get("loaded") or not answer.get("written"):
         entry["world_state"] = {"error": answer}
     else:
         with open(first_path, "rb") as file_a, open(again_path, "rb") as file_b:
             differs = save_diff.compare_files(file_a.read(), file_b.read())
-        entry["world_state"] = {"same": not differs, "parts": save_diff.differing_parts(differs)}
+        unexplained = save_diff.not_temple_visit(differs) if in_temple else save_diff.differing_parts(differs)
+        entry["world_state"] = {"same": not unexplained, "parts": save_diff.differing_parts(differs),
+                                "in_temple": in_temple}
         if differs and options.keep:
             entry["world_state"]["report"] = save_diff.text_report(differs)
     first_slot, second_slot, third_slot = SLOTS
