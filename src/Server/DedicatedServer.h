@@ -24,6 +24,7 @@
 #include "Common/DeveloperTools.h"
 #include "Debug/SimRun.h"
 #include "EngineConfig.h"
+#include "Server/ServerSnapshots.h"
 #include "Simulation/WorldStart.h"
 #include "Story/NewGameChoice.h"
 
@@ -84,6 +85,8 @@ struct NetworkSettings
 	std::string roomName {"Game"};
 	/// Tests on this computer only: a PEM file of more certificate authorities for a lobby on a loopback address
 	std::optional<std::filesystem::path> lobbyTestAuthorities;
+	/// The snapshots of the shared world on the server's own disk (deviation 100)
+	snapshots::Settings snapshots;
 };
 
 /// What the command line of the dedicated server gives
