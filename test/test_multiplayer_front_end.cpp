@@ -322,17 +322,17 @@ struct FrontEndTest: public ::testing::Test
 	}
 
 	/// The game server lets the player in on the last socket
-	void ServerJoins(game_socket::Role role = game_socket::Role::God)
+	void ServerJoins(game_socket::Role role = game_socket::Role::God, std::optional<game_socket::Start> start = std::nullopt)
 	{
 		const std::optional<uint8_t> slot = role == game_socket::Role::God ? std::optional<uint8_t>(1) : std::nullopt;
 		sockets.ServerText(sockets.order.back(),
 		                   game_socket::ToJson(game_socket::Joined {
-		                       .role = role, .slot = slot, .session = "s", .name = "Alice", .start = std::nullopt}));
+		                       .role = role, .slot = slot, .session = "s", .name = "Alice", .start = std::move(start)}));
 		Step();
 	}
 
-	/// The player joins the first game, its socket opens and the server lets the player in
-	void ToRoom()
+	/// The player joins the first game, its socket opens and the server lets the player in with its start
+	void ToRoom(std::optional<game_socket::Start> start = std::nullopt)
 	{
 		ToGameList();
 		frontEnd->SelectGame(0);
@@ -346,7 +346,7 @@ struct FrontEndTest: public ::testing::Test
 		Step();
 		// The room opens only when the server lets the player in
 		ASSERT_EQ(frontEnd->GetBox(), Box::GameList);
-		ServerJoins();
+		ServerJoins(game_socket::Role::God, std::move(start));
 		ASSERT_EQ(frontEnd->GetBox(), Box::Room);
 	}
 };
@@ -547,6 +547,32 @@ TEST(MultiplayerRules, TheConditionsOfATestSwitchKeepToTheLimitsOfTheLand)
 	EXPECT_TRUE(ConditionsRefusal(limits, tooFew).has_value());
 	// A land with no block in the template has no limits, so the host can pick nothing there
 	EXPECT_TRUE(ConditionsRefusal(FindConditions(k_Conditions, "Land1"), inLimits).has_value());
+}
+
+TEST(MultiplayerRules, TheConditionsPageListsTheLastConditionFirst)
+{
+	using game_end::Condition;
+	using game_end::ConditionPick;
+	const std::array picks = {
+	    ConditionPick {.condition = Condition::HousesBuilt, .value = 20},
+	    ConditionPick {.condition = Condition::TreesGrown, .value = 100},
+	    ConditionPick {.condition = Condition::FoodInStores, .value = 9000},
+	};
+	// Each condition goes to the top of the list in the order of the game, whatever the order of the picks
+	const auto lines = ConditionLines(picks);
+	EXPECT_EQ(lines, (std::vector<ConditionPick> {
+	                     {.condition = Condition::TreesGrown, .value = 100},
+	                     {.condition = Condition::FoodInStores, .value = 9000},
+	                     {.condition = Condition::HousesBuilt, .value = 20},
+	                 }));
+	// A condition that is in the picks two times shows one time, with the last value
+	const std::array twice = {
+	    ConditionPick {.condition = Condition::WoodInStores, .value = 4000},
+	    ConditionPick {.condition = Condition::WoodInStores, .value = 5000},
+	};
+	EXPECT_EQ(ConditionLines(twice), (std::vector<ConditionPick> {{.condition = Condition::WoodInStores, .value = 5000}}));
+	EXPECT_TRUE(ConditionLines({}).empty());
+	EXPECT_EQ(ConditionLineText(u"Number of trees grown", 100), u"Number of trees grown (100)");
 }
 
 TEST(MultiplayerRules, ClanInfoLines)
@@ -772,8 +798,9 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(frontEnd->GetOwnSeat()->god, 2);
 	EXPECT_EQ(frontEnd->GetServerLand(), 0u);
 	ASSERT_TRUE(frontEnd->GetConditions().has_value());
-	// The game server sends no time limit, so the game's default of 30 minutes shows
+	// A server that gives no start has no picks: the game's default of 30 minutes shows, and no condition
 	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
+	EXPECT_TRUE(frontEnd->GetConditionPicks().empty());
 	// Back leaves the room and its channel, and the server gets the leave
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
@@ -782,6 +809,45 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(socket.sent.back().Text(), R"({"type":"room.leave"})");
 	Step();
 	EXPECT_EQ(sockets.Count(), 0u);
+}
+
+TEST_F(FrontEndTest, TheRoomShowsTheTimeLimitAndTheConditionsThatTheServerPicked)
+{
+	// The game server is the host: its start gives the time limit and the winning conditions as the player joins
+	ToRoom(game_socket::Start {
+	    .land = "Online Maps/mpm_2p_1.txt",
+	    .testbed = false,
+	    .seed = 1,
+	    .turn = 0,
+	    .opening = {},
+	    .godsRingMap = false,
+	    .allComputerGods = false,
+	    .aiSeed = std::nullopt,
+	    .scenario = std::nullopt,
+	    .timeLimit = 90,
+	    .conditions = {{.condition = 14, .value = 100}, {.condition = 3, .value = 20}},
+	    .names = {},
+	    .gods = {},
+	});
+	EXPECT_EQ(frontEnd->GetTimeLimit(), 90u);
+	EXPECT_EQ(frontEnd->GetConditionPicks().size(), 2u);
+	EXPECT_EQ(ConditionLines(frontEnd->GetConditionPicks()), (std::vector<game_end::ConditionPick> {
+	                                                             {.condition = game_end::Condition::TreesGrown, .value = 100},
+	                                                             {.condition = game_end::Condition::HousesBuilt, .value = 20},
+	                                                         }));
+	// A start with no time limit has the default time limit
+	frontEnd->Back();
+	Step();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	ServerJoins(game_socket::Role::God, game_socket::Start {});
+	ASSERT_EQ(frontEnd->GetBox(), Box::Room);
+	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
+	EXPECT_TRUE(frontEnd->GetConditionPicks().empty());
 }
 
 TEST_F(FrontEndTest, ARefusedTicketShowsConnectionFailed)

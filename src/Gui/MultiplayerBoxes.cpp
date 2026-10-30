@@ -751,15 +751,20 @@ void MultiplayerBoxes::SyncRoom()
 	// The game shows only the lines of the lobby's player database under the title. The lobby has no such lines yet.
 	SetItemsIfChanged(*_playerInfo, Items(PlayerDetailLines({})));
 
-	// The conditions page: the conditions of the game and its time limit, or "Please select a map first." A game of
-	// the game server has no conditions, so the list is empty.
+	// The conditions page: the conditions of the game and its time limit, or "Please select a map first." The game
+	// server is the host, and it gives its picks when the player joins. With no picks, the list is empty.
 	const auto page = ConditionsPageOf(_frontEnd->GetConditions().has_value());
 	_selectMap->visible = conditionsPage && page.selectMap;
 	_conditions->visible = conditionsPage && page.conditions;
 	_timeLabel->visible = conditionsPage && page.timeLimit;
 	_timeLimit->visible = conditionsPage && page.timeLimit;
 	_viewChat->visible = conditionsPage && page.viewChat;
-	SetItemsIfChanged(*_conditions, Items({}));
+	std::vector<std::u16string> conditionLines;
+	for (const auto& line : ConditionLines(_frontEnd->GetConditionPicks()))
+	{
+		conditionLines.push_back(ConditionLineText(Text(ConditionText(static_cast<size_t>(line.condition))), line.value));
+	}
+	SetItemsIfChanged(*_conditions, Items(conditionLines));
 	_timeLimit->text = TimeLimitText(_frontEnd->GetTimeLimit());
 	_ready->SetChecked(_frontEnd->IsReady());
 
