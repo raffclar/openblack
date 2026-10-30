@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include <memory>
 
 #include "RendererInterface.h"
@@ -18,29 +16,19 @@
 namespace openblack::graphics
 {
 
-/// The number of objects that the graphics library keeps now: the textures, the buffers, the frame buffers, the shaders,
-/// the programs, the uniforms and the occlusion queries
-[[nodiscard]] uint32_t GraphicsObjectCount();
+/// True while the graphics library runs. The function does not start the library, and it is safe at all times.
+[[nodiscard]] bool GraphicsLibraryStarted() noexcept;
 
 /// The renderer of a world that nobody sees, such as the dedicated server. It has no window, no device, no shaders and
 /// no buffers or textures, and it draws nothing.
 ///
-/// The pictures that the world asks for never come and never fail, as with a device that has no screen. The graphics
-/// library starts with no device only to keep the calls of other parts safe: the server makes no object with it. The
-/// library makes some objects of its own as it starts, for its debug text and its transient buffers.
+/// The renderer does not start the graphics library. The pictures that the world asks for never come and never fail.
+/// The parts of the world on the server must not use the graphics library. A call to the library that did not start
+/// stops the program.
 class HeadlessRenderer final: public RendererInterface
 {
-	/// Only Create makes a renderer, after the library started
-	struct Started
-	{
-		explicit Started() = default;
-	};
-
 public:
-	/// Starts the graphics library with no device on this thread. Gives none when the library does not start.
-	[[nodiscard]] static std::unique_ptr<HeadlessRenderer> Create() noexcept;
-
-	explicit HeadlessRenderer(Started started) noexcept;
+	HeadlessRenderer() noexcept;
 	HeadlessRenderer(const HeadlessRenderer&) = delete;
 	HeadlessRenderer& operator=(const HeadlessRenderer&) = delete;
 	HeadlessRenderer(HeadlessRenderer&&) = delete;
@@ -50,7 +38,7 @@ public:
 	void ConfigureView(RenderPass /*viewId*/, glm::u16vec2 /*resolution*/, uint32_t /*clearColor*/) const noexcept override {}
 	void Reset(glm::u16vec2 /*resolution*/) const noexcept override {}
 	void DrawScene(const DrawSceneDesc& /*drawDesc*/) const noexcept override {}
-	void Frame() noexcept override;
+	void Frame() noexcept override {}
 	void BakeLandShadows(bool /*drawVegetation*/) const noexcept override {}
 	void PrepareCreatureSkins(size_t /*count*/) const noexcept override {}
 	[[nodiscard]] bool WarmUpScene(const DrawSceneDesc& /*drawDesc*/, uint32_t /*part*/) const noexcept override
@@ -69,6 +57,7 @@ public:
 		return std::nullopt;
 	}
 	[[nodiscard]] uint32_t GetPipelinesMade() const noexcept override { return 0; }
+	[[nodiscard]] uint32_t GetDrawsOfLastFrame() const noexcept override { return 0; }
 	[[nodiscard]] bool GetDebug() const noexcept override { return _debug; }
 	void SetDebug(bool value) noexcept override { _debug = value; }
 	[[nodiscard]] bool GetProfile() const noexcept override { return _profile; }

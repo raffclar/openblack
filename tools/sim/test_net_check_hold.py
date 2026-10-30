@@ -9,6 +9,7 @@
 # ******************************************************************************
 """Tests of the steps of net_check that start the hold of a creature: the turn of the start and the information box"""
 
+import json
 import os
 import sys
 import tempfile
@@ -139,6 +140,38 @@ class HoldRetry(unittest.TestCase):
         buttons = self.run_hold(99)
         self.assertEqual(buttons.count("press"), 8)
         self.assertNotIn("click", buttons)
+
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class ShiftedInput(unittest.TestCase):
+    def shifted(self, close_box, extra=0):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "recorded.json")
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump({"events": [{"frame": 10, "event": {"kind": "button_down", "button": 3}},
+                                      {"frame": 70, "event": {"kind": "button_up", "button": 3}}]}, file)
+            with open(net_check.shifted_input(path, folder, extra, None, close_box), encoding="utf-8") as file:
+                return json.load(file)["events"]
+
+    def test_the_input_closes_the_land_box_before_its_first_event(self):
+        events = self.shifted(True)
+        first = net_check.INPUT_OFFSET_FRAMES + 10
+        self.assertEqual([event["event"]["kind"] for event in events], ["key_down", "key_up", "button_down", "button_up"])
+        self.assertEqual(events[0]["event"]["key"], "Escape")
+        self.assertEqual(events[1]["event"]["key"], "Escape")
+        self.assertLess(events[1]["frame"], first)
+        self.assertEqual(events[0]["frame"], first - net_check.BOX_CLOSE_LEAD_FRAMES)
+        self.assertEqual(events[2]["frame"], first)
+
+    def test_the_second_client_closes_the_box_after_its_delay(self):
+        events = self.shifted(True, 1500)
+        self.assertEqual(events[0]["frame"], net_check.INPUT_OFFSET_FRAMES + 1500 + 10 - net_check.BOX_CLOSE_LEAD_FRAMES)
+
+    def test_a_land_with_no_box_keeps_the_input_as_it_is(self):
+        events = self.shifted(False)
+        self.assertEqual([event["frame"] for event in events],
+                         [net_check.INPUT_OFFSET_FRAMES + 10, net_check.INPUT_OFFSET_FRAMES + 70])
 
 
 if __name__ == "__main__":
