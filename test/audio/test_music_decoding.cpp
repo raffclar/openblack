@@ -15,9 +15,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <future>
 #include <map>
 #include <memory>
 #include <span>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -258,5 +260,41 @@ TEST(MusicDecoding, AChunkThatCannotBeDecodedCountsAsPlayed)
 	// The player hears of the chunk that failed as of a played one
 	EXPECT_EQ(backend.ReleasePlayedChunks(stream), 1u);
 	EXPECT_EQ(backend.ReleasePlayedChunks(stream), 0u);
+	backend.Destroy(stream);
+}
+
+TEST(MusicDecoding, ADecodeDoesNotKeepTheDecodesBeforeIt)
+{
+	auto bank = MakeBank(4);
+	// The read of the last chunk waits for the gate, so its decode is still on its thread
+	std::promise<void> gate;
+	bank.readChunk = [good = bank.readChunk, opened = gate.get_future().share()](uint32_t chunk) {
+		if (chunk == 3)
+		{
+			opened.wait();
+		}
+		return good(chunk);
+	};
+	// Each decode keeps a copy of the decoder, so the count of the token tells how many decodes are alive
+	const auto token = std::make_shared<int>(0);
+	const auto decoder = [token](std::span<const uint8_t> data, int sampleRate) { return ColdDecoder(data, sampleRate); };
+	RecordingPlayer player;
+	MusicStreamBackend backend(player, decoder, StillClock);
+	const auto stream = backend.CreateStream(100);
+	for (uint32_t chunk = 0; chunk < 4; ++chunk)
+	{
+		EXPECT_TRUE(backend.QueueChunk(stream, bank, chunk, 0));
+	}
+	for (int attempt = 0; attempt < 500 && player.buffers.size() < 3; ++attempt)
+	{
+		static_cast<void>(backend.ReleasePlayedChunks(stream));
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	ASSERT_EQ(player.buffers.size(), 3u);
+	// The token, the backend's decoder and the decode that waits. The three decodes that ended are gone.
+	EXPECT_EQ(token.use_count(), 4);
+	gate.set_value();
+	backend.WaitForDecodes();
+	EXPECT_EQ(player.sources.begin()->second, DecodeWhole(bank, {0, 1, 2, 3}));
 	backend.Destroy(stream);
 }

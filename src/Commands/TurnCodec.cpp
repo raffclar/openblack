@@ -124,13 +124,20 @@ private:
 	bool _bad {false};
 };
 
+/// The god slot of a player, as a byte of a frame. The check of the frame before the write makes sure that the player
+/// has a slot.
+[[nodiscard]] uint8_t SlotByte(PlayerNames player)
+{
+	return static_cast<uint8_t>(player_slots::SlotOfPlayer(player).value_or(0));
+}
+
 /// The players that get a line of the chat: their count, then the god slot of each
 void WriteRecipients(Writer& out, const std::vector<PlayerNames>& recipients)
 {
 	out.Byte(static_cast<uint8_t>(recipients.size()));
 	for (const auto recipient : recipients)
 	{
-		out.Byte(static_cast<uint8_t>(recipient));
+		out.Byte(SlotByte(recipient));
 	}
 }
 
@@ -145,12 +152,12 @@ DecodeError ReadRecipients(Reader& in, std::vector<PlayerNames>& recipients)
 	recipients.resize(count);
 	for (auto& recipient : recipients)
 	{
-		const auto slot = in.Byte();
-		if (slot >= player_slots::k_MaxPlayers)
+		const auto player = player_slots::PlayerOfSlot(in.Byte());
+		if (!player.has_value())
 		{
 			return DecodeError::Value;
 		}
-		recipient = static_cast<PlayerNames>(slot);
+		recipient = *player;
 	}
 	return in.Bad() ? DecodeError::Truncated : DecodeError::None;
 }
@@ -775,7 +782,7 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 {
 	const auto validRecipients = [](const std::vector<PlayerNames>& recipients) {
 		return recipients.size() <= player_slots::k_MaxPlayers && std::ranges::all_of(recipients, [](PlayerNames recipient) {
-			       return static_cast<size_t>(recipient) < player_slots::k_MaxPlayers;
+			       return player_slots::SlotOfPlayer(recipient).has_value();
 		       });
 	};
 	if (const auto* speech = std::get_if<ChatSpeech>(&action); speech != nullptr)
@@ -804,8 +811,7 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 			                      return false;
 		                      }
 		                      return std::ranges::all_of(turn.blocks, [](const StampedBlock& block) {
-			                      return static_cast<size_t>(block.sender) < player_slots::k_MaxPlayers &&
-			                             ValidActions(block.actions);
+			                      return player_slots::SlotOfPlayer(block.sender).has_value() && ValidActions(block.actions);
 		                      });
 	                      },
 	                      [](const TurnChecksum& /*checksum*/) { return true; },
@@ -998,7 +1004,7 @@ bool Append(const Frame& frame, std::vector<uint8_t>& out)
 		               writer.Number(static_cast<uint16_t>(turn.blocks.size()));
 		               for (const auto& block : turn.blocks)
 		               {
-			               writer.Byte(static_cast<uint8_t>(block.sender));
+			               writer.Byte(SlotByte(block.sender));
 			               writer.Number(block.sequence);
 			               writeActions(block.actions);
 		               }
@@ -1114,12 +1120,12 @@ DecodeResult Decode(std::span<const uint8_t> bytes)
 		turn.blocks.resize(count);
 		for (auto& block : turn.blocks)
 		{
-			const auto sender = in.Byte();
-			if (sender >= player_slots::k_MaxPlayers)
+			const auto sender = player_slots::PlayerOfSlot(in.Byte());
+			if (!sender.has_value())
 			{
 				return Fail(in.Bad() ? DecodeError::Truncated : DecodeError::Value);
 			}
-			block.sender = static_cast<PlayerNames>(sender);
+			block.sender = *sender;
 			block.sequence = in.Number<uint16_t>();
 			if (const auto error = ReadActions(in, block.actions); error != DecodeError::None)
 			{

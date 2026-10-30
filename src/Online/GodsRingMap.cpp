@@ -108,12 +108,13 @@ glm::vec2 Moved(glm::vec2 place, glm::vec2 from, glm::vec2 to, float turn)
 
 std::optional<PlayerNames> gods_ring_map::GodOfSlot(size_t slot)
 {
-	// Each player of a land is a god, but the last is the neutral player
-	if (slot >= static_cast<size_t>(PlayerNames::NEUTRAL))
+	// The script of the map names its gods as the scripts of the game do, and these have names for the gods of a land
+	// only. A later slot has no god until the scripts can name it.
+	if (slot >= player_slots::k_LandGods)
 	{
 		return std::nullopt;
 	}
-	return static_cast<PlayerNames>(slot);
+	return player_slots::PlayerOfSlot(slot);
 }
 
 std::array<Slot, k_Slots> gods_ring_map::LayOutSlots(glm::vec2 middle)

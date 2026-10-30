@@ -53,6 +53,8 @@ struct FakeWorld
 	uint32_t turns {0};
 	/// A world whose checksum parts from the others after this turn
 	std::optional<uint32_t> partsAfter;
+	/// The players of the commands that the world did
+	std::set<PlayerNames> players;
 
 	uint64_t Play(uint32_t turn, const std::vector<Command>& commands)
 	{
@@ -60,6 +62,7 @@ struct FakeWorld
 		hash = (hash ^ (turn + 1)) * 1099511628211ull;
 		for (const auto& command : commands)
 		{
+			players.insert(command.player);
 			hash = (hash ^ (static_cast<uint64_t>(command.player) + 1) * 31 + command.action.index()) * 1099511628211ull;
 		}
 		return partsAfter.has_value() && turn >= *partsAfter ? hash ^ 0xFF : hash;
@@ -1258,4 +1261,37 @@ TEST_F(LockstepTest, AnObserverThatJoinsAfterTheStopGetsTheStopWithTheWorld)
 	EXPECT_EQ(late.loads, 1u);
 	EXPECT_EQ(late.session.StoppedAfter(), host->StoppedAfter());
 	EXPECT_EQ(late.world.turns, serverWorld.turns);
+}
+
+TEST_F(LockstepTest, TheGodsAfterTheSeventhTakeTheNumbersAfterTheNeutralPlayer)
+{
+	constexpr uint8_t k_Gods = 9;
+	MakeHost(k_Gods, 5LL * 60 * 1'000'000, k_Gods);
+	std::vector<std::unique_ptr<Computer>> gods;
+	std::vector<Computer*> computers;
+	for (uint8_t i = 0; i < k_Gods; ++i)
+	{
+		gods.push_back(std::make_unique<Computer>(network, now, "god:god" + std::to_string(i), k_LandFile,
+		                                          std::vector<uint8_t> {static_cast<uint8_t>('a' + i)}));
+		computers.push_back(gods.back().get());
+	}
+	Frames(computers, 12);
+	ASSERT_TRUE(host->Started());
+	// The first 7 gods have the numbers of the gods of a land; the eighth and the ninth come after the neutral player
+	EXPECT_EQ(gods[0]->session.OwnGod(), PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(gods[6]->session.OwnGod(), PlayerNames::PLAYER_SEVEN);
+	EXPECT_EQ(gods[7]->session.OwnGod(), static_cast<PlayerNames>(8));
+	EXPECT_EQ(gods[8]->session.OwnGod(), static_cast<PlayerNames>(9));
+	for (const player_commands::TurnCommandSourceInterface* source :
+	     std::initializer_list<const player_commands::TurnCommandSourceInterface*> {host.get(), &gods[0]->session})
+	{
+		const auto eighth = source->StartCreatureFile(static_cast<PlayerNames>(8));
+		EXPECT_EQ(std::vector<uint8_t>(eighth.begin(), eighth.end()), (std::vector<uint8_t> {'h'}));
+		EXPECT_TRUE(source->StartCreatureFile(PlayerNames::NEUTRAL).empty());
+	}
+	// The joins of the first turn come from each god's own number, never from the neutral player
+	EXPECT_TRUE(serverWorld.players.contains(static_cast<PlayerNames>(8)));
+	EXPECT_TRUE(serverWorld.players.contains(static_cast<PlayerNames>(9)));
+	EXPECT_FALSE(serverWorld.players.contains(PlayerNames::NEUTRAL));
+	EXPECT_EQ(gods[8]->world.players, serverWorld.players);
 }

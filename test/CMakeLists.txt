@@ -4,7 +4,10 @@ include(CTest)
 # took most of a build. Each test source is still a ctest test of its own, named as before: ctest runs the program with
 # --openblack-test-source=<source>, which runs only that source's tests, in a process of its own.
 add_executable(openblack_tests test_runner_main.cpp)
-target_link_libraries(openblack_tests PRIVATE GTest::gtest openblack_lib)
+# The simulation libraries come first on the link line. Some component libraries are built with no exceptions and have
+# their own copies of standard templates (std::function's call, for example); the linker takes the first copy that it
+# loads, and an exception must go through the simulation's copy.
+target_link_libraries(openblack_tests PRIVATE GTest::gtest openblack_sim openblack_systems openblack_lib)
 set_property(TARGET openblack_tests PROPERTY FOLDER "tests")
 # A program started by hand reads the folders that depend on the checkout from this file, next to the program (see
 # test_runner_main.cpp). It is written at generate time, so no object that the compiler cache shares between worktrees
@@ -1653,6 +1656,7 @@ set_tests_properties(
 openblack_setup_and_add_test(
   test_shadow_texture graphics/test_shadow_texture.cpp
 )
+openblack_setup_and_add_test(test_texture_size graphics/test_texture_size.cpp)
 openblack_setup_and_add_test(
   test_moving_shadow_casters test_moving_shadow_casters.cpp
 )
@@ -2200,3 +2204,5 @@ add_test(NAME test_server_check
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_server_check.py
 )
+openblack_setup_and_add_test(test_script_object test_script_object.cpp)
+openblack_setup_and_add_test(test_player_slots test_player_slots.cpp)

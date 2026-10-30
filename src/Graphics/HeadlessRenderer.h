@@ -9,15 +9,10 @@
 
 #pragma once
 
-#include <memory>
-
 #include "RendererInterface.h"
 
 namespace openblack::graphics
 {
-
-/// True while the graphics library runs. The function does not start the library, and it is safe at all times.
-[[nodiscard]] bool GraphicsLibraryStarted() noexcept;
 
 /// The renderer of a world that nobody sees, such as the dedicated server. It has no window, no device, no shaders and
 /// no buffers or textures, and it draws nothing.
@@ -28,12 +23,12 @@ namespace openblack::graphics
 class HeadlessRenderer final: public RendererInterface
 {
 public:
-	HeadlessRenderer() noexcept;
+	HeadlessRenderer() noexcept = default;
 	HeadlessRenderer(const HeadlessRenderer&) = delete;
 	HeadlessRenderer& operator=(const HeadlessRenderer&) = delete;
 	HeadlessRenderer(HeadlessRenderer&&) = delete;
 	HeadlessRenderer& operator=(HeadlessRenderer&&) = delete;
-	~HeadlessRenderer() noexcept override;
+	~HeadlessRenderer() noexcept override = default;
 
 	void ConfigureView(RenderPass /*viewId*/, glm::u16vec2 /*resolution*/, uint32_t /*clearColor*/) const noexcept override {}
 	void Reset(glm::u16vec2 /*resolution*/) const noexcept override {}
@@ -65,8 +60,8 @@ public:
 	void DrawMesh(const L3DMesh& /*mesh*/, const L3DMeshSubmitDesc& /*desc*/, uint8_t /*subMeshIndex*/) const noexcept override
 	{
 	}
-	/// A shader manager with no shaders
-	[[nodiscard]] ShaderManager& GetShaderManager() const noexcept override { return *_shaderManager; }
+	/// The renderer has no shaders
+	[[nodiscard]] ShaderManager* GetShaderManager() const noexcept override { return nullptr; }
 	void ShowInterfaceCreatures(interface_creatures::Request /*request*/) noexcept override {}
 	void ShowMenuCreature(interface_creatures::MenuCreature /*creature*/) noexcept override {}
 	void DrawFilmCreature(const DrawSceneDesc& /*desc*/, const interface_creatures::FilmCreature& /*creature*/) const override
@@ -74,7 +69,6 @@ public:
 	}
 
 private:
-	std::unique_ptr<ShaderManager> _shaderManager;
 	bool _debug {false};
 	bool _profile {false};
 };

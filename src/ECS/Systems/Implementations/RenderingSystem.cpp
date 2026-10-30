@@ -89,6 +89,7 @@
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectDetail.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowLevels.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
@@ -1050,7 +1051,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    const float pulse = Locator::heartbeatSystem::has_value()
 				                            ? Locator::heartbeatSystem::value().Pulse(temple->owner, turnFraction)
 				                            : 0.0f;
-				    const auto colour = Player::k_Colours.at(static_cast<size_t>(temple->owner));
+				    const auto colour = player_colour::Of(temple->owner);
 				    glow = heart_look::Glow(colour, heart_look::GlowStrength(temple->destructionClock, pulse));
 			    }
 			    if (registry.AllOf<ChangedMaterials>(entity))

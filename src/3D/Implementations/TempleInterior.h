@@ -81,7 +81,8 @@ public:
 	[[nodiscard]] TempleDoors& GetDoors() override { return _doors; }
 	[[nodiscard]] const TempleDoors& GetDoors() const override { return _doors; }
 	[[nodiscard]] std::optional<TempleCursorHit> GetCursorHit() const override;
-	void SetInterface(gui::GameInterface* interface) override;
+	void SetInterface(TempleScreenInterface* interface) override;
+	void SetDrawMakers(DrawMakers makers) override;
 	bool HoldControl(bool pressed, float mouseY) override;
 	[[nodiscard]] std::vector<TempleSubMeshTexture> GetScrollTextures(TempleRoom room) const override;
 	[[nodiscard]] std::vector<uint32_t> GetHiddenSubMeshes(TempleRoom room) const override;
@@ -163,6 +164,8 @@ private:
 	entt::locator<ecs::systems::RenderingSystemInterface>::node_type _islandDraw;
 	/// The draw of the temple's rooms. The first visit or warm-up makes it, and the next visits use it again.
 	entt::locator<ecs::systems::RenderingSystemInterface>::node_type _templeDraw;
+	/// The functions that make the draws, which only the game gives
+	DrawMakers _drawMakers;
 	/// The pictures of the rooms that the game's files give, read once
 	struct RoomPictures
 	{
@@ -262,7 +265,7 @@ private:
 	/// The player's worshippers walking about the temple, who come in with the player and go as the player leaves
 	std::unique_ptr<TemplePeople> _people;
 	/// The game's interface, whose text and font the scrolls and signs are written with
-	gui::GameInterface* _interface {nullptr};
+	TempleScreenInterface* _interface {nullptr};
 	/// The rooms' scrolls, written as the temple opens, and the labels of their signs
 	std::unique_ptr<TempleScrolls> _scrolls;
 	std::unique_ptr<TempleSigns> _signs;

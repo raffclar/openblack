@@ -11,7 +11,7 @@
 
 #include <string>
 
-#include "Gui/GameMenu.h"
+#include "Gui/MenuSettings.h"
 
 namespace openblack::simulation
 {

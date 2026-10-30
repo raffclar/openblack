@@ -217,3 +217,20 @@ TEST(ScriptWeather, AWeatherThingFollowsItsStormThenStaysOnlyWhileAScriptHoldsIt
 	EXPECT_EQ(weather::AfterTurn(false, true), ThingAfterTurn::StaysWithoutStorm);
 	EXPECT_EQ(weather::AfterTurn(false, false), ThingAfterTurn::Goes);
 }
+
+TEST(ScriptWeather, AWeatherThingThatGoesEndsItsStormAtOnce)
+{
+	Storm storm {};
+	storm.lastsFor = 6000.0f;
+	storm.age = 150.0f;
+	weather::EndStorm(storm);
+	EXPECT_TRUE(storm.dead);
+	EXPECT_EQ(storm.deadTurns, 0);
+	// A storm that is already dead keeps its count of dead turns
+	storm.deadTurns = 1;
+	weather::EndStorm(storm);
+	EXPECT_TRUE(storm.dead);
+	EXPECT_EQ(storm.deadTurns, 1);
+	// A weather thing that goes no longer follows the storm
+	EXPECT_EQ(weather::AfterTurn(!storm.dead, false), weather::ThingAfterTurn::Goes);
+}

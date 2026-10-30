@@ -19,6 +19,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Online/StartRules.h"
+#include "PlayerSlots.h"
 
 namespace openblack::online
 {
@@ -36,6 +37,13 @@ void Log(spdlog::level::level_enum level, std::string_view text)
 	{
 		logger->log(level, "{}", text);
 	}
+}
+
+/// The god slot of a player, as the key of the start files. The neutral player has no slot.
+[[nodiscard]] std::optional<uint8_t> SlotKey(PlayerNames player)
+{
+	const auto slot = player_slots::SlotOfPlayer(player);
+	return slot.has_value() ? std::optional(static_cast<uint8_t>(*slot)) : std::nullopt;
 }
 
 } // namespace
@@ -323,13 +331,15 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 
 std::span<const uint8_t> NetworkSession::StartCreatureFile(PlayerNames god) const
 {
-	const auto file = _startCreatures.find(static_cast<uint8_t>(god));
+	const auto slot = SlotKey(god);
+	const auto file = slot.has_value() ? _startCreatures.find(*slot) : _startCreatures.end();
 	return file != _startCreatures.end() ? std::span<const uint8_t>(file->second) : std::span<const uint8_t> {};
 }
 
 std::optional<float> NetworkSession::StartAlignment(PlayerNames god) const
 {
-	const auto alignment = _startAlignments.find(static_cast<uint8_t>(god));
+	const auto slot = SlotKey(god);
+	const auto alignment = slot.has_value() ? _startAlignments.find(*slot) : _startAlignments.end();
 	return alignment != _startAlignments.end() ? std::optional<float>(alignment->second) : std::nullopt;
 }
 
@@ -339,7 +349,7 @@ std::optional<PlayerNames> NetworkSession::OwnGod() const
 	{
 		return std::nullopt;
 	}
-	return static_cast<PlayerNames>(*_joined->slot);
+	return player_slots::PlayerOfSlot(*_joined->slot);
 }
 
 std::optional<StartEvent> NetworkSession::TakeStartEvent()

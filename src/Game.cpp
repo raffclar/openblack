@@ -377,6 +377,9 @@
 #if defined(__EMSCRIPTEN__)
 #include "Web/WebPlatform.h"
 #endif
+#if defined(OPENBLACK_INSPECTOR)
+#include "Inspector/GameSeam.h"
+#endif
 
 using namespace openblack;
 using namespace openblack::lhscriptx;
@@ -816,6 +819,7 @@ Game::Game(Arguments&& args) noexcept
 
 Game::~Game() noexcept
 {
+	Locator::gameMusic::reset();
 	// Its textures go before the renderer, and the temple's scrolls are written with its text
 	if (Locator::temple::has_value())
 	{
@@ -846,6 +850,7 @@ Game::~Game() noexcept
 		Locator::saveGameSystem::value().SetShowBox({});
 		Locator::saveGameSystem::value().SetReportProblem({});
 	}
+	Locator::screenFade::reset();
 	_interface.reset();
 	_loadingScreen.reset();
 	// What the scripts asked of openblack that it can't do yet, for the natives to write next
@@ -4522,7 +4527,12 @@ bool Game::Initialize() noexcept
 	{
 		// An agent drives it: the player's mouse and keyboard are kept out while a client is connected, so that a knock
 		// of the mouse doesn't spoil its tests; from the start for a headless run, or never when asked
-		if (StartInspector(*_inspectPort))
+#if defined(OPENBLACK_INSPECTOR)
+		const bool started = StartInspector(*_inspectPort, inspector::MakeGameSeam());
+#else
+		const bool started = StartInspector(*_inspectPort);
+#endif
+		if (started)
 		{
 			loadingData.emplace("game data");
 			Locator::gameActionSystem::value().SetInputLockMode(_inspectInputLock);
@@ -4553,6 +4563,11 @@ const gui::TextDatabase* Game::MakeInterface()
 	const auto kept = gui::ToProfileSettings(settings);
 	const auto& pictures = Locator::tattooEditorSystem::value().GetPictures();
 	_interface = gui::GameInterface::Create(playerName, std::move(settings), pictures);
+	if (_interface)
+	{
+		// The films find the fade through the locator; the interface stays the owner
+		Locator::screenFade::reset(&_interface->GetScreenFade(), [](gui::ScreenFade* /*unowned*/) {});
+	}
 	ApplyPlayerSettings(kept);
 	LoadProfileKeys();
 	RefreshPlayersPage();
@@ -5393,6 +5408,8 @@ void Game::StartLandAudio()
 	{
 		// The -NOLOADMUSIC switch: the game loads none of its music banks, so none of its music plays
 		_gameMusic = std::make_unique<audio::GameMusic>(!_launchSwitches.noLoadMusic);
+		// The script, the saves and the films find the music through the locator; the game stays the owner
+		Locator::gameMusic::reset(_gameMusic.get(), [](audio::GameMusic* /*unowned*/) {});
 		if (Locator::scriptMusicSystem::has_value())
 		{
 			Locator::scriptMusicSystem::value().SetBanksLoaded(!_launchSwitches.noLoadMusic);

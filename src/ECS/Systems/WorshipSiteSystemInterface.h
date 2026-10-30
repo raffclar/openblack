@@ -107,6 +107,9 @@ public:
 	/// A site is built up by a share of the whole, its altar with it. Reaching the whole, no town is asked to build it
 	/// any more.
 	virtual void BuildBy(entt::entity site, float share) = 0;
+	/// A script sets how much of a site is built, at least none. At the whole or more, the site stands built as when
+	/// its builders finish it, also when it stood built before.
+	virtual void SetBuilt(entt::entity site, float built) = 0;
 	/// Whether a site stands wholly built
 	[[nodiscard]] virtual bool IsBuilt(entt::entity site) const = 0;
 	/// The temple of a player, none without one

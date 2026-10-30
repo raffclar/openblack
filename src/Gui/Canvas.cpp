@@ -180,8 +180,9 @@ void Canvas::End()
 
 	// In a sorted view the view's own transform is the world camera's, so the draws take the canvas's projection with
 	// them
-	const auto& shaders = Locator::rendererInterface::value().GetShaderManager();
-	const auto* program = shaders.GetShader(_sortedView.has_value() ? "InterfaceSorted" : "Interface");
+	const auto* shaders = Locator::rendererInterface::value().GetShaderManager();
+	const auto* program =
+	    shaders != nullptr ? shaders->GetShader(_sortedView.has_value() ? "InterfaceSorted" : "Interface") : nullptr;
 	const auto target = _sortedView.has_value() ? static_cast<bgfx::ViewId>(*_sortedView) : view;
 	auto& layout = GetLayout();
 	for (const auto& batch : _batches)
@@ -209,8 +210,8 @@ void Canvas::WarmUp(RenderPass view, DepthTest depthTest, bool sorted)
 	// One triangle with its corners in one place, for each way to blend
 	constexpr std::array k_Blends {Blend::Alpha, Blend::Additive};
 	constexpr uint32_t k_Corners = 3;
-	const auto* program =
-	    Locator::rendererInterface::value().GetShaderManager().GetShader(sorted ? "InterfaceSorted" : "Interface");
+	const auto* shaders = Locator::rendererInterface::value().GetShaderManager();
+	const auto* program = shaders != nullptr ? shaders->GetShader(sorted ? "InterfaceSorted" : "Interface") : nullptr;
 	auto& layout = GetLayout();
 	const std::array<float, 16> noProjection {};
 	for (const auto blend : k_Blends)

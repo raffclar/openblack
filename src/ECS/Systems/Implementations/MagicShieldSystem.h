@@ -44,6 +44,7 @@ public:
 	[[nodiscard]] std::vector<Avoid> CreatureAvoids(PlayerNames creaturePlayer, bool scripted) const override;
 	[[nodiscard]] bool KeepsReactionOff(glm::vec3 watcher, glm::vec3 initiator) const override;
 	[[nodiscard]] std::optional<entt::entity> ShieldAt(glm::vec3 point) const override;
+	void RemoveWithSpell(entt::entity spell) override;
 	[[nodiscard]] std::vector<DomeDraw> GetDomes(float fraction) const override;
 
 private:

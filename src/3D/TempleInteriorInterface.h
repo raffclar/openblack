@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -35,15 +36,16 @@ namespace openblack
 namespace ecs
 {
 class Registry;
+namespace systems
+{
+class RenderingSystemInterface;
 }
+} // namespace ecs
 namespace graphics
 {
 class Texture2D;
 }
-namespace gui
-{
-class GameInterface;
-} // namespace gui
+class TempleScreenInterface;
 struct OrientedTextVertex;
 struct TempleSubMeshTexture;
 class TempleDoors;
@@ -143,7 +145,15 @@ public:
 	[[nodiscard]] virtual std::optional<TempleCursorHit> GetCursorHit() const = 0;
 	/// The game's interface, whose text and font the rooms write their scrolls and signs with, whose options the options
 	/// room opens and over which the future room shows its words, or null without one
-	virtual void SetInterface(gui::GameInterface* interface) = 0;
+	virtual void SetInterface(TempleScreenInterface* interface) = 0;
+	/// The functions that put the draw of the rooms or the draw of the island in the locator. Only the game draws, so
+	/// only the game gives them. With no functions, the temple makes no draw.
+	struct DrawMakers
+	{
+		std::function<void()> temple;
+		std::function<void()> island;
+	};
+	virtual void SetDrawMakers(DrawMakers makers) = 0;
 	/// A press on one of the rooms' controls takes the mouse: on a scroll, dragging the mouse up
 	/// and down turns it, and letting go over a button presses it. True while a control has the press, which the camera
 	/// then leaves alone.

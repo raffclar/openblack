@@ -25,15 +25,11 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/Implementations/LandIsland.h"
-#include "3D/Implementations/Ocean.h"
 #include "3D/Implementations/TempleInterior.h"
 #include "3D/Implementations/UnloadedIsland.h"
 #include "3D/LandData.h"
-#include "Audio/AudioManager.h"
 #include "Audio/AudioManagerNoOp.h"
-#include "Audio/ClockedAudioPlayer.h"
 #include "Audio/GameSoundRequests.h"
-#include "Audio/QueuedAudioManager.h"
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
@@ -41,7 +37,6 @@
 #include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
-#include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/MapProduction.h"
@@ -49,7 +44,6 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/AbodeKnockSystem.h"
 #include "ECS/Systems/Implementations/AdvisorSystem.h"
-#include "ECS/Systems/Implementations/AdvisorVoiceSystem.h"
 #include "ECS/Systems/Implementations/AlignmentSystem.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
 #include "ECS/Systems/Implementations/AnimatedStaticSystem.h"
@@ -62,7 +56,6 @@
 #include "ECS/Systems/Implementations/CameraZoneSystem.h"
 #include "ECS/Systems/Implementations/ChimneySmokeSystem.h"
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
-#include "ECS/Systems/Implementations/CloudSystem.h"
 #include "ECS/Systems/Implementations/ComputerSettingsSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationLogSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
@@ -123,6 +116,7 @@
 #include "ECS/Systems/Implementations/WorkshopSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
+#include "Inspector/GameSeamInterface.h"
 #endif
 #include "ECS/IncomingMessageRules.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -155,7 +149,6 @@
 #include "ECS/Systems/Implementations/PuzzleGameSystem.h"
 #include "ECS/Systems/Implementations/RainSystem.h"
 #include "ECS/Systems/Implementations/ReactionSystem.h"
-#include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
@@ -164,7 +157,6 @@
 #include "ECS/Systems/Implementations/SharkSystem.h"
 #include "ECS/Systems/Implementations/SimulationSystem.h"
 #include "ECS/Systems/Implementations/SkyClockSystem.h"
-#include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/SnowfallSystem.h"
 #include "ECS/Systems/Implementations/SoundTagSystem.h"
@@ -178,11 +170,9 @@
 #include "ECS/Systems/Implementations/TornadoSystem.h"
 #include "ECS/Systems/Implementations/TownDesireSystem.h"
 #include "ECS/Systems/Implementations/TownSystem.h"
-#include "ECS/Systems/Implementations/TurnCheerSystem.h"
 #include "ECS/Systems/Implementations/TutorialSkipSystem.h"
 #include "ECS/Systems/Implementations/VegetationSystem.h"
 #include "ECS/Systems/Implementations/VideoSystem.h"
-#include "ECS/Systems/Implementations/VillageLightSystem.h"
 #include "ECS/Systems/Implementations/VillageTotemSystem.h"
 #include "ECS/Systems/Implementations/VortexSystem.h"
 #include "ECS/Systems/Implementations/WalkPathSystem.h"
@@ -220,7 +210,6 @@
 #include "Online/Desktop/CurlWebSocketClient.h"
 #endif
 #include "Resources/Resources.h"
-#include "Windowing/Sdl2WindowingSystem.h"
 #if __ANDROID__
 #include "FileSystem/AndroidFileSystem.h"
 #else
@@ -235,14 +224,12 @@ using openblack::RandomNumberManagerProduction;
 using openblack::TempleInterior;
 using openblack::UnloadedIsland;
 using openblack::chlapi::CHLApi;
-using openblack::debug::gui::DebugGuiInterface;
 using openblack::ecs::DrawnRegistry;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
 using openblack::ecs::systems::AbodeSoundSystem;
 using openblack::ecs::systems::AdvisorSystem;
-using openblack::ecs::systems::AdvisorVoiceSystem;
 using openblack::ecs::systems::AlignmentSystem;
 using openblack::ecs::systems::AnimalSystem;
 using openblack::ecs::systems::AnimatedStaticSystem;
@@ -256,7 +243,6 @@ using openblack::ecs::systems::CameraZoneSystem;
 using openblack::ecs::systems::ChatSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
-using openblack::ecs::systems::CloudSystem;
 using openblack::ecs::systems::ComputerPlayerSystem;
 using openblack::ecs::systems::ComputerSettingsSystem;
 using openblack::ecs::systems::CreatureAnimationSystem;
@@ -330,7 +316,6 @@ using openblack::ecs::systems::PuzzleGameSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
 using openblack::ecs::systems::RealWeatherSystem;
-using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
 using openblack::ecs::systems::SaveGameSystem;
 using openblack::ecs::systems::ScriptControlSystem;
@@ -352,11 +337,9 @@ using openblack::ecs::systems::TipBubbleSystem;
 using openblack::ecs::systems::TornadoSystem;
 using openblack::ecs::systems::TownDesireSystem;
 using openblack::ecs::systems::TownSystem;
-using openblack::ecs::systems::TurnCheerSystem;
 using openblack::ecs::systems::TutorialSkipSystem;
 using openblack::ecs::systems::VegetationSystem;
 using openblack::ecs::systems::VideoSystem;
-using openblack::ecs::systems::VillageLightSystem;
 using openblack::ecs::systems::VillageTotemSystem;
 using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WalkPathSystem;
@@ -366,18 +349,9 @@ using openblack::ecs::systems::WonderSystem;
 using openblack::ecs::systems::WorkshopSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
 using openblack::graphics::HeadlessRenderer;
-using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
 using openblack::lhvm::LHVM;
 using openblack::resources::Resources;
-using openblack::windowing::DisplayMode;
-using openblack::windowing::Sdl2WindowingSystem;
-
-void openblack::InitializeWindow(const std::string& title, int width, int height, DisplayMode displayMode, uint32_t extraFlags,
-                                 bool background)
-{
-	Locator::windowing::emplace<Sdl2WindowingSystem>(title, width, height, displayMode, extraFlags, background);
-}
 
 void openblack::InitializeSimulationCore()
 {
@@ -394,41 +368,6 @@ void openblack::InitializeSimulationCore()
 #endif
 	Locator::rng::emplace<RandomNumberManagerProduction>();
 	Locator::gameRandom::emplace<GameRandomProduction>();
-}
-
-bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
-{
-	Locator::rendererInterface::reset(RendererInterface::Create(backend, vsync).release());
-	if (!Locator::rendererInterface::has_value())
-	{
-		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to create renderer");
-		return false;
-	}
-	Locator::debugGui::reset(DebugGuiInterface::Create(graphics::RenderPass::ImGui).release());
-
-	std::unique_ptr<audio::AudioManagerInterface> machineAudio;
-	try
-	{
-		// A simulation run with a fixed frame time times its sounds by the game's clock
-		if (Locator::config::has_value() && Locator::config::value().clockedAudio)
-		{
-			machineAudio = std::make_unique<AudioManager>(
-			    std::make_unique<audio::ClockedAudioPlayer>([] { return machine_clock::Ticks(); }));
-		}
-		else
-		{
-			machineAudio = std::make_unique<AudioManager>();
-		}
-	}
-	catch (std::runtime_error& error)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("audio"), "Falling back to no-op audio: {}", error.what());
-		machineAudio = std::make_unique<AudioManagerNoOp>();
-	}
-	// The game's calls go to the audio through the queue of the main thread
-	Locator::audio::emplace<audio::QueuedAudioManager>(std::move(machineAudio), Locator::mainThreadQueue::value());
-	Locator::sounds::emplace<audio::GameSoundRequests>();
-	return true;
 }
 
 bool openblack::InitializeHeadlessEngine() noexcept
@@ -611,7 +550,10 @@ void EmplaceChat(bool developer)
 		std::vector<PlayerNames> players;
 		for (size_t slot = 0; slot < player_slots::k_MaxPlayers; ++slot)
 		{
-			players.push_back(static_cast<PlayerNames>(slot));
+			if (const auto player = player_slots::PlayerOfSlot(slot))
+			{
+				players.push_back(*player);
+			}
 		}
 		return players;
 	};
@@ -664,7 +606,10 @@ void EmplaceChat(bool developer)
 		{
 			for (const auto& god : *gods)
 			{
-				names[static_cast<PlayerNames>(god.slot)] = gui::ToUtf16(god.name);
+				if (const auto player = player_slots::PlayerOfSlot(god.slot))
+				{
+					names[*player] = gui::ToUtf16(god.name);
+				}
 			}
 		}
 		return names;
@@ -819,41 +764,19 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	return true;
 }
 
-void openblack::InitializePresentation()
+void openblack::InitializePlayerInput()
 {
-	// The sea, the sky, the clouds and the village lights, which the turns and the scripts do not read
-	Locator::oceanSystem::emplace<Ocean>(graphics::ConfiguredUploads());
-	Locator::skySystem::emplace<ecs::systems::SkySystem>();
-	Locator::cloudSystem::emplace<CloudSystem>();
-	Locator::villageLightSystem::emplace<VillageLightSystem>();
-	// The sound, the gestures and the lip sync of the advisors' lines. The scripts time the lines on their own clock.
-	Locator::advisorVoiceSystem::emplace<AdvisorVoiceSystem>();
-	// The measure of how fast this computer's camera turns, and the advisors' cheers at it
-	Locator::turnCheerSystem::emplace<TurnCheerSystem>();
+	Locator::gameActionSystem::emplace<GameActionMap>();
 }
 
-void openblack::InitializeClient(const player_profiles::Store& profiles)
+void openblack::InitializeOnlineAndTools(const player_profiles::Store& profiles)
 {
-	// The input of the player, the drawing of the world, the editor, the videos and the online services
-	Locator::gameActionSystem::emplace<GameActionMap>();
-	Locator::rendereringSystem::emplace<RenderingSystem>();
 	InitializeOnline(profiles);
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// The editor is a developer tool: a build without the developer tools has no editor
 	Locator::editorSystem::emplace<EditorSystem>();
 #endif
 	Locator::videoSystem::emplace<VideoSystem>();
-}
-
-bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
-{
-	if (!InitializeSimulation(profiles))
-	{
-		return false;
-	}
-	InitializePresentation();
-	InitializeClient(profiles);
-	return true;
 }
 
 namespace openblack
@@ -1143,6 +1066,16 @@ void openblack::ShutDownServices()
 bool openblack::StartInspector([[maybe_unused]] uint16_t port)
 {
 #if defined(OPENBLACK_INSPECTOR)
+	return StartInspector(port, nullptr);
+#else
+	SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This build has no inspector: configure with OPENBLACK_INSPECTOR on");
+	return false;
+#endif
+}
+
+#if defined(OPENBLACK_INSPECTOR)
+bool openblack::StartInspector(uint16_t port, std::unique_ptr<inspector::GameSeamInterface> seam)
+{
 	std::string error;
 	auto server = inspector::Server::Listen(port, error);
 	if (server == nullptr)
@@ -1154,10 +1087,7 @@ bool openblack::StartInspector([[maybe_unused]] uint16_t port)
 	Locator::fightTranscript::emplace<ecs::systems::FightTranscriptSystem>();
 	// The creatures' bodies keep a log of their clips for the inspector's tools
 	Locator::creatureAnimationLog::emplace<ecs::systems::CreatureAnimationLogSystem>();
-	Locator::inspector::emplace<ecs::systems::InspectorSystem>(std::move(server));
+	Locator::inspector::emplace<ecs::systems::InspectorSystem>(std::move(server), std::move(seam));
 	return true;
-#else
-	SPDLOG_LOGGER_ERROR(spdlog::get("game"), "This build has no inspector: configure with OPENBLACK_INSPECTOR on");
-	return false;
-#endif
 }
+#endif
