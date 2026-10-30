@@ -54,6 +54,7 @@
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreaturePlanActions.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/CreatureRoute.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
@@ -4365,6 +4366,21 @@ CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder
 		}
 		if (!hands.CanPickUp(creature, *order.object))
 		{
+			// Name the size or the weight when that is what stops it
+			const auto lift = hands.LiftFactsOf(creature, *order.object);
+			if (lift.has_value() && lift->thingRadius + lift->creatureRadius > lift->reach)
+			{
+				return {.detail = fmt::format("it cannot pick that thing up: its radius {:.2f} and the creature's "
+				                              "radius {:.2f} are more than the reach {:.2f}",
+				                              lift->thingRadius, lift->creatureRadius, lift->reach)};
+			}
+			if (lift.has_value() && lift->thingWeight > lift->creatureWeight * creature_object_actions::k_MostLiftedWeightShare)
+			{
+				return {.detail = fmt::format("it cannot pick that thing up: its weight {:.2f} is more than the "
+				                              "creature can lift ({:.2f})",
+				                              lift->thingWeight,
+				                              lift->creatureWeight * creature_object_actions::k_MostLiftedWeightShare)};
+			}
 			return {.detail = "it cannot pick that thing up"};
 		}
 		// As a leash order on a thing it can lift when its desires choose nothing else
@@ -4387,9 +4403,19 @@ CreatureOrderResult GiveCreatureOrder(entt::entity creature, const CreatureOrder
 			    creature, ForcedPlan {.desire = creature_desires::Desire::ObeyPlayer, .action = "PutDown", .ordered = true});
 			return {.taken = taken, .detail = taken ? "puts it down where it stands" : "its mind refused the plan"};
 		}
-		// As a leash order on the land while it carries something
+		// As a leash order on the land while it carries something: it throws the thing there when it cannot stand at
+		// the point, or on the aggression leash
 		const auto height = creature_morph::k_HeightAtSizeOne * ShownSize(*body);
-		const bool throws = order.kind == Kind::Throw;
+		const bool standable = !Locator::creatureLocomotionSystem::has_value() ||
+		                       Locator::creatureLocomotionSystem::value().GetWalkableLand().IsValid(
+		                           *order.point, creature_route::k_DestinationClearance);
+		const auto leash = Locator::leashSystem::has_value() ? Locator::leashSystem::value().TypeOf(creature) : LeashType::None;
+		const auto ground =
+		    creature_leash_orders::OnGround(*order.point, {.carrying = true,
+		                                                   .placeReachable = standable,
+		                                                   .leash = leash == LeashType::None ? LeashType::Rope : leash,
+		                                                   .height = height});
+		const bool throws = order.kind == Kind::Throw || ground.kind == creature_leash_orders::GroundOrder::Kind::ThrowAt;
 		const bool taken =
 		    minds.ForcePlan(creature, ForcedPlan {.desire = creature_desires::Desire::ObeyPlayer,
 		                                          .action = creature_leash_orders::k_MoveAction,

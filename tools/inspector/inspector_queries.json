@@ -548,7 +548,7 @@
   "writes": true
  },
  {
-  "description": "The creature lets go of what it carries. With no point it puts it down where it stands with the game's put-down action. With a point it carries it there and puts it down at rest, as a leash order on the land does while it carries something; with throw true it throws it at the point from near enough instead",
+  "description": "The creature lets go of what it carries. With no point it puts it down where it stands with the game's put-down action. With a point it carries it there and puts it down at rest, as a leash order on the land does while it carries something. Where it cannot stand, or with throw true, it throws it at the point from near enough instead",
   "kind": "object",
   "parameters": [
    {

@@ -207,8 +207,8 @@ void AddCreatureOrders(FunctionProvider& provider, const CreatureSources& source
 	auto putDown = Query("put_down",
 	                     "The creature lets go of what it carries. With no point it puts it down where it stands with the "
 	                     "game's put-down action. With a point it carries it there and puts it down at rest, as a leash "
-	                     "order on the land does while it carries something; with throw true it throws it at the point from "
-	                     "near enough instead",
+	                     "order on the land does while it carries something. Where it cannot stand, or with throw true, it "
+	                     "throws it at the point from near enough instead",
 	                     {id, Parameter("point", "point", "Where it takes the thing, [x, z] or [x, y, z]", false),
 	                      Parameter("throw", "boolean", "It throws the thing at the point (false by default)", false)});
 	putDown.writes = true;
