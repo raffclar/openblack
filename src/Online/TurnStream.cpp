@@ -105,6 +105,11 @@ bool TurnStream::SendCommands(uint32_t turn, std::span<const player_commands::Ac
 	return true;
 }
 
+bool TurnStream::SendBlock(const turn_codec::CommandBlock& block)
+{
+	return SendFrame(block);
+}
+
 bool TurnStream::SendChecksum(uint32_t turn, uint64_t checksum)
 {
 	return SendFrame(turn_codec::TurnChecksum {.turn = turn, .checksum = checksum});
