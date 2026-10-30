@@ -193,6 +193,9 @@ public:
 	{
 		return nullptr;
 	}
+	/// A body at rest for an object that things can hit, as for an obstacle near a moving body. An object that has a body
+	/// keeps it. None when the object has no shape.
+	virtual PhysicsEntry* AddObstacle([[maybe_unused]] entt::entity object) { return nullptr; }
 	[[nodiscard]] virtual PhysicsEntry* Find([[maybe_unused]] entt::entity object) { return nullptr; }
 	/// Whether its kind can be thrown, dropped or knocked into flight (and so drawn into a vortex), as it is now
 	[[nodiscard]] virtual bool CanBecomePhysicsObject([[maybe_unused]] entt::entity object) const { return false; }

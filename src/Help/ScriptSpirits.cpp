@@ -68,6 +68,11 @@ int32_t SpiritWhoTalks(int32_t narrator)
 	return narrator == k_NarratorEvil ? k_EvilSpirit : 0;
 }
 
+uint32_t TextToAskSpeakerOf(uint32_t text, uint32_t textCount)
+{
+	return text < textCount ? text : 0;
+}
+
 bool IsScreenFraction(float value)
 {
 	return value >= 0.0f && !(value > 1.0f);

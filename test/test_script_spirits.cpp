@@ -109,3 +109,12 @@ TEST(ScriptSpirits, ScreenFractionsAreZeroToOne)
 	EXPECT_FALSE(IsScreenFraction(1.01f));
 	EXPECT_FALSE(IsScreenFraction(std::numeric_limits<float>::quiet_NaN()));
 }
+
+TEST(ScriptSpirits, ATextPastTheLastAsksForTheFirstText)
+{
+	EXPECT_EQ(TextToAskSpeakerOf(0, 6974), 0u);
+	EXPECT_EQ(TextToAskSpeakerOf(2095, 6974), 2095u);
+	EXPECT_EQ(TextToAskSpeakerOf(6973, 6974), 6973u);
+	EXPECT_EQ(TextToAskSpeakerOf(6974, 6974), 0u);
+	EXPECT_EQ(TextToAskSpeakerOf(0xFFFFFFFFu, 6974), 0u);
+}

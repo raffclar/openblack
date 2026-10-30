@@ -42,6 +42,7 @@
 #include "Common/WorkerPool.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Texture2D.h"
@@ -224,12 +225,14 @@ void LandIsland::Build(const LandData& data)
 		_heightMap->Update(heightMapData.data(), static_cast<uint32_t>(heightMapData.size()));
 
 		const auto luminosityMapData = CreateLuminosityMap();
-		_luminosityMap->Create(mapWidth, mapHeight, 1, graphics::TextureFormat::R8, Wrapping::ClampEdge, Filter::Nearest,
-		                       bgfx::copy(luminosityMapData.data(), static_cast<uint32_t>(luminosityMapData.size())));
+		_luminosityMap->Create(
+		    mapWidth, mapHeight, 1, graphics::TextureFormat::R8, Wrapping::ClampEdge, Filter::Nearest,
+		    Locator::graphicsDevice::value().Copy(luminosityMapData.data(), static_cast<uint32_t>(luminosityMapData.size())));
 
 		const auto cellColourMapData = CreateCellColourMap();
-		_cellColourMap->Create(mapWidth, mapHeight, 1, graphics::TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Nearest,
-		                       bgfx::copy(cellColourMapData.data(), static_cast<uint32_t>(cellColourMapData.size())));
+		_cellColourMap->Create(
+		    mapWidth, mapHeight, 1, graphics::TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Nearest,
+		    Locator::graphicsDevice::value().Copy(cellColourMapData.data(), static_cast<uint32_t>(cellColourMapData.size())));
 	}
 	else
 	{
@@ -274,7 +277,7 @@ void LandIsland::Build(const LandData& data)
 		// Threads that live as long as the build paint the blocks, each straight into the memory that bgfx then takes
 		std::vector<const bgfx::Memory*> painted(_landBlocks.size());
 		const auto blockBytes = static_cast<uint32_t>(block_texture::BlockBytesOf(_textureResolution));
-		std::ranges::generate(painted, [blockBytes] { return bgfx::alloc(blockBytes); });
+		std::ranges::generate(painted, [blockBytes] { return Locator::graphicsDevice::value().Alloc(blockBytes); });
 		WorkerPool painters(WorkerPool::DefaultThreadCount());
 		block_texture::BuildBlocks(
 		    _landBlocks.size(),
@@ -342,7 +345,8 @@ void LandIsland::Build(const LandData& data)
 	if (device)
 	{
 		const auto vertexCount = _landBlocks.size() * LandBlock::k_VertexCount;
-		const auto* vertexMemory = bgfx::alloc(static_cast<uint32_t>(vertexCount * sizeof(LandVertex)));
+		const auto* vertexMemory =
+		    Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(vertexCount * sizeof(LandVertex)));
 		const auto vertices = std::span(reinterpret_cast<LandVertex*>(vertexMemory->data), vertexCount);
 		for (size_t i = 0; i < _landBlocks.size(); ++i)
 		{
@@ -370,7 +374,7 @@ void LandIsland::Build(const LandData& data)
 		{
 			_landBlocks[i].SetVertices(*_blockVertices, static_cast<uint32_t>(i * LandBlock::k_VertexCount));
 		}
-		bgfx::frame();
+		Locator::graphicsDevice::value().Frame();
 	}
 }
 
@@ -566,7 +570,8 @@ void LandIsland::CommitAltitudeChanges()
 		{
 			continue;
 		}
-		const auto* vertexMemory = bgfx::alloc(static_cast<uint32_t>(LandBlock::k_VertexCount * sizeof(LandVertex)));
+		const auto* vertexMemory =
+		    Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(LandBlock::k_VertexCount * sizeof(LandVertex)));
 		_landBlocks[i].BuildMesh(*this, std::span(reinterpret_cast<LandVertex*>(vertexMemory->data), LandBlock::k_VertexCount));
 		_blockVertices->Update(static_cast<uint32_t>(i * LandBlock::k_VertexCount), vertexMemory);
 		// The ground's materials follow the height, so the changed cells are painted again. A block's texture has a

@@ -54,6 +54,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
@@ -786,6 +787,24 @@ TEST_F(Reactions, AVillagerGoingFromAFireToFightItKeepsTheReactionItNeeds)
 	EXPECT_EQ(registry.Get<const VillagerFireState>(villager).reaction, 7u);
 	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 7u);
 	Locator::reactionSystem::reset();
+}
+
+TEST_F(Reactions, ADeadVillagerLeavesItsFlockAlsoWhenAScriptControlsIt)
+{
+	// A script counts the worshippers it lost by the size of their flock: a body that lies dead is no longer a member
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto first = _villagers[0];
+	const auto second = _villagers[1];
+	const auto flock = ecs::script_flocks::Create(registry, ecs::script_flocks::PositionOf(registry, first));
+	ecs::script_flocks::AddLiving(registry, flock, first);
+	ecs::script_flocks::AddLiving(registry, flock, second);
+	registry.AssignOrReplace<ScriptControlled>(first);
+	villager_fire::Dead(registry.Get<LivingAction>(first));
+	EXPECT_EQ(ecs::script_flocks::Size(registry, flock), 1u);
+	EXPECT_FALSE(ecs::script_flocks::IsMember(registry, flock, first));
+	// The flock goes with its last member
+	villager_fire::Dead(registry.Get<LivingAction>(second));
+	EXPECT_FALSE(registry.Valid(flock));
 }
 
 TEST(VillagerFireRules, AFiremanRememberingNothingDecidesWhatToDoRatherThanStandingStill)

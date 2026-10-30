@@ -22,6 +22,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "3D/TempleScreenInterface.h"
 #include "Canvas.h"
 #include "ChatControls.h"
 #include "Creature/CreatureFightHud.h"
@@ -84,8 +85,8 @@ namespace openblack::gui
 /// The game's own interface, drawn over the scene: the menu that Escape brings up and the start-of-game question.
 ///
 /// It loads what Black & White's dialogs are made of: the texts of the info scripts, the font j0 and the front end
-/// atlas, and takes the mouse and keyboard from the game while a dialog is open.
-class GameInterface
+/// atlas, and takes the mouse and keyboard from the game while a dialog is open. It is the screen that the temple uses.
+class GameInterface final: public TempleScreenInterface
 {
 public:
 	/// Null when the game's files for it are missing. The player's own pictures take the places of their symbols.
@@ -93,7 +94,7 @@ public:
 	                                             const creature_tattoo::Pictures& pictures);
 	/// The texts of the game from its text scripts, which the interface and the help's dialogue show
 	[[nodiscard]] static TextDatabase LoadTexts();
-	~GameInterface();
+	~GameInterface() override;
 
 	/// Takes every key press and mouse event while the menu or a dialog is open. True when the event was taken.
 	bool ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution);
@@ -231,7 +232,7 @@ public:
 	/// The save game room's boxes take the mouse and the keyboard while one is up; true when they took the event
 	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
 	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.
-	void SetToolTipName(std::u16string name) { _toolTipName = std::move(name); }
+	void SetToolTipName(std::u16string name) override { _toolTipName = std::move(name); }
 	/// The screen of the front end: the backdrop that swirls by the milliseconds of the frame, the new player's box or the
 	/// skirmish box, and the pointer, under black of an alpha
 	void DrawNewPlayerScreen(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t milliseconds, float frameMilliseconds,
@@ -276,40 +277,34 @@ public:
 	/// The mouse buttons held down while the tattoo editor takes the mouse: the left one, and any of them
 	[[nodiscard]] bool IsTattooEditorLeftHeld() const noexcept { return _leftButtonDown; }
 	[[nodiscard]] bool IsTattooEditorButtonHeld() const noexcept { return _leftButtonDown || _otherButtonsDown != 0; }
-	[[nodiscard]] const TextDatabase& GetTexts() const noexcept { return _texts; }
+	[[nodiscard]] const TextDatabase& GetTexts() const noexcept override { return _texts; }
 	/// The dialogs' font, which the temple's scrolls are written in too
-	[[nodiscard]] const GameFont& GetFont() const noexcept { return _font; }
+	[[nodiscard]] const GameFont& GetFont() const noexcept override { return _font; }
 	/// The font's glyphs, white with their coverage in alpha
-	[[nodiscard]] const graphics::Texture2D& GetFontTexture() const noexcept { return *_fontTexture; }
+	[[nodiscard]] const graphics::Texture2D& GetFontTexture() const noexcept override { return *_fontTexture; }
 
-	/// Words shown over the screen, wrapped across the dialogs' 800 by 600 and 60 high from its top, as the temple's
-	/// future room shows them
-	struct Message
-	{
-		std::u16string text;
-		float alpha;
-	};
-	void SetMessage(std::optional<Message> message) { _message = std::move(message); }
-
-	/// Lines of words centred at the top of the screen, in black and again in yellow just right of and below, as the
-	/// temple's challenge room titles the picture it looks at closely
-	struct Caption
-	{
-		std::vector<std::u16string> lines;
-		/// From 0 to 255
-		uint8_t alpha;
-		/// Words that start a line's height below the top line, broken into lines across the middle half of the screen.
-		/// The temple's save game room writes the name of a save here.
-		std::u16string details;
-	};
-	void SetCaption(std::optional<Caption> caption) { _caption = std::move(caption); }
+	/// Words shown over the screen, wrapped across the dialogs' 800 by 600 and 60 high from its top
+	void SetMessage(std::optional<Message> message) override { _message = std::move(message); }
+	void SetCaption(std::optional<Caption> caption) override { _caption = std::move(caption); }
 
 	/// What the hand shows for what it is over
-	[[nodiscard]] ToolTips& GetToolTips() noexcept { return _toolTips; }
+	[[nodiscard]] ToolTips& GetToolTips() noexcept override { return _toolTips; }
 	/// The colour over the whole screen, over the interface too, which the temple fades in and out by
-	[[nodiscard]] ScreenFade& GetScreenFade() noexcept { return _screenFade; }
+	[[nodiscard]] ScreenFade& GetScreenFade() noexcept override { return _screenFade; }
 	/// Where on the screen the hand is, in pixels, which the tooltip is drawn by, or nowhere to show none
-	void SetHandOnScreen(std::optional<glm::vec2> position) { _handOnScreen = position; }
+	void SetHandOnScreen(std::optional<glm::vec2> position) override { _handOnScreen = position; }
+
+	[[nodiscard]] bool IsMenuOpen() const noexcept override { return _menu->IsOpen(); }
+	void OpenOptions() override;
+	void CloseMenu() override;
+	void SetMenuInsideTemple(bool inside) override;
+	[[nodiscard]] bool IsSaveBoxActive() const noexcept override { return _saveGameBoxes->IsActive(); }
+	void AskSaveQuestion(std::u16string question) override;
+	void AskSaveName(std::u16string_view name) override;
+	[[nodiscard]] std::optional<SaveAnswer> TakeSaveAnswer() override { return _saveGameBoxes->TakeAnswer(); }
+	[[nodiscard]] std::u16string_view GetSaveName() const override;
+	void SetStoryHistoryShown(bool shown) override;
+	[[nodiscard]] std::optional<help::StoryTurn> TakeStoryHistoryTurn() override { return _storyHistoryBox->TakeTurn(); }
 	/// The creature's status panel shown this frame, or none. It shows its reward row when the values have a reward,
 	/// and near the top of the screen without one, as while the camera follows a creature.
 	void SetCreaturePanel(std::optional<creature_panel::Values> values) { _creaturePanel = values; }

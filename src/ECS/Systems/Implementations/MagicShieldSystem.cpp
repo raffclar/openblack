@@ -48,6 +48,7 @@
 #include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -195,6 +196,12 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 		    .player = static_cast<int>(miracle.caster.player),
 		});
 		effects.AddTarget(dome.effect, object);
+	}
+	// The dome goes into the physics at once as a body at rest. It stays there until it goes, so that what flies at it
+	// bounces off.
+	if (Locator::dynamicsSystem::has_value())
+	{
+		static_cast<void>(Locator::dynamicsSystem::value().AddObstacle(object));
 	}
 }
 
@@ -498,14 +505,45 @@ std::optional<entt::entity> MagicShieldSystem::ShieldAt(glm::vec3 point) const
 		    {
 			    return;
 		    }
+		    // A dome that fades after the end of its miracle is not a shield miracle
+		    if (shield.spell == entt::null)
+		    {
+			    return;
+		    }
 		    const auto* dome = registry.TryGet<const ShieldDome>(entity);
 		    const float scale = dome != nullptr ? dome->solidScale : shield.radius * shield::k_DomeScalePerRadius;
 		    if (gutils::GetDistanceInMetres(transform.position, point) < shield::VolumeOf(halfExtent, scale).radius)
 		    {
-			    found = entity;
+			    found = shield.spell;
 		    }
 	    });
 	return found;
+}
+
+void MagicShieldSystem::RemoveWithSpell(entt::entity spell)
+{
+	const auto known = _objects.find(spell);
+	if (known == _objects.end())
+	{
+		return;
+	}
+	const auto object = known->second;
+	_objects.erase(known);
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(object))
+	{
+		return;
+	}
+	if (const auto* dome = registry.TryGet<const ShieldDome>(object);
+	    dome != nullptr && Locator::effectRequestSystem::has_value())
+	{
+		Locator::effectRequestSystem::value().Remove(dome->effect);
+	}
+	auto& shieldObject = registry.Get<MagicShield>(object);
+	shieldObject.spell = entt::null;
+	Strip(object, shieldObject);
+	registry.Destroy(object);
+	registry.SetDirty();
 }
 
 std::vector<MagicShieldSystemInterface::Avoid> MagicShieldSystem::CreatureAvoids(PlayerNames creaturePlayer,

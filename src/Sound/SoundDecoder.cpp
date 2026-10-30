@@ -353,4 +353,96 @@ std::optional<uint64_t> CountMpegFrames(std::span<const uint8_t> data)
 	return frames;
 }
 
+namespace
+{
+std::optional<SoundLength> MeasureWav(std::span<const uint8_t> data)
+{
+	drwav wav;
+	if (drwav_init_memory(&wav, data.data(), data.size(), nullptr) == DRWAV_FALSE)
+	{
+		return std::nullopt;
+	}
+	const SoundLength length {.frames = wav.totalPCMFrameCount, .sampleRate = static_cast<int>(wav.sampleRate)};
+	const bool known = ToLayout(wav.channels).has_value();
+	drwav_uninit(&wav);
+	return known ? std::optional(length) : std::nullopt;
+}
+
+std::optional<SoundLength> MeasureMpeg(std::span<const uint8_t> data)
+{
+	drmp3 mp3;
+	if (data.empty() || drmp3_init_memory(&mp3, data.data(), data.size(), nullptr) == DRMP3_FALSE)
+	{
+		return std::nullopt;
+	}
+	const auto frames = drmp3_get_pcm_frame_count(&mp3);
+	const SoundLength length {.frames = frames, .sampleRate = static_cast<int>(mp3.sampleRate)};
+	const bool known = ToLayout(mp3.channels).has_value();
+	drmp3_uninit(&mp3);
+	return known ? std::optional(length) : std::nullopt;
+}
+} // namespace
+
+std::optional<SoundLength> MeasureSound(std::span<const uint8_t> data)
+{
+	// The same choice of decoder and the same cut of the padding at the end as DecodeSound
+	std::optional<SoundLength> length;
+	std::optional<uint64_t> declaredFrames;
+	bool cutsPadding = true;
+	if (const auto wav = ParseWav(data))
+	{
+		switch (wav->formatTag)
+		{
+		case k_WaveFormatPcm:
+			if (wav->blockAlign != 0)
+			{
+				declaredFrames = wav->dataSize / wav->blockAlign;
+			}
+			cutsPadding = false;
+			length = MeasureWav(data);
+			break;
+		case k_WaveFormatMpeg:
+		case k_WaveFormatMpegLayer3:
+			length = MeasureMpeg(data.subspan(wav->dataOffset, wav->dataSize));
+			break;
+		default:
+			declaredFrames = wav->factSamples;
+			length = MeasureWav(data);
+			break;
+		}
+	}
+	else if (IsMpeg(data))
+	{
+		length = MeasureMpeg(data);
+	}
+	if (!length)
+	{
+		return std::nullopt;
+	}
+	if (cutsPadding && declaredFrames && length->frames > *declaredFrames)
+	{
+		length->frames = *declaredFrames;
+	}
+	const bool declaredSilent = declaredFrames && *declaredFrames == 0;
+	if (length->frames == 0 && !declaredSilent)
+	{
+		return std::nullopt;
+	}
+	return length;
+}
+
+float MeasureSoundParts(std::span<const std::vector<uint8_t>> parts)
+{
+	SoundLength total;
+	for (const auto& part : parts)
+	{
+		if (const auto length = MeasureSound(part))
+		{
+			total.frames += length->frames;
+			total.sampleRate = length->sampleRate;
+		}
+	}
+	return total.Seconds();
+}
+
 } // namespace openblack::audio

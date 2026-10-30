@@ -18,6 +18,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundDecoder.h"
 #include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
@@ -57,7 +58,8 @@ void HelpSpeechSystem::Say(uint32_t text, audio::SpeechVoice voice, std::optiona
 	// The scripts time the line by the length of its sample on their own clock, whatever the sound device does
 	const audio::SilentPlayback playback {
 	    .startMs = _clockMs,
-	    .lengthMs = Locator::resources::value().GetSounds().Handle(sample->sound)->duration * 1000.0f,
+	    .lengthMs = openblack::audio::MeasureSoundParts(Locator::resources::value().GetSounds().Handle(sample->sound)->buffer) *
+	                1000.0f,
 	};
 	_voices.Add(voice, *sample, emitter, playback, TimedByLength(audio));
 	// Each spoken line goes into the log, so that you can examine a run that has no sound

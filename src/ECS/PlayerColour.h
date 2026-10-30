@@ -21,6 +21,16 @@
 namespace openblack::player_colour
 {
 
+/// The colour of a player, 0xAARRGGBB, by player number. The table has a colour for each player slot of a land. A
+/// larger number takes the colour of its three low bits, as the masked colour lookups of the game do. Thus the gods
+/// after the neutral player have no colours of their own yet.
+[[nodiscard]] constexpr uint32_t Of(PlayerNames player)
+{
+	const auto& colours = ecs::components::Player::k_Colours;
+	static_assert((colours.size() & (colours.size() - 1)) == 0, "The mask of the colour table needs a power of two");
+	return colours.at(static_cast<size_t>(player) & (colours.size() - 1));
+}
+
 /// The colour of a player on a land, 0xFFRRGGBB. Some lands of the story give their second and third players the
 /// colours of other players; the other lands give each player its own colour.
 [[nodiscard]] constexpr uint32_t OnLand(PlayerNames player, int32_t landNumber)

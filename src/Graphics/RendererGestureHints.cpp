@@ -24,6 +24,7 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Player.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -240,7 +241,7 @@ void Renderer::DrawGestureHintSeeds(const DrawSceneDesc& desc) const
 	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const float alignment =
 	    Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(own) : 0.0f;
-	const auto ringColour = ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(own)));
+	const auto ringColour = ColourOf(player_colour::Of(own));
 
 	// The warm-up draws a globe of no size in the view of each picture, and each seed of no size in the first view.
 	// Thus the renderer has the pipelines before the first picture shows.

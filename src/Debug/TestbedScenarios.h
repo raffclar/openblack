@@ -15,6 +15,7 @@
 
 #include <entt/entity/fwd.hpp>
 
+#include "TestbedGameStage.h"
 #include "TestbedScenarioRegistry.h"
 #include "TestbedScenarioRunner.h"
 #include "Window.h"
@@ -62,7 +63,9 @@ private:
 	void DrawCreatures() noexcept;
 
 	CreatureSpawner& _spawner;
-	testbed_scenarios::Runner _runner;
+	/// The game that the scenarios stage
+	testbed_scenarios::TestbedGameStage _stage;
+	testbed_scenarios::Runner _runner {&_stage};
 	/// The facet the list is narrowed to, or every facet
 	std::optional<testbed_scenarios::Facet> _facet;
 	size_t _picked {0};

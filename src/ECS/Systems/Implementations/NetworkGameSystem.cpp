@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <string_view>
 #include <tuple>
 #include <utility>
@@ -32,6 +33,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Online/NetworkLand.h"
+#include "PlayerSlots.h"
 
 using namespace openblack::ecs::systems;
 
@@ -330,13 +332,14 @@ void NetworkGameSystem::Update()
 	if (const auto& joined = _session->GetJoined(); joined.has_value() && Locator::handSystem::has_value())
 	{
 		auto& hands = Locator::handSystem::value();
-		if (!joined->slot.has_value())
+		const auto own = joined->slot.has_value() ? player_slots::PlayerOfSlot(*joined->slot) : std::nullopt;
+		if (!own.has_value())
 		{
 			hands.ClearOwnPlayer();
 		}
-		else if (!hands.IsOwnPlayer(static_cast<PlayerNames>(*joined->slot)))
+		else if (!hands.IsOwnPlayer(*own))
 		{
-			hands.SetOwnPlayer(static_cast<PlayerNames>(*joined->slot));
+			hands.SetOwnPlayer(*own);
 		}
 	}
 
