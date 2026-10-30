@@ -51,7 +51,6 @@
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
 #include "Animals/HunterRules.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
@@ -247,7 +246,6 @@
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GesturePaths.h"
-#include "Graphics/RendererInterface.h"
 #include "Gui/GameTexts.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
@@ -272,7 +270,9 @@
 #include "Sound/GameMusic.h"
 #include "Sound/HeaderOverrides.h"
 #include "Sound/MusicMood.h"
+#include "Sound/SoundRequestInterface.h"
 #include "TestbedDispenserGrid.h"
+#include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
 
 #include "../Profiler.h"
@@ -819,7 +819,7 @@ std::string CheckProfileFolder()
 /// The custom music player plays a track of the custom music folder, or stops; the music moods look at once
 std::string PlayCustomMusic(size_t track)
 {
-	auto* player = Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+	auto* player = Locator::sounds::has_value() ? Locator::sounds::value().GetCustomMusic() : nullptr;
 	if (player == nullptr || !Locator::musicMoodSystem::has_value())
 	{
 		return "failed: no custom music player";
@@ -2597,7 +2597,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::PlayGuidanceVoice:
 	{
-		if (!Locator::audio::has_value())
+		if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio())
 		{
 			return "no audio";
 		}
@@ -2613,7 +2613,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			options.maxDistance = command.radius;
 			options.callerWins = audio::k_CallerDistancesWin;
 		}
-		const auto started = Locator::audio::value().StartSoundEffect(resources::HashIdentifier(sample), options);
+		const auto started = Locator::sounds::value().StartSoundEffect(resources::HashIdentifier(sample), options);
 		return fmt::format("{} asked for at volume {} and pitch {}%{}{}", sample, guidance::k_VoiceVolume,
 		                   guidance::k_VoicePitch, command.ctrl ? ", placed" : ", heard everywhere",
 		                   started == entt::null ? ", not started" : "");
@@ -5942,7 +5942,7 @@ void Runner::Measure()
 		stages.at(i) = static_cast<float>(Milliseconds(entry.stages.at(i).total));
 	}
 	// What the renderer last drew, the frame before
-	const auto draws = Locator::rendererInterface::has_value() ? Locator::rendererInterface::value().GetDrawsOfLastFrame() : 0u;
+	const auto draws = Locator::rendererRequests::has_value() ? Locator::rendererRequests::value().GetDrawsOfLastFrame() : 0u;
 	_recorder->Add(static_cast<float>(Milliseconds(frame)), static_cast<float>(Milliseconds(update)),
 	               static_cast<float>(Milliseconds(frame - update)), stages, static_cast<float>(draws));
 	if (++_framesSinceSummary >= k_FramesPerSummary || _recorder->Count() == _recorder->Capacity())

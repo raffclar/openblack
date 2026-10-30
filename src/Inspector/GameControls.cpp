@@ -31,7 +31,6 @@
 #include <glm/trigonometric.hpp>
 
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraDrag.h"
 #include "Camera/CreatureCameraModel.h"
@@ -52,11 +51,12 @@
 #include "Editor/EditorEntities.h"
 #include "EntityDescription.h"
 #include "GameSeamInterface.h"
-#include "Graphics/RendererInterface.h"
 #include "Gui/VillagerLabels.h"
 #include "Level.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
+#include "Sound/SoundRequestInterface.h"
+#include "Visual/RendererRequestsInterface.h"
 
 using namespace openblack;
 using namespace openblack::inspector;
@@ -265,9 +265,9 @@ std::string GameCamera::Set(const CameraPose& pose)
 void GameCamera::SetOverride(std::optional<CameraPose> pose)
 {
 	_override = pose;
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().SetListenerOverride(
+		Locator::sounds::value().SetListenerOverride(
 		    pose.has_value() ? std::optional(audio::ListenerLookingAt(pose->origin, pose->focus)) : std::nullopt);
 	}
 }
@@ -806,11 +806,11 @@ std::string GameScreenshots::Capture(const std::filesystem::path& path, bool hid
 
 std::optional<std::string> GameScreenshots::CaptureFailure(const std::filesystem::path& path)
 {
-	if (!Locator::rendererInterface::has_value())
+	if (!Locator::rendererRequests::has_value())
 	{
 		return std::nullopt;
 	}
-	return Locator::rendererInterface::value().TakeScreenshotFailure(path);
+	return Locator::rendererRequests::value().TakeScreenshotFailure(path);
 }
 
 void GameScreenshots::HideDebugGui()

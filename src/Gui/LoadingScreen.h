@@ -22,6 +22,7 @@
 #include <glm/vec4.hpp>
 
 #include "Graphics/Texture2D.h"
+#include "Graphics/VideoOverlay.h"
 #include "Gui/Canvas.h"
 #include "Gui/DialogPainter.h"
 #include "Gui/GameFont.h"

@@ -2205,3 +2205,7 @@ add_test(NAME test_server_check
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_server_check.py
 )
+add_test(NAME test_sim_includes
+         COMMAND ${CMAKE_COMMAND} -DCONFIG=${CMAKE_BINARY_DIR}/SimIncludesConfig.cmake
+                 -P ${CMAKE_SOURCE_DIR}/CMakeModules/CheckSimIncludes.cmake
+)

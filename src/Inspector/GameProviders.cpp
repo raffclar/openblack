@@ -40,7 +40,6 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/OceanInterface.h"
 #include "3D/TempleInteriorInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraZones.h"
@@ -250,7 +249,6 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "GameControls.h"
 #include "GameSeamInterface.h"
-#include "Graphics/RendererInterface.h"
 #include "Gui/ScreenFade.h"
 #include "Gui/ScriptTexts.h"
 #include "Gui/TextDatabase.h"
@@ -275,8 +273,10 @@
 #include "Sound/CustomMusicPlayerInterface.h"
 #include "Sound/GameMusic.h"
 #include "Sound/MusicMood.h"
+#include "Sound/SoundRequestInterface.h"
 #include "SystemProviders.h"
 #include "Temple/TemplePeople.h"
+#include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
 #include "WorldProviders.h"
 
@@ -324,6 +324,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"inputDevice", "players.input"},
     LocatorCoverage {"rendereringSystem", "engine.frame"},
     LocatorCoverage {"rendererInterface", "engine.frame"},
+    LocatorCoverage {"rendererRequests", "engine.frame"},
     // The device makes what the renderer draws, which engine.frame shows
     LocatorCoverage {"graphicsDevice", "engine.frame"},
     LocatorCoverage {"dynamicsSystem", "physics.state"},
@@ -789,10 +790,10 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 			              const auto size = Locator::windowing::value().GetSize();
 			              result["window"] = {size.x, size.y};
 		              }
-		              if (Locator::rendererInterface::has_value())
+		              if (Locator::rendererRequests::has_value())
 		              {
-			              result["renderer_debug"] = Locator::rendererInterface::value().GetDebug();
-			              result["renderer_profile"] = Locator::rendererInterface::value().GetProfile();
+			              result["renderer_debug"] = Locator::rendererRequests::value().GetDebug();
+			              result["renderer_profile"] = Locator::rendererRequests::value().GetProfile();
 		              }
 		              if (Locator::rendereringSystem::has_value())
 		              {
@@ -1888,7 +1889,7 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 	                                    "position) and the music moods: the record of each track and the current feelings"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
-		              auto* player = Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+		              auto* player = Locator::sounds::has_value() ? Locator::sounds::value().GetCustomMusic() : nullptr;
 		              if (player != nullptr)
 		              {
 			              Json tracks = Json::array();
@@ -4648,15 +4649,15 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(MakeAudioProvider({
 	    .world = World(),
 	    .state = []() -> std::optional<AudioState> {
-		    if (!Locator::audio::has_value())
+		    if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio())
 		    {
 			    return std::nullopt;
 		    }
-		    auto& audio = Locator::audio::value();
+		    auto& audio = Locator::sounds::value();
 		    AudioState state {.globalVolume = audio.GetGlobalVolume(),
 		                      .sfxVolume = audio.GetSfxVolume(),
 		                      .musicVolume = audio.GetMusicVolume(),
-		                      .musicActive = audio.MusicIsActive(),
+		                      .musicActive = audio.IsMusicActive(),
 		                      .listener = audio.GetListener().origin};
 		    if (Locator::gameMusic::has_value())
 		    {
@@ -4680,32 +4681,26 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 				    state.scriptMusicMs = std::chrono::duration_cast<std::chrono::milliseconds>(*time).count();
 			    }
 		    }
-		    if (const auto* player = audio.GetMusic(); player != nullptr)
+		    for (auto& channel : audio.GetMusicChannelStates())
 		    {
-			    for (const auto& channel : player->GetChannels())
-			    {
-				    if (channel.active && channel.bank)
-				    {
-					    state.musicChannels.push_back({
-					        .bank = channel.bank->path,
-					        .volume = channel.volume,
-					        .position = channel.placement ? std::optional(channel.placement->position) : std::nullopt,
-					    });
-				    }
-			    }
+			    state.musicChannels.push_back({
+			        .bank = std::move(channel.bank),
+			        .volume = channel.volume,
+			        .position = channel.position,
+			    });
 		    }
 		    return state;
 	    },
 	    .simulateDeviceLoss =
 	        [](bool lost) {
-		        if (Locator::audio::has_value())
+		        if (Locator::sounds::has_value())
 		        {
-			        Locator::audio::value().SimulateDeviceLoss(lost);
+			        Locator::sounds::value().SimulateDeviceLoss(lost);
 		        }
 	        },
-	    .deviceLost = []() { return Locator::audio::has_value() && Locator::audio::value().IsDeviceLost(); },
+	    .deviceLost = []() { return Locator::sounds::has_value() && Locator::sounds::value().IsDeviceLost(); },
 	    .emitters = []() -> const ecs::Registry* {
-		    return Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
+		    return Locator::sounds::has_value() ? Locator::sounds::value().GetEmitters() : nullptr;
 	    },
 	}));
 
