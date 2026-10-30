@@ -273,7 +273,6 @@
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/ScriptTexts.h"
 #include "Hand/HandClickRules.h"
@@ -3573,8 +3572,7 @@ void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 /// The game's music, none before the game has started it
 static audio::GameMusic* ScriptGameMusic()
 {
-	auto* game = Game::Instance();
-	return game != nullptr ? game->GetGameMusic() : nullptr;
+	return Locator::gameMusic::has_value() ? &Locator::gameMusic::value() : nullptr;
 }
 
 /// The music that the scripts start, as the world sees it

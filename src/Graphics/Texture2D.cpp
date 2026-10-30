@@ -11,14 +11,20 @@
 
 #include <cassert>
 
+#include <string>
+#include <vector>
+
 #include <bgfx/bgfx.h>
 #include <glm/ext/vector_uint2_sized.hpp>
 #include <spdlog/spdlog.h>
 #include <stb_image_write.h>
 
 #include "Common/MainThreadQueue.h"
+#include "GraphicsDeviceInterface.h"
 #include "GraphicsHandleBgfx.h"
+#include "Locator.h"
 #include "MainThreadWork.h"
+#include "TextureSize.h"
 #include "Visual/UploadPacer.h"
 
 namespace openblack::graphics
@@ -35,7 +41,7 @@ Texture2D::~Texture2D()
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::~Texture2D");
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
-		bgfx::destroy(toBgfx(_handle));
+		Locator::graphicsDevice::value().Destroy(_handle);
 	}
 }
 
@@ -82,43 +88,43 @@ void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t laye
 		{
 			UploadPacer::Pace(texels->size);
 		}
-		_handle = fromBgfx(bgfx::createTexture2D(width, height, false, layers, toBgfx(format), flags, texels));
+		const auto& device = Locator::graphicsDevice::value();
+		_handle = device.CreateTexture2D(width, height, layers, format, flags, texels);
 		// Out of textures, it isn't made: only one that is can be named
 		if (bgfx::isValid(toBgfx(_handle)))
 		{
-			bgfx::setName(toBgfx(_handle), _name.c_str());
+			device.SetName(_handle, _name);
 		}
 	});
 }
 
 void Texture2D::Describe(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format) noexcept
 {
-	bgfx::TextureInfo textureInfo;
-	bgfx::calcTextureSize(textureInfo, width, height, 1, false, false, layers, toBgfx(format));
-	_resolution = glm::u16vec2(textureInfo.width, textureInfo.height);
-	_numLayers = textureInfo.numLayers;
-	_format = fromBgfx(textureInfo.format);
-	_stride = textureInfo.width * textureInfo.bitsPerPixel / 8;
-	_storageSize = textureInfo.storageSize;
+	const auto size = CalculateTextureSize(width, height, layers, format);
+	_resolution = glm::u16vec2(size.width, size.height);
+	_numLayers = size.layers;
+	_format = format;
+	_stride = static_cast<uint16_t>(size.width * size.bitsPerPixel / 8);
+	_storageSize = size.storageSize;
 }
 
 void Texture2D::Update(const void* data, uint32_t size) const
 {
-	UpdateLayerFromMemory(0, bgfx::copy(data, size), size);
+	UpdateLayerFromMemory(0, Locator::graphicsDevice::value().Copy(data, size), size);
 }
 
 void Texture2D::UpdateLayerRegion(uint16_t layer, glm::u16vec2 origin, glm::u16vec2 size, const void* data,
                                   uint32_t bytes) const
 {
-	const auto* memory = bgfx::copy(data, bytes);
+	const auto* memory = Locator::graphicsDevice::value().Copy(data, bytes);
 	PostToMainThread(MainThreadApi::Graphics, [this, layer, origin, size, memory] {
-		bgfx::updateTexture2D(toBgfx(_handle), layer, 0, origin.x, origin.y, size.x, size.y, memory);
+		Locator::graphicsDevice::value().UpdateTexture2D(_handle, layer, origin, size, memory);
 	});
 }
 
 void Texture2D::UpdateLayer(uint16_t layer, const void* data, uint32_t size) const
 {
-	UpdateLayerFromMemory(layer, bgfx::copy(data, size), std::nullopt);
+	UpdateLayerFromMemory(layer, Locator::graphicsDevice::value().Copy(data, size), std::nullopt);
 }
 
 void Texture2D::UpdateLayerFromMemory(uint16_t layer, const void* memory) const
@@ -134,24 +140,26 @@ void Texture2D::UpdateLayerFromMemory(uint16_t layer, const void* memory, std::o
 		{
 			UploadPacer::Pace(*paced);
 		}
-		bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y, texels);
+		Locator::graphicsDevice::value().UpdateTexture2D(_handle, layer, glm::u16vec2(0, 0), _resolution, texels);
 	});
 }
 
 void Texture2D::DumpTexture() const
 {
 	assert(!_name.empty());
+	if (!Locator::graphicsDevice::has_value())
+	{
+		return;
+	}
+	const auto& device = Locator::graphicsDevice::value();
 	std::vector<uint8_t> pixels;
 	pixels.resize(_storageSize);
 	// A read gives one layer
 	for (uint16_t i = 0; i < _numLayers; ++i)
 	{
-		bgfx::TextureRegion layer;
-		layer.init(toBgfx(_handle));
-		layer.z = i;
-		bgfx::read(layer, &pixels[static_cast<size_t>(i) * _stride * _resolution.y]);
+		device.ReadTexture(_handle, i, &pixels[static_cast<size_t>(i) * _stride * _resolution.y]);
 	}
-	bgfx::frame();
+	device.Frame();
 	// TODO(bwrsandman): get the number of components from _info.format
 	const auto numComponents = 4u;
 	for (uint16_t i = 0; i < _numLayers; ++i)

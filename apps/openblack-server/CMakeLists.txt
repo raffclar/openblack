@@ -9,6 +9,48 @@ add_executable(openblack-server ${OPENBLACK_SERVER})
 target_link_libraries(openblack-server PRIVATE openblack_sim)
 target_include_directories(openblack-server PRIVATE ${CXXOPTS_INCLUDE_DIRS})
 
+# The server links neither the graphics library nor the game's library, which has the renderer. This check reads every
+# library that the server links, also through other libraries, and stops the configure step if one of them is there.
+function(openblack_server_link_closure target out)
+  set(seen "")
+  set(queue ${target})
+  while (queue)
+    list(POP_FRONT queue current)
+    if (NOT TARGET ${current} OR current IN_LIST seen)
+      continue()
+    endif ()
+    list(APPEND seen ${current})
+    get_target_property(aliased ${current} ALIASED_TARGET)
+    if (aliased)
+      list(APPEND queue ${aliased})
+    endif ()
+    foreach (property LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
+      get_target_property(libraries ${current} ${property})
+      if (NOT libraries)
+        continue()
+      endif ()
+      foreach (library ${libraries})
+        string(REGEX REPLACE "^\\$<LINK_ONLY:(.*)>$" "\\1" library
+                             "${library}"
+        )
+        if (TARGET ${library})
+          list(APPEND queue ${library})
+        endif ()
+      endforeach ()
+    endforeach ()
+  endwhile ()
+  set(${out}
+      ${seen}
+      PARENT_SCOPE
+  )
+endfunction()
+openblack_server_link_closure(openblack-server OPENBLACK_SERVER_LINKS)
+foreach (forbidden bgfx::bgfx bgfx::bx bgfx::bimg openblack_lib)
+  if (forbidden IN_LIST OPENBLACK_SERVER_LINKS)
+    message(FATAL_ERROR "openblack-server must not link ${forbidden}")
+  endif ()
+endforeach ()
+
 if (OPENBLACK_CLANG_TIDY_CHECKS)
   if (CLANG_TIDY)
     if (MSVC)

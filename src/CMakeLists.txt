@@ -48,27 +48,48 @@ endif ()
 # The systems are a static library of their own. The Debug objects of all sources together are bigger than the 4 GB that
 # the librarian can hold in one library file, as every object has its own copy of the debug information.
 set(OPENBLACK_ALL_SOURCES ${OPENBLACK_SOURCES})
-set(OPENBLACK_SYSTEM_SOURCES ${OPENBLACK_SOURCES})
-list(FILTER OPENBLACK_SYSTEM_SOURCES INCLUDE REGEX "/ECS/Systems/")
-if (NOT ANDROID)
-  list(REMOVE_ITEM OPENBLACK_SOURCES ${OPENBLACK_SYSTEM_SOURCES})
-endif ()
 
-# The simulation library, openblack_sim, has the world that the game and the dedicated server (apps/openblack-server)
-# share: the ECS and its components, the turn, the script machine, the physics, the creatures' minds, the land's data and
-# the save. The systems library is the systems part of it. The renderer, the GUI, the audio, the input, the windows and
-# the videos stay in the game's library, openblack_lib. Some files of the simulation still use the game's library, so the
-# two libraries use each other's symbols for now.
-set(OPENBLACK_SIM_SOURCES ${OPENBLACK_SOURCES})
+# The game's library, openblack_lib, is the client: the renderer and the graphics library, the GUI, the audio device, the
+# input, the windows, the videos, the debug windows, the editor and the inspector's game side. The first list gives these
+# files. The second list gives the files in these folders that the world uses with no device: they are in the simulation.
+set(OPENBLACK_CLIENT_SOURCES ${OPENBLACK_SOURCES})
 list(
   FILTER
-  OPENBLACK_SIM_SOURCES
+  OPENBLACK_CLIENT_SOURCES
   INCLUDE
   REGEX
-  "/src/(Animals|Blast|Commands|Common|Creature|ECS|FileSystem|Fire|Hand|LHScriptX|Magic|Nature|Parsers|Physics|Scenery|ScriptHeaders|Serializer|Simulation|Sound|Story|Visual)/|/src/(CHLApi|InfoConstants|Level|Profiler)[.]cpp$"
+  "/src/(Graphics|Gui|Windowing|Input|Video|Editor|Audio|Debug|Inspector|Web)/|/src/(Game|GameStartup|GameSession|GameSkirmish|LaunchSwitches|LocatorClient)[.]cpp$|/src/3D/Implementations/Ocean[.]cpp$|/ECS/Systems/Implementations/RenderingSystem[A-Za-z]*[.]cpp$"
+)
+set(OPENBLACK_SIM_IN_CLIENT_FOLDERS
+    "Audio/(GameSoundRequests|MpegAudioDecoder|WavAudioDecoder)"
+    "Debug/(SimRun|SimChecks|TempleVillagersSurvey|RowDump|ComputerGodTimes|ComputerActions|BenchmarkRecorder|FightAutopilotRules|TestbedCrowd|TestbedDispenserGrid|TestbedMultiplayer|TownMiracleRules|TownMiracles|TestbedScenarioRunner)"
+    "Debug/TestbedScenario[A-Z][A-Za-z]*"
+    "Editor/(EditorMath|EditorEntities|EditorPalette)"
+    "Graphics/(HandLight|InterfaceCreatures|MeshDetail|Moon|Sun|ViewFrustum|Texture2D|VertexBuffer|IndexBuffer|Mesh|TextureSize)"
+    "Gui/(ChatControlsRules|CinemaBars|ConditionsBoxRules|CustomMusicControlsRules|DialogKeyRules|EndGameBoxRules|EscapeKeyRules|GameFont|GameTexts|HandToolTipRules|HandToolTips|IncomingMessageStripRules|JoinOnlineEntry|LandThumbnail|LoadingScreenRules|LogoEffect|MenuBackdrop|MenuSettings|MultiplayerFrontEnd|MultiplayerFrontEndRules|OnlineMapTexts|PauseText|PingDisplay|ScreenFade|ScreenFit|ScriptFade|ScriptTexts|SkirmishBoxRules|StartupRules|StatisticsBoxRules|TextDatabase|TextEditRules|TextWrap|ToolTips|VillagerLabels|WorldTextDepth|WorldToolTipRules|WorldToolTips)"
+    "Input/(InjectedInput|InputLock|KeyBindings|KeyRebinding|GameActionMap|CursorFreeze|PointerSpeed|ScriptedMouse|ShortcutKeys|WindowPointer)"
+    "Windowing/(SystemPointer|WindowFit|WindowPixels)"
+    "Video/(FilmCreature|FilmEffects|FrameQueue|VideoRules|FallingSpellAudio|StillPicture)"
+    "Inspector/(CameraControl|ComponentReflection|EditProviders|EntityDescription|FightAutopilot|FightProviders|GameControls|GameInput|GameProviders|GameWorldEdit|GuiControl|InputControl|LevelControl|RegistryProviders|RunControl|ScriptControl|SimRecorder|SystemProviders|WorldProviders)"
+)
+list(JOIN OPENBLACK_SIM_IN_CLIENT_FOLDERS "|" OPENBLACK_SIM_IN_CLIENT_FOLDERS)
+list(FILTER OPENBLACK_CLIENT_SOURCES EXCLUDE REGEX
+     "/src/(${OPENBLACK_SIM_IN_CLIENT_FOLDERS})[.]cpp$"
+)
+
+# The simulation library, openblack_sim, has the world that the game and the dedicated server (apps/openblack-server)
+# share: the ECS and its components, the turn, the script machine, the physics, the creatures' minds, the land's data,
+# the resources with no device and the save. The systems library is the systems part of it. The simulation does not use
+# the game's library, so the dedicated server links neither the graphics library nor the renderer.
+set(OPENBLACK_SYSTEM_SOURCES ${OPENBLACK_SOURCES})
+list(FILTER OPENBLACK_SYSTEM_SOURCES INCLUDE REGEX "/ECS/Systems/")
+list(REMOVE_ITEM OPENBLACK_SYSTEM_SOURCES ${OPENBLACK_CLIENT_SOURCES})
+set(OPENBLACK_SIM_SOURCES ${OPENBLACK_SOURCES})
+list(REMOVE_ITEM OPENBLACK_SIM_SOURCES ${OPENBLACK_CLIENT_SOURCES}
+     ${OPENBLACK_SYSTEM_SOURCES}
 )
 if (NOT ANDROID)
-  list(REMOVE_ITEM OPENBLACK_SOURCES ${OPENBLACK_SIM_SOURCES})
+  set(OPENBLACK_SOURCES ${OPENBLACK_CLIENT_SOURCES})
 endif ()
 
 set(OPENBLACK_RC ${CMAKE_SOURCE_DIR}/assets/resource/icon/openblack.rc)
@@ -441,53 +462,66 @@ target_compile_options(
   PUBLIC "$<IF:$<CXX_COMPILER_ID:MSVC>,/fp:precise,-ffp-contract=off>"
 )
 
-# The systems library is built with the same options as the game's library: it takes each build property of that
-# library, so a property added above reaches both. The two libraries use each other's symbols, which static libraries
-# may do.
+# The simulation and its systems library are built with the same options as the game's library: they take each build
+# property of that library, so a property added above reaches all three. They link the same libraries as the game's
+# library, but not the graphics library or the game's library itself. The two simulation libraries use each other's
+# symbols, which static libraries may do; the game's library uses both, and they do not use it.
 if (NOT ANDROID)
+  # The libraries of the client only
+  set(OPENBLACK_CLIENT_ONLY_LIBRARIES bgfx::bgfx)
   add_library(openblack_systems STATIC ${OPENBLACK_SYSTEM_SOURCES})
-  foreach (
-    property
-    COMPILE_DEFINITIONS
-    COMPILE_OPTIONS
-    INCLUDE_DIRECTORIES
-    LINK_LIBRARIES
-    LINKER_LANGUAGE
-    CXX_CLANG_TIDY
-  )
-    get_target_property(value openblack_lib ${property})
-    if (value)
-      set_property(TARGET openblack_systems PROPERTY ${property} "${value}")
-    endif ()
-  endforeach ()
-  # The simulation library takes the build properties of the game's library in the same way
   add_library(openblack_sim STATIC ${OPENBLACK_SIM_SOURCES})
-  foreach (
-    property
-    COMPILE_DEFINITIONS
-    COMPILE_OPTIONS
-    INCLUDE_DIRECTORIES
-    LINK_LIBRARIES
-    LINKER_LANGUAGE
-    CXX_CLANG_TIDY
-  )
-    get_target_property(value openblack_lib ${property})
-    if (value)
-      set_property(TARGET openblack_sim PROPERTY ${property} "${value}")
+  # The version of the build is a part of the simulation: the server and the game both write it
+  get_target_property(OPENBLACK_LIB_SOURCES openblack_lib SOURCES)
+  list(REMOVE_ITEM OPENBLACK_LIB_SOURCES ${OPENBLACK_BUILD_VERSION_SOURCE})
+  set_property(TARGET openblack_lib PROPERTY SOURCES ${OPENBLACK_LIB_SOURCES})
+  target_sources(openblack_sim PRIVATE ${OPENBLACK_BUILD_VERSION_SOURCE})
+  add_dependencies(openblack_sim openblack_build_version)
+  foreach (target openblack_systems openblack_sim)
+    foreach (
+      property
+      COMPILE_DEFINITIONS
+      COMPILE_OPTIONS
+      INCLUDE_DIRECTORIES
+      INTERFACE_COMPILE_DEFINITIONS
+      INTERFACE_COMPILE_OPTIONS
+      INTERFACE_INCLUDE_DIRECTORIES
+      LINKER_LANGUAGE
+      CXX_CLANG_TIDY
+    )
+      get_target_property(value openblack_lib ${property})
+      if (value)
+        set_property(TARGET ${target} PROPERTY ${property} "${value}")
+      endif ()
+    endforeach ()
+    get_target_property(libraries openblack_lib LINK_LIBRARIES)
+    list(REMOVE_ITEM libraries ${OPENBLACK_CLIENT_ONLY_LIBRARIES})
+    target_link_libraries(${target} PUBLIC ${libraries})
+  endforeach ()
+  # The simulation uses the types of the graphics library in its headers, but not the library: it takes the include
+  # folders and the definitions of the library and its two parts, and links none of them
+  add_library(openblack_bgfx_headers INTERFACE)
+  foreach (part bgfx::bgfx bgfx::bx bgfx::bimg)
+    if (TARGET ${part})
+      target_include_directories(
+        openblack_bgfx_headers
+        INTERFACE $<TARGET_PROPERTY:${part},INTERFACE_INCLUDE_DIRECTORIES>
+      )
+      target_compile_definitions(
+        openblack_bgfx_headers
+        INTERFACE $<TARGET_PROPERTY:${part},INTERFACE_COMPILE_DEFINITIONS>
+      )
     endif ()
   endforeach ()
-  # The headers of the simulation are found from the folder of the sources, as the game's are
-  target_include_directories(
-    openblack_sim PUBLIC ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_BINARY_DIR}/include
-  )
-  target_link_libraries(openblack_lib PUBLIC openblack_systems openblack_sim)
-  target_link_libraries(openblack_systems PUBLIC openblack_lib)
-  target_link_libraries(openblack_sim PUBLIC openblack_systems openblack_lib)
-  # A linker that reads each static library one time (GNU ld) finds the symbols of the three libraries only if the link
-  # line names them again. MSVC's linker and LLVM's lld look through each library again by themselves.
-  set_property(
-    TARGET openblack_lib openblack_systems openblack_sim
-    PROPERTY LINK_INTERFACE_MULTIPLICITY 4
+  target_link_libraries(openblack_systems PUBLIC openblack_bgfx_headers)
+  target_link_libraries(openblack_sim PUBLIC openblack_bgfx_headers)
+  target_link_libraries(openblack_sim PUBLIC openblack_systems)
+  target_link_libraries(openblack_systems PUBLIC openblack_sim)
+  target_link_libraries(openblack_lib PUBLIC openblack_sim openblack_systems)
+  # A linker that reads each static library one time (GNU ld) finds the symbols of the two simulation libraries only if
+  # the link line names them again. MSVC's linker and LLVM's lld look through each library again by themselves.
+  set_property(TARGET openblack_systems openblack_sim
+               PROPERTY LINK_INTERFACE_MULTIPLICITY 4
   )
 endif ()
 

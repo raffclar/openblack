@@ -24,6 +24,7 @@
 
 #include "3D/L3DSubMesh.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VertexBuffer.h"
 #include "Locator.h"
@@ -36,7 +37,7 @@ namespace
 /// The layout of the skins of a model with these flags, on this device
 l3d_skin::Layout SkinLayoutOf(uint32_t flags)
 {
-	const auto* caps = bgfx::getCaps();
+	const auto* caps = Locator::graphicsDevice::has_value() ? Locator::graphicsDevice::value().GetCaps() : nullptr;
 	const bool has1555 = caps != nullptr && (caps->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0;
 	return l3d_skin::LayoutOf(flags, has1555);
 }
@@ -123,7 +124,8 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 		const auto size = static_cast<uint32_t>(bytes.size());
 		// bgfx only lets a texture created without texels have them changed
 		_skins[skin.id]->Create(l3d::L3DTexture::k_Width, l3d::L3DTexture::k_Height, 1, TextureFormatOf(_skinLayout),
-		                        Wrapping::Repeat, Filter::Linear, _dynamic ? nullptr : bgfx::copy(bytes.data(), size));
+		                        Wrapping::Repeat, Filter::Linear,
+		                        _dynamic ? nullptr : Locator::graphicsDevice::value().Copy(bytes.data(), size));
 		if (_dynamic)
 		{
 			_skins[skin.id]->Update(bytes.data(), size);

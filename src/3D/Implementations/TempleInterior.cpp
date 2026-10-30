@@ -38,6 +38,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleChallengeRoom.h"
 #include "3D/TempleSaveGameRoom.h"
+#include "3D/TempleScreenInterface.h"
 #include "3D/TempleScrolls.h"
 #include "3D/TempleSigns.h"
 #include "CHLApi.h"
@@ -68,21 +69,21 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
-#include "ECS/Systems/Implementations/RenderingSystem.h"
-#include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Gui/GameInterface.h"
-#include "Gui/GameMenu.h"
-#include "Gui/SaveGameBoxes.h"
+#include "Gui/GameFont.h"
+#include "Gui/ScreenFade.h"
+#include "Gui/TextDatabase.h"
+#include "Gui/ToolTips.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
@@ -358,7 +359,7 @@ glm::mat4 TempleInterior::GetPlacement() const
 	return glm::translate(glm::mat4(1.0f), _templePosition) * portable_math::EulerAngleY(_templeRotation.y);
 }
 
-void TempleInterior::SetInterface(gui::GameInterface* interface)
+void TempleInterior::SetInterface(TempleScreenInterface* interface)
 {
 	_interface = interface;
 	_scrolls.reset();
@@ -543,8 +544,7 @@ void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t 
 	{
 		return;
 	}
-	auto& boxes = _interface->GetSaveGameBoxes();
-	if (boxes.IsActive())
+	if (_interface->IsSaveBoxActive())
 	{
 		return;
 	}
@@ -553,17 +553,17 @@ void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t 
 	switch (click)
 	{
 	case Click::AskLoad:
-		boxes.Ask(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_LOADREQUEST")));
+		_interface->AskSaveQuestion(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_LOADREQUEST")));
 		break;
 	case Click::AskOverwrite:
-		boxes.Ask(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_SAVEREQUEST")));
+		_interface->AskSaveQuestion(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_SAVEREQUEST")));
 		break;
 	case Click::AskDelete:
-		boxes.Ask(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_DELETEREQUEST")));
+		_interface->AskSaveQuestion(std::u16string(texts.Get("HELP_TEXT_ROOM_CITADEL_SAVEGAME_ROOM_DELETEREQUEST")));
 		break;
 	case Click::AskName:
 		// A new save's name starts empty
-		boxes.AskName(u"");
+		_interface->AskSaveName(u"");
 		break;
 	default:
 		break;
@@ -574,7 +574,7 @@ void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t 
 void TempleInterior::UpdateSaveGameRoom()
 {
 	using Click = temple::save_game_room::Click;
-	using Answer = gui::SaveGameBoxes::Answer;
+	using Answer = TempleScreenInterface::SaveAnswer;
 	if (_saveGameRoom == nullptr || _interface == nullptr)
 	{
 		return;
@@ -586,8 +586,7 @@ void TempleInterior::UpdateSaveGameRoom()
 		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		_saveGameRoom->SetAlignment(Locator::alignmentSystem::value().GetPlayerAlignment(local));
 	}
-	auto& boxes = _interface->GetSaveGameBoxes();
-	const auto answer = boxes.TakeAnswer();
+	const auto answer = _interface->TakeSaveAnswer();
 	if (!answer.has_value() || !_saveGameQuestion.has_value())
 	{
 		return;
@@ -604,10 +603,10 @@ void TempleInterior::UpdateSaveGameRoom()
 	case Click::AskOverwrite:
 		// Yes to saving over a save asks for its name, the box holding the save's name
 		_saveGameQuestion = SaveGameQuestion {.click = Click::AskName, .slot = question.slot};
-		boxes.AskName(_saveGameRoom->SaveName(question.slot).value_or(std::u16string_view()));
+		_interface->AskSaveName(_saveGameRoom->SaveName(question.slot).value_or(std::u16string_view()));
 		return;
 	case Click::AskName:
-		SaveIntoSlot(question.slot, boxes.GetName(), gamesave::RoomSave::Chosen);
+		SaveIntoSlot(question.slot, _interface->GetSaveName(), gamesave::RoomSave::Chosen);
 		return;
 	case Click::AskLoad:
 		// Before a load of the previous land or the next land, the room saves the land that is open into the other of the
@@ -724,7 +723,7 @@ bool TempleInterior::HoldControl(bool pressed, float mouseY)
 		}
 	}
 	// While a question or the name box is up, the save game room's controls take no clicks
-	const bool boxUp = _interface != nullptr && _interface->GetSaveGameBoxes().IsActive();
+	const bool boxUp = _interface != nullptr && _interface->IsSaveBoxActive();
 	if (_saveGameRoom != nullptr && _cameraModel != nullptr && !boxUp)
 	{
 		const auto hoveredSaveSubMesh =
@@ -867,20 +866,18 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 	const bool arrived = _cameraModel != nullptr && _cameraModel->IsInControl() && !_transitionRoom.has_value();
 	if (_interface != nullptr)
 	{
-		auto& menu = _interface->GetMenu();
-		menu.SetInsideTemple(_active);
+		_interface->SetMenuInsideTemple(_active);
 		if (_cameraModel != nullptr)
 		{
-			_cameraModel->SetDialogOpen(menu.IsOpen() || _multiplayerFrontEnd);
+			_cameraModel->SetDialogOpen(_interface->IsMenuOpen() || _multiplayerFrontEnd);
 		}
 		// The options room, while no dialog is up: once the camera has come into the room it opens the game's
 		// options, and once they are closed it goes back to the main room
-		if (_currentRoom == TempleRoom::Options && arrived && !menu.IsOpen())
+		if (_currentRoom == TempleRoom::Options && arrived && !_interface->IsMenuOpen())
 		{
 			if (!_optionsShown)
 			{
-				menu.Open();
-				menu.ShowPage(gui::GameMenu::Page::Options);
+				_interface->OpenOptions();
 				_optionsShown = true;
 			}
 			else
@@ -893,14 +890,14 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 		{
 			// The options belong to their room: put elsewhere, as the debug window can, the player leaves them behind
 			_optionsShown = false;
-			menu.Close();
+			_interface->CloseMenu();
 		}
 	}
 
 	// The future room: once the camera has come into the room with no dialog up, "The future is still uncertain..."
 	// fades in to half over two seconds, from the start each time the camera comes in again. While the words show,
 	// the room turns slowly by itself.
-	std::optional<gui::GameInterface::Message> message;
+	std::optional<TempleScreenInterface::Message> message;
 	if (_currentRoom != TempleRoom::Multi || _cameraModel == nullptr)
 	{
 		_futureWords = {};
@@ -908,11 +905,11 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 	else
 	{
 		// The boxes of the multiplayer front end are always up, so the room never shows its words under them
-		const bool dialogOpen = (_interface != nullptr && _interface->GetMenu().IsOpen()) || _multiplayerFrontEnd;
+		const bool dialogOpen = (_interface != nullptr && _interface->IsMenuOpen()) || _multiplayerFrontEnd;
 		const auto alpha = temple::future_room::Step(_futureWords, _cameraModel->IsInControl(), dialogOpen, milliseconds);
 		if (alpha.has_value() && _interface != nullptr)
 		{
-			message = gui::GameInterface::Message {
+			message = TempleScreenInterface::Message {
 			    .text = std::u16string(_interface->GetTexts().Get("HELP_TEXT_DIALOG_ADDITION_129")),
 			    .alpha = *alpha / 255.0f,
 			};
@@ -930,7 +927,7 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 
 void TempleInterior::UpdateChallengeRoom()
 {
-	std::optional<gui::GameInterface::Caption> caption;
+	std::optional<TempleScreenInterface::Caption> caption;
 	if (_challengeRoom != nullptr && IsRoomDrawn(TempleRoom::Challenge))
 	{
 		const auto& registry = Locator::entitiesRegistry::value();
@@ -952,7 +949,7 @@ void TempleInterior::UpdateChallengeRoom()
 			const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 			const auto millisecondsPerTurn = static_cast<uint32_t>(ecs::systems::TimeSystemInterface::k_TurnDuration.count());
 			const auto taken = rules::TimeTaken(challenge.startedTurn, challenge.doneTurn, turn, millisecondsPerTurn);
-			caption = gui::GameInterface::Caption {
+			caption = TempleScreenInterface::Caption {
 			    .lines = {helpText(challenge.title),
 			              rules::DetailsLine(texts.Get("HELP_TEXT_ROOM_CITADEL_CHALLENGE_ROOM_TIME"), taken,
 			                                 texts.Get("HELP_TEXT_ROOM_CITADEL_CHALLENGE_ROOM_PERCENTCOMPLETE"),
@@ -966,7 +963,7 @@ void TempleInterior::UpdateChallengeRoom()
 	// are written on the screen, showing more the closer the camera is
 	if (const auto words = SaveGameRoomWords(); !caption.has_value() && words.has_value())
 	{
-		caption = gui::GameInterface::Caption {
+		caption = TempleScreenInterface::Caption {
 		    .lines = {},
 		    .alpha = temple::challenge_room::TextAlpha(_cameraModel->GetSubMeshZoom()),
 		    .details = words->details,
@@ -1061,7 +1058,7 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	_toolTipTurnTime += milliseconds;
 	for (; _toolTipTurnTime >= k_ToolTipTurnMilliseconds; _toolTipTurnTime -= k_ToolTipTurnMilliseconds)
 	{
-		if (!_interface->GetMenu().IsOpen() && _toolTip.index.has_value())
+		if (!_interface->IsMenuOpen() && _toolTip.index.has_value())
 		{
 			toolTips.Submit(*_toolTip.index, _toolTip.action, _toolTip.arrows);
 		}
@@ -1773,9 +1770,8 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			// While the camera is close to the story history, its buttons show, and a press turns its first line
 			if (_interface != nullptr)
 			{
-				auto& historyBox = _interface->GetStoryHistoryBox();
-				historyBox.SetShown(_scrolls->IsHistoryOpen());
-				if (const auto turn = historyBox.TakeTurn(); turn.has_value())
+				_interface->SetStoryHistoryShown(_scrolls->IsHistoryOpen());
+				if (const auto turn = _interface->TakeStoryHistoryTurn(); turn.has_value())
 				{
 					_scrolls->TurnHistory(*turn, facts);
 				}
@@ -2055,7 +2051,7 @@ void TempleInterior::Deactivate()
 	// The story history's buttons go with the temple
 	if (_interface != nullptr)
 	{
-		_interface->GetStoryHistoryBox().SetShown(false);
+		_interface->SetStoryHistoryShown(false);
 	}
 	// Leaving the room the player was kept in ends the game: the screen goes black rather than out to the island
 	if (_lock.GetRoom().has_value())
@@ -2201,28 +2197,39 @@ void TempleInterior::BringBackDialogue()
 	temple_help::BringBackDialogue(dialogue, _heldDialogue);
 }
 
+void TempleInterior::SetDrawMakers(DrawMakers makers)
+{
+	_drawMakers = std::move(makers);
+}
+
 void TempleInterior::DrawTemple()
 {
 	_islandDraw = Locator::rendereringSystem::handle();
 	Locator::rendereringSystem::reset(_templeDraw);
-	if (!Locator::rendereringSystem::has_value())
+	if (!Locator::rendereringSystem::has_value() && _drawMakers.temple)
 	{
-		Locator::rendereringSystem::emplace<ecs::systems::RenderingSystemTemple>();
+		_drawMakers.temple();
 		_templeDraw = Locator::rendereringSystem::handle();
 	}
 	// The rooms of this visit are new things, so the draw lists are made again
-	Locator::rendereringSystem::value().SetLayoutDirty();
+	if (Locator::rendereringSystem::has_value())
+	{
+		Locator::rendereringSystem::value().SetLayoutDirty();
+	}
 }
 
 void TempleInterior::DrawIsland()
 {
 	Locator::rendereringSystem::reset(std::exchange(_islandDraw, {}));
-	if (!Locator::rendereringSystem::has_value())
+	if (!Locator::rendereringSystem::has_value() && _drawMakers.island)
 	{
-		Locator::rendereringSystem::emplace<ecs::systems::RenderingSystem>();
+		_drawMakers.island();
 	}
 	// The island's things can have changed while the temple was drawn, so the draw lists are made again
-	Locator::rendereringSystem::value().SetLayoutDirty();
+	if (Locator::rendereringSystem::has_value())
+	{
+		Locator::rendereringSystem::value().SetLayoutDirty();
+	}
 }
 
 void TempleInterior::Close()
@@ -2256,11 +2263,11 @@ void TempleInterior::Close()
 		// Nor do the options room's options go out of the temple with the player
 		if (_optionsShown)
 		{
-			_interface->GetMenu().Close();
+			_interface->CloseMenu();
 		}
 		_interface->SetMessage(std::nullopt);
 		_interface->SetCaption(std::nullopt);
-		_interface->GetMenu().SetInsideTemple(false);
+		_interface->SetMenuInsideTemple(false);
 		// The tooltip ends with nothing to keep it
 		_interface->SetHandOnScreen(std::nullopt);
 		_interface->GetToolTips().ProcessTurn();

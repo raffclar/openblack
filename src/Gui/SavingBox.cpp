@@ -33,11 +33,6 @@ saving_box::Quad Box(int x1, int y1, int x2, int y2, std::array<uint32_t, 4> col
 }
 } // namespace
 
-bool saving_box::DarkensScreen(uint32_t slot)
-{
-	return slot < gamesave::k_FirstAutosaveSlot || slot > gamesave::k_LastAutosaveSlot;
-}
-
 saving_box::Layout saving_box::LayoutFor(int left, int right)
 {
 	const int middle = DialogPainter::k_Size.y / 2;

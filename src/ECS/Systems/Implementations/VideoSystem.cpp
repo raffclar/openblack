@@ -25,8 +25,7 @@
 #include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
-#include "Gui/GameInterface.h"
+#include "Gui/ScreenFade.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameMusic.h"
@@ -62,9 +61,9 @@ VideoSystem::Hooks GameHooks()
 	        },
 	    .forgetMusic =
 	        []() {
-		        if (auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		        if (Locator::gameMusic::has_value())
 		        {
-			        game->GetGameMusic()->ForgetPlaying();
+			        Locator::gameMusic::value().ForgetPlaying();
 		        }
 	        },
 	    .openFile = [](const std::filesystem::path& path) -> std::shared_ptr<const bink::BinkFile> {
@@ -100,12 +99,7 @@ VideoSystem::Hooks GameHooks()
 	    .fallingSpellPath = []() { return std::filesystem::path(k_FallingSpellFilm); },
 	    .fallingSpellCue = [audio =
 	                            std::make_shared<video::FallingSpellAudio>()](video::FallingSpellCue cue) { audio->Play(cue); },
-	    .whiteFadeReached =
-	        []() {
-		        auto* game = Game::Instance();
-		        return game != nullptr && game->GetInterface() != nullptr &&
-		               game->GetInterface()->GetScreenFade().GetTurns() > 0;
-	        },
+	    .whiteFadeReached = []() { return Locator::screenFade::has_value() && Locator::screenFade::value().GetTurns() > 0; },
 	    .fallingSpellStarted = []() { Locator::filmCreatureSystem::value().Start(); },
 	    .fallingSpellFrame =
 	        [](int32_t filmMs, std::chrono::steady_clock::time_point now) {
