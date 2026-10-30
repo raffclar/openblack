@@ -47,6 +47,10 @@ enum class SeedOrigin : uint8_t
 	return origin == SeedOrigin::Bubble;
 }
 
+/// The prayer power that a seed holds now. A cast gives all of the charge to the miracle, so the seed holds none. When
+/// the hand lets go of a miracle that it held, the seed holds what the miracle had left.
+[[nodiscard]] float SeedChantStore(float chantStore, float storedChants, bool hasCast);
+
 /// What a seed dropped from the hand gives back to the worship site of its icon: what its held miracle had left when let
 /// go, or its whole charge if it was never cast. A seed made without an icon gives back nothing, having nowhere to.
 [[nodiscard]] float SeedRefund(bool hasIcon, float chantStore, float storedChants, bool hasCast);

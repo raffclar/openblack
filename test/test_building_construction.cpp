@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <optional>
 
 #include <gtest/gtest.h>
 
@@ -182,4 +183,16 @@ TEST(BuildingConstruction, OnlyTheArksDryDockOfTheFeaturesIsDrawnGoingUp)
 	EXPECT_FALSE(FeatureDrawnGoingUp(openblack::FeatureInfo::Ark));
 	EXPECT_FALSE(FeatureDrawnGoingUp(openblack::FeatureInfo::ArkWreck));
 	EXPECT_FALSE(FeatureDrawnGoingUp(openblack::FeatureInfo::Toadstool));
+}
+
+TEST(BuildingConstruction, ABuildingIsDrawnGoingUpOnlyBelowAllOfIt)
+{
+	EXPECT_FALSE(DrawnGoingUp(std::nullopt, std::nullopt)) << "a building with no built amount stands whole";
+	EXPECT_TRUE(DrawnGoingUp(0.0f, std::nullopt));
+	EXPECT_TRUE(DrawnGoingUp(0.5f, std::nullopt));
+	EXPECT_FALSE(DrawnGoingUp(1.0f, std::nullopt)) << "all of it built is drawn whole, also before it is finished";
+	EXPECT_FALSE(DrawnGoingUp(1.5f, std::nullopt));
+	EXPECT_TRUE(DrawnGoingUp(0.5f, openblack::FeatureInfo::ArkDryDock));
+	EXPECT_FALSE(DrawnGoingUp(1.0f, openblack::FeatureInfo::ArkDryDock));
+	EXPECT_FALSE(DrawnGoingUp(0.5f, openblack::FeatureInfo::Ark));
 }

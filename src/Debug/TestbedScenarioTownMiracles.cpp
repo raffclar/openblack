@@ -257,6 +257,31 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "miracles.icon_charge_looks",
+	    .name = "The ring, the shine and the pulse of a worship site's icons as they charge",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The town and temple of town.miracle_debug_given. When the site has its heal and water icons, the site "
+	        "is built and each icon holds 45% of the charge of its miracle. The hand draws a spiral, then a W, so that "
+	        "the water icon starts to charge for the hand. The camera looks at the icons from near.",
+	    .expected = "A ring of light in red stands round the foot of each icon. The ring of the heal icon is 45% full, "
+	                "and the heal icon does not shine. When the water icon starts to charge, its ring falls to a part "
+	                "of its height and rises again as the icon charges. The water icon flashes red for 1.5 seconds, "
+	                "then shines a dim red. Once in each 3.33 seconds, a large red pulse model shrinks into the water "
+	                "icon over one second. When the water miracle comes into the hand, the water icon throbs in red "
+	                "and its ring is full.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = k_IconCharge},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::Spiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 7.0f, .value = static_cast<size_t>(GestureType::WShape)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "miracles.selection_request",
 	    .name = "A miracle asked for by gesture from a worship site's icon, then again by the R",
 	    .facet = Facet::Miracles,

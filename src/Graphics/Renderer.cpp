@@ -7734,6 +7734,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawTribalPower(desc);
 			DrawLightColumns(desc);
 			DrawScrollBeams(desc);
+			DrawIconPulses(desc);
 			DrawLeashes(desc);
 			DrawWaterRings(desc);
 			DrawRain(desc);

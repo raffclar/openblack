@@ -5803,6 +5803,22 @@ void AddObjects(std::vector<Scenario>& all)
 		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "TakeToyHome"}},
 		});
 		all.push_back({
+		    .id = "objects.kick_ball_in_pen",
+		    .name = "Kicking a ball about in the pen",
+		    .facet = Facet::Objects,
+		    .description = "A grown tiger of the player's stands in its pen before the temple, shown at a newborn's size. A "
+		                   "toy ball lies nine metres from it in the pen. A script tells it to kick the ball about.",
+		    .expected = "It walks towards the ball and stops some metres short of it, because its walks keep clear of "
+		                "things by its own size. It turns to the ball and kicks it: the ball flies off a short way, as a "
+		                "small creature kicks. It goes after the ball and kicks it again, two to four times in all.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Follow, .distance = 1.5f},
+		    .creatures = {Content(CreatureType::Tiger, {-320.0f, 113.0f})},
+		    .objects = {{.type = MobileStaticInfo::ToyBall, .offset = {-320.0f, 122.0f}}},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 2.0f, .object = 0, .action = "KickBallAround"}},
+		});
+		all.push_back({
 		    .id = "objects.take_wheat_home",
 		    .name = "Taking wheat from a field home",
 		    .facet = Facet::Objects,
@@ -12856,15 +12872,15 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
-	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
-	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
-	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown || kind == Kind::PlainKeyRepeat ||
-	       kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod || kind == Kind::JoinOnline ||
-	       kind == Kind::EndBox || kind == Kind::BringCreature || kind == Kind::TattooEditorAsNetworkGame ||
-	       kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage || kind == Kind::Chat ||
-	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || kind == Kind::SkirmishBox ||
-	       IsPointerCommand(kind);
+	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::FillBuiltAmount ||
+	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
+	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
+	       kind == Kind::BuildWorshipSites || kind == Kind::PressPlainKey || kind == Kind::PlainKeyDown ||
+	       kind == Kind::PlainKeyRepeat || kind == Kind::PlainKeyUp || kind == Kind::OtherGodHand || kind == Kind::OwnGod ||
+	       kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
+	       kind == Kind::TattooEditorAsNetworkGame || kind == Kind::ShowDemoPing || kind == Kind::AddIncomingMessage ||
+	       kind == Kind::Chat || kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends ||
+	       kind == Kind::SkirmishBox || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -12892,7 +12908,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 197> k_Names {
+	constexpr std::array<std::string_view, 198> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -13062,6 +13078,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "play the logo effect",
 	    "charge an icon with its seed in the hand",
 	    "finish the building",
+	    "fill the built amount",
 	    "call a script native",
 	    "animal flees",
 	    "hold the route search",

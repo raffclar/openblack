@@ -9,11 +9,14 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 #include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat4x4.hpp>
 
 #include "Enums.h"
 #include "Magic/WorshipBattery.h"
@@ -119,6 +122,21 @@ public:
 
 	/// Once a frame: the seeds above the icons spin
 	virtual void Update(float seconds) = 0;
+
+	/// The pulse model that a charging icon shows in a frame: where it is drawn, and its colour and alpha as 0xAARRGGBB
+	struct ChargePulse
+	{
+		glm::mat4 model {1.0f};
+		uint32_t argb {0};
+	};
+	/// Once a frame, while the frame draws the land: each icon at a worship site that is on the screen shows its charge.
+	/// Its ring of light fills and moves on, its shine changes, and its pulse model shrinks into it while it charges.
+	virtual void UpdateChargeLooks(int32_t /*gameMilliseconds*/, bool /*landDrawn*/) {}
+	/// The colour that an icon adds to its model this frame (0xRRGGBB), 0 for none. The model shows the shine of the
+	/// frame before, because the game draws the model before it changes the shine.
+	[[nodiscard]] virtual uint32_t ShownTint(entt::entity /*icon*/) const { return 0; }
+	/// The pulse models of the charging icons on the screen this frame
+	[[nodiscard]] virtual std::vector<ChargePulse> ChargePulses() const { return {}; }
 	/// A new land
 	virtual void Reset() = 0;
 };
