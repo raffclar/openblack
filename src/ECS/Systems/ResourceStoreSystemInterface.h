@@ -54,6 +54,9 @@ public:
 	/// A store takes a thing whole, for all the resource it is worth, and the thing goes; whether it took it. Thrown by a
 	/// player, the giving is that player's.
 	virtual bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) = 0;
+	/// A store takes a thing whole for a given resource, and the thing goes, as for TakeObject. Whether it took it.
+	virtual bool TakeObjectAs(entt::entity store, entt::entity object, ObjectResource resource,
+	                          std::optional<PlayerNames> giver) = 0;
 	/// A player's gift of a resource to a thing, by hand or by a miracle: the player's creature may see a deed to copy
 	virtual void ReportGift(entt::entity /*store*/, ResourceType /*type*/, PlayerNames /*giver*/) {}
 	/// A resource poured at a point goes to the stores and piles of it about the point, each taking what it will; what is

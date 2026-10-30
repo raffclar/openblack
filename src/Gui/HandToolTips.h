@@ -50,6 +50,14 @@ struct BuildingToolTips
 /// The tooltip of a tap on a thing that the hand can take, none when a tap does nothing to it
 [[nodiscard]] std::optional<uint32_t> TakeableTapOf(entt::entity object);
 
+/// How many scaffolds a scaffold is worth, which the hand shows in place of "Pick Up"; none for other things
+[[nodiscard]] std::optional<uint32_t> ScaffoldValueOf(entt::entity object);
+
+/// The tooltip of a let go of a held thing: "Plant" for a tree; for a scaffold, the text for the building that its
+/// phantom shows, or "Build" when the phantom shows no building; "Drop" for other things. None when the text of the
+/// building is not a tooltip.
+[[nodiscard]] std::optional<uint32_t> DropOf(entt::entity held);
+
 /// The tooltip over a scroll that a script put in the world, none for other things
 [[nodiscard]] std::optional<Offer> ScrollOf(entt::entity object);
 

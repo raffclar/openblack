@@ -66,6 +66,36 @@ struct SpecialPlace
 /// whole number
 [[nodiscard]] uint32_t ValueOfScale(float scale);
 
+/// The wood that a scaffold gives to a storage pit: the wood of one scaffold for each scaffold that it is worth
+[[nodiscard]] uint32_t WoodOfScaffold(uint32_t value, uint32_t scaffoldWood);
+
+/// The worth that stays in the hand when the hand puts a scaffold down gently on a building that needs fewer scaffolds
+/// than the scaffold is worth. None when the building needs all of the worth, or more.
+[[nodiscard]] std::optional<uint32_t> RestInHand(uint32_t value, uint32_t required);
+
+/// What the game knows of a scaffold when the hand taps it
+struct TapFacts
+{
+	/// The number of scaffolds that the scaffold is worth
+	uint32_t value {0};
+	/// The scaffold is in the physics
+	bool inPhysics {false};
+	/// The scaffold is on a building site
+	bool onSite {false};
+	/// Its workshop still keeps it (see KeepsScaffold), thus the hand can take it from its site
+	bool kept {false};
+	/// A script gave the scaffold its building
+	bool scriptBuilding {false};
+};
+
+/// Whether a tap breaks one scaffold off a scaffold: the scaffold is worth more than one, it is not in the physics, a
+/// script did not give it its building, and it is on no building site or still in the time to take it from the site
+[[nodiscard]] bool CanTapToBreak(const TapFacts& facts);
+
+/// The angle about the up axis along which a tap moves the two parts of a scaffold apart: a random quarter turn, 0 to 3,
+/// added to the angle of the scaffold
+[[nodiscard]] float BreakAngle(uint32_t quarterTurns, float yAngle);
+
 /// The scale of a scaffold that a script makes worth a size: the size cut to a whole number towards nought, then taken
 /// as a number of scaffolds. A negative size wraps round to a very large number of scaffolds, as the game takes it.
 [[nodiscard]] float ScaleOfScriptSize(float size);

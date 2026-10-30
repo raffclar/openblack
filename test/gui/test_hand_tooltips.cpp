@@ -113,40 +113,58 @@ TEST(HandToolTips, TapsAndScrolls)
 
 TEST(HandToolTips, HoldingAThingTheHandOffersToDropOrPlantItThenToThrowIt)
 {
-	const auto rock = Holding(true, HeldUse::None, false);
+	const auto rock = Holding(true, HeldUse::None, k_Drop);
 	ASSERT_TRUE(rock.has_value());
 	ASSERT_EQ(rock->size(), 2u);
 	EXPECT_EQ((*rock)[0], (Offer {.index = k_Drop, .action = ToolTipAction::Apply}));
 	EXPECT_EQ((*rock)[1], (Offer {.index = k_Throw, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_All}));
-	const auto tree = Holding(true, HeldUse::None, true);
+	const auto tree = Holding(true, HeldUse::None, k_Plant);
 	ASSERT_TRUE(tree.has_value());
 	EXPECT_EQ((*tree)[0].index, k_Plant);
-	EXPECT_EQ((*Holding(true, HeldUse::Give, false))[0].index, k_Give);
-	EXPECT_EQ((*Holding(true, HeldUse::Supply, true))[0].index, k_Supply);
-	EXPECT_EQ(Holding(true, HeldUse::Give, false)->size(), 1u);
+	EXPECT_EQ((*Holding(true, HeldUse::Give, k_Drop))[0].index, k_Give);
+	EXPECT_EQ((*Holding(true, HeldUse::Supply, k_Plant))[0].index, k_Supply);
+	EXPECT_EQ(Holding(true, HeldUse::Give, k_Drop)->size(), 1u);
+}
+
+TEST(HandToolTips, AHeldScaffoldOffersToCombineOrToBuildThenToThrow)
+{
+	const auto combine = Holding(true, HeldUse::Combine, k_Drop);
+	ASSERT_TRUE(combine.has_value());
+	ASSERT_EQ(combine->size(), 1u);
+	EXPECT_EQ((*combine)[0], (Offer {.index = k_CombineScaffolds, .action = ToolTipAction::Apply}));
+	constexpr uint32_t k_Build = 125;
+	const auto build = Holding(true, HeldUse::None, k_Build);
+	ASSERT_TRUE(build.has_value());
+	ASSERT_EQ(build->size(), 2u);
+	EXPECT_EQ((*build)[0].index, k_Build);
+	EXPECT_EQ((*build)[1].index, k_Throw);
+	const auto noDrop = Holding(true, HeldUse::None, std::nullopt);
+	ASSERT_TRUE(noDrop.has_value());
+	ASSERT_EQ(noDrop->size(), 1u);
+	EXPECT_EQ((*noDrop)[0].index, k_Throw);
 }
 
 TEST(HandToolTips, OverAnAltarThatTakesTheHeldThingTheHandOffersToSacrificeIt)
 {
-	const auto offers = Holding(true, HeldUse::Sacrifice, true);
+	const auto offers = Holding(true, HeldUse::Sacrifice, k_Plant);
 	ASSERT_TRUE(offers.has_value());
 	ASSERT_EQ(offers->size(), 1u);
 	EXPECT_EQ((*offers)[0].index, k_Sacrifice);
 	EXPECT_EQ((*offers)[0].action, ToolTipAction::Apply);
-	EXPECT_FALSE(Holding(false, HeldUse::Sacrifice, false).has_value());
+	EXPECT_FALSE(Holding(false, HeldUse::Sacrifice, k_Drop).has_value());
 }
 
 TEST(HandToolTips, OutsideTheInfluenceAHeldThingOffersWhatTheLandOffers)
 {
-	EXPECT_FALSE(Holding(false, HeldUse::Give, false).has_value());
-	EXPECT_FALSE(Holding(false, HeldUse::None, true).has_value());
+	EXPECT_FALSE(Holding(false, HeldUse::Give, k_Drop).has_value());
+	EXPECT_FALSE(Holding(false, HeldUse::None, k_Plant).has_value());
 }
 
 TEST(HandToolTips, DropAndThrowTakeTurnsForEachDisplayTime)
 {
 	ToolTips toolTips(SameInfo());
 	toolTips.SetLevel(ToolTipLevel::All);
-	const auto offers = *Holding(true, HeldUse::None, false);
+	const auto offers = *Holding(true, HeldUse::None, k_Drop);
 	const auto turn = [&]() {
 		for (const auto& offer : offers)
 		{

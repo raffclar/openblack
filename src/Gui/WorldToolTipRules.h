@@ -99,6 +99,8 @@ constexpr uint32_t k_BeliefNeeded = 109;
 constexpr uint32_t k_GotBelief = 110;
 /// "Amount: %3.0f", forced as the hand takes food from a pile, a field or a fish farm
 constexpr uint32_t k_HeldAmount = 119;
+/// "Scaffold Value %d", over a scaffold that the hand can take: how many scaffolds it is worth, as a whole number
+constexpr uint32_t k_ScaffoldValue = 116;
 /// "Temple Health: %3.0f%%"
 constexpr uint32_t k_TempleHealth = 117;
 /// "Prayer Energy: %3.0f", over the altar of a worship site with the hand empty

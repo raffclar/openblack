@@ -82,6 +82,25 @@ public:
 	/// A puff shows at the joined scaffold, and a sound plays at `hand` when it is given. The caller removes the held
 	/// scaffold from the hand first.
 	virtual void Join(entt::entity held, entt::entity target, std::optional<glm::vec3> hand) = 0;
+	/// Whether the hand can give a held scaffold to a thing as wood. Only a built storage pit takes a scaffold. A
+	/// workshop, a building site and a pile do not take it. Nothing changes.
+	[[nodiscard]] virtual bool GoesIntoStore(entt::entity scaffold, entt::entity store) const = 0;
+	/// A built storage pit takes a held scaffold as the wood of all the scaffolds that it is worth, and the scaffold goes.
+	/// The gift is the gift of the player. Whether the storage pit took the scaffold. The caller removes the scaffold from
+	/// the hand first.
+	virtual bool GiveToStore(entt::entity scaffold, entt::entity store, PlayerNames player) = 0;
+	/// A hand put a scaffold down gently, and the scaffold offers a building that needs fewer scaffolds than the scaffold
+	/// is worth. The scaffold keeps the worth that the building needs. The rest of the worth becomes a new scaffold at the
+	/// same place for the same town, with no workshop. The new scaffold, which the caller puts in the hand. None when the
+	/// scaffold keeps all of its worth.
+	virtual entt::entity SplitOffRest(entt::entity scaffold) = 0;
+	/// Whether the hand can tap a scaffold to break one scaffold off it (see workshop::CanTapToBreak)
+	[[nodiscard]] virtual bool ValidToTap(entt::entity scaffold) const = 0;
+	/// The hand taps a scaffold: the building that the scaffold started goes, and one scaffold breaks off. The two parts
+	/// move apart along a random quarter turn and start to move in the physics. The part that broke off goes to the
+	/// workshop of the scaffold when the workshop has room. One of four sounds plays at `hand`. Whether the tap broke the
+	/// scaffold.
+	virtual bool Tap(entt::entity scaffold, glm::vec3 hand) = 0;
 	/// The building that a town offers for scaffolds of a value at a place on the land, none when it offers none. The
 	/// search turns from a random angle (see scaffold_offer::SearchTown). A computer god looks for a place to use a
 	/// scaffold in this way.

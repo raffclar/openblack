@@ -96,6 +96,21 @@ std::optional<uint32_t> ScaffoldDrop(std::optional<uint32_t> plannedBuildText)
 
 std::u16string Compose(uint32_t index, std::u16string_view words, double first, std::optional<double> second)
 {
+	if (index == k_ScaffoldValue)
+	{
+		// The words write the worth of the scaffold as a whole number
+		std::u16string text(words);
+		if (const auto at = text.find(u"%d"); at != std::u16string::npos)
+		{
+			std::u16string number;
+			for (const char c : std::to_string(static_cast<int64_t>(first)))
+			{
+				number.push_back(static_cast<char16_t>(c));
+			}
+			text.replace(at, 2, number);
+		}
+		return text;
+	}
 	if (!second.has_value())
 	{
 		return fixed_format::WithNumber(words, first);
