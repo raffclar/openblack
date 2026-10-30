@@ -169,6 +169,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-leave-at", "Tests: at this turn the player of a network game leaves it as a player does, by Escape, Exit Online Game and Leave Game.", cxxopts::value<uint32_t>())
 		("sim-info-box-back-at", "Tests: at this turn the player of a network game clicks Back in the land information box. The player leaves the network game.", cxxopts::value<uint32_t>())
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
+		("sim-no-hand-reports", "Tools: the player's computer sends no report of its hand and its view to a network game. The reports carry the camera, which moves at each frame, so two runs with the same seed get the same commands only with this switch.")
 		("sim-checksums", "Tools: write the checksum of the synced world at the end of each turn to this file, as JSON lines (- for the standard output, as the web build needs). Two builds that play the same land, seed and commands must write the same lines.", cxxopts::value<std::string>())
 		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world, to find the part where two builds part.")
 		("sim-checksum-fields", "Tools: as --sim-checksum-parts, and the hash of each field of each component too.")
@@ -418,6 +419,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
 			}
 			simulation.settings.stillHand = result.count("sim-still-hand") != 0;
+			simulation.settings.noHandReports = result.count("sim-no-hand-reports") != 0;
 			simulation.settings.godsNeedNoTemple = result.count("sim-gods-need-no-temple") != 0;
 			if (result.count("sim-temple-loss") != 0)
 			{

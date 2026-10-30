@@ -2576,7 +2576,11 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 			std::ignore = TakeDialogueClick();
 			break;
 		}
-		ReportHand();
+		// A tool's run can keep the camera out of the commands, so that two runs give the same commands
+		if (!_simulation.has_value() || !_simulation->settings.noHandReports)
+		{
+			ReportHand();
+		}
 		ReportHelp();
 		SendDialogueClick();
 		Locator::playerCommandSystem::value().SendOpenBlock();
