@@ -13,9 +13,12 @@
 #include <algorithm>
 #include <array>
 #include <initializer_list>
+#include <iterator>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -28,7 +31,9 @@
 #include "LoopbackSockets.h"
 #include "Online/NetworkSession.h"
 #include "Online/StartRules.h"
+#include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/LockstepHost.h"
+#include "Server/SessionHash.h"
 
 using namespace openblack;
 using namespace openblack::player_commands;
@@ -67,6 +72,55 @@ struct FakeWorld
 		}
 		return partsAfter.has_value() && turn >= *partsAfter ? hash ^ 0xFF : hash;
 	}
+};
+
+/// True when the bytes have the text in them
+bool HasText(std::span<const uint8_t> bytes, std::string_view text)
+{
+	return !std::ranges::search(bytes, text, [](uint8_t byte, char letter) {
+		        return byte == static_cast<uint8_t>(letter);
+	        }).empty();
+}
+
+/// The hashes of the secrets of sessions, for the test: each hash has a new salt, and the digest is a FNV-1a hash
+class FakeSessionHasher final: public server::SessionHasherInterface
+{
+public:
+	[[nodiscard]] std::optional<server::SessionHash> Hash(std::string_view secret) const override
+	{
+		server::SessionHash hash;
+		hash.salt.fill(++_salts);
+		hash.digest = Digest(hash.salt, secret);
+		return hash;
+	}
+
+	[[nodiscard]] bool Matches(const server::SessionHash& hash, std::string_view secret) const override
+	{
+		return Digest(hash.salt, secret) == hash.digest;
+	}
+
+private:
+	[[nodiscard]] static std::array<uint8_t, server::k_SessionDigestBytes> Digest(std::span<const uint8_t> salt,
+	                                                                              std::string_view secret)
+	{
+		uint64_t value = 1469598103934665603ull;
+		for (const auto byte : salt)
+		{
+			value = (value ^ byte) * 1099511628211ull;
+		}
+		for (const auto letter : secret)
+		{
+			value = (value ^ static_cast<uint8_t>(letter)) * 1099511628211ull;
+		}
+		std::array<uint8_t, server::k_SessionDigestBytes> digest {};
+		for (size_t i = 0; i < digest.size(); ++i)
+		{
+			digest[i] = static_cast<uint8_t>(value >> (8 * (i % sizeof(uint64_t))));
+		}
+		return digest;
+	}
+
+	mutable uint8_t _salts {0};
 };
 
 /// The land file of the server in the test
@@ -167,7 +221,8 @@ protected:
 		        .godSlots = slots,
 		        .comeBackMicroseconds = comeBack,
 		        .keptTurns = 3200,
-		        .testCommands = testCommands});
+		        .testCommands = testCommands,
+		        .sessionHasher = hasher});
 	}
 
 	/// A room with no human god (tools): the game starts at once, and the world turns when this many observers joined
@@ -183,7 +238,8 @@ protected:
 		                          .minGods = observers,
 		                          .godSlots = 7,
 		                          .comeBackMicroseconds = comeBack,
-		                          .keptTurns = 3200});
+		                          .keptTurns = 3200,
+		                          .sessionHasher = hasher});
 	}
 
 	/// A room of the tools whose game plays a testbed scenario from the first turn
@@ -198,7 +254,8 @@ protected:
 		                          .minGods = gods,
 		                          .godSlots = 7,
 		                          .comeBackMicroseconds = 5LL * 60 * 1'000'000,
-		                          .keptTurns = 3200});
+		                          .keptTurns = 3200,
+		                          .sessionHasher = hasher});
 	}
 
 	/// One frame of the server and of each computer: 100 ms of time, and a turn when the world turns
@@ -253,6 +310,46 @@ protected:
 		return stopper.session.StoppedAfter().value_or(0);
 	}
 
+	/// The server keeps each turn that it sends in a journal, as the snapshots of the game server do
+	void KeepJournal()
+	{
+		host->SetTurnJournal(
+		    [this](uint32_t turn, std::span<const uint8_t> bytes) { journal[turn].assign(bytes.begin(), bytes.end()); });
+	}
+
+	/// The server stops with no warning. A new server continues the game from the room and the world of a snapshot, and
+	/// does again the turns of the journal after the snapshot, less the last turns that the journal lost.
+	void RestartFrom(const server::snapshots::Room& room, uint32_t turn, const FakeWorld& world,
+	                 const std::vector<Computer*>& computers, uint32_t lostTurns = 0)
+	{
+		for (auto* computer : computers)
+		{
+			network.Cut(computer->sockets->Ids().back());
+		}
+		host.reset();
+		MakeHost(2);
+		GiveWorldState();
+		serverWorld = world;
+		auto replayed = journal;
+		for (uint32_t i = 0; i < lostTurns && !replayed.empty(); ++i)
+		{
+			replayed.erase(std::prev(replayed.end()));
+		}
+		const auto savedRoom = server::snapshots::DecodeRoom(server::snapshots::EncodeRoom(room));
+		ASSERT_TRUE(savedRoom.has_value());
+		host->Restore(*savedRoom, turn, std::move(replayed));
+		KeepJournal();
+		while (host->Replaying())
+		{
+			const auto next = serverWorld.turns;
+			ASSERT_TRUE(host->HasTurn(next));
+			const auto commands = host->TakeTurn(next);
+			host->TurnChecksum(next + 1, serverWorld.Play(next, commands));
+		}
+	}
+
+	std::map<uint32_t, std::vector<uint8_t>> journal;
+	std::shared_ptr<const server::SessionHasherInterface> hasher = std::make_shared<FakeSessionHasher>();
 	int64_t now {1'000'000};
 	int secrets {0};
 	LoopbackSockets network;
@@ -1294,4 +1391,142 @@ TEST_F(LockstepTest, TheGodsAfterTheSeventhTakeTheNumbersAfterTheNeutralPlayer)
 	EXPECT_TRUE(serverWorld.players.contains(static_cast<PlayerNames>(9)));
 	EXPECT_FALSE(serverWorld.players.contains(PlayerNames::NEUTRAL));
 	EXPECT_EQ(gods[8]->world.players, serverWorld.players);
+}
+
+TEST_F(LockstepTest, AServerThatRestartsFromItsSnapshotGetsItsPlayersBackWithNoStepBack)
+{
+	hasher = std::make_shared<server::Sha256SessionHasher>();
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	// The snapshot of the server, then more turns with a command of a player
+	const auto room = host->RoomRecord();
+	const auto snapshotTurn = host->TurnsDone();
+	const auto snapshotWorld = serverWorld;
+	// The snapshot file keeps the hashes of the secrets, not the secrets
+	const auto file = server::snapshots::EncodeSnapshot({.turn = snapshotTurn, .room = room, .world = {}});
+	EXPECT_EQ(secrets, 2);
+	EXPECT_FALSE(HasText(file, "secret-"));
+	for (const auto& seat : host->Seats())
+	{
+		EXPECT_TRUE(seat.session.empty() || !HasText(file, seat.session));
+	}
+	alice.session.Send(HandTap {.object = Entity(5)});
+	Frames({&alice, &bob}, 20);
+	const auto lastTurn = host->TurnsDone();
+	const auto lastHash = serverWorld.hash;
+
+	RestartFrom(room, snapshotTurn, snapshotWorld, {&alice, &bob});
+	// The new server did again every turn that the old server sent, with the same commands
+	EXPECT_EQ(host->TurnsDone(), lastTurn);
+	EXPECT_EQ(serverWorld.hash, lastHash);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Away);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+	EXPECT_FALSE(host->HasTurn(lastTurn));
+
+	// The players come back with the secrets of their sessions and get only the turns that they missed
+	Frames({&alice, &bob}, 40);
+	for (const auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->session.GetState(), NetworkSession::State::Playing);
+		EXPECT_EQ(computer->session.Resumes(), 1u);
+		EXPECT_EQ(computer->loads, 0u);
+		EXPECT_EQ(computer->world.hash, serverWorld.hash);
+		EXPECT_EQ(computer->world.turns, serverWorld.turns);
+		EXPECT_EQ(computer->session.GetCompares().compared, computer->session.GetCompares().same);
+	}
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
+	EXPECT_GT(serverWorld.turns, lastTurn + 20);
+}
+
+TEST_F(LockstepTest, AfterARestartAPlayerWithTheWrongSecretIsRefused)
+{
+	hasher = std::make_shared<server::Sha256SessionHasher>();
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	auto room = host->RoomRecord();
+	const auto snapshotTurn = host->TurnsDone();
+	const auto snapshotWorld = serverWorld;
+	Frames({&alice, &bob}, 10);
+
+	// The slot of Bob keeps the hash of another secret, so the secret of Bob does not match it
+	room.seats[1].session = hasher->Hash("another-secret");
+	RestartFrom(room, snapshotTurn, snapshotWorld, {&alice, &bob});
+	Frames({&alice, &bob}, 40);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+	EXPECT_EQ(bob.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(bob.session.RefusedReason(), "resume");
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+}
+
+TEST_F(LockstepTest, AClientAheadOfTheRestoredServerGetsTheWorldOfTheServer)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto room = host->RoomRecord();
+	const auto snapshotTurn = host->TurnsDone();
+	const auto snapshotWorld = serverWorld;
+	Frames({&alice, &bob}, 20);
+	const auto lastTurn = host->TurnsDone();
+
+	// The journal lost its last turns, so the clients are at turns after the turn of the new server
+	RestartFrom(room, snapshotTurn, snapshotWorld, {&alice, &bob}, 5);
+	EXPECT_EQ(host->TurnsDone(), lastTurn - 5);
+	Frames({&alice, &bob}, 40);
+	for (const auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->session.GetState(), NetworkSession::State::Playing);
+		EXPECT_EQ(computer->loads, 1u);
+		EXPECT_EQ(computer->world.hash, serverWorld.hash);
+		EXPECT_EQ(computer->world.turns, serverWorld.turns);
+	}
+}
+
+TEST_F(LockstepTest, AGodWhoseProgramStoppedWithTheServerComesBackWithANewTicket)
+{
+	MakeHost(2);
+	GiveWorldState();
+	KeepJournal();
+	Computer alice(network, now, "god:alice");
+	auto bob = std::make_unique<Computer>(network, now, "god:bob");
+	Frames({&alice, bob.get()}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto room = host->RoomRecord();
+	const auto snapshotTurn = host->TurnsDone();
+	const auto snapshotWorld = serverWorld;
+	Frames({&alice, bob.get()}, 10);
+
+	// Bob's program stopped with the server. He starts it again with a new ticket of the same account.
+	network.Cut(bob->sockets->Ids().back());
+	bob.reset();
+	RestartFrom(room, snapshotTurn, snapshotWorld, {&alice});
+	Computer again(network, now, "god:bob");
+	Frames({&alice, &again}, 40);
+	ASSERT_TRUE(again.session.GetJoined().has_value());
+	EXPECT_EQ(again.session.GetJoined()->slot, std::optional<uint8_t>(1));
+	EXPECT_EQ(again.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(again.world.hash, serverWorld.hash);
+	// Alice came back with the secret of her session and stays in step with the server
+	EXPECT_GT(alice.session.GetCompares().same, 60u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(alice.loads, 0u);
+	EXPECT_EQ(alice.session.Resumes(), 1u);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
 }
