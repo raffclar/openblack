@@ -1483,12 +1483,15 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 		if (atom.shower != nullptr)
 		{
 			out.WriteValue(atom.shower->object);
+			// The frames that draw the shower move its sparks with the random numbers of this computer
+			out.Out().BeginPresentation();
 			out.WriteValue(atom.shower->sparks.has_value());
 			if (atom.shower->sparks.has_value())
 			{
 				out.WritePlain(*atom.shower->sparks);
 			}
 			out.WritePlain(atom.shower->clock);
+			out.Out().EndPresentation();
 		}
 		out.Out().WriteSize(atom.subCollections.size());
 		for (const auto& sub : atom.subCollections)

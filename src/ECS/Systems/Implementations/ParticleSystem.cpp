@@ -2029,7 +2029,8 @@ void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _gestureTrails);
 	reflection::SavePresentation(out, _gestureChain);
 	reflection::SavePresentation(out, _selectionEffect);
-	reflection::Save(out, _handManaPath);
+	// Only the hand of this computer starts the effect of its mana path, also in a frame
+	reflection::SavePresentation(out, _handManaPath);
 	reflection::Save(out, _beliefWanted);
 	reflection::SavePresentation(out, _chainScrollPace);
 
