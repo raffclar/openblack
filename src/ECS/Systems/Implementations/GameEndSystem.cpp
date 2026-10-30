@@ -218,6 +218,16 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 			                   : event.kind == game_end::Event::Kind::GodOut ? "is out of the game"
 			                                                                 : "is out of the game, and the game is decided");
 		}
+		// The rank of each god when the game is decided, so that the tools can compare the end on each computer
+		if (game_end::DecidingEvents(_events) != 0)
+		{
+			for (const auto god : world.ActiveGods())
+			{
+				const auto& standing = world.Standing(god);
+				SPDLOG_LOGGER_INFO(logger, "Turn {}: the god of player {} ends the game {} with a share of {:.9g} at place {}",
+				                   turn, static_cast<int>(god), standing.out ? "out" : "in", standing.share, standing.place);
+			}
+		}
 	}
 }
 

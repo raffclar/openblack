@@ -2136,6 +2136,9 @@ def main():
     # game decided after the last turn of the run tells nothing of the stop of the turns on the clients
     decided_after_run = decided_after_the_run(summary["decided_at_turn"], options.turns)
     summary["decided_after_run"] = decided_after_run
+    # The winner and the rank of each god, as the server tells them. Each client that plays to the end must tell the same.
+    server_end = sim_report.game_end_in_file(server_log)
+    summary["game_end"] = server_end
     for index, client_dir in enumerate(client_dirs):
         client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))
         compared = [turn for turn in sorted(client_turns) if turn in server_turns]
@@ -2176,6 +2179,10 @@ def main():
         # An observer that loaded the world of a running game catches up in frames of several turns, and the record keeps
         # the last turn of each frame: its session counts every turn
         enough = counts is not None and counts[0] >= expected // 2 if is_observer else len(compared) >= expected // 2
+        client_end = sim_report.game_end_in_file(os.path.join(client_dir, "client.log"))
+        if server_end and not left and not decided_after_run and client_end != server_end:
+            print(f"client {index + 1} tells another end of the game than the server: {client_end} against {server_end}")
+            different = different + [-3]
         same = (not different and enough and counts is not None
                 and (counts[0] - counts[1] <= (PURPOSEFUL_PART_COMPARES if parted_on_purpose else 0))
                 and (left or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
@@ -2190,7 +2197,7 @@ def main():
             "observer": is_observer, "max_turn_ms": max_turn_ms(os.path.join(client_dir, "record.jsonl")),
             "max_record_ms": max_record_ms(os.path.join(client_dir, "record.jsonl")),
             "last_compared": compared[-1] if compared else None,
-            "stopped_after": client_stopped_after,
+            "stopped_after": client_stopped_after, "game_end": client_end,
             "end_box": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The end box opens", "The end box asks", "leaves the network game"])[-3:],
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
