@@ -665,8 +665,13 @@ public:
 	    : _settings(settings)
 	    , _store(settings.folder, settings.keep)
 	{
-		// The first snapshot comes during the game, so the server makes the data of the world states ready before the game
-		if (Locator::saveGameSystem::has_value())
+	}
+
+	/// Makes the data of the world states ready after the land loaded, before the game turns. Thus the first snapshot
+	/// takes no more time than the next.
+	void Prepare() const
+	{
+		if (_settings.everyTurns > 0 && Locator::saveGameSystem::has_value())
 		{
 			Locator::saveGameSystem::value().PrepareWorldState();
 		}
@@ -838,6 +843,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	}
 	if (keeper != nullptr)
 	{
+		keeper->Prepare();
 		host.SetTurnJournal([keeper](uint32_t turn, std::span<const uint8_t> bytes) { keeper->Turn(turn, bytes); });
 	}
 	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.

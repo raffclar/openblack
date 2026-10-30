@@ -1267,6 +1267,12 @@ std::vector<uint8_t> SaveGameSystem::WorldState()
 	return WorldStateLater()();
 }
 
+void SaveGameSystem::PrepareWorldState()
+{
+	// The first copies of the world make the data that each later copy uses again. The function drops these copies.
+	std::ignore = WorldStateLater();
+}
+
 std::function<std::vector<uint8_t>()> SaveGameSystem::WorldStateLater()
 {
 	auto& registry = Locator::entitiesRegistry::value();
