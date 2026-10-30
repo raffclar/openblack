@@ -28,7 +28,8 @@ namespace
 constexpr std::array<uint8_t, 8> k_SnapshotMagic {'O', 'B', 'S', 'N', 'A', 'P', 'S', 'H'};
 constexpr std::array<uint8_t, 8> k_JournalMagic {'O', 'B', 'J', 'O', 'U', 'R', 'N', 'L'};
 /// Version 2 keeps a salted hash of each secret of a session. The files of version 1 kept the secrets, and do not load.
-constexpr uint32_t k_FormatVersion = 2;
+/// Version 3 keeps the last block of commands of each god. The files of version 2 do not load.
+constexpr uint32_t k_FormatVersion = 3;
 constexpr std::string_view k_SnapshotPrefix = "snapshot-";
 constexpr std::string_view k_SnapshotExtension = ".obsnap";
 constexpr std::string_view k_JournalPrefix = "journal-";
@@ -52,6 +53,12 @@ constexpr size_t k_ChecksumBytes = 8;
 void PutU8(std::vector<uint8_t>& out, uint8_t value)
 {
 	out.push_back(value);
+}
+
+void PutU16(std::vector<uint8_t>& out, uint16_t value)
+{
+	out.push_back(static_cast<uint8_t>(value));
+	out.push_back(static_cast<uint8_t>(value >> 8));
 }
 
 void PutU32(std::vector<uint8_t>& out, uint32_t value)
@@ -119,6 +126,12 @@ public:
 		return bytes.empty() ? 0 : bytes[0];
 	}
 
+	[[nodiscard]] uint16_t U16()
+	{
+		const auto bytes = Take(2);
+		return bytes.size() == 2 ? static_cast<uint16_t>(bytes[0] | (bytes[1] << 8)) : uint16_t {0};
+	}
+
 	[[nodiscard]] uint32_t U32()
 	{
 		uint32_t value = 0;
@@ -168,6 +181,28 @@ private:
 	size_t _at {0};
 	bool _good {true};
 };
+
+void PutBlocks(std::vector<uint8_t>& out, const BlockSequences& blocks)
+{
+	PutU32(out, static_cast<uint32_t>(blocks.size()));
+	for (const auto& [seat, sequence] : blocks)
+	{
+		PutU8(out, seat);
+		PutU16(out, sequence);
+	}
+}
+
+[[nodiscard]] BlockSequences ReadBlocks(Reader& reader)
+{
+	BlockSequences blocks;
+	const auto count = reader.U32();
+	for (uint32_t i = 0; i < count && reader.Good(); ++i)
+	{
+		const auto seat = reader.U8();
+		blocks[seat] = reader.U16();
+	}
+	return blocks;
+}
 
 [[nodiscard]] std::optional<uint32_t> TurnOfName(std::string_view name, std::string_view prefix, std::string_view extension)
 {
@@ -307,6 +342,7 @@ std::vector<uint8_t> EncodeSnapshot(const Snapshot& snapshot)
 	PutBytes(out, EncodeRoom(snapshot.room));
 	out.reserve(out.size() + 4 + snapshot.world.size() + k_ChecksumBytes);
 	PutBytes(out, snapshot.world);
+	PutBlocks(out, snapshot.blocks);
 	PutU64(out, Checksum(out));
 	return out;
 }
@@ -333,6 +369,7 @@ std::optional<Snapshot> DecodeSnapshot(std::span<const uint8_t> bytes)
 	snapshot.turn = reader.U32();
 	const auto room = DecodeRoom(reader.Bytes());
 	snapshot.world = reader.Bytes();
+	snapshot.blocks = ReadBlocks(reader);
 	if (!reader.Good() || !reader.AtEnd() || !room.has_value())
 	{
 		return std::nullopt;
@@ -351,25 +388,29 @@ std::vector<uint8_t> EncodeRecord(RecordKind kind, std::span<const uint8_t> byte
 	return out;
 }
 
-std::vector<uint8_t> TurnRecordBytes(uint32_t turn, std::span<const uint8_t> bytes)
+std::vector<uint8_t> TurnRecordBytes(uint32_t turn, std::span<const uint8_t> bytes, const BlockSequences& blocks)
 {
 	std::vector<uint8_t> out;
-	out.reserve(4 + bytes.size());
+	out.reserve(8 + 3 * blocks.size() + bytes.size());
 	PutU32(out, turn);
+	PutBlocks(out, blocks);
 	out.insert(out.end(), bytes.begin(), bytes.end());
 	return out;
 }
 
-std::optional<std::pair<uint32_t, std::vector<uint8_t>>> ReadTurnRecord(std::span<const uint8_t> bytes)
+std::optional<TurnRecord> ReadTurnRecord(std::span<const uint8_t> bytes)
 {
-	if (bytes.size() < 4)
+	Reader reader(bytes);
+	TurnRecord record;
+	record.turn = reader.U32();
+	record.blocks = ReadBlocks(reader);
+	if (!reader.Good())
 	{
 		return std::nullopt;
 	}
-	Reader reader(bytes);
-	const auto turn = reader.U32();
-	const auto rest = bytes.subspan(4);
-	return std::pair {turn, std::vector<uint8_t>(rest.begin(), rest.end())};
+	const auto rest = bytes.subspan(reader.At());
+	record.bytes.assign(rest.begin(), rest.end());
+	return record;
 }
 
 std::vector<uint8_t> JournalHeader()
@@ -528,9 +569,9 @@ void Store::AddRecord(RecordKind kind, std::span<const uint8_t> bytes)
 	_journal.flush();
 }
 
-void Store::AddTurn(uint32_t turn, std::span<const uint8_t> bytes)
+void Store::AddTurn(uint32_t turn, std::span<const uint8_t> bytes, const BlockSequences& blocks)
 {
-	AddRecord(RecordKind::Turn, TurnRecordBytes(turn, bytes));
+	AddRecord(RecordKind::Turn, TurnRecordBytes(turn, bytes, blocks));
 }
 
 void Store::AddRoom(const Room& room)
@@ -552,8 +593,10 @@ std::optional<Restored> Store::LoadNewest() const
 			skipped.push_back(path.filename().string());
 			continue;
 		}
-		Restored restored {.snapshot = std::move(*snapshot), .room = {}, .turns = {}, .skipped = skipped, .tornJournal = false};
+		Restored restored {
+		    .snapshot = std::move(*snapshot), .room = {}, .turns = {}, .blocks = {}, .skipped = skipped, .tornJournal = false};
 		restored.room = restored.snapshot.room;
+		restored.blocks = restored.snapshot.blocks;
 		// The turns after the snapshot follow one after the other through the journals. A gap or a torn record ends them.
 		auto next = turn;
 		bool ended = false;
@@ -576,19 +619,29 @@ std::optional<Restored> Store::LoadNewest() const
 				{
 					if (auto room = DecodeRoom(record.bytes); room.has_value())
 					{
+						// A slot with a new session counts its blocks from 0 again
+						for (size_t seat = 0; seat < room->seats.size(); ++seat)
+						{
+							if (seat >= restored.room.seats.size() ||
+							    room->seats[seat].session != restored.room.seats[seat].session)
+							{
+								restored.blocks.erase(static_cast<uint8_t>(seat));
+							}
+						}
 						restored.room = std::move(*room);
 					}
 					continue;
 				}
 				auto turnRecord = ReadTurnRecord(record.bytes);
-				if (!turnRecord.has_value() || turnRecord->first > next)
+				if (!turnRecord.has_value() || turnRecord->turn > next)
 				{
 					ended = true;
 					break;
 				}
-				if (turnRecord->first == next)
+				if (turnRecord->turn == next)
 				{
-					restored.turns.emplace(next, std::move(turnRecord->second));
+					restored.turns.emplace(next, std::move(turnRecord->bytes));
+					restored.blocks = std::move(turnRecord->blocks);
 					++next;
 				}
 			}
