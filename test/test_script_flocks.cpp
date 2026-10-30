@@ -15,6 +15,7 @@
 #include <numbers>
 #include <vector>
 
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
@@ -120,6 +121,28 @@ TEST(ScriptFlockRules, MembersWithinTheDomainStayPut)
 	const auto step = rules::MoveInFlock(Metres(6, 8), flock, std::ref(none), [](const MapCoords&) { return true; });
 	EXPECT_EQ(step.result, 1u);
 	EXPECT_FALSE(step.goal.has_value());
+}
+
+TEST(ScriptFlockRules, AHerdLeaderStaysWhenAScriptMovesThePlaceTwentyMetresEachWay)
+{
+	// The herd of The Greedy Farmer: the domain is 30 metres and the leader stays at the first place. The script moves
+	// the place by up to 20 metres on each axis. Each new place is less than 30 metres from the leader. Thus the leader
+	// does not move.
+	const std::array offsets = {glm::vec2(20.0f, 20.0f), glm::vec2(-20.0f, 20.0f), glm::vec2(20.0f, -20.0f),
+	                            glm::vec2(-20.0f, -20.0f)};
+	const auto start = Metres(1724.0f, 3081.0f);
+	for (const auto& offset : offsets)
+	{
+		const rules::FlockView herd {.place = Metres(1724.0f + offset.x, 3081.0f + offset.y),
+		                             .domainRadius = 30,
+		                             .flockDistance = 5,
+		                             .isLeader = true,
+		                             .leader = start};
+		Draws none;
+		const auto step = rules::MoveInFlock(start, herd, std::ref(none), [](const MapCoords&) { return true; });
+		EXPECT_EQ(step.result, 1u);
+		EXPECT_FALSE(step.goal.has_value());
+	}
 }
 
 TEST(ScriptFlockRules, TheLeaderOutsideTheDomainWalksBackIntoIt)

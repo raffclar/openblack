@@ -45,12 +45,12 @@
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/RendererInterface.h"
-#include "Graphics/ScreenshotCapture.h"
 #include "Help/ScriptSpirits.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "MainThreadWork.h"
+#include "Visual/RendererRequestsInterface.h"
+#include "Visual/ScreenView.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -210,15 +210,14 @@ void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
 	    Locator::helpTextSystem::has_value() ? Locator::helpTextSystem::value().GetWords(text) : std::u16string {});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game took picture {} of creature {}: action {}, score {}", *slot,
 	                   entt::to_integral(entity), plan.action, score);
-	if (!player.has_value() || !Locator::rendererInterface::has_value())
+	if (!player.has_value() || !Locator::rendererRequests::has_value())
 	{
 		return;
 	}
-	auto name =
-	    fmt::format("{}creature-picture/{}/{}", graphics::ScreenPictures::k_Prefix, entt::to_integral(entity), _asked++);
+	auto name = fmt::format("{}creature-picture/{}/{}", graphics::k_ScreenPicturePrefix, entt::to_integral(entity), _asked++);
 	// The renderer takes the picture at the end of a draw, so the request goes to the main thread
 	PostToMainThread(MainThreadApi::Renderer, [name] {
-		Locator::rendererInterface::value().RequestScreenPicture(name, &creature_web_page::TakePicture);
+		Locator::rendererRequests::value().RequestScreenPicture(name, &creature_web_page::TakePicture);
 	});
 	_waiting.push_back({.name = std::move(name), .player = *player, .slot = *slot});
 }
