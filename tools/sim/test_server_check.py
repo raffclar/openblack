@@ -62,6 +62,22 @@ class ServerCheckTest(unittest.TestCase):
         self.assertEqual(server_check.turns_gone_back(path), [[3, 2]])
         self.assertEqual(server_check.turns_gone_back(os.path.join(self.folder.name, "none.jsonl")), [])
 
+    def test_the_server_gets_the_commands_before_the_first_load(self):
+        source = write_lines(self.folder.name, "commands.jsonl",
+                             [{"turn": t, "give": t} for t in (1, 2, 3, 2, 3, 4)])
+        target = os.path.join(self.folder.name, "commands.before_load.jsonl")
+        server_check.copy_before_first_load(source, target)
+        with open(target, encoding="utf-8") as file:
+            self.assertEqual([json.loads(line)["turn"] for line in file], [1, 2, 3])
+
+    def test_the_given_commands_of_one_turn_stay_before_the_first_load(self):
+        source = write_lines(self.folder.name, "commands.gives.jsonl",
+                             [{"turn": t, "give": n} for n, t in enumerate((10, 10, 30, 71, 40))])
+        target = os.path.join(self.folder.name, "commands.before_load.gives.jsonl")
+        server_check.copy_before_first_load(source, target, lines_a_turn=0)
+        with open(target, encoding="utf-8") as file:
+            self.assertEqual([json.loads(line)["give"] for line in file], [0, 1, 2, 3])
+
     def test_compare_stops_at_the_turns_given(self):
         server = {1: "a1", 2: "a2", 3: "a3", 4: "x4"}
         game = {1: "a1", 2: "a2", 3: "a3"}

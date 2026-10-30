@@ -25,9 +25,9 @@ The object can also have an "expect", the least count of each deed of the hand (
 gives the deeds of the hand of each player that the server did ("Hand deed" lines of the logs: takes, scoops, throws,
 puts_down, pours, uses), and a run whose hand did fewer than its input expects is not the same.
 
-A testbed scenario can make the game load a saved world. The server keeps no saves and never loads, so the turns are
-compared only up to the game's last turn before its first load (the summary gives that turn as
-compared_until_load_at_turn).
+A testbed scenario can make the game load a saved world. The server keeps no saves and never loads, so it gets only the
+commands before the game's first load (commands.before_load.jsonl), and the turns are compared only up to the game's last
+turn before its first load (the summary gives that turn as compared_until_load_at_turn).
 
 Both play as the profile of a tool's run, in their own working folders. Both programs start with no console window of their
 own. The game starts with --background. The script stops only the
@@ -164,6 +164,23 @@ def turns_gone_back(path):
             if line:
                 turns.append(int(json.loads(line).get("turn", 0)))
     return [[before, after] for before, after in zip(turns, turns[1:]) if after <= before]
+
+
+def copy_before_first_load(source, target, lines_a_turn=1):
+    """Copies the lines of a commands file up to the first place where the turn goes back (the game's first load). The
+    server reads the commands of each turn from all the lines, so the commands of the turns played again after the load
+    would add to the commands of the first turns. The commands file has one line a turn. The file of the scenario's given
+    commands can have more lines for one turn (lines_a_turn 0): then only a smaller turn tells of the load."""
+    with open(source, encoding="utf-8") as file, open(target, "w", encoding="utf-8", newline="\n") as out:
+        last = None
+        for line in file:
+            if not line.strip():
+                continue
+            turn = int(json.loads(line).get("turn", 0))
+            if last is not None and (turn < last or (lines_a_turn == 1 and turn == last)):
+                break
+            last = turn
+            out.write(line.rstrip("\r\n") + "\n")
 
 
 def count_lines(path):
@@ -342,6 +359,16 @@ def main():
         played = game_checksums(record) if options.game_frames else {}
         if played and max(played) < options.turns:
             server_command[server_command.index("-n") + 1] = str(max(played))
+        # The server gets only the commands before the game's first load, and the scenario's commands given before it
+        if turns_gone_back(commands):
+            before_load = os.path.join(game_dir, "commands.before_load.jsonl")
+            copy_before_first_load(commands, before_load)
+            before_load_gives = os.path.join(game_dir, "commands.before_load.gives.jsonl")
+            if os.path.exists(gives):
+                copy_before_first_load(gives, before_load_gives, lines_a_turn=0)
+            elif os.path.exists(before_load_gives):
+                os.remove(before_load_gives)
+            server_command[server_command.index("--commands") + 1] = local(before_load)
         code, server_seconds = play_server()
         if code != 0:
             return 1
