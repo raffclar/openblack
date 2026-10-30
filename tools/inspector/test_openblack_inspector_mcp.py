@@ -794,6 +794,23 @@ class ArgumentsTest(SessionBase):
             self.assertEqual(sent, value)
             self.assertEqual(type(sent), type(value))
 
+    def test_creature_orders_go_to_the_game_with_their_parameters(self):
+        self.session.call("creature_pick_up", {"id": 157, "object": 3621, "pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["query"], "creature.pick_up")
+        self.assertEqual(self.first.asked()[-1]["params"], {"id": 157, "object": 3621})
+        self.session.call("creature_put_down", {"point": [2926.0, 3060.0], "throw": True, "pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["query"], "creature.put_down")
+        self.assertEqual(self.first.asked()[-1]["params"], {"point": [2926.0, 3060.0], "throw": True})
+        self.session.call("creature_put_down", {"pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["query"], "creature.put_down")
+        self.assertNotIn("params", self.first.asked()[-1])
+        self.session.call("creature_eat", {"object": 614, "action": "EatAlive", "pid": 1001})
+        self.assertEqual(self.first.asked()[-1]["query"], "creature.eat")
+        self.assertEqual(self.first.asked()[-1]["params"], {"object": 614, "action": "EatAlive"})
+        self.assertEqual(mcp.TOOLS_BY_NAME["creature_pick_up"]["inputSchema"]["required"], ["object"])
+        self.assertEqual(mcp.TOOLS_BY_NAME["creature_eat"]["inputSchema"]["required"], ["object"])
+        self.assertEqual(mcp.TOOLS_BY_NAME["creature_put_down"]["inputSchema"]["required"], [])
+
     def test_a_tool_refuses_arguments_it_doesnt_take(self):
         asked = len(self.first.asked())
         answer = self.session.call("game_moon", {"pid": 1001, "colour": "red"})

@@ -116,6 +116,37 @@ struct ClipLine
 [[nodiscard]] Json AnimationEntryJson(const creature_animation_log::Entry& entry, const std::optional<ClipLine>& line);
 [[nodiscard]] Json AnimationCauseJson(const creature_animation_log::Cause& cause);
 
+/// An order that the inspector gives a creature. The game does it as one of its own orders, through the
+/// creature's mind and body, never by a move of the thing.
+struct CreatureOrder
+{
+	enum class Kind : uint8_t
+	{
+		/// It goes to the thing, lifts it and holds it
+		PickUp,
+		/// It puts what it carries on the land: where it stands, or at the point after it carries it there
+		PutDown,
+		/// It takes what it carries near to the point and throws it there
+		Throw,
+		/// It eats from the thing with the eat action of the game's table
+		Eat,
+	};
+	Kind kind {Kind::PickUp};
+	std::optional<entt::entity> object;
+	std::optional<glm::vec2> point;
+	/// The action of the game's table, for an order to eat
+	std::string action;
+};
+/// What came of an order: whether the creature took it, and why not or what it does
+struct CreatureOrderResult
+{
+	bool taken {false};
+	std::string detail;
+};
+/// The eat action of the game's table for a creature that eats from the thing: from a storage pit, a field, a tree, or
+/// the thing itself
+[[nodiscard]] std::string_view EatActionFor(const ecs::Registry& registry, entt::entity thing);
+
 struct CreatureSources
 {
 	WorldSources world;
@@ -133,6 +164,8 @@ struct CreatureSources
 	std::function<std::optional<ClipLine>(entt::entity creature, size_t clip)> clipLine;
 	/// Removes the logs of the clips of all the creatures; none when the game has no log
 	std::function<void()> clearAnimationLogs;
+	/// Gives a creature an order; none when the inspector may not give orders
+	std::function<CreatureOrderResult(entt::entity creature, const CreatureOrder& order)> order;
 };
 
 ///   creature.list                       the creatures, what each does and its strongest desire
@@ -145,6 +178,10 @@ struct CreatureSources
 ///   creature.animation_history {id?, last?}  the clips that a creature's body played, the newest last
 ///   creature.animation_problems {id?}   the clips that something asked for that did not play
 ///   creature.animation_clear            removes the logs of the clips of all the creatures
+///   creature.pick_up {id?, object}      (writes) the creature goes to a thing, lifts it and holds it
+///   creature.put_down {id?, point?, throw?}  (writes) the creature puts what it carries on the land, here or at a
+///                                       point, or throws it at the point
+///   creature.eat {id?, object, action?} (writes) the creature eats from a thing: a store, a field, a tree or food
 ///   creature.clear_area {id?, position, width, living?}  the cells about a point that are not clear for the creature,
 ///                                       and the nearest clear area so wide
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeCreatureProvider(CreatureSources sources);

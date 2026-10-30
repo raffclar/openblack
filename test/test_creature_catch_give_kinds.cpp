@@ -11,6 +11,10 @@
 
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/StreetLantern.h"
@@ -21,6 +25,7 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include "ECS/Systems/Implementations/CreatureObjectActionSystem.h"
+#include "ECS/Systems/Implementations/PuzzleGameSystem.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -86,4 +91,53 @@ TEST_F(CreatureCatchKindsTest, ALanternIsNeverCaught)
 	const auto lantern = Make(StreetLantern {.country = false});
 	EXPECT_FALSE(hands.KindOf(lantern).canBePickedUp);
 	EXPECT_FALSE(hands.CanBeCaught(lantern));
+}
+
+// The player's hand may not take a covered ring of the beach temple puzzle, but a creature's hands may. They refuse a
+// ring only when the puzzle is solved.
+TEST_F(CreatureCatchKindsTest, ACreatureRefusesARingOfTheBeachTemplePuzzleOnlyWhenItIsSolved)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto ring = Make(MobileObject {.type = MobileObjectInfo::None});
+	registry.Assign<HanoiBlock>(ring);
+	registry.Assign<CannotBePickedUp>(ring);
+	EXPECT_EQ(hands.KindOf(ring).thing, Thing::MobileObject);
+	EXPECT_TRUE(hands.CanBeCaught(ring));
+
+	registry.Get<HanoiBlock>(ring).fixed = true;
+	EXPECT_FALSE(hands.CanBeCaught(ring));
+}
+
+TEST_F(CreatureCatchKindsTest, AThingThatCannotBePickedUpIsNotCaught)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto thing = Make(MobileObject {.type = MobileObjectInfo::None});
+	EXPECT_TRUE(hands.CanBeCaught(thing));
+	registry.Assign<CannotBePickedUp>(thing);
+	EXPECT_FALSE(hands.CanBeCaught(thing));
+}
+
+TEST_F(CreatureCatchKindsTest, ARingInACreaturesHandStaysWhereTheCreatureTookItForThePuzzle)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 home {10.0f, 9.0f, 20.0f};
+	const auto puzzle = registry.Create();
+	const auto ring = Make(MobileObject {.type = MobileObjectInfo::None});
+	registry.Assign<HanoiBlock>(ring, HanoiBlock {.puzzle = puzzle, .placedAt = home});
+	// The hand carries the ring away from its place
+	registry.Get<Transform>(ring).position = home + glm::vec3(30.0f, 5.0f, 0.0f);
+	registry.Assign<HeldByCreature>(ring, HeldByCreature {.takenFrom = HeldByCreature::Taken {.position = home}});
+	registry.Assign<PuzzleGame>(
+	    puzzle, PuzzleGame {.type = script::PuzzleGameType::Hanoi, .rings = {entt::null, entt::null, entt::null, ring}});
+	PuzzleGameSystem puzzles;
+
+	// The map keeps the ring at its place, so the puzzle stays calm and keeps the ring
+	puzzles.ProcessTurn();
+	EXPECT_TRUE(registry.Valid(ring));
+	EXPECT_EQ(registry.Get<const PuzzleGame>(puzzle).calmTurns, 5);
+
+	// A ring taken somewhere else is off its place, and the puzzle is not calm
+	registry.Get<HeldByCreature>(ring).takenFrom->position = home + glm::vec3(30.0f, 0.0f, 0.0f);
+	puzzles.ProcessTurn();
+	EXPECT_EQ(registry.Get<const PuzzleGame>(puzzle).calmTurns, 4);
 }
