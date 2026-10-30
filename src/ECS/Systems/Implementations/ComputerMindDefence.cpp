@@ -18,6 +18,7 @@
 #include <array>
 #include <functional>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -203,23 +204,27 @@ entt::entity HeartOf(entt::entity temple)
 	return heart;
 }
 
-/// The player that has the most influence at the place, the players asked in the order of their numbers
-PlayerNames MostInfluentialAt(const map_coords::MapCoords& place)
+/// The players that can have the most influence at a place, in the order of their numbers. The neutral player is not
+/// in the list: it is the answer when no player has influence there.
+std::vector<PlayerNames> InfluentialPlayers()
 {
-	std::vector<influence_rules::PlayerInfluenceAt> players;
-	Entities().Each<const Player>([&players, &place](const Player& player) {
-		// The neutral player is not asked: it is the answer when no player has influence there
-		if (player.name == PlayerNames::NEUTRAL)
+	std::vector<PlayerNames> players;
+	Entities().Each<const Player>([&players](const Player& player) {
+		if (player.name != PlayerNames::NEUTRAL)
 		{
-			return;
+			players.push_back(player.name);
 		}
-		const float influence = Locator::influenceSystem::has_value()
-		                            ? Locator::influenceSystem::value().PlayerInfluence(player.name, place)
-		                            : 0.0f;
-		players.push_back({.player = player.name, .influence = influence});
 	});
-	std::ranges::sort(players, {}, &influence_rules::PlayerInfluenceAt::player);
-	return influence_rules::MostInfluentialPlayer(players);
+	std::ranges::sort(players);
+	return players;
+}
+
+/// Whether the player has the most influence at the place
+bool MostInfluentialAt(const map_coords::MapCoords& place, PlayerNames player, std::span<const PlayerNames> players)
+{
+	return influence_rules::IsMostInfluentialPlayer(player, players, [&place](PlayerNames each) {
+		return Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().PlayerInfluence(each, place) : 0.0f;
+	});
 }
 
 /// What the town believes in each player, and what each player gave it lately
@@ -259,12 +264,14 @@ float ReactToAggressiveCreature(RuleContext& context, computer_mind::Mind& mind,
 	    });
 	std::ranges::sort(creatures, std::greater {});
 	const auto towns = TownsOf(context.player);
+	const auto players = InfluentialPlayers();
 	float best = 0.0f;
 	entt::entity chosen = entt::null;
 	for (const auto& [made, creature] : creatures)
 	{
 		const auto coords = CoordsOfThing(creature);
-		if (creature == own || !coords.has_value() || MostInfluentialAt(*coords) != context.player || !temple.has_value())
+		if (creature == own || !coords.has_value() || !MostInfluentialAt(*coords, context.player, players) ||
+		    !temple.has_value())
 		{
 			continue;
 		}
