@@ -272,6 +272,7 @@
 #include "Sound/GameMusic.h"
 #include "Sound/HeaderOverrides.h"
 #include "Sound/MusicMood.h"
+#include "Sound/SoundId.h"
 #include "TestbedDispenserGrid.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -4059,6 +4060,12 @@ void Runner::Give(const Command& command)
 		{
 			creature_hand_glow::Set(glows.glows, static_cast<creature_hand_glow::Place>(place), 1.0f,
 			                        static_cast<float>(command.value));
+		}
+		// A creature with glows that have power makes the hum of the creed, as after a load of the glows
+		if (command.value > 0 && Locator::soundTagSystem::has_value())
+		{
+			Locator::soundTagSystem::value().AttachObjectSound(*entity, static_cast<entt::id_type>(audio::SoundId::G_Creed_01),
+			                                                   true);
 		}
 		result = fmt::format("four glows of power {}", command.value);
 		break;
