@@ -22,6 +22,7 @@
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
 #include "Common/WorkerPool.h"
+#include "Creature/CreatureBlendStore.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 
@@ -66,62 +67,6 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(const Registry& things, entt::entity creature) override;
 	void AddAlignmentMotesOf(const Registry& copies, entt::entity copy) override;
 
-	/// A species' animation adjusted to the stand of a variant mesh that has no animation of its own, and the
-	/// animations that it comes from
-	struct AdjustedAnimation
-	{
-		const skeletal_animation::Animation* base;
-		const skeletal_animation::Animation* baseStand;
-		const skeletal_animation::Animation* stand;
-		skeletal_animation::Animation animation;
-	};
-	/// Which species, variant mesh and animation an adjusted animation is of
-	struct AdjustedKey
-	{
-		const creature::CreatureRig* rig;
-		creature::CreatureRig::Mesh mesh;
-		size_t index;
-		[[nodiscard]] bool operator==(const AdjustedKey&) const = default;
-	};
-	struct AdjustedKeyHash
-	{
-		[[nodiscard]] size_t operator()(const AdjustedKey& key) const noexcept
-		{
-			return std::hash<const void*> {}(key.rig) ^ (std::hash<size_t> {}(key.index) * 31u) ^
-			       (static_cast<size_t>(key.mesh) << 20u);
-		}
-	};
-	/// Which species, drawn body and animation a blend is of. The body is the bits of its two weights of shape.
-	struct BlendKey
-	{
-		const creature::CreatureRig* rig;
-		uint32_t evilGood;
-		uint32_t thinFat;
-		size_t index;
-		[[nodiscard]] bool operator==(const BlendKey&) const = default;
-	};
-	struct BlendKeyHash
-	{
-		[[nodiscard]] size_t operator()(const BlendKey& key) const noexcept
-		{
-			return std::hash<const void*> {}(key.rig) ^ (std::hash<size_t> {}(key.index) * 31u) ^
-			       (std::hash<uint64_t> {}((static_cast<uint64_t>(key.evilGood) << 32u) | key.thinFat) * 131u);
-		}
-	};
-	/// A blend that the system made before a turn asked for it, and the count of the shapes of the bodies at that time
-	struct PreparedBlend
-	{
-		skeletal_animation::Animation animation;
-		uint32_t shaping;
-	};
-	/// The animations of the species: the animations adjusted to the variants' stands, and the blends that the system
-	/// made for the first poses of the bodies before a turn asks for them
-	struct AnimationStores
-	{
-		std::unordered_map<AdjustedKey, std::optional<AdjustedAnimation>, AdjustedKeyHash> adjusted;
-		std::unordered_map<BlendKey, PreparedBlend, BlendKeyHash> prepared;
-	};
-
 private:
 	/// The creature's animations move on by some milliseconds, and the body takes a new pose where the creature is. The
 	/// pose of the last turn becomes the older pose.
@@ -146,7 +91,7 @@ private:
 	GameRandomSource _random;
 	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them,
 	/// and the blends made for the first poses
-	AnimationStores _stores;
+	creature_blends::Stores _stores;
 	/// The turns of the keyframes that the poses use, each turn made one time. Only the time that a pose takes changes.
 	skeletal_animation::KeyframeTurns _keyframeTurns;
 };

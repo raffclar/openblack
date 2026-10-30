@@ -15,7 +15,6 @@
 
 #include <algorithm>
 #include <array>
-#include <bit>
 #include <chrono>
 #include <functional>
 #include <numbers>
@@ -41,6 +40,7 @@
 #include "Creature/CreatureAlignmentMotes.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureAnimationLog.h"
+#include "Creature/CreatureBlendStore.h"
 #include "Creature/CreatureEyes.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/CreatureHandGlow.h"
@@ -91,9 +91,7 @@ using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 using openblack::creature::CreatureRig;
 using openblack::skeletal_animation::Animation;
-using AnimationStores = CreatureAnimationSystem::AnimationStores;
-using AdjustedKey = CreatureAnimationSystem::AdjustedKey;
-using BlendKey = CreatureAnimationSystem::BlendKey;
+using AnimationStores = creature_blends::Stores;
 
 namespace
 {
@@ -157,160 +155,6 @@ creature_morph::Morph TargetMorph(const Creature& creature, const CreatureMorph&
 	target.evilGood = morph.alignmentLook.value_or(target.evilGood);
 	target.weakStrong = morph.strengthLook.value_or(target.weakStrong);
 	return target;
-}
-
-CreatureRig::Mesh EvilGoodMesh(float value)
-{
-	return value < 0.0f ? CreatureRig::Mesh::Evil : CreatureRig::Mesh::Good;
-}
-
-CreatureRig::Mesh ThinFatMesh(float value)
-{
-	return value < 0.0f ? CreatureRig::Mesh::Thin : CreatureRig::Mesh::Fat;
-}
-
-/// A variant's animation, the base's adjusted to the variant's stand where the variant has none of its own, and the
-/// variant's stand
-struct VariantAnimation
-{
-	const Animation* animation {nullptr};
-	const Animation* stand {nullptr};
-};
-
-/// The animations that the adjusted animation of a variant comes from, when the variant has no animation of its own and
-/// the store has no adjusted animation from these animations yet
-struct AdjustmentSources
-{
-	AdjustedKey key;
-	const Animation* base;
-	const Animation* baseStand;
-	const Animation* stand;
-};
-
-std::optional<AdjustmentSources> MissingAdjustment(const AnimationStores& stores, const CreatureRig& rig,
-                                                   CreatureRig::Mesh mesh, size_t index)
-{
-	const auto slot = static_cast<size_t>(mesh);
-	if (!rig.hasMesh.at(slot) || slot >= rig.animations.size() || index == creature_animation::k_StandAnimation)
-	{
-		return std::nullopt;
-	}
-	const auto& own = rig.animations.at(slot);
-	if (index < own.size() && own[index].has_value())
-	{
-		return std::nullopt;
-	}
-	const AdjustmentSources sources {
-	    .key = {.rig = &rig, .mesh = mesh, .index = index},
-	    .base = rig.GetAnimation(CreatureRig::Mesh::Base, index),
-	    .baseStand = rig.GetAnimation(CreatureRig::Mesh::Base, creature_animation::k_StandAnimation),
-	    .stand = rig.GetAnimation(mesh, creature_animation::k_StandAnimation),
-	};
-	if (sources.base == nullptr || sources.baseStand == nullptr || sources.stand == nullptr)
-	{
-		return std::nullopt;
-	}
-	const auto kept = stores.adjusted.find(sources.key);
-	if (kept != stores.adjusted.end() && kept->second.has_value() && kept->second->base == sources.base &&
-	    kept->second->baseStand == sources.baseStand && kept->second->stand == sources.stand)
-	{
-		return std::nullopt;
-	}
-	return sources;
-}
-
-CreatureAnimationSystem::AdjustedAnimation AdjustmentOf(const AdjustmentSources& sources, Animation animation)
-{
-	return {.base = sources.base, .baseStand = sources.baseStand, .stand = sources.stand, .animation = std::move(animation)};
-}
-
-/// A variant's animation from the store, which has the adjusted animations of the variant already. It changes nothing,
-/// so many threads can find variants at the same time.
-VariantAnimation FindVariant(const AnimationStores& stores, const CreatureRig& rig, CreatureRig::Mesh mesh, size_t index)
-{
-	VariantAnimation variant;
-	const auto slot = static_cast<size_t>(mesh);
-	if (!rig.hasMesh.at(slot) || slot >= rig.animations.size())
-	{
-		return variant;
-	}
-	variant.stand = rig.GetAnimation(mesh, creature_animation::k_StandAnimation);
-	const auto& own = rig.animations.at(slot);
-	if (index < own.size() && own[index].has_value())
-	{
-		variant.animation = &*own[index];
-	}
-	else if (index == creature_animation::k_StandAnimation)
-	{
-		variant.animation = variant.stand;
-	}
-	else if (const auto kept = stores.adjusted.find({.rig = &rig, .mesh = mesh, .index = index});
-	         kept != stores.adjusted.end() && kept->second.has_value())
-	{
-		variant.animation = &kept->second->animation;
-	}
-	return variant;
-}
-
-VariantAnimation VariantOf(AnimationStores& stores, const CreatureRig& rig, CreatureRig::Mesh mesh, size_t index)
-{
-	// The adjustment uses only the species' animations, so every creature of the species has the same one
-	if (const auto missing = MissingAdjustment(stores, rig, mesh, index))
-	{
-		stores.adjusted.insert_or_assign(
-		    missing->key,
-		    AdjustmentOf(*missing, creature_animation::AdjustFromStand(*missing->base, *missing->baseStand, *missing->stand)));
-	}
-	return FindVariant(stores, rig, mesh, index);
-}
-
-/// The base animation blended toward the two variants as the body is drawn
-Animation BlendVariants(const Animation& base, const creature_morph::Morph& morph, const VariantAnimation& evilGood,
-                        const VariantAnimation& thinFat)
-{
-	return creature_animation::Blend(base,
-	                                 {.animation = evilGood.animation,
-	                                  .stand = evilGood.stand,
-	                                  .weight = evilGood.animation != nullptr ? std::abs(morph.evilGood) : 0.0f},
-	                                 {.animation = thinFat.animation,
-	                                  .stand = thinFat.stand,
-	                                  .weight = thinFat.animation != nullptr ? std::abs(morph.thinFat) : 0.0f});
-}
-
-/// The species' animation blended as the body is drawn
-std::optional<Animation> BlendAnimation(AnimationStores& stores, const CreatureRig& rig, const creature_morph::Morph& morph,
-                                        size_t index)
-{
-	const auto* base = rig.GetAnimation(CreatureRig::Mesh::Base, index);
-	if (base == nullptr)
-	{
-		return std::nullopt;
-	}
-	const auto evilGood = VariantOf(stores, rig, EvilGoodMesh(morph.evilGood), index);
-	const auto thinFat = VariantOf(stores, rig, ThinFatMesh(morph.thinFat), index);
-	return BlendVariants(*base, morph, evilGood, thinFat);
-}
-
-BlendKey BlendKeyOf(const CreatureRig& rig, const creature_morph::Morph& morph, size_t index)
-{
-	return {.rig = &rig,
-	        .evilGood = std::bit_cast<uint32_t>(morph.evilGood),
-	        .thinFat = std::bit_cast<uint32_t>(morph.thinFat),
-	        .index = index};
-}
-
-/// The blend that the system made for the body before the turn asked for it, taken out of the store
-std::optional<Animation> TakePrepared(AnimationStores& stores, const CreatureRig& rig, const creature_morph::Morph& morph,
-                                      size_t index)
-{
-	const auto kept = stores.prepared.find(BlendKeyOf(rig, morph, index));
-	if (kept == stores.prepared.end())
-	{
-		return std::nullopt;
-	}
-	auto animation = std::move(kept->second.animation);
-	stores.prepared.erase(kept);
-	return animation;
 }
 
 /// The animations of the first pose of a body and of its first plan: its stand and the two turns of its head. A body
@@ -394,10 +238,10 @@ const Animation* AnimationOf(AnimationStores& stores, CreatureAnimation& animati
 	{
 		// A species without the animation keeps an empty one, so as not to look for it again. A blend that the system
 		// made before the turn asked for it is the same blend.
-		auto blended = TakePrepared(stores, rig, morph, index);
+		auto blended = creature_blends::TakePrepared(stores, rig, morph, index);
 		if (!blended.has_value())
 		{
-			blended = BlendAnimation(stores, rig, morph, index);
+			blended = creature_blends::Blend(stores, rig, morph, index);
 		}
 		found = animation.animations.emplace(index, std::move(blended).value_or(Animation {})).first;
 	}
@@ -1181,7 +1025,7 @@ void CreatureAnimationSystem::ShapeBodies()
 	auto& registry = Locator::entitiesRegistry::value();
 	// A blend that no turn took after two shapes goes, so that the store does not grow
 	++_shapings;
-	std::erase_if(_stores.prepared, [this](const auto& kept) { return kept.second.shaping + 2 < _shapings; });
+	creature_blends::ForgetOld(_stores, _shapings);
 	std::vector<entt::entity> unposed;
 	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
 	    [&](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation,
@@ -1224,12 +1068,7 @@ void CreatureAnimationSystem::PrepareFirstBlends(std::span<const entt::entity> c
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& rigs = Locator::resources::value().GetCreatureRigs();
-	struct Wanted
-	{
-		BlendKey key;
-		creature_morph::Morph morph;
-	};
-	std::vector<Wanted> wanted;
+	std::vector<creature_blends::Wanted> wanted;
 	for (const auto entity : creatures)
 	{
 		const auto* body = registry.TryGet<const Creature>(entity);
@@ -1240,15 +1079,12 @@ void CreatureAnimationSystem::PrepareFirstBlends(std::span<const entt::entity> c
 			continue;
 		}
 		const auto& rig = *rigs.Handle(creature::GetRigId(body->species));
+		// A blend that the creature keeps already is not made again
 		const auto want = [&](size_t index) {
-			const auto key = BlendKeyOf(rig, morph->drawn, index);
-			if (animation->animations.contains(index) || _stores.prepared.contains(key) ||
-			    rig.GetAnimation(CreatureRig::Mesh::Base, index) == nullptr ||
-			    std::ranges::any_of(wanted, [&key](const Wanted& other) { return other.key == key; }))
+			if (!animation->animations.contains(index))
 			{
-				return;
+				wanted.push_back({.rig = &rig, .morph = morph->drawn, .index = index});
 			}
-			wanted.push_back({.key = key, .morph = morph->drawn});
 		};
 		std::ranges::for_each(k_FirstPoseBlends, want);
 		if (!registry.AllOf<PickUpReach>(entity))
@@ -1265,46 +1101,7 @@ void CreatureAnimationSystem::PrepareFirstBlends(std::span<const entt::entity> c
 	{
 		_workers = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
 	}
-
-	// First the adjusted animations of the variants that the blends use, each one time
-	std::vector<AdjustmentSources> adjustments;
-	for (const auto& [key, morph] : wanted)
-	{
-		for (const auto mesh : {EvilGoodMesh(morph.evilGood), ThinFatMesh(morph.thinFat)})
-		{
-			const auto missing = MissingAdjustment(_stores, *key.rig, mesh, key.index);
-			if (missing.has_value() && std::ranges::none_of(adjustments, [&missing](const AdjustmentSources& other) {
-				    return other.key == missing->key;
-			    }))
-			{
-				adjustments.push_back(*missing);
-			}
-		}
-	}
-	std::vector<Animation> adjusted(adjustments.size());
-	_workers->ForEach(adjustments.size(), [&adjustments, &adjusted](size_t index, size_t /*lane*/) {
-		const auto& sources = adjustments[index];
-		adjusted[index] = creature_animation::AdjustFromStand(*sources.base, *sources.baseStand, *sources.stand);
-	});
-	for (size_t i = 0; i < adjustments.size(); ++i)
-	{
-		_stores.adjusted.insert_or_assign(adjustments[i].key, AdjustmentOf(adjustments[i], std::move(adjusted[i])));
-	}
-
-	// Then the blends. The threads only read the store.
-	std::vector<Animation> blends(wanted.size());
-	_workers->ForEach(wanted.size(), [this, &wanted, &blends](size_t index, size_t /*lane*/) {
-		const auto& [key, morph] = wanted[index];
-		const auto& rig = *key.rig;
-		blends[index] = BlendVariants(*rig.GetAnimation(CreatureRig::Mesh::Base, key.index), morph,
-		                              FindVariant(_stores, rig, EvilGoodMesh(morph.evilGood), key.index),
-		                              FindVariant(_stores, rig, ThinFatMesh(morph.thinFat), key.index));
-	});
-	for (size_t i = 0; i < wanted.size(); ++i)
-	{
-		_stores.prepared.insert_or_assign(
-		    wanted[i].key, CreatureAnimationSystem::PreparedBlend {.animation = std::move(blends[i]), .shaping = _shapings});
-	}
+	creature_blends::Prepare(_stores, wanted, *_workers, _shapings);
 }
 
 void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
