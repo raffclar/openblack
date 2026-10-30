@@ -498,7 +498,9 @@ std::vector<player_commands::Command> NetworkSession::TakeTurn(uint32_t turn)
 
 void NetworkSession::Turn(const turn_codec::TurnBundle& turn)
 {
-	if (turn.turn < _turnsDone || _turns.contains(turn.turn))
+	// While the world of the server comes, the session keeps the turns from the turn of that world. After a restart of the
+	// server, that turn can come before the turns that this computer did.
+	if (turn.turn < _worldTurn.value_or(_turnsDone) || _turns.contains(turn.turn))
 	{
 		return;
 	}
