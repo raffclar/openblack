@@ -415,6 +415,45 @@ void AddPiles(std::vector<Scenario>& all)
 	                  .holdSeconds = 4.0f}},
 	});
 }
+
+void AddScriptDeletes(std::vector<Scenario>& all)
+{
+	// A script makes two fireball globes, as the second land's fireball challenge does, then deletes them
+	using Kind = Command::Kind;
+	using Argument = ScriptArgument;
+	constexpr int32_t k_OneShotSpell = 30;
+	constexpr int32_t k_FireballSeed = 2;
+	const auto create = [](float delay, glm::vec2 point) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "CREATE",
+		                .scriptArguments = {{.kind = Argument::Kind::Integer, .number = static_cast<float>(k_OneShotSpell)},
+		                                    {.kind = Argument::Kind::Integer, .number = static_cast<float>(k_FireballSeed)},
+		                                    {.kind = Argument::Kind::Position, .point = point}}};
+	};
+	const auto remove = [](float delay, size_t made, float mode) {
+		return Command {.kind = Kind::CallNative,
+		                .delaySeconds = delay,
+		                .script = "OBJECT_DELETE",
+		                .scriptArguments = {{.kind = Argument::Kind::Made, .index = made},
+		                                    {.kind = Argument::Kind::Integer, .number = mode}}};
+	};
+	all.push_back({
+	    .id = "miracles.script_deletes_globes",
+	    .name = "A script deletes fireball globes with fade and with explode",
+	    .facet = Facet::Miracles,
+	    .description = "One second in, a script makes a fireball globe 3 metres west of the point the camera looks at, "
+	                   "and another 3 metres east. Three seconds later it deletes the west globe with fade. Three "
+	                   "seconds after that it deletes the east globe with explode.",
+	    .expected = "The two globes lie on the land, each with its fireball seed spinning inside. At the first delete a "
+	                "ghost of the west globe's dome flickers out where it lay over half a second, and the globe is gone. "
+	                "At the second delete the dome of the east globe breaks into pieces that fly out, and the globe is "
+	                "gone. No globe stays.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 6.0f, 12.0f}, .look = {0.0f, 0.0f, 25.0f}},
+	    .commands = {create(1.0f, {-3.0f, 25.0f}), create(0.1f, {3.0f, 25.0f}), remove(3.0f, 0, 1.0f), remove(3.0f, 1, 2.0f)},
+	});
+}
 } // namespace
 
 void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
@@ -425,4 +464,5 @@ void testbed_scenarios::AddGlobeScenarios(std::vector<Scenario>& all)
 	AddGlobes(all);
 	AddHand(all);
 	AddPiles(all);
+	AddScriptDeletes(all);
 }
