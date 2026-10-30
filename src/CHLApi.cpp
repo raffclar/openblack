@@ -139,6 +139,7 @@
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
@@ -3673,6 +3674,19 @@ static void DeleteNow(entt::entity object)
 	}
 	else
 	{
+		// A shield miracle takes its shield with it at once
+		if (const auto* spell = registry.TryGet<const ecs::components::Spell>(object);
+		    spell != nullptr && spell->spellClass == magic::SpellClass::Shield)
+		{
+			if (Locator::magicShieldSystem::has_value())
+			{
+				Locator::magicShieldSystem::value().RemoveWithSpell(object);
+			}
+			if (Locator::magicSystem::has_value())
+			{
+				Locator::magicSystem::value().CloseDown(object);
+			}
+		}
 		ecs::world_objects::Remove(object);
 	}
 }
