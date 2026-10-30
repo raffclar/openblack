@@ -258,6 +258,8 @@ void HandSystem::FindAfterLoad()
 	std::vector<entt::entity> unlinked;
 	registry.Each<const Player>([&unlinked](entt::entity entity, const Player&) { unlinked.push_back(entity); },
 	                            entt::exclude<PlayerHands>);
+	// The links come in the order in which the game made the players, as in a new game
+	std::ranges::sort(unlinked, {}, [](entt::entity entity) { return entt::to_integral(entity); });
 	for (const auto entity : unlinked)
 	{
 		LinkHandsOf(entity);
