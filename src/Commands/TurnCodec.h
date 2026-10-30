@@ -138,12 +138,21 @@ inline constexpr size_t k_WorldPartBytes = 60 * 1024;
 /// The commands of one client, as it sends them to the server
 struct CommandBlock
 {
-	/// The number of the block. Each client counts its blocks from 0, and the count wraps.
+	/// The number of the block. Each session of a client counts its blocks from 0 through all its sockets, and the count
+	/// wraps. Thus the server knows a block that a client sends again after it came back.
 	uint16_t sequence {0};
 	/// The last turn that the client did when it made the block
 	uint32_t turn {0};
 	std::vector<player_commands::Action> actions;
 };
+
+/// True when the number of a block comes after the other number. The count wraps, so a number is after the numbers in the
+/// half of the count before it.
+[[nodiscard]] constexpr bool SequenceAfter(uint16_t sequence, uint16_t other) noexcept
+{
+	const auto distance = static_cast<uint16_t>(sequence - other);
+	return distance != 0 && distance < 0x8000;
+}
 
 /// A block in a turn, with the stamp of the server: the player that sent it and the number of the block
 struct StampedBlock

@@ -89,6 +89,11 @@ struct Room
 /// The room of the bytes. None when the bytes do not read.
 [[nodiscard]] std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes);
 
+/// The number of the last block of commands of each god slot that a closed turn holds, by god slot. A slot whose
+/// session has no block in a turn has no number. The client of a player sends again the blocks that no turn held, and
+/// the server leaves out the blocks up to this number.
+using BlockSequences = std::map<uint8_t, uint16_t>;
+
 /// True when the start of a snapshot is the start of the game that the server makes now: the same land, seed and modes
 [[nodiscard]] bool SameGame(const game_socket::Start& saved, const game_socket::Start& now);
 
@@ -100,6 +105,8 @@ struct Snapshot
 	Room room;
 	/// The world state of the turn, as SaveGameSystemInterface::WorldState gives it
 	std::vector<uint8_t> world;
+	/// The last block of each god that the turns before this turn hold
+	BlockSequences blocks;
 };
 
 /// The bytes of a snapshot file, which end with a checksum of all the bytes before it
@@ -124,10 +131,21 @@ struct Record
 
 /// The bytes of one record of a journal, with a checksum
 [[nodiscard]] std::vector<uint8_t> EncodeRecord(RecordKind kind, std::span<const uint8_t> bytes);
-/// The bytes of a turn record: the number of the turn, then the bytes that the server sent
-[[nodiscard]] std::vector<uint8_t> TurnRecordBytes(uint32_t turn, std::span<const uint8_t> bytes);
-/// The number of the turn and the bytes that the server sent, from the bytes of a turn record
-[[nodiscard]] std::optional<std::pair<uint32_t, std::vector<uint8_t>>> ReadTurnRecord(std::span<const uint8_t> bytes);
+/// A turn that the server sent, as a journal keeps it
+struct TurnRecord
+{
+	uint32_t turn {0};
+	/// The last block of each god that this turn and the turns before it hold
+	BlockSequences blocks;
+	/// The bytes that the server sent
+	std::vector<uint8_t> bytes;
+};
+
+/// The bytes of a turn record: the number of the turn, the last blocks of the gods, then the bytes that the server sent
+[[nodiscard]] std::vector<uint8_t> TurnRecordBytes(uint32_t turn, std::span<const uint8_t> bytes,
+                                                   const BlockSequences& blocks = {});
+/// The turn record of the bytes. None when the bytes do not read.
+[[nodiscard]] std::optional<TurnRecord> ReadTurnRecord(std::span<const uint8_t> bytes);
 /// The first bytes of a journal file
 [[nodiscard]] std::vector<uint8_t> JournalHeader();
 /// The records of a journal file, in order. The read stops at the first record that is torn: the server stopped while it
@@ -149,6 +167,8 @@ struct Restored
 	Room room;
 	/// The turns that the server sent after the snapshot, by turn, with no gap
 	std::map<uint32_t, std::vector<uint8_t>> turns;
+	/// The last block of each god that the turns hold. A slot that got a new session after its last block has no number.
+	BlockSequences blocks;
 	/// The snapshot files that did not read, newest first
 	std::vector<std::string> skipped;
 	/// The journals ended with a torn or bad record
@@ -176,8 +196,9 @@ public:
 
 	/// Starts the journal of the turns from a turn, with the room at that turn. The journal before it closes.
 	[[nodiscard]] bool OpenJournal(uint32_t turn, const Room& room);
-	/// Adds a turn that the server sends, before it sends it. Nothing when no journal is open.
-	void AddTurn(uint32_t turn, std::span<const uint8_t> bytes);
+	/// Adds a turn that the server sends, before it sends it, with the last block of each god that the closed turns hold.
+	/// Nothing when no journal is open.
+	void AddTurn(uint32_t turn, std::span<const uint8_t> bytes, const BlockSequences& blocks = {});
 	/// Adds the room after a change. Nothing when no journal is open.
 	void AddRoom(const Room& room);
 	[[nodiscard]] bool JournalOpen() const { return _journal.is_open(); }

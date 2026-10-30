@@ -34,12 +34,14 @@
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureHelp.h"
+#include "Creature/LeashOwnership.h"
 #include "ECS/AltarOffering.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/BuildingDamage.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
@@ -778,6 +780,11 @@ bool GameHandGrabWorld::ValidToTap(entt::entity object) const
 	if (registry.AnyOf<OneOffSpellSeed, MagicFireBall>(object))
 	{
 		return true;
+	}
+	// A leash post takes the taps of its own player only. This is also true when the leash does not hang on the post.
+	if (const auto* post = registry.TryGet<const LeashPost>(object); post != nullptr)
+	{
+		return creature_leash::MayTapPost(player, post->owner);
 	}
 	// Only the player of a chest opens it, until it is open
 	if (const auto* reward = registry.TryGet<const Reward>(object); reward != nullptr)

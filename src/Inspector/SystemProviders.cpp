@@ -166,7 +166,12 @@ QueryResult GiveOrder(const CreatureSources& sources, const Json& params, const 
 	{
 		return QueryResult::Error("the creature did not take the order: " + result.detail);
 	}
-	return QueryResult::Value({{"id", ToId(entity)}, {"taken", true}, {"doing", result.detail}});
+	Json answer {{"id", ToId(entity)}, {"taken", true}, {"doing", result.detail}};
+	if (!result.warning.empty())
+	{
+		answer["warning"] = result.warning;
+	}
+	return QueryResult::Value(std::move(answer));
 }
 
 /// The thing that a request names by its object parameter, if it exists
@@ -186,7 +191,10 @@ void AddCreatureOrders(FunctionProvider& provider, const CreatureSources& source
 	auto pickUp = Query("pick_up",
 	                    "The creature goes to a thing, picks it up and holds it, as a leash order does on a thing that it "
 	                    "can lift: the first times it holds a thing of that sort it plays with it, then it holds it facing "
-	                    "the player for 40 to 50 seconds. Give it creature.put_down to let go before that",
+	                    "the player for 40 to 50 seconds. Give it creature.put_down to let go before that. The creature "
+	                    "gives up an order on the way when it has not moved for 50 turns (a long route search can cause "
+	                    "it): give it for a thing that is near, and read the warning in the answer. It is refused while a "
+	                    "cut scene plays",
 	                    {id, Parameter("object", "integer", "The thing to pick up", true)});
 	pickUp.writes = true;
 	provider.Add(std::move(pickUp), [sources](const QueryContext& context) {
@@ -236,7 +244,8 @@ void AddCreatureOrders(FunctionProvider& provider, const CreatureSources& source
 	auto eat = Query("eat",
 	                 "The creature goes to a thing and eats from it as its own plan to eat does: from a storage pit "
 	                 "(EatFromStoragePit), a field (EatFromContainer), a tree (EatFromTree) or the thing itself "
-	                 "(EatAfterExamining), or with the eat action given",
+	                 "(EatAfterExamining), or with the eat action given. The limits of creature.pick_up hold here too: a "
+	                 "thing that is near, and no cut scene",
 	                 {id, Parameter("object", "integer", "The thing to eat from: give a storage pit, not its food pile", true),
 	                  Parameter("action", "string", "An eat action of the game's table, e.g. EatAlive", false)});
 	eat.writes = true;
