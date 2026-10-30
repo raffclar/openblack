@@ -142,10 +142,17 @@ public:
 	void Reset();
 	/// The sounds of the particles of effects that a save does not keep, which the save leaves out too
 	using LeftOutSounds = std::set<const particles::ParticleSoundLink*>;
-	/// The things that the world shares with the effects go first in the tables of a save, in the order of the world
-	void NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut) const;
-	/// The running state of the world: its lists, and the sounds that the particles keep
-	void SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut) const;
+	/// The things that the world shares with the effects go first in the tables of a save, in the order of the world.
+	/// The local tables hold the things of the effects of this computer. With local false, these things stay out. With
+	/// local true, only these things go in.
+	void NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut, const particles::SharedTables& localThings,
+	                  bool local) const;
+	/// Adds the things that only the effects of this computer use: the gesture trails that wait for their effect
+	void AddLocalThings(particles::SharedTables& localThings) const;
+	/// The running state of the world: its lists, and the sounds that the particles keep. The parts of the things in the
+	/// local tables are presentation values.
+	void SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
+	               const particles::SharedTables& localThings) const;
 	bool LoadState(particles::EffectReader& in);
 
 private:

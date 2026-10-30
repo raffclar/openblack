@@ -44,6 +44,14 @@ struct SharedTable
 {
 	std::vector<std::shared_ptr<Type>> items;
 	std::unordered_map<const Type*, uint32_t> numbers;
+	/// The things from this place in the list to the end belong only to the effects of this computer. A save keeps
+	/// them, but the tools that compare the synced state do not look at them.
+	std::optional<size_t> firstLocal;
+
+	/// Whether the table has the thing
+	[[nodiscard]] bool Contains(const Type* item) const { return numbers.contains(item); }
+	/// The things after this point belong only to the effects of this computer
+	void StartLocal() { firstLocal = items.size(); }
 
 	/// The number of the thing, which it gets when it is new; 0 for none
 	uint32_t Add(const std::shared_ptr<Type>& item)
@@ -75,6 +83,17 @@ struct SharedTables
 	SharedTable<LightSheet> sheets;
 	SharedTable<CarriedObject> carried;
 	SharedTable<GestureTrail> trails;
+
+	/// The things after this point, in each table, belong only to the effects of this computer
+	void StartLocal()
+	{
+		sounds.StartLocal();
+		bolts.StartLocal();
+		shields.StartLocal();
+		sheets.StartLocal();
+		carried.StartLocal();
+		trails.StartLocal();
+	}
 
 	template <typename Type>
 	[[nodiscard]] SharedTable<Type>& Of()

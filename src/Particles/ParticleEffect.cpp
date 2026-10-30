@@ -1006,10 +1006,22 @@ namespace
 template <typename Type>
 void SaveItems(EffectWriter& out, const SharedTable<Type>& table, auto&& write)
 {
+	// The things of the effects of this computer change the count, so the count is a presentation value
+	out.Out().BeginPresentation();
 	out.Out().WriteSize(table.items.size());
-	for (const auto& item : table.items)
+	out.Out().EndPresentation();
+	for (size_t i = 0; i < table.items.size(); ++i)
 	{
-		write(*item);
+		const bool local = table.firstLocal.has_value() && i >= *table.firstLocal;
+		if (local)
+		{
+			out.Out().BeginPresentation();
+		}
+		write(*table.items[i]);
+		if (local)
+		{
+			out.Out().EndPresentation();
+		}
 	}
 }
 

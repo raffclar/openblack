@@ -1808,9 +1808,25 @@ std::vector<std::string> ParticleSystem::GetFileNames() const
 namespace
 {
 
-/// The numbers of the live things of a list of weak holds, in the order of the list
+/// Writes a value of a save. A local value is a presentation value.
+void WriteMarked(particles::EffectWriter& out, bool local, auto&& write)
+{
+	if (local)
+	{
+		out.Out().BeginPresentation();
+	}
+	write();
+	if (local)
+	{
+		out.Out().EndPresentation();
+	}
+}
+
+/// The numbers of the live things of a list of weak holds, in the order of the list. The things of the effects of this
+/// computer are presentation values, and so is the count.
 template <typename Type>
-void WriteLive(particles::EffectWriter& out, const std::vector<std::weak_ptr<Type>>& list)
+void WriteLive(particles::EffectWriter& out, const std::vector<std::weak_ptr<Type>>& list,
+               const particles::SharedTable<Type>& localThings)
 {
 	std::vector<std::shared_ptr<Type>> live;
 	for (const auto& weak : list)
@@ -1820,10 +1836,25 @@ void WriteLive(particles::EffectWriter& out, const std::vector<std::weak_ptr<Typ
 			live.push_back(std::move(item));
 		}
 	}
-	out.Out().WriteSize(live.size());
+	WriteMarked(out, true, [&]() { out.Out().WriteSize(live.size()); });
 	for (const auto& item : live)
 	{
-		out.WriteShared(item);
+		WriteMarked(out, localThings.Contains(item.get()), [&]() { out.WriteShared(item); });
+	}
+}
+
+/// Adds the live things of a list of weak holds to a table. With local true, it adds only the things in the local table.
+/// With local false, it adds only the other things.
+template <typename Type>
+void NumberLive(particles::SharedTable<Type>& table, const std::vector<std::weak_ptr<Type>>& list,
+                const particles::SharedTable<Type>& localThings, bool local)
+{
+	for (const auto& weak : list)
+	{
+		if (auto item = weak.lock(); item && localThings.Contains(item.get()) == local)
+		{
+			table.Add(item);
+		}
 	}
 }
 
@@ -1843,30 +1874,34 @@ void ReadLive(particles::EffectReader& in, std::vector<std::weak_ptr<Type>>& lis
 
 } // namespace
 
-void GameParticleWorld::NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut) const
+void GameParticleWorld::NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut,
+                                     const particles::SharedTables& localThings, bool local) const
 {
 	for (const auto& sound : _sounds)
 	{
-		if (Saved(sound, leftOut))
+		if (Saved(sound, leftOut) && localThings.sounds.Contains(sound.link.get()) == local)
 		{
 			tables.sounds.Add(sound.link);
 		}
 	}
-	for (const auto& weak : _bolts)
-	{
-		tables.bolts.Add(weak.lock());
-	}
-	for (const auto& weak : _shields)
-	{
-		tables.shields.Add(weak.lock());
-	}
-	for (const auto& weak : _lightSheets)
-	{
-		tables.sheets.Add(weak.lock());
-	}
+	NumberLive(tables.bolts, _bolts, localThings.bolts, local);
+	NumberLive(tables.shields, _shields, localThings.shields, local);
+	NumberLive(tables.sheets, _lightSheets, localThings.sheets, local);
 	for (const auto& trail : _gestureTrails)
 	{
-		tables.trails.Add(trail);
+		if (localThings.trails.Contains(trail.get()) == local)
+		{
+			tables.trails.Add(trail);
+		}
+	}
+}
+
+void GameParticleWorld::AddLocalThings(particles::SharedTables& localThings) const
+{
+	// Only the gestures of this computer make trails, and only the effect of these gestures takes them
+	for (const auto& trail : _gestureTrails)
+	{
+		localThings.trails.Add(trail);
 	}
 }
 
@@ -1880,34 +1915,41 @@ bool GameParticleWorld::Saved(const PlayingSound& sound, const LeftOutSounds& le
 	return !EndsWithLoad(sound) && !leftOut.contains(sound.link.get());
 }
 
-void GameParticleWorld::SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut) const
+void GameParticleWorld::SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
+                                  const particles::SharedTables& localThings) const
 {
 	out.WriteValue(_claimed);
 	out.WriteValue(_arcsWaiting);
 	out.WritePlainList(_beliefSprites);
-	out.Out().WriteSize(_gestureTrails.size());
-	for (const auto& trail : _gestureTrails)
-	{
-		out.WriteShared(trail);
-	}
-	WriteLive(out, _lightSheets);
+	// The trails of the gestures of this computer are presentation values
+	WriteMarked(out, true, [&]() {
+		out.Out().WriteSize(_gestureTrails.size());
+		for (const auto& trail : _gestureTrails)
+		{
+			out.WriteShared(trail);
+		}
+	});
+	WriteLive(out, _lightSheets, localThings.sheets);
 	out.WriteValue(_arcsWanted);
-	WriteLive(out, _bolts);
+	WriteLive(out, _bolts, localThings.bolts);
 	out.WriteValue(_boltOrder);
 	// A sound goes with the particle that keeps its record. The audio's own emitter and the sound's owner, an entity of
-	// the audio, are of this run only and do not go. A sound that a load ends at once does not go either.
+	// the audio, are of this run only and do not go. A sound that a load ends at once does not go either. The sounds of
+	// the effects of this computer, and so the count, are presentation values.
 	const auto kept = [&leftOut](const PlayingSound& sound) { return Saved(sound, leftOut); };
-	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, kept)));
+	WriteMarked(out, true, [&]() { out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, kept))); });
 	for (const auto& sound : _sounds | std::views::filter(kept))
 	{
-		out.WriteShared(sound.link);
-		out.WriteValue(sound.letGo);
-		out.WritePlain(sound.fade);
-		out.WriteValue(sound.wait);
+		WriteMarked(out, localThings.sounds.Contains(sound.link.get()), [&]() {
+			out.WriteShared(sound.link);
+			out.WriteValue(sound.letGo);
+			out.WritePlain(sound.fade);
+			out.WriteValue(sound.wait);
+		});
 	}
 	out.WriteValue(_rainStorms);
 	out.WriteValue(_nextRainStorm);
-	WriteLive(out, _shields);
+	WriteLive(out, _shields, localThings.shields);
 	for (const auto& queue : _objectEffects.Queues())
 	{
 		out.WritePlainList(queue);
@@ -2010,14 +2052,48 @@ void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 	{
 		leftOut.insert(link.get());
 	}
+	// The effects of this computer draw their own random numbers, and only this computer steps them, also in the
+	// frames. The local tables keep the things that these effects share. Their parts of the save are presentation
+	// values.
+	const auto local = [](const Running& running) { return running.saved && !running.effect->IsSynced(); };
+	const auto synced = [](const Running& running) { return running.saved && running.effect->IsSynced(); };
+	particles::SharedTables localThings;
+	{
+		reflection::BinaryWriter localBytes(out.Context());
+		particles::EffectWriter localWriter(localBytes, localThings);
+		for (const auto& running : _effects | std::views::filter(local))
+		{
+			running.effect->Save(localWriter);
+		}
+		_world.AddLocalThings(localThings);
+	}
+	// The synced things take the first numbers of each table, in the order that the save finds them. Thus the things of
+	// the effects of this computer do not change the numbers of the synced things.
 	particles::SharedTables tables;
-	_world.NumberShared(tables, leftOut);
+	_world.NumberShared(tables, leftOut, localThings, false);
+	{
+		reflection::BinaryWriter syncedBytes(out.Context());
+		particles::EffectWriter syncedWriter(syncedBytes, tables);
+		for (const auto& running : _effects | std::views::filter(synced))
+		{
+			running.effect->Save(syncedWriter);
+		}
+	}
+	tables.StartLocal();
+	_world.NumberShared(tables, leftOut, localThings, true);
 	reflection::BinaryWriter effectBytes(out.Context());
 	particles::EffectWriter effects(effectBytes, tables);
 	const auto saved = [](const Running& running) { return running.saved; };
+	effectBytes.BeginPresentation();
 	effectBytes.WriteSize(static_cast<size_t>(std::ranges::count_if(_effects, saved)));
+	effectBytes.EndPresentation();
 	for (const auto& running : _effects | std::views::filter(saved))
 	{
+		const bool presentation = local(running);
+		if (presentation)
+		{
+			effectBytes.BeginPresentation();
+		}
 		reflection::Save(effectBytes, running.id);
 		reflection::Save(effectBytes, running.file);
 		reflection::Save(effectBytes, running.effect->IsSynced());
@@ -2031,10 +2107,14 @@ void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 		const auto at = effectBytes.BeginLength();
 		running.effect->Save(effects);
 		effectBytes.EndLength(at);
+		if (presentation)
+		{
+			effectBytes.EndPresentation();
+		}
 	}
 	reflection::BinaryWriter worldBytes(out.Context());
 	particles::EffectWriter world(worldBytes, tables);
-	_world.SaveState(world, leftOut);
+	_world.SaveState(world, leftOut, localThings);
 	for (const auto* writer : {&effectBytes, &worldBytes})
 	{
 		for (const auto& unsaved : writer->Unsaved())
@@ -2045,8 +2125,8 @@ void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 
 	particles::EffectWriter tableWriter(out, tables);
 	particles::SaveSharedTables(tableWriter);
-	out.Write(effectBytes.Bytes());
-	out.Write(worldBytes.Bytes());
+	out.Append(effectBytes);
+	out.Append(worldBytes);
 }
 
 bool ParticleSystem::LoadState(reflection::BinaryReader& in)
