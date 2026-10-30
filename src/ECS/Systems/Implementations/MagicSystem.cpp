@@ -3880,15 +3880,22 @@ void MagicSystem::SaveState(reflection::BinaryWriter& out) const
 	out.EndPresentation();
 	// The hands keep their seeds (HandHeldSeed). An older save kept the seed of the first player here.
 	reflection::Save(out, std::optional<entt::entity> {});
+	// The press of this computer's hand, its sound and its pour: the hand sends its casts as commands, which the turn does
+	out.BeginPresentation();
 	out.WriteRaw(_input);
 	reflection::Save(out, _actionDown);
 	out.WriteRaw(_fireBallPress);
 	reflection::Save(out, _holdLoop != entt::null);
 	out.WriteRaw(_pour);
+	out.EndPresentation();
 	reflection::Save(out, _rainWatchers);
+	// The last circle that this computer's hand drew. The cast sends its place in the command.
+	out.BeginPresentation();
 	out.WriteRaw(_circle);
+	out.EndPresentation();
 	reflection::Save(out, _turn);
-	reflection::Save(out, _lastHandResult);
+	// Only the tools read the result of the last action of the hand
+	reflection::SavePresentation(out, _lastHandResult);
 	reflection::Save(out, _ignoreInfluence);
 }
 

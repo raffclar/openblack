@@ -16,6 +16,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -355,7 +356,6 @@ TEST_F(ParticleSaveParts, ASaveFromBeforeTheSplitLoads)
 	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
 	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
 	reflection::Save(head, std::vector<glm::vec3> {});
-	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
 	reflection::Save(head, false);
 	const auto& headBytes = head.Bytes();
 	ASSERT_GE(parts.synced.size(), headBytes.size());
@@ -472,7 +472,9 @@ TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
 
 	// Each part starts with its form. The older form has the same bytes after it when no sound waits, but:
 	// - the synced part has no next synced number after its form
+	// - the synced part keeps the effect of the gesture trails after the waiting storm bolts
 	// - the part of this computer keeps the one number of all effects after its form
+	// - the part of this computer has no effect of the gesture trails
 	// - the part of this computer has no list of waits. With no sound, that list is one of the counts of 0 at its end.
 	reflection::BinaryWriter now(Context());
 	reflection::Save(now, uint32_t {3});
@@ -489,7 +491,13 @@ TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
 	auto synced = older(parts.synced);
 	const auto afterForm = static_cast<std::ptrdiff_t>(nowBytes.size());
 	synced.erase(synced.begin() + afterForm, synced.begin() + afterForm + static_cast<std::ptrdiff_t>(sizeof(uint32_t)));
+	// The pause, the two effects and the count of the waiting storm bolts come before the effect of the gesture trails
+	constexpr std::ptrdiff_t k_TrailsAt = 1 + 4 + 4 + 4;
+	const std::array<uint8_t, sizeof(uint32_t)> noEffect {};
+	synced.insert(synced.begin() + afterForm + k_TrailsAt, noEffect.begin(), noEffect.end());
 	auto local = older(parts.local);
+	local.erase(local.begin() + afterForm + static_cast<std::ptrdiff_t>(sizeof(uint32_t)),
+	            local.begin() + afterForm + static_cast<std::ptrdiff_t>(2 * sizeof(uint32_t)));
 	// The one number of all effects was after the synced effect
 	constexpr uint32_t k_OldNext = 2;
 	std::memcpy(local.data() + afterForm, &k_OldNext, sizeof(k_OldNext));

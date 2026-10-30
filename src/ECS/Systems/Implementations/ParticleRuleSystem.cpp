@@ -2243,7 +2243,6 @@ void ParticleRuleSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _explodeObject);
 	reflection::Save(out, _stormBolts);
 	reflection::Save(out, _pendingStormBolts);
-	reflection::Save(out, _gestureTrails);
 	reflection::Save(out, _beliefWanted);
 
 	SaveNumbering numbering;
@@ -2275,6 +2274,7 @@ void ParticleRuleSystem::SaveLocalState(reflection::BinaryWriter& out) const
 	out.BeginPresentation();
 	reflection::Save(out, k_LocalPartVersion);
 	reflection::Save(out, _nextLocalId);
+	reflection::Save(out, _gestureTrails);
 	reflection::Save(out, _gestureChain);
 	reflection::Save(out, _selectionEffect);
 	// Only the hand of this computer starts the effect of its mana path, also in a frame
@@ -2470,7 +2470,12 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _explodeObject);
 	reflection::Load(in, _stormBolts);
 	reflection::Load(in, _pendingStormBolts);
-	reflection::Load(in, _gestureTrails);
+	// The effect of the gesture trails is an effect of this computer. An older save keeps it in the synced part.
+	_gestureTrails = k_NoEffect;
+	if (version != k_SyncedPartVersion)
+	{
+		reflection::Load(in, _gestureTrails);
+	}
 	reflection::Load(in, _beliefWanted);
 	// The effects of this computer come back with their own part of the save. Until then, this computer has none.
 	_gestureChain = k_NoEffect;
@@ -2519,6 +2524,10 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 		// An older save kept one number for all effects. The synced effects continue after it, so that no number of an
 		// effect of this computer comes again.
 		_nextId = std::max(_nextId, savedNext);
+	}
+	if (version == k_LocalPartVersion)
+	{
+		reflection::Load(in, _gestureTrails);
 	}
 	reflection::Load(in, _gestureChain);
 	reflection::Load(in, _selectionEffect);

@@ -450,6 +450,10 @@ def compare_synced(data_a, map_a, data_b, map_b):
                       if name not in LOCAL_CLOCK_VALUES and clock_a[name] != clock_b[name]}
         elif tag == "ECSW":
             detail = synced_entities(one, other, parts)
+        elif tag == "RCTX":
+            # The context keeps some presentation values, as the sections of the systems do
+            detail = compare_bytes(synced_bytes(one, map_a.get("contextPresentation", [])),
+                                   synced_bytes(other, map_b.get("contextPresentation", []))) or {}
         else:
             detail = compare_bytes(one, other) or {}
         if detail:

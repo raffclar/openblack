@@ -416,6 +416,20 @@ void SavePresentation(BinaryWriter& out, const Type& value)
 	out.EndPresentation();
 }
 
+/// Writes a value as a presentation value or as a synced value
+template <bool Presentation, typename Type>
+void SaveKept(BinaryWriter& out, const Type& value)
+{
+	if constexpr (Presentation)
+	{
+		SavePresentation(out, value);
+	}
+	else
+	{
+		Save(out, value);
+	}
+}
+
 /// A codec that writes the bytes of the whole value, for a value type with private data that is plain and holds no
 /// entity. The archive keeps the size of the value, so that a value of another size fails the reader.
 template <typename Type>

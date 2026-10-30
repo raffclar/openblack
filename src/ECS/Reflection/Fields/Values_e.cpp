@@ -107,7 +107,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::villagerDetailsShown>("villagerDetailsShown")
 	    .Field<&openblack::ecs::RegistryContext::impressiveMiracleCastTurn>("impressiveMiracleCastTurn")
 	    .Field<&openblack::ecs::RegistryContext::explorationMap>("explorationMap")
-	    .Field<&openblack::ecs::RegistryContext::globalStatistics>("globalStatistics");
+	    .PresentationField<&openblack::ecs::RegistryContext::globalStatistics>("globalStatistics");
 	Reflect<openblack::ecs::components::Animal::DrawnPlace>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::position>("position")
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::rotation>("rotation");
