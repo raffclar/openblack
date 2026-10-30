@@ -254,8 +254,8 @@ void InitializeWindow(const std::string& title, int width, int height, windowing
 void InitializeSimulationCore();
 /// The services that show the world: the renderer, the debug GUI and the audio. Call it after the core services.
 bool InitializeEngine(GraphicsBackend backend, bool vsync) noexcept;
-/// The services of a world that nobody sees or hears, such as the dedicated server: a renderer with no device and no
-/// graphics objects, no debug GUI and no audio device. Call it after the core services.
+/// The services of a world that nobody sees or hears, such as the dedicated server: a renderer that does not start the
+/// graphics library, no debug GUI and no audio device. Call it after the core services.
 bool InitializeHeadlessEngine() noexcept;
 /// The script machine and the systems of the world, which the game and the dedicated server share. The players' profiles
 /// are kept as the store says.

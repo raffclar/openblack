@@ -433,12 +433,7 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 
 bool openblack::InitializeHeadlessEngine() noexcept
 {
-	Locator::rendererInterface::reset(HeadlessRenderer::Create().release());
-	if (!Locator::rendererInterface::has_value())
-	{
-		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to create the renderer with no device");
-		return false;
-	}
+	Locator::rendererInterface::reset(std::make_unique<HeadlessRenderer>().release());
 	Locator::audio::emplace<AudioManagerNoOp>();
 	Locator::sounds::emplace<audio::GameSoundRequests>();
 	return true;
@@ -696,6 +691,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::temple::emplace<TempleInterior>();
 	// The clock of day and night, and the entities of the sky, which every computer makes at this place in the order
 	Locator::skyClockSystem::emplace<ecs::systems::SkyClockSystem>();
+	// The mists that the scripts make and fade, whose size the turns change on every computer
+	Locator::mistSystem::emplace<MistSystem>();
 	Locator::alignmentSystem::emplace<AlignmentSystem>();
 	Locator::cameraHelpSystem::emplace<CameraHelpSystem>();
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
@@ -817,8 +814,6 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::scriptObjects::emplace<ecs::systems::ScriptObjectsSystem>();
 	Locator::buildingDamageSystem::emplace<ecs::systems::BuildingDamageSystem>();
 	Locator::scriptHighlightSystem::emplace<ecs::systems::ScriptHighlightSystem>();
-	// The scripts fade the mists, and the turns step the fades
-	Locator::mistSystem::emplace<MistSystem>();
 	// The land loads and plays its turns for the game and for the dedicated server both
 	Locator::landSystem::emplace<LandSystem>();
 	return true;

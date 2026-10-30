@@ -24,6 +24,8 @@ can have its own "camera" and an "expect" (the least count of each deed of the h
 summary gives the deeds of the hand of each god slot that the server did (hand_deeds: takes, scoops, throws, puts_down,
 pours, uses). The run fails when a client counts other deeds than the server, or when the hand of a slot did fewer deeds
 than its input expects.
+The information box of a land whose script opens it (TwoGods) takes every press of the buttons until the player closes
+it, so the input of each client first closes it with the Escape key.
 
 With --hold-creature the hand of that client holds its god's creature through the inspector once the client compared
 --hold-after turns: the camera looks at the creature, the pointer goes to a point of its body that the interface picks,
@@ -158,6 +160,10 @@ SERVER_ID = "net-check-1"
 # The input of the first client starts after this many frames (50 s at 20 ms), when both clients loaded and the game
 # started
 INPUT_OFFSET_FRAMES = 2500
+# The input closes the information box of the land this many frames before its first event, and holds the Escape key for
+# BOX_KEY_FRAMES. The box closes as the key goes down, so the hand is free well before the input starts.
+BOX_CLOSE_LEAD_FRAMES = 100
+BOX_KEY_FRAMES = 5
 RUN_LIMIT_SECONDS = 900
 # The most turns of a game. The game has no time limit; a soak of 100000 turns takes about 3 hours at 10 turns a
 # second.
@@ -1223,15 +1229,27 @@ def leave_room(game_exe, options, url, key, kid, certs, out, server_log):
     return True
 
 
-def shifted_input(path, folder, extra=0, camera=None):
+def box_closing_events(frame):
+    """The input that closes the information box of the land at a frame: the Escape key, as Go! does. The box shows at
+    the start of a network game on a land whose script opens it, and it takes every press of the buttons until the player
+    closes it."""
+    return [{"frame": frame, "event": {"kind": "key_down", "timing": "mouse", "key": "Escape"}},
+            {"frame": frame + BOX_KEY_FRAMES, "event": {"kind": "key_up", "timing": "mouse", "key": "Escape"}}]
+
+
+def shifted_input(path, folder, extra=0, camera=None, close_box=False):
     """The recorded input with its frames moved after the start of the network game, and the extra frames. A camera (JSON
     as camera_set takes it) goes into the input, in place of a camera of the file: the client puts its camera there as
-    its land starts, in place of the start view and its flight to the temple."""
+    its land starts, in place of the start view and its flight to the temple. With close_box, the input first closes the
+    information box of the land, before the first event of the file."""
     with open(path, encoding="utf-8") as file:
         value = json.load(file)
     events = value.get("events", []) if isinstance(value, dict) else value
     for event in events:
         event["frame"] = event["frame"] + INPUT_OFFSET_FRAMES + extra
+    if close_box:
+        first = min((event["frame"] for event in events), default=INPUT_OFFSET_FRAMES + extra)
+        events = box_closing_events(first - BOX_CLOSE_LEAD_FRAMES) + events
     if isinstance(value, dict):
         value["events"] = events
     else:
@@ -1722,7 +1740,8 @@ def main():
         parser.error(str(error))
     if any(leash["client"] == "web" for leash in leashes) and not (options.web_client and options.web_god):
         parser.error("--leash web needs --web-client and --web-god")
-    # The web god closes the information box of the land with the Escape key before its first leash key
+    # The information box of the land takes the presses until the player closes it. The web god closes it with the Escape
+    # key before its first leash key, and the recorded input of a desktop client closes it before its first event.
     options.web_close_box = not options.testbed and land_shows_info_box(options.game_path, options.land)
     waited_observers = options.observers + (1 if options.web_client else 0)
     if options.all_computer_gods and waited_observers == 0:
@@ -1914,7 +1933,7 @@ def main():
             client_input = client_inputs[index]
             if client_input:
                 command += ["--sim-input", shifted_input(client_input, client_dir, options.input2_delay_frames * index,
-                                                         client_cameras[index])]
+                                                         client_cameras[index], options.web_close_box)]
             else:
                 command.append("--sim-still-hand")
             camera = client_cameras[index]
