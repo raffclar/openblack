@@ -12743,6 +12743,61 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000}},
 	});
 
+	all.push_back({
+	    .id = "hand.tooltips_workshop_production",
+	    .name = "The hand over a workshop that makes a scaffold",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop that holds 10000 wood, the "
+	                   "wood of four scaffolds. The hand is over the workshop, in the influence of the player.",
+	    .expected = "The workshop starts a scaffold, and its chimney smokes. Over the workshop the tooltip shows "
+	                "\"Production Completed\" with the part of the scaffold that the workshop made, as a whole percent "
+	                "that goes up from 0 to 99. When the scaffold is finished, the percent starts again at 0 for the next "
+	                "scaffold. When the yard holds three scaffolds, the workshop stops, the tooltip shows 0, and the "
+	                "smoke stops.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Workshop.x, 22.0f, k_Workshop.y - 32.0f},
+	                .look = {k_Workshop.x, 3.0f, k_Workshop.y}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 10000}},
+	});
+
+	// The place where the hand puts the villager down, in front of the workshop and beside its yard
+	constexpr glm::vec2 k_DropPlace = k_Workshop + glm::vec2 {6.0f, -6.0f};
+	all.push_back({
+	    .id = "villagers.craftsman_supplies_workshop",
+	    .name = "Craftsmen bring the wood of the storage pit to the workshop",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's (which believes in the player from the start) with a village centre, "
+	                   "a storage pit that holds 3000 wood 25 m to the west, and a built workshop with no wood. A "
+	                   "craftsman disciple stands by the workshop. A grown villager of the town, not a disciple, stands "
+	                   "to the east. After one second the hand takes that villager, and after three more seconds it puts "
+	                   "the villager down by the workshop. Best watched at game speed 4.",
+	    .expected = "The villager that the hand puts down by the workshop becomes a craftsman disciple: it glows and the "
+	                "craftsman's line plays. Each craftsman walks to the storage pit, takes as much wood as it can carry, "
+	                "walks to the workshop and puts the wood in. When the workshop has the wood of a scaffold, it makes a "
+	                "scaffold. The town's desire for wood (the inspector's living.town_desires, desire 1) adds the share of "
+	                "the adults that are craftsmen.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_DropPlace.x - 10.0f, 30.0f, k_DropPlace.y - 40.0f},
+	                .look = {k_DropPlace.x, 0.0f, k_DropPlace.y}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Workshop + glm::vec2 {-25.0f, 0.0f}, .storedWood = 3000},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 0},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_Workshop + glm::vec2 {-6.0f, -8.0f},
+	                 .joinTown = true,
+	                 .disciple = VillagerDisciple::Craftsman},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_Workshop + glm::vec2 {20.0f, -8.0f},
+	                 .joinTown = true}},
+	    .commands = {{.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 4},
+	                 {.kind = Kind::HandRelease, .delaySeconds = 3.0f}},
+	    // The town belongs to the player at the start. Thus the hand of the player holds a villager of its own.
+	    .townBeliefInPlayer = 1000.0f,
+	});
+
 	constexpr glm::vec2 k_LooseScaffold {-25.0f, 30.0f};
 	constexpr glm::vec2 k_BuildPlace {-5.0f, 25.0f};
 	all.push_back({

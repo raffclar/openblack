@@ -1915,6 +1915,12 @@
   "query": "view.chat"
  },
  {
+  "description": "The tooltip that the hand shows: its index and text name, its mouse button and arrows, its fade, and the numbers or other words that it shows",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.tooltip"
+ },
+ {
   "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, whether films are on, and the 16-bit surface of the films",
   "kind": "object",
   "parameters": [],
