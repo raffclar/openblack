@@ -117,8 +117,8 @@ protected:
 	{
 		const auto room = MakeRoom();
 		ASSERT_TRUE(store.OpenJournal(snapshotTurn, room));
-		ASSERT_TRUE(
-		    store.Write(snapshotTurn, EncodeSnapshot({.turn = snapshotTurn, .room = room, .world = World(snapshotTurn)})));
+		ASSERT_TRUE(store.Write(
+		    snapshotTurn, EncodeSnapshot({.turn = snapshotTurn, .room = room, .world = World(snapshotTurn), .blocks = {}})));
 		for (auto turn = snapshotTurn; turn < endTurn; ++turn)
 		{
 			store.AddTurn(turn, TurnBytes(turn));
@@ -142,13 +142,14 @@ TEST(ServerSnapshots, TheRoomReadsBackAsItWasWritten)
 
 TEST(ServerSnapshots, ASnapshotReadsBackAndATornOrChangedSnapshotDoesNot)
 {
-	const Snapshot snapshot {.turn = 300, .room = MakeRoom(), .world = World(300)};
+	const Snapshot snapshot {.turn = 300, .room = MakeRoom(), .world = World(300), .blocks = {{0, 65'535}, {3, 7}}};
 	const auto bytes = EncodeSnapshot(snapshot);
 	const auto read = DecodeSnapshot(bytes);
 	ASSERT_TRUE(read.has_value());
 	EXPECT_EQ(read->turn, 300u);
 	EXPECT_EQ(read->room, snapshot.room);
 	EXPECT_EQ(read->world, snapshot.world);
+	EXPECT_EQ(read->blocks, snapshot.blocks);
 
 	// A server that stopped during the write leaves a part of the file
 	const std::vector<uint8_t> torn(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(bytes.size() / 2));
@@ -172,8 +173,9 @@ TEST(ServerSnapshots, TheJournalReadStopsAtATornRecord)
 	EXPECT_FALSE(whole.second);
 	const auto turn = ReadTurnRecord(whole.first[1].bytes);
 	ASSERT_TRUE(turn.has_value());
-	EXPECT_EQ(turn->first, 6u);
-	EXPECT_EQ(turn->second, TurnBytes(6));
+	EXPECT_EQ(turn->turn, 6u);
+	EXPECT_EQ(turn->bytes, TurnBytes(6));
+	EXPECT_TRUE(turn->blocks.empty());
 
 	bytes.resize(bytes.size() - 3);
 	const auto torn = ReadJournal(bytes);
@@ -328,7 +330,7 @@ TEST_F(SnapshotStoreTest, TheFilesKeepNoSecretOfASessionButTheHashesFindTheRight
 	room.watchers = {*hasher.Hash("observer-secret-carol")};
 	Store store(folder, 3);
 	ASSERT_TRUE(store.OpenJournal(1, room));
-	ASSERT_TRUE(store.Write(1, EncodeSnapshot({.turn = 1, .room = room, .world = World(1)})));
+	ASSERT_TRUE(store.Write(1, EncodeSnapshot({.turn = 1, .room = room, .world = World(1), .blocks = {}})));
 	store.AddRoom(room);
 	store.AddTurn(1, TurnBytes(1));
 
@@ -351,18 +353,74 @@ TEST_F(SnapshotStoreTest, TheFilesKeepNoSecretOfASessionButTheHashesFindTheRight
 	EXPECT_TRUE(hasher.Matches(restored->room.watchers[0], "observer-secret-carol"));
 }
 
-TEST(ServerSnapshots, ASnapshotOfTheFirstFormatDoesNotLoad)
+TEST(ServerSnapshots, ASnapshotOfAnEarlierFormatDoesNotLoad)
 {
-	auto bytes = EncodeSnapshot({.turn = 300, .room = MakeRoom(), .world = World(300)});
-	ASSERT_TRUE(DecodeSnapshot(bytes).has_value());
-	// The first format kept the secrets of the sessions. Its version is after the 8 bytes of the magic text.
-	bytes.resize(bytes.size() - sizeof(uint64_t));
-	ASSERT_EQ(bytes[8], 2);
-	bytes[8] = 1;
-	const auto checksum = Checksum(bytes);
-	for (int shift = 0; shift < 64; shift += 8)
+	const auto now = EncodeSnapshot({.turn = 300, .room = MakeRoom(), .world = World(300), .blocks = {}});
+	ASSERT_TRUE(DecodeSnapshot(now).has_value());
+	// The first format kept the secrets of the sessions, and the second format kept no blocks of commands. The version is
+	// after the 8 bytes of the magic text.
+	for (const uint8_t version : {1, 2})
 	{
-		bytes.push_back(static_cast<uint8_t>(checksum >> shift));
+		auto bytes = now;
+		bytes.resize(bytes.size() - sizeof(uint64_t));
+		ASSERT_EQ(bytes[8], 3);
+		bytes[8] = version;
+		const auto checksum = Checksum(bytes);
+		for (int shift = 0; shift < 64; shift += 8)
+		{
+			bytes.push_back(static_cast<uint8_t>(checksum >> shift));
+		}
+		EXPECT_FALSE(DecodeSnapshot(bytes).has_value());
 	}
-	EXPECT_FALSE(DecodeSnapshot(bytes).has_value());
+}
+
+TEST(ServerSnapshots, ATurnRecordKeepsTheLastBlocksOfTheGods)
+{
+	const BlockSequences blocks {{0, 12}, {1, 0}, {31, 65'535}};
+	const auto turn = ReadTurnRecord(TurnRecordBytes(77, TurnBytes(77), blocks));
+	ASSERT_TRUE(turn.has_value());
+	EXPECT_EQ(turn->turn, 77u);
+	EXPECT_EQ(turn->blocks, blocks);
+	EXPECT_EQ(turn->bytes, TurnBytes(77));
+	// A record that ends in the list of the blocks does not read
+	auto torn = TurnRecordBytes(77, {}, blocks);
+	torn.pop_back();
+	EXPECT_FALSE(ReadTurnRecord(torn).has_value());
+}
+
+TEST_F(SnapshotStoreTest, TheLastBlocksComeFromTheLastTurnOfTheJournals)
+{
+	Store store(folder, 3);
+	const auto room = MakeRoom();
+	ASSERT_TRUE(store.OpenJournal(10, room));
+	ASSERT_TRUE(store.Write(10, EncodeSnapshot({.turn = 10, .room = room, .world = World(10), .blocks = {{0, 4}}})));
+	store.AddTurn(10, TurnBytes(10), {{0, 4}});
+	store.AddTurn(11, TurnBytes(11), {{0, 6}, {1, 2}});
+	const auto restored = Store(folder, 3).LoadNewest();
+	ASSERT_TRUE(restored.has_value());
+	EXPECT_EQ(restored->blocks, (BlockSequences {{0, 6}, {1, 2}}));
+
+	// With no turn after the snapshot, the blocks of the snapshot count
+	Store other(folder / "other", 3);
+	ASSERT_TRUE(other.OpenJournal(10, room));
+	ASSERT_TRUE(other.Write(10, EncodeSnapshot({.turn = 10, .room = room, .world = World(10), .blocks = {{1, 9}}})));
+	const auto onlySnapshot = Store(folder / "other", 3).LoadNewest();
+	ASSERT_TRUE(onlySnapshot.has_value());
+	EXPECT_EQ(onlySnapshot->blocks, (BlockSequences {{1, 9}}));
+}
+
+TEST_F(SnapshotStoreTest, ASlotWithANewSessionAfterItsLastBlockHasNoLastBlock)
+{
+	Store store(folder, 3);
+	auto room = MakeRoom();
+	ASSERT_TRUE(store.OpenJournal(10, room));
+	ASSERT_TRUE(store.Write(10, EncodeSnapshot({.turn = 10, .room = room, .world = World(10), .blocks = {}})));
+	store.AddTurn(10, TurnBytes(10), {{0, 40}, {1, 2}});
+	// The player of slot 0 came back in a new process, with a new session that counts its blocks from 0
+	ASSERT_FALSE(room.seats.empty());
+	room.seats[0].session = FixedHash(9);
+	store.AddRoom(room);
+	const auto restored = Store(folder, 3).LoadNewest();
+	ASSERT_TRUE(restored.has_value());
+	EXPECT_EQ(restored->blocks, (BlockSequences {{1, 2}}));
 }

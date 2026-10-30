@@ -119,6 +119,15 @@ public:
 		uint32_t resumes {0};
 		/// The commands of the god that the server put in its turns, by the tag of the command
 		std::map<uint8_t, uint32_t> commands;
+		/// The number of the session of the player. Each new session of any seat gets the next number.
+		uint32_t sessionNumber {0};
+		/// The number of the last block of commands of the session that the server took. The server leaves out a block
+		/// that the client sends again after it came back (deviation 100).
+		std::optional<uint16_t> lastBlock;
+		/// The number of the last block of commands of the session that a closed turn holds
+		std::optional<uint16_t> lastBlockInTurn;
+		/// The blocks that the client sent again and that the server had, so left out
+		uint32_t blocksAgain {0};
 	};
 
 	/// The session of an observer. An observer has no god, but it can come back with the secret of its session, as the
@@ -147,16 +156,21 @@ public:
 	/// The server's world state at the start of the next turn, which a client whose world parted loads as it comes back
 	using WorldState = std::function<std::vector<uint8_t>()>;
 	void SetWorldState(WorldState worldState) { _worldState = std::move(worldState); }
-	/// Gets the bytes of each turn that the server closes, before the server sends them. The snapshots of the server keep
-	/// them in a journal (deviation 100).
-	using TurnJournal = std::function<void(uint32_t turn, std::span<const uint8_t> bytes)>;
+	/// Gets the bytes of each turn that the server closes, before the server sends them, and the last block of each god
+	/// that a closed turn holds. The snapshots of the server keep them in a journal (deviation 100).
+	using TurnJournal =
+	    std::function<void(uint32_t turn, std::span<const uint8_t> bytes, const snapshots::BlockSequences& blocks)>;
 	void SetTurnJournal(TurnJournal journal) { _turnJournal = std::move(journal); }
 	/// The room of the game, as a snapshot of the server keeps it
 	[[nodiscard]] snapshots::Room RoomRecord() const;
+	/// The number of the last block of commands of the session of each god slot that a closed turn holds
+	[[nodiscard]] snapshots::BlockSequences BlocksInTurns() const;
 	/// Continues a game from a snapshot, before any client connects. The world of the server is at the start of the turn
 	/// turnsDone. The gods of the room wait for their players, who come back with the secrets of their sessions. The
 	/// world turns the replayed turns first, with no player: these are the turns that the server sent before it stopped.
-	void Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed);
+	/// The server leaves out the blocks of commands up to the last block of each god that the sent turns hold.
+	void Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed,
+	             const snapshots::BlockSequences& blocks = {});
 	/// True while the world must turn the replayed turns of a restored game. The server reads no socket until then.
 	[[nodiscard]] bool Replaying() const { return !_replayed.empty(); }
 	/// The next turn that the server closes
@@ -298,8 +312,17 @@ private:
 	uint32_t _turnsDone {0};
 	/// The last turn of the game, once the turns stopped
 	std::optional<uint32_t> _stoppedAfter;
+	/// A block that came since the last turn, with the god slot and the session that sent it
+	struct PendingBlock
+	{
+		turn_codec::StampedBlock block;
+		uint8_t seat {0};
+		uint32_t session {0};
+	};
 	/// The blocks that came since the last turn
-	std::vector<turn_codec::StampedBlock> _pending;
+	std::vector<PendingBlock> _pending;
+	/// The number of the last session that a god's player got
+	uint32_t _sessions {0};
 	/// The slots whose god leaves at the next turn
 	std::vector<uint8_t> _leaving;
 	/// The slots of the gods that get their hands at the first turn

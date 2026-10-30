@@ -271,7 +271,11 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		              .awaySince = 0,
 		              .compares = {},
 		              .resumes = 0,
-		              .commands = {}};
+		              .commands = {},
+		              .sessionNumber = ++_sessions,
+		              .lastBlock = std::nullopt,
+		              .lastBlockInTurn = std::nullopt,
+		              .blocksAgain = 0};
 		free->sessionHash = HashOf(free->session);
 		peer.seat = seat;
 		joined.slot = seat;
@@ -498,6 +502,10 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 		// A new secret, so that the old process of the player cannot take the god back
 		own->session = _makeSecret ? _makeSecret() : std::string();
 		own->sessionHash = HashOf(own->session);
+		// The new process of the player counts its blocks of commands from 0
+		own->sessionNumber = ++_sessions;
+		own->lastBlock.reset();
+		own->lastBlockInTurn.reset();
 		++own->resumes;
 		std::erase_if(_early, [seat](const auto& early) { return early.first.first == seat; });
 		peer.role = game_socket::Role::God;
@@ -558,15 +566,28 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 		{
 			++_refusedBlocks;
 		}
+		auto& seat = _seats[*peer.seat];
+		// A client that came back sends again the blocks that no turn held. The server takes each block one time only.
+		if (seat.lastBlock.has_value() && !turn_codec::SequenceAfter(block->sequence, *seat.lastBlock))
+		{
+			++seat.blocksAgain;
+			Log(spdlog::level::info, fmt::format("The server had block {} of slot {}: it leaves out the block that came again",
+			                                     block->sequence, *peer.seat));
+			return;
+		}
+		seat.lastBlock = block->sequence;
 		if (!block->actions.empty())
 		{
 			for (const auto& action : block->actions)
 			{
-				++_seats[*peer.seat].commands[static_cast<uint8_t>(turn_codec::TagOf(action))];
+				++seat.commands[static_cast<uint8_t>(turn_codec::TagOf(action))];
 			}
-			_pending.push_back(turn_codec::StampedBlock {
-			    .sender = SeatPlayer(*peer.seat), .sequence = block->sequence, .actions = std::move(block->actions)});
 		}
+		// A block with no command left still goes to the next turn's count of blocks, so its number is in a turn
+		_pending.push_back(PendingBlock {
+		    .block = {.sender = SeatPlayer(*peer.seat), .sequence = block->sequence, .actions = std::move(block->actions)},
+		    .seat = *peer.seat,
+		    .session = seat.sessionNumber});
 	}
 	else if (const auto* checksum = std::get_if<turn_codec::TurnChecksum>(&*decoded.frame))
 	{
@@ -956,9 +977,18 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 		    turn_codec::StampedBlock {.sender = SeatPlayer(seat), .sequence = 0, .actions = {player_commands::PlayerLeft {}}});
 	}
 	_leaving.clear();
-	for (auto& block : _pending)
+	for (auto& pending : _pending)
 	{
-		bundle.blocks.push_back(std::move(block));
+		// The turn holds the block even when the turn is too large and drops its commands. The client never sends it again.
+		auto& seat = _seats[pending.seat];
+		if (pending.session == seat.sessionNumber)
+		{
+			seat.lastBlockInTurn = pending.block.sequence;
+		}
+		if (!pending.block.actions.empty())
+		{
+			bundle.blocks.push_back(std::move(pending.block));
+		}
 	}
 	_pending.clear();
 	auto bytes = turn_codec::Encode(bundle);
@@ -972,7 +1002,7 @@ std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 	// The journal keeps the turn before any client gets it, so that a restart of the server can send it again
 	if (_turnJournal)
 	{
-		_turnJournal(turn, bytes);
+		_turnJournal(turn, bytes, BlocksInTurns());
 	}
 	BroadcastBinary(bytes);
 	_history[turn] = std::move(bytes);
@@ -1063,7 +1093,21 @@ snapshots::Room LockstepHost::RoomRecord() const
 	return room;
 }
 
-void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed)
+snapshots::BlockSequences LockstepHost::BlocksInTurns() const
+{
+	snapshots::BlockSequences blocks;
+	for (size_t i = 0; i < _seats.size(); ++i)
+	{
+		if (_seats[i].lastBlockInTurn.has_value())
+		{
+			blocks.emplace(static_cast<uint8_t>(i), *_seats[i].lastBlockInTurn);
+		}
+	}
+	return blocks;
+}
+
+void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std::map<uint32_t, std::vector<uint8_t>> replayed,
+                           const snapshots::BlockSequences& blocks)
 {
 	const auto now = _clock();
 	_started = true;
@@ -1093,7 +1137,17 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                  .awaySince = now,
 		                  .compares = {},
 		                  .resumes = 0,
-		                  .commands = {}};
+		                  .commands = {},
+		                  .sessionNumber = ++_sessions,
+		                  .lastBlock = std::nullopt,
+		                  .lastBlockInTurn = std::nullopt,
+		                  .blocksAgain = 0};
+		// The server takes only the blocks after the last block that the sent turns hold
+		if (const auto last = blocks.find(static_cast<uint8_t>(i)); last != blocks.end())
+		{
+			_seats[i].lastBlock = last->second;
+			_seats[i].lastBlockInTurn = last->second;
+		}
 	}
 	_watchers.clear();
 	// The players and the observers come back with the secrets of their sessions, which the server checks against the
