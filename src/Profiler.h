@@ -96,6 +96,7 @@ public:
 		MainPassDrawParticles,
 		GuiDraw,
 		RendererFrame,
+		SyncChecksum,
 
 		_count,
 	};
@@ -168,6 +169,7 @@ public:
 	    "Draw Particles",       //
 	    "Encode GUI Draw",      //
 	    "Renderer Frame",       //
+	    "Sync Checksum",        //
 	};
 	// Every stage has a name: a short list would leave the last ones empty
 	static_assert(std::ranges::none_of(k_StageNames, &std::string_view::empty));

@@ -683,6 +683,21 @@ entt::entity WorshipSiteSystem::TempleOf(PlayerNames player) const
 	return found;
 }
 
+std::vector<entt::entity> WorshipSiteSystem::TemplesOfPlayers(size_t count) const
+{
+	// The first temple made for each player
+	std::vector<entt::entity> found(count, static_cast<entt::entity>(entt::null));
+	_world->Entities().Each<const Temple, const CitadelWorship>(
+	    [&found](entt::entity entity, const Temple& temple, const CitadelWorship& /*unused*/) {
+		    const auto player = static_cast<size_t>(temple.owner);
+		    if (player < found.size() && (found[player] == entt::null || entity < found[player]))
+		    {
+			    found[player] = entity;
+		    }
+	    });
+	return found;
+}
+
 void WorshipSiteSystem::OpenSites(entt::entity temple, float desireBoost)
 {
 	auto& registry = _world->Entities();
