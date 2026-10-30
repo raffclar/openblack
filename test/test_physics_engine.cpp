@@ -375,6 +375,52 @@ TEST(PhysicsBody, LookingAheadStopsAFastBodyAtAThinWall)
 	EXPECT_LT(ball.velocity.x, 0.0f);
 }
 
+TEST(PhysicsBody, ALightWallIsSoftAndAHeavyFastRockGoesThroughIt)
+{
+	// The rock and the physical shield rows of the game's material table
+	constexpr Material k_Rock {.density = 2.0f,
+	                           .springK = 21.5625f,
+	                           .dampK = 1.328125f,
+	                           .friction = 1.3125f,
+	                           .spinKeptPerSecond = 0.709375f,
+	                           .drag = 0.0f};
+	constexpr Material k_Shield {
+	    .density = 0.8f, .springK = 54.0625f, .dampK = 0.4f, .friction = 0.0f, .spinKeptPerSecond = 0.2f, .drag = 0.0f};
+	const FakeLand land(-1000.0f);
+	Shape wallShape;
+	wallShape.points = {{0.0f, -5.0f, -5.0f}, {0.0f, -5.0f, 5.0f}, {0.0f, 5.0f, 5.0f}, {0.0f, 5.0f, -5.0f}};
+	wallShape.faces = {{0, 1, 2}, {0, 2, 3}};
+	wallShape.radius = glm::length(glm::vec2(5.0f));
+	// A contact is as stiff as the softer of the two bodies, and stiffness grows with mass. A small dome is light. Thus a
+	// rock of some tonnes at 31 metres a second pushes into it further than its own size, and goes through.
+	const auto goesThrough = [&](float wallMass) {
+		Body wall({.mass = wallMass, .material = k_Shield, .dynamic = false}, wallShape);
+		wall.SetUpPose({.axes = glm::mat3(1.0f), .origin = {0.0f, 0.0f, 0.0f}});
+		wall.resting = true;
+		auto rock = MakeCube(1.5f, {-6.0f, 0.0f, 0.0f}, k_Rock, 5488.0f);
+		rock.velocity = {31.0f, 0.0f, 0.0f};
+		for (int i = 0; i < 400; ++i)
+		{
+			rock.ClearForces();
+			wall.ClearForces();
+			rock.TouchGround(land);
+			wall.TouchGround(land);
+			rock.TouchFaces(wall);
+			rock.ApplyContacts();
+			wall.ApplyContacts();
+			static_cast<void>(rock.Integrate());
+			if (rock.Centre().x > 1.5f)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	// The weight of a dome of radius 15.6, and of a dome of radius 30
+	EXPECT_TRUE(goesThrough(932.6f));
+	EXPECT_FALSE(goesThrough(6632.6f));
+}
+
 TEST(PhysicsBody, OverlapIsMeasuredThroughTheTop)
 {
 	auto below = MakeCube(1.0f, {0.0f, 0.0f, 0.0f});
