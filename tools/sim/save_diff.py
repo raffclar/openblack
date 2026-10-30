@@ -245,6 +245,20 @@ def compare_files(data_a, data_b):
     return result
 
 
+def differing_parts(result):
+    """The parts of a result in short: each block that differs as its tag, or each component and section in it as
+    the tag, a colon and its name"""
+    parts = []
+    for key, value in result.items():
+        detail = value.get("detail") if isinstance(value, dict) else None
+        names = []
+        if isinstance(detail, dict):
+            names += [f"{key}:{name}" for name in detail.get("components", {})]
+            names += [f"{key}:{name}" for name in detail if name != "components"]
+        parts += names or [key]
+    return parts
+
+
 def text_report(result):
     """The result as lines of text"""
     if not result:

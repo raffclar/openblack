@@ -91,6 +91,15 @@ class SaveDiffTests(unittest.TestCase):
         result = save_diff.compare_files(world([], attempts=1), world([], attempts=0))
         self.assertIn("head", result)
 
+    def test_parts_name_the_components_sections_and_blocks(self):
+        first = entities_block([1], [("Tag", ["value"], [(1, [b"\x00"])])])
+        second = entities_block([1], [("Tag", ["value"], [(1, [b"\x01"])])])
+        result = save_diff.compare_files(
+            world([("ECSW", first), ("SYST", sections_block([("fire", b"\x00")])), ("TIME", b"\x00")]),
+            world([("ECSW", second), ("SYST", sections_block([("fire", b"\x01")])), ("TIME", b"\x01")]))
+        self.assertEqual(save_diff.differing_parts(result), ["ECSW:Tag", "SYST:fire", "TIME"])
+        self.assertEqual(save_diff.differing_parts({}), [])
+
 
 if __name__ == "__main__":
     unittest.main()

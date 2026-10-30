@@ -72,19 +72,6 @@ def saved_world(out, slot, since):
     raise RuntimeError(f"the game wrote no world file for slot {slot}")
 
 
-def summary_of(result):
-    """The tags of the blocks that differ, and the components and sections in them"""
-    parts = []
-    for key, value in result.items():
-        detail = value.get("detail") if isinstance(value, dict) else None
-        names = []
-        if isinstance(detail, dict):
-            names += [f"{key}:{name}" for name in detail.get("components", {})]
-            names += [f"{key}:{name}" for name in detail if name != "components"]
-        parts += names or [key]
-    return parts
-
-
 def check(game, options, name):
     """The three round trips of one check: the result of each comparison"""
     state = game.wait_ready()
@@ -99,7 +86,7 @@ def check(game, options, name):
     else:
         with open(first_path, "rb") as file_a, open(again_path, "rb") as file_b:
             differs = save_diff.compare_files(file_a.read(), file_b.read())
-        entry["world_state"] = {"same": not differs, "parts": summary_of(differs)}
+        entry["world_state"] = {"same": not differs, "parts": save_diff.differing_parts(differs)}
         if differs and options.keep:
             entry["world_state"]["report"] = save_diff.text_report(differs)
     first_slot, second_slot, third_slot = SLOTS
@@ -119,7 +106,8 @@ def check(game, options, name):
     b, c = results[second_slot], results[third_slot]
     game_start = save_diff.compare_files(a, b)
     again = save_diff.compare_files(b, c)
-    entry["saved_game"] = {"same": not again, "parts": summary_of(again), "game_start": summary_of(game_start)}
+    entry["saved_game"] = {"same": not again, "parts": save_diff.differing_parts(again),
+                           "game_start": save_diff.differing_parts(game_start)}
     if options.keep:
         if again:
             entry["saved_game"]["report"] = save_diff.text_report(again)
