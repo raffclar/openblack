@@ -42,6 +42,8 @@ SyncChecksumSystem::~SyncChecksumSystem() = default;
 
 void SyncChecksumSystem::ProcessTurn()
 {
+	// A tool takes the hash only in the turn that made it
+	_lastHash.reset();
 	if (!_enabled || !Locator::entitiesRegistry::has_value() || !Locator::time::has_value())
 	{
 		return;
@@ -78,9 +80,9 @@ void SyncChecksumSystem::ProcessTurn()
 		rows = &keptRows;
 	}
 #endif
-	const auto hash =
-	    synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection, synced_state::PresentationParts(),
-	                         _keepParts && _byField, visit, _pool.get(), rows, &_memo);
+	const bool byField = _keepParts && _byField;
+	auto hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
+	                                 synced_state::PresentationParts(), byField, visit, _pool.get(), rows, &_memo);
 	// The music that the scripts start is synced too: its piece, its lyrics and its clock
 	auto stateHash = hash.hash;
 	if (Locator::scriptMusicSystem::has_value())
@@ -126,6 +128,7 @@ void SyncChecksumSystem::ProcessTurn()
 	{
 		_listener(*_last);
 	}
+	_lastHash = TurnHash {.turn = turn, .byField = byField, .hash = std::move(hash)};
 }
 
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
