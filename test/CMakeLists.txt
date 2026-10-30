@@ -2209,6 +2209,7 @@ add_test(NAME test_server_check
 )
 openblack_setup_and_add_test(test_script_object test_script_object.cpp)
 openblack_setup_and_add_test(test_player_slots test_player_slots.cpp)
+openblack_setup_and_add_test(test_hand_report_rules test_hand_report_rules.cpp)
 add_test(NAME test_net_check_runs
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_runs.py
 )

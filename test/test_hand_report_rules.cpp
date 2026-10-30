@@ -1,0 +1,131 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#include <cmath>
+
+#include <limits>
+
+#include <gtest/gtest.h>
+
+#include "Hand/HandReportRules.h"
+
+using namespace openblack;
+using namespace openblack::hand_report;
+
+namespace
+{
+/// A report with a hand over the land of a network map, and a camera that looks down at it
+player_commands::HandReport Resting()
+{
+	return {
+	    .collidePoint = {1985.0f, 99.0f, 2355.0f},
+	    .handPoint = {1990.0f, 101.0f, 2360.0f},
+	    .camera = {2024.62256f, 194.08386f, 2271.5874f},
+	    .focus = {1988.58362f, 99.86731f, 2358.64062f},
+	};
+}
+} // namespace
+
+TEST(HandReportRules, AnAxisMovesOnlyWhenItMovesByMoreThanTheLimit)
+{
+	const float limit = 0.01f;
+	EXPECT_FALSE(PointMoved({0.0f, 0.0f, 0.0f}, {limit, 0.0f, 0.0f}));
+	EXPECT_FALSE(PointMoved({0.0f, 0.0f, 0.0f}, {0.0f, -limit, 0.0f}));
+	const float over = std::nextafter(limit, 1.0f);
+	EXPECT_TRUE(PointMoved({0.0f, 0.0f, 0.0f}, {over, 0.0f, 0.0f}));
+	EXPECT_TRUE(PointMoved({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, -over}));
+	EXPECT_TRUE(PointMoved({5.0f, 5.0f, 5.0f}, {5.0f, 5.0f, 6.0f}));
+}
+
+TEST(HandReportRules, TheLimitIsTheFloatOfAHundredthAsADouble)
+{
+	EXPECT_EQ(k_MoveLimit, 0.009999999776482582);
+}
+
+TEST(HandReportRules, AnAxisThatIsNotANumberDoesNotMove)
+{
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	EXPECT_FALSE(PointMoved({0.0f, 0.0f, 0.0f}, {nan, 0.0f, 0.0f}));
+	EXPECT_FALSE(PointMoved({nan, nan, nan}, {1.0f, 1.0f, 1.0f}));
+}
+
+TEST(HandReportRules, TheCollidePointMovesOnlyIntoAnotherMapCell)
+{
+	// A map cell is ten units across
+	EXPECT_FALSE(CollidePointMoved({12.0f, 0.0f, 5.0f}, {19.99f, 500.0f, 9.9f}));
+	EXPECT_TRUE(CollidePointMoved({12.0f, 0.0f, 5.0f}, {20.0f, 0.0f, 5.0f}));
+	EXPECT_TRUE(CollidePointMoved({12.0f, 0.0f, 5.0f}, {12.0f, 0.0f, 10.0f}));
+	EXPECT_TRUE(CollidePointMoved({0.5f, 0.0f, 0.5f}, {-0.5f, 0.0f, 0.5f}));
+}
+
+TEST(HandReportRules, TheMapCellIsTheHighWordOfTheFixedPoint)
+{
+	EXPECT_EQ(MapCell({10.0f, 0.0f, 9.999f}), (std::array<uint16_t, 2> {1, 0}));
+	EXPECT_EQ(MapCell({5119.0f, 0.0f, 25.0f}), (std::array<uint16_t, 2> {511, 2}));
+	EXPECT_EQ(MapCell({-0.5f, 0.0f, 0.0f}), (std::array<uint16_t, 2> {0xFFFF, 0}));
+}
+
+TEST(HandReportRules, ACameraThatMovesByVerySmallValuesSendsNoReport)
+{
+	const auto last = Resting();
+	auto now = last;
+	// The focus of a resting camera moved by less than two thousandths at each turn
+	now.focus += glm::vec3(0.000122f, -0.001648f, 0.001465f);
+	now.handPoint += glm::vec3(0.004f, 0.0f, -0.004f);
+	now.collidePoint += glm::vec3(0.5f, 3.0f, 0.5f);
+	EXPECT_EQ(MovedParts(last, now), Parts::None);
+	EXPECT_FALSE(ToSend(last, now).has_value());
+}
+
+TEST(HandReportRules, BothPartsGoWhenBothMoved)
+{
+	const auto last = Resting();
+	auto now = last;
+	now.handPoint.x += 1.0f;
+	now.camera.y += 1.0f;
+	EXPECT_EQ(MovedParts(last, now), Parts::All);
+	EXPECT_EQ(ToSend(last, now), now);
+}
+
+TEST(HandReportRules, TheHandPartGoesWithTheCameraOfTheLastReport)
+{
+	const auto last = Resting();
+	auto now = last;
+	now.collidePoint.x += 10.0f;
+	now.camera.y += 0.005f;
+	EXPECT_EQ(MovedParts(last, now), Parts::Hand);
+	const auto sent = ToSend(last, now);
+	ASSERT_TRUE(sent.has_value());
+	EXPECT_EQ(sent->collidePoint, now.collidePoint);
+	EXPECT_EQ(sent->handPoint, now.handPoint);
+	EXPECT_EQ(sent->camera, last.camera);
+	EXPECT_EQ(sent->focus, last.focus);
+}
+
+TEST(HandReportRules, TheCameraPartGoesWithTheHandOfTheLastReport)
+{
+	const auto last = Resting();
+	auto now = last;
+	now.focus.z += 0.5f;
+	now.handPoint.y += 0.005f;
+	EXPECT_EQ(MovedParts(last, now), Parts::Camera);
+	const auto sent = ToSend(last, now);
+	ASSERT_TRUE(sent.has_value());
+	EXPECT_EQ(sent->collidePoint, last.collidePoint);
+	EXPECT_EQ(sent->handPoint, last.handPoint);
+	EXPECT_EQ(sent->camera, now.camera);
+	EXPECT_EQ(sent->focus, now.focus);
+}
+
+TEST(HandReportRules, TheFirstReportGoesFromTheMiddleOfTheAxes)
+{
+	const player_commands::HandReport none {};
+	EXPECT_EQ(ToSend(none, Resting()), Resting());
+	EXPECT_FALSE(ToSend(none, none).has_value());
+}
