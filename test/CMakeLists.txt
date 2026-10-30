@@ -2221,3 +2221,5 @@ add_test(NAME test_net_check_runs
 openblack_setup_and_add_test(test_hand_report_rules test_hand_report_rules.cpp)
 openblack_setup_and_add_test(test_server_snapshots online/test_server_snapshots.cpp)
 openblack_setup_and_add_test(test_sent_blocks online/test_sent_blocks.cpp)
+openblack_setup_and_add_test(test_dance_world_state test_dance_world_state.cpp)
+target_link_libraries(test_dance_world_state PRIVATE dance)
