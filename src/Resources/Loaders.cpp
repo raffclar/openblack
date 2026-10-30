@@ -50,6 +50,7 @@
 #include "Common/Zip.h"
 #include "ECS/Components/Player.h"
 #include "FileSystem/FileSystemInterface.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/Texture2D.h"
 #include "Gui/LandThumbnail.h"
 #include "Help/AdvisorModel.h"
@@ -260,8 +261,9 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromPackTag, const std:
 	}
 	else
 	{
-		texture2D->Create(width, height, 1, internalFormat, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-		                  bgfx::copy(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
+		texture2D->Create(
+		    width, height, 1, internalFormat, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+		    Locator::graphicsDevice::value().Copy(g3dTexture.ddsData.data(), static_cast<uint32_t>(g3dTexture.ddsData.size())));
 	}
 	// Its alpha as the game reads it into 4 bits a channel, which trees' shadows are cut out by
 	const auto compression =
@@ -304,8 +306,9 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 			return texture;
 		}
 		const auto packed = graphics::texel_depth::PackRgb555(data, channels);
-		texture->Create(*side, *side, 1, graphics::TextureFormat::BGR5A1, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-		                bgfx::copy(packed.data(), static_cast<uint32_t>(packed.size() * sizeof(packed[0]))));
+		texture->Create(
+		    *side, *side, 1, graphics::TextureFormat::BGR5A1, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+		    Locator::graphicsDevice::value().Copy(packed.data(), static_cast<uint32_t>(packed.size() * sizeof(packed[0]))));
 		return texture;
 	}
 	// The small grey images that the game also reads itself keep their texels as the file has them
@@ -324,7 +327,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const st
 	}
 	graphics::texel_depth::Reduce(data, depth);
 	texture->Create(*side, *side, 1, format, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                bgfx::copy(data.data(), static_cast<uint32_t>(data.size())));
+	                Locator::graphicsDevice::value().Copy(data.data(), static_cast<uint32_t>(data.size())));
 	return texture;
 }
 
@@ -369,7 +372,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskWithAlphaTag, c
 	}
 	graphics::texel_depth::Reduce(texels, graphics::texel_depth::Depth::FourBits);
 	texture->Create(side, side, 1, graphics::TextureFormat::RGBA8, graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size())));
+	                Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size())));
 	return texture;
 }
 
@@ -394,12 +397,12 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
 		texture->Describe(side, side, layers, graphics::TextureFormat::BGR5A1);
 		return texture;
 	}
-	const auto* caps = bgfx::getCaps();
+	const auto* caps = Locator::graphicsDevice::value().GetCaps();
 	if (caps == nullptr || (caps->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0)
 	{
-		texture->Create(side, side, layers, graphics::TextureFormat::BGR5A1, graphics::Wrapping::ClampEdge,
-		                graphics::Filter::Linear,
-		                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+		texture->Create(
+		    side, side, layers, graphics::TextureFormat::BGR5A1, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+		    Locator::graphicsDevice::value().Copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
 		return texture;
 	}
 	// A device without the 16-bit format (WebGL 2) gets a byte for each channel
@@ -410,7 +413,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
 		std::ranges::copy(Texel1555Bytes(texels[i]), bytes.begin() + static_cast<std::ptrdiff_t>(i * 4));
 	}
 	texture->Create(side, side, layers, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
-	                bgfx::copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
+	                Locator::graphicsDevice::value().Copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
 	return texture;
 }
 
@@ -1063,10 +1066,10 @@ LandThumbnailLoader::result_type LandThumbnailLoader::operator()(FromDiskTag, co
 		return thumbnail;
 	}
 	// As in the game, the texture repeats at its edges and its texels blend
-	thumbnail->texture->Create(
-	    gui::land_thumbnail::k_TextureSide, gui::land_thumbnail::k_TextureSide, 1, graphics::TextureFormat::BGRA4,
-	    graphics::Wrapping::Repeat, graphics::Filter::Linear,
-	    bgfx::copy(picture.texels.data(), static_cast<uint32_t>(picture.texels.size() * sizeof(uint16_t))));
+	thumbnail->texture->Create(gui::land_thumbnail::k_TextureSide, gui::land_thumbnail::k_TextureSide, 1,
+	                           graphics::TextureFormat::BGRA4, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	                           Locator::graphicsDevice::value().Copy(
+	                               picture.texels.data(), static_cast<uint32_t>(picture.texels.size() * sizeof(uint16_t))));
 	return thumbnail;
 }
 

@@ -26,6 +26,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/SkyClockSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Graphics/GraphicsLibrary.h"
 #include "Graphics/HeadlessRenderer.h"
 #include "Locator.h"
 #include "Server/DedicatedServer.h"
@@ -206,8 +207,9 @@ TEST(DedicatedServer, TheServerKeepsTheSkysCloudsOutOfTheWorldAndMakesNoSystemTh
 		                           using openblack::Locator;
 		                           using openblack::ecs::components::Cloud;
 		                           shown = shown || Locator::oceanSystem::has_value() || Locator::cloudSystem::has_value() ||
-		                                   Locator::villageLightSystem::has_value() || Locator::advisorVoiceSystem::has_value() ||
-		                                   Locator::turnCheerSystem::has_value();
+		                                   Locator::villageLightSystem::has_value() ||
+		                                   Locator::advisorVoiceSystem::has_value() || Locator::turnCheerSystem::has_value() ||
+		                                   Locator::rendereringSystem::has_value();
 		                           // The scripts fade the mists, and the turns change their size on every computer
 		                           mists = mists && Locator::mistSystem::has_value();
 		                           // Every computer draws the numbers of the sky's clouds at the start of the land, but

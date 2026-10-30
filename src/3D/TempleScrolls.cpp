@@ -27,6 +27,7 @@
 #include "3D/TempleScroll.h"
 #include "Common/MachineClock.h"
 #include "EngineConfig.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Gui/GameFont.h"
 #include "Gui/TextDatabase.h"
@@ -144,7 +145,7 @@ TempleScrolls::~TempleScrolls()
 	{
 		if (scroll.texture)
 		{
-			bgfx::destroy(graphics::toBgfx(*scroll.texture));
+			Locator::graphicsDevice::value().Destroy(*scroll.texture);
 		}
 	}
 }
@@ -155,7 +156,7 @@ TempleScrolls::KeptTextures::~KeptTextures()
 	{
 		if (entry.has_value())
 		{
-			bgfx::destroy(graphics::toBgfx(entry->texture));
+			Locator::graphicsDevice::value().Destroy(entry->texture);
 		}
 	}
 }
@@ -235,9 +236,9 @@ void TempleScrolls::Create(const Facts& facts, KeptTextures kept)
 		else if (scroll.subMesh.has_value())
 		{
 			// A texture in memory, 256 texels square, or 128 at the lowest detail levels, 16 bits a texel
-			scroll.texture =
-			    graphics::fromBgfx(bgfx::createTexture2D(side, side, false, 1, bgfx::TextureFormat::BGRA4, BGFX_TEXTURE_NONE));
-			bgfx::setName(graphics::toBgfx(*scroll.texture), fmt::format("Scroll {}", place.subMesh).c_str());
+			const auto& device = Locator::graphicsDevice::value();
+			scroll.texture = device.CreateTexture2D(side, side, 1, graphics::TextureFormat::BGRA4, BGFX_TEXTURE_NONE, nullptr);
+			device.SetName(*scroll.texture, fmt::format("Scroll {}", place.subMesh));
 		}
 		_scrolls.push_back(scroll);
 	}
@@ -297,8 +298,9 @@ void TempleScrolls::Redraw(Scroll& scroll, const Facts& facts)
 			side = low_resolution_textures::k_HalfSide;
 		}
 	}
-	bgfx::updateTexture2D(graphics::toBgfx(*scroll.texture), 0, 0, 0, 0, side, side,
-	                      bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+	const auto& device = Locator::graphicsDevice::value();
+	device.UpdateTexture2D(*scroll.texture, 0, glm::u16vec2(0, 0), glm::u16vec2(side, side),
+	                       device.Copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
 	scroll.drawn = std::move(drawn);
 }
 

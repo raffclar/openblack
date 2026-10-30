@@ -18,7 +18,9 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/MainThreadQueue.h"
+#include "GraphicsDeviceInterface.h"
 #include "GraphicsHandleBgfx.h"
+#include "Locator.h"
 #include "MainThreadWork.h"
 #include "Visual/UploadPacer.h"
 
@@ -36,7 +38,8 @@ IndexBuffer::IndexBuffer(std::string name, const void* indices, uint32_t indexCo
 
 	// The indices are only referenced when the buffer is made at once. For work that waits, they are copied.
 	const auto bytes = indexCount * GetTypeSize(_type);
-	const auto* mem = MainThreadWorkRunsAtOnce() ? bgfx::makeRef(indices, bytes) : bgfx::copy(indices, bytes);
+	const auto& device = Locator::graphicsDevice::value();
+	const auto* mem = MainThreadWorkRunsAtOnce() ? device.Reference(indices, bytes) : device.Copy(indices, bytes);
 	Make(mem);
 }
 
@@ -59,25 +62,26 @@ void IndexBuffer::Make(const void* memory)
 	const auto* memBgfx = static_cast<const bgfx::Memory*>(memory);
 	PostToMainThread(MainThreadApi::Graphics, [this, memBgfx] {
 		UploadPacer::Pace(memBgfx->size);
-		const uint16_t flags = _type == Type::Uint32 ? BGFX_BUFFER_INDEX32 : 0;
+		const bool wide = _type == Type::Uint32;
+		const auto& device = Locator::graphicsDevice::value();
 		if (_storage == Storage::Shared)
 		{
 			// bgfx gives a part of its shared buffer. A name is only for a buffer of its own.
-			_sharedHandle = fromBgfx(bgfx::createDynamicIndexBuffer(memBgfx, flags));
+			_sharedHandle = device.CreateSharedIndexBuffer(memBgfx, wide);
 			if (!bgfx::isValid(toBgfx(_sharedHandle)))
 			{
 				SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
 			}
 			return;
 		}
-		_handle = fromBgfx(bgfx::createIndexBuffer(memBgfx, flags));
+		_handle = device.CreateIndexBuffer(memBgfx, wide);
 		if (!bgfx::isValid(toBgfx(_handle)))
 		{
 			// Out of handles, setting a name would write past bgfx's own arrays; the buffer is left empty and isn't drawn
 			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
 			return;
 		}
-		bgfx::setName(toBgfx(_handle), _name.c_str());
+		device.SetName(_handle, _name);
 	});
 }
 
@@ -86,11 +90,11 @@ IndexBuffer::~IndexBuffer()
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "IndexBuffer::~IndexBuffer");
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
-		bgfx::destroy(toBgfx(_handle));
+		Locator::graphicsDevice::value().Destroy(_handle);
 	}
 	if (_storage == Storage::Shared && bgfx::isValid(toBgfx(_sharedHandle)))
 	{
-		bgfx::destroy(toBgfx(_sharedHandle));
+		Locator::graphicsDevice::value().Destroy(_sharedHandle);
 	}
 }
 
@@ -122,19 +126,4 @@ uint32_t IndexBuffer::GetTypeSize(Type type)
 bool IndexBuffer::IsValid() const noexcept
 {
 	return _storage == Storage::Shared ? bgfx::isValid(toBgfx(_sharedHandle)) : bgfx::isValid(toBgfx(_handle));
-}
-
-void IndexBuffer::Bind(uint32_t count, uint32_t startIndex) const
-{
-	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "IndexBuffer::Bind");
-	if (!IsValid())
-	{
-		return;
-	}
-	if (_storage == Storage::Shared)
-	{
-		bgfx::setIndexBuffer(toBgfx(_sharedHandle), startIndex, count);
-		return;
-	}
-	bgfx::setIndexBuffer(toBgfx(_handle), startIndex, count);
 }

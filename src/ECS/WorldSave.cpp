@@ -100,7 +100,6 @@
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
-#include "Game.h"
 #include "Locator.h"
 #include "Particles/LightSheet.h"
 #include "Sound/GameMusic.h"
@@ -298,8 +297,7 @@ systems::SavedStateInterface* FindSystem()
 /// The game's music, which the game keeps for as long as it runs
 systems::SavedStateInterface* FindGameMusic()
 {
-	auto* game = Game::Instance();
-	return game != nullptr ? game->GetGameMusic() : nullptr;
+	return Locator::gameMusic::has_value() ? &Locator::gameMusic::value() : nullptr;
 }
 
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state

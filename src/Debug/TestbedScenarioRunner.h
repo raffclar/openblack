@@ -30,6 +30,7 @@
 
 #include "BenchmarkRecorder.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "TestbedGameStageInterface.h"
 #include "TestbedScenarioRegistry.h"
 
 namespace openblack::testbed_scenarios
@@ -65,6 +66,13 @@ struct BenchmarkSettings
 class Runner
 {
 public:
+	/// The stage is the game on the player's computer. The dedicated server has no stage, and the commands that stage the
+	/// game fail there.
+	explicit Runner(GameStageInterface* stage = nullptr) noexcept
+	    : _stage(stage)
+	{
+	}
+
 	/// Loads the testbed and starts the scenario on it, in place of any other
 	void Start(const Scenario& scenario);
 	/// Stops giving commands and puts back the settings the scenario changed: the body time, fainting, the footprints'
@@ -255,6 +263,8 @@ private:
 	std::optional<uint32_t> _layoutTurn;
 	/// When the made-up ping of the ping line started, in the scenario's seconds; none while it does not show
 	std::optional<float> _demoPingSince;
+	/// The game that the commands stage, or null on the dedicated server
+	GameStageInterface* _stage {nullptr};
 	/// Gives the made-up ping to the game while it shows
 	void UpdateDemoPing() const;
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
