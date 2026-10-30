@@ -65,8 +65,9 @@ RUN_ONLY = {
 # Fields of values that only the frames or the local random numbers of a computer change, and that no turn reads. A
 # save keeps them as presentation values, so the tools that compare the synced state do not look at them.
 PRESENTATION = {
-    # The frame rate of this computer and lines of code from its local random numbers
-    "openblack::ecs::RegistryContext": {"globalStatistics"},
+    # The frame rate of this computer and lines of code from its local random numbers. The loop of the village lights'
+    # flames, which the frames move on, from the C library's numbers of this computer.
+    "openblack::ecs::RegistryContext": {"globalStatistics", "villageLightFlames"},
 }
 
 SOURCES = ROOT / "src"
