@@ -412,6 +412,8 @@ bool ServerWorld::StartLand()
 	{
 		return false;
 	}
+	// The game makes the creatures' maps of the land at the end of its loading screen, before its first turn
+	simulation::PrepareLandMaps();
 	simulation::BeginPlay(false, _simulation.frameTime.has_value(), *this);
 	_frameStart = std::chrono::steady_clock::now();
 	return true;

@@ -2313,7 +2313,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			return "no miracles";
 		}
 		auto& magic = Locator::magicSystem::value();
-		magic.DiscardHeldSeed();
+		magic.DiscardHeldSeedOf(command.player);
 		const auto seed = static_cast<SpellSeedType>(command.value);
 		const auto given = magic.GiveSeedToHand(command.player, seed, magic::k_BasePowerUpLevel, 1.0f);
 		return given != entt::null ? fmt::format("seed {} in the hand", command.value) : "the hand isn't free";
@@ -2334,7 +2334,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			return "no miracles";
 		}
 		auto& magic = Locator::magicSystem::value();
-		magic.DiscardHeldSeed();
+		magic.DiscardHeldSeedOf(command.player);
 		const auto seed = static_cast<SpellSeedType>(command.value);
 		const auto given = magic.SummonSeed(command.player, seed, magic::k_BasePowerUpLevel);
 		return given != entt::null ? fmt::format("seed {} summoned to the hand", command.value) : "the hand isn't free";
@@ -4845,10 +4845,16 @@ void Runner::UpdateMiracles(float seconds)
 					{
 						magic.DriveHand(std::nullopt);
 					}
-					// A seed kept in the hand is dropped, for the next go
-					if (magic.IsHandBusy())
+					// The hand drops a seed that it keeps, for the next go. The drop is a shake of the hand, which goes as a
+					// command after the cast. Thus the turn does the cast first, and each computer of a network game
+					// drops the seed at the same turn.
+					if (magic.IsHandBusy() && Locator::gestureEvents::has_value())
 					{
-						magic.DiscardHeldSeed();
+						Locator::gestureEvents::value().Inject({.kind = ecs::systems::GestureEvent::Kind::Shake,
+						                                        .gesture = GestureType::None,
+						                                        .centre = miracle.hand,
+						                                        .radius = 0.0f,
+						                                        .powerUpLevel = -1});
 					}
 				}
 			}
@@ -5092,9 +5098,11 @@ void Runner::StartHandCast(size_t index)
 	auto& miracle = _miracles.at(index);
 	const auto& info = Locator::infoConstants::value();
 	auto& magic = Locator::magicSystem::value();
-	if (magic.IsHandBusy())
+	// The first player's hand gets the seed, so it drops the seed that it holds. Each computer does this before the
+	// same turn.
+	if (magic.IsHandBusyOf(PlayerNames::PLAYER_ONE))
 	{
-		magic.DiscardHeldSeed();
+		magic.DiscardHeldSeedOf(PlayerNames::PLAYER_ONE);
 	}
 	const auto seed = magic::FindFirstSpellSeedForMagicType(info, setup.type);
 	if (!seed.has_value())

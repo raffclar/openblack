@@ -3269,6 +3269,12 @@ void MagicSystem::UnlockHeldMiracle()
 	}
 }
 
+void MagicSystem::DiscardHeldSeedOf(PlayerNames player)
+{
+	const ActingAs acting(*this, player);
+	DiscardHeldSeed();
+}
+
 void MagicSystem::DiscardHeldSeed()
 {
 	if (!Held().has_value())

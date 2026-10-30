@@ -185,6 +185,7 @@ public:
 	entt::entity SummonSeedAtSite(entt::entity site, SpellSeedType seed, int powerUp) override;
 	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int powerUp, float chants) override;
 	void DiscardHeldSeed() override;
+	void DiscardHeldSeedOf(PlayerNames player) override;
 	void DeleteSeed(entt::entity seed) override;
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override;
 	[[nodiscard]] std::optional<uint32_t> TakeHeldMiracleToolTip() override;

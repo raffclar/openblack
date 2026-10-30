@@ -63,19 +63,21 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Mist.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
+#include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
-#include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -580,6 +582,11 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		registerMesh(SkyArchetype::k_SunMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "sun.l3d");
 		registerMesh(SkyArchetype::k_MoonMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "moon.l3d");
 		registerMesh(ecs::components::Mist::k_MeshId, fileSystem.GetPath<Path::Landscape>() / "mist.l3d");
+		// The globe of a one-shot miracle and its band. The world measures the globe from its model, for the paths and the
+		// physics, so each computer reads the models with the world, also a computer that draws no frame.
+		using OneOffSpellSeed = ecs::components::OneOffSpellSeed;
+		registerMesh(OneOffSpellSeed::k_MeshId.value(), fileSystem.GetPath<Path::Data>() / OneOffSpellSeed::k_MeshFile);
+		registerMesh(OneOffSpellSeed::k_RingMeshId.value(), fileSystem.GetPath<Path::Data>() / OneOffSpellSeed::k_RingMeshFile);
 
 		using CFromDiskTag = resources::CameraPathLoader::FromDiskTag;
 		camPathManager.Load("cam", CFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "cam.cam");
@@ -1124,6 +1131,18 @@ void ApplyPlayerSettings(const player_profiles::Settings& settings)
 	}
 }
 
+void PrepareLandMaps()
+{
+	if (Locator::creatureLocomotionSystem::has_value())
+	{
+		[[maybe_unused]] const auto& land = Locator::creatureLocomotionSystem::value().GetWalkableLand();
+	}
+	if (Locator::creatureFightSystem::has_value())
+	{
+		Locator::creatureFightSystem::value().PrepareLand();
+	}
+}
+
 void PrepareNetworkLand(uint32_t seed)
 {
 	Locator::entitiesRegistry::value().SetFreshIdsAtNextReset();
@@ -1188,13 +1207,6 @@ void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
 	Locator::time::value().Start();
 
 	view.StartPlayView();
-
-	// The models of the miracles' globes come with the world: the physics of a thrown globe needs them, also on a computer
-	// that draws no frame
-	if (Locator::miracleFxSystem::has_value())
-	{
-		Locator::miracleFxSystem::value().LoadMeshes();
-	}
 
 	// A simulation run with a fixed frame time loads every resource before its first frame. A thing that waits for its
 	// picture or its model then starts after the same frames each run, at any speed.

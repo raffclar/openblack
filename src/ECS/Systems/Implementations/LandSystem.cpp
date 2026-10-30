@@ -384,6 +384,8 @@ void LandSystem::LoadTestbed()
 	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
 	PrepareNewLand(land_change::Kind::Testbed);
 	_landPath = k_TestbedLandPath;
+	// The game builds the flat land, so it has no landscape file. The name of the last landscape does not stay.
+	_landscapePath.clear();
 	View().ShowLoadingFrame();
 	InitializeLevel(flat_land::Build());
 	SetUpLandscape();
@@ -460,6 +462,8 @@ bool LandSystem::LoadGodsRingMap()
 	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
 	PrepareNewLand(land_change::Kind::Testbed);
 	_landPath = gods_ring_map::k_File;
+	// The game builds this land too, so it has no landscape file
+	_landscapePath.clear();
 	View().ShowLoadingFrame();
 	InitializeLevel(gods_ring_land::Build());
 	SetUpLandscape();
@@ -592,11 +596,13 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 		// The testbed's flat land comes from no file: it is built again
 		else if (landPath == k_TestbedLandPath)
 		{
+			_landscapePath.clear();
 			InitializeLevel(flat_land::Build());
 			SetUpLandscape();
 		}
 		else if (gods_ring_map::IsThisMap(landPath.generic_string()))
 		{
+			_landscapePath.clear();
 			InitializeLevel(gods_ring_land::Build());
 			SetUpLandscape();
 		}
@@ -805,6 +811,12 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 		{
 			Locator::playerSystem::value().ForgetKept();
 		}
+	}
+	// The reward table of the fireflies keeps its running totals from land to land. Nothing comes onto the testbed, so
+	// its table starts empty, as on a computer that loaded no land before.
+	if (toTestbed && Locator::fireflySystem::has_value())
+	{
+		Locator::fireflySystem::value().ForgetRewards();
 	}
 	// The players' hearts beat on from land to land; a new game starts them calm
 	if (Locator::heartbeatSystem::has_value())

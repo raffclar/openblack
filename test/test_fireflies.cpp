@@ -499,6 +499,16 @@ TEST_F(Fireflies, WithNoWeightsACatchGivesNothing)
 	EXPECT_TRUE(_world->rewards.empty());
 }
 
+TEST_F(Fireflies, AForgottenRewardTableHasNoRunningTotals)
+{
+	_system->SetRewardWeight("FIRE", 1.0f);
+	_system->Reset();
+	EXPECT_GT(_system->GetRewards().Total(), 0.0f);
+	_system->ForgetRewards();
+	EXPECT_FLOAT_EQ(_system->GetRewards().Total(), 0.0f);
+	EXPECT_FLOAT_EQ(_system->GetRewards().Weight(k_Fire), 0.0f);
+}
+
 TEST_F(Fireflies, ALandClosingRemovesThemAndTopsUpAgain)
 {
 	_world->Add(FakeWorld::Kind::Tree, k_Here);
