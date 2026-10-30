@@ -1286,6 +1286,8 @@ std::vector<uint8_t> SaveGameSystem::WorldState()
 	for (uint32_t index = 0; index < creatures.size(); ++index)
 	{
 		saved.push_back(ToSave(registry, creatures[index], index));
+		// A visit to the temple is a view of this computer only, and the world state is the same on each computer
+		saved.back().creature.creature.savedInTemple = 0;
 	}
 	const auto chunks = gamesave::ToChunks(saved);
 	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
