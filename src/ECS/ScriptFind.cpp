@@ -36,11 +36,13 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
+#include "Locator.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
 using namespace openblack;
@@ -86,6 +88,24 @@ std::optional<ScriptType> AnimalType(AnimalInfo info)
 	default:
 		return ScriptType::Animal;
 	}
+}
+
+/// The tribe of a town's totem, which is the tribe of its town centre: the row of the totems' table. None when the
+/// tables are not loaded or the centre has no tribe.
+std::optional<uint32_t> TotemTribe(const Registry& registry, const VillageTotem& totem)
+{
+	const auto* centre = registry.Valid(totem.townCentre) ? registry.TryGet<const Abode>(totem.townCentre) : nullptr;
+	if (centre == nullptr || centre->info == AbodeInfo::None || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& rows = Locator::infoConstants::value().abode;
+	const auto row = static_cast<size_t>(centre->info);
+	if (row >= rows.size())
+	{
+		return std::nullopt;
+	}
+	return Row(rows.at(row).tribeType);
 }
 
 /// A 16.16 value of a search's edge: the position in metres less or plus the reach, back in 16.16, truncated. Each
@@ -153,6 +173,11 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	if (registry.AllOf<Temple>(entity))
 	{
 		return Kind {.type = ScriptType::Citadel};
+	}
+	// A town's totem is a totem statue to the scripts. Its subtype is its tribe.
+	if (const auto* totem = registry.TryGet<const VillageTotem>(entity))
+	{
+		return Kind {.type = ScriptType::TotemStatue, .subtype = TotemTribe(registry, *totem)};
 	}
 	// A worship site's subtype is its tribe, which is the row of the tribes' table
 	if (const auto* site = registry.TryGet<const WorshipSite>(entity))
