@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <ios>
 #include <iterator>
 #include <ranges>
 #include <set>
@@ -19,6 +20,7 @@
 
 #include <gtest/gtest.h>
 
+#include "ColourDifference.h"
 #include "ECS/Components/Player.h"
 #include "ECS/PlayerColour.h"
 #include "PlayerSlots.h"
@@ -88,20 +90,50 @@ TEST(PlayerColour, ThePlayersOfALandKeepTheirColours)
 	}
 }
 
-TEST(PlayerColour, ALaterGodTakesTheChatColourOfItsSlot)
+TEST(PlayerColour, ALaterGodTakesTheLandColourOfItsSlot)
 {
-	// The eighth god (number 8, slot 7) and the last god (number 32, slot 31) have the chat colours of their slots
-	EXPECT_EQ(player_colour::Of(static_cast<PlayerNames>(8)), player_colour::k_GodChatColours.at(7));
-	EXPECT_EQ(player_colour::Of(static_cast<PlayerNames>(32)), player_colour::k_GodChatColours.at(31));
-	EXPECT_EQ(player_colour::OnLand(static_cast<PlayerNames>(14), 0), player_colour::k_GodChatColours.at(13) | 0xFF000000u);
+	// The eighth god (number 8, slot 7) and the last god (number 32, slot 31) have the land colours of their slots
+	const auto& colours = player_colour::k_LaterGodLandColours;
+	EXPECT_EQ(player_colour::Of(static_cast<PlayerNames>(8)), colours.front());
+	EXPECT_EQ(player_colour::Of(static_cast<PlayerNames>(32)), colours.back());
+	EXPECT_EQ(player_colour::OnLand(static_cast<PlayerNames>(14), 0), colours.at(6) | 0xFF000000u);
 	EXPECT_FALSE(player_colour::LaterGodColour(PlayerNames::PLAYER_SEVEN).has_value());
 	EXPECT_FALSE(player_colour::LaterGodColour(PlayerNames::NEUTRAL).has_value());
 	// A number past the gods takes the colour of its low bits
 	EXPECT_EQ(player_colour::Of(static_cast<PlayerNames>(33)), ecs::components::Player::k_Colours.at(1));
 	constexpr std::array<uint32_t, k_LandSlots> k_Table {1, 2, 3, 4, 5, 6, 7, 8};
 	EXPECT_EQ(player_colour::FromTable(k_Table, PlayerNames::PLAYER_TWO), 2u);
-	EXPECT_EQ(player_colour::FromTable(k_Table, static_cast<PlayerNames>(9)),
-	          player_colour::k_GodChatColours.at(8) & 0xFFFFFFu);
+	EXPECT_EQ(player_colour::FromTable(k_Table, static_cast<PlayerNames>(9)), colours.at(1) & 0xFFFFFFu);
+}
+
+TEST(PlayerColour, TheLandColoursOfTheLaterGodsAreFarFromTheOtherColours)
+{
+	// The rule of deviations 116 and 164: a CIE L*a*b* difference of 25 or more, and a contrast of 4.5 to 1 or more with
+	// black
+	constexpr double k_LeastDifference = 25.0;
+	constexpr double k_LeastContrast = 4.5;
+	const auto& later = player_colour::k_LaterGodLandColours;
+	// The land colours of the first 7 gods, the black of the neutral player and the white of its influence
+	std::vector<uint32_t> colours(ecs::components::Player::k_Colours.begin(), ecs::components::Player::k_Colours.end());
+	colours.push_back(0xFFFFFFFFu);
+	colours.insert(colours.end(), later.begin(), later.end());
+	for (size_t i = 0; i < colours.size(); ++i)
+	{
+		for (size_t j = i + 1; j < colours.size(); ++j)
+		{
+			EXPECT_GE(test_colour::Difference(colours[i], colours[j]), k_LeastDifference)
+			    << std::hex << colours[i] << " and " << colours[j];
+		}
+	}
+	for (size_t index = 0; index < later.size(); ++index)
+	{
+		const auto slot = index + k_LandGods;
+		EXPECT_EQ(later.at(index) >> 24u, 0xFFu) << "slot " << slot;
+		EXPECT_GE(test_colour::ContrastWithBlack(later.at(index)), k_LeastContrast) << "slot " << slot;
+		// The land colour of a god differs from its chat colour
+		EXPECT_GE(test_colour::Difference(later.at(index), player_colour::k_GodChatColours.at(slot)), k_LeastDifference)
+		    << "slot " << slot;
+	}
 }
 
 TEST(PlayerSlots, TheWalksOfAGameTakeItsPlayersInOrder)

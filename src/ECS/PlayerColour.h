@@ -35,8 +35,19 @@ inline constexpr std::array<uint32_t, player_slots::k_MaxPlayers> k_GodChatColou
     0xFF2299AA, 0xFFFF0077, 0xFF7788CC, 0xFFFF77BB, 0xFF00AA55, 0xFFBBCC33, 0xFFFF0044, 0xFF00BB00,
 };
 
-/// The colour of a god after the seventh, 0xFFRRGGBB: the chat colour of its god slot (deviation 164). None for a
-/// player of a land, which keeps the colour of the game's tables.
+/// The land colour of each god after the seventh, 0xFFRRGGBB, by god slot from the eighth (deviation 164). The land
+/// shows these colours, and the chat shows the colours of `k_GodChatColours`. The colours are far from each other, from
+/// the 7 land colours of the first gods and from the black and white of the neutral player. Each colour is also far
+/// from the chat colour of its god, and bright enough to read on a dark place. A god earlier in the list is further from
+/// the colours before it.
+inline constexpr std::array<uint32_t, player_slots::k_MaxPlayers - player_slots::k_LandGods> k_LaterGodLandColours = {
+    0xFF668844, 0xFFBB6699, 0xFF3388BB, 0xFFFF0099, 0xFF99FFAA, 0xFFFFEE99, 0xFF009911, 0xFFAA7755, 0xFFCCBBFF,
+    0xFFAA9900, 0xFF009988, 0xFFDD88FF, 0xFFFF8888, 0xFF889999, 0xFF99DD33, 0xFFFF6600, 0xFF00AA66, 0xFFAADDBB,
+    0xFFDDAABB, 0xFFDD3366, 0xFF99DDFF, 0xFF0099FF, 0xFF8855FF, 0xFF8866BB, 0xFFFFCCAA,
+};
+
+/// The land colour of a god after the seventh, 0xFFRRGGBB, from `k_LaterGodLandColours` by its god slot (deviation
+/// 164). None for a player of a land, which keeps the colour of the game's tables.
 [[nodiscard]] constexpr std::optional<uint32_t> LaterGodColour(PlayerNames player)
 {
 	if (player_slots::IsLandPlayer(player))
@@ -44,15 +55,16 @@ inline constexpr std::array<uint32_t, player_slots::k_MaxPlayers> k_GodChatColou
 		return std::nullopt;
 	}
 	const auto slot = player_slots::SlotOfPlayer(player);
-	if (!slot.has_value() || *slot >= k_GodChatColours.size())
+	if (!slot.has_value() || *slot < player_slots::k_LandGods ||
+	    *slot - player_slots::k_LandGods >= k_LaterGodLandColours.size())
 	{
 		return std::nullopt;
 	}
-	return k_GodChatColours.at(*slot);
+	return k_LaterGodLandColours.at(*slot - player_slots::k_LandGods);
 }
 
 /// The colour of a player, 0xAARRGGBB, by player number. The table has a colour for each player slot of a land. A god
-/// after the seventh has the chat colour of its god slot. A number past the gods takes the colour of its three low bits,
+/// after the seventh has the land colour of its god slot. A number past the gods takes the colour of its three low bits,
 /// as the masked colour lookups of the game do.
 [[nodiscard]] constexpr uint32_t Of(PlayerNames player)
 {
@@ -66,7 +78,7 @@ inline constexpr std::array<uint32_t, player_slots::k_MaxPlayers> k_GodChatColou
 }
 
 /// The colour of a player, 0xRRGGBB, from a table of the colours of the players of a land: a god after the seventh has
-/// the chat colour of its god slot, and any other player the colour of its three low bits
+/// the land colour of its god slot, and any other player the colour of its three low bits
 [[nodiscard]] constexpr uint32_t FromTable(const std::array<uint32_t, player_slots::k_LandSlots>& table, PlayerNames player)
 {
 	if (const auto later = LaterGodColour(player); later.has_value())
