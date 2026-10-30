@@ -221,19 +221,6 @@ std::string TooFar(const glm::vec3& position, float range)
 }
 } // namespace
 
-Listener CameraListener()
-{
-	if (!Locator::camera::has_value())
-	{
-		return {};
-	}
-	// The game hears from the view that it drew last, with its lift above the land and its shake
-	const auto& camera = Locator::camera::value();
-	return {.origin = camera.GetOrigin(Camera::Interpolation::Drawn),
-	        .forward = camera.GetForward(Camera::Interpolation::Drawn),
-	        .up = camera.GetUp(Camera::Interpolation::Drawn)};
-}
-
 void AudioManager::Stop()
 {
 	_musicPlayer->Stop(false);

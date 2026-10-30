@@ -187,6 +187,10 @@ bool MusicStreamBackend::QueueChunk(Stream stream, const MusicBank& bank, uint32
 			const auto& last = previous.get();
 			before = last.chunk;
 			beforeFrames = last.chunkFrames;
+			// Release the decode of the chunk before. If each decode keeps the decode before it, a long stream keeps
+			// all of its chunks. The release of the last decode then releases all the others in a chain that
+			// overflows the stack.
+			previous = {};
 		}
 		auto decoded = Decode(decoder, read, sampleRate, before, beforeFrames, chunk, skipFrames);
 		decoded.bank = std::move(path);

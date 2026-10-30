@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -47,6 +48,7 @@ using InfoConstants = v120::InfoConstants;
 namespace audio
 {
 class AudioManagerInterface;
+class GameMusic;
 class SoundRequestInterface;
 } // namespace audio
 
@@ -61,6 +63,11 @@ class HttpClientInterface;
 class WebSocketClientInterface;
 } // namespace online
 
+namespace gui
+{
+class ScreenFade;
+}
+
 namespace debug::gui
 {
 class DebugGuiInterface;
@@ -73,8 +80,9 @@ class FileSystemInterface;
 
 namespace graphics
 {
+class GraphicsDeviceInterface;
 class RendererInterface;
-}
+} // namespace graphics
 
 namespace input
 {
@@ -252,7 +260,8 @@ void InitializeWindow(const std::string& title, int width, int height, windowing
 /// The services that the game and the dedicated server share, first of all: the profiler, the events, the files and the
 /// random numbers
 void InitializeSimulationCore();
-/// The services that show the world: the renderer, the debug GUI and the audio. Call it after the core services.
+/// The services that show the world: the graphics device, the renderer, the debug GUI and the audio. Call it after the
+/// core services. Only the game's library has this function.
 bool InitializeEngine(GraphicsBackend backend, bool vsync) noexcept;
 /// The services of a world that nobody sees or hears, such as the dedicated server: a renderer that does not start the
 /// graphics library, no debug GUI and no audio device. Call it after the core services.
@@ -261,10 +270,15 @@ bool InitializeHeadlessEngine() noexcept;
 /// are kept as the store says.
 bool InitializeSimulation(const player_profiles::Store& profiles) noexcept;
 /// The systems that only show the world, which no turn and no script reads. The dedicated server does not make them.
-/// Call it after the simulation.
+/// Call it after the simulation. Only the game's library has this function.
 void InitializePresentation();
+/// The input of the player. The game and the dedicated server both make it. Call it after the simulation.
+void InitializePlayerInput();
+/// The online services, the editor and the videos. The game and the dedicated server both make them. Call it after the
+/// input of the player.
+void InitializeOnlineAndTools(const player_profiles::Store& profiles);
 /// The services of the game on the player's computer: the input, the drawing of the world, the editor, the videos and
-/// the online services. Call it after the simulation.
+/// the online services. Call it after the simulation. Only the game's library has this function.
 void InitializeClient(const player_profiles::Store& profiles);
 /// The simulation, the systems that show the world, then the services of the game on the player's computer
 bool InitializeGame(const player_profiles::Store& profiles) noexcept;
@@ -278,8 +292,17 @@ void InitializeLevelOnOpenLand();
 void InitializeComputerSettings(std::optional<std::filesystem::path> file);
 void ShutDownServices();
 /// Starts the debug inspector's server on a port of 127.0.0.1 (any free one for 0): false, with why in the log, if it
-/// can't listen. Only in builds with the inspector.
+/// can't listen. Only in builds with the inspector. The inspector has no parts of the game on the player's computer, as
+/// on the dedicated server.
 bool StartInspector(uint16_t port);
+#if defined(OPENBLACK_INSPECTOR)
+namespace inspector
+{
+class GameSeamInterface;
+}
+/// Starts the debug inspector as above, with the parts of the game on the player's computer that the seam gives
+bool StartInspector(uint16_t port, std::unique_ptr<inspector::GameSeamInterface> seam);
+#endif
 
 struct Locator
 {
@@ -302,10 +325,16 @@ struct Locator
 	using audio = entt::locator<audio::AudioManagerInterface>;
 	/// The sounds that the world asks for. The audio library plays them through the audio manager.
 	using sounds = entt::locator<openblack::audio::SoundRequestInterface>;
+	/// The game's music, which the game makes and owns. The dedicated server has no music.
+	using gameMusic = entt::locator<openblack::audio::GameMusic>;
+	/// The fade of the whole screen, which the game's interface makes and owns. The dedicated server has no fade.
+	using screenFade = entt::locator<openblack::gui::ScreenFade>;
 	using camera = entt::locator<Camera>;
 	using gameActionSystem = entt::locator<input::GameActionInterface>;
 	using rendereringSystem = entt::locator<ecs::systems::RenderingSystemInterface>;
 	using rendererInterface = entt::locator<graphics::RendererInterface>;
+	/// The device that makes the textures and buffers of the world. The dedicated server has no device.
+	using graphicsDevice = entt::locator<graphics::GraphicsDeviceInterface>;
 	using dynamicsSystem = entt::locator<ecs::systems::DynamicsSystemInterface>;
 	using pickingSystem = entt::locator<ecs::systems::PickingSystemInterface>;
 	using cameraBookmarkSystem = entt::locator<ecs::systems::CameraBookmarkSystemInterface>;

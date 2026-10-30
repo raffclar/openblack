@@ -140,6 +140,7 @@ public:
 	[[nodiscard]] float TotalChantsAvailable(entt::entity) const override { return 0.0f; }
 	float TakeChantsForVirtualInfluence(PlayerNames, uint32_t) override { return 0.0f; }
 	void BuildBy(entt::entity, float) override {}
+	void SetBuilt(entt::entity, float) override {}
 	[[nodiscard]] bool IsBuilt(entt::entity) const override { return true; }
 	[[nodiscard]] entt::entity TempleOf(PlayerNames player) const override
 	{

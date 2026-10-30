@@ -783,6 +783,19 @@ PhysicsEntry* DynamicsSystem::AddObject(entt::entity object, const PhysicsStart&
 	return _entries.back().get();
 }
 
+PhysicsEntry* DynamicsSystem::AddObstacle(entt::entity object)
+{
+	if (!IsAvailable(object))
+	{
+		return nullptr;
+	}
+	if (auto* known = Find(object))
+	{
+		return known;
+	}
+	return AddProxy(object);
+}
+
 PhysicsEntry* DynamicsSystem::AddProxy(entt::entity object)
 {
 	const auto facts = FactsOf(object);

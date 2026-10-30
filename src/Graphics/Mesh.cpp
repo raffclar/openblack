@@ -9,9 +9,7 @@
 
 #include "Mesh.h"
 
-#include "GraphicsHandleBgfx.h"
 #include "IndexBuffer.h"
-#include "ShaderProgram.h"
 #include "VertexBuffer.h"
 
 using namespace openblack::graphics;
@@ -43,26 +41,4 @@ bool Mesh::IsIndexed() const
 Mesh::Topology Mesh::GetTopology() const noexcept
 {
 	return _topology;
-}
-
-void Mesh::Draw(const DrawDesc& desc) const
-{
-	if (desc.instanceBuffer && (desc.skip & SkipState::SkipInstanceBuffer) == 0)
-	{
-		bgfx::setInstanceDataBuffer(toBgfx(*desc.instanceBuffer), desc.instanceStart, desc.instanceCount);
-	}
-	if (_indexBuffer != nullptr && _indexBuffer->GetCount() > 0 && (desc.skip & SkipState::SkipIndexBuffer) == 0)
-	{
-		_indexBuffer->Bind(desc.count, desc.offset);
-	}
-	if ((desc.skip & SkipState::SkipVertexBuffer) == 0)
-	{
-		_vertexBuffer->Bind();
-	}
-	if ((desc.skip & SkipState::SkipRenderState) == 0)
-	{
-		bgfx::setState(desc.state, desc.rgba);
-	}
-
-	desc.program.Submit(static_cast<bgfx::ViewId>(desc.viewId), 0, desc.preserveState ? BGFX_DISCARD_NONE : BGFX_DISCARD_ALL);
 }
