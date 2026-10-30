@@ -73,6 +73,10 @@ public:
 	/// as it is anywhere else, anything else when it is in another cell. Nothing changes for a thing that is not in the
 	/// cells.
 	virtual void Moved(entt::entity /*entity*/) {}
+	/// A thing that a script puts somewhere else goes into its new cells at once, as Moved does, also a thing that does
+	/// not move by itself, such as a scroll: a building as soon as it is anywhere else, anything else when it is in
+	/// another cell. Nothing changes for a thing that is not in the cells.
+	virtual void Placed(entt::entity entity) { Moved(entity); }
 	/// A thing in the cells that turns or changes its size comes out of its cells and goes in again, as the game does:
 	/// it covers the cells of its new outline, and it goes to the front of the lists of its cells. Nothing changes for a
 	/// thing that is not in the cells.

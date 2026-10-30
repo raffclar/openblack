@@ -568,6 +568,16 @@ void construction::SetBuilt(entt::entity building, float built)
 		registry.SetDirty();
 		return;
 	}
+	// A worship site keeps how much of it is built, and at the whole it stands built with its altar
+	if (registry.AllOf<WorshipSite>(building))
+	{
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().SetBuilt(building, built);
+		}
+		registry.SetDirty();
+		return;
+	}
 	if (!(registry.AllOf<Temple>(building) || world_objects::IsBuilding(building)))
 	{
 		return;

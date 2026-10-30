@@ -331,11 +331,11 @@ std::optional<uint32_t> MapProduction::CellOfPlace(entt::entity entity) const
 	return _lists.IndexOf(map_coords::Cell(thing_map_place::Of(*_registry, entity)));
 }
 
-bool MapProduction::MovedSinceFiled(entt::entity entity) const
+bool MapProduction::MovedSinceFiled(entt::entity entity, bool anyThing) const
 {
 	const auto* resident = _registry->TryGet<const MapCellResident>(entity);
 	const auto* transform = _registry->TryGet<const Transform>(entity);
-	if (resident == nullptr || transform == nullptr || !_registry->AllOf<MapCellMover>(entity))
+	if (resident == nullptr || transform == nullptr || (!anyThing && !_registry->AllOf<MapCellMover>(entity)))
 	{
 		return false;
 	}
@@ -568,6 +568,30 @@ void MapProduction::Moved(entt::entity entity)
 		{
 			File(entity, *kind);
 		}
+	}
+}
+
+void MapProduction::Placed(entt::entity entity)
+{
+	if (_registry == nullptr)
+	{
+		return;
+	}
+	// The things made before it moved are in their cells first
+	FileMadeBeforeLook();
+	if (!_registry->Valid(entity) || _registry->AnyOf<InHand, InPhysics>(entity))
+	{
+		return;
+	}
+	const auto* resident = _registry->TryGet<const MapCellResident>(entity);
+	if (resident == nullptr || resident->cells.empty() || !MovedSinceFiled(entity, true))
+	{
+		return;
+	}
+	TakeOut(entity);
+	if (const auto kind = KindOf(*_registry, entity))
+	{
+		File(entity, *kind);
 	}
 }
 

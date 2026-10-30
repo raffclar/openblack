@@ -107,10 +107,11 @@ void thing_map_place::Put(Registry& registry, entt::entity thing, const map_coor
 	}
 	at->position = {map_coords::ToMetres(place.x), height, map_coords::ToMetres(place.z)};
 	Keep(registry, thing, place);
-	// It goes into the map cells of the new place at once, as the game moves it
+	// It goes into the map cells of the new place at once, as the game moves it, also a thing that does not move by
+	// itself
 	if (Locator::entitiesMap::has_value())
 	{
-		Locator::entitiesMap::value().Moved(thing);
+		Locator::entitiesMap::value().Placed(thing);
 	}
 }
 
