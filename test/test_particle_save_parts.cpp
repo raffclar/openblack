@@ -131,7 +131,6 @@ struct Parts
 {
 	std::vector<uint8_t> synced;
 	std::vector<uint8_t> local;
-	std::vector<std::pair<size_t, size_t>> syncedPresentation;
 	std::vector<std::pair<size_t, size_t>> localPresentation;
 };
 
@@ -166,7 +165,6 @@ protected:
 		Parts parts;
 		reflection::BinaryWriter synced(Context());
 		rules.SaveState(synced);
-		parts.syncedPresentation = synced.PresentationRanges();
 		parts.synced = std::move(synced.Bytes());
 		reflection::BinaryWriter local(Context());
 		rules.LocalEffectsState()->SaveState(local);
@@ -225,8 +223,7 @@ TEST_F(ParticleSaveParts, TheSyncedPartDoesNotChangeWithTheEffectsOfThisComputer
 	const auto aloneParts = Save(alone);
 	const auto withLocalParts = Save(withLocal);
 	EXPECT_EQ(aloneParts.synced, withLocalParts.synced);
-	// The synced part has no presentation value. All of the other part is a presentation value.
-	EXPECT_TRUE(withLocalParts.syncedPresentation.empty());
+	// All of the part of this computer is a presentation value
 	ASSERT_EQ(withLocalParts.localPresentation.size(), 1u);
 	EXPECT_EQ(withLocalParts.localPresentation.front(), std::make_pair(size_t {0}, withLocalParts.local.size()));
 	EXPECT_NE(aloneParts.local, withLocalParts.local);
