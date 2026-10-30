@@ -265,13 +265,15 @@ def differing_parts(result):
 # - the statistics note the alignments and the towns at the start again (the towns are the last value of the RCTX block);
 # - the creatures' minds forget what a saved game does not keep;
 # - the sounds do not come back, and a creature's creed powers come back one by one with no glow placed yet;
-# - the mind of each computer god starts again, with no player for the size of its creature and a free hand.
+# - the mind of each computer god starts again, with no player for the size of its creature and a free hand;
+# - a search for a footpath starts again from its two ends.
 GAME_START_VALUES = {
     "Alignment": {"value"},
     "PlayerStatistics": {"startAlignment", "startCreatureAlignment"},
     "CreatureMindState": {"leftAreaActions", "agendaRefused"},
     "CreatureHandGlows": {"placed", "motion"},
     "ComputerPlayer": {"mind", "creatureLike", "hand"},
+    "FootpathFinder": {"plan"},
 }
 # The components whose rows a load of a saved game can add or remove
 GAME_START_ROWS = {"PlayerStatistics": "only_b", "SoundTag": "only_a"}
@@ -279,10 +281,23 @@ GAME_START_ROWS = {"PlayerStatistics": "only_b", "SoundTag": "only_a"}
 GAME_START_CONTEXT_BYTES = 4
 
 
-def not_game_start(result):
-    """The parts of a comparison of a save with the save after its load that the start of a game does not explain"""
+def changed_altitudes(data):
+    """The count of the land's corners whose altitude the world changed, as a world state keeps them (LALT block)"""
+    _, blocks = read_world(data)
+    for tag, block in blocks:
+        if tag == "LALT" and len(block) >= 4:
+            return struct.unpack_from("<I", block)[0]
+    return 0
+
+
+def not_game_start(result, land_from_file=False):
+    """The parts of a comparison of a save with the save after its load that the start of a game does not explain.
+    With land_from_file, the land had altitudes that the world changed: a saved game does not keep them (vanilla-bugs
+    778), so the heights of the creatures above the ground in the OBJS block can change."""
     left = []
     for key, value in result.items():
+        if key == "OBJS" and land_from_file:
+            continue
         if key == "RCTX":
             size = value["bytes"]
             if size["sizes"][0] == size["sizes"][1] and size["first"] >= size["sizes"][0] - GAME_START_CONTEXT_BYTES:

@@ -14,10 +14,12 @@ At each check the game is held, and three round trips follow with no frame and n
     world state   the world state that a game server sends is made, loaded and made again (saves.world_state_round_trip).
                   The two states must have the same bytes: a server snapshot and a rejoin load world states. The one
                   exception is a player in the temple: the load ends the visit (see save_diff.TEMPLE_VISIT_SECTIONS).
+                  The world state keeps the altitudes of the land that the world changed (the LALT block).
     saved game    the game saves (A), loads A and saves (B), loads B and saves (C). Each load of a saved game starts a
                   game, as the game does: the player takes the alignment that the profile keeps, and the statistics
                   note the start again (see save_diff.GAME_START_VALUES). B and C must have the same bytes; A and B can
-                  differ only by the start of a game.
+                  differ only by the start of a game, and by the land of the file when the world changed the land
+                  (vanilla-bugs 778: a saved game does not keep the altitudes).
 
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/sweep --scenarios all --turns 100
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/land1 --land Land1.txt --at 0,500,2000
@@ -95,14 +97,17 @@ def check(game, options, name):
         # A game with no temple has no visit
         in_temple = False
     answer = game.call("saves.world_state_round_trip", {"first": first_path, "again": again_path})
+    altitudes = 0
     if not answer.get("loaded") or not answer.get("written"):
         entry["world_state"] = {"error": answer}
     else:
         with open(first_path, "rb") as file_a, open(again_path, "rb") as file_b:
-            differs = save_diff.compare_files(file_a.read(), file_b.read())
+            first = file_a.read()
+            differs = save_diff.compare_files(first, file_b.read())
+        altitudes = save_diff.changed_altitudes(first)
         unexplained = save_diff.not_temple_visit(differs) if in_temple else save_diff.differing_parts(differs)
         entry["world_state"] = {"same": not unexplained, "parts": save_diff.differing_parts(differs),
-                                "in_temple": in_temple}
+                                "in_temple": in_temple, "changed_altitudes": altitudes}
         if differs and options.keep:
             entry["world_state"]["report"] = save_diff.text_report(differs)
     first_slot, second_slot, third_slot = SLOTS
@@ -122,7 +127,8 @@ def check(game, options, name):
     b, c = results[second_slot], results[third_slot]
     game_start = save_diff.compare_files(a, b)
     again = save_diff.compare_files(b, c)
-    unexplained = save_diff.not_game_start(game_start)
+    # A saved game brings back the land of its file (vanilla-bugs 778)
+    unexplained = save_diff.not_game_start(game_start, land_from_file=altitudes > 0)
     entry["saved_game"] = {"same": not again and not unexplained, "parts": save_diff.differing_parts(again),
                            "game_start": save_diff.differing_parts(game_start), "not_game_start": unexplained}
     if options.keep:
