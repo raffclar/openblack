@@ -535,7 +535,7 @@
   "writes": true
  },
  {
-  "description": "The creature goes to a thing, picks it up and holds it, as a leash order does on a thing that it can lift: the first times it holds a thing of that sort it plays with it, then it holds it facing the player for 40 to 50 seconds. Give it creature.put_down to let go before that",
+  "description": "The creature goes to a thing, picks it up and holds it, as a leash order does on a thing that it can lift: the first times it holds a thing of that sort it plays with it, then it holds it facing the player for 40 to 50 seconds. Give it creature.put_down to let go before that. The creature gives up an order on the way when it has not moved for 50 turns (a long route search can cause it): give it for a thing that is near, and read the warning in the answer. It is refused while a cut scene plays",
   "kind": "object",
   "parameters": [
    {
@@ -577,7 +577,7 @@
   "writes": true
  },
  {
-  "description": "The creature goes to a thing and eats from it as its own plan to eat does: from a storage pit (EatFromStoragePit), a field (EatFromContainer), a tree (EatFromTree) or the thing itself (EatAfterExamining), or with the eat action given",
+  "description": "The creature goes to a thing and eats from it as its own plan to eat does: from a storage pit (EatFromStoragePit), a field (EatFromContainer), a tree (EatFromTree) or the thing itself (EatAfterExamining), or with the eat action given. The limits of creature.pick_up hold here too: a thing that is near, and no cut scene",
   "kind": "object",
   "parameters": [
    {
