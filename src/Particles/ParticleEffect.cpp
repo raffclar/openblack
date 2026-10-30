@@ -1386,7 +1386,11 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 	out.WriteValue(collection.hierarchy);
 	out.WriteValue(collection.textureRepeats);
 	out.WriteValue(collection.textureSpeed);
+	// The frames slide the texture of a ribbon, also in a synced effect. Only the draw uses it, so it is a presentation
+	// value.
+	out.Out().BeginPresentation();
 	out.WriteValue(collection.textureScroll);
+	out.Out().EndPresentation();
 	out.Out().WriteSize(collection.modifiers.size());
 	for (const auto& slot : collection.modifiers)
 	{
