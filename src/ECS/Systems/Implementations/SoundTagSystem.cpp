@@ -325,18 +325,34 @@ void SoundTagSystem::CreatePointSound(entt::id_type sound, const glm::vec3& posi
 entt::entity SoundTagSystem::AttachObjectSound(entt::entity entity, entt::id_type sound, bool loops)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto tag = registry.Create();
-	registry.Assign<SoundTag>(tag, SoundTag {
-	                                   .sound = sound,
-	                                   .offset = glm::vec3(0.0f),
-	                                   .active = true,
-	                                   .emitter = entt::null,
-	                                   .point = false,
-	                                   .delayed = false,
-	                                   .turns = 0,
-	                                   .owner = entity,
-	                                   .loops = loops,
-	                               });
+	const SoundTag fresh {
+	    .sound = sound,
+	    .offset = glm::vec3(0.0f),
+	    .active = true,
+	    .emitter = entt::null,
+	    .point = false,
+	    .delayed = false,
+	    .turns = 0,
+	    .owner = entity,
+	    .loops = loops,
+	};
+	// At a load, the sound takes back the tag that it had before the load, so that the loaded world keeps its entities
+	const auto unclaimed = std::ranges::find_if(_unclaimed, [&registry, entity, sound](entt::entity tag) {
+		const auto& kept = registry.Get<const SoundTag>(tag);
+		return kept.owner == entity && kept.sound == sound;
+	});
+	entt::entity tag = entt::null;
+	if (unclaimed != _unclaimed.end())
+	{
+		tag = *unclaimed;
+		_unclaimed.erase(unclaimed);
+		registry.Get<SoundTag>(tag) = fresh;
+	}
+	else
+	{
+		tag = registry.Create();
+		registry.Assign<SoundTag>(tag, fresh);
+	}
 	// A new tag goes at the start of the list
 	_tags.push_front(Entry {.tag = tag, .point = std::nullopt});
 	return tag;
@@ -370,18 +386,34 @@ void SoundTagSystem::ForgetSavedSounds()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> gone;
-	registry.Each<SoundTag>([&gone](entt::entity entity, SoundTag& tag) {
-		if (tag.point || tag.owner != entt::null)
+	_unclaimed.clear();
+	registry.Each<SoundTag>([this, &gone](entt::entity entity, SoundTag& tag) {
+		if (tag.point)
 		{
 			gone.push_back(entity);
 			return;
 		}
-		// The count of the turns stays, because it is a part of the synced world
 		tag.emitter = entt::null;
+		// A sound attached to an object waits until the load attaches it again or forgets it
+		if (tag.owner != entt::null)
+		{
+			_unclaimed.push_back(entity);
+		}
+		// The count of the turns of an object's own tag stays, because it is a part of the synced world
 	});
 	for (const auto entity : gone)
 	{
 		registry.Destroy(entity);
 	}
 	_tags.clear();
+}
+
+void SoundTagSystem::ForgetUnclaimedSounds()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto entity : _unclaimed)
+	{
+		registry.Destroy(entity);
+	}
+	_unclaimed.clear();
 }

@@ -266,6 +266,7 @@ void ForgetSavedSounds(Registry& registry)
 	Locator::soundTagSystem::value().ForgetSavedSounds();
 	if (!Locator::creatureAnimationSystem::has_value())
 	{
+		Locator::soundTagSystem::value().ForgetUnclaimedSounds();
 		return;
 	}
 	using creature_hand_glow::k_PlaceCount;
@@ -286,6 +287,7 @@ void ForgetSavedSounds(Registry& registry)
 	{
 		Locator::creatureAnimationSystem::value().LoadCreedPowers(entity, powers);
 	}
+	Locator::soundTagSystem::value().ForgetUnclaimedSounds();
 }
 
 template <typename Service>
