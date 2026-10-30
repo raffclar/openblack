@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#define LOCATOR_IMPLEMENTATIONS
+
 #include <cstddef>
 #include <cstdint>
 
@@ -31,7 +33,8 @@
 #include "Online/OnlineMapStoreInterface.h"
 #include "Online/StartRules.h"
 #include "Server/LobbyStatus.h"
-#include "TestTempFolder.h"
+
+#include "../TestTempFolder.h"
 
 using namespace openblack;
 
