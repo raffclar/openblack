@@ -187,6 +187,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("sim-row-dump-turn", "Tools: with --sim-row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
 		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"))
+		("sim-world-states", "Tools: write the world state of this computer to this folder at the end of each turn of --sim-world-state-turns, with a map of its synced bytes (tools/sim/save_diff.py --synced compares two computers).", cxxopts::value<std::string>())
+		("sim-world-state-turns", "Tools: with --sim-world-states, the turns, such as 250 or 100,250,400.", cxxopts::value<std::string>())
 		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
 		("turn-beside-draw", "Developers: the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later.");
 #endif
@@ -498,6 +500,21 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				{
 					simulation.rowDump.atTurn = result["sim-row-dump-turn"].as<uint32_t>();
 				}
+			}
+			if (result.count("sim-world-states") != 0)
+			{
+				const auto turns =
+				    result.count("sim-world-state-turns") != 0
+				        ? openblack::world_state_at_turn::ParseTurns(result["sim-world-state-turns"].as<std::string>())
+				        : std::nullopt;
+				if (!turns.has_value())
+				{
+					std::cerr << "--sim-world-states needs --sim-world-state-turns with a list such as 100,250" << std::endl;
+					returnCode = EXIT_FAILURE;
+					return false;
+				}
+				simulation.worldStates = openblack::world_state_at_turn::Settings {
+				    .turns = *turns, .folder = std::filesystem::path(result["sim-world-states"].as<std::string>())};
 			}
 #endif
 			if (result.count("sim-play-commands") != 0)

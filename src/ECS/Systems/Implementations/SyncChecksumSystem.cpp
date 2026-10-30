@@ -129,6 +129,13 @@ void SyncChecksumSystem::ProcessTurn()
 		_listener(*_last);
 	}
 	_lastHash = TurnHash {.turn = turn, .byField = byField, .hash = std::move(hash)};
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The world state of the tools is the world of this checksum
+	if (_worldStates.has_value())
+	{
+		world_state_at_turn::WriteIfDue(*_worldStates, turn, *_reflection);
+	}
+#endif
 }
 
 #if defined(OPENBLACK_DEVELOPER_TOOLS)

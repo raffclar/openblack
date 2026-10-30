@@ -2226,3 +2226,4 @@ openblack_setup_and_add_test(test_server_snapshots online/test_server_snapshots.
 openblack_setup_and_add_test(test_sent_blocks online/test_sent_blocks.cpp)
 openblack_setup_and_add_test(test_dance_world_state test_dance_world_state.cpp)
 target_link_libraries(test_dance_world_state PRIVATE dance)
+openblack_setup_and_add_test(test_world_state_at_turn test_world_state_at_turn.cpp)

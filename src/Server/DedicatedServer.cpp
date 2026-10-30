@@ -1067,6 +1067,10 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}", settings.rowDumpPath->string());
 	}
+	if (settings.worldStates.has_value())
+	{
+		checksums.WriteWorldStates(*settings.worldStates);
+	}
 #endif
 	checksums.SetTurnListener(
 	    [&onTurn, logChecksums = settings.logChecksums](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {

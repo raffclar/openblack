@@ -16,10 +16,12 @@ the places of the bytes that differ.
 
     python tools/sim/save_diff.py first.obsav second.obsav
     python tools/sim/save_diff.py first.obsav second.obsav --json      (the result as JSON)
+    python tools/sim/save_diff.py --synced server.obsav client.obsav   (only the synced parts of two world states)
 """
 
 import argparse
 import json
+import os
 import struct
 import sys
 
@@ -283,12 +285,206 @@ def text_report(result):
     return "\n".join(lines) + "\n"
 
 
+# The synced part of two world states of a network game (--synced). The game server and each client write their world
+# state at the end of the same turn, with a map beside it (the game's --sim-world-states, the server's --world-states).
+# The map gives the parts that only show the world on that computer. This compare leaves these parts out:
+# - the head: the count of the loads that did not end is of the file on this computer;
+# - the camera block (CAMR): each computer has its own camera;
+# - in the clock block (TIME), all values but the synced seed and the count of its draws: the clock of the frames, the
+#   local seed and the streams of this computer (see LOCAL_CLOCK_VALUES);
+# - in the entities block, the presentation parts of the map (synced_state::PresentationParts);
+# - in the systems block, the presentation bytes of each section of the map. A section that a computer does not write
+#   has no synced bytes.
+LOCAL_BLOCKS = {"CAMR"}
+# The values of the clock block that each computer keeps for itself
+LOCAL_CLOCK_VALUES = {"speed", "paused", "remainderMs", "localSeed", "particleStream", "crtSeed", "runSeed", "streams",
+                      "general"}
+
+
+def read_clock(data):
+    """The values of the clock block (TIME), by name"""
+    reader = Reader(data)
+    clock = {"speed": struct.unpack("<f", reader.take(4))[0], "paused": reader.take(1)[0] != 0,
+             "remainderMs": struct.unpack("<i", reader.take(4))[0], "syncedSeed": reader.u32(),
+             "localSeed": reader.u32(), "particleStream": reader.take(1)[0]}
+    clock["crtSeed"] = reader.u32() if reader.take(1)[0] != 0 else None
+    clock["runSeed"] = reader.u32()
+    clock["streams"] = [reader.name() for _ in range(reader.u32())]
+    clock["general"] = reader.name() if reader.left() > 0 else ""
+    clock["syncedDraws"] = struct.unpack("<Q", reader.take(8))[0] if reader.left() > 0 else None
+    return clock
+
+
+def presentation_test(parts, entities):
+    """A test of whether a value of a component of an entity only shows the world on one computer. A part with a
+    marker covers only the entities that have the marker component (entities: {component: set of entities})."""
+    def is_presentation(component, field, entity):
+        for part in parts:
+            if part["component"] not in ("*", component) or part["field"] not in ("", field):
+                continue
+            if not part["marker"] or entity in entities.get(part["marker"], set()):
+                return True
+        return False
+    return is_presentation
+
+
+def whole_presentation(parts, component):
+    """True for a component of which each value of each entity only shows the world"""
+    return any(part["component"] == component and not part["field"] and not part["marker"] for part in parts)
+
+
+def synced_entities(a, b, parts):
+    """How the synced parts of two entities blocks differ"""
+    first, second = read_entities(a), read_entities(b)
+    result = {}
+    if first["entities"] != second["entities"] or first["in_use"] != second["in_use"]:
+        result["entities"] = {"counts": [len(first["entities"]), len(second["entities"])],
+                              "in_use": [first["in_use"], second["in_use"]]}
+    marks = []
+    for block in (first, second):
+        marks.append({name: {entity for entity, _ in comp["rows"]} for name, comp in block["components"].items()})
+    tests = [presentation_test(parts, marks[0]), presentation_test(parts, marks[1])]
+    components = {}
+    for name in sorted(set(first["order"]) | set(second["order"])):
+        if whole_presentation(parts, name):
+            continue
+        empty = {"fields": [], "rows": []}
+        comp_a, comp_b = first["components"].get(name, empty), second["components"].get(name, empty)
+        if comp_a == comp_b:
+            continue
+        entry = {}
+        rows_a = [entity for entity, _ in comp_a["rows"]]
+        rows_b = [entity for entity, _ in comp_b["rows"]]
+        # The order of the rows of a mark with no values does not count, as for the checksum
+        if not comp_a["fields"] and not comp_b["fields"]:
+            rows_a, rows_b = sorted(rows_a), sorted(rows_b)
+        if rows_a != rows_b:
+            entry["rows"] = {"counts": [len(rows_a), len(rows_b)],
+                             "only_a": [entity_text(e) for e in rows_a if e not in set(rows_b)][:20],
+                             "only_b": [entity_text(e) for e in rows_b if e not in set(rows_a)][:20]}
+        if comp_a["fields"] != comp_b["fields"] and comp_a["rows"] and comp_b["rows"]:
+            entry["fields"] = [comp_a["fields"], comp_b["fields"]]
+        values_b = dict(comp_b["rows"])
+        fields = {}
+        for entity, values in comp_a["rows"]:
+            other = values_b.get(entity)
+            if other is None or comp_a["fields"] != comp_b["fields"]:
+                continue
+            for field, value_a, value_b in zip(comp_a["fields"], values, other):
+                if tests[0](name, field, entity) or tests[1](name, field, entity):
+                    continue
+                difference = compare_bytes(value_a, value_b)
+                if difference is not None:
+                    fields.setdefault(field, []).append({"entity": entity_text(entity), **difference})
+        if fields:
+            entry["values"] = {field: {"entities": len(rows), "examples": rows[:3]} for field, rows in fields.items()}
+        if entry:
+            components[name] = entry
+    if components:
+        result["components"] = components
+    return result
+
+
+def synced_bytes(data, ranges):
+    """The bytes of a section without its presentation ranges"""
+    kept, at = bytearray(), 0
+    for first, last in sorted(ranges):
+        if first > at:
+            kept += data[at:first]
+        at = max(at, last)
+    return bytes(kept + data[at:])
+
+
+def synced_sections(a, b, map_a, map_b):
+    """How the synced bytes of the sections of two systems blocks differ. A section that a computer did not write has
+    no synced bytes."""
+    result = {}
+    sides = []
+    for data, mapping in ((a, map_a), (b, map_b)):
+        sections = dict(read_sections(data)) if data is not None else {}
+        ranges = {section["name"]: section for section in mapping.get("sections", [])}
+        for name, section in sections.items():
+            if name not in ranges or ranges[name]["size"] != len(section):
+                raise ValueError(f"the map does not give the section {name} of its world state")
+        sides.append({name: synced_bytes(section, ranges[name]["presentation"]) for name, section in sections.items()})
+    for name in sorted(set(sides[0]) | set(sides[1])):
+        difference = compare_bytes(sides[0].get(name, b""), sides[1].get(name, b""))
+        if difference is not None:
+            result[name] = difference
+    return result
+
+
+def compare_synced(data_a, map_a, data_b, map_b):
+    """How the synced parts of two world states differ; an empty result when they are the same"""
+    _, blocks_a = read_world(data_a)
+    _, blocks_b = read_world(data_b)
+    result = {}
+    if map_a.get("turn") != map_b.get("turn"):
+        result["turn"] = [map_a.get("turn"), map_b.get("turn")]
+    for value in ("syncedSeed", "syncedDraws"):
+        if map_a.get(value) != map_b.get(value):
+            result[value] = [map_a.get(value), map_b.get(value)]
+    parts = map_a.get("presentationParts", []) + [p for p in map_b.get("presentationParts", [])
+                                                  if p not in map_a.get("presentationParts", [])]
+    # A tag can come more than one time: the blocks of a tag pair in their order
+    def keyed(blocks):
+        seen, out = {}, {}
+        for tag, data in blocks:
+            index = seen.get(tag, 0)
+            seen[tag] = index + 1
+            out[tag if index == 0 else f"{tag}#{index}"] = data
+        return out
+    first, second = keyed(blocks_a), keyed(blocks_b)
+    for key in list(first) + [k for k in second if k not in first]:
+        tag = key.split("#")[0]
+        if tag in LOCAL_BLOCKS:
+            continue
+        one, other = first.get(key), second.get(key)
+        if tag == "SYST":
+            detail = synced_sections(one, other, map_a, map_b)
+        elif one is None or other is None:
+            detail = {"only_in": "a" if other is None else "b"}
+        elif tag == "TIME":
+            clock_a, clock_b = read_clock(one), read_clock(other)
+            detail = {name: [clock_a[name], clock_b[name]] for name in clock_a
+                      if name not in LOCAL_CLOCK_VALUES and clock_a[name] != clock_b[name]}
+        elif tag == "ECSW":
+            detail = synced_entities(one, other, parts)
+        else:
+            detail = compare_bytes(one, other) or {}
+        if detail:
+            result[key] = detail
+    return result
+
+
+def read_state(path):
+    """The bytes of a world state and its map, which is beside it with the extension .json"""
+    with open(path, "rb") as file:
+        data = file.read()
+    with open(os.path.splitext(path)[0] + ".json", encoding="utf-8") as file:
+        return data, json.load(file)
+
+
+def compare_synced_files(path_a, path_b):
+    """compare_synced of two world states on the disk"""
+    data_a, map_a = read_state(path_a)
+    data_b, map_b = read_state(path_b)
+    return compare_synced(data_a, map_a, data_b, map_b)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("first")
     parser.add_argument("second")
     parser.add_argument("--json", action="store_true", help="write the result as JSON")
+    parser.add_argument("--synced", action="store_true",
+                        help="compare only the synced parts of two world states of a network game, with their maps")
     options = parser.parse_args(argv)
+    if options.synced:
+        result = compare_synced_files(options.first, options.second)
+        sys.stdout.write(json.dumps(result, indent=1) + "\n" if options.json or result
+                         else "The synced parts of the two world states have the same bytes.\n")
+        return 0 if not result else 1
     with open(options.first, "rb") as file_a, open(options.second, "rb") as file_b:
         result = compare_files(file_a.read(), file_b.read())
     sys.stdout.write(json.dumps(result, indent=1) + "\n" if options.json else text_report(result))
