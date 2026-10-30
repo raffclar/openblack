@@ -12677,6 +12677,26 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.scaffold_tap_breaks",
+	    .name = "A tap breaks one scaffold off a scaffold, and a storage pit takes a scaffold as wood",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a storage pit, and a loose scaffold that "
+	                   "is worth three scaffolds and that no workshop counts. Put the hand over the scaffold, tap it, "
+	                   "then pick up a part and hold it over the other part and over the storage pit.",
+	    .expected = "Over the scaffold the tooltip shows \"Scaffold Value\" with 3, and \"Tap\". A tap breaks one small "
+	                "scaffold off. The two parts move apart along a quarter turn of the scaffold and one of four sounds "
+	                "plays. The old scaffold is now worth 2. A held part over the other part shows \"Combine "
+	                "Scaffolds\". Over the storage pit it shows \"Supply\", and the pit takes the wood of all the "
+	                "scaffolds that the part is worth. Elsewhere the tooltip shows the name of the building that the "
+	                "phantom shows, or \"Build\", then \"Throw\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {15.0f}, k_Workshop + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Workshop + glm::vec2 {-15.0f, 0.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_Workshop, .scale = 1.1f}},
+	});
+
+	all.push_back({
 	    .id = "objects.workshop_wood_by_hand",
 	    .name = "The hand takes wood from a workshop's pile and gives it back",
 	    .facet = Facet::Objects,

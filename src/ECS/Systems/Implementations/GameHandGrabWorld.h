@@ -141,6 +141,7 @@ public:
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
 	[[nodiscard]] bool JoinsScaffold(entt::entity target, entt::entity held) const override;
 	void JoinScaffold(entt::entity target, entt::entity held) override;
+	entt::entity RestOfScaffold(entt::entity scaffold) override;
 	void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) override;
 	void UseUp(entt::entity object) override;
 	altar_offering::Answer OfferAtAltar(entt::entity altar, entt::entity held) override;
