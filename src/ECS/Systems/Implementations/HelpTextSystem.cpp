@@ -13,6 +13,7 @@
 
 #include <utility>
 
+#include "3D/TempleInteriorInterface.h"
 #include "Common/GameLanguage.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
@@ -60,7 +61,8 @@ help::DialogueText::Queries HelpTextSystem::DialogueQueries()
 	// The texts are timed in milliseconds by the scripts' clock, which only the turns move on, in the world and in the
 	// temple, and which runs on through every change of land
 	queries.nowMs = []() { return static_cast<int32_t>(Locator::helpSpeechSystem::value().GetClockMs()); };
-	queries.inTemple = [this]() { return _inTemple; };
+	// The turn reads whether the player is in the temple when it needs it. A computer with no temple has none.
+	queries.inTemple = []() { return Locator::temple::has_value() && Locator::temple::value().Active(); };
 	// The scripts find the advisors talking by the scripts' clock, not by the sound that the advisors play
 	queries.advisorsTalking = [this]() {
 		return _scriptAdvisorLine.has_value() &&
@@ -133,17 +135,12 @@ void HelpTextSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _dialogue != nullptr);
 	if (_dialogue != nullptr)
 	{
-		// The real times of the text go into the save as times from the moment of the save. The real clock of a run starts
-		// at a different time in each run, so a save of a loaded game then has the same bytes as the save that the game
-		// loaded.
-		const auto realNow =
-		    Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()) : 0;
-		// A load empties the box and shows the kept texts again, and the newest text reads from the load. The save keeps
-		// the text as the load makes it, so that a save at once after a load has the same bytes.
+		// The times of the text are on the scripts' clock, which the save keeps before them. Thus the load puts them back
+		// on the same clock. A load empties the box and shows the kept texts again, and the newest text reads from the load.
+		// The save keeps the text as the load makes it, so that a save at once after a load has the same bytes.
 		auto saved = *_dialogue;
 		saved.EmptyBox();
 		saved.ShowAgain();
-		saved.ShiftRealTime(-realNow);
 		reflection::Save(out, saved);
 	}
 	reflection::Save(out, _storyHistory);
@@ -264,17 +261,25 @@ std::u16string HelpTextSystem::GetWords(uint32_t text) const
 
 void HelpTextSystem::Update(const Frame& frame)
 {
-	_inTemple = frame.inTemple;
 	if (!_dialogue)
 	{
 		return;
 	}
-	// The next turn takes the click and the key, so that the scripts see them at the same turn at any frame rate
-	_pendingClick = _pendingClick || frame.click;
-	_pendingSkipKey = _pendingSkipKey || frame.skipKey;
 	_dialogue->Update(static_cast<float>(frame.inTemple ? frame.realMs : frame.gameMs));
 	_dialogue->AdvanceClickCue(static_cast<float>(frame.realMs) * 0.001f);
 	_dialogue->AdvanceControlIcons(static_cast<float>(frame.realMs) * 0.001f);
+}
+
+void HelpTextSystem::TakeClick(bool click, bool skipKey)
+{
+	if (!_dialogue)
+	{
+		return;
+	}
+	// The next turn of the dialogue takes the click and the key, so that the scripts see them at the same turn at any
+	// frame rate
+	_pendingClick = _pendingClick || click;
+	_pendingSkipKey = _pendingSkipKey || skipKey;
 }
 
 void HelpTextSystem::ProcessTurn(uint32_t milliseconds)

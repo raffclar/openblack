@@ -24,10 +24,6 @@ public:
 	[[nodiscard]] virtual bool IsHandDrawn() const = 0;
 	/// The advisors move and act on the screen
 	virtual void UpdateAdvisors() = 0;
-	/// Whether the player clicked the dialogue since the last frame. The click is then used.
-	[[nodiscard]] virtual bool TakeDialogueClick() = 0;
-	/// Whether the player holds the key that skips the dialogue
-	[[nodiscard]] virtual bool DialogueSkipKeyDown() const = 0;
 	/// The word of a sung verse that the song has reached gets its glow
 	virtual void UpdateSingAlong(bool inTemple) = 0;
 	/// Whether the words of the advisors showed in the last frame
@@ -44,8 +40,6 @@ class NoFrameView final: public FrameViewInterface
 public:
 	[[nodiscard]] bool IsHandDrawn() const override { return false; }
 	void UpdateAdvisors() override {}
-	[[nodiscard]] bool TakeDialogueClick() override { return false; }
-	[[nodiscard]] bool DialogueSkipKeyDown() const override { return false; }
 	void UpdateSingAlong(bool /*inTemple*/) override {}
 	[[nodiscard]] bool DialogueWordsDrawn() const override { return false; }
 	void UpdateVillagerLabels(float /*milliseconds*/) override {}

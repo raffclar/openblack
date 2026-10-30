@@ -330,8 +330,6 @@ public:
 	void ShowLandMessage(const land_message::Message& message) override;
 	/// The parts of the effects of a frame that the view of the player does
 	void UpdateAdvisors() override;
-	[[nodiscard]] bool TakeDialogueClick() override;
-	[[nodiscard]] bool DialogueSkipKeyDown() const override;
 	void UpdateSingAlong(bool inTemple) override;
 	[[nodiscard]] bool DialogueWordsDrawn() const override;
 	void CloseMenuForCinema() override;
@@ -412,6 +410,12 @@ public:
 	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
 	/// world camera, when they changed
 	void ReportHelp();
+	/// Before the block of commands goes: sends the player's click of the dialogue and the key that cuts a text short
+	void SendDialogueClick();
+	/// Whether the player clicked the dialogue since the last call. The click is then used.
+	[[nodiscard]] bool TakeDialogueClick();
+	/// Whether the player holds the key that cuts a text short
+	[[nodiscard]] bool DialogueSkipKeyDown() const;
 	/// The things in view are made ready for the draw of this frame
 	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
 	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
