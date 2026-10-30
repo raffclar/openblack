@@ -98,7 +98,7 @@ private:
 	/// A symbol made from the points of a path. A computer god asks for the symbols of its gestures in each turn.
 	struct KeptSymbol
 	{
-		entt::resource<CameraPath> path;
+		entt::resource<const CameraPath> path;
 		gesture::TrailSymbol symbol;
 	};
 
