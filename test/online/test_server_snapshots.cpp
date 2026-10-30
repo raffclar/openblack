@@ -9,32 +9,67 @@
 
 #include <cstdint>
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/ServerSnapshots.h"
 
 using namespace openblack::server::snapshots;
+using openblack::server::SessionHash;
+using openblack::server::Sha256SessionHasher;
 
 namespace
 {
 
+/// A hash with fixed bytes, so that two rooms of MakeRoom are the same
+SessionHash FixedHash(uint8_t value)
+{
+	SessionHash hash;
+	hash.salt.fill(value);
+	hash.digest.fill(static_cast<uint8_t>(value + 1));
+	return hash;
+}
+
 Room MakeRoom()
 {
 	return Room {.start = R"({"type":"room.start","land":"Land1.txt"})",
-	             .seats = {{.state = 1, .session = "secret-1", .account = "11", .name = "alice"},
-	                       {.state = 2, .session = "secret-2", .account = "12", .name = "bob"},
-	                       {.state = 0, .session = {}, .account = {}, .name = {}}},
-	             .watchers = {"secret-3"},
+	             .seats = {{.state = 1, .session = FixedHash(1), .account = "11", .name = "alice"},
+	                       {.state = 2, .session = FixedHash(3), .account = "12", .name = "bob"},
+	                       {.state = 0, .session = std::nullopt, .account = {}, .name = {}}},
+	             .watchers = {FixedHash(5)},
 	             .stoppedAfter = std::nullopt,
 	             .leaving = {1},
 	             .joining = {}};
+}
+
+/// True when the bytes have the text in them
+bool HasText(const std::vector<uint8_t>& bytes, std::string_view text)
+{
+	return !std::ranges::search(bytes, text, [](uint8_t byte, char letter) {
+		        return byte == static_cast<uint8_t>(letter);
+	        }).empty();
+}
+
+/// A 64-bit FNV-1a hash of the bytes, as the snapshot files have at their end
+uint64_t Checksum(const std::vector<uint8_t>& bytes)
+{
+	uint64_t hash = 14695981039346656037ull;
+	for (const auto byte : bytes)
+	{
+		hash = (hash ^ byte) * 1099511628211ull;
+	}
+	return hash;
 }
 
 std::vector<uint8_t> World(uint32_t turn)
@@ -255,4 +290,79 @@ TEST_F(SnapshotStoreTest, AFolderWithNoGoodSnapshotGivesNothingAndTheEndOfTheGam
 	store.Clear();
 	EXPECT_FALSE(store.LoadNewest().has_value());
 	EXPECT_TRUE(std::filesystem::is_empty(folder));
+}
+
+TEST(SessionHashes, TheDigestIsTheSha256OfTheSaltThenTheSecret)
+{
+	// The SHA-256 test value of "abc"
+	constexpr std::array<uint8_t, 32> k_Abc {0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40,
+	                                         0xde, 0x5d, 0xae, 0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17,
+	                                         0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00, 0x15, 0xad};
+	const std::array<uint8_t, 2> salt {'a', 'b'};
+	EXPECT_EQ(openblack::server::SaltedSha256(salt, "c"), k_Abc);
+	EXPECT_EQ(openblack::server::SaltedSha256({}, "abc"), k_Abc);
+}
+
+TEST(SessionHashes, OnlyTheSameSecretMatchesAndEachHashHasItsOwnSalt)
+{
+	const Sha256SessionHasher hasher;
+	const auto first = hasher.Hash("secret-1");
+	const auto second = hasher.Hash("secret-1");
+	ASSERT_TRUE(first.has_value());
+	ASSERT_TRUE(second.has_value());
+	EXPECT_NE(first->salt, second->salt);
+	EXPECT_NE(first->digest, second->digest);
+	EXPECT_TRUE(hasher.Matches(*first, "secret-1"));
+	EXPECT_TRUE(hasher.Matches(*second, "secret-1"));
+	EXPECT_FALSE(hasher.Matches(*first, "secret-2"));
+	EXPECT_FALSE(hasher.Matches(*first, "secret-"));
+	EXPECT_FALSE(hasher.Matches(*first, ""));
+}
+
+TEST_F(SnapshotStoreTest, TheFilesKeepNoSecretOfASessionButTheHashesFindTheRightSecrets)
+{
+	const Sha256SessionHasher hasher;
+	auto room = MakeRoom();
+	room.seats[0].session = hasher.Hash("god-secret-alice");
+	room.seats[1].session = hasher.Hash("god-secret-bob");
+	room.watchers = {*hasher.Hash("observer-secret-carol")};
+	Store store(folder, 3);
+	ASSERT_TRUE(store.OpenJournal(1, room));
+	ASSERT_TRUE(store.Write(1, EncodeSnapshot({.turn = 1, .room = room, .world = World(1)})));
+	store.AddRoom(room);
+	store.AddTurn(1, TurnBytes(1));
+
+	size_t files = 0;
+	for (const auto& entry : std::filesystem::directory_iterator(folder))
+	{
+		const auto bytes = ReadAll(entry.path());
+		++files;
+		EXPECT_FALSE(HasText(bytes, "secret")) << entry.path().filename().string();
+		EXPECT_TRUE(HasText(bytes, "alice")) << entry.path().filename().string();
+	}
+	EXPECT_EQ(files, 2u);
+
+	const auto restored = Store(folder, 3).LoadNewest();
+	ASSERT_TRUE(restored.has_value());
+	ASSERT_TRUE(restored->room.seats[0].session.has_value());
+	EXPECT_TRUE(hasher.Matches(*restored->room.seats[0].session, "god-secret-alice"));
+	EXPECT_FALSE(hasher.Matches(*restored->room.seats[0].session, "god-secret-bob"));
+	ASSERT_EQ(restored->room.watchers.size(), 1u);
+	EXPECT_TRUE(hasher.Matches(restored->room.watchers[0], "observer-secret-carol"));
+}
+
+TEST(ServerSnapshots, ASnapshotOfTheFirstFormatDoesNotLoad)
+{
+	auto bytes = EncodeSnapshot({.turn = 300, .room = MakeRoom(), .world = World(300)});
+	ASSERT_TRUE(DecodeSnapshot(bytes).has_value());
+	// The first format kept the secrets of the sessions. Its version is after the 8 bytes of the magic text.
+	bytes.resize(bytes.size() - sizeof(uint64_t));
+	ASSERT_EQ(bytes[8], 2);
+	bytes[8] = 1;
+	const auto checksum = Checksum(bytes);
+	for (int shift = 0; shift < 64; shift += 8)
+	{
+		bytes.push_back(static_cast<uint8_t>(checksum >> shift));
+	}
+	EXPECT_FALSE(DecodeSnapshot(bytes).has_value());
 }

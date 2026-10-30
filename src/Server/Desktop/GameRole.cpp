@@ -13,6 +13,7 @@
 #include <chrono>
 #include <fstream>
 #include <iterator>
+#include <memory>
 #include <random>
 #include <set>
 #include <thread>
@@ -25,6 +26,7 @@
 
 #include "Common/BuildVersion.h"
 #include "Online/Desktop/CurlHttpClient.h"
+#include "Server/Desktop/Sha256SessionHasher.h"
 #include "Server/Desktop/SocketWebSocketServer.h"
 #include "Server/Ed25519.h"
 #include "Server/LobbyBans.h"
@@ -279,7 +281,8 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                  .godSlots = godSlots,
 	                  .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,
 	                  .keptTurns = settings.comeBackSeconds * 10 + 200,
-	                  .testCommands = settings.testCommands});
+	                  .testCommands = settings.testCommands,
+	                  .sessionHasher = std::make_shared<Sha256SessionHasher>()});
 	return std::nullopt;
 }
 

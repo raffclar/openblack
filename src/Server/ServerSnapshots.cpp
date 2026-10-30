@@ -27,7 +27,8 @@ namespace
 
 constexpr std::array<uint8_t, 8> k_SnapshotMagic {'O', 'B', 'S', 'N', 'A', 'P', 'S', 'H'};
 constexpr std::array<uint8_t, 8> k_JournalMagic {'O', 'B', 'J', 'O', 'U', 'R', 'N', 'L'};
-constexpr uint32_t k_FormatVersion = 1;
+/// Version 2 keeps a salted hash of each secret of a session. The files of version 1 kept the secrets, and do not load.
+constexpr uint32_t k_FormatVersion = 2;
 constexpr std::string_view k_SnapshotPrefix = "snapshot-";
 constexpr std::string_view k_SnapshotExtension = ".obsnap";
 constexpr std::string_view k_JournalPrefix = "journal-";
@@ -79,6 +80,12 @@ void PutText(std::vector<uint8_t>& out, std::string_view text)
 {
 	PutU32(out, static_cast<uint32_t>(text.size()));
 	out.insert(out.end(), text.begin(), text.end());
+}
+
+void PutHash(std::vector<uint8_t>& out, const SessionHash& hash)
+{
+	out.insert(out.end(), hash.salt.begin(), hash.salt.end());
+	out.insert(out.end(), hash.digest.begin(), hash.digest.end());
 }
 
 /// Reads values from bytes. After a read past the end, every read gives zero and Good gives false.
@@ -148,6 +155,14 @@ public:
 		return {bytes.begin(), bytes.end()};
 	}
 
+	[[nodiscard]] SessionHash Hash()
+	{
+		SessionHash hash;
+		std::ranges::copy(Take(hash.salt.size()), hash.salt.begin());
+		std::ranges::copy(Take(hash.digest.size()), hash.digest.begin());
+		return hash;
+	}
+
 private:
 	std::span<const uint8_t> _bytes;
 	size_t _at {0};
@@ -201,7 +216,7 @@ template <typename TurnOf>
 	return files;
 }
 
-/// Only the user of the server can read the files, because they keep the secrets of the sessions
+/// Only the user of the server can read the files, because they keep the accounts of the players
 void KeepPrivate(const std::filesystem::path& path)
 {
 	std::error_code error;
@@ -219,14 +234,18 @@ std::vector<uint8_t> EncodeRoom(const Room& room)
 	for (const auto& seat : room.seats)
 	{
 		PutU8(out, seat.state);
-		PutText(out, seat.session);
+		PutU8(out, seat.session.has_value() ? 1 : 0);
+		if (seat.session.has_value())
+		{
+			PutHash(out, *seat.session);
+		}
 		PutText(out, seat.account);
 		PutText(out, seat.name);
 	}
 	PutU32(out, static_cast<uint32_t>(room.watchers.size()));
 	for (const auto& watcher : room.watchers)
 	{
-		PutText(out, watcher);
+		PutHash(out, watcher);
 	}
 	PutU8(out, room.stoppedAfter.has_value() ? 1 : 0);
 	PutU32(out, room.stoppedAfter.value_or(0));
@@ -245,7 +264,10 @@ std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes)
 	{
 		RoomSeat seat;
 		seat.state = reader.U8();
-		seat.session = reader.Text();
+		if (reader.U8() != 0)
+		{
+			seat.session = reader.Hash();
+		}
 		seat.account = reader.Text();
 		seat.name = reader.Text();
 		room.seats.push_back(std::move(seat));
@@ -253,7 +275,7 @@ std::optional<Room> DecodeRoom(std::span<const uint8_t> bytes)
 	const auto watchers = reader.U32();
 	for (uint32_t i = 0; i < watchers && reader.Good(); ++i)
 	{
-		room.watchers.push_back(reader.Text());
+		room.watchers.push_back(reader.Hash());
 	}
 	const bool stopped = reader.U8() != 0;
 	const auto stoppedAfter = reader.U32();

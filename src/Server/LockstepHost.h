@@ -14,6 +14,7 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
@@ -26,6 +27,7 @@
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
 #include "Server/ServerSnapshots.h"
+#include "Server/SessionHash.h"
 #include "Server/TicketCheck.h"
 #include "Server/WebSocketServerInterface.h"
 
@@ -61,6 +63,9 @@ struct HostSettings
 	/// Tests: the commands of the test tools (player_commands::CreatureFightCheat) go into the turns. Without this, the
 	/// server leaves them out.
 	bool testCommands {false};
+	/// Makes the salted hashes of the secrets of sessions, which the snapshots keep in place of the secrets. With none, a
+	/// restored room has no sessions, and no player can come back with a secret.
+	std::shared_ptr<const SessionHasherInterface> sessionHasher;
 };
 
 /// The game role of the server in a network game (authoritative lockstep, user decision MP-Q1). It lets in the players
@@ -102,7 +107,10 @@ public:
 	{
 		SeatState state {SeatState::Open};
 		std::optional<ConnectionId> connection;
+		/// The secret of the session. After a restore, it is empty until the player comes back with the secret.
 		std::string session;
+		/// The salted hash of the secret of the session
+		std::optional<SessionHash> sessionHash;
 		std::string account;
 		std::string name;
 		bool ready {false};
@@ -118,6 +126,7 @@ public:
 	struct Watcher
 	{
 		std::string session;
+		std::optional<SessionHash> sessionHash;
 		/// None while the observer is away
 		std::optional<ConnectionId> connection;
 		int64_t awaySince {0};
@@ -216,6 +225,12 @@ private:
 	/// Gives a new session to an observer on a connection, and returns its secret. With no secrets, the observer cannot
 	/// come back.
 	[[nodiscard]] std::string NewWatcher(ConnectionId connection);
+	/// The salted hash of a secret. None when the secret is empty or the host has no hasher.
+	[[nodiscard]] std::optional<SessionHash> HashOf(std::string_view secret) const;
+	/// True when the secret that a client gives is the secret of a session. A session that a restore gave has only the
+	/// hash of its secret.
+	[[nodiscard]] bool SessionMatches(std::string_view session, const std::optional<SessionHash>& hash,
+	                                  std::string_view given) const;
 	/// A join after the start: the player of a waiting god comes back into it, and any other player is an observer
 	void JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims);
 	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.

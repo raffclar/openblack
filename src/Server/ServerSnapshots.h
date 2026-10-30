@@ -23,11 +23,14 @@
 
 #include <GameSocket.h>
 
+#include "Server/SessionHash.h"
+
 /// The snapshots of a game server (deviation 100). The server keeps the shared world of its game on its own disk, so that
 /// it can continue the game after a crash or a restart. A snapshot holds the world state of one turn and the room of the
 /// game. A journal after each snapshot holds the turns that the server sent after that snapshot. Thus a server that starts
 /// again goes back to the last turn that it sent, and the clients come back to the game with no step back.
-/// The files hold only the shared world and the room, never a saved game or the profile of a player.
+/// The files hold only the shared world and the room, never a saved game or the profile of a player. The room keeps a
+/// salted hash of each secret of a session, never the secret.
 namespace openblack::server::snapshots
 {
 
@@ -55,8 +58,9 @@ struct RoomSeat
 {
 	/// The state of the slot, as the number of LockstepHost::SeatState
 	uint8_t state {0};
-	/// The secret of the session, which the client of the player sends to come back
-	std::string session;
+	/// The salted hash of the secret of the session. The client of the player sends the secret to come back. None when
+	/// the slot has no session.
+	std::optional<SessionHash> session;
 	/// The account id of the player in the lobby, and the name of the account
 	std::string account;
 	std::string name;
@@ -70,8 +74,8 @@ struct Room
 	/// The start of the game, as the text of the frame that the server sends to the clients
 	std::string start;
 	std::vector<RoomSeat> seats;
-	/// The secrets of the sessions of the observers
-	std::vector<std::string> watchers;
+	/// The salted hashes of the secrets of the sessions of the observers
+	std::vector<SessionHash> watchers;
 	/// The last turn of a decided game
 	std::optional<uint32_t> stoppedAfter;
 	/// The slots of the gods that leave at the next turn, and the slots of the gods that get their hands at the next turn

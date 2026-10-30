@@ -264,6 +264,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		*free = Seat {.state = SeatState::Taken,
 		              .connection = connection,
 		              .session = _makeSecret ? _makeSecret() : std::string(),
+		              .sessionHash = std::nullopt,
 		              .account = claims.subject,
 		              .name = claims.name,
 		              .ready = false,
@@ -271,6 +272,7 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		              .compares = {},
 		              .resumes = 0,
 		              .commands = {}};
+		free->sessionHash = HashOf(free->session);
 		peer.seat = seat;
 		joined.slot = seat;
 		joined.session = free->session;
@@ -288,9 +290,9 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 
 void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume)
 {
-	const auto found = std::ranges::find_if(_seats, [&resume](const Seat& seat) {
-		return !seat.session.empty() && seat.session == resume.session &&
-		       (seat.state == SeatState::Taken || seat.state == SeatState::Away);
+	const auto found = std::ranges::find_if(_seats, [this, &resume](const Seat& seat) {
+		return (seat.state == SeatState::Taken || seat.state == SeatState::Away) &&
+		       SessionMatches(seat.session, seat.sessionHash, resume.session);
 	});
 	// The server sends again only the turns that it kept, unless it sends its world. After a restart from a snapshot, a
 	// client that the kept turns cannot bring back gets the world too.
@@ -322,6 +324,7 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	const bool wasAway = found->state == SeatState::Away;
 	found->state = SeatState::Taken;
 	found->connection = connection;
+	found->session = resume.session;
 	++found->resumes;
 	peer.joined = true;
 	peer.role = game_socket::Role::God;
@@ -351,8 +354,9 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 
 bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const game_socket::Resume& resume, bool world)
 {
-	const auto found = std::ranges::find_if(
-	    _watchers, [&resume](const Watcher& watcher) { return !watcher.session.empty() && watcher.session == resume.session; });
+	const auto found = std::ranges::find_if(_watchers, [this, &resume](const Watcher& watcher) {
+		return SessionMatches(watcher.session, watcher.sessionHash, resume.session);
+	});
 	if (found == _watchers.end())
 	{
 		return false;
@@ -364,6 +368,7 @@ bool LockstepHost::ResumeObserver(ConnectionId connection, Peer& peer, const gam
 		_peers.erase(*found->connection);
 	}
 	found->connection = connection;
+	found->session = resume.session;
 	found->awaySince = 0;
 	++found->resumes;
 	peer.joined = true;
@@ -408,8 +413,32 @@ std::string LockstepHost::NewWatcher(ConnectionId connection)
 		return {};
 	}
 	auto session = _makeSecret();
-	_watchers.push_back(Watcher {.session = session, .connection = connection, .awaySince = 0, .resumes = 0});
+	_watchers.push_back(
+	    Watcher {.session = session, .sessionHash = HashOf(session), .connection = connection, .awaySince = 0, .resumes = 0});
 	return session;
+}
+
+std::optional<SessionHash> LockstepHost::HashOf(std::string_view secret) const
+{
+	if (secret.empty() || !_settings.sessionHasher)
+	{
+		return std::nullopt;
+	}
+	return _settings.sessionHasher->Hash(secret);
+}
+
+bool LockstepHost::SessionMatches(std::string_view session, const std::optional<SessionHash>& hash,
+                                  std::string_view given) const
+{
+	if (given.empty())
+	{
+		return false;
+	}
+	if (!session.empty())
+	{
+		return session == given;
+	}
+	return hash.has_value() && _settings.sessionHasher && _settings.sessionHasher->Matches(*hash, given);
 }
 
 bool LockstepHost::SendWorld(ConnectionId connection)
@@ -468,6 +497,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 		own->connection = connection;
 		// A new secret, so that the old process of the player cannot take the god back
 		own->session = _makeSecret ? _makeSecret() : std::string();
+		own->sessionHash = HashOf(own->session);
 		++own->resumes;
 		std::erase_if(_early, [seat](const auto& early) { return early.first.first == seat; });
 		peer.role = game_socket::Role::God;
@@ -1018,12 +1048,17 @@ snapshots::Room LockstepHost::RoomRecord() const
 	                      .joining = _joining};
 	for (const auto& seat : _seats)
 	{
-		room.seats.push_back(
-		    {.state = static_cast<uint8_t>(seat.state), .session = seat.session, .account = seat.account, .name = seat.name});
+		room.seats.push_back({.state = static_cast<uint8_t>(seat.state),
+		                      .session = seat.sessionHash,
+		                      .account = seat.account,
+		                      .name = seat.name});
 	}
 	for (const auto& watcher : _watchers)
 	{
-		room.watchers.push_back(watcher.session);
+		if (watcher.sessionHash.has_value())
+		{
+			room.watchers.push_back(*watcher.sessionHash);
+		}
 	}
 	return room;
 }
@@ -1050,7 +1085,8 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		}
 		_seats[i] = Seat {.state = state,
 		                  .connection = std::nullopt,
-		                  .session = saved.session,
+		                  .session = {},
+		                  .sessionHash = saved.session,
 		                  .account = saved.account,
 		                  .name = saved.name,
 		                  .ready = true,
@@ -1060,9 +1096,12 @@ void LockstepHost::Restore(const snapshots::Room& room, uint32_t turnsDone, std:
 		                  .commands = {}};
 	}
 	_watchers.clear();
-	for (const auto& session : room.watchers)
+	// The players and the observers come back with the secrets of their sessions, which the server checks against the
+	// hashes
+	for (const auto& hash : room.watchers)
 	{
-		_watchers.push_back(Watcher {.session = session, .connection = std::nullopt, .awaySince = now, .resumes = 0});
+		_watchers.push_back(
+		    Watcher {.session = {}, .sessionHash = hash, .connection = std::nullopt, .awaySince = now, .resumes = 0});
 	}
 	// A room with no human god turned before the restart, so it turns again when an observer comes back
 	_observersJoined = true;
