@@ -38,6 +38,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/WorshipSites.h"
@@ -525,6 +526,36 @@ TEST(WorshipSiteSystem, ScriptsStopAndAllowSitesForATempleOrATown)
 	EXPECT_TRUE(f.registry.Get<const components::Town>(celtic).worshipSite == entt::null);
 	f.system->SetCanHaveSites(celtic, true);
 	EXPECT_TRUE(f.registry.Get<const components::Town>(celtic).worshipSite != entt::null);
+}
+
+TEST(WorshipSiteSystem, TheSecondLandLessonFindsTheNorseSiteNearTheTempleAfterItAllowsTheTown)
+{
+	Fixture f;
+	// The town and the temple of the player on the second land, as the land puts them
+	const auto town = f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {-129.73f, 0.0f, 154.6f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 4.254f, false);
+
+	// The lesson stops the temple from sites before its builders finish it
+	f.system->SetCanHaveSites(temple, false);
+	f.system->TempleBuilt(temple);
+	ASSERT_TRUE(f.registry.Get<const components::Town>(town).worshipSite == entt::null);
+
+	// The film allows the town and then the temple: the Norse site stands from then on
+	f.system->SetCanHaveSites(town, true);
+	const auto site = f.registry.Get<const components::Town>(town).worshipSite;
+	ASSERT_TRUE(site != entt::null);
+	f.system->SetCanHaveSites(temple, true);
+	EXPECT_EQ(f.registry.Get<const WorshipSite>(site).buildRequests.size(), 1u);
+
+	// The search for type 19 and subtype 7 finds it from its altar, within 50 metres of the temple
+	const auto kind = script_find::KindOf(f.registry, site);
+	ASSERT_TRUE(kind.has_value());
+	EXPECT_TRUE(script_find::Matches(*kind, script::ObjectType::WorshipSite, 7));
+	const auto measured = script_find::MeasuredFrom(f.registry, site);
+	ASSERT_TRUE(measured == f.registry.Get<const WorshipSite>(site).altar);
+	const auto altarAt = f.registry.Get<const Transform>(measured).position;
+	EXPECT_LT(glm::length(glm::vec2(altarAt.x, altarAt.z)), 50.0f);
 }
 
 TEST(WorshipSiteSystem, TheDebugToolLetsATownHaveItsSiteGoingUpAsTheScriptsDo)
