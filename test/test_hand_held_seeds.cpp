@@ -116,7 +116,7 @@ protected:
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto seed = registry.Create();
 		registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .player = player});
-		registry.Assign<HandHeldSeed>(_hands->hands.at(player)[k_Left], seed);
+		registry.AssignOrReplace<HandHeldSeed>(_hands->hands.at(player)[k_Left], seed);
 		return seed;
 	}
 
