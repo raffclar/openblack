@@ -39,3 +39,10 @@ TEST(HandCastCommands, ACastOfAnotherPlayerWithAnEmptyHandDoesNothing)
 	EXPECT_FALSE(magic.GetHeldSeed().has_value());
 	EXPECT_EQ(magic.GetLastHandResult(), MagicSystem::HandResult::None);
 }
+
+// With no miracle, the hand report waits after a send
+TEST(HandCastCommands, NoMiracleNeedsTheHandReportEachTurn)
+{
+	const MagicSystem magic;
+	EXPECT_FALSE(magic.SpellNeedsHandReportEachTurn());
+}

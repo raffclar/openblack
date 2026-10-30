@@ -48,6 +48,12 @@ struct HandWind
 /// The frame's push on a smoke: the hand's air if it passes close and quickly, else a random breath across the ground
 [[nodiscard]] glm::vec3 Drift(const glm::vec3& chimney, const HandWind& hand, const Random& random);
 
+/// Whether the smoke of a building is lit: while someone is at home, or while a workshop makes a scaffold
+[[nodiscard]] constexpr bool IsLit(bool someoneAtHome, bool makesScaffold)
+{
+	return someoneAtHome || makesScaffold;
+}
+
 /// Whether a smoke is lit, its home having someone in. Returns whether there is anything left of it to draw.
 bool UpdateState(ecs::components::ChimneySmoke& smoke, bool lit);
 /// Moves the puffs by one step of game time. The drift of the step pushes them

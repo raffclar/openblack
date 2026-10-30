@@ -127,8 +127,17 @@ bool FlockMiracle::AnimalsLeft(const Spell& spell) const
 
 bool FlockMiracle::FollowsHand(SpellServicesInterface& services, const Spell& spell) const
 {
+	if (spell.closedDown || !spell.humanCasting || !spell.fromLocalHand)
+	{
+		return false;
+	}
+	return MakesAnimals(services, spell);
+}
+
+bool FlockMiracle::MakesAnimals(SpellServicesInterface& services, const Spell& spell) const
+{
 	const auto* data = DataOf(spell);
-	if (data == nullptr || spell.closedDown || !spell.humanCasting || !spell.fromLocalHand)
+	if (data == nullptr)
 	{
 		return false;
 	}

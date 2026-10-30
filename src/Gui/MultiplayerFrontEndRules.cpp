@@ -631,6 +631,35 @@ std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTempla
 	return std::nullopt;
 }
 
+std::vector<game_end::ConditionPick> ConditionLines(std::span<const game_end::ConditionPick> picks)
+{
+	// The value of each condition, in the order of the game. The last pick of a condition sets its value.
+	std::array<std::optional<int32_t>, k_ConditionCount> values {};
+	for (const auto& pick : picks)
+	{
+		if (const auto index = static_cast<size_t>(pick.condition); index < values.size())
+		{
+			values.at(index) = pick.value;
+		}
+	}
+	// Each condition goes to the top of the list, so the list shows the conditions from the last to the first
+	std::vector<game_end::ConditionPick> lines;
+	for (size_t index = values.size(); index-- > 0;)
+	{
+		if (const auto& value = values.at(index); value.has_value())
+		{
+			lines.push_back({.condition = static_cast<game_end::Condition>(index), .value = *value});
+		}
+	}
+	return lines;
+}
+
+std::u16string ConditionLineText(std::u16string_view name, int32_t value)
+{
+	const std::array<TextArgument, 2> arguments = {name, static_cast<int64_t>(value)};
+	return FormatText(u"%s (%d)", arguments);
+}
+
 std::optional<ConditionTemplate> FindConditions(std::string_view text, std::string_view landFile)
 {
 	const auto wanted = std::string(landFile) + ".txt";

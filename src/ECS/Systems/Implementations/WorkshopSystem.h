@@ -44,6 +44,11 @@ public:
 	[[nodiscard]] entt::entity TownForBuilding(glm::vec3 place) const override;
 	[[nodiscard]] bool CanJoin(entt::entity held, entt::entity target) const override;
 	void Join(entt::entity held, entt::entity target, std::optional<glm::vec3> hand) override;
+	[[nodiscard]] bool GoesIntoStore(entt::entity scaffold, entt::entity store) const override;
+	bool GiveToStore(entt::entity scaffold, entt::entity store, PlayerNames player) override;
+	entt::entity SplitOffRest(entt::entity scaffold) override;
+	[[nodiscard]] bool ValidToTap(entt::entity scaffold) const override;
+	bool Tap(entt::entity scaffold, glm::vec3 hand) override;
 	[[nodiscard]] std::optional<components::ScaffoldOffer> OfferAt(entt::entity town, glm::vec3 place, uint32_t value) override;
 	void ProcessHeld(entt::entity scaffold) override;
 	void SiteClosed(entt::entity building) override;
@@ -105,6 +110,8 @@ private:
 	std::vector<entt::scoped_connection> _connections;
 	/// The next of the four sounds that a join of scaffolds plays. It changes each join and only selects the sound.
 	uint32_t _joinSound {0};
+	/// The next of the four sounds of a tap that breaks a scaffold
+	uint32_t _tapSound {0};
 	/// The sounds of the phantom in the hand that played. Only the frames change them.
 	scaffold_ghost::SoundsPlayed _ghostSounds;
 };

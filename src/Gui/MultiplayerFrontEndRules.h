@@ -356,6 +356,14 @@ using ConditionTemplate = std::array<ConditionLimits, k_ConditionCount>;
 [[nodiscard]] std::optional<std::string> ConditionsRefusal(const std::optional<ConditionTemplate>& limits,
                                                            std::span<const game_end::ConditionPick> picks);
 
+/// The lines of the list on the conditions page, one for each condition that the host switched on. The page adds the
+/// conditions in the order of the game, and each new line goes to the top. Thus the last condition of the game shows
+/// first. When a condition is in the picks two times, the last value is the value of the line.
+[[nodiscard]] std::vector<game_end::ConditionPick> ConditionLines(std::span<const game_end::ConditionPick> picks);
+
+/// The text of a line on the conditions page: the name of the condition and its value, "Number of houses built (20)"
+[[nodiscard]] std::u16string ConditionLineText(std::u16string_view name, int32_t value);
+
 /// The front end's flow from box to box. It knows nothing of the lobby: the controller tells it what happened.
 struct Flow
 {

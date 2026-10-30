@@ -151,6 +151,30 @@ public:
 		                      {"players", std::move(players)},
 		                      {"recipients", std::move(recipients)}};
 	}
+
+	void AddToolTip(Json& result) const override
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			return;
+		}
+		const auto shown = game->GetInterface()->GetToolTips().GetShown();
+		if (!shown.has_value())
+		{
+			return;
+		}
+		const auto optional = [](const auto& value) { return value.has_value() ? Json(*value) : Json(nullptr); };
+		result["shown"] = true;
+		result["index"] = shown->index;
+		result["text"] = gui::ToolTips::TextName(shown->index);
+		result["action"] = static_cast<int>(shown->action);
+		result["arrows"] = shown->arrows;
+		result["alpha"] = shown->alpha;
+		result["number"] = optional(shown->number);
+		result["second"] = optional(shown->second);
+		result["words"] = optional(shown->words);
+	}
 };
 
 } // namespace

@@ -50,6 +50,8 @@ namespace
 constexpr int64_t k_PlayerId = 7;
 /// The other gods in the big room; the player is the last of its 32 gods
 constexpr int64_t k_BigRoomOthers = 31;
+/// The time limit of the game of the demonstration server that picks winning conditions, in minutes
+constexpr uint32_t k_DemoTimeLimitMinutes = 90;
 
 lobby_api::RoomPlayer Player(int64_t id, std::string name, std::string role)
 {
@@ -330,6 +332,8 @@ public:
 	static constexpr int64_t k_FrameMicroseconds = 48'000;
 
 	[[nodiscard]] int64_t Now() const noexcept { return _now; }
+	/// The start that the server gives when it lets a player in: its time limit and its winning conditions
+	void SetJoinStart(std::optional<game_socket::Start> start) { _joinStart = std::move(start); }
 
 	online::WebSocketId Connect(online::WebSocketRequest, online::WebSocketHandlers handlers) override
 	{
@@ -407,7 +411,7 @@ public:
 				                         .slot = observer ? std::nullopt : std::optional<uint8_t>(1),
 				                         .session = "demo",
 				                         .name = "Alice",
-				                         .start = std::nullopt}));
+				                         .start = _joinStart}));
 			}
 		}
 		auto opening = std::move(_opening);
@@ -453,6 +457,7 @@ private:
 	std::vector<online::WebSocketId> _opening;
 	/// The joins to let in, and whether the ticket is an observer's
 	std::vector<std::pair<online::WebSocketId, bool>> _joins;
+	std::optional<game_socket::Start> _joinStart;
 	std::vector<std::string> _toClients;
 	/// The answers to the pings, for the next frame
 	std::vector<std::pair<online::WebSocketId, std::vector<uint8_t>>> _pongs;
@@ -476,6 +481,11 @@ public:
 		    .ticket = std::move(join.ticket),
 		    .gamePassword = std::move(join.gamePassword),
 		    .name = std::move(join.name),
+		    .readLand = {},
+		    .readCreature = {},
+		    .readAlignment = {},
+		    .parts = {},
+		    .origin = join.origin,
 		});
 		return true;
 	}
@@ -591,6 +601,7 @@ void Finish(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		frontEnd.ShowSeat(0);
 		break;
 	case Stage::Conditions:
+	case Stage::ConditionsPicked:
 		frontEnd.Next();
 		break;
 	case Stage::WaitingForStart:
@@ -633,6 +644,25 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 {
 	auto demo = std::make_shared<DemoServices>();
 	demo->stage = stage;
+	if (stage == Stage::ConditionsPicked)
+	{
+		// The server picked three winning conditions in the limits of the land, and a time limit of an hour and a half
+		demo->sockets.SetJoinStart(game_socket::Start {
+		    .land = {},
+		    .testbed = true,
+		    .seed = 0,
+		    .turn = 0,
+		    .opening = {},
+		    .godsRingMap = false,
+		    .allComputerGods = false,
+		    .aiSeed = std::nullopt,
+		    .scenario = std::nullopt,
+		    .timeLimit = k_DemoTimeLimitMinutes,
+		    .conditions = {{.condition = 3, .value = 20}, {.condition = 5, .value = 9000}, {.condition = 14, .value = 100}},
+		    .names = {},
+		    .gods = {},
+		});
+	}
 	bool begun = false;
 	MultiplayerFrontEnd::Services services {
 	    .lobby = &demo->lobby,
