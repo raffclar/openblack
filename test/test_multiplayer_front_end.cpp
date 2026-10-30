@@ -835,17 +835,11 @@ TEST_F(FrontEndTest, TheRoomShowsTheTimeLimitAndTheConditionsThatTheServerPicked
 	                                                             {.condition = game_end::Condition::TreesGrown, .value = 100},
 	                                                             {.condition = game_end::Condition::HousesBuilt, .value = 20},
 	                                                         }));
-	// A start with no time limit has the default time limit
-	frontEnd->Back();
-	Step();
-	frontEnd->SelectGame(0);
-	frontEnd->Join(u"");
-	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
-	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
-	sockets.Accept(sockets.order.back());
-	Step();
-	ServerJoins(game_socket::Role::God, game_socket::Start {});
-	ASSERT_EQ(frontEnd->GetBox(), Box::Room);
+}
+
+TEST_F(FrontEndTest, AStartWithNoTimeLimitShowsTheDefaultTimeLimit)
+{
+	ToRoom(game_socket::Start {});
 	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
 	EXPECT_TRUE(frontEnd->GetConditionPicks().empty());
 }

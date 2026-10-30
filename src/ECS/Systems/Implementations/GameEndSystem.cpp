@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <string>
 
 #include <spdlog/spdlog.h>
 
@@ -225,7 +226,8 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 			{
 				const auto& standing = world.Standing(god);
 				SPDLOG_LOGGER_INFO(logger, "Turn {}: the god of player {} ends the game {} with a share of {:.9g} at place {}",
-				                   turn, static_cast<int>(god), standing.out ? "out" : "in", standing.share, standing.place);
+				                   turn, static_cast<int>(god), standing.out ? "out" : "in", standing.share,
+				                   standing.place.has_value() ? std::to_string(*standing.place) : std::string("none"));
 			}
 		}
 	}
