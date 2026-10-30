@@ -64,6 +64,43 @@ uint32_t workshop::ValueOfScale(float scale)
 	return static_cast<uint32_t>(map_coords::FtoL(value));
 }
 
+uint32_t workshop::WoodOfScaffold(uint32_t value, uint32_t scaffoldWood)
+{
+	return value * scaffoldWood;
+}
+
+std::optional<uint32_t> workshop::RestInHand(uint32_t value, uint32_t required)
+{
+	// The game takes the two counts as signed numbers
+	const int32_t rest = static_cast<int32_t>(value) - static_cast<int32_t>(required);
+	if (rest <= 0)
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(rest);
+}
+
+bool workshop::CanTapToBreak(const TapFacts& facts)
+{
+	if (facts.value <= 1 || facts.inPhysics)
+	{
+		return false;
+	}
+	if (facts.onSite && !facts.kept)
+	{
+		return false;
+	}
+	return !facts.scriptBuilding;
+}
+
+float workshop::BreakAngle(uint32_t quarterTurns, float yAngle)
+{
+	// A quarter turn, the float of pi / 2
+	constexpr float k_QuarterTurn = std::bit_cast<float>(0x3FC90FDBu);
+	const float turn = static_cast<float>(quarterTurns) * k_QuarterTurn;
+	return yAngle + turn;
+}
+
 float workshop::ScaleOfScriptSize(float size)
 {
 	return ScaleOfValue(static_cast<uint32_t>(map_coords::FtoL(size)));

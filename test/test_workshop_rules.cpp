@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <array>
+#include <bit>
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -73,6 +74,49 @@ TEST(WorkshopRules, AScriptSizeIsCutToAWholeWorth)
 	EXPECT_EQ(BitsOf(workshop::ScaleOfScriptSize(-0.5f)), BitsOf(workshop::ScaleOfValue(0)));
 	EXPECT_EQ(BitsOf(workshop::ScaleOfScriptSize(-1.0f)), BitsOf(workshop::ScaleOfValue(0xFFFFFFFFu)));
 	EXPECT_EQ(workshop::ValueOfScale(workshop::ScaleOfScriptSize(5.0f)), 5u);
+}
+
+// A storage pit gets the wood of one scaffold for each scaffold that the given scaffold is worth
+TEST(WorkshopRules, AScaffoldIsWorthTheWoodOfEachScaffold)
+{
+	EXPECT_EQ(workshop::WoodOfScaffold(1, 2500), 2500u);
+	EXPECT_EQ(workshop::WoodOfScaffold(7, 2500), 17500u);
+	EXPECT_EQ(workshop::WoodOfScaffold(0, 2500), 0u);
+}
+
+// Only the worth that the building does not need stays in the hand
+TEST(WorkshopRules, TheRestOfTheWorthStaysInTheHand)
+{
+	EXPECT_EQ(workshop::RestInHand(5, 3), 2u);
+	EXPECT_EQ(workshop::RestInHand(7, 1), 6u);
+	EXPECT_FALSE(workshop::RestInHand(3, 3).has_value());
+	EXPECT_FALSE(workshop::RestInHand(2, 3).has_value());
+	// The game takes the two counts as signed numbers: a very large worth is a negative number
+	EXPECT_FALSE(workshop::RestInHand(0xFFFFFFFFu, 3).has_value());
+}
+
+// A tap breaks only a scaffold worth more than one that lies still, has no script building, and can leave its site
+TEST(WorkshopRules, ATapBreaksOnlyAScaffoldThatTheHandCouldTake)
+{
+	const workshop::TapFacts loose {.value = 2};
+	EXPECT_TRUE(workshop::CanTapToBreak(loose));
+	EXPECT_FALSE(workshop::CanTapToBreak({.value = 1}));
+	EXPECT_FALSE(workshop::CanTapToBreak({.value = 3, .inPhysics = true}));
+	EXPECT_FALSE(workshop::CanTapToBreak({.value = 3, .scriptBuilding = true}));
+	EXPECT_FALSE(workshop::CanTapToBreak({.value = 3, .onSite = true, .kept = false}));
+	EXPECT_TRUE(workshop::CanTapToBreak({.value = 3, .onSite = true, .kept = true}));
+	// The keep test does not matter for a scaffold on no site
+	EXPECT_TRUE(workshop::CanTapToBreak({.value = 3, .onSite = false, .kept = false}));
+}
+
+// The parts move apart along a quarter turn, the float of pi / 2 times the draw, added to the scaffold's angle
+TEST(WorkshopRules, TheBreakAngleIsAQuarterTurnFromTheScaffold)
+{
+	EXPECT_EQ(BitsOf(workshop::BreakAngle(0, 0.25f)), BitsOf(0.25f));
+	EXPECT_EQ(BitsOf(workshop::BreakAngle(1, 0.0f)), 0x3FC90FDBu);
+	EXPECT_EQ(BitsOf(workshop::BreakAngle(2, 0.0f)), 0x40490FDBu);
+	const float three = 3.0f * std::bit_cast<float>(0x3FC90FDBu);
+	EXPECT_EQ(BitsOf(workshop::BreakAngle(3, 1.0f)), BitsOf(1.0f + three));
 }
 
 // The abode number -1 gives a scaffold no building of a script

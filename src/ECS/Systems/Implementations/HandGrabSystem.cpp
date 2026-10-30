@@ -1052,7 +1052,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 			return true;
 		}
 		// A tree, a dead tree, a fence, a mushroom or an animal goes whole into a store of what it is worth
-		// TODO(stores): onto a teleport, or a scaffold into a store of wood; openblack has none of those yet
+		// TODO(stores): onto a teleport; openblack has none yet. A scaffold goes only into a built storage pit, as wood.
 		if (!_world->TakeIntoStore(target, held))
 		{
 			return false;
@@ -1415,6 +1415,15 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, const std::option
 	if (result.accepted)
 	{
 		grab.lastDropped = object;
+	}
+	// A scaffold put down gently keeps only what the building on offer needs. The rest stays in the hand as a new
+	// scaffold, which the hand takes with no sound.
+	if (result.accepted && Exists(object) && registry.AllOf<Scaffold>(object))
+	{
+		if (const auto rest = _world->RestOfScaffold(object); rest != entt::null && Exists(rest))
+		{
+			Take(grab, rest, true, false, false);
+		}
 	}
 	// A player a script made proof against the wind throws things that fly without the air's drag
 	if (_world->PlayerHasNoWindResistance(player))

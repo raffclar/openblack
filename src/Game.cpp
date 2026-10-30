@@ -322,6 +322,7 @@
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Gui/StatisticsBoxRules.h"
+#include "Gui/WorldToolTipRules.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
@@ -2058,8 +2059,8 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 			{
 				return;
 			}
-			const bool tree = Locator::entitiesRegistry::value().AllOf<ecs::components::Tree>(*thing);
-			if (const auto offers = tips::Holding(HandInInfluence(), tips::UseAt(*thing, pointed), tree); offers.has_value())
+			if (const auto offers = tips::Holding(HandInInfluence(), tips::UseAt(*thing, pointed), tips::DropOf(*thing));
+			    offers.has_value())
 			{
 				submitAll(*offers);
 				return;
@@ -2184,10 +2185,18 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		}
 		return;
 	}
-	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it
+	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it. Over a
+	// scaffold, the hand shows how many scaffolds it is worth in place of "Pick Up".
 	if (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().WhyNotTake(*pointed).empty())
 	{
-		submitAll(tips::OverTakeable(tips::IsMoving(*pointed), tips::TakeableTapOf(*pointed)));
+		const bool moving = tips::IsMoving(*pointed);
+		auto offers = tips::OverTakeable(moving, tips::TakeableTapOf(*pointed));
+		if (const auto value = tips::ScaffoldValueOf(*pointed); value.has_value() && !moving)
+		{
+			toolTips.SubmitNumbered(gui::world_tooltip::k_ScaffoldValue, gui::ToolTipAction::Apply, *value, std::nullopt);
+			offers.erase(offers.begin());
+		}
+		submitAll(offers);
 		return;
 	}
 	if (const auto tap = tips::TapOf(*pointed); tap.has_value())

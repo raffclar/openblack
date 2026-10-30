@@ -57,6 +57,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -738,6 +739,16 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		countTap();
 		return Locator::spellIconSystem::value().Tap(object, player);
 	}
+	// A scaffold worth more than one breaks one scaffold off
+	if (Entities().AllOf<Scaffold>(object) && Locator::workshopSystem::has_value())
+	{
+		if (!Locator::workshopSystem::value().ValidToTap(object))
+		{
+			return false;
+		}
+		countTap();
+		return Locator::workshopSystem::value().Tap(object, handPoint);
+	}
 	// Other things' taps are the clicking and activating of the interface
 	return false;
 }
@@ -787,6 +798,10 @@ bool GameHandGrabWorld::ValidToTap(entt::entity object) const
 	if (Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsIcon(object))
 	{
 		return Locator::spellIconSystem::value().ValidToTap(object, player);
+	}
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return Locator::workshopSystem::has_value() && Locator::workshopSystem::value().ValidToTap(object);
 	}
 	return false;
 }
@@ -1495,6 +1510,12 @@ uint32_t GameHandGrabWorld::AddToStore(entt::entity store, ResourceType resource
 
 bool GameHandGrabWorld::TakeIntoStore(entt::entity store, entt::entity object)
 {
+	// A built storage pit takes a scaffold as its wood. No other store takes a scaffold.
+	if (Entities().AllOf<Scaffold>(object))
+	{
+		return Locator::workshopSystem::has_value() &&
+		       Locator::workshopSystem::value().GiveToStore(object, store, HandPlayer());
+	}
 	// An animal, a static such as a fence, or a tree a script made indestructible refuses to be given
 	if (Entities().AllOf<Indestructible>(object) && Entities().AnyOf<Animal, MobileStatic, Tree>(object))
 	{
@@ -1513,6 +1534,10 @@ bool GameHandGrabWorld::TakesWhole(entt::entity target, entt::entity held) const
 	if (Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().TakesGateStone(target, held))
 	{
 		return true;
+	}
+	if (Locator::entitiesRegistry::value().AllOf<Scaffold>(held))
+	{
+		return Locator::workshopSystem::has_value() && Locator::workshopSystem::value().GoesIntoStore(held, target);
 	}
 	// A store takes what it is worth, but not an animal, a static or a tree that a script made indestructible
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -1537,6 +1562,18 @@ bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
 bool GameHandGrabWorld::JoinsScaffold(entt::entity target, entt::entity held) const
 {
 	return Locator::workshopSystem::has_value() && Locator::workshopSystem::value().CanJoin(held, target);
+}
+
+entt::entity GameHandGrabWorld::RestOfScaffold(entt::entity scaffold)
+{
+	// Only the hand of a player who is not a computer god keeps the rest of a scaffold
+	const auto player = HandPlayer();
+	if (!Locator::workshopSystem::has_value() ||
+	    (Locator::playerSystem::has_value() && Locator::playerSystem::value().IsComputerPlayer(player)))
+	{
+		return entt::null;
+	}
+	return Locator::workshopSystem::value().SplitOffRest(scaffold);
 }
 
 void GameHandGrabWorld::JoinScaffold(entt::entity target, entt::entity held)

@@ -42,6 +42,8 @@ constexpr uint32_t k_Reminder = 45;
 constexpr uint32_t k_Scroll = 17;
 /// "Give", while the hand holds a thing that a creature can take from it
 constexpr uint32_t k_Give = 20;
+/// "Combine Scaffolds", while the hand holds a scaffold that it can join to the scaffold under it
+constexpr uint32_t k_CombineScaffolds = 50;
 /// "Zoom Out", with the camera near the land and pointed down
 constexpr uint32_t k_ZoomOut = 24;
 /// "Sacrifice", while the hand holds a thing that the worship site altar under it takes
@@ -150,6 +152,8 @@ enum class HeldUse : uint8_t
 {
 	/// Let go of it or throw it
 	None,
+	/// Join the held scaffold to the scaffold under the pointer
+	Combine,
 	/// Give it to the creature under the pointer
 	Give,
 	/// Put it into the store under the pointer
@@ -159,10 +163,11 @@ enum class HeldUse : uint8_t
 };
 
 /// What the hand offers while it holds a thing. Outside the player's influence it offers nothing of its own: the hand
-/// then shows the tooltips that it shows over the land. Over a creature that can take the thing, "Give"; over a store
-/// of its resource, "Supply"; over a worship site altar that takes the thing, "Sacrifice". In all other places "Drop" (or
-/// "Plant" for a tree) and "Throw", which take turns.
-[[nodiscard]] std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, bool tree);
+/// then shows the tooltips that it shows over the land. Over a scaffold that the held scaffold can join, "Combine
+/// Scaffolds"; over a creature that can take the thing, "Give"; over a store of its resource, "Supply"; over a worship
+/// site altar that takes the thing, "Sacrifice". In all other places the tooltip `drop` of a let go, then "Throw", which
+/// take turns. With no `drop`, only "Throw" shows.
+[[nodiscard]] std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, std::optional<uint32_t> drop);
 
 /// Whether the hand shows "Wood Required" and "Building Completed" over a building. The hand shows them over a
 /// building that is not fully built or not fully repaired. The building must have no player or the local player, and

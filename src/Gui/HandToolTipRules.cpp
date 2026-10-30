@@ -111,7 +111,7 @@ std::optional<Offer> GlobeOffer(bool givesAMiracle, uint32_t miracleToolTipText,
 	return SpellIconOffer(givesAMiracle ? miracleToolTipText : seedToolTipText);
 }
 
-std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, bool tree)
+std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, std::optional<uint32_t> drop)
 {
 	if (!handInInfluence)
 	{
@@ -119,6 +119,8 @@ std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, boo
 	}
 	switch (use)
 	{
+	case HeldUse::Combine:
+		return std::vector<Offer> {{.index = k_CombineScaffolds, .action = ToolTipAction::Apply}};
 	case HeldUse::Give:
 		return std::vector<Offer> {{.index = k_Give, .action = ToolTipAction::Apply}};
 	case HeldUse::Supply:
@@ -128,10 +130,13 @@ std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, boo
 	case HeldUse::None:
 		break;
 	}
-	return std::vector<Offer> {
-	    {.index = tree ? k_Plant : k_Drop, .action = ToolTipAction::Apply},
-	    {.index = k_Throw, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_All},
-	};
+	std::vector<Offer> offers;
+	if (drop.has_value())
+	{
+		offers.push_back({.index = *drop, .action = ToolTipAction::Apply});
+	}
+	offers.push_back({.index = k_Throw, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_All});
+	return offers;
 }
 
 bool OffersBuildingToolTips(bool whole, bool ownOrNoPlayer, uint32_t features)

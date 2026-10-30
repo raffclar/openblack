@@ -105,6 +105,12 @@ TEST(WorldToolTips, PilesAndHeldAmounts)
 	EXPECT_EQ(Compose(k_HeldAmount, u"Amount: %3.0f", 7.0, std::nullopt), u"Amount:   7");
 }
 
+TEST(WorldToolTips, AScaffoldShowsItsWorthAsAWholeNumber)
+{
+	EXPECT_EQ(Compose(k_ScaffoldValue, u"Scaffold Value %d", 3.0, std::nullopt), u"Scaffold Value 3");
+	EXPECT_EQ(Compose(k_ScaffoldValue, u"Scaffold Value %d", 12.0, std::nullopt), u"Scaffold Value 12");
+}
+
 TEST(WorldToolTips, AScaffoldOverAPlannedGraveyardNamesIt)
 {
 	// A planned graveyard's text for building it is the game's "Graveyard" tooltip text
