@@ -38,6 +38,7 @@
 #include "ECS/Map.h"
 #include "ECS/RealWeatherLand.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptSpotVisuals.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -63,6 +64,7 @@
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -784,6 +786,14 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The particle effects that no miracle owns take a step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
 		Locator::particleSystem::value().ProcessTurn();
+		// A visual that a script holds as a thing takes its thing with it when it ends. The record of the simulation
+		// tells which visuals still run.
+		if (Locator::effectRequestSystem::has_value() && Locator::entitiesRegistry::has_value())
+		{
+			const auto& effects = Locator::effectRequestSystem::value();
+			ecs::script_spot_visuals::RemoveEnded(Locator::entitiesRegistry::value(),
+			                                      [&effects](uint32_t effect) { return effects.IsRunning(effect); });
+		}
 		break;
 	}
 	case Step::Tornadoes:

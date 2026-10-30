@@ -26,6 +26,7 @@
 #include <gtest/gtest.h>
 
 #include "Common/GameRandom.h"
+#include "Debug/FrameWriteGuard.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "Particles/ParticleArchive.h"
@@ -565,4 +566,50 @@ TEST_F(ParticleSaveTest, TheSymbolsOfBeliefInASaveThatKeptNoCreatorForThemAreDra
 	Load(bytes, *loaded);
 	EXPECT_EQ(SymbolsDrawn(*loaded), (std::vector<int> {0}));
 	EXPECT_EQ(Drawn(*loaded), Drawn(*saved));
+}
+
+namespace
+{
+
+/// The tables of a save with one synced shield and one shield of an effect of this computer
+std::vector<uint8_t> SaveShields(float syncedRadius, float ownRadius, std::vector<std::pair<size_t, size_t>>& presentation)
+{
+	SharedTables tables;
+	tables.shields.Add(std::make_shared<ShieldSphere>(ShieldSphere {.radius = syncedRadius}));
+	tables.StartLocal();
+	tables.shields.Add(std::make_shared<ShieldSphere>(ShieldSphere {.radius = ownRadius}));
+	reflection::BinaryWriter bytes(Context());
+	EffectWriter writer(bytes, tables);
+	SaveSharedTables(writer);
+	presentation = bytes.PresentationRanges();
+	return bytes.Bytes();
+}
+
+} // namespace
+
+TEST(ParticleSaveTables, TheThingsOfTheEffectsOfThisComputerArePresentationValues)
+{
+	std::vector<std::pair<size_t, size_t>> first;
+	std::vector<std::pair<size_t, size_t>> own;
+	std::vector<std::pair<size_t, size_t>> synced;
+	const auto before = SaveShields(2.0f, 3.0f, first);
+	const auto ownChanged = SaveShields(2.0f, 4.0f, own);
+	const auto syncedChanged = SaveShields(5.0f, 3.0f, synced);
+	ASSERT_NE(before, ownChanged);
+	// The tools that compare the synced state do not see the shield of this computer, but they see the synced shield
+	EXPECT_EQ(frame_write_guard::SyncedHash(before, 0, before.size(), first),
+	          frame_write_guard::SyncedHash(ownChanged, 0, ownChanged.size(), own));
+	EXPECT_NE(frame_write_guard::SyncedHash(before, 0, before.size(), first),
+	          frame_write_guard::SyncedHash(syncedChanged, 0, syncedChanged.size(), synced));
+
+	// The load gives back both shields in their order
+	SharedTables tables;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), before, identity);
+	EffectReader reader(in, tables);
+	LoadSharedTables(reader);
+	EXPECT_EQ(in.Remaining(), 0u);
+	ASSERT_EQ(tables.shields.items.size(), 2u);
+	EXPECT_EQ(tables.shields.items[0]->radius, 2.0f);
+	EXPECT_EQ(tables.shields.items[1]->radius, 3.0f);
 }

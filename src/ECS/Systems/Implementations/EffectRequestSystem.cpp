@@ -22,6 +22,18 @@ using namespace openblack::ecs::systems;
 EffectRequestSystem::EffectRequestSystem(FindServer findServer)
     : _findServer(std::move(findServer))
 {
+	if (auto* server = _findServer())
+	{
+		server->SetLifeListener(this);
+	}
+}
+
+EffectRequestSystem::~EffectRequestSystem()
+{
+	if (auto* server = _findServer())
+	{
+		server->SetLifeListener(nullptr);
+	}
 }
 
 EffectHandle EffectRequestSystem::Start(const EffectRequest& request)
@@ -80,8 +92,8 @@ void EffectRequestSystem::Remove(EffectHandle handle)
 
 bool EffectRequestSystem::IsRunning(EffectHandle handle) const
 {
-	const auto* server = ServerFor(handle);
-	return server != nullptr && server->IsRunning(handle);
+	// The record answers. The turns never ask the particles.
+	return handle != k_NoEffectHandle && _running.contains(handle);
 }
 
 void EffectRequestSystem::SetPlayer(EffectHandle handle, int player)
