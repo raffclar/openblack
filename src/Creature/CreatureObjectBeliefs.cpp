@@ -62,9 +62,9 @@ void Store::MarkBlocked(entt::entity thing, uint32_t turn)
 
 Store::Added Store::Add(entt::entity thing, uint32_t kind, map_coords::MapCoords place)
 {
-	if (const auto known = _index.find(thing); known != _index.end())
+	if (const auto known = _contents.index.find(thing); known != _contents.index.end())
 	{
-		auto& belief = *_pools.at(known->second.kind).slots.at(known->second.slot);
+		auto& belief = *_contents.pools.at(known->second.kind).slots.at(known->second.slot);
 		belief.place = place;
 		return {.belief = &belief, .isNew = false};
 	}
@@ -72,7 +72,7 @@ Store::Added Store::Add(entt::entity thing, uint32_t kind, map_coords::MapCoords
 	{
 		return {};
 	}
-	auto& pool = _pools.at(kind);
+	auto& pool = _contents.pools.at(kind);
 	const auto capacity = static_cast<size_t>(k_Capacity.at(kind));
 	if (pool.slots.empty())
 	{
@@ -93,35 +93,35 @@ Store::Added Store::Add(entt::entity thing, uint32_t kind, map_coords::MapCoords
 	{
 		// Every place is taken: the belief at the oldest-kept marker gives way, and the marker stays where it is
 		slot = pool.oldest.value_or(0);
-		_index.erase(pool.slots.at(slot)->thing);
+		_contents.index.erase(pool.slots.at(slot)->thing);
 	}
-	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place, .order = ++_made};
-	_index[thing] = Place {.kind = kind, .slot = slot};
+	pool.slots.at(slot) = Belief {.thing = thing, .kind = kind, .place = place, .order = ++_contents.made};
+	_contents.index[thing] = Place {.kind = kind, .slot = slot};
 	return {.belief = &*pool.slots.at(slot), .isNew = true};
 }
 
 const Belief* Store::Find(entt::entity thing) const
 {
-	const auto known = _index.find(thing);
-	return known != _index.end() ? &*_pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
+	const auto known = _contents.index.find(thing);
+	return known != _contents.index.end() ? &*_contents.pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
 }
 
 Belief* Store::Find(entt::entity thing)
 {
-	const auto known = _index.find(thing);
-	return known != _index.end() ? &*_pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
+	const auto known = _contents.index.find(thing);
+	return known != _contents.index.end() ? &*_contents.pools.at(known->second.kind).slots.at(known->second.slot) : nullptr;
 }
 
 bool Store::Forget(entt::entity thing)
 {
-	const auto known = _index.find(thing);
-	if (known == _index.end())
+	const auto known = _contents.index.find(thing);
+	if (known == _contents.index.end())
 	{
 		return false;
 	}
 	const auto [kind, slot] = known->second;
-	_index.erase(known);
-	auto& pool = _pools.at(kind);
+	_contents.index.erase(known);
+	auto& pool = _contents.pools.at(kind);
 	pool.slots.at(slot).reset();
 	// The marker moves on to the next place, round to the first after the last
 	if (pool.oldest == slot)
@@ -137,7 +137,7 @@ bool Store::Forget(entt::entity thing)
 
 size_t Store::Count(uint32_t kind) const
 {
-	return kind < k_KindCount ? _pools.at(kind).used : 0;
+	return kind < k_KindCount ? _contents.pools.at(kind).used : 0;
 }
 
 void Store::JoinTo(entt::entity part, entt::entity whole)
@@ -198,12 +198,12 @@ std::vector<Belief> Store::InListOrder() const
 
 std::vector<const Belief*> Store::HeldNewestFirst() const
 {
-	return NewestFirstOf(_pools, _index.size());
+	return NewestFirstOf(_contents.pools, _contents.index.size());
 }
 
 std::vector<const Belief*> Store::HeldInListOrder() const
 {
-	auto held = NewestFirstOf(_pools, _index.size());
+	auto held = NewestFirstOf(_contents.pools, _contents.index.size());
 	std::ranges::stable_partition(held, [](const Belief* belief) { return InListOfWholeThings(belief->kind); });
 	return held;
 }
@@ -211,8 +211,8 @@ std::vector<const Belief*> Store::HeldInListOrder() const
 std::vector<Belief> Store::All() const
 {
 	std::vector<Belief> all;
-	all.reserve(_index.size());
-	for (const auto& pool : _pools)
+	all.reserve(_contents.index.size());
+	for (const auto& pool : _contents.pools)
 	{
 		for (const auto& held : pool.slots)
 		{
