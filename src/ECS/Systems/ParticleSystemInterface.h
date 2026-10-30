@@ -154,6 +154,8 @@ public:
 	virtual void SetInTemple(EffectId id) = 0;
 	/// A hidden effect continues to step but does not draw
 	virtual void SetHidden(EffectId /*id*/, bool /*hidden*/) {}
+	/// The record that the particles tell of each start and end of an effect, none to stop
+	virtual void SetLifeListener(EffectLifeListener* /*listener*/) {}
 	/// An effect that the world and the temple do not draw. Only CollectEffectDrawFrame draws it, as for the seeds
 	/// pictured over the gestures' hints.
 	virtual void SetDrawnAlone(EffectId /*id*/) {}

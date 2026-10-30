@@ -1006,10 +1006,22 @@ namespace
 template <typename Type>
 void SaveItems(EffectWriter& out, const SharedTable<Type>& table, auto&& write)
 {
+	// The things of the effects of this computer change the count, so the count is a presentation value
+	out.Out().BeginPresentation();
 	out.Out().WriteSize(table.items.size());
-	for (const auto& item : table.items)
+	out.Out().EndPresentation();
+	for (size_t i = 0; i < table.items.size(); ++i)
 	{
-		write(*item);
+		const bool local = table.firstLocal.has_value() && i >= *table.firstLocal;
+		if (local)
+		{
+			out.Out().BeginPresentation();
+		}
+		write(*table.items[i]);
+		if (local)
+		{
+			out.Out().EndPresentation();
+		}
 	}
 }
 
@@ -1374,7 +1386,11 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 	out.WriteValue(collection.hierarchy);
 	out.WriteValue(collection.textureRepeats);
 	out.WriteValue(collection.textureSpeed);
+	// The frames slide the texture of a ribbon, also in a synced effect. Only the draw uses it, so it is a presentation
+	// value.
+	out.Out().BeginPresentation();
 	out.WriteValue(collection.textureScroll);
+	out.Out().EndPresentation();
 	out.Out().WriteSize(collection.modifiers.size());
 	for (const auto& slot : collection.modifiers)
 	{
@@ -1471,12 +1487,15 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 		if (atom.shower != nullptr)
 		{
 			out.WriteValue(atom.shower->object);
+			// The frames that draw the shower move its sparks with the random numbers of this computer
+			out.Out().BeginPresentation();
 			out.WriteValue(atom.shower->sparks.has_value());
 			if (atom.shower->sparks.has_value())
 			{
 				out.WritePlain(*atom.shower->sparks);
 			}
 			out.WritePlain(atom.shower->clock);
+			out.Out().EndPresentation();
 		}
 		out.Out().WriteSize(atom.subCollections.size());
 		for (const auto& sub : atom.subCollections)

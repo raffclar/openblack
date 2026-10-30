@@ -209,6 +209,20 @@ public:
 	}
 	/// The bytes of each presentation value, from its first byte to the byte after its last byte, in the order of the save
 	[[nodiscard]] const std::vector<std::pair<size_t, size_t>>& PresentationRanges() const { return _presentation; }
+	/// Writes all the bytes of another writer. The presentation values of the other writer become presentation values
+	/// of this writer.
+	void Append(const BinaryWriter& other)
+	{
+		const auto at = Size();
+		if (_presentationDepth == 0)
+		{
+			for (const auto& [first, last] : other.PresentationRanges())
+			{
+				_presentation.emplace_back(at + first, at + last);
+			}
+		}
+		Write(other.Written());
+	}
 	/// A value starts and ends. Only the ends of the outer values are kept.
 	void EnterValue() { ++_depth; }
 	void LeaveValue()
