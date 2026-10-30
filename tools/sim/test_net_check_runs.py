@@ -7,7 +7,7 @@
 #
 # openblack is licensed under the GNU General Public License version 3.
 # ******************************************************************************
-"""Tests of the compare of the server checksums of two net_check runs"""
+"""Tests of the compare of the server checksums of two net_check runs, and of the hand deeds of a restarted server"""
 
 import json
 import os
@@ -134,6 +134,48 @@ class WorldStatesAgainstServer(unittest.TestCase):
         result = net_check.world_states_against_server(self.server, self.client, [250])
         self.assertFalse(result["same"])
         self.assertIn("unread", result["turns"][0]["difference"])
+
+
+def deed(player, name, thing, turn):
+    return f"[info] Hand deed: the hand of player {player} {name} thing {thing} at turn {turn}"
+
+
+@unittest.skipIf(net_check is None, "net_check needs the cryptography package")
+class RestartedServerDeeds(unittest.TestCase):
+    def test_a_turn_that_both_servers_did_counts_its_deeds_one_time(self):
+        first = [deed(0, "takes", 5, 900), deed(0, "throws", 5, 1004), deed(1, "scoops from", 7, 1006)]
+        # The new server did again the turns from its snapshot of turn 1001, with other numbers for the things
+        restarted = [deed(0, "throws", 50, 1004), deed(1, "scoops from", 70, 1006), deed(1, "throws", 71, 1100)]
+        self.assertEqual(net_check.restarted_server_deeds(first, restarted),
+                         {0: {"takes": 1, "throws": 1}, 1: {"scoops": 1, "throws": 1}})
+
+    def test_a_deed_that_only_one_server_did_counts(self):
+        # The first server stopped after it sent turn 1008 and before its world did it; the new server did it
+        first = [deed(0, "takes", 5, 1002)]
+        restarted = [deed(0, "takes", 5, 1002), deed(0, "throws", 5, 1008)]
+        self.assertEqual(net_check.restarted_server_deeds(first, restarted), {0: {"takes": 1, "throws": 1}})
+
+    def test_two_deeds_of_a_turn_count_two_times(self):
+        first = [deed(0, "takes", 5, 1003), deed(0, "takes", 6, 1003)]
+        restarted = [deed(0, "takes", 5, 1003), deed(0, "takes", 6, 1003)]
+        self.assertEqual(net_check.restarted_server_deeds(first, restarted), {0: {"takes": 2}})
+
+    def test_the_deeds_after_the_last_common_turn_are_left_out(self):
+        first = [deed(0, "takes", 5, 10)]
+        restarted = [deed(0, "takes", 5, 10), deed(0, "throws", 5, 20)]
+        self.assertEqual(net_check.restarted_server_deeds(first, restarted, 15), {0: {"takes": 1}})
+
+    def test_with_no_restart_only_the_first_log_counts(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log = os.path.join(folder, "server.log")
+            with open(log, "w", encoding="utf-8") as file:
+                file.write(deed(2, "gives", 3, 40) + "\n")
+            self.assertEqual(net_check.server_deeds_in_logs(log, None), {2: {"gives": 1}})
+            self.assertEqual(net_check.server_deeds_in_logs(log, os.path.join(folder, "missing.log")), {2: {"gives": 1}})
+            again = os.path.join(folder, "server-restarted.log")
+            with open(again, "w", encoding="utf-8") as file:
+                file.write(deed(2, "gives", 3, 40) + "\n" + deed(2, "gives", 4, 41) + "\n")
+            self.assertEqual(net_check.server_deeds_in_logs(log, again), {2: {"gives": 2}})
 
 
 if __name__ == "__main__":

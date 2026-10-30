@@ -168,7 +168,7 @@ public:
 	/// The hand taps a thing at a point, for a player, as a rock breaks when tapped; whether the thing took the tap
 	virtual bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) = 0;
 	/// Whether a thing takes a tap of the hand's player because of its kind: a building, a rock that breaks, a scroll, a
-	/// globe, a chest, an icon or the entrance of a temple
+	/// globe, a chest, an icon, the player's own leash post or the entrance of a temple
 	[[nodiscard]] virtual bool ValidToTap(entt::entity object) const = 0;
 	/// Whether what the hand holds can be given to a thing: none when the thing isn't a creature
 	[[nodiscard]] virtual std::optional<creature_giving::Verdict> GiveVerdict(entt::entity /*target*/,
