@@ -8,7 +8,7 @@
  *******************************************************************************/
 
 // The save keeps the particles in two parts: the synced effects, and the effects of this computer. Each part loads
-// alone, and a save from before the split still loads.
+// alone, and a save from before the split still loads. The synced part keeps no value that comes from the listener.
 
 #define LOCATOR_IMPLEMENTATIONS
 
@@ -19,6 +19,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -30,8 +31,12 @@
 #include <entt/meta/context.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "3D/WaterRings.h"
+#include "Audio/AudioManagerNoOp.h"
+#include "Audio/GameSoundRequests.h"
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -126,6 +131,27 @@ std::string EffectText(int maxAtoms)
 	       "PROPERTY DieAge FLOAT 0.45\nENDPROPERTIES\nENDCLASS\n";
 }
 
+/// The bolts of the storms as the game's file has them: a point under the cloud, whose strike thunders from the land
+std::string StormBoltsText()
+{
+	return "BEGINPROPERTIES\nPROPERTY DeleteOnCloseDown BOOL 0\nPROPERTY Hierarchies ARRAY SIZE 3 0 0 0\n"
+	       "PROPERTY InitiallyCreated ARRAY SIZE 3 1 0 0\nPROPERTY MaxSpellAge FLOAT -1\nENDPROPERTIES\n"
+	       "BEGINCLASS ParticleSpriteCreator Root\nBEGINPROPERTIES\nPROPERTY ColorA INTEGER 255\nENDPROPERTIES\nENDCLASS\n"
+	       "BEGINCLASS UR_LightningStrike Strike\nBEGINPROPERTIES\nPROPERTY Group INTEGER 0\n"
+	       "PROPERTY NextGroups ARRAY SIZE 1 1\nPROPERTY PCreator PERSIS_PNTR Root\n"
+	       "PROPERTY SoundLightning SOUND_ACTION SOUND_SPELL_LIGHTNING LOOPING 0 ONLYONE 0 SOFTRELEASE 1 USESURFACE 0\n"
+	       "ENDPROPERTIES\nENDCLASS\n";
+}
+
+/// Where the storm strikes, under its cloud
+constexpr glm::vec3 k_CloudPoint {300.0f, 160.0f, 0.0f};
+/// A listener at the place where the thunder starts, which hears it at once
+constexpr glm::vec3 k_NearListener {300.0f, 0.0f, 0.0f};
+/// A listener 3 km from the strike, which hears the thunder after more than 8 seconds
+constexpr glm::vec3 k_FarListener {-2700.0f, 0.0f, 0.0f};
+/// The turns of each run of the storm
+constexpr int k_StormTurns = 40;
+
 /// The two parts of a save of the particles
 struct Parts
 {
@@ -151,10 +177,22 @@ protected:
 		}
 		Locator::resources::emplace<resources::Resources>();
 		Locator::gameRandom::emplace<FakeRandom>();
+		// The rules write their warnings to the log of the game
+		if (spdlog::get("game") == nullptr)
+		{
+			_log = spdlog::null_logger_st("game");
+		}
 	}
 
 	void TearDown() override
 	{
+		if (_log != nullptr)
+		{
+			spdlog::drop("game");
+			_log.reset();
+		}
+		Locator::sounds::reset();
+		Locator::audio::reset();
 		Locator::gameRandom::reset();
 		Locator::resources::reset();
 		Locator::filesystem::reset();
@@ -179,6 +217,58 @@ protected:
 		reflection::BinaryReader in(Context(), bytes, identity);
 		return state.LoadState(in) && !in.Failed() && in.Remaining() == 0;
 	}
+
+	/// The files of the two effects that each turn keeps: the bolts of the storms, and the pieces of what blasts break
+	static void AddStormFiles()
+	{
+		auto& files = static_cast<FakeFiles&>(Locator::filesystem::value());
+		const auto folder = files.GetPath<filesystem::Path::Data>() / "Spells" / "ZSpellFiles";
+		const auto bolts = StormBoltsText();
+		files.files[folder / "SF_LightningStrike.txt"] = std::vector<uint8_t>(bolts.begin(), bolts.end());
+		const auto pieces = EffectText(1);
+		files.files[folder / "SF_ExplodeObject.txt"] = std::vector<uint8_t>(pieces.begin(), pieces.end());
+	}
+
+	/// Puts the listener of the audio at a place. With no place, the computer has no audio, so no sound waits.
+	static void PlaceListener(std::optional<glm::vec3> listener)
+	{
+		Locator::sounds::emplace<audio::GameSoundRequests>();
+		Locator::audio::reset();
+		if (listener.has_value())
+		{
+			Locator::audio::emplace<audio::AudioManagerNoOp>().SetListenerOverride(audio::Listener {.origin = *listener});
+		}
+	}
+
+	/// The storm strikes once in the first turn. Gives the two parts of the save and the count of the sounds after
+	/// each turn.
+	static std::vector<std::pair<Parts, size_t>> RunStorm(ParticleRuleSystem& rules, std::optional<glm::vec3> listener)
+	{
+		PlaceListener(listener);
+		Locator::gameRandom::emplace<FakeRandom>();
+		rules.AddStormBolt(k_CloudPoint);
+		std::vector<std::pair<Parts, size_t>> turns;
+		for (int turn = 0; turn < k_StormTurns; ++turn)
+		{
+			rules.ProcessTurn();
+			turns.emplace_back(Save(rules), rules.GetSoundCount());
+		}
+		return turns;
+	}
+
+	/// The turns from now until the particles have no sound
+	static int TurnsUntilSilent(ParticleRuleSystem& rules)
+	{
+		int turns = 0;
+		while (rules.GetSoundCount() != 0 && turns < 1000)
+		{
+			rules.ProcessTurn();
+			++turns;
+		}
+		return turns;
+	}
+
+	std::shared_ptr<spdlog::logger> _log;
 
 	static EffectList Effects(const ParticleRuleSystem& rules)
 	{
@@ -258,7 +348,7 @@ TEST_F(ParticleSaveParts, ASaveFromBeforeTheSplitLoads)
 	// The synced part starts with its form and the values of the rules. The tables, the effects and the world follow,
 	// as in the one part of an old save.
 	reflection::BinaryWriter head(Context());
-	reflection::Save(head, uint32_t {1});
+	reflection::Save(head, uint32_t {2});
 	reflection::Save(head, false);
 	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
 	reflection::Save(head, ParticleRuleSystemInterface::k_NoEffect);
@@ -287,6 +377,124 @@ TEST_F(ParticleSaveParts, ASaveFromBeforeTheSplitLoads)
 	ParticleRuleSystem loaded;
 	ASSERT_TRUE(Read(*loaded.OldSaveState(), oldBytes));
 	EXPECT_EQ(Effects(loaded), Effects(rules));
+	const auto again = Save(loaded);
+	EXPECT_EQ(again.synced, parts.synced);
+	EXPECT_EQ(again.local, parts.local);
+}
+
+TEST_F(ParticleSaveParts, TheSyncedPartIsTheSameWhereverTheListenerIs)
+{
+	AddStormFiles();
+	// A server with no audio, a client whose listener is at the strike, and a client far from the strike
+	ParticleRuleSystem server;
+	const auto serverTurns = RunStorm(server, std::nullopt);
+	ParticleRuleSystem near;
+	const auto nearTurns = RunStorm(near, k_NearListener);
+	ParticleRuleSystem far;
+	const auto farTurns = RunStorm(far, k_FarListener);
+	ASSERT_EQ(serverTurns.size(), static_cast<size_t>(k_StormTurns));
+	bool thunderWaited = false;
+	bool localPartsDiffer = false;
+	for (size_t turn = 0; turn < serverTurns.size(); ++turn)
+	{
+		EXPECT_EQ(nearTurns[turn].first.synced, serverTurns[turn].first.synced) << "turn " << turn;
+		EXPECT_EQ(farTurns[turn].first.synced, serverTurns[turn].first.synced) << "turn " << turn;
+		// The far client keeps the thunder while it travels, after the strike has gone
+		thunderWaited = thunderWaited || farTurns[turn].second > serverTurns[turn].second;
+		localPartsDiffer = localPartsDiffer || farTurns[turn].first.local != nearTurns[turn].first.local;
+	}
+	EXPECT_GT(serverTurns.front().second, 0u);
+	EXPECT_TRUE(thunderWaited);
+	// The part of this computer keeps the wait, and all of it is a presentation value
+	EXPECT_TRUE(localPartsDiffer);
+	const auto& last = farTurns.back().first;
+	ASSERT_EQ(last.localPresentation.size(), 1u);
+	EXPECT_EQ(last.localPresentation.front(), std::make_pair(size_t {0}, last.local.size()));
+}
+
+TEST_F(ParticleSaveParts, AThunderThatTravelsComesBackWithTheSaveAndArrivesAtTheSameTurn)
+{
+	AddStormFiles();
+	ParticleRuleSystem far;
+	const auto turns = RunStorm(far, k_FarListener);
+	// The strike has gone, and only the thunder on its way to the listener is left
+	ASSERT_EQ(turns.back().second, 1u);
+	const auto& parts = turns.back().first;
+
+	ParticleRuleSystem loaded;
+	ASSERT_TRUE(Read(loaded, parts.synced));
+	EXPECT_EQ(loaded.GetSoundCount(), 0u);
+	ASSERT_TRUE(Read(*loaded.LocalEffectsState(), parts.local));
+	EXPECT_EQ(loaded.GetSoundCount(), 1u);
+	const auto again = Save(loaded);
+	EXPECT_EQ(again.synced, parts.synced);
+	EXPECT_EQ(again.local, parts.local);
+
+	const auto original = TurnsUntilSilent(far);
+	EXPECT_GT(original, 0);
+	EXPECT_EQ(TurnsUntilSilent(loaded), original);
+}
+
+TEST_F(ParticleSaveParts, AThunderThatTravelsWhileItsStrikeLivesKeepsItsWaitInThePartOfThisComputer)
+{
+	AddStormFiles();
+	ParticleRuleSystem far;
+	PlaceListener(k_FarListener);
+	Locator::gameRandom::emplace<FakeRandom>();
+	far.AddStormBolt(k_CloudPoint);
+	far.ProcessTurn();
+	// The strike lives, so the synced part keeps its sound
+	ASSERT_EQ(far.GetSoundCount(), 1u);
+	const auto parts = Save(far);
+
+	ParticleRuleSystem loaded;
+	ASSERT_TRUE(Read(loaded, parts.synced));
+	EXPECT_EQ(loaded.GetSoundCount(), 1u);
+	ASSERT_TRUE(Read(*loaded.LocalEffectsState(), parts.local));
+	EXPECT_EQ(loaded.GetSoundCount(), 1u);
+	const auto again = Save(loaded);
+	EXPECT_EQ(again.synced, parts.synced);
+	EXPECT_EQ(again.local, parts.local);
+	// The wait came back: the sound stays after its strike has gone, until it arrives
+	const auto original = TurnsUntilSilent(far);
+	EXPECT_GT(original, 20);
+	EXPECT_EQ(TurnsUntilSilent(loaded), original);
+}
+
+TEST_F(ParticleSaveParts, TwoPartsOfTheFormBeforeTheWaitsMovedLoad)
+{
+	ParticleRuleSystem rules;
+	rules.Start("Synced", {1.0f, 0.0f, 0.0f}, 1.0f, true);
+	rules.Start("Local", {2.0f, 0.0f, 0.0f}, 1.0f, false);
+	const auto parts = Save(rules);
+
+	// Each part starts with its form. The older form has the same bytes after it when no sound waits, but the part of
+	// this computer has no list of waits. With no sound, that list is one of the counts of 0 at the end of the part.
+	reflection::BinaryWriter now(Context());
+	reflection::Save(now, uint32_t {2});
+	reflection::BinaryWriter before(Context());
+	reflection::Save(before, uint32_t {1});
+	const auto& nowBytes = now.Bytes();
+	const auto& beforeBytes = before.Bytes();
+	ASSERT_EQ(nowBytes.size(), beforeBytes.size());
+	const auto older = [&](std::vector<uint8_t> bytes) {
+		EXPECT_TRUE(std::equal(nowBytes.begin(), nowBytes.end(), bytes.begin()));
+		std::copy(beforeBytes.begin(), beforeBytes.end(), bytes.begin());
+		return bytes;
+	};
+	const auto synced = older(parts.synced);
+	auto local = older(parts.local);
+	constexpr size_t k_ZeroCounts = 4;
+	ASSERT_GE(local.size(), k_ZeroCounts * sizeof(uint32_t));
+	ASSERT_TRUE(std::all_of(local.end() - static_cast<std::ptrdiff_t>(k_ZeroCounts * sizeof(uint32_t)), local.end(),
+	                        [](uint8_t byte) { return byte == 0; }));
+	local.resize(local.size() - sizeof(uint32_t));
+
+	ParticleRuleSystem loaded;
+	ASSERT_TRUE(Read(loaded, synced));
+	ASSERT_TRUE(Read(*loaded.LocalEffectsState(), local));
+	EXPECT_EQ(Effects(loaded), Effects(rules));
+	// A save of what was read has the form of now
 	const auto again = Save(loaded);
 	EXPECT_EQ(again.synced, parts.synced);
 	EXPECT_EQ(again.local, parts.local);
