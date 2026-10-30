@@ -61,6 +61,11 @@ public:
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	bool StartRowDump(const std::filesystem::path& path, row_dump::Settings settings) override;
 	void DumpPart(uint32_t turn, std::string_view reason, uint32_t source) override;
+	void WriteWorldStates(world_state_at_turn::Settings settings) override
+	{
+		_worldStates = std::move(settings);
+		_enabled = true;
+	}
 #endif
 
 private:
@@ -92,6 +97,8 @@ private:
 	std::unique_ptr<row_dump::TaggedLines> _rowLines;
 	std::unique_ptr<std::ostream> _rowFile;
 	std::unique_ptr<row_dump::RowDump> _rowDump;
+	/// Tools: the turns at which the system writes the world state, and the folder
+	std::optional<world_state_at_turn::Settings> _worldStates;
 #endif
 };
 

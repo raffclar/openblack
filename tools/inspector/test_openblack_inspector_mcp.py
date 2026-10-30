@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -937,6 +938,98 @@ class SchemaTest(unittest.TestCase):
 
     def test_a_missing_catalogue_is_empty(self):
         self.assertEqual(mcp.read_catalogue(os.path.join(tempfile.gettempdir(), "no-such-catalogue.json")), {})
+
+
+
+LIVE_GAME = os.environ.get("OPENBLACK_LIVE_GAME")
+
+
+@unittest.skipUnless(LIVE_GAME, "set OPENBLACK_LIVE_GAME to an openblack.exe to run a real game")
+class LiveCreatureOrdersTest(unittest.TestCase):
+    """A creature picks up and eats a villager on the Land 2 start, once the cut scene is over, through the tools. The
+    game runs headless and fast. Needs the game data in OPENBLACK_LIVE_DATA (C:/projects/black by default)."""
+
+    def setUp(self):
+        self.folder = tempfile.mkdtemp(prefix="openblack-inspector-live-")
+        data = os.environ.get("OPENBLACK_LIVE_DATA", "C:/projects/black")
+        arguments = [LIVE_GAME, "-g", data, "-s", "Land2.txt", "--direct-start-creature=tiger", "--seed", "1",
+                     "--background", "--sim-fast", "--no-draw", "--inspect-port", "0", "-n", "20000000",
+                     "--profile-folder", os.path.join(self.folder, "profile")]
+        self.game = subprocess.Popen(arguments, cwd=self.folder, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        port = self.wait_for_port()
+        write_record(self.folder, self.game.pid, port, self.folder)
+        self.session = mcp.Session(port, 60.0, folder=self.folder, alive=lambda pid: self.game.poll() is None)
+
+    def tearDown(self):
+        self.session.close()
+        self.game.kill()
+        self.game.wait()
+        shutil.rmtree(self.folder, ignore_errors=True)
+
+    def wait_for_port(self):
+        log = os.path.join(self.folder, "openblack.log")
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            try:
+                with open(log, encoding="utf-8", errors="replace") as file:
+                    for line in file:
+                        if "Inspector listening on 127.0.0.1:" in line:
+                            return int(line.rsplit(":", 1)[1])
+            except OSError:
+                pass
+            time.sleep(0.5)
+        self.fail("the game did not start its inspector")
+
+    def ask(self, query, params=None):
+        answer = self.session.call("inspector_query", {"query": query, "params": params or {}, "pid": self.game.pid})
+        self.assertTrue(answer["ok"], answer)
+        return answer["result"]
+
+    def call(self, tool, arguments):
+        return self.session.call(tool, {**arguments, "pid": self.game.pid})
+
+    def entity(self, thing):
+        return self.ask("ecs.entity", {"id": thing})
+
+    def run_until(self, condition, seconds):
+        """Clicks the dialogues of the cut scenes until the condition holds"""
+        deadline = time.monotonic() + seconds
+        while not condition():
+            if time.monotonic() > deadline:
+                self.fail("timed out")
+            if self.ask("help.dialogue").get("waiting_for_click"):
+                self.ask("input.button", {"action": "click"})
+            time.sleep(0.3)
+
+    def test_a_creature_picks_up_and_eats_a_villager(self):
+        self.call("game_resume", {})
+        deadline = time.monotonic() + 120
+        while not self.ask("creature.list")["items"]:
+            self.assertLess(time.monotonic(), deadline, "the land did not load")
+            time.sleep(0.5)
+        creature = self.ask("creature.list")["items"][0]["id"]
+        self.run_until(lambda: "ScriptControlled" not in self.entity(creature)["components"] and
+                       not self.ask("camera.state").get("held_by_script"), 280)
+        self.call("game_pause", {})
+        near = self.entity(creature)["position"]
+        villagers = [thing for thing in self.call("game_find_objects", {"near": [near[0], near[2]], "radius": 60})
+                     ["result"]["items"] if thing["kind"] == "Villager"]
+        self.assertGreaterEqual(len(villagers), 2)
+
+        picked = self.call("creature_pick_up", {"id": creature, "object": villagers[0]["id"]})
+        self.assertTrue(picked["ok"], picked)
+        self.assertNotIn("warning", picked["result"])
+        self.call("game_step", {"turns": 150})
+        self.assertIn("HeldByCreature", self.entity(villagers[0]["id"])["components"])
+        self.assertTrue(self.call("creature_put_down", {"id": creature})["ok"])
+        self.call("game_step", {"turns": 100})
+
+        eaten = self.call("creature_eat", {"id": creature, "object": villagers[1]["id"]})
+        self.assertTrue(eaten["ok"], eaten)
+        self.call("game_step", {"turns": 150})
+        # An eaten villager is gone from the game
+        state = self.call("inspector_query", {"query": "ecs.entity", "params": {"id": villagers[1]["id"]}})
+        self.assertTrue(not state["ok"] or "HeldByCreature" in state["result"]["components"], state)
 
 
 if __name__ == "__main__":

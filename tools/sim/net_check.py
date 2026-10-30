@@ -62,7 +62,9 @@ refuse it with "kicked" while the other clients play in step.
 With --restart-server-at N the script stops the game server by its own process id once the server did turn N, as a
 crash does, and starts it again with --resume-snapshot on the same port (deviation 100). The new server loads its newest
 snapshot and does again the turns of its journal; the clients come back, and the checksums of the turns that both
-servers did must be the same. Compare the server checksums with a run with no restart to show an unbroken game:
+servers did must be the same. The deeds of the hands of the server are the deeds of both server logs: a deed of a turn
+that both servers did counts one time. The clients send again the commands that no turn held at the stop, and the
+summary gives these lines ("resent"). Compare the server checksums with a run with no restart to show an unbroken game:
 
     python tools/sim/net_check.py --land "Online Maps/mpm_2p_1.map" --turns 1500 --restart-server-at 1000
 
@@ -136,6 +138,7 @@ import os
 import re
 import shutil
 import socket
+import struct
 import subprocess
 import sys
 import time
@@ -156,6 +159,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sim_report  # noqa: E402
 import row_dump  # noqa: E402
+import save_diff  # noqa: E402
 import sim_paths  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -401,6 +405,46 @@ def server_checksums(log):
     return turns
 
 
+def deeds_by_turn(lines, until_turn=None):
+    """The count of each deed of the hand of each player at each turn, as {(player, deed, turn): count}. With
+    until_turn, a deed after that turn is not counted."""
+    deeds = {}
+    for line in lines:
+        match = sim_report.HAND_DEED.search(line)
+        if match is None:
+            continue
+        turn = int(match.group(4)) if match.group(4) is not None else None
+        if until_turn is not None and turn is not None and turn > until_turn:
+            continue
+        key = (int(match.group(1)), sim_report.HAND_DEED_NAMES.get(match.group(2), match.group(2)), turn)
+        deeds[key] = deeds.get(key, 0) + 1
+    return deeds
+
+
+def restarted_server_deeds(first_lines, restarted_lines, until_turn=None):
+    """The deeds of the hands of a server that stopped and of the server that continued its game from a snapshot, as
+    {player: {deed: count}}. The new server does again the turns from its snapshot, so a turn that both logs cover has
+    its deeds in both: they count one time. The turns before the snapshot are only in the first log, and the turns after
+    the stop only in the second."""
+    first = deeds_by_turn(first_lines, until_turn)
+    restarted = deeds_by_turn(restarted_lines, until_turn)
+    deeds = {}
+    for key in sorted(set(first) | set(restarted), key=lambda item: (item[0], item[1], item[2] is None, item[2] or 0)):
+        player, name, _ = key
+        counts = deeds.setdefault(player, {})
+        counts[name] = counts.get(name, 0) + max(first.get(key, 0), restarted.get(key, 0))
+    return deeds
+
+
+def server_deeds_in_logs(server_log, restarted_log, until_turn=None):
+    """The deeds of the hands that the server counts, up to a turn: of both logs when the server restarted"""
+    if restarted_log is None or not os.path.exists(restarted_log):
+        return sim_report.hand_deeds_in_file(server_log, until_turn)
+    with open(server_log, encoding="utf-8", errors="replace") as first, \
+            open(restarted_log, encoding="utf-8", errors="replace") as restarted:
+        return restarted_server_deeds(first.readlines(), restarted.readlines(), until_turn)
+
+
 def server_against_run(server_turns, other_turns, last_turn):
     """Compares the server checksums of this run with the server checksums of another run, from turn 1 to the last
     turn of the clients. The turns after it are left out: each client stops at its own time, so the turn that its god
@@ -410,6 +454,40 @@ def server_against_run(server_turns, other_turns, last_turn):
     return {"compared": len(compared), "same_turns": len(compared) - len(different),
             "first_different": different[0] if different else None, "last_different": different[-1] if different else None,
             "same": bool(compared) and compared[0] == 1 and compared[-1] == last_turn and not different}
+
+
+# The folder in the folder of the server and of each client where it writes its world states (--world-states)
+WORLD_STATES_FOLDER = "world-states"
+
+
+def world_state_turns(text):
+    """The turns of a list such as "250" or "100,250", as the game reads it; None when the text is not such a list"""
+    items = text.split(",")
+    if not all(item.isdigit() and item.isascii() and int(item) < 2 ** 32 for item in items):
+        return None
+    return [int(item) for item in items]
+
+
+def world_states_against_server(server_folder, client_folder, turns):
+    """Compares the synced parts of the world state of a client with the world state of the server at each turn
+    (save_diff.compare_synced). A turn whose world state one of them did not write is not the same."""
+    results = []
+    for turn in turns:
+        name = f"world-{turn}.obsav"
+        paths = [os.path.join(folder, WORLD_STATES_FOLDER, name) for folder in (server_folder, client_folder)]
+        missing = [who for who, path in zip(("server", "client"), paths) if not os.path.exists(path)
+                   or not os.path.exists(os.path.splitext(path)[0] + ".json")]
+        if missing:
+            results.append({"turn": turn, "same": False, "missing": missing})
+            continue
+        maps = [save_diff.read_state(path)[1] for path in paths]
+        try:
+            difference = save_diff.compare_synced_files(*paths)
+        except (ValueError, struct.error) as error:
+            difference = {"unread": str(error)}
+        results.append({"turn": turn, "same": not difference, "difference": difference or None,
+                        "waiting_sounds": [mapping.get("waitingSounds") for mapping in maps]})
+    return {"same": all(result["same"] for result in results), "turns": results}
 
 
 def record_checksums(record):
@@ -1609,6 +1687,10 @@ def main():
                         help="the server and each client keep the rows of the synced world of the last turns and write "
                         "the rows of a turn at which a client parts (server/rows.txt, clientN/rows.txt); the summary "
                         "names the first different entity, component and field of each client (row_dump.py)")
+    parser.add_argument("--world-states", metavar="TURNS",
+                        help="the server and each desktop client write their world state at the end of these turns "
+                             "(such as 250 or 100,250), and the synced parts of each client must be the same as the "
+                             "server's (save_diff.py --synced)")
     parser.add_argument("--row-dump-turn", type=int,
                         help="with --row-dump, the server and the clients also write the rows of this turn")
     parser.add_argument("--input3", help="recorded input for the third client's hand")
@@ -1757,6 +1839,9 @@ def main():
         # The game does not start with another frame time, and the run would only say that the first client did not join
         parser.error("--frame-ms takes 0 (the real frame time of the clients) or 1 to 1000 milliseconds, as the game's --sim-frame-ms")
     options.hash_parts = options.hash_parts or options.hash_fields
+    state_turns = world_state_turns(options.world_states) if options.world_states else []
+    if state_turns is None:
+        parser.error("--world-states takes a list of turns such as 250 or 100,250")
     if options.all_computer_gods:
         options.clients = 0
     if not 1 <= options.turns <= MOST_TURNS:
@@ -1881,6 +1966,9 @@ def main():
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
         if options.hash_fields:
             server_command.append("--record-fields")
+    if state_turns:
+        server_command += ["--world-states", os.path.join(server_dir, WORLD_STATES_FOLDER),
+                           "--world-state-turns", options.world_states]
     if options.row_dump:
         server_command += ["--row-dump", os.path.join(server_dir, "rows.txt")]
         if options.row_dump_turn is not None:
@@ -1941,6 +2029,9 @@ def main():
             command += options.all_clients_arg
             if options.trace_draws:
                 command += ["--sim-trace-draws", os.path.join(client_dir, "draws.tsv")]
+            if state_turns:
+                command += ["--sim-world-states", os.path.join(client_dir, WORLD_STATES_FOLDER),
+                            "--sim-world-state-turns", options.world_states]
             if options.row_dump:
                 command += ["--sim-row-dump", os.path.join(client_dir, "rows.txt")]
                 if options.row_dump_turn is not None:
@@ -2114,7 +2205,11 @@ def main():
         restart = {"killed_at": killed_at, "resumed": resumed[-1:], "restarted_turns": len(again),
                    "overlap": len(both), "overlap_same": all(server_turns[turn] == again[turn] for turn in both),
                    "snapshots": lines_with(server_log, ["The snapshot of turn"])[-2:],
-                   "last_turn": max(again, default=None)}
+                   "last_turn": max(again, default=None),
+                   # The commands that the clients sent again after the stop, and the blocks that the new server had
+                   "resent": [line for client_dir in client_dirs for line in lines_with(
+                       os.path.join(client_dir, "client.log"), ["sends again"])],
+                   "left_out": lines_with(restarted_log, ["it leaves out the block"]) if again else []}
         server_turns.update(again)
     summary = {"turns": options.turns, "server_turns": len(server_turns), "clients": []}
     # A decided game: the server stops its turns after one turn, and every computer must stop at that turn. The stop
@@ -2210,7 +2305,9 @@ def main():
     # What the turns did with the hand of each god slot, as the server counts it; each client must count the same. A
     # client's input that expects deeds of its hand (its "expect") fails the run when the hand of its slot did fewer:
     # the checksums are then the same only because the hand did nothing.
-    server_deeds = sim_report.hand_deeds_in_file(server_log)
+    # After a restart, the deeds of the server are in two logs (deviation 100)
+    restarted_deeds_log = restarted_log if options.restart_server_at is not None else None
+    server_deeds = server_deeds_in_logs(server_log, restarted_deeds_log)
     summary["hand_deeds"] = {str(slot): counts for slot, counts in sorted(server_deeds.items())}
     summary["until_end"] = options.until_end
     summary["ended"] = stopped_after is not None
@@ -2262,7 +2359,7 @@ def main():
         # last turn of one of them is not a difference
         last_common = summary["clients"][index].get("last_compared")
         client_deeds = sim_report.hand_deeds_in_file(os.path.join(client_dir, "client.log"), last_common)
-        server_deeds_common = sim_report.hand_deeds_in_file(server_log, last_common)
+        server_deeds_common = server_deeds_in_logs(server_log, restarted_deeds_log, last_common)
         summary["clients"][index]["hand_deeds_same"] = client_deeds == server_deeds_common
         if index >= options.clients and min(record_checksums(os.path.join(client_dir, "record.jsonl")), default=0) > 1:
             # An observer that joined a running game did not see the deeds of the turns before its world
@@ -2311,6 +2408,19 @@ def main():
         if not summary["box_back"]["same"]:
             print("the client that clicked Back in the information box of the land did not leave as Leave Game does")
             all_same = False
+    # The synced parts of the world state of each desktop client at each turn of --world-states are the server's
+    if state_turns:
+        summary["world_states"] = {}
+        for index, client_dir in enumerate(client_dirs):
+            states = world_states_against_server(server_dir, client_dir, state_turns)
+            summary["world_states"][str(index + 1)] = states
+            for result in states["turns"]:
+                print(f"world state of turn {result['turn']}, client {index + 1}: "
+                      f"{'same synced parts' if result['same'] else 'DIFFERENT'}"
+                      f"{'' if result['same'] else ' ' + json.dumps(result.get('difference') or result)[:600]}"
+                      f", sounds that wait (server, client): {result.get('waiting_sounds')}")
+            if not states["same"]:
+                all_same = False
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the",
                                                 "turns of the game stop", "leaves the game"])
     # A component with no registration is left out of the checksum: a change in it would never show here

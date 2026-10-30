@@ -4718,6 +4718,10 @@ void Game::StartSimulationLogs()
 			                    _simulation->rowDumpPath->string());
 		}
 	}
+	if (_simulation->worldStates.has_value())
+	{
+		Locator::syncChecksumSystem::value().WriteWorldStates(*_simulation->worldStates);
+	}
 #endif
 	if (_simulation->playCommandsPath.has_value())
 	{

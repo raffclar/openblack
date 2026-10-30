@@ -49,7 +49,8 @@ public:
 	[[nodiscard]] bool IsHumanPlayer(PlayerNames name) const override;
 
 private:
-	/// What decides who plays a player now
+	/// What decides who plays a player now. The system looks for the hands of the player only when the kind of the
+	/// player depends on them, else the facts tell no hands.
 	[[nodiscard]] player_kind::Facts FactsOf(PlayerNames name) const;
 	/// Remembers that the owner of the creature got it, after the creatures they got before or before all of them
 	void Acquire(entt::entity creature, bool primary);

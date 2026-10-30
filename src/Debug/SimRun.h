@@ -24,6 +24,7 @@
 #include "ECS/GameEndConditions.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/RowDump.h"
+#include "Simulation/WorldStateAtTurn.h"
 #endif
 
 /// The fast simulation mode for long tool runs, such as a creature's whole life. Each frame takes a fixed game time, so a
@@ -143,6 +144,8 @@ struct Request
 	/// Tools: the file of the row dump (row_dump::RowDump), and what it keeps and writes
 	std::optional<std::filesystem::path> rowDumpPath;
 	row_dump::Settings rowDump;
+	/// Tools: the turns at which this computer writes its world state, and the folder of the files
+	std::optional<world_state_at_turn::Settings> worldStates;
 #endif
 
 	static constexpr uint32_t k_DefaultRecordEvery = 100;

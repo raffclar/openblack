@@ -716,3 +716,34 @@ TEST(InspectorCreature, OrdersGoToTheGameWithWhatTheyName)
 	takes = false;
 	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.put_down"})").Ok());
 }
+
+TEST(InspectorCreature, AWarningOfTheGameGoesWithATakenOrder)
+{
+	ecs::Registry registry;
+	const auto creature = Placed(registry, glm::vec3(0.0f));
+	registry.Assign<CreatureMindState>(creature);
+	const auto villager = Placed(registry, glm::vec3(500.0f));
+
+	bool refuses = false;
+	Inspector inspector;
+	inspector.Add(MakeCreatureProvider(
+	    {.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	               .info = []() -> const InfoConstants* { return nullptr; }},
+	     .tables = []() -> const creature_mind_tables::Tables* { return nullptr; },
+	     .order =
+	         [&refuses](entt::entity /*creature*/, const CreatureOrder& /*order*/) {
+		         return refuses ? CreatureOrderResult {.detail = "a cut scene is playing"}
+		                        : CreatureOrderResult {.taken = true, .detail = "doing", .warning = "the thing is far"};
+	         }}));
+
+	// The warning is in the answer of an order that the creature took
+	const auto taken = Ask(inspector, R"({"query": "creature.pick_up", "params": {"object": )" + IdOf(villager) + "}}");
+	EXPECT_EQ(taken["taken"], true);
+	EXPECT_EQ(taken["warning"], "the thing is far");
+
+	// The reason of a refusal is in the error
+	refuses = true;
+	const auto refused = AskAny(inspector, R"({"query": "creature.eat", "params": {"object": )" + IdOf(villager) + "}}");
+	EXPECT_FALSE(refused.Ok());
+	EXPECT_NE(refused.error.find("a cut scene is playing"), std::string::npos);
+}

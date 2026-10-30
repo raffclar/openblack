@@ -39,12 +39,10 @@
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
-#include "Audio/AudioManagerInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/StringUtils.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
@@ -90,6 +88,7 @@
 #include "PlayerSlots.h"
 #include "Resources/ResourcesInterface.h"
 #include "Sound/GameSoundEffects.h"
+#include "Sound/SoundRequestInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -241,7 +240,7 @@ glm::vec3 GameParticleWorld::CameraPosition() const
 
 void GameParticleWorld::PlayListenerSound(uint32_t inGameSample, bool playsOnce)
 {
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value() && Locator::sounds::value().HasAudio())
 	{
 		const auto id = entt::hashed_string(fmt::format("InGame.sad/{}", inGameSample).c_str()).value();
 		const auto voicePlayType = playsOnce ? std::optional<pack::AudioBankLoop>(pack::AudioBankLoop::Once) : std::nullopt;
@@ -302,12 +301,15 @@ void GameParticleWorld::ClaimTarget(entt::entity target, bool claimed)
 void GameParticleWorld::StartSound(const particles::Effect& /*effect*/,
                                    const std::shared_ptr<particles::ParticleSoundLink>& sound)
 {
-	auto& playing = _sounds.emplace_back(PlayingSound {.link = sound});
+	auto& playing = _sounds.emplace_back(PlayingSound {.link = sound, .start = sound->position});
 	playing.owner = NewSoundOwner();
-	// Thunder is heard once it has come from the cloud
-	if (sound->sound.travelsAtSoundSpeed && Locator::audio::has_value())
+	// Thunder is heard once it has come from the cloud. The audio measures the distance from its own listener.
+	const auto distance = sound->sound.travelsAtSoundSpeed && Locator::sounds::has_value()
+	                          ? Locator::sounds::value().ListenerDistance(sound->position)
+	                          : std::nullopt;
+	if (distance.has_value())
 	{
-		playing.wait = glm::distance(Locator::audio::value().GetListener().origin, sound->position) / k_SpeedOfSound;
+		playing.wait = *distance / k_SpeedOfSound;
 		if (playing.wait > 0.0f)
 		{
 			return;
@@ -338,7 +340,7 @@ const std::map<std::string, int32_t, std::less<>>& GameParticleWorld::SoundActio
 
 void GameParticleWorld::Play(PlayingSound& sound) const
 {
-	if (!Locator::audio::has_value() || !Locator::camera::has_value())
+	if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio() || !Locator::camera::has_value())
 	{
 		return;
 	}
@@ -350,29 +352,38 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 	}
 	const std::array<int32_t, 5> keys {sound.link->sound.size, sound.link->sound.alignment, k_SoundObject,
 	                                   sound.link->sound.surface, action->second};
-	const auto result = Locator::audio::value().PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner,
-	                                                           sound.link->position, audio::CurrentSoundEffectConditions());
+	auto& sounds = Locator::sounds::value();
+	const auto result = sounds.PlayAnimEffect(std::string(k_SpellSoundBank), keys, sound.owner, sound.start,
+	                                          audio::CurrentSoundEffectConditions());
 	if (result.emitter != entt::null)
 	{
 		sound.emitter = result.emitter;
 		// The sound moves with its particle each turn (see ProcessSounds), and the audio turn stops it when the camera
 		// goes too far
-		Locator::audio::value().SetEmitterFollows(result.emitter, audio::Follows::Place);
+		sounds.SetEmitterFollows(result.emitter, audio::Follows::Place);
 	}
 }
 
 void GameParticleWorld::ProcessSounds()
 {
-	auto* audio = Locator::audio::has_value() ? &Locator::audio::value() : nullptr;
-	// The sounds' entities are the audio's, apart from the world's
-	auto* registry = audio != nullptr ? audio->Emitters() : nullptr;
+	auto* sounds = Locator::sounds::has_value() ? &Locator::sounds::value() : nullptr;
 	const auto playing = [&](const PlayingSound& sound) {
-		return audio != nullptr && sound.emitter != entt::null && audio->EmitterExists(sound.emitter) &&
-		       audio->GetStatus(sound.emitter) != audio::AudioStatus::Stopped;
+		return sounds != nullptr && sound.emitter != entt::null && sounds->EmitterExists(sound.emitter) &&
+		       sounds->GetStatus(sound.emitter) != audio::AudioStatus::Stopped;
 	};
 	std::erase_if(_sounds, [&](PlayingSound& sound) {
 		auto& link = *sound.link;
-		// On its way to the listener: it plays when it gets there, wherever its particle has gone
+		// The place of the sound follows its particle on each turn, also while the sound travels to the listener. Thus
+		// all computers keep the same place, whatever the distance to their listeners.
+		if (link.atom != nullptr && link.atom->drawn)
+		{
+			link.position = link.atom->current.position;
+			if (link.sound.onLand)
+			{
+				link.position.y = LandHeight({link.position.x, link.position.z});
+			}
+		}
+		// On its way to the listener: it plays from its start when it gets there, wherever its particle has gone
 		if (sound.wait > 0.0f)
 		{
 			sound.wait -= k_TurnSeconds;
@@ -384,20 +395,10 @@ void GameParticleWorld::ProcessSounds()
 		}
 		if (link.atom != nullptr)
 		{
-			if (link.atom->drawn)
+			// The sounds of the particles lock no axis, so the emitter goes to the full position
+			if (sounds != nullptr && sound.emitter != entt::null)
 			{
-				link.position = link.atom->current.position;
-				if (link.sound.onLand)
-				{
-					link.position.y = LandHeight({link.position.x, link.position.z});
-				}
-			}
-			if (registry != nullptr && sound.emitter != entt::null && registry->Valid(sound.emitter))
-			{
-				if (auto* emitter = registry->TryGet<ecs::components::AudioEmitter>(sound.emitter))
-				{
-					emitter->position = link.position;
-				}
+				sounds->SetEmitterPosition(sound.emitter, link.position);
 			}
 			// The sound stays with its particle. It does not start again when the audio stops it, for example when
 			// the camera goes past its maximum distance or when it could not start.
@@ -423,11 +424,11 @@ void GameParticleWorld::ProcessSounds()
 void GameParticleWorld::LetGo(PlayingSound& sound)
 {
 	sound.letGo = true;
-	if (!Locator::audio::has_value())
+	if (!Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	if (sound.emitter == entt::null || !audio.EmitterExists(sound.emitter))
 	{
 		return;
@@ -451,11 +452,11 @@ void GameParticleWorld::LetGo(PlayingSound& sound)
 
 void GameParticleWorld::Fade(PlayingSound& sound)
 {
-	if (sound.fade.fadeStep <= 0 || !Locator::audio::has_value())
+	if (sound.fade.fadeStep <= 0 || !Locator::sounds::has_value())
 	{
 		return;
 	}
-	auto& audio = Locator::audio::value();
+	auto& audio = Locator::sounds::value();
 	if (sound.emitter == entt::null || !audio.EmitterExists(sound.emitter))
 	{
 		return;
@@ -473,16 +474,14 @@ entt::entity GameParticleWorld::NewSoundOwner()
 {
 	// The sound's own owner only tells the audio which sounds are the same. It is an entity of the audio, not of the
 	// world, so that a computer with no sound keeps the same entities in the world.
-	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
-	return emitters != nullptr ? emitters->Create() : entt::null;
+	return Locator::sounds::has_value() ? Locator::sounds::value().CreateSoundOwner() : entt::null;
 }
 
 void GameParticleWorld::Forget(PlayingSound& sound)
 {
-	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
-	if (sound.owner != entt::null && emitters != nullptr && emitters->Valid(sound.owner))
+	if (sound.owner != entt::null && Locator::sounds::has_value())
 	{
-		emitters->Destroy(sound.owner);
+		Locator::sounds::value().DestroySoundOwner(sound.owner);
 	}
 	sound.owner = entt::null;
 }
@@ -861,9 +860,10 @@ void GameParticleWorld::Reset()
 	// Every sound stops with the land, and its owner goes
 	for (auto& sound : _sounds)
 	{
-		if (Locator::audio::has_value() && sound.emitter != entt::null && Locator::audio::value().EmitterExists(sound.emitter))
+		if (Locator::sounds::has_value() && sound.emitter != entt::null &&
+		    Locator::sounds::value().EmitterExists(sound.emitter))
 		{
-			Locator::audio::value().StopEmitter(sound.emitter);
+			Locator::sounds::value().StopEmitter(sound.emitter);
 		}
 		Forget(sound);
 	}
@@ -1841,7 +1841,7 @@ void GameParticleWorld::NumberShared(particles::SharedTables& tables, const Left
 {
 	for (const auto& sound : _sounds)
 	{
-		if (Saved(sound, leftOut) && localThings.sounds.Contains(sound.link.get()) == local)
+		if (Saved(sound, leftOut) && InSyncedPart(sound, leftOut, localThings) != local)
 		{
 			tables.sounds.Add(sound.link);
 		}
@@ -1877,6 +1877,12 @@ bool GameParticleWorld::Saved(const PlayingSound& sound, const LeftOutSounds& le
 	return !EndsWithLoad(sound) && !leftOut.contains(sound.link.get());
 }
 
+bool GameParticleWorld::InSyncedPart(const PlayingSound& sound, const LeftOutSounds& leftOut,
+                                     const particles::SharedTables& localThings)
+{
+	return Saved(sound, leftOut) && sound.link->atom != nullptr && !localThings.sounds.Contains(sound.link.get());
+}
+
 void GameParticleWorld::SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
                                   const particles::SharedTables& localThings) const
 {
@@ -1890,14 +1896,15 @@ void GameParticleWorld::SaveState(particles::EffectWriter& out, const LeftOutSou
 	WriteSyncedLive(out, _bolts, localThings.bolts);
 	out.WriteValue(_boltOrder);
 	// A sound goes with the particle that keeps its record. The audio's own emitter and the sound's owner, an entity of
-	// the audio, are of this run only and do not go. A sound that a load ends at once does not go either.
+	// the audio, are of this run only and do not go. A sound that a load ends at once does not go either. The wait of a
+	// sound comes from the listener of this computer, so the part of this computer keeps it.
 	const auto synced = [&leftOut, &localThings](const PlayingSound& sound) {
-		return Saved(sound, leftOut) && !localThings.sounds.Contains(sound.link.get());
+		return InSyncedPart(sound, leftOut, localThings);
 	};
 	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, synced)));
 	for (const auto& sound : _sounds | std::views::filter(synced))
 	{
-		WriteSound(out, sound);
+		out.WriteShared(sound.link);
 	}
 	out.WriteValue(_rainStorms);
 	out.WriteValue(_nextRainStorm);
@@ -1918,15 +1925,27 @@ void GameParticleWorld::SaveLocalState(particles::EffectWriter& out, const LeftO
 	}
 	WriteLocalLive(out, _lightSheets, localThings.sheets);
 	WriteLocalLive(out, _bolts, localThings.bolts);
-	// Each sound goes with its place among the sounds that the save keeps
+	// The sounds of the synced part that travel to the listener keep their waits here. The link of each sound has the
+	// number of the synced part.
+	const auto synced = [&leftOut, &localThings](const PlayingSound& sound) {
+		return InSyncedPart(sound, leftOut, localThings);
+	};
+	const auto syncedAndWaits = [&synced](const PlayingSound& sound) { return synced(sound) && sound.wait > 0.0f; };
+	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, syncedAndWaits)));
+	for (const auto& sound : _sounds | std::views::filter(syncedAndWaits))
+	{
+		out.WriteShared(sound.link);
+		out.WriteValue(sound.wait);
+		out.WriteValue(sound.start);
+	}
+	// Each other sound goes with its place among the sounds that the save keeps
 	const auto kept = [&leftOut](const PlayingSound& sound) { return Saved(sound, leftOut); };
-	const auto local = [&localThings](const PlayingSound& sound) { return localThings.sounds.Contains(sound.link.get()); };
-	const auto keptAndLocal = [&kept, &local](const PlayingSound& sound) { return kept(sound) && local(sound); };
-	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, keptAndLocal)));
+	const auto keptHere = [&kept, &synced](const PlayingSound& sound) { return kept(sound) && !synced(sound); };
+	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, keptHere)));
 	uint32_t place = 0;
 	for (const auto& sound : _sounds | std::views::filter(kept))
 	{
-		if (local(sound))
+		if (!synced(sound))
 		{
 			out.Write(place);
 			WriteSound(out, sound);
@@ -1942,17 +1961,30 @@ void GameParticleWorld::WriteSound(particles::EffectWriter& out, const PlayingSo
 	out.WriteValue(sound.letGo);
 	out.WritePlain(sound.fade);
 	out.WriteValue(sound.wait);
+	out.WriteValue(sound.start);
 }
 
-std::optional<GameParticleWorld::PlayingSound> GameParticleWorld::ReadSound(particles::EffectReader& in)
+std::optional<GameParticleWorld::PlayingSound> GameParticleWorld::ReadSound(particles::EffectReader& in, SoundRecord record)
 {
 	PlayingSound sound;
 	sound.link = in.ReadShared<particles::ParticleSoundLink>();
 	// The sound gets an owner of this run's audio
 	sound.owner = NewSoundOwner();
-	in.ReadValue(sound.letGo);
-	in.ReadPlain(sound.fade);
-	in.ReadValue(sound.wait);
+	if (record != SoundRecord::Link)
+	{
+		in.ReadValue(sound.letGo);
+		in.ReadPlain(sound.fade);
+		in.ReadValue(sound.wait);
+	}
+	// An older save did not move the place of a sound while the sound waited, so the place of its link is its start
+	if (sound.link != nullptr)
+	{
+		sound.start = sound.link->position;
+	}
+	if (record == SoundRecord::LinkWaitAndStart)
+	{
+		in.ReadValue(sound.start);
+	}
 	if (EndsWithLoad(sound))
 	{
 		Forget(sound);
@@ -1961,7 +1993,7 @@ std::optional<GameParticleWorld::PlayingSound> GameParticleWorld::ReadSound(part
 	return sound;
 }
 
-bool GameParticleWorld::LoadLocalState(particles::EffectReader& in)
+bool GameParticleWorld::LoadLocalState(particles::EffectReader& in, SavedForm form)
 {
 	_gestureTrails.clear();
 	const auto trails = in.ReadSize();
@@ -1974,12 +2006,33 @@ bool GameParticleWorld::LoadLocalState(particles::EffectReader& in)
 	}
 	ReadLocalLive(in, _lightSheets);
 	ReadLocalLive(in, _bolts);
+	if (form == SavedForm::WaitOnThisComputer)
+	{
+		// The waits of the sounds of the synced part. A sound that the load of the synced part ended has no link.
+		const auto waits = in.ReadSize();
+		for (size_t i = 0; waits.has_value() && i < *waits && !in.Failed(); ++i)
+		{
+			const auto link = in.ReadShared<particles::ParticleSoundLink>();
+			float wait = 0.0f;
+			glm::vec3 start {0.0f};
+			in.ReadValue(wait);
+			in.ReadValue(start);
+			const auto found = std::ranges::find_if(
+			    _sounds, [&link](const PlayingSound& sound) { return link != nullptr && sound.link == link; });
+			if (found != _sounds.end())
+			{
+				found->wait = wait;
+				found->start = start;
+			}
+		}
+	}
+	const auto record = form == SavedForm::WaitOnThisComputer ? SoundRecord::LinkWaitAndStart : SoundRecord::LinkAndWait;
 	const auto sounds = in.ReadSize();
 	for (size_t i = 0; sounds.has_value() && i < *sounds && !in.Failed(); ++i)
 	{
 		uint32_t place = 0;
 		in.Read(place);
-		if (auto sound = ReadSound(in))
+		if (auto sound = ReadSound(in, record))
 		{
 			const auto at = std::min(static_cast<size_t>(place), _sounds.size());
 			_sounds.insert(_sounds.begin() + static_cast<std::ptrdiff_t>(at), std::move(*sound));
@@ -1989,7 +2042,7 @@ bool GameParticleWorld::LoadLocalState(particles::EffectReader& in)
 	return !in.Failed();
 }
 
-bool GameParticleWorld::LoadState(particles::EffectReader& in)
+bool GameParticleWorld::LoadState(particles::EffectReader& in, SavedForm form)
 {
 	in.ReadValue(_claimed);
 	in.ReadValue(_arcsWaiting);
@@ -2008,10 +2061,11 @@ bool GameParticleWorld::LoadState(particles::EffectReader& in)
 	ReadLive(in, _bolts);
 	in.ReadValue(_boltOrder);
 	_sounds.clear();
+	const auto record = form == SavedForm::WaitOnThisComputer ? SoundRecord::Link : SoundRecord::LinkAndWait;
 	const auto sounds = in.In().ReadSize();
 	for (size_t i = 0; sounds.has_value() && i < *sounds && !in.Failed(); ++i)
 	{
-		if (auto sound = ReadSound(in))
+		if (auto sound = ReadSound(in, record))
 		{
 			_sounds.push_back(std::move(*sound));
 		}
@@ -2047,8 +2101,24 @@ namespace
 {
 
 /// The forms of the two parts of the save of the particles. A load refuses a part of another form.
-constexpr uint32_t k_SyncedPartVersion = 1;
-constexpr uint32_t k_LocalPartVersion = 1;
+constexpr uint32_t k_SyncedPartVersion = 2;
+constexpr uint32_t k_LocalPartVersion = 2;
+/// The form of the two parts before the waits of the sounds went to the part of this computer. A load reads it too.
+constexpr uint32_t k_WaitWithSoundVersion = 1;
+
+/// The form of the world in a part of a save of a given version
+std::optional<GameParticleWorld::SavedForm> WorldForm(uint32_t version, uint32_t current)
+{
+	if (version == current)
+	{
+		return GameParticleWorld::SavedForm::WaitOnThisComputer;
+	}
+	if (version == k_WaitWithSoundVersion)
+	{
+		return GameParticleWorld::SavedForm::WaitWithSound;
+	}
+	return std::nullopt;
+}
 
 template <typename Type>
 std::vector<std::weak_ptr<Type>> WeakItems(const particles::SharedTable<Type>& table)
@@ -2328,7 +2398,7 @@ void ParticleRuleSystem::RestoreCarried(std::span<const std::shared_ptr<particle
 	}
 }
 
-bool ParticleRuleSystem::LoadSyncedBody(reflection::BinaryReader& in)
+bool ParticleRuleSystem::LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form)
 {
 	particles::SharedTables tables;
 	particles::EffectReader reader(in, tables);
@@ -2352,7 +2422,7 @@ bool ParticleRuleSystem::LoadSyncedBody(reflection::BinaryReader& in)
 			_effects.push_back(std::move(running));
 		}
 	}
-	if (in.Failed() || !_world.LoadState(reader))
+	if (in.Failed() || !_world.LoadState(reader, form))
 	{
 		return false;
 	}
@@ -2376,7 +2446,8 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	}
 	uint32_t version = 0;
 	reflection::Load(in, version);
-	if (in.Failed() || version != k_SyncedPartVersion)
+	const auto form = WorldForm(version, k_SyncedPartVersion);
+	if (in.Failed() || !form.has_value())
 	{
 		return false;
 	}
@@ -2391,7 +2462,7 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	_selectionEffect = k_NoEffect;
 	_handManaPath = k_NoEffect;
 	_chainScrollPace = {};
-	if (!LoadSyncedBody(in))
+	if (!LoadSyncedBody(in, *form))
 	{
 		return false;
 	}
@@ -2416,7 +2487,8 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 	}
 	uint32_t version = 0;
 	reflection::Load(in, version);
-	if (in.Failed() || version != k_LocalPartVersion)
+	const auto form = WorldForm(version, k_LocalPartVersion);
+	if (in.Failed() || !form.has_value())
 	{
 		return false;
 	}
@@ -2458,7 +2530,7 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 			_effects.insert(_effects.begin() + static_cast<std::ptrdiff_t>(at), std::move(running));
 		}
 	}
-	if (in.Failed() || !_world.LoadLocalState(reader))
+	if (in.Failed() || !_world.LoadLocalState(reader, *form))
 	{
 		return false;
 	}
@@ -2507,7 +2579,7 @@ bool ParticleRuleSystem::LoadOldState(reflection::BinaryReader& in)
 	reflection::Load(in, _handManaPath);
 	reflection::Load(in, _beliefWanted);
 	reflection::Load(in, _chainScrollPace);
-	const bool read = LoadSyncedBody(in);
+	const bool read = LoadSyncedBody(in, GameParticleWorld::SavedForm::WaitWithSound);
 	_loadedSynced.reset();
 	return read;
 }

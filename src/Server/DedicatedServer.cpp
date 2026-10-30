@@ -694,6 +694,7 @@ public:
 			return;
 		}
 		auto room = host.RoomRecord();
+		auto blocks = host.BlocksInTurns();
 		const auto turn = host.TurnsDone();
 		// The first turn brings the creatures from the files of the players, so the first snapshot comes after it
 		const bool due = turn >= 1 && (!_lastTurn.has_value() || turn >= *_lastTurn + _settings.everyTurns);
@@ -710,9 +711,10 @@ public:
 			_lastRoom = room;
 			_lastTurn = turn;
 			_writer->Queue(fmt::format("the snapshot of turn {}", turn), [store = &_store, make = std::move(make),
-			                                                              room = std::move(room), turn, takenMs]() {
+			                                                              room = std::move(room), blocks = std::move(blocks),
+			                                                              turn, takenMs]() {
 				const auto writeStart = std::chrono::steady_clock::now();
-				const auto bytes = snapshots::EncodeSnapshot({.turn = turn, .room = room, .world = make()});
+				const auto bytes = snapshots::EncodeSnapshot({.turn = turn, .room = room, .world = make(), .blocks = blocks});
 				const bool written = store->Write(turn, bytes);
 				SPDLOG_LOGGER_INFO(
 				    spdlog::get("game"),
@@ -731,11 +733,11 @@ public:
 	}
 
 	/// A turn that the server closed, before it sends the turn
-	void Turn(uint32_t turn, std::span<const uint8_t> bytes)
+	void Turn(uint32_t turn, std::span<const uint8_t> bytes, const snapshots::BlockSequences& blocks)
 	{
 		if (!_ended)
 		{
-			_store.AddTurn(turn, bytes);
+			_store.AddTurn(turn, bytes, blocks);
 		}
 	}
 
@@ -842,12 +844,14 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	auto& host = network->Host();
 	if (restored.has_value())
 	{
-		host.Restore(restored->room, restored->snapshot.turn, restored->turns);
+		host.Restore(restored->room, restored->snapshot.turn, restored->turns, restored->blocks);
 	}
 	if (keeper != nullptr)
 	{
 		keeper->Prepare();
-		host.SetTurnJournal([keeper](uint32_t turn, std::span<const uint8_t> bytes) { keeper->Turn(turn, bytes); });
+		host.SetTurnJournal([keeper](uint32_t turn, std::span<const uint8_t> bytes, const snapshots::BlockSequences& blocks) {
+			keeper->Turn(turn, bytes, blocks);
+		});
 	}
 	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
 	Locator::playerCommandSystem::value().SetSource(&host);
@@ -1062,6 +1066,10 @@ int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop
 	if (settings.rowDumpPath.has_value() && !checksums.StartRowDump(*settings.rowDumpPath, settings.rowDump))
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}", settings.rowDumpPath->string());
+	}
+	if (settings.worldStates.has_value())
+	{
+		checksums.WriteWorldStates(*settings.worldStates);
 	}
 #endif
 	checksums.SetTurnListener(

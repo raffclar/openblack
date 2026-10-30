@@ -24,6 +24,13 @@ else ()
   # The dump of the rows of the synced world is a developer tool
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/RowDump[.]cpp$")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Debug/RowDump[.]h$")
+  # The world states that the tools write at a set turn are a developer tool
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX
+       "/Simulation/WorldStateAtTurn[.]cpp$"
+  )
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX
+       "/Simulation/WorldStateAtTurn[.]h$"
+  )
 endif ()
 # The code that connects the game to a browser page is built only for the web
 if (NOT EMSCRIPTEN)

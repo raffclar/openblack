@@ -171,6 +171,8 @@ public:
 	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
 	/// How many particle sounds are playing or dying away, for the debug window
 	[[nodiscard]] virtual size_t GetSoundCount() const = 0;
+	/// Tools: how many particle sounds travel to the listener of this computer and do not play yet
+	[[nodiscard]] virtual size_t GetWaitingSoundCount() const { return 0; }
 	/// An object for the effect's rules to act on, such as a person for the heal miracle's chakra
 	virtual void AddTarget(EffectId id, entt::entity target) = 0;
 	/// A point of the world for the effect's rules to act on, such as where a spot visual's beam ends

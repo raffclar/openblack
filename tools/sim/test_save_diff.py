@@ -51,6 +51,111 @@ def world(blocks, attempts=0):
     return data
 
 
+def clock_block(synced_seed=7, draws=100, remainder=0, local_seed=3, streams=()):
+    """A clock block (TIME) as the game writes it"""
+    data = struct.pack("<f", 1.0) + b"\x00" + struct.pack("<i", remainder) + u32(synced_seed) + u32(local_seed)
+    data += b"\x00" + b"\x00" + u32(1) + u32(len(streams)) + b"".join(name(text) for text in streams)
+    return data + name("general") + struct.pack("<Q", draws)
+
+
+def state_map(sections, parts=(), turn=250, seed=7, draws=100):
+    """The map of a world state: sections is [(name, size, [(first, last)])]"""
+    return {"turn": turn, "syncedSeed": seed, "syncedDraws": draws, "waitingSounds": 0,
+            "presentationParts": [{"component": c, "field": f, "marker": m} for c, f, m in parts],
+            "sections": [{"name": n, "size": size, "presentation": [list(r) for r in ranges]}
+                         for n, size, ranges in sections]}
+
+
+# The presentation parts of these tests: a whole component, a field, and a field only of the entities with a marker
+PARTS = [("Sprite", "", ""), ("Animal", "clipPlace", ""), ("Transform", "rotation", "Animal")]
+
+
+class SyncedCompareTests(unittest.TestCase):
+    def entities(self, clip=b"\x00", rotation=b"\x00", position=b"\x00", sprite=b"\x00"):
+        return entities_block([1, 2], [("Animal", ["clipPlace", "speed"], [(1, [clip, b"\x05"])]),
+                                       ("Transform", ["position", "rotation"],
+                                        [(1, [b"\x00", rotation]), (2, [position, rotation])]),
+                                       ("Sprite", ["frame"], [(2, [sprite])])])
+
+    def compare(self, blocks_a, blocks_b, map_a=None, map_b=None):
+        map_a = map_a or state_map([], PARTS)
+        map_b = map_b or state_map([], PARTS)
+        return save_diff.compare_synced(world(blocks_a), map_a, world(blocks_b), map_b)
+
+    def test_the_presentation_parts_of_the_entities_do_not_count(self):
+        first = self.entities()
+        second = self.entities(clip=b"\x01", sprite=b"\x09")
+        self.assertEqual(self.compare([("ECSW", first)], [("ECSW", second)]), {})
+
+    def test_a_marker_covers_only_the_entities_that_have_it(self):
+        # Entity 1 is an animal, so its rotation only shows the world. Entity 2 is not, so its rotation is synced.
+        first = self.entities()
+        second = entities_block([1, 2], [("Animal", ["clipPlace", "speed"], [(1, [b"\x00", b"\x05"])]),
+                                         ("Transform", ["position", "rotation"],
+                                          [(1, [b"\x00", b"\x04"]), (2, [b"\x00", b"\x04"])]),
+                                         ("Sprite", ["frame"], [(2, [b"\x00"])])])
+        result = self.compare([("ECSW", first)], [("ECSW", second)])
+        values = result["ECSW"]["components"]["Transform"]["values"]
+        self.assertEqual(list(values), ["rotation"])
+        self.assertEqual(values["rotation"]["entities"], 1)
+        self.assertEqual(values["rotation"]["examples"][0]["entity"], "2v0")
+
+    def test_a_synced_field_that_differs_is_named(self):
+        result = self.compare([("ECSW", self.entities())], [("ECSW", self.entities(position=b"\x03"))])
+        self.assertEqual(list(result), ["ECSW"])
+        self.assertEqual(list(result["ECSW"]["components"]["Transform"]["values"]), ["position"])
+
+    def test_the_presentation_bytes_of_a_section_do_not_count(self):
+        first = sections_block([("magic", b"\x01\x02\x03\x04")])
+        second = sections_block([("magic", b"\x01\x09\x09\x04")])
+        same = state_map([("magic", 4, [(1, 3)])])
+        self.assertEqual(self.compare([("SYST", first)], [("SYST", second)], same, same), {})
+        synced = state_map([("magic", 4, [(1, 2)])])
+        result = self.compare([("SYST", first)], [("SYST", second)], synced, synced)
+        self.assertEqual(list(result["SYST"]), ["magic"])
+
+    def test_a_section_of_presentation_only_that_the_server_does_not_write_is_the_same(self):
+        server = sections_block([("magic", b"\x01")])
+        client = sections_block([("magic", b"\x01"), ("localParticles", b"\x05\x06")])
+        result = self.compare([("SYST", server)], [("SYST", client)], state_map([("magic", 1, [])]),
+                              state_map([("magic", 1, []), ("localParticles", 2, [(0, 2)])]))
+        self.assertEqual(result, {})
+
+    def test_a_synced_section_that_only_one_computer_writes_differs(self):
+        server = sections_block([("magic", b"\x01")])
+        client = sections_block([("magic", b"\x01"), ("fire", b"\x05")])
+        result = self.compare([("SYST", server)], [("SYST", client)], state_map([("magic", 1, [])]),
+                              state_map([("magic", 1, []), ("fire", 1, [])]))
+        self.assertEqual(list(result["SYST"]), ["fire"])
+
+    def test_a_map_that_does_not_give_a_section_is_refused(self):
+        block = sections_block([("magic", b"\x01\x02")])
+        with self.assertRaises(ValueError):
+            self.compare([("SYST", block)], [("SYST", block)], state_map([("magic", 1, [])]),
+                         state_map([("magic", 2, [])]))
+
+    def test_the_camera_and_the_local_values_of_the_clock_do_not_count(self):
+        first = [("CAMR", b"\x01"), ("TIME", clock_block(remainder=5, local_seed=1, streams=["a"]))]
+        second = [("CAMR", b"\x02"), ("TIME", clock_block(remainder=9, local_seed=2, streams=["b"]))]
+        self.assertEqual(self.compare(first, second), {})
+
+    def test_the_synced_seed_and_its_draws_count(self):
+        result = self.compare([("TIME", clock_block(draws=100))], [("TIME", clock_block(draws=101))],
+                              state_map([], PARTS, draws=100), state_map([], PARTS, draws=101))
+        self.assertEqual(result["TIME"], {"syncedDraws": [100, 101]})
+        self.assertEqual(result["syncedDraws"], [100, 101])
+
+    def test_other_blocks_count_whole(self):
+        result = self.compare([("SOBJ", b"\x01\x02")], [("SOBJ", b"\x01\x03")])
+        self.assertEqual(result["SOBJ"]["first"], 1)
+        result = self.compare([("SOBJ", b"\x01")], [])
+        self.assertEqual(result["SOBJ"], {"only_in": "a"})
+
+    def test_world_states_of_other_turns_differ(self):
+        result = self.compare([], [], state_map([], turn=250), state_map([], turn=251))
+        self.assertEqual(result["turn"], [250, 251])
+
+
 class SaveDiffTests(unittest.TestCase):
     def test_same_files_give_nothing(self):
         data = world([("TIME", b"\x01\x02"), ("SYST", sections_block([("fire", b"\x00")]))])
