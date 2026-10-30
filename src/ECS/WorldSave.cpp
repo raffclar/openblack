@@ -85,7 +85,7 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
@@ -307,7 +307,7 @@ systems::SavedStateInterface* FindGameMusic()
 using SystemFinder = systems::SavedStateInterface* (*)();
 constexpr std::array<std::pair<std::string_view, SystemFinder>, 41> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
-    {"particles", &FindSystem<Locator::particleSystem>},
+    {"particles", &FindSystem<Locator::particleRuleSystem>},
     {"effectRequests", &FindSystem<Locator::effectRequestSystem>},
     {"towns", &FindSystem<Locator::townSystem>},
     {"magic", &FindSystem<Locator::magicSystem>},

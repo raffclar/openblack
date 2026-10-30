@@ -43,7 +43,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -132,18 +132,18 @@ GameObjectEffects::FireBallState GameObjectEffects::FollowFireBall(entt::entity 
 
 uint32_t GameObjectEffects::StartSpotVisual(SpotVisualType type, glm::vec3 position, float magnitude, int turns)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::particleRuleSystem::has_value())
 	{
-		return ParticleSystemInterface::k_NoEffect;
+		return ParticleRuleSystemInterface::k_NoEffect;
 	}
-	return Locator::particleSystem::value().StartSpotVisual(type, position, turns, entt::null, magnitude);
+	return Locator::particleRuleSystem::value().StartSpotVisual(type, position, turns, entt::null, magnitude);
 }
 
 void GameObjectEffects::CloseSpotVisual(uint32_t id)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
-		Locator::particleSystem::value().CloseDown(id);
+		Locator::particleRuleSystem::value().CloseDown(id);
 	}
 }
 

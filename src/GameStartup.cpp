@@ -48,6 +48,7 @@
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -870,9 +871,14 @@ void Game::PrepareFirstFrames()
 		Locator::objectDrawListSystem::value().PrepareLand();
 	}
 	// The first start of each effect reads its file, its models and its light maps
+	if (Locator::particleRuleSystem::has_value())
+	{
+		Locator::particleRuleSystem::value().LoadAllTypes();
+	}
+	// The first draw of an effect finds the names of the texture sheets
 	if (Locator::particleSystem::has_value())
 	{
-		Locator::particleSystem::value().LoadAllTypes();
+		Locator::particleSystem::value().LoadTextures();
 	}
 	// The first thing that a script puts in high detail reads its detailed model and its eyes
 	if (Locator::highDetailSystem::has_value())

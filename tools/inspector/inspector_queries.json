@@ -444,6 +444,12 @@
   "query": "particles.requests"
  },
  {
+  "description": "What the last frame of the draw of the particle effects drew: sprites, ribbons, models, mists, light maps and effects. Null on a computer that does not draw the effects",
+  "kind": "object",
+  "parameters": [],
+  "query": "particles.drawn"
+ },
+ {
   "description": "How many bodies the physics has: flying, resting and in water",
   "kind": "object",
   "parameters": [],

@@ -47,7 +47,7 @@
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
@@ -140,9 +140,9 @@ void PlayFrameEffects(FrameViewInterface& view)
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	// The ribbons' textures slide on the frames that draw them
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
-		Locator::particleSystem::value().ScrollChains(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+		Locator::particleRuleSystem::value().ScrollChains(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	}
 	{
 		// The flames, steam and smoke of what burns move on

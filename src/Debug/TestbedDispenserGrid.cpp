@@ -15,7 +15,7 @@
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 

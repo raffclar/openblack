@@ -189,7 +189,7 @@ Json openblack::inspector::LiquidSummary(std::span<const liquid_particles::Parti
 	};
 }
 
-Json openblack::inspector::BeliefSummary(const ecs::systems::ParticleSystemInterface::BeliefSpritesSeen& seen)
+Json openblack::inspector::BeliefSummary(const ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen& seen)
 {
 	Json recent = Json::array();
 	for (const auto& sprite : seen.recent)
@@ -261,6 +261,12 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	     .parameters = {},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
+	    {.name = "drawn",
+	     .description = "What the last frame of the draw of the particle effects drew: sprites, ribbons, models, mists, "
+	                    "light maps and effects. Null on a computer that does not draw the effects",
+	     .parameters = {},
+	     .kind = ResultKind::Object,
+	     .needsNear = false},
 	};
 }
 
@@ -305,12 +311,28 @@ QueryResult ParticlesProvider::Run(std::string_view query, const QueryContext& c
 	}
 	if (query == "belief")
 	{
-		return QueryResult::Value(
-		    BeliefSummary(_sources.belief ? _sources.belief() : ecs::systems::ParticleSystemInterface::BeliefSpritesSeen {}));
+		return QueryResult::Value(BeliefSummary(
+		    _sources.belief ? _sources.belief() : ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen {}));
 	}
 	if (query == "requests")
 	{
 		return QueryResult::Value(RequestSummary(_sources.nextRequest ? _sources.nextRequest() : std::nullopt, effects));
+	}
+	if (query == "drawn")
+	{
+		const auto stats = _sources.drawn ? _sources.drawn() : std::nullopt;
+		if (!stats.has_value())
+		{
+			return QueryResult::Value(Json(nullptr));
+		}
+		return QueryResult::Value(Json {
+		    {"sprites", stats->sprites},
+		    {"ribbons", stats->chains},
+		    {"models", stats->meshes},
+		    {"mists", stats->mists},
+		    {"lightMaps", stats->lightStamps},
+		    {"effects", stats->effects},
+		});
 	}
 	return QueryResult::Error("no query particles." + std::string(query));
 }

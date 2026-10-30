@@ -19,7 +19,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DrawnOnScreen.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Magic/IconChargeLooks.h"
@@ -137,9 +137,9 @@ void SpellIconSystem::ShowCharge(entt::entity entity, const WorshipIcon& icon, i
 	look.ring->SetHidden(false);
 	look.ring->Update(static_cast<float>(gameMilliseconds) * k_SecondsPerMillisecond);
 	// The particles keep the sheet until a new land or a load clears their list, so it is given to them again each time
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
-		Locator::particleSystem::value().AddLightSheet(look.ring);
+		Locator::particleRuleSystem::value().AddLightSheet(look.ring);
 	}
 
 	// While the icon charges, the pulse model shrinks into it once in each round of the clock

@@ -273,6 +273,20 @@ void EffectRequestSystem::SetPlayerSymbols(std::vector<particles::draw::PlayerSy
 	}
 }
 
+void EffectRequestSystem::SetShown(EffectHandle handle, bool shown)
+{
+	if (auto* server = ServerFor(handle))
+	{
+		server->SetShown(handle, shown);
+	}
+}
+
+bool EffectRequestSystem::Renumber(EffectHandle from, EffectHandle to)
+{
+	auto* server = ServerFor(from);
+	return server != nullptr && to != k_NoEffectHandle && server->Renumber(from, to);
+}
+
 void EffectRequestSystem::Reset()
 {
 	_next = k_FirstEffectHandle;

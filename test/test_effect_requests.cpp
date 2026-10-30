@@ -132,6 +132,22 @@ public:
 	{
 		shared.emplace_back("playerSymbols " + std::to_string(symbols.size()));
 	}
+	void SetShown(EffectHandle handle, bool shown) override { changes.emplace_back(shown ? "shown" : "notShown", handle); }
+	bool Renumber(EffectHandle from, EffectHandle to) override
+	{
+		const auto it = std::ranges::find(running, from);
+		if (it == running.end() || IsRunning(to))
+		{
+			return false;
+		}
+		*it = to;
+		if (listener != nullptr)
+		{
+			listener->EffectEnded(from);
+			listener->EffectStarted(to);
+		}
+		return true;
+	}
 
 	/// The record that hears of each start and end
 	EffectLifeListener* listener {nullptr};
@@ -423,4 +439,45 @@ TEST(EffectRequests, TheRecordStopsToListenWhenTheSystemGoes)
 		EXPECT_NE(server.listener, nullptr);
 	}
 	EXPECT_EQ(server.listener, nullptr);
+}
+
+TEST(EffectRequests, AnEffectOfThisComputerTakesTheNumberOfTheSaveAgain)
+{
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	const auto own = effects.StartHere({.type = ParticleType::LandscapeVortexInBefore, .synced = false, .saved = false});
+	ASSERT_EQ(own, 7u);
+	// The owner starts the effect again after a load and gives it the number of the save
+	EXPECT_TRUE(effects.Renumber(own, 3));
+	EXPECT_FALSE(effects.IsRunning(own));
+	EXPECT_TRUE(effects.IsRunning(3));
+	// No effect has the first number, and no number is not a number
+	EXPECT_FALSE(effects.Renumber(own, 4));
+	EXPECT_FALSE(effects.Renumber(3, k_NoEffectHandle));
+	EXPECT_TRUE(effects.IsRunning(3));
+	// The request keeps what a save does with the effect and how the effect draws
+	ASSERT_EQ(server.served.size(), 1u);
+	EXPECT_FALSE(server.served.front().first.saved);
+	EXPECT_FALSE(server.served.front().first.drawPath.has_value());
+}
+
+TEST(EffectRequests, TheFramesShowAnEffectOnlyWhileTheyDrawItsThing)
+{
+	FakeServer server;
+	EffectRequestSystem effects([&server]() -> EffectServerInterface* { return &server; });
+	const auto glow = effects.StartHere({.type = ParticleType::LandscapeVortexInBefore, .synced = false});
+	effects.SetShown(glow, false);
+	effects.SetShown(glow, true);
+	// No effect: no call
+	effects.SetShown(k_NoEffectHandle, true);
+	const std::vector<std::pair<std::string, EffectHandle>> expected {{"notShown", glow}, {"shown", glow}};
+	EXPECT_EQ(server.changes, expected);
+}
+
+TEST(EffectRequests, NoRenumberOnAComputerThatShowsNothing)
+{
+	EffectRequestSystem effects([]() -> EffectServerInterface* { return nullptr; });
+	EXPECT_FALSE(effects.Renumber(7, 3));
+	effects.SetShown(7, true);
+	EXPECT_FALSE(effects.IsRunning(3));
 }

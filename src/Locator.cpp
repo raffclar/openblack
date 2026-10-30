@@ -145,6 +145,7 @@
 #include "ECS/Systems/Implementations/MiracleFxSystem.h"
 #include "ECS/Systems/Implementations/MistSystem.h"
 #include "ECS/Systems/Implementations/MusicMoodSystem.h"
+#include "ECS/Systems/Implementations/ParticleRuleSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
 #include "ECS/Systems/Implementations/PauseTextSystem.h"
@@ -318,6 +319,7 @@ using openblack::ecs::systems::MistSystem;
 using openblack::ecs::systems::MusicMoodSystem;
 using openblack::ecs::systems::NetworkGameSystem;
 using openblack::ecs::systems::ObjectDrawListSystem;
+using openblack::ecs::systems::ParticleRuleSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PauseTextSystem;
@@ -769,10 +771,11 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::abodeKnockSystem::emplace<AbodeKnockSystem>();
 	Locator::influenceSystem::emplace<InfluenceSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
-	Locator::particleSystem::emplace<ParticleSystem>();
-	// The turns and the scripts ask for effects here. The particles of this computer, if any, show them.
+	// The rules of the particle effects step in the turns on every computer, also on the dedicated server
+	Locator::particleRuleSystem::emplace<ParticleRuleSystem>();
+	// The turns and the scripts ask for effects here. The rules of the particles serve them.
 	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>([]() -> ecs::systems::EffectServerInterface* {
-		return Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+		return Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 	});
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
@@ -830,6 +833,12 @@ void openblack::InitializePresentation()
 	Locator::advisorVoiceSystem::emplace<AdvisorVoiceSystem>();
 	// The measure of how fast this computer's camera turns, and the advisors' cheers at it
 	Locator::turnCheerSystem::emplace<TurnCheerSystem>();
+	// The draw of the particle effects, which reads the effects from their rules
+	Locator::particleSystem::emplace<ParticleSystem>(
+	    []() -> const ecs::systems::ParticleRuleSystemInterface* {
+		    return Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
+	    },
+	    &ParticleSystem::TextureStemsOnDisk);
 }
 
 void openblack::InitializeClient(const player_profiles::Store& profiles)
@@ -1100,6 +1109,7 @@ void openblack::ShutDownServices()
 	Locator::gestureSystem::reset();
 	Locator::effectRequestSystem::reset();
 	Locator::particleSystem::reset();
+	Locator::particleRuleSystem::reset();
 	Locator::terrainSystem::reset();
 	Locator::filesystem::reset();
 	Locator::gameActionSystem::reset();
