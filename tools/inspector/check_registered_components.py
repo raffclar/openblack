@@ -44,9 +44,11 @@ NOT_COMPONENTS = {
     # The rendering services that the locator holds
     "RenderingSystemTemple",
 }
-# Files whose calls are not about entity components: the service locator and the template that the registry itself uses
+# Files whose calls are not about entity components: the service locator (its game part too) and the template that the
+# registry itself uses
 SKIPPED_FILES = {
     "src/Locator.cpp",
+    "src/LocatorClient.cpp",
     "src/ECS/Registry.h",
     "src/ECS/Reflection/ComponentReflection.h",
     "src/ECS/Reflection/BinaryArchive.h",

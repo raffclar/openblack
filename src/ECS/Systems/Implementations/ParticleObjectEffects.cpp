@@ -219,15 +219,23 @@ bool GameObjectEffects::IsCreature(entt::entity object) const
 void GameObjectEffects::ExplodeObject(entt::entity object, glm::vec3 origin, float speed)
 {
 	const auto& registry = Entities();
-	const auto* mesh = registry.TryGet<const Mesh>(object);
 	const auto* transform = registry.TryGet<const Transform>(object);
-	if (mesh == nullptr || transform == nullptr)
+	if (transform == nullptr)
 	{
 		return;
 	}
 	auto matrix = glm::translate(glm::mat4(1.0f), transform->position) * glm::mat4(transform->rotation);
 	matrix = glm::scale(matrix, transform->scale);
-	ExplodeMesh(mesh->id, matrix, origin, speed);
+	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(object))
+	{
+		// A one-shot globe breaks up its dome, turned as the last frame drew it
+		ExplodeMesh(OneOffSpellSeed::k_MeshId, globe->drawnModel.value_or(matrix), origin, speed);
+		return;
+	}
+	if (const auto* mesh = registry.TryGet<const Mesh>(object))
+	{
+		ExplodeMesh(mesh->id, matrix, origin, speed);
+	}
 }
 
 void GameObjectEffects::ExplodeMesh(entt::id_type mesh, const glm::mat4& transform, glm::vec3 origin, float speed)

@@ -97,7 +97,7 @@ public:
 	Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallback) noexcept;
 	~Renderer() noexcept final;
 
-	[[nodiscard]] ShaderManager& GetShaderManager() const noexcept final;
+	[[nodiscard]] ShaderManager* GetShaderManager() const noexcept final;
 
 	void ConfigureView(RenderPass viewId, glm::u16vec2 resolution, uint32_t clearColor) const noexcept final;
 

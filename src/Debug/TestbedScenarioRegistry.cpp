@@ -5658,6 +5658,30 @@ void AddObjects(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
 	});
 
+	// A land's script moves its challenge scroll to another place, as The Sacrifice moves its scroll to the altar
+	all.push_back({
+	    .id = "scripts.scroll_moved_to_another_cell",
+	    .name = "A script moves a challenge scroll to a place in another map cell",
+	    .facet = Facet::Objects,
+	    .description = "After one second, CREATE_HIGHLIGHT makes a silver challenge scroll on the land. After two more "
+	                   "seconds, SET_POSITION puts the scroll 30 to the side, in another map cell.",
+	    .expected = "The scroll shows where it was made, then it shows and turns at its new place, 30 to the side. "
+	                "The cursor on the scroll at its new place picks it. Nothing stays at the old place.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {15.0f, 20.0f, -25.0f}, .look = {15.0f, 3.0f, 0.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE_HIGHLIGHT",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 2.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {0.0f, 0.0f}},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 28.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "SET_POSITION",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {30.0f, 0.0f}}}}},
+	});
+
 	// A land's script aims a magic beam from one villager at another, as the healer of Land 2 calls the child
 	all.push_back({
 	    .id = "scripts.spot_beam_target",
@@ -10601,6 +10625,28 @@ void AddMind(std::vector<Scenario>& all)
 	                  .delaySeconds = 4.0f}},
 	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 4.6f, .value = 0},
 	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
+	// A physical shield stands in the physics as a solid dome from the turn that it goes up
+	all.push_back({
+	    .id = "miracles.physical_shield_stops_boulders",
+	    .name = "A physical shield stops thrown boulders",
+	    .facet = Facet::Miracles,
+	    .description = "A hand casts a physical shield over a point 40 metres north. 3 seconds after the start a hand "
+	                   "throws a boulder north at the shield from 50 metres south of it. The throw occurs again "
+	                   "every 6 seconds.",
+	    .expected = "The dome rises and spins. Each boulder hits the side of the dome and bounces back or rolls off it. "
+	                "No boulder goes through the dome or lands in it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, -10.0f}, {0.0f, 70.0f}}},
+	    .objects = {{.type = MobileStaticInfo::Boulder1Chalk, .offset = {0.0f, -10.0f}}},
+	    .miracles = {{.type = MagicType::PhysicalShield, .point = {0.0f, 40.0f}, .delaySeconds = 0.5f}},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2 {0.0f, -10.0f},
+	                .height = 6.0f,
+	                .velocity = {0.0f, 6.0f, 25.0f},
+	                .delaySeconds = 3.0f,
+	                .repeatSeconds = 6.0f}},
 	});
 
 	// A save while sounds, script music and an advisor's line play: a load brings back only what the game keeps

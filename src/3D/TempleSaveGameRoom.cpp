@@ -18,7 +18,9 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
+#include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
+#include "Locator.h"
 
 using namespace openblack;
 namespace rules = openblack::temple::save_game_room;
@@ -38,26 +40,30 @@ std::optional<graphics::TextureHandle> CompressedTexture(std::span<const uint8_t
 	{
 		return std::nullopt;
 	}
-	const auto* memory = bgfx::copy(blocks.data(), static_cast<uint32_t>(needed));
-	const auto handle = bgfx::createTexture2D(static_cast<uint16_t>(width), static_cast<uint16_t>(height), false, 1,
-	                                          bgfx::TextureFormat::BC1, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, memory);
-	bgfx::setName(handle, name.data(), static_cast<int32_t>(name.size()));
-	return graphics::fromBgfx(handle);
+	const auto& device = Locator::graphicsDevice::value();
+	const auto* memory = device.Copy(blocks.data(), static_cast<uint32_t>(needed));
+	const auto handle =
+	    device.CreateTexture2D(static_cast<uint16_t>(width), static_cast<uint16_t>(height), 1,
+	                           graphics::TextureFormat::BlockCompression1, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, memory);
+	device.SetName(handle, name);
+	return handle;
 }
 
 /// A texture of the columns of a square RGBA picture from first, as wide as given
 graphics::TextureHandle ColumnsTexture(std::span<const uint8_t> rgba, uint32_t first, uint32_t width, std::string_view name)
 {
-	const auto* memory = bgfx::alloc(width * k_EmptySide * 4);
+	const auto& device = Locator::graphicsDevice::value();
+	const auto* memory = device.Alloc(width * k_EmptySide * 4);
 	for (uint32_t y = 0; y < k_EmptySide; ++y)
 	{
 		const auto from = rgba.subspan(((static_cast<size_t>(y) * k_EmptySide) + first) * 4, static_cast<size_t>(width) * 4);
 		std::ranges::copy(from, memory->data + (static_cast<size_t>(y) * width * 4));
 	}
-	const auto handle = bgfx::createTexture2D(static_cast<uint16_t>(width), static_cast<uint16_t>(k_EmptySide), false, 1,
-	                                          bgfx::TextureFormat::RGBA8, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, memory);
-	bgfx::setName(handle, name.data(), static_cast<int32_t>(name.size()));
-	return graphics::fromBgfx(handle);
+	const auto handle =
+	    device.CreateTexture2D(static_cast<uint16_t>(width), static_cast<uint16_t>(k_EmptySide), 1,
+	                           graphics::TextureFormat::RGBA8, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP, memory);
+	device.SetName(handle, name);
+	return handle;
 }
 } // namespace
 
@@ -76,7 +82,7 @@ void TempleSaveGameRoom::Destroy(std::optional<graphics::TextureHandle>& texture
 {
 	if (texture.has_value())
 	{
-		bgfx::destroy(graphics::toBgfx(*texture));
+		Locator::graphicsDevice::value().Destroy(*texture);
 		texture.reset();
 	}
 }

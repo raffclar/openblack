@@ -984,6 +984,25 @@ TEST(TurnCodec, ALineOfTheChatKeepsToItsLimits)
 	EXPECT_EQ(Decode(shortLine).error, DecodeError::Truncated);
 }
 
+TEST(TurnCodec, AClickOfTheDialogueIsOneByteOfFlags)
+{
+	const CommandBlock block {
+	    .sequence = 0, .turn = 0, .actions = {DialogueClick {.click = true}, DialogueClick {.skipKey = true}}};
+	const std::vector<uint8_t> expected {k_Version, 1, 0, 0, 0, 0, 0, 0, 2, 47, 1, 47, 2};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
+	ASSERT_EQ(actions.size(), 2);
+	EXPECT_EQ(std::get<DialogueClick>(actions[0]), (DialogueClick {.click = true}));
+	EXPECT_EQ(std::get<DialogueClick>(actions[1]), (DialogueClick {.skipKey = true}));
+
+	// A flag after the second is refused
+	auto wrong = expected;
+	wrong.back() = 4;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
 TEST(TurnCodec, TheFrameCarriesTheGodSlotOfEachPlayer)
 {
 	// The gods of a land keep their numbers on the wire. The god after them is in slot 7, and the last god in slot 31.
@@ -1023,23 +1042,4 @@ TEST(TurnCodec, TheGodsOfALandHaveTheBytesOfTheirNumbers)
 		ASSERT_FALSE(bytes.empty());
 		EXPECT_EQ(bytes[8], number);
 	}
-}
-
-TEST(TurnCodec, AClickOfTheDialogueIsOneByteOfFlags)
-{
-	const CommandBlock block {
-	    .sequence = 0, .turn = 0, .actions = {DialogueClick {.click = true}, DialogueClick {.skipKey = true}}};
-	const std::vector<uint8_t> expected {k_Version, 1, 0, 0, 0, 0, 0, 0, 2, 47, 1, 47, 2};
-	EXPECT_EQ(Encode(block), expected);
-	const auto decoded = Decode(expected);
-	ASSERT_EQ(decoded.error, DecodeError::None);
-	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
-	ASSERT_EQ(actions.size(), 2);
-	EXPECT_EQ(std::get<DialogueClick>(actions[0]), (DialogueClick {.click = true}));
-	EXPECT_EQ(std::get<DialogueClick>(actions[1]), (DialogueClick {.skipKey = true}));
-
-	// A flag after the second is refused
-	auto wrong = expected;
-	wrong.back() = 4;
-	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }

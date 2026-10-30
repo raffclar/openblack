@@ -68,6 +68,7 @@
 #include "Gui/ChatControlsRules.h"
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
+#include "Gui/GameTexts.h"
 #include "Gui/GlyphTexture.h"
 #include "Gui/IncomingMessageStripRules.h"
 #include "Gui/PingDisplay.h"
@@ -103,8 +104,6 @@ using openblack::filesystem::Path;
 
 namespace
 {
-/// The scripts the game's text is in, in the order the game reads them
-constexpr std::array k_TextScripts = {"InfoScript2.txt", "InfoScriptPatch2.txt", "InfoScriptMultiplayer2.txt"};
 /// What the game tells the player when a save did not write its world files completely
 constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED";
 /// "Warning. The game may not be synchronised on your machine. Continue?" The game's text has this name.
@@ -335,22 +334,43 @@ std::shared_ptr<const land_thumbnail::LandThumbnail> LoadLandThumbnail(const std
 
 TextDatabase GameInterface::LoadTexts()
 {
-	auto& fileSystem = Locator::filesystem::value();
-	TextDatabase texts;
-	for (const auto* script : k_TextScripts)
-	{
-		const auto data = ReadIfExists(fileSystem.GetPath<Path::Scripts>() / script);
-		// The first is the help texts' script, whose texts the game's scripts refer to by number
-		if (script == k_TextScripts.front())
-		{
-			texts.AddHelpScript(data);
-		}
-		else
-		{
-			texts.AddScript(data);
-		}
-	}
-	return texts;
+	return LoadGameTexts();
+}
+
+void GameInterface::OpenOptions()
+{
+	_menu->Open();
+	_menu->ShowPage(GameMenu::Page::Options);
+}
+
+void GameInterface::CloseMenu()
+{
+	_menu->Close();
+}
+
+void GameInterface::SetMenuInsideTemple(bool inside)
+{
+	_menu->SetInsideTemple(inside);
+}
+
+void GameInterface::AskSaveQuestion(std::u16string question)
+{
+	_saveGameBoxes->Ask(std::move(question));
+}
+
+void GameInterface::AskSaveName(std::u16string_view name)
+{
+	_saveGameBoxes->AskName(name);
+}
+
+std::u16string_view GameInterface::GetSaveName() const
+{
+	return _saveGameBoxes->GetName();
+}
+
+void GameInterface::SetStoryHistoryShown(bool shown)
+{
+	_storyHistoryBox->SetShown(shown);
 }
 
 std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerName, MenuSettings settings,

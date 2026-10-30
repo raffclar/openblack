@@ -33,7 +33,6 @@
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "Game.h"
 #include "Input/GameActionMapInterface.h"
 #include "Inspector/CameraControl.h"
 #include "Inspector/ComponentReflection.h"
@@ -41,6 +40,7 @@
 #include "Inspector/GameControls.h"
 #include "Inspector/GameInput.h"
 #include "Inspector/GameProviders.h"
+#include "Inspector/GameSeamInterface.h"
 #include "Inspector/GameWorldEdit.h"
 #include "Inspector/InputControl.h"
 #include "Inspector/RunControl.h"
@@ -65,6 +65,12 @@ static_assert(inspector::GameProvider::k_SeededDate == TimeSystemInterface::k_De
 class GameRunTarget final: public inspector::RunTargetInterface
 {
 public:
+	/// With no seam, no scenario loads
+	explicit GameRunTarget(inspector::GameSeamInterface* seam)
+	    : _seam(seam)
+	{
+	}
+
 	[[nodiscard]] bool IsPaused() const override { return Locator::time::has_value() && Locator::time::value().IsPaused(); }
 	void SetPaused(bool paused) override
 	{
@@ -135,12 +141,11 @@ public:
 	[[nodiscard]] inspector::Json InputLock() const override { return inspector::InputLockState(); }
 	bool LoadScenario(std::string_view id) override
 	{
-		auto* game = Game::Instance();
-		if (game == nullptr || testbed_scenarios::Find(id) == nullptr)
+		if (_seam == nullptr || testbed_scenarios::Find(id) == nullptr)
 		{
 			return false;
 		}
-		return game->RequestScenario({.id = std::string(id), .benchmark = false});
+		return _seam->RequestScenario(id);
 	}
 	[[nodiscard]] std::vector<inspector::ScenarioSummary> Scenarios() const override
 	{
@@ -156,17 +161,21 @@ public:
 		}
 		return summaries;
 	}
+
+private:
+	inspector::GameSeamInterface* _seam;
 };
 
 } // namespace
 
-InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
+InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server, std::unique_ptr<inspector::GameSeamInterface> seam)
     : _server(std::move(server))
+    , _seam(std::move(seam))
     , _reflection(std::make_unique<entt::meta_ctx>())
-    , _runTarget(std::make_unique<GameRunTarget>())
+    , _runTarget(std::make_unique<GameRunTarget>(_seam.get()))
     , _worldEdit(std::make_unique<inspector::GameWorldEdit>())
     , _inputTarget(std::make_unique<inspector::GameInput>())
-    , _controls(std::make_unique<inspector::GameControlSet>(*_inputTarget))
+    , _controls(std::make_unique<inspector::GameControlSet>(*_inputTarget, _seam.get()))
 {
 	// Points of the world are found on the screen through the view drawn, an override's while one is shown
 	_inputTarget->SetCamera(_controls->camera);
@@ -201,7 +210,7 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	_autopilot->SetRecorder(
 	    [input = _input](uint64_t frame, const inspector::InputEvent& event) { input->Record(frame, event); });
 	// The game's dialogs are clicked through the input's queue, behind any input asked for before
-	_controls->gui.SetInputSender(
+	_controls->gui->SetInputSender(
 	    [input = _input](std::span<const inspector::InputEvent> events) { return input->Send(events); });
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Inspector listening on 127.0.0.1:{}", _server->Port());
@@ -423,10 +432,8 @@ void InspectorSystem::Service()
 	_controls->camera.Unpin();
 	// A scenario asked for is loading from the moment it is asked until its things are laid out: the frames before the
 	// scenarios' window starts it answer as loading too, so that nothing reads the testbed without them
-	const auto* game = Game::Instance();
-	const auto pending = game != nullptr && game->PendingScenario().has_value()
-	                         ? std::optional<std::string_view>(game->PendingScenario()->id)
-	                         : std::nullopt;
+	const auto pendingId = _seam != nullptr ? _seam->GetPendingScenario() : std::nullopt;
+	const auto pending = pendingId.has_value() ? std::optional<std::string_view>(*pendingId) : std::nullopt;
 	if (const auto loading = inspector::ScenarioLoading(pending); loading.has_value())
 	{
 		_server->Poll([this, &loading](std::string_view line) {

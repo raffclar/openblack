@@ -140,6 +140,7 @@
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
+#include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
@@ -173,6 +174,7 @@
 #include "ECS/ScriptDelete.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
+#include "ECS/ScriptObject.h"
 #include "ECS/ScriptPoison.h"
 #include "ECS/ScriptPopulate.h"
 #include "ECS/ScriptSpotVisuals.h"
@@ -272,7 +274,6 @@
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/ScriptTexts.h"
 #include "Hand/HandClickRules.h"
@@ -589,11 +590,15 @@ std::string PopString()
 }
 
 /// Whether a thing is one of the world's objects, which a miracle can be cast on, rather than something with only a place,
-/// such as a town or a miracle: anything with a model but the hand, a creature, or a field
+/// such as a town or a miracle
 bool IsScriptObject(const ecs::Registry& registry, entt::entity thing)
 {
-	return (registry.AnyOf<ecs::components::Mesh>(thing) && !registry.AnyOf<ecs::components::Hand>(thing)) ||
-	       registry.AnyOf<ecs::components::Creature, ecs::components::Field>(thing);
+	return ecs::script_object::IsObject({.model = registry.AnyOf<ecs::components::Mesh>(thing),
+	                                     .hand = registry.AnyOf<ecs::components::Hand>(thing),
+	                                     .creature = registry.AnyOf<ecs::components::Creature>(thing),
+	                                     .field = registry.AnyOf<ecs::components::Field>(thing),
+	                                     .globe = registry.AnyOf<ecs::components::OneOffSpellSeed>(thing),
+	                                     .seed = registry.AnyOf<ecs::components::SpellSeed>(thing)});
 }
 
 /// A football made by a script goes to the nearest town, however far, for its people to play with; a town that already
@@ -3575,8 +3580,7 @@ void PlaySoundEffect() // 043 PLAY_SOUND_EFFECT
 /// The game's music, none before the game has started it
 static audio::GameMusic* ScriptGameMusic()
 {
-	auto* game = Game::Instance();
-	return game != nullptr ? game->GetGameMusic() : nullptr;
+	return Locator::gameMusic::has_value() ? &Locator::gameMusic::value() : nullptr;
 }
 
 /// The music that the scripts start, as the world sees it
@@ -3676,6 +3680,19 @@ static void DeleteNow(entt::entity object)
 	}
 	else
 	{
+		// A shield miracle takes its shield with it at once
+		if (const auto* spell = registry.TryGet<const ecs::components::Spell>(object);
+		    spell != nullptr && spell->spellClass == magic::SpellClass::Shield)
+		{
+			if (Locator::magicShieldSystem::has_value())
+			{
+				Locator::magicShieldSystem::value().RemoveWithSpell(object);
+			}
+			if (Locator::magicSystem::has_value())
+			{
+				Locator::magicSystem::value().CloseDown(object);
+			}
+		}
 		ecs::world_objects::Remove(object);
 	}
 }
@@ -7190,13 +7207,8 @@ void HasPlayerMagic() // 245 HAS_PLAYER_MAGIC
 
 void SpiritSpeaks() // 246 SPIRIT_SPEAKS
 {
-	const auto text = Pop().uintVal;
+	const auto text = help::script_spirits::TextToAskSpeakerOf(Pop().uintVal, help::k_HelpTextCount);
 	const auto spirit = ScriptHelpSpirit(Pop().intVal);
-	if (text >= help::k_HelpTextCount)
-	{
-		Pushb(false);
-		return;
-	}
 	const auto narrator = Locator::helpTextSystem::value().GetNarrator(text);
 	Pushb(help::script_spirits::SpiritWhoTalks(narrator) == spirit);
 }

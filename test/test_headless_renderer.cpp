@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 
+#include "Graphics/GraphicsLibrary.h"
 #include "Graphics/HeadlessRenderer.h"
 #include "Graphics/ScreenshotCapture.h"
 
