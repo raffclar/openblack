@@ -12,7 +12,8 @@
 #include "HandDemoSystem.h"
 
 #include <HNDFile.h>
-#include <SDL.h>
+#include <SDL_events.h>
+#include <SDL_mouse.h>
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
@@ -34,6 +35,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
+#include "Input/InputDeviceInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Windowing/WindowingInterface.h"
@@ -99,7 +101,7 @@ void PushInjected(SDL_Event& event)
 {
 	event.motion.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
 	input::MarkInjected(event);
-	SDL_PushEvent(&event);
+	input::Device().PushEvent(event);
 }
 
 /// The mouse button a recorded button message is: the one that grips the land, or the action button

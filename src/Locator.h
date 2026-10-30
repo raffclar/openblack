@@ -87,7 +87,8 @@ class RendererInterface;
 namespace input
 {
 class GameActionInterface;
-}
+class InputDeviceInterface;
+} // namespace input
 
 namespace lhvm
 {
@@ -331,6 +332,9 @@ struct Locator
 	using screenFade = entt::locator<openblack::gui::ScreenFade>;
 	using camera = entt::locator<Camera>;
 	using gameActionSystem = entt::locator<input::GameActionInterface>;
+	/// The keyboard, the mouse and the event queue of the window system. The dedicated server has no device (see
+	/// input::Device).
+	using inputDevice = entt::locator<input::InputDeviceInterface>;
 	using rendereringSystem = entt::locator<ecs::systems::RenderingSystemInterface>;
 	using rendererInterface = entt::locator<graphics::RendererInterface>;
 	/// The device that makes the textures and buffers of the world. The dedicated server has no device.

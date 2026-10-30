@@ -15,7 +15,6 @@
 #include <ranges>
 
 #include <LNDFile.h>
-#include <bgfx/bgfx.h>
 
 #include "Graphics/GraphicsDeviceInterface.h"
 #include "Graphics/IndexBuffer.h"

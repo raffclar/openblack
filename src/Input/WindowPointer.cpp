@@ -9,10 +9,9 @@
 
 #include "WindowPointer.h"
 
-#include <SDL_mouse.h>
-
 #include "Common/Platform.h"
 #include "GameActionMapInterface.h"
+#include "InputDeviceInterface.h"
 #include "Locator.h"
 
 glm::ivec2 openblack::input::WindowPointer()
@@ -24,9 +23,7 @@ glm::ivec2 openblack::input::WindowPointer()
 			return Locator::gameActionSystem::value().GetPointerPosition();
 		}
 	}
-	glm::ivec2 position {0, 0};
-	SDL_GetMouseState(&position.x, &position.y);
-	return position;
+	return Device().Mouse().position;
 }
 
 void openblack::input::PointWindowEvent(SDL_Event& event)

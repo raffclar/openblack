@@ -26,13 +26,9 @@
 #include "Visual/RenderModes.h"
 #include "Visual/RenderPass.h"
 
-namespace bgfx
-{
-struct Memory;
-}
-
 namespace openblack::graphics
 {
+struct DeviceMemory;
 class L3DMesh;
 class Mesh;
 class ShaderProgram;
@@ -187,12 +183,12 @@ public:
 	[[nodiscard]] const std::vector<SurfacePrimitive>& GetSurfacePrimitives() const { return _surfacePrimitives; }
 
 private:
-	/// The submesh's vertices as they are drawn, in bgfx memory
-	[[nodiscard]] const bgfx::Memory* PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex) const;
+	/// The submesh's vertices as they are drawn, in device memory
+	[[nodiscard]] const graphics::DeviceMemory* PackVertices(const l3d::L3DFile& l3d, uint32_t meshIndex) const;
 	/// The box about the submesh's vertices, as they are placed by its bones
 	void BoundVertices(const l3d::L3DFile& l3d, uint32_t meshIndex);
 	/// The blend source texture of count packed vertices, where the renderer can read one in the vertex shader
-	void CreateBlendSource(const bgfx::Memory* vertices, uint32_t count);
+	void CreateBlendSource(const graphics::DeviceMemory* vertices, uint32_t count);
 
 	graphics::L3DMesh& _l3dMesh;
 	/// Which of its file's submeshes it is

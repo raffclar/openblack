@@ -192,6 +192,7 @@
 #include "Gui/TextDatabase.h"
 #include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
+#include "Input/InputDeviceInterface.h"
 #include "LHVM.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkSession.h"
@@ -1051,6 +1052,7 @@ void openblack::ShutDownServices()
 	Locator::entitiesRegistry::reset();
 	Locator::rendererInterface::reset();
 	Locator::windowing::reset();
+	Locator::inputDevice::reset();
 	Locator::events::reset();
 	Locator::camera::reset();
 	Locator::config::reset();

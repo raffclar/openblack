@@ -15,7 +15,7 @@
 #include <iterator>
 #include <vector>
 
-#include "TempleVillagers.h"
+#include "TempleVillagersSurvey.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -108,7 +108,7 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .temples = {{.offset = k_Temple}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 0.5f,
-	    .debugWindow = debug::gui::k_TempleVillagersWindow,
+	    .debugWindow = temple_villagers::k_DebugWindowName,
 	});
 	all.push_back({
 	    .id = "footpaths.town_joins_site",
@@ -151,7 +151,7 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .commands = {{.kind = Command::Kind::EnterTemple, .delaySeconds = 60.0f, .value = k_MainRoom}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 1.0f,
-	    .debugWindow = debug::gui::k_TempleVillagersWindow,
+	    .debugWindow = temple_villagers::k_DebugWindowName,
 	});
 	all.push_back({
 	    .id = "town.worship_site_pour",

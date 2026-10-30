@@ -25,7 +25,7 @@ namespace openblack::debug::gui
 {
 
 /// The name of the temple villagers' window, which its testbed scenario opens
-constexpr std::string_view k_TempleVillagersWindow = "Temple Villagers";
+constexpr std::string_view k_TempleVillagersWindow = temple_villagers::k_DebugWindowName;
 
 /// The villagers around the player's temple, for testing them: its worship sites and the places at them, the towns that
 /// worship there with their share of people at worship, every villager worshipping, on its way or near with what it is
