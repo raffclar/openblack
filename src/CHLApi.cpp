@@ -7182,13 +7182,8 @@ void HasPlayerMagic() // 245 HAS_PLAYER_MAGIC
 
 void SpiritSpeaks() // 246 SPIRIT_SPEAKS
 {
-	const auto text = Pop().uintVal;
+	const auto text = help::script_spirits::TextToAskSpeakerOf(Pop().uintVal, help::k_HelpTextCount);
 	const auto spirit = ScriptHelpSpirit(Pop().intVal);
-	if (text >= help::k_HelpTextCount)
-	{
-		Pushb(false);
-		return;
-	}
 	const auto narrator = Locator::helpTextSystem::value().GetNarrator(text);
 	Pushb(help::script_spirits::SpiritWhoTalks(narrator) == spirit);
 }
