@@ -175,6 +175,7 @@ TEST(OnlineMapStore, TheFolderStoreKeepsMapsInTheProfileFolder)
 {
 	const test::TestTempFolder folder;
 	filesystem::DefaultFileSystem files;
+	std::filesystem::create_directories(folder.Path() / "game");
 	files.SetGamePath(folder.Path() / "game");
 	online::FolderMapStore store(files, folder.Path() / "profile");
 	const auto bytes = Bytes("map bytes");
@@ -215,9 +216,9 @@ TEST(OnlineMapStore, TheLandOfTheStartComesFromTheStoreFirst)
 {
 	const test::TestTempFolder folder;
 	filesystem::DefaultFileSystem files;
-	files.SetGamePath(folder.Path() / "game");
 	std::filesystem::create_directories(folder.Path() / "game" / "Online Maps");
 	std::filesystem::create_directories(folder.Path() / "game" / "Scripts");
+	files.SetGamePath(folder.Path() / "game");
 	ASSERT_TRUE(files.WriteAll(folder.Path() / "game" / "Online Maps" / "mpm_2p_1.map", Bytes("game")));
 	FakeStore store;
 	store.files["obm_32p_1.map"] = Bytes("sent");
