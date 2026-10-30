@@ -71,7 +71,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerPhysics.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleHeartPassOn.h"
 #include "ECS/TownHomes.h"

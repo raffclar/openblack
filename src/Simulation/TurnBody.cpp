@@ -88,7 +88,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PuzzleGameSystemInterface.h"
@@ -785,7 +785,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	{
 		// The particle effects that no miracle owns take a step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
-		Locator::particleSystem::value().ProcessTurn();
+		Locator::particleRuleSystem::value().ProcessTurn();
 		// A visual that a script holds as a thing takes its thing with it when it ends. The record of the simulation
 		// tells which visuals still run.
 		if (Locator::effectRequestSystem::has_value() && Locator::entitiesRegistry::has_value())

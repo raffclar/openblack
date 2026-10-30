@@ -43,7 +43,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -270,7 +270,7 @@ void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std:
 	const auto bubble = OneOffSpellSeed::k_MeshId.value();
 	const glm::vec3 centre = meshes.Contains(bubble) ? meshes.Handle(bubble)->GetBoundingBox().Center() : glm::vec3(0.0f);
 	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
-	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	auto* particles = Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 
 	std::vector<entt::entity> globes;
 	registry.Each<OneOffSpellSeed, const Transform>(
@@ -351,7 +351,7 @@ void MiracleFxSystem::UpdateGlobes(std::chrono::milliseconds frameRealTime, std:
 		    if (found == _holderEffects.end())
 		    {
 			    const auto effect = particles->Start(seed.holderParticle, point, scale);
-			    if (effect == ParticleSystemInterface::k_NoEffect)
+			    if (effect == ParticleRuleSystemInterface::k_NoEffect)
 			    {
 				    return;
 			    }
@@ -446,11 +446,11 @@ void MiracleFxSystem::Reset()
 {
 	_runners.clear();
 	_ring = nullptr;
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
 		for (const auto& [globe, effect] : _holderEffects)
 		{
-			Locator::particleSystem::value().Delete(effect);
+			Locator::particleRuleSystem::value().Delete(effect);
 		}
 	}
 	_holderEffects.clear();

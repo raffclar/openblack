@@ -215,7 +215,7 @@
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -1231,11 +1231,11 @@ void Runner::Stop()
 		_ownsPointer = false;
 	}
 	// Its particle effects die away
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
 		for (const auto& particle : _particles)
 		{
-			Locator::particleSystem::value().CloseDown(particle.effect);
+			Locator::particleRuleSystem::value().CloseDown(particle.effect);
 		}
 	}
 	_particles.clear();
@@ -5153,14 +5153,14 @@ void Runner::StartHandCast(size_t index)
 
 uint32_t Runner::StartParticle(size_t index) const
 {
-	if (!Locator::particleSystem::has_value() || !Locator::terrainSystem::has_value())
+	if (!Locator::particleRuleSystem::has_value() || !Locator::terrainSystem::has_value())
 	{
-		return ecs::systems::ParticleSystemInterface::k_NoEffect;
+		return ecs::systems::ParticleRuleSystemInterface::k_NoEffect;
 	}
 	const auto& particle = _scenario->particles.at(index);
 	const auto point = MapPoint(_middle, particle.offset);
 	const glm::vec3 position {point.x, Locator::terrainSystem::value().GetHeightAt(point) + particle.height, point.y};
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	const auto effect = particle.file.empty() ? particles.Start(particle.type, position, particle.magnitude)
 	                                          : particles.Start(particle.file, position, particle.magnitude);
 	particles.SetPlayer(effect, particle.player);
@@ -5290,11 +5290,11 @@ void Runner::UpdateRewards()
 
 void Runner::UpdateParticles(float seconds)
 {
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::particleRuleSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	for (size_t i = 0; i < _particles.size(); ++i)
 	{
 		auto& running = _particles.at(i);

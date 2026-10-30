@@ -66,6 +66,8 @@ public:
 	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override;
 	void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> symbols) override;
 	void Reset() override;
+	void SetShown(EffectHandle handle, bool shown) override;
+	bool Renumber(EffectHandle from, EffectHandle to) override;
 	[[nodiscard]] EffectHandle NextHandle() const override { return _next; }
 
 	void EffectStarted(EffectHandle handle) override { _running.insert(handle); }
