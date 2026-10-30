@@ -555,6 +555,23 @@ void WorshipSiteSystem::BuildBy(entt::entity site, float share)
 	}
 }
 
+void WorshipSiteSystem::SetBuilt(entt::entity site, float built)
+{
+	auto& registry = _world->Entities();
+	if (!registry.AllOf<WorshipSite>(site))
+	{
+		return;
+	}
+	const auto value = std::max(built, 0.0f);
+	if (value >= 1.0f)
+	{
+		Built(site);
+		return;
+	}
+	// Under the whole, the site stands part built, also a site that stood built before
+	registry.AssignOrReplace<BuildProgress>(site, value);
+}
+
 bool WorshipSiteSystem::IsBuilt(entt::entity site) const
 {
 	const auto& registry = _world->Entities();

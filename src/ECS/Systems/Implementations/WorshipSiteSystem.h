@@ -59,6 +59,7 @@ public:
 	[[nodiscard]] float TotalChantsAvailable(entt::entity site) const override;
 	float TakeChantsForVirtualInfluence(PlayerNames player, uint32_t interfaces) override;
 	void BuildBy(entt::entity site, float share) override;
+	void SetBuilt(entt::entity site, float built) override;
 	[[nodiscard]] bool IsBuilt(entt::entity site) const override;
 	[[nodiscard]] entt::entity TempleOf(PlayerNames player) const override;
 	[[nodiscard]] std::optional<glm::vec2> PlaceAt(entt::entity site, SitePlace place) const override;

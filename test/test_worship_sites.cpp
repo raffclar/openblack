@@ -539,6 +539,32 @@ TEST(WorshipSiteSystem, BuildingUpASiteFinishesItAtTheWhole)
 	EXPECT_TRUE(f.registry.Get<const WorshipSite>(site).buildRequests.empty());
 }
 
+TEST(WorshipSiteSystem, AScriptSetsHowMuchOfASiteIsBuiltAndAtTheWholeItStandsBuilt)
+{
+	Fixture f;
+	f.Town(0, PlayerNames::PLAYER_ONE, Tribe::NORSE, {0.0f, 0.0f, -50.0f});
+	const auto temple = f.Temple(PlayerNames::PLAYER_ONE);
+	f.system->AddTemple(temple, 0.0f, true);
+	const auto site = *std::ranges::find_if(f.registry.Get<const CitadelWorship>(temple).sites,
+	                                        [](auto entity) { return entity != entt::null; });
+	f.system->SetBuilt(site, -0.5f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const BuildProgress>(site).built, 0.0f);
+	f.system->SetBuilt(site, 0.7f);
+	EXPECT_FLOAT_EQ(f.registry.Get<const BuildProgress>(site).built, 0.7f);
+	EXPECT_FALSE(f.system->IsBuilt(site));
+	EXPECT_TRUE(f.world->closedSites.empty());
+	f.system->SetBuilt(site, 1.0f);
+	EXPECT_TRUE(f.system->IsBuilt(site));
+	EXPECT_FALSE(f.registry.AllOf<BuildProgress>(site));
+	EXPECT_TRUE(f.registry.Get<const WorshipSite>(site).buildRequests.empty());
+	ASSERT_EQ(f.world->closedSites.size(), 1u);
+	EXPECT_EQ(f.world->closedSites.front(), site);
+	// A built site set under the whole stands part built again
+	f.system->SetBuilt(site, 0.25f);
+	EXPECT_FALSE(f.system->IsBuilt(site));
+	EXPECT_FLOAT_EQ(f.registry.Get<const BuildProgress>(site).built, 0.25f);
+}
+
 TEST(WorshipSiteSystem, ASiteWearsItsTemplesSkinOnceTheTempleHasOne)
 {
 	Fixture f;
