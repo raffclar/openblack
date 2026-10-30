@@ -29,6 +29,9 @@
 namespace openblack::temple_villagers
 {
 
+/// The name of the debug window of the temple villagers, which its testbed scenario opens
+constexpr std::string_view k_DebugWindowName = "Temple Villagers";
+
 /// How a villager stands with the temple
 enum class Standing : uint8_t
 {

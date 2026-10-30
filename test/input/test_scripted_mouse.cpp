@@ -25,6 +25,7 @@
 #include <Input/GameActionMap.h>
 #include <Input/InjectedInput.h>
 #include <Input/ScriptedMouse.h>
+#include <Input/SdlInputDevice.h>
 #include <Inspector.h>
 #include <Inspector/GameInput.h>
 #include <Inspector/InputControl.h>
@@ -76,6 +77,7 @@ protected:
 	{
 		ASSERT_EQ(SDL_InitSubSystem(SDL_INIT_EVENTS), 0) << SDL_GetError();
 		SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+		Locator::inputDevice::emplace<input::SdlInputDevice>();
 		Locator::windowing::emplace<StillWindow>();
 		_actions = &static_cast<input::GameActionMap&>(Locator::gameActionSystem::emplace<input::GameActionMap>());
 		auto provider = std::make_unique<inspector::InputProvider>(_input);
@@ -87,6 +89,7 @@ protected:
 	{
 		Locator::gameActionSystem::reset();
 		Locator::windowing::reset();
+		Locator::inputDevice::reset();
 		Locator::config::reset();
 		SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
 		SDL_QuitSubSystem(SDL_INIT_EVENTS);

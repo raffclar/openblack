@@ -37,7 +37,6 @@
 #include <RawImage.h>
 #include <SASFile.h>
 #include <StackedBitmap.h>
-#include <bgfx/bgfx.h>
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
@@ -397,8 +396,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
 		texture->Describe(side, side, layers, graphics::TextureFormat::BGR5A1);
 		return texture;
 	}
-	const auto* caps = Locator::graphicsDevice::value().GetCaps();
-	if (caps == nullptr || (caps->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0)
+	if (Locator::graphicsDevice::value().HasTextureFormat(graphics::TextureFormat::BGR5A1, graphics::TextureUse::Texture2D))
 	{
 		texture->Create(
 		    side, side, layers, graphics::TextureFormat::BGR5A1, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,

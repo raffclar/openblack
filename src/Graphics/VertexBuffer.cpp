@@ -17,7 +17,6 @@
 
 #include "Common/MainThreadQueue.h"
 #include "GraphicsDeviceInterface.h"
-#include "GraphicsHandleBgfx.h"
 #include "Locator.h"
 #include "MainThreadWork.h"
 #include "Visual/UploadPacer.h"
@@ -29,10 +28,10 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
     , _vertexCount(0)
     , _vertexDecl(std::move(decl))
     , _strideBytes(0)
-    , _handle(BGFX_INVALID_HANDLE)
-    , _dynamicHandle(BGFX_INVALID_HANDLE)
+    , _handle(InvalidHandle<VertexBufferHandle>())
+    , _dynamicHandle(InvalidHandle<DynamicVertexBufferHandle>())
     , _dynamic(dynamic)
-    , _layoutHandle(BGFX_INVALID_HANDLE)
+    , _layoutHandle(InvalidHandle<VertexLayoutHandle>())
 {
 	// assert(vertices != nullptr);
 	assert(!_vertexDecl.empty());
@@ -51,14 +50,15 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 		_strideBytes += strides.at(static_cast<size_t>(d.type)).at(d.num - 1);
 	}
 
-	const auto* bgfxMem = reinterpret_cast<const bgfx::Memory*>(mem);
+	const auto* bgfxMem = static_cast<const DeviceMemory*>(mem);
+	const auto bytes = static_cast<uint32_t>(Locator::graphicsDevice::value().Bytes(bgfxMem).size());
 
-	_vertexCount = bgfxMem->size / _strideBytes;
+	_vertexCount = bytes / _strideBytes;
 
 	// The graphics library makes the buffer on the main thread: a turn on another thread gives that work to the main
 	// thread, which makes the buffer before the next draw
-	PostToMainThread(MainThreadApi::Graphics, [this, bgfxMem] {
-		UploadPacer::Pace(bgfxMem->size);
+	PostToMainThread(MainThreadApi::Graphics, [this, bgfxMem, bytes] {
+		UploadPacer::Pace(bytes);
 		const auto& device = Locator::graphicsDevice::value();
 		if (_dynamic)
 		{
@@ -85,15 +85,15 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 VertexBuffer::~VertexBuffer() noexcept
 {
 	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::~VertexBuffer");
-	if (bgfx::isValid(toBgfx(_handle)))
+	if (IsValidHandle(_handle))
 	{
 		Locator::graphicsDevice::value().Destroy(_handle);
 	}
-	if (bgfx::isValid(toBgfx(_dynamicHandle)))
+	if (IsValidHandle(_dynamicHandle))
 	{
 		Locator::graphicsDevice::value().Destroy(_dynamicHandle);
 	}
-	if (bgfx::isValid(toBgfx(_layoutHandle)))
+	if (IsValidHandle(_layoutHandle))
 	{
 		Locator::graphicsDevice::value().Destroy(_layoutHandle);
 	}
@@ -116,7 +116,7 @@ uint32_t VertexBuffer::GetSizeInBytes() const noexcept
 
 bool VertexBuffer::IsValid() const noexcept
 {
-	return _dynamic ? bgfx::isValid(toBgfx(_dynamicHandle)) : bgfx::isValid(toBgfx(_handle));
+	return _dynamic ? IsValidHandle(_dynamicHandle) : IsValidHandle(_handle);
 }
 
 void VertexBuffer::Update(const void* memory) const
@@ -128,7 +128,7 @@ void VertexBuffer::Update(uint32_t firstVertex, const void* memory) const
 {
 	assert(_dynamic);
 	// A turn on another thread gives the update to the main thread. It reads whether the buffer was made only then.
-	const auto* vertices = reinterpret_cast<const bgfx::Memory*>(memory);
+	const auto* vertices = static_cast<const DeviceMemory*>(memory);
 	PostToMainThread(MainThreadApi::Graphics, [this, firstVertex, vertices] {
 		if (!IsValid())
 		{

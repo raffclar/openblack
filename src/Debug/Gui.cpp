@@ -1310,6 +1310,16 @@ void Gui::ShowVillagerNames() noexcept
 	    });
 }
 
+void Gui::KeepOffTheMouse(bool off) noexcept
+{
+	if (ImGui::GetCurrentContext() == nullptr)
+	{
+		return;
+	}
+	auto& io = ImGui::GetIO();
+	io.ConfigFlags = off ? (io.ConfigFlags | ImGuiConfigFlags_NoMouse) : (io.ConfigFlags & ~ImGuiConfigFlags_NoMouse);
+}
+
 void Gui::SetInputLock(bool locked, bool pointerScripted) noexcept
 {
 	// While the player's input is locked out, the debug windows take nothing from the mouse either

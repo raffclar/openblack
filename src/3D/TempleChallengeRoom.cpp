@@ -14,7 +14,6 @@
 #include <vector>
 
 #include <SavePictureMaker.h>
-#include <bgfx/bgfx.h>
 #include <fmt/format.h>
 
 #include "3D/L3DMesh.h"
@@ -24,7 +23,6 @@
 #include "ECS/Components/ChallengeRecord.h"
 #include "ECS/Registry.h"
 #include "Graphics/GraphicsDeviceInterface.h"
-#include "Graphics/GraphicsHandleBgfx.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -54,9 +52,9 @@ void Upload(std::optional<graphics::TextureHandle>& texture, std::span<const uin
 		Locator::graphicsDevice::value().Destroy(*texture);
 		texture.reset();
 	}
-	constexpr uint64_t k_Sampler = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
-	const auto* caps = Locator::graphicsDevice::value().GetCaps();
-	if (compressed && (caps->formats[bgfx::TextureFormat::BC1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0)
+	constexpr uint64_t k_Sampler = graphics::texture_flags::k_ClampU | graphics::texture_flags::k_ClampV;
+	if (compressed && Locator::graphicsDevice::value().HasTextureFormat(graphics::TextureFormat::BlockCompression1,
+	                                                                    graphics::TextureUse::Texture2D))
 	{
 		const auto& device = Locator::graphicsDevice::value();
 		texture = device.CreateTexture2D(width, height, 1, graphics::TextureFormat::BlockCompression1, k_Sampler,
@@ -68,12 +66,13 @@ void Upload(std::optional<graphics::TextureHandle>& texture, std::span<const uin
 		const auto rgb =
 		    compressed ? gamesave::DecodeBlocks(picture, width, height) : std::vector<uint8_t>(picture.begin(), picture.end());
 		const auto* memory = Locator::graphicsDevice::value().Alloc(static_cast<uint32_t>(texels * 4));
+		const auto bytes = Locator::graphicsDevice::value().Bytes(memory);
 		for (size_t i = 0; i < texels; ++i)
 		{
-			memory->data[(i * 4) + 0] = rgb[(i * 3) + 0];
-			memory->data[(i * 4) + 1] = rgb[(i * 3) + 1];
-			memory->data[(i * 4) + 2] = rgb[(i * 3) + 2];
-			memory->data[(i * 4) + 3] = 0xFF;
+			bytes[(i * 4) + 0] = rgb[(i * 3) + 0];
+			bytes[(i * 4) + 1] = rgb[(i * 3) + 1];
+			bytes[(i * 4) + 2] = rgb[(i * 3) + 2];
+			bytes[(i * 4) + 3] = 0xFF;
 		}
 		texture = Locator::graphicsDevice::value().CreateTexture2D(width, height, 1, graphics::TextureFormat::RGBA8, k_Sampler,
 		                                                           memory);

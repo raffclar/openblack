@@ -320,6 +320,8 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"gameMusic", "audio.state"},
     LocatorCoverage {"camera", "camera.state"},
     LocatorCoverage {"gameActionSystem", "players.input"},
+    // The input device keeps no state of the game. The keys and the buttons it gives show in the player input.
+    LocatorCoverage {"inputDevice", "players.input"},
     LocatorCoverage {"rendereringSystem", "engine.frame"},
     LocatorCoverage {"rendererInterface", "engine.frame"},
     // The device makes what the renderer draws, which engine.frame shows
