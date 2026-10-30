@@ -31,6 +31,7 @@
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
+#include "ECS/GameEndConditions.h"
 #include "Server/DedicatedServer.h"
 
 namespace
@@ -72,8 +73,8 @@ int main(int argc, char* argv[])
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
 		("gods-need-no-temple", "Tests: a god with no temple stays in the game, for a land that makes no temple at its start (a story land). Each client needs the same switch (--sim-gods-need-no-temple).")
 		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0). Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
-		("time-limit", "Tests: the time limit of the network game in minutes, in place of the default 30. The start sends it to every client.", cxxopts::value<uint32_t>())
-		("conditions", "Tools: the winning conditions of the network game, as the host picks them: [LAND:]NAME=VALUE,... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0. The values must be in the limits of the land (or of LAND) in that file. The start sends them to every client.", cxxopts::value<std::string>())
+		("time-limit", "The time limit of the network game in minutes, from 10 to 1440 (24 hours) as the host picks it, in place of the default 30. A build with the developer tools also accepts 1 to 9 minutes for tests. The start sends it to every client.", cxxopts::value<uint32_t>())
+		("conditions", "The winning conditions of the network game, as the host picks them: [LAND:]NAME=VALUE,... with the names of Online Maps/ConditionTemplate.txt or their numbers from 0. The values must be in the limits of the land (or of LAND) in that file. The start sends them to every client.", cxxopts::value<std::string>())
 		("all-computer-gods", "Tools: every god with a citadel is a computer god, and the room has no human god. The game starts at once: with --gods N the world turns when N observers joined (for the AI soak).")
 		("ai-seed", "Tools: the seed of the personalities of the computer gods. Each client takes it from the start.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
@@ -180,7 +181,15 @@ int main(int argc, char* argv[])
 		}
 		if (result.count("time-limit") != 0)
 		{
-			settings.timeLimit = result["time-limit"].as<uint32_t>();
+			const auto minutes = result["time-limit"].as<uint32_t>();
+			if (const auto refusal = openblack::game_end::TimeLimitRefusal(minutes, openblack::developer_tools::k_Built);
+			    refusal.has_value())
+			{
+				std::cerr << "The time limit of --time-limit is " << minutes << " minutes, but " << *refusal << "."
+				          << std::endl;
+				return EXIT_FAILURE;
+			}
+			settings.timeLimit = minutes;
 		}
 		if (result.count("conditions") != 0)
 		{
