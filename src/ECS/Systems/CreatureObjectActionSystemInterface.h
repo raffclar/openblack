@@ -177,6 +177,12 @@ public:
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity /*object*/) const { return false; }
 	/// What kind of thing something is to a creature's hands, and what its kind says of its being picked up
 	[[nodiscard]] virtual creature_object_actions::KindFacts KindOf(entt::entity /*object*/) const { return {}; }
+	/// The sizes and weights that decide whether a creature can lift a thing, if the creature can measure them
+	[[nodiscard]] virtual std::optional<creature_object_actions::LiftFacts> LiftFactsOf(entt::entity /*creature*/,
+	                                                                                    entt::entity /*object*/) const
+	{
+		return std::nullopt;
+	}
 	/// Whether a creature may throw a thing to impress, by its kind, its height and the creature's weight
 	[[nodiscard]] virtual bool CanThrowToImpress(entt::entity /*creature*/, entt::entity /*object*/) const { return false; }
 	/// Whether a creature can knock something down: trees, homes and things, statics and rocks among them

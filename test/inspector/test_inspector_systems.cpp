@@ -30,6 +30,7 @@
 #include <ECS/Components/Mesh.h>
 #include <ECS/Components/Physics.h>
 #include <ECS/Components/SoundTag.h>
+#include <ECS/Components/StoragePit.h>
 #include <ECS/Components/Town.h>
 #include <ECS/Components/Transform.h>
 #include <ECS/Components/Tree.h>
@@ -662,4 +663,56 @@ TEST(InspectorCreature, ReactionsAreShownAndSetForDebugging)
 	EXPECT_TRUE(registry.AllOf<ecs::components::CreatureReactionsOff>(creature));
 	// Without a notice it sets nothing
 	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.set_reactions"})").Ok());
+}
+
+// The orders that the inspector gives a creature go to the game as orders, with the thing, the point and the eat action
+// that the request names
+TEST(InspectorCreature, OrdersGoToTheGameWithWhatTheyName)
+{
+	ecs::Registry registry;
+	const auto creature = Placed(registry, glm::vec3(0.0f));
+	registry.Assign<CreatureMindState>(creature);
+	const auto villager = Placed(registry, glm::vec3(5.0f));
+	const auto store = Placed(registry, glm::vec3(9.0f));
+	registry.Assign<StoragePit>(store);
+
+	std::vector<CreatureOrder> given;
+	bool takes = true;
+	Inspector inspector;
+	inspector.Add(MakeCreatureProvider({.world = {.registry = [&registry]() -> const ecs::Registry* { return &registry; },
+	                                              .info = []() -> const InfoConstants* { return nullptr; }},
+	                                    .tables = []() -> const creature_mind_tables::Tables* { return nullptr; },
+	                                    .order =
+	                                        [&given, &takes](entt::entity /*creature*/, const CreatureOrder& order) {
+		                                        given.push_back(order);
+		                                        return CreatureOrderResult {.taken = takes, .detail = takes ? "doing" : "busy"};
+	                                        }}));
+
+	const auto picked = Ask(inspector, R"({"query": "creature.pick_up", "params": {"object": )" + IdOf(villager) + "}}");
+	EXPECT_EQ(picked["taken"], true);
+	ASSERT_EQ(given.size(), 1);
+	EXPECT_EQ(given.back().kind, CreatureOrder::Kind::PickUp);
+	EXPECT_EQ(given.back().object, villager);
+
+	Ask(inspector, R"({"query": "creature.put_down"})");
+	EXPECT_EQ(given.back().kind, CreatureOrder::Kind::PutDown);
+	EXPECT_FALSE(given.back().point.has_value());
+	Ask(inspector, R"({"query": "creature.put_down", "params": {"point": [10, 20], "throw": true}})");
+	EXPECT_EQ(given.back().kind, CreatureOrder::Kind::Throw);
+	EXPECT_EQ(given.back().point, glm::vec2(10.0f, 20.0f));
+
+	Ask(inspector, R"({"query": "creature.eat", "params": {"object": )" + IdOf(store) + "}}");
+	EXPECT_EQ(given.back().kind, CreatureOrder::Kind::Eat);
+	EXPECT_EQ(given.back().action, "EatFromStoragePit");
+	Ask(inspector, R"({"query": "creature.eat", "params": {"object": )" + IdOf(villager) + R"(, "action": "EatAlive"}})");
+	EXPECT_EQ(given.back().action, "EatAlive");
+	EXPECT_EQ(EatActionFor(registry, villager), "EatAfterExamining");
+
+	// A request that names no thing, a throw with no point and an order the creature refuses are errors
+	const auto count = given.size();
+	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.pick_up"})").Ok());
+	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.put_down", "params": {"throw": true}})").Ok());
+	EXPECT_EQ(given.size(), count);
+	takes = false;
+	EXPECT_FALSE(AskAny(inspector, R"({"query": "creature.put_down"})").Ok());
 }

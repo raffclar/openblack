@@ -529,6 +529,72 @@
   "writes": true
  },
  {
+  "description": "The creature goes to a thing, picks it up and holds it, as a leash order does on a thing that it can lift: the first times it holds a thing of that sort it plays with it, then it holds it facing the player for 40 to 50 seconds. Give it creature.put_down to let go before that",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The thing to pick up",
+    "name": "object",
+    "required": true,
+    "type": "integer"
+   }
+  ],
+  "query": "creature.pick_up",
+  "writes": true
+ },
+ {
+  "description": "The creature lets go of what it carries. With no point it puts it down where it stands with the game's put-down action. With a point it carries it there and puts it down at rest, as a leash order on the land does while it carries something. Where it cannot stand, or with throw true, it throws it at the point from near enough instead",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "Where it takes the thing, [x, z] or [x, y, z]",
+    "name": "point",
+    "type": "point"
+   },
+   {
+    "description": "It throws the thing at the point (false by default)",
+    "name": "throw",
+    "type": "boolean"
+   }
+  ],
+  "query": "creature.put_down",
+  "writes": true
+ },
+ {
+  "description": "The creature goes to a thing and eats from it as its own plan to eat does: from a storage pit (EatFromStoragePit), a field (EatFromContainer), a tree (EatFromTree) or the thing itself (EatAfterExamining), or with the eat action given",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "The thing to eat from: give a storage pit, not its food pile",
+    "name": "object",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "An eat action of the game's table, e.g. EatAlive",
+    "name": "action",
+    "type": "string"
+   }
+  ],
+  "query": "creature.eat",
+  "writes": true
+ },
+ {
   "description": "The ordinary skills and miracles a creature knows, and how often it has seen each miracle",
   "kind": "object",
   "parameters": [

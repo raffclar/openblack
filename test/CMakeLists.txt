@@ -2196,3 +2196,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_icon_charge_looks test_icon_charge_looks.cpp)
 openblack_setup_and_add_test(test_boat_film_boat test_boat_film_boat.cpp)
+add_test(NAME test_server_check
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_server_check.py
+)

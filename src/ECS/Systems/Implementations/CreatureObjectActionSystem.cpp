@@ -90,6 +90,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
@@ -133,6 +134,7 @@
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -960,6 +962,17 @@ creature_object_actions::HoldStart IntoCreatureHand(ecs::Registry& registry, ent
 	return creature_object_actions::HoldStartFor(villager || animal, registry.AllOf<Creature>(object), accepted);
 }
 
+/// Where a thing is as a creature takes it, which the map keeps while the creature holds it
+std::optional<HeldByCreature::Taken> TakenFrom(const ecs::Registry& registry, entt::entity object)
+{
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	return HeldByCreature::Taken {.position = transform->position, .place = ecs::thing_map_place::Of(registry, object)};
+}
+
 /// The thing a creature catches is taken into its hand out of the air: it leaves the physics without going back on the
 /// map, and a person or animal is held
 void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity object, const CreatureObjectAction& action,
@@ -968,7 +981,8 @@ void TakeInHand(ecs::Registry& registry, entt::entity creature, entt::entity obj
 	registry.AssignOrReplace<CreatureHeldObject>(
 	    creature, CreatureHeldObject {
 	                  .object = object, .mirrored = action.mirrored, .bone = HandBone(points, animation, action.mirrored)});
-	registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
+	registry.AssignOrReplace<HeldByCreature>(object,
+	                                         HeldByCreature {.creature = creature, .takenFrom = TakenFrom(registry, object)});
 	// It leaves the physics with its end, not going back on the map
 	if (Locator::dynamicsSystem::has_value() && Locator::dynamicsSystem::value().Find(object) != nullptr)
 	{
@@ -2386,6 +2400,18 @@ bool Runs(const CreatureObjectAction& action)
 {
 	return action.status == Status::Running || action.status == Status::Contact;
 }
+
+/// Whether the thing refuses a creature's hands. A piece of the beach temple puzzle refuses them only when the puzzle is
+/// solved. The other rules of the puzzle (a base, a covered ring, a puzzle that is not calm or that is gone) stop only
+/// the player's hand.
+bool RefusesCreature(const ecs::Registry& registry, entt::entity object)
+{
+	if (const auto* block = registry.TryGet<const HanoiBlock>(object))
+	{
+		return block->fixed;
+	}
+	return registry.AllOf<CannotBePickedUp>(object);
+}
 } // namespace
 
 bool CreatureObjectActionSystem::PlaysOnAlone(entt::entity creature) const
@@ -2697,7 +2723,7 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 		}
 	}
 	return {
-	    .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
+	    .cannotBePickedUp = RefusesCreature(registry, object),
 	    .villagerAtHome = registry.AllOf<Villager, AtHome>(object),
 	    .worshippingForCreaturesPlayer = worshipping,
 	    .inScript = registry.AllOf<InScript>(object),
@@ -2753,9 +2779,9 @@ bool CreatureObjectActionSystem::CanTakeFromHand(entt::entity creature, entt::en
 bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	return creature_object_actions::MayCatchKind(KindFactsOf(object),
-	                                             {.cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
-	                                              .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
+	return creature_object_actions::MayCatchKind(
+	    KindFactsOf(object),
+	    {.cannotBePickedUp = RefusesCreature(registry, object), .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
 }
 
 bool CreatureObjectActionSystem::CanThrowToImpress(entt::entity creature, entt::entity object) const
@@ -3463,7 +3489,8 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 			    creature, CreatureHeldObject {.object = object,
 			                                  .mirrored = action.mirrored,
 			                                  .bone = HandBone(*points, animation, action.mirrored)});
-			registry.AssignOrReplace<HeldByCreature>(object, HeldByCreature {.creature = creature});
+			registry.AssignOrReplace<HeldByCreature>(
+			    object, HeldByCreature {.creature = creature, .takenFrom = TakenFrom(registry, object)});
 			// A person or an animal stops what it did and is held, from the ground or out of the air. One that cannot go
 			// into its state for the hand is let go where it is, and the pick-up fails.
 			if (IntoCreatureHand(registry, object) == creature_object_actions::HoldStart::Refused)
