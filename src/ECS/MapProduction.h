@@ -60,6 +60,7 @@ public:
 	void Sync() override;
 	void Refile(entt::entity entity) override;
 	void Moved(entt::entity entity) override;
+	void Placed(entt::entity entity) override;
 	void Reinsert(entt::entity entity) override;
 	void FileNew() override;
 	void FileResidents() override;
@@ -92,8 +93,9 @@ private:
 	void File(entt::entity entity, const Kind& kind) const;
 	void TakeOut(entt::entity entity) const;
 	[[nodiscard]] std::vector<uint32_t> CellsFor(entt::entity entity, const Kind& kind) const;
-	/// Whether a thing in the cells is now somewhere that puts it in other cells
-	[[nodiscard]] bool MovedSinceFiled(entt::entity entity) const;
+	/// Whether a thing in the cells is now somewhere that puts it in other cells. Without anyThing, only a thing that
+	/// moves by itself counts.
+	[[nodiscard]] bool MovedSinceFiled(entt::entity entity, bool anyThing = false) const;
 	/// The index of the cell of a thing's place on the map, none off the map
 	[[nodiscard]] std::optional<uint32_t> CellOfPlace(entt::entity entity) const;
 

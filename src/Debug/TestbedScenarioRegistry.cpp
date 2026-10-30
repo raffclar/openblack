@@ -5521,6 +5521,30 @@ void AddObjects(std::vector<Scenario>& all)
 	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
 	});
 
+	// A land's script moves its challenge scroll to another place, as The Sacrifice moves its scroll to the altar
+	all.push_back({
+	    .id = "scripts.scroll_moved_to_another_cell",
+	    .name = "A script moves a challenge scroll to a place in another map cell",
+	    .facet = Facet::Objects,
+	    .description = "After one second, CREATE_HIGHLIGHT makes a silver challenge scroll on the land. After two more "
+	                   "seconds, SET_POSITION puts the scroll 30 to the side, in another map cell.",
+	    .expected = "The scroll shows where it was made, then it shows and turns at its new place, 30 to the side. "
+	                "The cursor on the scroll at its new place picks it. Nothing stays at the old place.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {15.0f, 20.0f, -25.0f}, .look = {15.0f, 3.0f, 0.0f}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "CREATE_HIGHLIGHT",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 2.0f},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {0.0f, 0.0f}},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 28.0f}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "SET_POSITION",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::LastResult},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {30.0f, 0.0f}}}}},
+	});
+
 	// A land's script aims a magic beam from one villager at another, as the healer of Land 2 calls the child
 	all.push_back({
 	    .id = "scripts.spot_beam_target",

@@ -23,6 +23,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Town.h"
@@ -36,6 +37,7 @@
 #include "ECS/MapCells.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "Locator.h"
 #include "Magic/TeleportRules.h"
@@ -591,4 +593,31 @@ TEST_F(MapProductionFiling, ATownsFlagIsAtTheBackOfTheFixedThingsInItsCellAndGoe
 	// A new store takes it to its place in the same cell: it goes to the back of the cell's fixed things again
 	map.Refile(flag);
 	EXPECT_EQ(map.GetFixedInGridCell(place).back(), flag);
+}
+
+TEST_F(MapProductionFiling, AScrollThatAScriptPutsInAnotherCellGoesIntoThatCellAtOnce)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 here {500.0f, 0.0f, 500.0f};
+	const glm::vec3 near {501.0f, 0.0f, 500.0f};
+	const glm::vec3 there {520.0f, 0.0f, 500.0f};
+	const auto scroll = registry.Create();
+	registry.Assign<Transform>(scroll, here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ScriptHighlight>(scroll);
+	map.FileNew();
+	const auto other = registry.Create();
+	registry.Assign<Transform>(other, here, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<ScriptHighlight>(other);
+	map.FileNew();
+	ASSERT_EQ(map.GetFixedInGridCell(here).size(), 2u);
+	ASSERT_EQ(map.GetFixedInGridCell(here).front(), other);
+	// A place in the same cell keeps the order of the cell
+	thing_map_place::Put(registry, scroll, map_coords::FromMetres({near.x, near.z}), 0.0f);
+	ASSERT_EQ(map.GetFixedInGridCell(here).size(), 2u);
+	EXPECT_EQ(map.GetFixedInGridCell(here).front(), other);
+	// A place in another cell takes it out of its old cell and into the new one, though it does not move by itself
+	thing_map_place::Put(registry, scroll, map_coords::FromMetres({there.x, there.z}), 0.0f);
+	EXPECT_EQ(std::vector(map.GetFixedInGridCell(here).begin(), map.GetFixedInGridCell(here).end()), std::vector {other});
+	EXPECT_EQ(std::vector(map.GetFixedInGridCell(there).begin(), map.GetFixedInGridCell(there).end()), std::vector {scroll});
 }
