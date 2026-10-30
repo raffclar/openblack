@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
+#include <memory>
 #include <optional>
 #include <random>
 #include <span>
@@ -18,6 +21,7 @@
 #include "3D/SkeletalAnimation.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
+#include "Common/WorkerPool.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 
@@ -86,7 +90,36 @@ public:
 			       (static_cast<size_t>(key.mesh) << 20u);
 		}
 	};
-	using AdjustedAnimations = std::unordered_map<AdjustedKey, std::optional<AdjustedAnimation>, AdjustedKeyHash>;
+	/// Which species, drawn body and animation a blend is of. The body is the bits of its two weights of shape.
+	struct BlendKey
+	{
+		const creature::CreatureRig* rig;
+		uint32_t evilGood;
+		uint32_t thinFat;
+		size_t index;
+		[[nodiscard]] bool operator==(const BlendKey&) const = default;
+	};
+	struct BlendKeyHash
+	{
+		[[nodiscard]] size_t operator()(const BlendKey& key) const noexcept
+		{
+			return std::hash<const void*> {}(key.rig) ^ (std::hash<size_t> {}(key.index) * 31u) ^
+			       (std::hash<uint64_t> {}((static_cast<uint64_t>(key.evilGood) << 32u) | key.thinFat) * 131u);
+		}
+	};
+	/// A blend that the system made before a turn asked for it, and the count of the shapes of the bodies at that time
+	struct PreparedBlend
+	{
+		skeletal_animation::Animation animation;
+		uint32_t shaping;
+	};
+	/// The animations of the species: the animations adjusted to the variants' stands, and the blends that the system
+	/// made for the first poses of the bodies before a turn asks for them
+	struct AnimationStores
+	{
+		std::unordered_map<AdjustedKey, std::optional<AdjustedAnimation>, AdjustedKeyHash> adjusted;
+		std::unordered_map<BlendKey, PreparedBlend, BlendKeyHash> prepared;
+	};
 
 private:
 	/// The creature's animations move on by some milliseconds, and the body takes a new pose where the creature is. The
@@ -98,11 +131,21 @@ private:
 	static void ApplyHum(entt::entity creature, creature_hand_glow::Hum hum);
 	/// While the body of a creature plays the loop of the puke animation, twelve drops of sick come out of its lips
 	static void AddPukeDrops(entt::entity creature);
+	/// Makes the blends of the first pose and the first plan of each body, on the shared threads. The turn then takes
+	/// each blend from the store when it asks for it. A blend comes only from the species and the drawn body, so it is
+	/// the same blend that the turn makes.
+	void PrepareFirstBlends(std::span<const entt::entity> creatures);
+
+	/// The threads that make the blends, made the first time that the system has many blends to make
+	std::unique_ptr<WorkerPool> _workers;
+	/// The count of the shapes of the bodies. A prepared blend that no turn took after two shapes goes from the store.
+	uint32_t _shapings {0};
 
 	/// The game's random numbers: the blinks and the eye movements draw on the local seed, the dance moves on the synced seed
 	GameRandomSource _random;
-	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them
-	AdjustedAnimations _adjusted;
+	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them,
+	/// and the blends made for the first poses
+	AnimationStores _stores;
 	/// The turns of the keyframes that the poses use, each turn made one time. Only the time that a pose takes changes.
 	skeletal_animation::KeyframeTurns _keyframeTurns;
 };
