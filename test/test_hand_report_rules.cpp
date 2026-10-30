@@ -10,6 +10,8 @@
 #include <cmath>
 
 #include <limits>
+#include <optional>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -128,4 +130,101 @@ TEST(HandReportRules, TheFirstReportGoesFromTheMiddleOfTheAxes)
 	const player_commands::HandReport none {};
 	EXPECT_EQ(ToSend(none, Resting()), Resting());
 	EXPECT_FALSE(ToSend(none, none).has_value());
+}
+
+TEST(HandReportRules, TheReportWaitsThreeTurnsInAGameOfTheInternetLobby)
+{
+	EXPECT_EQ(TurnsToWaitAfterSend(online::GameOrigin::InternetLobby), 3);
+	EXPECT_EQ(TurnsToWaitAfterSend(online::GameOrigin::Lan), 1);
+	EXPECT_EQ(TurnsToWaitAfterSend(std::nullopt), 1);
+}
+
+TEST(HandReportRules, AJoinWithATicketOfTheLobbyIsAGameOfTheInternetLobby)
+{
+	EXPECT_EQ(online::OriginOfJoin("ticket"), online::GameOrigin::InternetLobby);
+	EXPECT_EQ(online::OriginOfJoin(""), online::GameOrigin::Lan);
+}
+
+TEST(HandReportRules, AfterASendTheReportTestsAgainAfterTheWait)
+{
+	for (const auto origin : {std::optional(online::GameOrigin::InternetLobby), std::optional(online::GameOrigin::Lan),
+	                          std::optional<online::GameOrigin>()})
+	{
+		// The camera moves at each turn, so each turn that tests also sends
+		uint8_t wait = 0;
+		std::vector<bool> tests;
+		for (int turn = 0; turn < 8; ++turn)
+		{
+			const bool waits = WaitsThisTurn(wait, false);
+			tests.push_back(!waits);
+			wait = TurnsToWaitAfter(wait, waits, !waits, origin);
+		}
+		const auto gap = TurnsToWaitAfterSend(origin);
+		for (size_t turn = 0; turn < tests.size(); ++turn)
+		{
+			EXPECT_EQ(tests[turn], turn % (gap + 1U) == 0) << "turn " << turn;
+		}
+	}
+}
+
+TEST(HandReportRules, ATurnThatSendsNothingKeepsTheWait)
+{
+	EXPECT_EQ(TurnsToWaitAfter(0, false, false, online::GameOrigin::InternetLobby), 0);
+	EXPECT_FALSE(WaitsThisTurn(0, false));
+	// A miracle that stops the wait in a turn that sends nothing leaves the turns to wait as they were
+	EXPECT_EQ(TurnsToWaitAfter(2, false, false, online::GameOrigin::InternetLobby), 2);
+	EXPECT_EQ(TurnsToWaitAfter(2, true, false, online::GameOrigin::InternetLobby), 1);
+}
+
+TEST(HandReportRules, AMiracleThatFollowsTheHandStopsTheWait)
+{
+	EXPECT_TRUE(WaitsThisTurn(3, false));
+	EXPECT_FALSE(WaitsThisTurn(3, true));
+	EXPECT_EQ(TurnsToWaitAfter(3, false, true, online::GameOrigin::InternetLobby), 3);
+}
+
+TEST(HandReportRules, AMiracleCastInTheHandNeedsAReportEachTurn)
+{
+	const ReportedSpell held {
+	    .castFromHand = true,
+	    .closedDown = false,
+	    .humanCasting = true,
+	    .ownPlayer = true,
+	    .flockMakesAnimals = false,
+	};
+	EXPECT_TRUE(NeedsReportEachTurn(held));
+	auto closed = held;
+	closed.closedDown = true;
+	EXPECT_FALSE(NeedsReportEachTurn(closed));
+	auto notInHand = held;
+	notInHand.castFromHand = false;
+	EXPECT_FALSE(NeedsReportEachTurn(notInHand));
+	auto otherPlayer = held;
+	otherPlayer.ownPlayer = false;
+	EXPECT_FALSE(NeedsReportEachTurn(otherPlayer));
+	auto script = held;
+	script.humanCasting = false;
+	EXPECT_FALSE(NeedsReportEachTurn(script));
+}
+
+TEST(HandReportRules, AFlockNeedsAReportEachTurnWhileItMakesAnimals)
+{
+	const ReportedSpell flock {
+	    .castFromHand = false,
+	    .closedDown = true,
+	    .humanCasting = true,
+	    .ownPlayer = true,
+	    .flockMakesAnimals = true,
+	};
+	// The flock rule does not look at the close down
+	EXPECT_TRUE(NeedsReportEachTurn(flock));
+	auto done = flock;
+	done.flockMakesAnimals = false;
+	EXPECT_FALSE(NeedsReportEachTurn(done));
+	auto otherPlayer = flock;
+	otherPlayer.ownPlayer = false;
+	EXPECT_FALSE(NeedsReportEachTurn(otherPlayer));
+	auto computer = flock;
+	computer.humanCasting = false;
+	EXPECT_FALSE(NeedsReportEachTurn(computer));
 }

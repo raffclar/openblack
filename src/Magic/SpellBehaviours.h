@@ -190,6 +190,9 @@ void ProcessTurn(SpellServicesInterface& services, ecs::components::Spell& spell
 /// Whether its kind keeps following its caster's hand after the cast: a flock while it still makes its animals
 [[nodiscard]] bool FollowsHand(SpellServicesInterface& services, const ecs::components::Spell& spell);
 
+/// Whether it is a flock that made fewer animals than its total
+[[nodiscard]] bool MakesAnimals(SpellServicesInterface& services, const ecs::components::Spell& spell);
+
 /// Who its effects come from, whose alignment they move
 [[nodiscard]] EffectSource SourceOf(const ecs::components::Spell& spell);
 

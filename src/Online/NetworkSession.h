@@ -25,6 +25,7 @@
 #include "Commands/TurnCodec.h"
 #include "Commands/TurnCommandSource.h"
 #include "Online/Backoff.h"
+#include "Online/GameOrigin.h"
 #include "Online/ResyncRule.h"
 #include "Online/SentBlocks.h"
 #include "Online/TurnPlayout.h"
@@ -56,6 +57,8 @@ struct NetworkSessionSettings
 	std::function<float()> readAlignment;
 	/// Tools: gets each turn at which the world of this computer differs from the server's world
 	std::function<void(uint32_t turn)> parts;
+	/// Where the game came from: the lobby on the internet or the local network
+	GameOrigin origin {GameOrigin::Lan};
 };
 
 /// A step of the start of the game that the front end shows to the player
@@ -152,6 +155,8 @@ public:
 	[[nodiscard]] std::optional<PlayerNames> OwnGod() const override;
 
 	[[nodiscard]] State GetState() const { return _state; }
+	/// Where the game of the session came from: the lobby on the internet or the local network
+	[[nodiscard]] GameOrigin Origin() const { return _settings.origin; }
 	[[nodiscard]] End GetEnd() const { return _end; }
 	[[nodiscard]] const std::optional<game_socket::Joined>& GetJoined() const { return _joined; }
 	[[nodiscard]] const std::optional<game_socket::Start>& GetStart() const { return _start; }

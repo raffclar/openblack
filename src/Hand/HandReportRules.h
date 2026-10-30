@@ -19,11 +19,13 @@
 
 #include "3D/MapCoords.h"
 #include "Commands/PlayerCommands.h"
+#include "Online/GameOrigin.h"
 
 /// The rules that decide when the computer of a player sends the report of its hand and its camera. The report has two
 /// parts: the hand part (the collide point and the hand) and the camera part (the camera and its focus). A part goes
 /// only when it moved enough since the last report that sent it. Thus a camera that moves by very small values at each
-/// frame sends no report, and the turns of two runs get the same commands.
+/// frame sends no report, and the turns of two runs get the same commands. After a send, the report waits for some turns,
+/// but a miracle that follows the hand gets a report at each turn.
 namespace openblack::hand_report
 {
 
@@ -112,6 +114,57 @@ enum class Parts : uint8_t
 		break;
 	}
 	return std::nullopt;
+}
+
+/// The turns that the report waits after a send: 3 in a game of the internet lobby, else 1. A game alone has no network
+/// game and waits 1 turn.
+[[nodiscard]] constexpr uint8_t TurnsToWaitAfterSend(std::optional<online::GameOrigin> origin) noexcept
+{
+	return origin == online::GameOrigin::InternetLobby ? 3 : 1;
+}
+
+/// What the report rules read of a running miracle
+struct ReportedSpell
+{
+	/// The miracle is cast in the hand and its seed is still linked to it
+	bool castFromHand {false};
+	/// The miracle closed down
+	bool closedDown {false};
+	/// A person casts it with the hand of a player
+	bool humanCasting {false};
+	/// The player of the miracle is the player of this computer
+	bool ownPlayer {false};
+	/// The miracle is a flock that made fewer animals than its total
+	bool flockMakesAnimals {false};
+};
+
+/// The miracle needs a report at each turn, so that it follows the hand of the player of this computer at each turn:
+/// - a flock that a person casts, while it makes fewer animals than its total;
+/// - a miracle that a person casts in the hand, while its seed is linked to it and it did not close down.
+[[nodiscard]] constexpr bool NeedsReportEachTurn(const ReportedSpell& spell) noexcept
+{
+	const bool ownHuman = spell.humanCasting && spell.ownPlayer;
+	return ownHuman && (spell.flockMakesAnimals || (spell.castFromHand && !spell.closedDown));
+}
+
+/// The report waits in this turn: it sent in one of the last turns to wait, and no miracle needs a report at each turn
+[[nodiscard]] constexpr bool WaitsThisTurn(uint8_t turnsToWait, bool spellNeedsReport) noexcept
+{
+	return turnsToWait != 0 && !spellNeedsReport;
+}
+
+/// The turns to wait after this turn:
+/// - one turn less after a turn that waits;
+/// - the full wait after a turn that sends;
+/// - no change after a turn that tests and does not send.
+[[nodiscard]] constexpr uint8_t TurnsToWaitAfter(uint8_t turnsToWait, bool waited, bool sent,
+                                                 std::optional<online::GameOrigin> origin) noexcept
+{
+	if (waited)
+	{
+		return static_cast<uint8_t>(turnsToWait - 1);
+	}
+	return sent ? TurnsToWaitAfterSend(origin) : turnsToWait;
 }
 
 } // namespace openblack::hand_report
