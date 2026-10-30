@@ -9,6 +9,7 @@
 
 // A reset of the registry with fresh ids gives the entities the ids of a new program, as a network game's start needs
 
+#include <optional>
 #include <vector>
 
 #include <entt/entity/registry.hpp>
@@ -22,6 +23,11 @@ namespace
 {
 
 struct Mark
+{
+	int value {0};
+};
+
+struct Other
 {
 	int value {0};
 };
@@ -63,4 +69,31 @@ TEST(RegistryFreshIds, AResetWithFreshIdsGivesTheIdsOfANewRegistry)
 	// Only the next reset is fresh
 	used.Reset();
 	EXPECT_NE(MakeSome(used, 5), first);
+}
+
+TEST(RegistryFindFirst, TheFirstEntityIsTheFirstThatEachFinds)
+{
+	Registry registry;
+	const auto made = MakeSome(registry, 12);
+	// Two components of other sizes, so that the view goes through the smaller one, with gaps from removed entities
+	for (size_t i = 0; i < made.size(); i += 2)
+	{
+		registry.Assign<Other>(made[i], static_cast<int>(i % 3));
+	}
+	registry.Destroy(made[4]);
+	registry.Assign<Other>(made[5], 2);
+	for (const int wanted : {0, 1, 2, 3})
+	{
+		std::optional<entt::entity> each;
+		registry.Each<const Mark, const Other>([&each, wanted](entt::entity entity, const Mark&, const Other& other) {
+			if (other.value == wanted && !each.has_value())
+			{
+				each = entity;
+			}
+		});
+		const auto first = registry.FindFirst<const Mark, const Other>(
+		    [wanted](entt::entity, const Mark&, const Other& other) { return other.value == wanted; });
+		EXPECT_EQ(first, each) << wanted;
+	}
+	EXPECT_FALSE(registry.FindFirst<const Mark>([](entt::entity, const Mark& mark) { return mark.value > 100; }).has_value());
 }

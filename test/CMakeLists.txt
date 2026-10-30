@@ -2215,6 +2215,9 @@ add_test(NAME test_sim_includes
 )
 openblack_setup_and_add_test(test_particle_save_parts test_particle_save_parts.cpp)
 target_link_libraries(test_particle_save_parts PRIVATE psys)
+if(MSVC)
+  target_compile_options(test_particle_save_parts PRIVATE /bigobj)
+endif()
 add_test(NAME test_net_check_runs
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_net_check_runs.py
 )

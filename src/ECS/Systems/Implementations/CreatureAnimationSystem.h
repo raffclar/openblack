@@ -103,6 +103,8 @@ private:
 	GameRandomSource _random;
 	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them
 	AdjustedAnimations _adjusted;
+	/// The turns of the keyframes that the poses use, each turn made one time. Only the time that a pose takes changes.
+	skeletal_animation::KeyframeTurns _keyframeTurns;
 };
 
 } // namespace openblack::ecs::systems

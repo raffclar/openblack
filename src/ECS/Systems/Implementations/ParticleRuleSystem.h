@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <chrono>
 #include <deque>
 #include <functional>
@@ -152,16 +154,26 @@ public:
 	                  bool local) const;
 	/// Adds the things that only the effects of this computer use: the gesture trails that wait for their effect
 	void AddLocalThings(particles::SharedTables& localThings) const;
-	/// The synced running state of the world: its lists, and the sounds that the particles keep. The things in the local
-	/// tables stay out. LoadState also reads this part of a save from before the split, which kept all the things.
+	/// The forms of the parts of a save that the world reads
+	enum class SavedForm : uint8_t
+	{
+		/// The part of a save from before the split, or a part from before the move of the sound waits to this computer.
+		/// Each sound keeps its wait.
+		WaitWithSound,
+		/// The synced part keeps no value from the listener. The part of this computer keeps the waits of the sounds.
+		WaitOnThisComputer,
+	};
+	/// The synced running state of the world: its lists, and the sounds of the synced particles that live. The things
+	/// in the local tables stay out. LoadState also reads this part of an older save, which kept all the things.
 	void SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
 	               const particles::SharedTables& localThings) const;
-	bool LoadState(particles::EffectReader& in);
-	/// The running state of the world that only the effects of this computer use: the gesture trails, and the things of
-	/// the local tables with their places in the lists. LoadLocalState puts them back after LoadState.
+	bool LoadState(particles::EffectReader& in, SavedForm form);
+	/// The running state of the world that only this computer uses: the gesture trails, the things of the local tables
+	/// with their places in the lists, and the sounds that travel to the listener. LoadLocalState puts them back after
+	/// LoadState.
 	void SaveLocalState(particles::EffectWriter& out, const LeftOutSounds& leftOut,
 	                    const particles::SharedTables& localThings) const;
-	bool LoadLocalState(particles::EffectReader& in);
+	bool LoadLocalState(particles::EffectReader& in, SavedForm form);
 
 private:
 	/// A sound a particle started, and what plays it
@@ -175,17 +187,35 @@ private:
 		/// Let go of by its particle, and how it is fading out
 		bool letGo {false};
 		particles::SoundLetGo fade;
-		/// Seconds before it is heard, while it travels to the listener
+		/// Seconds before it is heard, while it travels to the listener. This value comes from the listener of this
+		/// computer.
 		float wait {0.0f};
+		/// Where the listener hears the sound start: where its particle was when it started the sound
+		glm::vec3 start {0.0f};
+	};
+	/// How a save keeps a sound
+	enum class SoundRecord : uint8_t
+	{
+		/// The sound of a synced particle in the synced part: only its link
+		Link,
+		/// A sound of an older save, with its wait
+		LinkAndWait,
+		/// A sound in the part of this computer, with its wait and the place where the listener hears it start
+		LinkWaitAndStart,
 	};
 	/// A sound that its particle let go of was dying away, and a sound whose particle is gone and that does not wait to
 	/// be heard is over: a load ends them
 	[[nodiscard]] static bool EndsWithLoad(const PlayingSound& sound);
 	/// Whether a save keeps the sound
 	[[nodiscard]] static bool Saved(const PlayingSound& sound, const LeftOutSounds& leftOut);
+	/// Whether the synced part keeps the sound: a kept sound of a synced particle that lives. A sound whose particle has
+	/// gone stays only while it travels to the listener of this computer, so the part of this computer keeps it.
+	[[nodiscard]] static bool InSyncedPart(const PlayingSound& sound, const LeftOutSounds& leftOut,
+	                                       const particles::SharedTables& localThings);
+	/// Writes a sound in the part of this computer
 	static void WriteSound(particles::EffectWriter& out, const PlayingSound& sound);
 	/// A sound of a save, none when the load ends it
-	[[nodiscard]] static std::optional<PlayingSound> ReadSound(particles::EffectReader& in);
+	[[nodiscard]] static std::optional<PlayingSound> ReadSound(particles::EffectReader& in, SoundRecord record);
 	void Play(PlayingSound& sound) const;
 	/// The particle let go of the sound: stopped at once, or, when its effect file soft-releases it, its loop released
 	/// and its first step quieter taken
@@ -455,7 +485,7 @@ private:
 	bool LoadLocalState(reflection::BinaryReader& in);
 	bool LoadOldState(reflection::BinaryReader& in);
 	/// Reads the tables, the effects and the world of the synced part, or of the one part of an old save
-	bool LoadSyncedBody(reflection::BinaryReader& in);
+	bool LoadSyncedBody(reflection::BinaryReader& in, GameParticleWorld::SavedForm form);
 	ReadResult ReadRunning(reflection::BinaryReader& in, particles::EffectReader& reader, Running& running);
 	static void RestoreCarried(std::span<const std::shared_ptr<particles::CarriedObject>> carried);
 
