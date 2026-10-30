@@ -97,7 +97,7 @@ struct NewGameStart
 	/// Debug only, not in the original game: the species of the creature that a story started directly on a later land
 	/// makes for the player, because no creature came through the vortex. With nothing, the land plays as the game
 	/// plays it.
-	std::optional<CreatureType> directCreature;
+	std::optional<CreatureType> directCreature {std::nullopt};
 
 	[[nodiscard]] constexpr bool operator==(const NewGameStart&) const = default;
 };

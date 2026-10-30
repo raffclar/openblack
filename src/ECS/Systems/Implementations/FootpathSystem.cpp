@@ -108,7 +108,7 @@ public:
 	{
 		/// A dance's footpaths end half a cell along x from its place
 		constexpr int32_t k_DanceArriveOffset = 0x8000;
-		const auto& registry = Registry();
+		const auto& registry = SharedRegistry();
 		if (const auto* dance = registry.TryGet<const Dance>(thing))
 		{
 			return {dance->place.x + k_DanceArriveOffset, dance->place.z};
@@ -139,7 +139,7 @@ public:
 	/// The first end towards the second as it was, and then the second towards the first as moved
 	[[nodiscard]] std::pair<glm::vec2, glm::vec2> PlannedEnds(entt::entity from, entt::entity to) const override
 	{
-		const auto& registry = Registry();
+		const auto& registry = SharedRegistry();
 		auto start = planning::ToPoint(ArrivePlace(from));
 		auto goal = planning::ToPoint(ArrivePlace(to));
 		const auto clearOf = [&registry](entt::entity building, glm::vec2 end, glm::vec2 other) {
@@ -162,7 +162,7 @@ public:
 
 	[[nodiscard]] footpath_world::ObstacleLook ObstacleOf(entt::entity entity, glm::vec3 /*position*/) const override
 	{
-		const auto& registry = Registry();
+		const auto& registry = SharedRegistry();
 		const auto thing = creature_obstacle_things::ThingOf(registry, entity);
 		footpath_world::ObstacleLook look {.known = thing.has_value()};
 		if (thing.has_value() && obstacles::MustAvoidWithoutWalker(*thing))
@@ -218,7 +218,7 @@ public:
 
 	[[nodiscard]] entt::entity TownOf(entt::entity building) const override
 	{
-		return town_homes::TownOfAbode(Registry(), building);
+		return town_homes::TownOfAbode(SharedRegistry(), building);
 	}
 
 	[[nodiscard]] std::optional<entt::entity> StoragePitOf(entt::entity town) const override
@@ -278,11 +278,11 @@ private:
 		    static_cast<size_t>(route::Obstacles::k_BlocksPerSide * route::Obstacles::k_BlocksPerSide));
 	};
 
-	[[nodiscard]] static const ecs::Registry& Registry() { return Locator::entitiesRegistry::value(); }
+	[[nodiscard]] static const ecs::Registry& SharedRegistry() { return Locator::entitiesRegistry::value(); }
 
 	[[nodiscard]] static glm::ivec2 PlaceOf(entt::entity thing)
 	{
-		return wall_hug::ToWhole(glm::xz(Registry().Get<const Transform>(thing).position));
+		return wall_hug::ToWhole(glm::xz(SharedRegistry().Get<const Transform>(thing).position));
 	}
 
 	/// The circles of a thing that a route no one walks goes round, none for a thing it goes through
@@ -356,7 +356,7 @@ private:
 		{
 			return;
 		}
-		const auto& registry = Registry();
+		const auto& registry = SharedRegistry();
 		for (const auto entity : map->GetAllInCell(cell))
 		{
 			if (!gathered.keep)
@@ -394,7 +394,7 @@ private:
 			{
 				return;
 			}
-			const auto& registry = Registry();
+			const auto& registry = SharedRegistry();
 			for (const auto entity : Locator::entitiesMap::value().GetAllInCell(cell))
 			{
 				const auto key = entt::to_integral(entity);
