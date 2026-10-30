@@ -177,7 +177,7 @@ TEST(ChallengePictures, ARecordsPictureComesBackOnceTheScreenIsRead)
 	registry.Assign<openblack::ecs::components::ChallengeRecord>(record);
 	auto& picture = registry.Assign<ChallengePicture>(record);
 	const auto name = pictures::Ask(picture, record);
-	EXPECT_TRUE(name.starts_with(openblack::graphics::ScreenPictures::k_Prefix));
+	EXPECT_TRUE(name.starts_with(openblack::graphics::k_ScreenPicturePrefix));
 	EXPECT_NE(pictures::Ask(picture, record), name);
 	const auto asked = *picture.waiting;
 

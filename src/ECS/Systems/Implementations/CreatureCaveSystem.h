@@ -34,8 +34,8 @@ class CreatureCaveSystem final: public CreatureCaveSystemInterface
 {
 public:
 	void Update(std::chrono::duration<float, std::milli> frameTime) override;
-	void SetInterface(const gui::GameInterface* interface) override { _interface = interface; }
-	[[nodiscard]] const gui::GameInterface* GetInterface() const override { return _interface; }
+	void SetInterface(const TempleScreenInterface* interface) override { _interface = interface; }
+	[[nodiscard]] const TempleScreenInterface* GetInterface() const override { return _interface; }
 	void Open() override;
 	void Close() override;
 	[[nodiscard]] bool IsOpen() const override { return _screen.open; }
@@ -69,7 +69,7 @@ private:
 	/// Starts the copy turning on the spot to face a heading
 	static void StartCaveTurn(const components::CreatureCopy& copy, cave_creature::State& state, GameHeading heading);
 
-	const gui::GameInterface* _interface {nullptr};
+	const TempleScreenInterface* _interface {nullptr};
 	creature_cave::Screen _screen;
 	bool _creatureShown {true};
 	/// The creature room has been made on this visit to the temple

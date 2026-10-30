@@ -4,9 +4,9 @@ source_group(apps\\openblack-server FILES ${OPENBLACK_SERVER})
 
 add_executable(openblack-server ${OPENBLACK_SERVER})
 
-# The server runs the world of the simulation library. Unlike the other tools, it keeps exceptions on, as the library
-# uses them.
-target_link_libraries(openblack-server PRIVATE openblack_sim)
+# The server runs the world of the simulation library, with the devices that use no hardware. Unlike the other tools, it
+# keeps exceptions on, as the library uses them.
+target_link_libraries(openblack-server PRIVATE openblack_headless openblack_sim)
 target_include_directories(openblack-server PRIVATE ${CXXOPTS_INCLUDE_DIRS})
 
 # The server links neither the graphics library, the window system (SDL), the debug windows (Dear ImGui), the audio

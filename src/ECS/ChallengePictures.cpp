@@ -148,8 +148,8 @@ std::vector<uint8_t> challenge_pictures::Shrink(std::span<const uint8_t> full)
 
 std::string challenge_pictures::Ask(ChallengePicture& picture, entt::entity record)
 {
-	auto name = fmt::format("{}challenge-picture/{}/{}", graphics::ScreenPictures::k_Prefix, static_cast<uint32_t>(record),
-	                        picture.asked);
+	auto name =
+	    fmt::format("{}challenge-picture/{}/{}", graphics::k_ScreenPicturePrefix, static_cast<uint32_t>(record), picture.asked);
 	++picture.asked;
 	picture.waiting = name;
 	return name;

@@ -58,10 +58,8 @@
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/HeadlessRenderer.h"
-#include "Graphics/RendererInterface.h"
-#include "Gui/GameInterface.h"
 #include "Gui/GameTexts.h"
+#include "Gui/MenuSettings.h"
 #include "Gui/MultiplayerFrontEndRules.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
@@ -74,6 +72,7 @@
 #include "Simulation/FrameBody.h"
 #include "Simulation/ProfileMenu.h"
 #include "Simulation/TurnBody.h"
+#include "Visual/RendererRequestsInterface.h"
 
 // The game role has sockets and TLS, which only the desktop builds have
 #if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
@@ -105,8 +104,9 @@ class ServerWorld final:
     public simulation::TurnViewInterface
 {
 public:
-	explicit ServerWorld(const ServerSettings& settings)
+	ServerWorld(const ServerSettings& settings, StartDevices startDevices)
 	    : _settings(settings)
+	    , _startDevices(std::move(startDevices))
 	    , _simulation(SimulationFor(settings))
 	{
 	}
@@ -174,6 +174,8 @@ public:
 
 private:
 	ServerSettings _settings;
+	/// Starts the renderer and the audio, which use no hardware
+	StartDevices _startDevices;
 	sim_run::Request _simulation;
 	std::filesystem::path _startMap;
 	bool _servicesStarted {false};
@@ -204,7 +206,7 @@ bool ServerWorld::Initialize()
 	// The services that the server shares with the game, then the renderer that does not start the graphics library
 	InitializeSimulationCore();
 	_servicesStarted = true;
-	if (!InitializeHeadlessEngine())
+	if (!_startDevices || !_startDevices())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
@@ -570,7 +572,7 @@ bool ServerWorld::Frame()
 
 	// What the loading threads finished goes into the caches, and the renderer with no device takes what they made
 	Locator::resources::value().UpdateLoading(simulation::k_FrameLoadBudget, simulation::k_FrameUploads);
-	auto& renderer = Locator::rendererInterface::value();
+	auto& renderer = Locator::rendererRequests::value();
 	renderer.Frame();
 	// The pictures that the world asked for come back with none: the server draws nothing
 	const auto take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); };
@@ -826,10 +828,10 @@ std::optional<std::pair<uint32_t, uint64_t>> ParseChecksumLine(std::string_view 
 	return std::pair {turn, checksum};
 }
 
-int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
-        const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn)
+int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop,
+                   const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn, const StartDevices& startDevices)
 {
-	auto world = std::make_unique<ServerWorld>(settings);
+	auto world = std::make_unique<ServerWorld>(settings, startDevices);
 	if (!world->Initialize())
 	{
 		return EXIT_FAILURE;

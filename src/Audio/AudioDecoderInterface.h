@@ -9,10 +9,12 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 #include <vector>
 
-#include "AudioPlayerInterface.h"
+#include "Sound/LoadedSound.h"
 
 namespace openblack::audio
 {

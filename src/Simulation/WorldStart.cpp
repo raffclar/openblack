@@ -87,7 +87,6 @@
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "EngineConfig.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/RendererInterface.h"
 #include "Gui/TextDatabase.h"
 #include "Level.h"
 #include "Locator.h"
@@ -100,6 +99,7 @@
 #include "Sound/HelpSpeech.h"
 #include "Sound/SoundRequestInterface.h"
 #include "Visual/DetailLevel.h"
+#include "Visual/RendererRequestsInterface.h"
 #include "Visual/TexelDepth.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -1167,7 +1167,7 @@ void LoadEveryResource()
 	{
 		loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
 		// The graphics card takes what the loading made, as on the loading screen
-		Locator::rendererInterface::value().Frame();
+		Locator::rendererRequests::value().Frame();
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every resource loaded in {:.0f} ms",
 	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());

@@ -11,7 +11,7 @@
 
 #include <glm/vec2.hpp>
 
-#include "DialogPainter.h"
+#include "DialogRect.h"
 #include "ECS/IncomingMessageRules.h"
 
 /// The layout and the pictures of the incoming message at the bottom left of the screen: a 48 pixel button with the
@@ -21,7 +21,7 @@ namespace openblack::gui::incoming_message_strip
 {
 
 /// The bottom of the layout, in the front end's units
-constexpr int k_LayoutBottom = DialogPainter::k_Size.y;
+constexpr int k_LayoutBottom = k_DialogSize.y;
 /// The button is a square of this size in the bottom left corner
 constexpr int k_ButtonSize = 48;
 /// The line of text starts at the right of the button, 34 units above the bottom, 20 units high
