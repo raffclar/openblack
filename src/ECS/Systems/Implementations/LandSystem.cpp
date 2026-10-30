@@ -623,10 +623,11 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// that go with them are forgotten.
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Reset();
-	// The things that only the frames make go with the things of the land that they go with
+	// The things that only the frames make go with the things of the land that they go with. The sky's clouds stay, as
+	// the land laid them out when it loaded: a save does not keep the clouds.
 	if (Locator::drawnRegistry::has_value())
 	{
-		Locator::drawnRegistry::value().Reset();
+		archetypes::CloudArchetype::RemoveAllButTheSky(Locator::drawnRegistry::value());
 	}
 	Locator::playerSystem::value().RegisterPlayers();
 	const bool restored = restore();
