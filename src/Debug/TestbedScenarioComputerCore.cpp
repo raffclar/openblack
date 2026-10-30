@@ -97,7 +97,7 @@ void testbed_scenarios::AddComputerGodCoreScenarios(std::vector<Scenario>& all)
 	    .expected = "The hand takes the pot and flies west. At the second action it lets go of the pot at once where the "
 	                "hand is, then flies to the man, picks him up and carries him to the marker. The game log shows "
 	                "each deed of the hand.",
-	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-120.0f, -100.0f), glm::vec2(40.0f, 130.0f)}},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-200.0f, -100.0f), glm::vec2(40.0f, 130.0f)}},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 120.0f}},
 	                {.type = PotInfo::HandWood, .offset = {0.0f, -80.0f}, .amount = 300}},
 	    .landScript = k_ComputerGodFarTempleScript,
