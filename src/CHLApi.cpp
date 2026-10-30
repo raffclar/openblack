@@ -4101,7 +4101,8 @@ void GetInfluence() // 062 GET_INFLUENCE
 	if (ScriptNamesPlayer(player) && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
 	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().FindPlayer(player).value_or(entt::null)))
 	{
-		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
+		influence =
+		    Locator::influenceSystem::value().PlayerOwnInfluence(player, map_coords::FromMetres({position.x, position.z}));
 	}
 	// Where the player has none, the allies that lend their influence to the player lend it
 	std::vector<float> lent;
