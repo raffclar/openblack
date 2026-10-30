@@ -331,6 +331,7 @@
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
 #include "Hand/ScriptHandState.h"
+#include "Hand/ViewReportRules.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpProfile.h"
 #include "Help/SingAlong.h"
@@ -3249,7 +3250,8 @@ void Game::ReportView()
 		    script_camera::PlayerCameraArrived(camera.GetOrigin(), camera.GetOrigin(Camera::Interpolation::Target),
 		                                       camera.GetFocus(), camera.GetFocus(Camera::Interpolation::Target));
 	}
-	if (_lastViewReport != nullptr && *_lastViewReport == report)
+	// The report goes only when the view changed enough since the last report that went
+	if (_lastViewReport != nullptr && !view_report::ChangedEnough(*_lastViewReport, report))
 	{
 		return;
 	}
