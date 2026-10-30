@@ -1002,34 +1002,23 @@ std::optional<glm::vec3> Effect::TakeTargetPosition()
 namespace
 {
 
-/// The kinds of the things in the tables, in the order that the tables go into a save
+/// The things of one kind that this part of the save keeps. With a local start, the part keeps only the things from that
+/// start to the end. The synced part of the save has their numbers before them.
 template <typename Type>
 void SaveItems(EffectWriter& out, const SharedTable<Type>& table, auto&& write)
 {
-	// The things of the effects of this computer change the count, so the count is a presentation value
-	out.Out().BeginPresentation();
-	out.Out().WriteSize(table.items.size());
-	out.Out().EndPresentation();
-	for (size_t i = 0; i < table.items.size(); ++i)
+	const auto first = std::min(table.firstLocal.value_or(0), table.items.size());
+	out.Out().WriteSize(table.items.size() - first);
+	for (size_t i = first; i < table.items.size(); ++i)
 	{
-		const bool local = table.firstLocal.has_value() && i >= *table.firstLocal;
-		if (local)
-		{
-			out.Out().BeginPresentation();
-		}
 		write(*table.items[i]);
-		if (local)
-		{
-			out.Out().EndPresentation();
-		}
 	}
 }
 
+/// Reads the things of one kind and adds them after the things that the table has
 template <typename Type>
 void LoadItems(EffectReader& in, SharedTable<Type>& table, auto&& read)
 {
-	table.items.clear();
-	table.numbers.clear();
 	const auto size = in.In().ReadSize();
 	if (!size.has_value())
 	{
@@ -1039,7 +1028,7 @@ void LoadItems(EffectReader& in, SharedTable<Type>& table, auto&& read)
 	{
 		auto item = std::make_shared<Type>();
 		read(*item);
-		table.Add(item);
+		table.Append(item);
 	}
 }
 
@@ -1171,16 +1160,36 @@ bool EffectReader::ReadBytes(void* bytes, size_t size)
 	return true;
 }
 
+void openblack::particles::AddLinkedBolts(SharedTables& tables)
+{
+	// A bolt links to the bolts it meets: those go in the table too, but a bolt of the other part of the save stays out
+	for (size_t i = tables.bolts.firstLocal.value_or(0); i < tables.bolts.items.size(); ++i)
+	{
+		const auto bolt = tables.bolts.items[i];
+		if (bolt == nullptr)
+		{
+			continue;
+		}
+		for (const auto& linked : {bolt->linkedTo.lock(), bolt->linkedFrom.lock()})
+		{
+			if (linked != nullptr && !tables.boltsOfOtherPart.contains(linked.get()))
+			{
+				tables.bolts.Add(linked);
+			}
+		}
+	}
+}
+
+uint32_t openblack::particles::BoltLinkNumber(SharedTables& tables, const std::weak_ptr<BoltShare>& link)
+{
+	const auto bolt = link.lock();
+	return bolt != nullptr && !tables.boltsOfOtherPart.contains(bolt.get()) ? tables.bolts.Add(bolt) : 0;
+}
+
 void openblack::particles::SaveSharedTables(EffectWriter& out)
 {
 	auto& tables = out.Tables();
-	// A bolt links to the bolts it meets: those go in the table too, before the table is written
-	for (size_t i = 0; i < tables.bolts.items.size(); ++i)
-	{
-		const auto bolt = tables.bolts.items[i];
-		tables.bolts.Add(bolt->linkedTo.lock());
-		tables.bolts.Add(bolt->linkedFrom.lock());
-	}
+	AddLinkedBolts(tables);
 	SaveItems(out, tables.sounds, [&out](const ParticleSoundLink& link) {
 		SaveSound(out, link.sound);
 		out.WriteValue(link.position);
@@ -1192,8 +1201,8 @@ void openblack::particles::SaveSharedTables(EffectWriter& out)
 		out.WriteValue(bolt.centroid);
 		out.WriteValue(bolt.heading);
 		out.WriteValue(bolt.hasTargets);
-		out.Out().WriteRaw(tables.bolts.Add(bolt.linkedTo.lock()));
-		out.Out().WriteRaw(tables.bolts.Add(bolt.linkedFrom.lock()));
+		out.Out().WriteRaw(BoltLinkNumber(tables, bolt.linkedTo));
+		out.Out().WriteRaw(BoltLinkNumber(tables, bolt.linkedFrom));
 		out.WriteValue(bolt.meeting);
 	});
 	SaveItems(out, tables.shields, [&out](const ShieldSphere& shield) {
@@ -1224,6 +1233,7 @@ void openblack::particles::LoadSharedTables(EffectReader& in)
 		in.ReadValue(link.fadeStep);
 	});
 	// The links between the bolts are numbers until every bolt is there
+	const auto firstBolt = tables.bolts.items.size();
 	std::vector<std::pair<uint32_t, uint32_t>> links;
 	LoadItems(in, tables.bolts, [&in, &links](BoltShare& bolt) {
 		in.ReadValue(bolt.order);
@@ -1236,10 +1246,10 @@ void openblack::particles::LoadSharedTables(EffectReader& in)
 		in.ReadPlain(link.second);
 		in.ReadValue(bolt.meeting);
 	});
-	for (size_t i = 0; i < links.size() && i < tables.bolts.items.size(); ++i)
+	for (size_t i = 0; i < links.size() && firstBolt + i < tables.bolts.items.size(); ++i)
 	{
-		tables.bolts.items[i]->linkedTo = tables.bolts.At(links[i].first);
-		tables.bolts.items[i]->linkedFrom = tables.bolts.At(links[i].second);
+		tables.bolts.items[firstBolt + i]->linkedTo = tables.bolts.At(links[i].first);
+		tables.bolts.items[firstBolt + i]->linkedFrom = tables.bolts.At(links[i].second);
 	}
 	LoadItems(in, tables.shields, [&in](ShieldSphere& shield) {
 		in.ReadValue(shield.centre);

@@ -2213,3 +2213,5 @@ add_test(NAME test_sim_includes
          COMMAND ${CMAKE_COMMAND} -DCONFIG=${CMAKE_BINARY_DIR}/SimIncludesConfig.cmake
                  -P ${CMAKE_SOURCE_DIR}/CMakeModules/CheckSimIncludes.cmake
 )
+openblack_setup_and_add_test(test_particle_save_parts test_particle_save_parts.cpp)
+target_link_libraries(test_particle_save_parts PRIVATE psys)
