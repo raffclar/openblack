@@ -1603,7 +1603,13 @@ TEST_F(LockstepTest, ACommandInASentTurnThatTheClientDidNotGetIsNotDoneTwiceAfte
 	{
 		EXPECT_EQ(world->taps.at(8), 1u);
 	}
-	EXPECT_EQ(alice.world.hash, serverWorld.hash);
+	// The clients do the turns a frame after the server, and each checksum is the same as the server's
+	for (const auto* computer : {&alice, &bob})
+	{
+		EXPECT_EQ(computer->loads, 0u);
+		EXPECT_GT(computer->session.GetCompares().compared, 60u);
+		EXPECT_EQ(computer->session.GetCompares().compared, computer->session.GetCompares().same);
+	}
 }
 
 TEST_F(LockstepTest, AClientThatLostItsSocketSendsAgainTheBlocksThatNoTurnHeldAndTheServerTakesThemOnce)
@@ -1627,7 +1633,11 @@ TEST_F(LockstepTest, AClientThatLostItsSocketSendsAgainTheBlocksThatNoTurnHeldAn
 	{
 		EXPECT_EQ(world->taps.at(4), 1u);
 	}
-	EXPECT_EQ(alice.world.hash, serverWorld.hash);
+	for (const auto* computer : {&alice, &bob})
+	{
+		EXPECT_GT(computer->session.GetCompares().compared, 60u);
+		EXPECT_EQ(computer->session.GetCompares().compared, computer->session.GetCompares().same);
+	}
 }
 
 TEST_F(LockstepTest, ANewProcessOfAPlayerCountsItsBlocksFromTheStartAgain)
