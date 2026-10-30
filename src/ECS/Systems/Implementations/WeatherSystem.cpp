@@ -1267,6 +1267,21 @@ bool WeatherSystem::SetWeatherThingSpeed(entt::entity thing, float speed)
 	return true;
 }
 
+void WeatherSystem::EndWeatherThing(entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* weatherThing = registry.Valid(thing) ? registry.TryGet<const WeatherThing>(thing) : nullptr;
+	if (weatherThing == nullptr)
+	{
+		return;
+	}
+	if (auto* storm = registry.Valid(weatherThing->storm) ? registry.TryGet<Storm>(weatherThing->storm) : nullptr;
+	    storm != nullptr)
+	{
+		script_weather::EndStorm(*storm);
+	}
+}
+
 bool WeatherSystem::SetWeatherThingAffectedByWind(entt::entity thing, bool affected)
 {
 	auto& registry = Locator::entitiesRegistry::value();

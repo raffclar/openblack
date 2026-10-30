@@ -40,6 +40,9 @@ void SetClouds(components::Storm& storm, float count, float shade, float height)
 void SetLightning(components::Storm& storm, float sheetMin, float sheetMax, float forkMin, float forkMax);
 /// How far from its middle it is at full strength and how far it reaches
 void SetInnerOuter(components::Storm& storm, float inner, float outer);
+/// A weather thing that goes ends its storm at once. The storm is dead from this turn, and it goes after its dead turns.
+/// A storm that is already dead does not change.
+void EndStorm(components::Storm& storm);
 
 /// The waits to its next flash and next fork, drawn afresh whenever a script changes the storm: the fork first, then the
 /// flash, each from its least up to its most
