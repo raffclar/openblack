@@ -137,11 +137,13 @@ struct CreatureOrder
 	/// The action of the game's table, for an order to eat
 	std::string action;
 };
-/// What came of an order: whether the creature took it, and why not or what it does
+/// What came of an order: whether the creature took it, and why not or what it does. A warning says what the game does
+/// that can end an order the creature took.
 struct CreatureOrderResult
 {
 	bool taken {false};
 	std::string detail;
+	std::string warning;
 };
 /// The eat action of the game's table for a creature that eats from the thing: from a storage pit, a field, a tree, or
 /// the thing itself
