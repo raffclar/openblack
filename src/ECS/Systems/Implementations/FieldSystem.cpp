@@ -19,6 +19,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -69,9 +70,8 @@ float LandAlignment(const glm::vec3& position)
 	const auto& influence = Locator::influenceSystem::value();
 	const auto& alignment = Locator::alignmentSystem::value();
 	float sum = 0.0f;
-	for (size_t i = 0; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	for (const auto player : ecs::game_players::All())
 	{
-		const auto player = static_cast<PlayerNames>(i);
 		sum += alignment.GetPlayerAlignment(player) * influence.PlayerInfluence(player, position);
 	}
 	return field_crop::ClampAlignment(sum);

@@ -20,6 +20,7 @@
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/Player.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -100,9 +101,8 @@ void AddAtCameras()
 	auto& random = Locator::gameRandom::value();
 	auto& liquids = Locator::liquidParticleSystem::value();
 	const auto land = registry.Context().mapScriptGlobals.landNumber;
-	for (size_t i = 0; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	for (const auto player : ecs::game_players::All())
 	{
-		const auto player = static_cast<PlayerNames>(i);
 		if (player == hands.GetOwnPlayer())
 		{
 			continue;

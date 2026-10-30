@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
 #include <cstdint>
 
 #include <algorithm>
@@ -20,6 +21,11 @@
 
 using namespace openblack;
 using namespace openblack::magic::town_belief;
+
+namespace
+{
+constexpr size_t k_LandPlayers = openblack::player_slots::k_LandSlots;
+} // namespace
 
 TEST(TownBelief, PendingBeliefIsBelievedAtTheTownsTurnByItsScale)
 {
@@ -86,19 +92,19 @@ TEST(TownBelief, NeutralTownIsTakenOnceAPlayerBelievesAsMuchAsItDoesInTheNeutral
 {
 	Belief town;
 	SetInPlayer(town, PlayerNames::NEUTRAL, 0.3f);
-	EXPECT_FALSE(Ownership(town, PlayerNames::NEUTRAL, 2.0f).has_value());
+	EXPECT_FALSE(Ownership(town, PlayerNames::NEUTRAL, 2.0f, k_LandPlayers).has_value());
 	EXPECT_FLOAT_EQ(town.belief.at(7), 0.3f);
 	Add(town, PlayerNames::PLAYER_ONE, 0.29f);
 	(void)Turn(town, 1.0f);
-	EXPECT_FALSE(Ownership(town, PlayerNames::NEUTRAL, 2.0f).has_value());
+	EXPECT_FALSE(Ownership(town, PlayerNames::NEUTRAL, 2.0f, k_LandPlayers).has_value());
 	Add(town, PlayerNames::PLAYER_ONE, 0.02f);
 	(void)Turn(town, 1.0f);
-	const auto taker = Ownership(town, PlayerNames::NEUTRAL, 2.0f);
+	const auto taker = Ownership(town, PlayerNames::NEUTRAL, 2.0f, k_LandPlayers);
 	ASSERT_TRUE(taker.has_value());
 	EXPECT_EQ(*taker, PlayerNames::PLAYER_ONE);
 	// The new owner's belief is multiplied by the claimed-town multiplier
 	EXPECT_FLOAT_EQ(town.belief.at(0), 0.62f);
-	EXPECT_FALSE(Ownership(town, PlayerNames::PLAYER_ONE, 2.0f).has_value());
+	EXPECT_FALSE(Ownership(town, PlayerNames::PLAYER_ONE, 2.0f, k_LandPlayers).has_value());
 }
 
 TEST(TownBelief, TiesGoToTheLaterPlayerTheNeutralPlayerLast)
@@ -107,13 +113,30 @@ TEST(TownBelief, TiesGoToTheLaterPlayerTheNeutralPlayerLast)
 	SetInPlayer(town, PlayerNames::NEUTRAL, 0.5f);
 	Set(town, PlayerNames::PLAYER_ONE, 0.5f);
 	// Player one holds it, but the neutral player believed in as much comes later and takes it
-	const auto taker = Ownership(town, PlayerNames::PLAYER_ONE, 1.0f);
+	const auto taker = Ownership(town, PlayerNames::PLAYER_ONE, 1.0f, k_LandPlayers);
 	ASSERT_TRUE(taker.has_value());
 	EXPECT_EQ(*taker, PlayerNames::NEUTRAL);
 	Set(town, PlayerNames::PLAYER_TWO, 0.5f);
 	Set(town, PlayerNames::PLAYER_THREE, 0.5f);
 	SetInPlayer(town, PlayerNames::NEUTRAL, 0.0f);
-	EXPECT_EQ(Ownership(town, PlayerNames::PLAYER_ONE, 1.0f), PlayerNames::PLAYER_THREE);
+	EXPECT_EQ(Ownership(town, PlayerNames::PLAYER_ONE, 1.0f, k_LandPlayers), PlayerNames::PLAYER_THREE);
+}
+
+TEST(TownBelief, OnlyThePlayersOfTheGameTakeATie)
+{
+	Belief town;
+	for (size_t p = 0; p < openblack::player_slots::k_LandGods; ++p)
+	{
+		Set(town, static_cast<PlayerNames>(p), -1.0f);
+	}
+	SetInPlayer(town, PlayerNames::NEUTRAL, -1.0f);
+	// The places after the players of a land believe nothing, more than the players do, but a land has only 8 players:
+	// the neutral player, the last of them, takes the tie
+	EXPECT_EQ(Ownership(town, PlayerNames::PLAYER_ONE, 1.0f, k_LandPlayers), PlayerNames::NEUTRAL);
+	SetInPlayer(town, PlayerNames::NEUTRAL, -1.0f);
+	Set(town, PlayerNames::PLAYER_ONE, -1.0f);
+	// A network game with a ninth god: that god comes after the neutral player and takes the town
+	EXPECT_EQ(Ownership(town, PlayerNames::PLAYER_ONE, 1.0f, k_LandPlayers + 1), static_cast<PlayerNames>(8));
 }
 
 TEST(TownBelief, NeutralBeliefIsSetBackEveryTurn)
@@ -121,7 +144,7 @@ TEST(TownBelief, NeutralBeliefIsSetBackEveryTurn)
 	Belief town;
 	SetInPlayer(town, PlayerNames::NEUTRAL, 0.5f);
 	Set(town, PlayerNames::NEUTRAL, 3.0f);
-	(void)Ownership(town, PlayerNames::NEUTRAL, 1.0f);
+	(void)Ownership(town, PlayerNames::NEUTRAL, 1.0f, k_LandPlayers);
 	EXPECT_FLOAT_EQ(town.belief.at(7), 0.5f);
 }
 
@@ -129,7 +152,7 @@ TEST(TownBelief, ClaimedBeliefIsCapped)
 {
 	Belief town;
 	Set(town, PlayerNames::PLAYER_TWO, 8.0f);
-	EXPECT_EQ(Ownership(town, PlayerNames::NEUTRAL, 2.0f), PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(Ownership(town, PlayerNames::NEUTRAL, 2.0f, k_LandPlayers), PlayerNames::PLAYER_TWO);
 	EXPECT_FLOAT_EQ(town.belief.at(1), k_DefaultCap);
 }
 

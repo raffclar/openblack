@@ -55,6 +55,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/GameEndConditions.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/LandForests.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -258,9 +259,8 @@ float LandAlignmentAt(const glm::vec3& position)
 	const auto& influence = Locator::influenceSystem::value();
 	const auto& alignment = Locator::alignmentSystem::value();
 	float sum = 0.0f;
-	for (size_t i = 0; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	for (const auto player : ecs::game_players::All())
 	{
-		const auto player = static_cast<PlayerNames>(i);
 		sum += alignment.GetPlayerAlignment(player) * influence.PlayerInfluence(player, position);
 	}
 	return std::clamp(sum, -1.0f, 1.0f);

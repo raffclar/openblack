@@ -1286,6 +1286,50 @@ TEST(WorldArchive, TheThreadsThatShareTheRowsOfAComponentGiveTheSameHash)
 	expectSame();
 }
 
+// A part holds at most 64 rows, and about 16 KB of the rows of the last hash, with one row at least
+TEST(WorldArchive, APartOfTheRowsHoldsAboutTheSameCountOfBytes)
+{
+	EXPECT_EQ(RowsInAPart(0, 0), k_MostRowsInAPart);
+	EXPECT_EQ(RowsInAPart(1000, 0), k_MostRowsInAPart);
+	EXPECT_EQ(RowsInAPart(30 * 10, 30), k_MostRowsInAPart);
+	EXPECT_EQ(RowsInAPart(30 * 1024, 30), 16u);
+	EXPECT_EQ(RowsInAPart(30 * 100 * 1024, 30), 1u);
+}
+
+// A few rows that are large go to the threads one row at a time after the first hash. The hash stays the same.
+TEST(WorldArchive, TheThreadsThatShareLargeRowsGiveTheSameHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	std::vector<entt::entity> made(12);
+	registry.create(made.begin(), made.end());
+	for (const auto entity : made)
+	{
+		auto walker = SampleWalker(entity, made[0]);
+		walker.name = std::string(20000 + entt::to_integral(entity), 'a');
+		registry.emplace<FakeWalker>(entity, std::move(walker));
+	}
+	WorkerPool pool(3);
+	HashMemo memo;
+	const auto expectSame = [&]() {
+		const auto plain = HashWorld(registry, context);
+		const auto remembered = HashWorld(registry, context, {}, false, {}, &pool, nullptr, &memo);
+		EXPECT_EQ(plain.entities, remembered.entities);
+		EXPECT_EQ(plain.components, remembered.components);
+	};
+	expectSame();
+	expectSame();
+	registry.get<FakeWalker>(made[5]).name = "Tom";
+	expectSame();
+	registry.get<FakeWalker>(made[0]).name += "b";
+	expectSame();
+	registry.destroy(made[7]);
+	expectSame();
+	// The memo keeps one writer for each thread
+	EXPECT_EQ(memo.writers.size(), pool.GetLaneCount());
+}
+
 // A footpath that the game still looks for keeps its search in a world state. A loaded search goes on to the same route
 // as the search that was saved.
 TEST(WorldArchive, AFootpathSearchContinuesAfterALoad)

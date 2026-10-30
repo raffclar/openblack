@@ -23,6 +23,7 @@
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/GameRandom.h"
+#include "ECS/GamePlayers.h"
 #include "Sound/SoundRequestInterface.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Common/DrawTrace.h"
@@ -152,9 +153,8 @@ void PlayPlayerTurns()
 		Locator::templeDestructionSystem::value().StartTurn();
 	}
 	auto& towns = Locator::townSystem::value();
-	for (uint8_t index = 0; index < static_cast<uint8_t>(PlayerNames::_COUNT); ++index)
+	for (const auto player : ecs::game_players::All())
 	{
-		const auto player = static_cast<PlayerNames>(index);
 		// In a network game, the winning conditions that the world measures take their values before the player's turn
 		if (Locator::gameEndSystem::has_value())
 		{
@@ -1047,9 +1047,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
 	case Step::SyncChecksum:
+	{
 		// When a network game asks for it, the checksum of the synced world as this turn left it
+		auto checksum = profiler.BeginScoped(Profiler::Stage::SyncChecksum);
 		Locator::syncChecksumSystem::value().ProcessTurn();
 		break;
+	}
 	case Step::RunRecord:
 		// A tool that records the run reads the world as the turn left it. The turn count moved on at the start of the
 		// turn, so the number is the turn after this one.

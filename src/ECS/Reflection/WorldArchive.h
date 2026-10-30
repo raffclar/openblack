@@ -174,8 +174,29 @@ struct HashMemo
 		std::vector<uint8_t> bytes;
 		std::vector<Row> rows;
 	};
+	/// A storage of the registry as the last hash found it: the hash of its type, the name of its component, and the
+	/// component type. A storage that the hash does not keep has no type.
+	struct Storage
+	{
+		uint32_t typeHash {0};
+		std::string name;
+		entt::meta_type type;
+		bool registered {false};
+	};
 	std::unordered_map<std::string, Component> components;
+	/// The storages by their ids, found for the reflection context below
+	std::unordered_map<uint32_t, Storage> storages;
+	const entt::meta_ctx* context {nullptr};
+	/// The writers of the threads. Each writer keeps its memory and the plans of the types from one hash to the next.
+	std::vector<BinaryWriter> writers;
 };
+
+/// The count of the rows in each part, when the threads save the rows of a component in parts. A part holds at most
+/// k_MostRowsInAPart rows. When the last hash of the component gives the size of its rows, a part holds about
+/// k_BytesInAPart bytes, and at least one row. The parts change only which thread saves a row, not the hash.
+constexpr size_t k_MostRowsInAPart = 64;
+constexpr size_t k_BytesInAPart = 16 * 1024;
+[[nodiscard]] size_t RowsInAPart(size_t lastBytes, size_t lastRows);
 
 [[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context,
                                     std::span<const HashLeaveOut> leaveOut = {}, bool byField = false,

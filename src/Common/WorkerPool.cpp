@@ -58,19 +58,21 @@ void WorkerPool::ForEach(size_t count, const Job& job)
 		return;
 	}
 	{
-		std::scoped_lock lock(_mutex);
+		// A thread that woke late for the last call must see that no job is left before the jobs change
+		std::unique_lock lock(_mutex);
+		_done.wait(lock, [this] { return _busy == 0; });
 		_job = &job;
 		_count = count;
 		_next.store(0, std::memory_order_relaxed);
+		_finished.store(0, std::memory_order_relaxed);
 		_busy = _threads.size();
 		++_generation;
 	}
 	_wake.notify_all();
 	DoJobs(0);
-	// The jobs are done when every thread has seen that none is left
+	// Return when each job is done. A thread that did not wake yet finds no job and does not touch the job.
 	std::unique_lock lock(_mutex);
-	_done.wait(lock, [this] { return _busy == 0; });
-	_job = nullptr;
+	_done.wait(lock, [this, count] { return _finished.load(std::memory_order_acquire) == count; });
 }
 
 void WorkerPool::DoJobs(size_t lane)
@@ -79,6 +81,14 @@ void WorkerPool::DoJobs(size_t lane)
 	     index = _next.fetch_add(1, std::memory_order_relaxed))
 	{
 		(*_job)(index, lane);
+		if (_finished.fetch_add(1, std::memory_order_acq_rel) + 1 == _count)
+		{
+			// Lock the mutex so that the calling thread cannot miss the signal between its test and its wait
+			{
+				std::scoped_lock lock(_mutex);
+			}
+			_done.notify_all();
+		}
 	}
 }
 
@@ -100,6 +110,6 @@ void WorkerPool::Work(const std::stop_token& stop, size_t lane)
 			std::scoped_lock lock(_mutex);
 			--_busy;
 		}
-		_done.notify_one();
+		_done.notify_all();
 	}
 }

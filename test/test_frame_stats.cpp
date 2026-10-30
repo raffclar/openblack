@@ -98,8 +98,10 @@ TEST(FrameStats, PeekKeepsTheFrames)
 TEST(FrameStats, TheCsvHasALineForEachFrame)
 {
 	const std::array<FrameRecord, 2> frames {
-	    FrameRecord {.milliseconds = 3.5f, .processorMilliseconds = 3.25f, .turn = 7, .played = false},
-	    FrameRecord {.milliseconds = 12.0f, .processorMilliseconds = 11.5f, .turn = 8, .played = true},
+	    FrameRecord {
+	        .milliseconds = 3.5f, .processorMilliseconds = 3.25f, .turn = 7, .played = false, .workMilliseconds = 2.75f},
+	    FrameRecord {
+	        .milliseconds = 12.0f, .processorMilliseconds = 11.5f, .turn = 8, .played = true, .workMilliseconds = 9.5f},
 	};
-	EXPECT_EQ(ToCsv(frames), "frame,ms,processor_ms,turn,played\n1,3.500,3.250,7,0\n2,12.000,11.500,8,1\n");
+	EXPECT_EQ(ToCsv(frames), "frame,ms,processor_ms,turn,played,work_ms\n1,3.500,3.250,7,0,2.750\n2,12.000,11.500,8,1,9.500\n");
 }

@@ -18,6 +18,7 @@
 #include <array>
 #include <functional>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -45,6 +46,7 @@
 #include "ECS/Components/TownAggression.h"
 #include "ECS/ComputerMindCreatureRules.h"
 #include "ECS/ComputerMindDefenceRules.h"
+#include "ECS/GamePlayers.h"
 #include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -65,12 +67,6 @@ using creature_desires::Desire;
 
 namespace
 {
-
-constexpr auto k_PlayerCount = static_cast<size_t>(PlayerNames::_COUNT);
-/// The players whose attacks a town keeps for the threat to it
-constexpr size_t k_ThreatPlayers = computer_mind_rules::k_TownAttackPlayers;
-/// The players in the game that a town looks at when it finds a close rival of the god
-constexpr size_t k_RivalPlayers = 7;
 
 /// The game turn now
 uint32_t Turn()
@@ -202,23 +198,27 @@ entt::entity HeartOf(entt::entity temple)
 	return heart;
 }
 
-/// The player that has the most influence at the place, the players asked in the order of their numbers
-PlayerNames MostInfluentialAt(const map_coords::MapCoords& place)
+/// The players that can have the most influence at a place, in the order of their numbers. The neutral player is not
+/// in the list: it is the answer when no player has influence there.
+std::vector<PlayerNames> InfluentialPlayers()
 {
-	std::vector<influence_rules::PlayerInfluenceAt> players;
-	Entities().Each<const Player>([&players, &place](const Player& player) {
-		// The neutral player is not asked: it is the answer when no player has influence there
-		if (player.name == PlayerNames::NEUTRAL)
+	std::vector<PlayerNames> players;
+	Entities().Each<const Player>([&players](const Player& player) {
+		if (player.name != PlayerNames::NEUTRAL)
 		{
-			return;
+			players.push_back(player.name);
 		}
-		const float influence = Locator::influenceSystem::has_value()
-		                            ? Locator::influenceSystem::value().PlayerInfluence(player.name, place)
-		                            : 0.0f;
-		players.push_back({.player = player.name, .influence = influence});
 	});
-	std::ranges::sort(players, {}, &influence_rules::PlayerInfluenceAt::player);
-	return influence_rules::MostInfluentialPlayer(players);
+	std::ranges::sort(players);
+	return players;
+}
+
+/// Whether the player has the most influence at the place
+bool MostInfluentialAt(const map_coords::MapCoords& place, PlayerNames player, std::span<const PlayerNames> players)
+{
+	return influence_rules::IsMostInfluentialPlayer(player, players, [&place](PlayerNames each) {
+		return Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().PlayerInfluence(each, place) : 0.0f;
+	});
 }
 
 /// What the town believes in each player, and what each player gave it lately
@@ -227,6 +227,7 @@ computer_mind_rules::TownBeliefFacts BeliefOf(entt::entity town)
 	computer_mind_rules::TownBeliefFacts facts;
 	if (const auto* impression = Entities().TryGet<const TownImpression>(town))
 	{
+		// The rules of the mind look at each player number (deviation 167). A player that the game does not have has 0.
 		facts.belief = impression->belief.belief;
 		facts.recent = impression->belief.recent;
 	}
@@ -257,12 +258,14 @@ float ReactToAggressiveCreature(RuleContext& context, computer_mind::Mind& mind,
 	    });
 	std::ranges::sort(creatures, std::greater {});
 	const auto towns = TownsOf(context.player);
+	const auto players = InfluentialPlayers();
 	float best = 0.0f;
 	entt::entity chosen = entt::null;
 	for (const auto& [made, creature] : creatures)
 	{
 		const auto coords = CoordsOfThing(creature);
-		if (creature == own || !coords.has_value() || MostInfluentialAt(*coords) != context.player || !temple.has_value())
+		if (creature == own || !coords.has_value() || !MostInfluentialAt(*coords, context.player, players) ||
+		    !temple.has_value())
 		{
 			continue;
 		}
@@ -330,9 +333,9 @@ float DefendTown(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 	for (size_t index = 0; index < towns.size(); ++index)
 	{
 		const auto* aggression = registry.TryGet<const TownAggression>(towns[index]);
-		for (size_t number = 0; number < k_PlayerCount; ++number)
+		for (const auto attacker : ecs::game_players::All())
 		{
-			const auto attacker = static_cast<PlayerNames>(number);
+			const auto number = static_cast<size_t>(attacker);
 			if (!InGame(attacker) || attacker == context.player)
 			{
 				continue;
@@ -390,10 +393,10 @@ float CheckTownForProtection(RuleContext& context, computer_mind::Mind& mind, ui
 /// town is the node's object.
 float CheckTownsForBeliefAttack(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 {
-	std::array<bool, k_PlayerCount> allies {};
-	for (size_t number = 0; number < k_PlayerCount; ++number)
+	std::array<bool, player_slots::k_PlayerNumbers> allies {};
+	for (const auto player : ecs::game_players::All())
 	{
-		allies.at(number) = KeepsAsAlly(context.player, static_cast<PlayerNames>(number));
+		allies.at(static_cast<size_t>(player)) = KeepsAsAlly(context.player, player);
 	}
 	const auto towns = TownsOf(context.player);
 	std::vector<float> attacks;
@@ -490,12 +493,12 @@ float CastSpellToDefendAgainstBelief(RuleContext& context, computer_mind::Mind& 
 	{
 		const auto belief = BeliefOf(town);
 		std::vector<float> rivals;
-		for (size_t number = 0; number < k_RivalPlayers; ++number)
+		// The gods of the game are the rivals, also the gods after the seventh (deviation 167)
+		for (const auto other : ecs::game_players::Gods())
 		{
-			const auto other = static_cast<PlayerNames>(number);
 			if (other != context.player && InGame(other) && !KeepsAsAlly(context.player, other))
 			{
-				rivals.push_back(belief.belief.at(number));
+				rivals.push_back(belief.belief.at(static_cast<size_t>(other)));
 			}
 		}
 		share = computer_mind_rules::CloseRivalShare(belief.belief.at(static_cast<size_t>(context.player)), rivals);
@@ -528,20 +531,24 @@ bool PerformDefendAgainstBelief(RuleContext& context, computer_mind::Mind& mind,
 
 std::optional<computer_mind_rules::TownThreat> computer_world::ThreatToTown(entt::entity town, uint32_t turn)
 {
-	std::array<computer_mind_rules::TownAttack, k_ThreatPlayers> attacks {};
-	if (const auto* aggression = Entities().TryGet<const TownAggression>(town))
+	// The town keeps the attacks of each god of the game, also of the gods after the seventh (deviation 167)
+	std::array<computer_mind_rules::TownAttack, player_slots::k_PlayerNumbers> attacks {};
+	size_t count = 0;
+	const auto* aggression = Entities().TryGet<const TownAggression>(town);
+	for (const auto god : ecs::game_players::Gods())
 	{
-		const auto& record = aggression->record;
-		for (size_t number = 0; number < k_ThreatPlayers; ++number)
+		auto& attack = attacks.at(count++);
+		if (aggression != nullptr)
 		{
-			const auto& harm = record.lastHarms.at(number);
-			attacks.at(number) = {.turn = record.lastTurns.at(number),
-			                      .miracleHarm = harm.burn,
-			                      .thingHarm = harm.crush,
-			                      .otherThingHarm = harm.hit};
+			const auto number = static_cast<size_t>(god);
+			const auto& harm = aggression->record.lastHarms.at(number);
+			attack = {.turn = aggression->record.lastTurns.at(number),
+			          .miracleHarm = harm.burn,
+			          .thingHarm = harm.crush,
+			          .otherThingHarm = harm.hit};
 		}
 	}
-	return computer_mind_rules::ThreatOf(attacks, turn);
+	return computer_mind_rules::ThreatOf(std::span(attacks).first(count), turn);
 }
 
 float computer_world::ShieldForTown(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
