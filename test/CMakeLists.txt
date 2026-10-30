@@ -2224,3 +2224,4 @@ add_test(NAME test_net_check_runs
 openblack_setup_and_add_test(test_hand_report_rules test_hand_report_rules.cpp)
 openblack_setup_and_add_test(test_server_snapshots online/test_server_snapshots.cpp)
 openblack_setup_and_add_test(test_sent_blocks online/test_sent_blocks.cpp)
+openblack_setup_and_add_test(test_temple_room_save temple/test_temple_room_save.cpp)
