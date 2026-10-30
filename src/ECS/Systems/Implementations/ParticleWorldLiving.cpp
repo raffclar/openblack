@@ -47,7 +47,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MapSpiral.h"
-#include "ParticleSystem.h"
+#include "ParticleRuleSystem.h"
 #include "Particles/LightningMaths.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -315,7 +315,7 @@ std::optional<particles::BeliefSprite> GameParticleWorld::TakeBeliefSprite()
 	return sprite;
 }
 
-void ParticleSystem::AddBeliefSprite(const particles::BeliefSprite& sprite)
+void ParticleRuleSystem::AddBeliefSprite(const particles::BeliefSprite& sprite)
 {
 	_beliefWanted |= _world.QueueBeliefSprite(sprite);
 	// The inspector shows the last symbols
@@ -327,7 +327,7 @@ void ParticleSystem::AddBeliefSprite(const particles::BeliefSprite& sprite)
 	++_beliefSpriteCount;
 }
 
-ParticleSystemInterface::BeliefSpritesSeen ParticleSystem::GetBeliefSpritesSeen() const
+ParticleRuleSystemInterface::BeliefSpritesSeen ParticleRuleSystem::GetBeliefSpritesSeen() const
 {
 	return {.recent = {_beliefSpritesSeen.begin(), _beliefSpritesSeen.end()}, .count = _beliefSpriteCount};
 }

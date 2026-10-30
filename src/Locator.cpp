@@ -139,6 +139,7 @@
 #include "ECS/Systems/Implementations/MiracleFxSystem.h"
 #include "ECS/Systems/Implementations/MistSystem.h"
 #include "ECS/Systems/Implementations/MusicMoodSystem.h"
+#include "ECS/Systems/Implementations/ParticleRuleSystem.h"
 #include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/PathfindingSystem.h"
 #include "ECS/Systems/Implementations/PauseTextSystem.h"
@@ -192,6 +193,7 @@
 #include "Gui/TextDatabase.h"
 #include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
+#include "Input/InputDeviceInterface.h"
 #include "LHVM.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkSession.h"
@@ -304,6 +306,7 @@ using openblack::ecs::systems::MistSystem;
 using openblack::ecs::systems::MusicMoodSystem;
 using openblack::ecs::systems::NetworkGameSystem;
 using openblack::ecs::systems::ObjectDrawListSystem;
+using openblack::ecs::systems::ParticleRuleSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PauseTextSystem;
@@ -714,10 +717,11 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::abodeKnockSystem::emplace<AbodeKnockSystem>();
 	Locator::influenceSystem::emplace<InfluenceSystem>();
 	Locator::townDesireSystem::emplace<TownDesireSystem>();
-	Locator::particleSystem::emplace<ParticleSystem>();
-	// The turns and the scripts ask for effects here. The particles of this computer, if any, show them.
+	// The rules of the particle effects step in the turns on every computer, also on the dedicated server
+	Locator::particleRuleSystem::emplace<ParticleRuleSystem>();
+	// The turns and the scripts ask for effects here. The rules of the particles serve them.
 	Locator::effectRequestSystem::emplace<ecs::systems::EffectRequestSystem>([]() -> ecs::systems::EffectServerInterface* {
-		return Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+		return Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
 	});
 	Locator::reactionSystem::emplace<ReactionSystem>();
 	Locator::teleportSystem::emplace<TeleportSystem>();
@@ -1023,6 +1027,7 @@ void openblack::ShutDownServices()
 	Locator::gestureSystem::reset();
 	Locator::effectRequestSystem::reset();
 	Locator::particleSystem::reset();
+	Locator::particleRuleSystem::reset();
 	Locator::terrainSystem::reset();
 	Locator::filesystem::reset();
 	Locator::gameActionSystem::reset();
@@ -1051,6 +1056,7 @@ void openblack::ShutDownServices()
 	Locator::entitiesRegistry::reset();
 	Locator::rendererInterface::reset();
 	Locator::windowing::reset();
+	Locator::inputDevice::reset();
 	Locator::events::reset();
 	Locator::camera::reset();
 	Locator::config::reset();

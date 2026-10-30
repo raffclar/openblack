@@ -31,14 +31,17 @@
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Systems/Implementations/AdvisorVoiceSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
+#include "ECS/Systems/Implementations/ParticleSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
 #include "ECS/Systems/Implementations/SkySystem.h"
 #include "ECS/Systems/Implementations/TurnCheerSystem.h"
 #include "ECS/Systems/Implementations/VillageLightSystem.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "EngineConfig.h"
 #include "Graphics/BgfxGraphicsDevice.h"
 #include "Graphics/RendererInterface.h"
+#include "Input/SdlInputDevice.h"
 #include "Locator.h"
 #include "Visual/UploadMode.h"
 #include "Windowing/Sdl2WindowingSystem.h"
@@ -47,6 +50,7 @@ using namespace openblack::audio;
 using openblack::debug::gui::DebugGuiInterface;
 using openblack::ecs::systems::AdvisorVoiceSystem;
 using openblack::ecs::systems::CloudSystem;
+using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::RenderingSystemTemple;
 using openblack::ecs::systems::TurnCheerSystem;
@@ -63,6 +67,8 @@ void openblack::InitializeWindow(const std::string& title, int width, int height
 
 bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 {
+	// The keyboard, the mouse and the event queue of the window system. The world reads them through this device.
+	Locator::inputDevice::emplace<input::SdlInputDevice>();
 	// The device goes first: the renderer makes its buffers and textures on it. Its service is made before the services of
 	// the resources, so that it stays until the last texture and buffer of the resources is deleted.
 	Locator::graphicsDevice::emplace<graphics::BgfxGraphicsDevice>();
@@ -110,6 +116,12 @@ void openblack::InitializePresentation()
 	Locator::advisorVoiceSystem::emplace<AdvisorVoiceSystem>();
 	// The measure of how fast this computer's camera turns, and the advisors' cheers at it
 	Locator::turnCheerSystem::emplace<TurnCheerSystem>();
+	// The draw of the particle effects, which reads the effects from their rules
+	Locator::particleSystem::emplace<ParticleSystem>(
+	    []() -> const ecs::systems::ParticleRuleSystemInterface* {
+		    return Locator::particleRuleSystem::has_value() ? &Locator::particleRuleSystem::value() : nullptr;
+	    },
+	    &ParticleSystem::TextureStemsOnDisk);
 }
 
 void openblack::InitializeClient(const player_profiles::Store& profiles)

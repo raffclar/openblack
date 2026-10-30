@@ -22,6 +22,7 @@
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 #include "Particles/ManaPathMaths.h"
+#include "Particles/ParticleDrawPath.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Particles/PlasmaCommand.h"
 
@@ -86,14 +87,36 @@ struct EffectRequest
 	bool drawnWithHand {false};
 	/// The effect starts hidden
 	bool hidden {false};
+	/// The way that the effect draws, when it does not sort with the other effects
+	std::optional<particles::draw::DrawPath> drawPath;
+	/// A save keeps the effect. When false, the owner starts the effect again after a load.
+	bool saved {true};
 };
 
-/// The side that shows the effects that the simulation asks for: the particles of this computer. A computer that shows
-/// nothing has none.
+/// The side that steps the effects tells the simulation when an effect starts and when it ends. The simulation keeps
+/// its own record of the effects that run from these calls, and the turns read the record, not the particles.
+class EffectLifeListener
+{
+public:
+	virtual ~EffectLifeListener() = default;
+
+	/// An effect started under this number
+	virtual void EffectStarted(EffectHandle handle) = 0;
+	/// The effect with this number ended, and it is gone
+	virtual void EffectEnded(EffectHandle handle) = 0;
+	/// All the effects ended at the same time, as at a new land or before a load
+	virtual void EffectsCleared() = 0;
+};
+
+/// The side that starts and steps the effects that the simulation asks for: the rules of the particles. Every computer
+/// has the rules, also the dedicated server. The draw of the particles shows the effects.
 class EffectServerInterface
 {
 public:
 	virtual ~EffectServerInterface() = default;
+
+	/// The record that this side tells of each start and end of an effect, none to stop
+	virtual void SetLifeListener(EffectLifeListener* listener) = 0;
 
 	/// Starts the effect under the number that the simulation gave it, or under a number of its own for none. Gives the
 	/// number of the effect, or none when no effect started.
@@ -104,7 +127,6 @@ public:
 	virtual void Stop(EffectHandle handle) = 0;
 	/// The effect goes at once
 	virtual void Remove(EffectHandle handle) = 0;
-	[[nodiscard]] virtual bool IsRunning(EffectHandle handle) const = 0;
 	/// The player whose colour the effect shows
 	virtual void SetPlayer(EffectHandle handle, int player) = 0;
 	/// The strength of the miracle that the rules of the effect read
@@ -150,11 +172,17 @@ public:
 	virtual void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) = 0;
 	/// The symbols of the players that the artefacts show. Each list replaces the last list.
 	virtual void SetPlayerSymbols(std::vector<particles::draw::PlayerSymbol> symbols) = 0;
+	/// Whether the effect shows in this frame. The effect shows only while the frame draws the thing of the effect.
+	virtual void SetShown(EffectHandle handle, bool shown) = 0;
+	/// Gives a running effect another number. Gives false, and changes nothing, when no effect has the first number or
+	/// an effect has the second number.
+	virtual bool Renumber(EffectHandle from, EffectHandle to) = 0;
 };
 
 /// The particle effects that the game turns and the scripts ask for. The simulation keeps each effect by a number of
-/// its own, and the particles of this computer, if any, show the effect.
-class EffectRequestSystemInterface: public SavedStateInterface
+/// its own, and the rules of the particles step the effect. The simulation also keeps a record of the
+/// effects that run, which the side that steps the effects tells it of.
+class EffectRequestSystemInterface: public SavedStateInterface, public EffectLifeListener
 {
 public:
 	/// Starts an effect and gives the number that keeps it. Every request takes a number, also when no particles show it.
@@ -171,7 +199,7 @@ public:
 	virtual void Stop(EffectHandle handle) = 0;
 	/// The effect goes at once
 	virtual void Remove(EffectHandle handle) = 0;
-	/// Whether the particles of this computer show the effect. It is false on a computer that shows nothing.
+	/// Whether the effect runs, from the record of the simulation. It is false on a computer that shows nothing.
 	[[nodiscard]] virtual bool IsRunning(EffectHandle handle) const = 0;
 	/// The player whose colour the effect shows
 	virtual void SetPlayer(EffectHandle handle, int player) = 0;
@@ -193,7 +221,7 @@ public:
 	/// A spark for the effect of the mana path to carry from one point to another
 	virtual void AddManaPathSpark(EffectHandle handle, const particles::mana_path::Spark& spark) = 0;
 
-	/// Whether the particles of this computer show the effects. It is false on a computer that shows nothing.
+	/// Whether the rules of the particles serve the effects. It is false only when there are no rules, as in a test.
 	[[nodiscard]] virtual bool ShowsEffects() const = 0;
 	/// One step of an effect that its owner steps, such as the effect of a miracle. Gives false when the effect ended,
 	/// and then the effect is gone. It is false on a computer that shows nothing.
@@ -224,6 +252,12 @@ public:
 
 	/// A new land: the numbers start from the first again
 	virtual void Reset() = 0;
+	/// Whether the effect shows in this frame. The effect shows only while the frame draws the thing of the effect.
+	virtual void SetShown(EffectHandle handle, bool shown) = 0;
+	/// Gives an effect that only this computer shows the number that a save has for it. The owner of the effect starts
+	/// it again after a load and gives it its old number. Gives false, and changes nothing, when no effect has the first
+	/// number or an effect has the second number.
+	virtual bool Renumber(EffectHandle from, EffectHandle to) = 0;
 	/// The number that the next effect gets
 	[[nodiscard]] virtual EffectHandle NextHandle() const = 0;
 };

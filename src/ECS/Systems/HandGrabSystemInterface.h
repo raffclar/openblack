@@ -171,6 +171,9 @@ public:
 	/// Why a press of the Action button on a thing wouldn't take it (out of the influence, a thing the hand can't hold,
 	/// a script holding it out of reach...); empty when it would
 	[[nodiscard]] virtual std::string WhyNotTake(entt::entity object) const = 0;
+	/// Whether a press of the Action button on a thing would scoop a handful out of it (a pile, a field or a fish farm
+	/// with something to give, inside the influence)
+	[[nodiscard]] virtual bool WouldScoop(entt::entity object) const = 0;
 	/// How far a thing hangs below a hand that holds it: the lowering of its kind times its height. A creature's hand
 	/// uses the same distance.
 	[[nodiscard]] virtual float HangOf(entt::entity object) const = 0;

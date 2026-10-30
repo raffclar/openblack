@@ -34,7 +34,7 @@
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TipBubbleSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
@@ -227,9 +227,9 @@ void GameScriptHighlightWorld::TargetEffect(uint32_t effect, entt::entity target
 
 void GameScriptHighlightWorld::StepEffect(uint32_t effect, float seconds)
 {
-	if (Locator::particleSystem::has_value())
+	if (Locator::particleRuleSystem::has_value())
 	{
-		Locator::particleSystem::value().ProcessByFrame(effect, seconds);
+		Locator::particleRuleSystem::value().ProcessByFrame(effect, seconds);
 	}
 }
 

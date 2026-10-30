@@ -248,6 +248,7 @@
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
@@ -4098,7 +4099,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				}
 				_handHold.PlaceHandEffect(heldSeed, _handAnimation.get(), *handTransform, handSize);
 				// The trails' sheets of light and the chain behind the gesturing hand move on every frame
-				Locator::particleSystem::value().UpdateFrame(
+				Locator::particleRuleSystem::value().UpdateFrame(
 				    std::chrono::duration<float>(gameTime).count(),
 				    {.position = handTransform->position,
 				     .size = handSize,

@@ -127,6 +127,26 @@ TEST(FrameWriteGuard, TheWriterKeepsTheBytesOfEachPresentationValue)
 	EXPECT_EQ(out.PresentationRanges(), (std::vector<frame_write_guard::ByteRange> {{0u, 8u}}));
 }
 
+TEST(FrameWriteGuard, TheWriterKeepsThePresentationValuesOfTheBytesThatItAppends)
+{
+	const entt::meta_ctx context;
+	ecs::reflection::BinaryWriter part(context);
+	ecs::reflection::Save(part, uint32_t {1});
+	ecs::reflection::SavePresentation(part, uint32_t {2});
+	ecs::reflection::BinaryWriter out(context);
+	ecs::reflection::SavePresentation(out, uint8_t {3});
+	ecs::reflection::Save(out, uint8_t {4});
+	out.Append(part);
+	EXPECT_EQ(out.Bytes().size(), 10u);
+	EXPECT_EQ(out.PresentationRanges(), (std::vector<frame_write_guard::ByteRange> {{0u, 1u}, {6u, 10u}}));
+	// Inside a presentation value, all the appended bytes are in that value
+	ecs::reflection::BinaryWriter inside(context);
+	inside.BeginPresentation();
+	inside.Append(part);
+	inside.EndPresentation();
+	EXPECT_EQ(inside.PresentationRanges(), (std::vector<frame_write_guard::ByteRange> {{0u, 8u}}));
+}
+
 TEST(FrameWriteGuard, TheSyncedHashLeavesOutThePresentationValues)
 {
 	std::vector<frame_write_guard::ByteRange> first;

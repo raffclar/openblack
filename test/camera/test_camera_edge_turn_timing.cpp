@@ -30,6 +30,7 @@
 #include <ECS/Registry.h>
 #include <ECS/Systems/HandSystemInterface.h>
 #include <Input/GameActionMap.h>
+#include <Input/SdlInputDevice.h>
 #include <Inspector.h>
 #include <Inspector/GameInput.h>
 #include <Inspector/InputControl.h>
@@ -119,6 +120,7 @@ protected:
 	{
 		ASSERT_EQ(SDL_InitSubSystem(SDL_INIT_EVENTS), 0) << SDL_GetError();
 		SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+		Locator::inputDevice::emplace<input::SdlInputDevice>();
 		Locator::entitiesRegistry::emplace<ecs::Registry>();
 		Locator::audio::emplace<audio::AudioManagerNoOp>();
 		Locator::terrainSystem::emplace<MockTerrain>();
@@ -143,6 +145,7 @@ protected:
 		Locator::pickingSystem::reset();
 		Locator::handSystem::reset();
 		Locator::windowing::reset();
+		Locator::inputDevice::reset();
 		Locator::terrainSystem::reset();
 		Locator::audio::reset();
 		Locator::entitiesRegistry::reset();

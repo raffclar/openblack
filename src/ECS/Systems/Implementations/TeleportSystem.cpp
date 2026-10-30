@@ -57,7 +57,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
-#include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -906,15 +906,15 @@ void TeleportSystem::UpdateFrame(ObjectDrawListSystemInterface& drawList, std::c
                                  std::chrono::milliseconds frameGameTime, bool landDrawn)
 {
 	const auto seconds = particles::drawn_steps::StepSeconds(_poolPace, frameRealTime, frameGameTime, landDrawn);
-	if (!Locator::particleSystem::has_value())
+	if (!Locator::particleRuleSystem::has_value())
 	{
 		return;
 	}
-	auto& particles = Locator::particleSystem::value();
+	auto& particles = Locator::particleRuleSystem::value();
 	auto& registry = EntityRegistry();
 	const auto stepPool = [&](entt::entity stone) {
 		const auto* component = registry.TryGet<const TeleportStone>(stone);
-		if (component == nullptr || component->pool == ParticleSystemInterface::k_NoEffect)
+		if (component == nullptr || component->pool == ParticleRuleSystemInterface::k_NoEffect)
 		{
 			return;
 		}

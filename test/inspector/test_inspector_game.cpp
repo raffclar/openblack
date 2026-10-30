@@ -253,7 +253,7 @@ TEST(InspectorSplash, SplashAtAPositionWithinARadius)
 // The symbols of belief that rose last show with their place, amount and colour, the newest first
 TEST(InspectorBelief, TheSymbolsOfBeliefThatRoseLast)
 {
-	const ecs::systems::ParticleSystemInterface::BeliefSpritesSeen seen {
+	const ecs::systems::ParticleRuleSystemInterface::BeliefSpritesSeen seen {
 	    .recent = {{.position = {1.0f, 2.0f, 3.0f}, .amount = 25, .colour = 0xFF0000},
 	               {.position = {4.0f, 5.0f, 6.0f}, .amount = 7, .colour = 0x00FF00}},
 	    .count = 40,
