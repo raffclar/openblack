@@ -35,7 +35,6 @@
 #include <SDL_events.h>
 #include <SDL_keycode.h>
 #include <SDL_mouse.h>
-#include <bgfx/bgfx.h>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -249,6 +248,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
+#include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
@@ -3494,6 +3494,26 @@ void Runner::Give(const Command& command)
 	}
 	if (command.kind == Kind::SkirmishBox)
 	{
+		if (command.value == 5 || command.value == 6)
+		{
+			// The game's own mind file takes the place of the creature that the profile keeps. This needs no interface, thus
+			// the dedicated server brings the creature too.
+			const auto path =
+			    Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
+			auto mind = std::make_shared<creaturemind::MindFileData>();
+			const bool read = creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success;
+			const auto brought = ecs::creature_from_file::BringKept(PlayerNames::PLAYER_ONE, read ? mind : nullptr);
+			// With 6, the profile also keeps the new creature in its file. Thus a load of a saved skirmish brings it again.
+			if (command.value == 6 && brought.creature.has_value() && Locator::creatureCarryOverSystem::has_value())
+			{
+				Locator::creatureCarryOverSystem::value().KeepCreature(*brought.creature);
+			}
+			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+			                brought.creature.has_value()
+			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))
+			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
+			return;
+		}
 		auto* game = Game::Instance();
 		if (game == nullptr || game->GetInterface() == nullptr)
 		{
@@ -3533,25 +3553,6 @@ void Runner::Give(const Command& command)
 			lands.ShowLandMessage(
 			    {.kind = land_message::Message::Kind::AddLine, .text = "Battle another god for this realm", .number = 2});
 			Log(fmt::format("{:.1f}s: {}: the land information box shows", _seconds, Name(command.kind)));
-			return;
-		}
-		if (command.value == 5 || command.value == 6)
-		{
-			// The game's own mind file takes the place of the creature that the profile keeps
-			const auto path =
-			    Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
-			auto mind = std::make_shared<creaturemind::MindFileData>();
-			const bool read = creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success;
-			const auto brought = ecs::creature_from_file::BringKept(PlayerNames::PLAYER_ONE, read ? mind : nullptr);
-			// With 6, the profile also keeps the new creature in its file. Thus a load of a saved skirmish brings it again.
-			if (command.value == 6 && brought.creature.has_value() && Locator::creatureCarryOverSystem::has_value())
-			{
-				Locator::creatureCarryOverSystem::value().KeepCreature(*brought.creature);
-			}
-			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
-			                brought.creature.has_value()
-			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))
-			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
 			return;
 		}
 		// The box holds the game, so that the scenario's clock stops while it is up
@@ -6093,10 +6094,9 @@ void Runner::Measure()
 		stages.at(i) = static_cast<float>(Milliseconds(entry.stages.at(i).total));
 	}
 	// What the renderer last drew, the frame before
-	const auto* renderStats = bgfx::getStats();
+	const auto draws = Locator::rendererInterface::has_value() ? Locator::rendererInterface::value().GetDrawsOfLastFrame() : 0u;
 	_recorder->Add(static_cast<float>(Milliseconds(frame)), static_cast<float>(Milliseconds(update)),
-	               static_cast<float>(Milliseconds(frame - update)), stages,
-	               renderStats != nullptr ? static_cast<float>(renderStats->numDraw) : 0.0f);
+	               static_cast<float>(Milliseconds(frame - update)), stages, static_cast<float>(draws));
 	if (++_framesSinceSummary >= k_FramesPerSummary || _recorder->Count() == _recorder->Capacity())
 	{
 		_framesSinceSummary = 0;

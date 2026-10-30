@@ -175,42 +175,41 @@ TEST(DedicatedServer, TheServerWritesNothingInTheProfileFolderItIsGiven)
 	EXPECT_TRUE(files.empty());
 }
 
-TEST(DedicatedServer, TheServerMakesNoGraphicsObjects)
+TEST(DedicatedServer, TheServerDoesNotStartTheGraphicsLibrary)
 {
-	// The objects that the graphics library makes for itself as it starts
-	uint32_t libraryObjects = 0;
-	{
-		const auto renderer = openblack::graphics::HeadlessRenderer::Create();
-		ASSERT_NE(renderer, nullptr);
-		libraryObjects = openblack::graphics::GraphicsObjectCount();
-	}
+	// A call to the library that did not start stops this test program, so the run also shows that no part calls it
+	ASSERT_FALSE(openblack::graphics::GraphicsLibraryStarted());
 	const openblack::test::TestTempFolder profileFolder;
-	std::vector<uint32_t> objects;
+	std::vector<bool> started;
 	const std::atomic<bool> stop {false};
 	const auto exitCode =
-	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&objects](uint32_t /*turn*/, uint64_t /*checksum*/) {
-		    objects.push_back(openblack::graphics::GraphicsObjectCount());
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&started](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    started.push_back(openblack::graphics::GraphicsLibraryStarted());
 	    });
 	EXPECT_EQ(exitCode, EXIT_SUCCESS);
-	ASSERT_FALSE(objects.empty());
-	EXPECT_TRUE(std::ranges::all_of(objects, [libraryObjects](uint32_t count) { return count == libraryObjects; }));
+	ASSERT_FALSE(started.empty());
+	EXPECT_TRUE(std::ranges::none_of(started, [](bool value) { return value; }));
+	EXPECT_FALSE(openblack::graphics::GraphicsLibraryStarted());
 }
 
 TEST(DedicatedServer, TheServerKeepsTheSkysCloudsOutOfTheWorldAndMakesNoSystemThatOnlyShowsTheWorld)
 {
 	const openblack::test::TestTempFolder profileFolder;
 	bool shown = false;
+	bool mists = true;
 	size_t worldClouds = 1;
 	size_t drawnClouds = 0;
 	const std::atomic<bool> stop {false};
 	const auto exitCode =
 	    openblack::server::Run(MockSettings(profileFolder.Path()), stop,
-	                           [&shown, &worldClouds, &drawnClouds](uint32_t /*turn*/, uint64_t /*checksum*/) {
+	                           [&shown, &mists, &worldClouds, &drawnClouds](uint32_t /*turn*/, uint64_t /*checksum*/) {
 		                           using openblack::Locator;
 		                           using openblack::ecs::components::Cloud;
-		                           shown = shown || Locator::oceanSystem::has_value() || Locator::mistSystem::has_value() ||
-		                                   Locator::cloudSystem::has_value() || Locator::villageLightSystem::has_value() ||
-		                                   Locator::advisorVoiceSystem::has_value() || Locator::turnCheerSystem::has_value();
+		                           shown = shown || Locator::oceanSystem::has_value() || Locator::cloudSystem::has_value() ||
+		                                   Locator::villageLightSystem::has_value() || Locator::advisorVoiceSystem::has_value() ||
+		                                   Locator::turnCheerSystem::has_value();
+		                           // The scripts fade the mists, and the turns change their size on every computer
+		                           mists = mists && Locator::mistSystem::has_value();
 		                           // Every computer draws the numbers of the sky's clouds at the start of the land, but
 		                           // the clouds are things of the drawn registry and take no entity numbers of the world
 		                           worldClouds = std::as_const(Locator::entitiesRegistry::value()).Size<const Cloud>();
@@ -218,6 +217,7 @@ TEST(DedicatedServer, TheServerKeepsTheSkysCloudsOutOfTheWorldAndMakesNoSystemTh
 	                           });
 	EXPECT_EQ(exitCode, EXIT_SUCCESS);
 	EXPECT_FALSE(shown);
+	EXPECT_TRUE(mists);
 	EXPECT_EQ(worldClouds, 0u);
 	EXPECT_GT(drawnClouds, 0u);
 }
@@ -243,4 +243,18 @@ TEST(DedicatedServer, TheServerMovesTheSkysClockButDoesNotShowTheSky)
 	EXPECT_GT(turns, 0u);
 	EXPECT_FALSE(shown);
 	EXPECT_TRUE(clock);
+}
+
+// The scripts fade the mists and the turns step the fades, thus the server has the mist system too
+TEST(DedicatedServer, TheServerHasTheMistSystemThatTheScriptsAndTheTurnsUse)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	bool mists = true;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [&mists](uint32_t /*turn*/, uint64_t /*checksum*/) {
+		    mists = mists && openblack::Locator::mistSystem::has_value();
+	    });
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	EXPECT_TRUE(mists);
 }
