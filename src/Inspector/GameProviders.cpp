@@ -990,9 +990,11 @@ std::unique_ptr<ProviderInterface> LandProvider()
 	              }));
 	provider->Add(Query("atmosphere", "The mists and clouds over the land"),
 	              ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
+		              // The sky's clouds are things of the drawn registry
+		              const auto* drawn = DrawnRegistry();
 		              return Json {{"mists", CountOf<Mist>(registry)},
 		                           {"mist_system", Locator::mistSystem::has_value()},
-		                           {"clouds", CountOf<Cloud>(registry)},
+		                           {"clouds", drawn != nullptr ? CountOf<Cloud>(*drawn) : size_t {0}},
 		                           {"cloud_system", Locator::cloudSystem::has_value()}};
 	              }));
 	return provider;

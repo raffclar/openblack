@@ -2451,6 +2451,7 @@ void CreatureMindSystem::AgendaTurn(entt::entity entity)
 		    .realTime = animation.realTime,
 		    .bodyDancing = creature_layers::IsDancing(animation.body),
 		    .moving = moving,
+		    .onlyMoves = moving && !creature_layers::IsPlaying(animation.body) && !playsOn,
 		    .subMove = SubMoveOf(entity),
 		    .position = glm::vec2(transform.position.x, transform.position.z),
 		    .communication = communication,

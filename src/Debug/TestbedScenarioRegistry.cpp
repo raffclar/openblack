@@ -1808,6 +1808,142 @@ void AddRivalCreatureLoads(std::vector<Scenario>& all)
 	});
 }
 
+/// The Pied Piper of the first land. The game's script runs at the same map positions as on the first land, with the
+/// Norse town, the creche and the piper's cave made there. The scenario clicks the creche, and the round starts.
+void AddPiedPiperRound(std::vector<Scenario>& all)
+{
+	using Argument = ScriptArgument;
+	// The first land's Norse town, as the lines of the first land make it, from the middle of the map. The town has the
+	// number of the scenario's town, thus the scenario gives this town to the script.
+	constexpr std::string_view k_NorseTown = R"(CREATE_TOWN(900, "-694.39,81.24", "PLAYER_ONE", 7, "NORSE")
+SET_TOWN_BELIEF(900, "PLAYER_ONE", 9.238012)
+CREATE_PLANNED_ABODE(900, "-637.52,157.17", "NORSE_ABODE_WONDER", 916, 250, 0, 0)
+CREATE_ABODE(900, "-804.91,132.52", "NORSE_ABODE_C", 4710, 990, 0, 0)
+CREATE_VILLAGER_POS("-797.15,132.48", "-804.91,132.52", "NORSE_FORESTER", 21)
+CREATE_VILLAGER_POS("-797.15,132.48", "-804.91,132.52", "NORSE_HOUSEWIFE", 24)
+CREATE_VILLAGER_POS("-797.15,132.48", "-811.55,119.58", "NORSE_FORESTER", 6)
+CREATE_VILLAGER_POS("-797.15,132.48", "-811.55,119.58", "NORSE_HOUSEWIFE", 6)
+CREATE_ABODE(900, "-779.62,153.34", "NORSE_ABODE_E", 6282, 1000, 0, 0)
+CREATE_VILLAGER_POS("-779.69,141.47", "-782.63,152.23", "NORSE_HOUSEWIFE", 3)
+CREATE_VILLAGER_POS("-779.69,141.47", "-782.63,152.23", "NORSE_HOUSEWIFE", 36)
+CREATE_VILLAGER_POS("-779.69,141.47", "-767.31,151.49", "NORSE_FORESTER", 13)
+CREATE_VILLAGER_POS("-779.69,141.47", "-767.31,151.49", "NORSE_HOUSEWIFE", 18)
+CREATE_VILLAGER_POS("-779.69,141.47", "-704.62,122.31", "NORSE_HOUSEWIFE", 8)
+CREATE_ABODE(900, "-702.20,105.53", "NORSE_ABODE_F", 1177, 888, 0, 0)
+CREATE_VILLAGER_POS("-705.45,106.99", "-702.20,105.53", "NORSE_FORESTER", 13)
+CREATE_VILLAGER_POS("-705.45,106.99", "-702.20,105.53", "NORSE_HOUSEWIFE", 48)
+CREATE_VILLAGER_POS("-705.45,106.99", "-702.20,105.53", "NORSE_HOUSEWIFE", 1)
+CREATE_ABODE(900, "-755.27,90.97", "NORSE_ABODE_A", 6217, 1000, 0, 0)
+CREATE_VILLAGER_POS("-754.97,93.93", "-755.27,90.97", "NORSE_FORESTER", 1)
+CREATE_VILLAGER_POS("-754.97,93.93", "-765.56,86.56", "NORSE_HOUSEWIFE", 24)
+CREATE_ABODE(900, "-774.79,92.58", "NORSE_ABODE_F", 5756, 888, 0, 0)
+CREATE_VILLAGER_POS("-772.92,95.61", "-811.55,119.58", "NORSE_HOUSEWIFE", 6)
+CREATE_VILLAGER_POS("-772.92,95.61", "-765.56,86.56", "NORSE_FORESTER", 13)
+CREATE_ABODE(900, "-906.86,94.09", "NORSE_ABODE_E", 0, 1000, 0, 0)
+CREATE_VILLAGER_POS("-906.91,82.21", "-782.63,152.23", "NORSE_FORESTER", 5)
+CREATE_VILLAGER_POS("-906.91,82.21", "-782.63,152.23", "NORSE_FORESTER", 5)
+CREATE_VILLAGER_POS("-906.91,82.21", "-906.86,94.09", "NORSE_FORESTER", 13)
+CREATE_VILLAGER_POS("-906.91,82.21", "-906.86,94.09", "NORSE_HOUSEWIFE", 3)
+CREATE_VILLAGER_POS("-906.91,82.21", "-782.57,97.55", "NORSE_FORESTER", 20)
+CREATE_VILLAGER_POS("-906.91,82.21", "-709.75,113.09", "NORSE_HOUSEWIFE", 30)
+CREATE_ABODE(900, "-881.77,176.70", "NORSE_ABODE_GRAVEYARD", 0, 1000, 0, 0)
+CREATE_ABODE(900, "-846.17,32.59", "NORSE_ABODE_C", 1588, 1000, 0, 0)
+CREATE_VILLAGER_POS("-854.01,32.48", "-755.27,90.97", "NORSE_FORESTER", 13)
+CREATE_VILLAGER_POS("-854.01,32.48", "-846.17,32.59", "NORSE_FORESTER", 5)
+CREATE_VILLAGER_POS("-854.01,32.48", "-846.17,32.59", "NORSE_HOUSEWIFE", 8)
+CREATE_VILLAGER_POS("-854.01,32.48", "-788.12,103.35", "NORSE_FORESTER", 35)
+CREATE_ABODE(900, "-695.01,209.27", "NORSE_ABODE_C", 2486, 1000, 0, 0)
+CREATE_VILLAGER_POS("-699.81,203.07", "-755.27,90.97", "NORSE_HOUSEWIFE", 6)
+CREATE_VILLAGER_POS("-699.81,203.07", "-695.01,209.27", "NORSE_FORESTER", 24)
+CREATE_VILLAGER_POS("-699.81,203.07", "-695.01,209.27", "NORSE_HOUSEWIFE", 30)
+CREATE_ABODE(900, "-733.21,81.36", "NORSE_ABODE_STORAGE_PIT", 3730, 1000, 20000, 30000)
+CREATE_ABODE(900, "-802.99,107.32", "NORSE_ABODE_D", 5039, 1000, 0, 0)
+CREATE_VILLAGER_POS("-796.25,104.55", "-802.99,107.32", "NORSE_HOUSEWIFE", 8)
+CREATE_VILLAGER_POS("-796.25,104.55", "-802.99,107.32", "NORSE_HOUSEWIFE", 17)
+CREATE_VILLAGER_POS("-796.25,104.55", "-713.05,105.14", "NORSE_FORESTER", 13)
+CREATE_VILLAGER_POS("-796.25,104.55", "-713.05,105.14", "NORSE_HOUSEWIFE", 8)
+CREATE_VILLAGER_POS("-796.25,104.55", "-704.62,122.31", "NORSE_FORESTER", 30)
+CREATE_TOWN_CENTRE(900, "-754.78,131.31", "NORSE_ABODE_TOWN_CENTRE", 6282, 990, 0)
+CREATE_ABODE(900, "-795.14,92.64", "NORSE_ABODE_A", 5366, 1000, 0, 0)
+CREATE_VILLAGER_POS("-792.71,94.37", "-802.99,107.32", "NORSE_FORESTER", 13)
+CREATE_VILLAGER_POS("-792.71,94.37", "-795.14,92.64", "NORSE_FORESTER", 28)
+CREATE_VILLAGER_POS("-792.71,94.37", "-795.14,92.64", "NORSE_HOUSEWIFE", 8)
+CREATE_ABODE(900, "-709.16,133.52", "NORSE_ABODE_F", 1963, 1000, 0, 0)
+CREATE_VILLAGER_POS("-712.91,132.09", "-709.16,133.52", "NORSE_FORESTER", 13)
+CREATE_VILLAGER_POS("-712.91,132.09", "-709.16,133.52", "NORSE_HOUSEWIFE", 8)
+CREATE_ABODE(900, "-709.75,113.09", "NORSE_ABODE_A", 1439, 1000, 0, 0)
+CREATE_VILLAGER_POS("-712.69,113.59", "-774.79,92.58", "NORSE_HOUSEWIFE", 8)
+CREATE_VILLAGER_POS("-712.69,113.59", "-709.75,113.09", "NORSE_FORESTER", 13)
+CREATE_ABODE(900, "-691.99,170.12", "NORSE_ABODE_CRECHE", 4907, 1000, 0, 0)
+CREATE_ABODE(900, "-707.14,145.21", "NORSE_ABODE_B", 1700, 1000, 0, 0)
+CREATE_VILLAGER_POS("-711.13,144.80", "-774.79,92.58", "NORSE_FORESTER", 5)
+CREATE_VILLAGER_POS("-711.13,144.80", "-707.48,145.18", "NORSE_FORESTER", 27)
+CREATE_VILLAGER_POS("-711.13,144.80", "-707.14,145.21", "NORSE_HOUSEWIFE", 50)
+CREATE_NEW_TOWN_FIELD(900, "-825.00,135.00", 2, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-735.00,195.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-725.00,195.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-725.00,185.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-735.00,185.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-825.00,145.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-815.00,145.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-805.00,145.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-935.00,95.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-925.00,95.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-925.00,105.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-935.00,105.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-855.00,55.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-855.00,45.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-845.00,55.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-835.00,55.00", 0, 0.000000)
+CREATE_NEW_TOWN_FIELD(900, "-835.00,45.00", 0, 0.000000)
+)";
+	// The positions on the first land, from the middle of the map: the creche, the piper's cave and where the player's
+	// creature stands, far from the town and the cave
+	constexpr glm::vec2 k_Creche {-691.99f, 170.12f};
+	constexpr glm::vec2 k_Cave {-589.2f, 252.12f};
+	constexpr glm::vec2 k_CreaturePlace {-645.0f, -451.0f};
+	const Command runRound {
+	    .kind = Kind::RunScript,
+	    .delaySeconds = 0.5f,
+	    .script = "PiedPiper",
+	    // As the first land sets them up: the piper's cave, the Norse town, the player's creature, and no round yet
+	    .scriptGlobals = {{"PiperCave", {.kind = Argument::Kind::Object, .index = 0}},
+	                      {"NorseTown", {.kind = Argument::Kind::Town}},
+	                      {"MyCreature", {.kind = Argument::Kind::Creature, .index = 0}},
+	                      {"PiedPiperInitiated", {.number = 0.0f}},
+	                      {"PiedPiperFinished", {.number = 0.0f}},
+	                      {"PiedPiperCompletedNow", {.number = 0.0f}},
+	                      {"PiedPiperChildrenInCave", {.number = 0.0f}},
+	                      {"PiedPiperDead", {.number = 0.0f}},
+	                      {"CaveOpen", {.number = 0.0f}}},
+	};
+	all.push_back({
+	    .id = "story.pied_piper_round",
+	    .name = "The Pied Piper takes the children of the Norse town",
+	    .facet = Facet::Story,
+	    .description = "The first land's Norse town, its creche and the piper's cave stand at their places on the first "
+	                   "land. The player's Cow stands 500 metres south of the town. The game's own PiedPiper script runs, "
+	                   "and three seconds in the creche is clicked.",
+	    .expected = "A scroll stands over the creche. On the click a film plays: the creche leader walks to the soap box "
+	                "and asks for help, the camera shows the piper at his cave and the cave's sounds. After the film the "
+	                "piper dances near the town, children join his flock, and he takes them to the cave. He leaves the "
+	                "dance after ten minutes or with five children, and the round starts again. When the Cow comes "
+	                "near the piper, he runs from it to his cave, and then the round starts again.",
+	    .environment = {.dispenserGrid = false, .landNumber = 1},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Creche.x - 20.0f, 12.0f, k_Creche.y - 22.0f},
+	                .look = {k_Creche.x, 4.0f, k_Creche.y}},
+	    .creatures = {Content(CreatureType::Cow, k_CreaturePlace, 0.0f, "player's cow")},
+	    .objects = {{.type = AnimatedStaticInfo::PiperCaveEntrance, .offset = k_Cave, .yawDegrees = -131.895f}},
+	    .landScript = k_NorseTown,
+	    .commands = {runRound,
+	                 {.kind = Kind::PointerTo, .delaySeconds = 2.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	    .objectsAfterLandScript = true,
+	});
+}
+
 /// The Ogre quest of the first land. The game's script runs at the same map positions as on the first land. The
 /// player's Cow is in the valley below the lair, where the script sends it. The scenario sets the flag of the fight
 /// lesson, thus the script makes the Ogre at the lair immediately. The scenario clicks the scroll after ten seconds.
@@ -2251,6 +2387,7 @@ CREATE_CITADEL("0.0,0.0", 0, "PLAYER_ONE", 4254, 1000)
 	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 0.5f}},
 	});
 	AddBreederOffers(all);
+	AddPiedPiperRound(all);
 	AddOgreLair(all);
 	AddGuideStorm(all);
 	AddRivalCreatureLoads(all);
@@ -7965,6 +8102,26 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.walk_back_on_the_way",
+	    .name = "Walked back while on the way",
+	    .facet = Facet::Leash,
+	    .description = "A tiger starts in the middle of the testbed. It is kept within 400 units of where it stands, as "
+	                   "a young creature is kept near its home. After one second its player orders it to look at its "
+	                   "reflection, and it walks north to the shore of the lake. After six seconds, on its way, the "
+	                   "area that holds it becomes 10 units wide.",
+	    .expected = "When the area becomes small, the tiger is out of it. It turns at once and walks back to where it "
+	                "started. It does not walk on to the lake first.",
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, -20.0f}, {60.0f, 160.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 0.0f},
+	    }},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.1f, .radius = 400.0f},
+	                 {.kind = Kind::ForceAction, .delaySeconds = 1.0f, .action = "LookAtReflection"},
+	                 {.kind = Kind::ConfineToHome, .delaySeconds = 6.0f, .radius = 10.0f}},
+	});
+
+	all.push_back({
 	    .id = "leash.tied",
 	    .name = "Tied to a tree and a rock",
 	    .facet = Facet::Leash,
@@ -12560,8 +12717,10 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 
 	// The tiger and a second loose scaffold stand inside the shot of objects.scaffold_starts_building, away from the
 	// hand's way, so that the shot and the hand's input stay the same. The tiger stays still until the input is over.
+	// The second scaffold is far from the village centre: the creature walks round the centre, and a scaffold near its
+	// edge is out of the creature's reach from there.
 	constexpr glm::vec2 k_SiteWatcher {-32.0f, 47.0f};
-	constexpr glm::vec2 k_SecondScaffold {-14.0f, 44.0f};
+	constexpr glm::vec2 k_SecondScaffold {-24.0f, 42.0f};
 	constexpr float k_WatcherWaits = 20.0f;
 	all.push_back({
 	    .id = "objects.creature_scaffold_on_site",

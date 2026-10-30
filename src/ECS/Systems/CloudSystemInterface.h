@@ -44,8 +44,8 @@ struct StormCloud
 	uint8_t flashGrey {0};
 };
 
-/// The frames of the clouds of the sky (components::Cloud) and the clouds of the storms. Only a computer that draws the
-/// world has this system.
+/// The frames of the clouds of the sky (components::Cloud, things of the drawn registry) and the clouds of the storms.
+/// Only a computer that draws the world has this system.
 class CloudSystemInterface
 {
 public:
