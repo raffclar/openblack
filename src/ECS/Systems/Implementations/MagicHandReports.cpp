@@ -27,6 +27,10 @@ using namespace openblack::ecs::systems;
 
 bool MagicSystem::SpellNeedsHandReportEachTurn() const
 {
+	if (_spells.empty())
+	{
+		return false;
+	}
 	const auto own = OwnPlayer();
 	const auto& registry = Locator::entitiesRegistry::value();
 	// The flock rule reads the info and the tribal power of the spell services, which are not const
