@@ -273,7 +273,6 @@
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/RendererInterface.h"
 #include "Gui/ScriptTexts.h"
 #include "Hand/HandClickRules.h"
 #include "Hand/HandGrabRules.h"
@@ -308,6 +307,7 @@
 #include "ScriptHeaders/ScriptStart.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
 #include "Temple/TempleEntrancePoint.h"
+#include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
 
 namespace openblack::chlapi
@@ -3946,7 +3946,7 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 	        },
 	};
 	const auto outcome = ecs::challenge_records::Record(registry, snapshot, call, turn, references);
-	if (outcome.takesPicture && Locator::rendererInterface::has_value())
+	if (outcome.takesPicture && Locator::rendererRequests::has_value())
 	{
 		// The picture is of the screen as the player sees it now
 		auto* picture = registry.TryGet<ecs::components::ChallengePicture>(outcome.record);
@@ -3956,7 +3956,7 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 		}
 		// The renderer takes the picture at the end of a draw, so the request goes to the main thread
 		PostToMainThread(MainThreadApi::Renderer, [name = ecs::challenge_pictures::Ask(*picture, outcome.record)] {
-			Locator::rendererInterface::value().RequestScreenPicture(name, &ecs::challenge_pictures::Take);
+			Locator::rendererRequests::value().RequestScreenPicture(name, &ecs::challenge_pictures::Take);
 		});
 	}
 	if (!outcome.alignment.has_value() || !Locator::alignmentSystem::has_value() || !Locator::infoConstants::has_value())

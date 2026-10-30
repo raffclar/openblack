@@ -19,12 +19,14 @@
 #include <fmt/format.h>
 #include <glm/glm.hpp>
 
+#include "3D/TempleScreenInterface.h"
 #include "Camera/Camera.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
-#include "Gui/GameInterface.h"
+#include "Gui/GameFont.h"
+#include "Gui/TextDatabase.h"
 #include "Locator.h"
 #include "MiracleFxSystem.h"
 

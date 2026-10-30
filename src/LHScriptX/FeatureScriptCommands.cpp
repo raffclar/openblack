@@ -88,7 +88,6 @@
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
 #include "Hand/HandStart.h"
 #include "InfoConstants.h"
 #include "Locator.h"

@@ -18,7 +18,7 @@
 #include <stb_image_write.h>
 
 #include "ECS/ChallengePictures.h"
-#include "Graphics/ScreenshotCapture.h"
+#include "Visual/ScreenView.h"
 
 using namespace openblack;
 using namespace openblack::creature_web_page;

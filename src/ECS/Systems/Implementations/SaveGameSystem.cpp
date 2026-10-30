@@ -96,13 +96,12 @@
 #include "ECS/ThingMapPlace.h"
 #include "ECS/WorldSave.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
-#include "Graphics/RendererInterface.h"
-#include "Gui/SavingBox.h"
+#include "Gui/SavingBoxRules.h"
 #include "Gui/TextDatabase.h"
 #include "LandChange.h"
 #include "Locator.h"
 #include "MainThreadWork.h"
+#include "Visual/RendererRequestsInterface.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -1935,7 +1934,7 @@ bool SaveGameSystem::AnyPictureWaiting() const
 
 void SaveGameSystem::AskForPicture(std::vector<uint32_t> slots)
 {
-	if (!Locator::rendererInterface::has_value())
+	if (!Locator::rendererRequests::has_value())
 	{
 		for (const auto slot : slots)
 		{
@@ -1943,10 +1942,10 @@ void SaveGameSystem::AskForPicture(std::vector<uint32_t> slots)
 		}
 		return;
 	}
-	auto name = std::format("{}save-picture/{}", graphics::ScreenPictures::k_Prefix, _pictureRequests++);
+	auto name = std::format("{}save-picture/{}", graphics::k_ScreenPicturePrefix, _pictureRequests++);
 	// The renderer takes the picture at the end of a draw, so the request goes to the main thread
 	PostToMainThread(MainThreadApi::Renderer, [name] {
-		Locator::rendererInterface::value().RequestScreenPicture(name, [](const graphics::ScreenView& screen) {
+		Locator::rendererRequests::value().RequestScreenPicture(name, [](const graphics::ScreenView& screen) {
 			return gamesave::SampleScreen({.width = screen.width,
 			                               .height = screen.height,
 			                               .pitch = screen.pitch,

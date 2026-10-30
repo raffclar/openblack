@@ -83,6 +83,14 @@ public:
 
 	[[nodiscard]] float GetSfxVolume() override;
 	[[nodiscard]] float GetMusicVolume() override;
+
+	[[nodiscard]] bool HasAudio() const override;
+	void SetListenerOverride(std::optional<Listener> listener) override;
+	[[nodiscard]] float GetGlobalVolume() override;
+	[[nodiscard]] bool IsMusicActive() const override;
+	[[nodiscard]] std::vector<MusicChannelState> GetMusicChannelStates() const override;
+	void SimulateDeviceLoss(bool lost) override;
+	[[nodiscard]] const ecs::Registry* GetEmitters() override;
 };
 
 /// The options of the music player for a music request of the world. The bank stays empty: the player finds the bank
