@@ -1795,6 +1795,15 @@ void Runner::UpdateComputerActions()
 		};
 		const auto first = thingOf(action.first);
 		const auto second = thingOf(action.second);
+		if (action.forceAtOnce)
+		{
+			if (!Locator::computerPlayerSystem::value().ForceAction(action.player, action.node, first, second))
+			{
+				SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} did not start {}",
+				                   static_cast<int>(action.player), action.node);
+			}
+			continue;
+		}
 		if (!debug::computer_actions::Force(action.player, action.node, first, second))
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} has no node {}",

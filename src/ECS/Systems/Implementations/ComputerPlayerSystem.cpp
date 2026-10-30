@@ -422,7 +422,13 @@ void ComputerPlayerSystem::ClearActions(PlayerNames player)
 {
 	if (auto* mind = FindMind(player); mind != nullptr)
 	{
+		// The action stops, and the hand puts down what it holds where it is
 		computer_hand::Clear(mind->hand);
+		computer_world::GameHandObjects objects(player, *mind);
+		if (!objects.HandHasRoom())
+		{
+			objects.PutDownHeld(mind->hand.hand);
+		}
 		mind->mind.queue.clear();
 	}
 }
@@ -638,7 +644,7 @@ bool ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint3
 	{
 		mind->mind = computer_mind::MakeMind();
 	}
-	computer_world::Validate(*mind);
+	computer_world::Validate(name, *mind);
 	if (!mind->switchedOn || mind->mind.paused || computer_world::HeldByHelp(*mind))
 	{
 		return false;

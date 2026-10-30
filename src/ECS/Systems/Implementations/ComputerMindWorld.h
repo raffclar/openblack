@@ -77,8 +77,8 @@ private:
 };
 
 /// Before the mind's turn: the god forgets its miracles, its seen things and its queued actions whose things are gone,
-/// and stops an action whose things are gone
-void Validate(components::ComputerPlayer& state);
+/// and stops an action whose things are gone. Then its hand puts down what it holds where the hand is.
+void Validate(PlayerNames player, components::ComputerPlayer& state);
 /// The thing is in the world, and it is not a villager on its way to dying
 [[nodiscard]] bool Available(entt::entity thing);
 /// The cinema bars hold the mind of the god while it has no script action and no queued action

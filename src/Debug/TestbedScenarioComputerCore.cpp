@@ -84,4 +84,31 @@ void testbed_scenarios::AddComputerGodCoreScenarios(std::vector<Scenario>& all)
 	                         .first = {.kind = ComputerActionThing::Kind::Object, .object = 0},
 	                         .second = {.kind = ComputerActionThing::Kind::Marker, .point = {20.0f, 120.0f}}}},
 	});
+	all.push_back({
+	    .id = "mind.computer_god_carry_puts_down_held_thing",
+	    .name = "A computer god that must carry a villager while its hand holds a pot",
+	    .facet = Facet::Mind,
+	    .description =
+	        "As the scenario of the far carry, but a pot of wood lies 10 metres north of the temple of player "
+	        "two. After 3 seconds, a testbed tool gives the god the action DIRECTPickupAndDropObject with the "
+	        "pot and a marker far to the west. When the hand holds the pot, the tool forces the same action "
+	        "at once with the man and a marker 20 metres to the east of him, as the second land's film forces Khazar "
+	        "to carry the builder while his hand can hold a thing.",
+	    .expected = "The hand takes the pot and flies west. At the second action it lets go of the pot at once where the "
+	                "hand is, then flies to the man, picks him up and carries him to the marker. The game log shows "
+	                "each deed of the hand.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-120.0f, -100.0f), glm::vec2(40.0f, 130.0f)}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 120.0f}},
+	                {.type = PotInfo::HandWood, .offset = {0.0f, -80.0f}, .amount = 300}},
+	    .landScript = k_ComputerGodFarTempleScript,
+	    .computerActions = {{.afterTurns = 30,
+	                         .node = "DIRECTPickupAndDropObject",
+	                         .first = {.kind = ComputerActionThing::Kind::Object, .object = 1},
+	                         .second = {.kind = ComputerActionThing::Kind::Marker, .point = {-400.0f, -80.0f}}},
+	                        {.afterTurns = 60,
+	                         .node = "DIRECTPickupAndDropObject",
+	                         .first = {.kind = ComputerActionThing::Kind::Object, .object = 0},
+	                         .second = {.kind = ComputerActionThing::Kind::Marker, .point = {20.0f, 120.0f}},
+	                         .forceAtOnce = true}},
+	});
 }

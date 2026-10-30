@@ -1312,6 +1312,9 @@ struct ComputerActionSetup
 	std::string_view node;
 	ComputerActionThing first;
 	ComputerActionThing second;
+	/// The tool forces the action as a land script's force command does: the god stops the action that it does and starts
+	/// this one at once, rather than after the actions before it in the queue
+	bool forceAtOnce {false};
 };
 
 struct Scenario
