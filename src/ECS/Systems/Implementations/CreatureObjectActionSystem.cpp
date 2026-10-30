@@ -1292,10 +1292,14 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	}
 	// A walk to a thing to pick up or stomp on fails when it does not move the creature for a time. It fails as a walk
 	// to a place where the creature cannot stand fails. Then the mind does not choose the thing again for a time
-	// (deviation 90).
+	// (deviation 90). The turns of one route search that has not found a route yet do not count.
+	const auto* moves = registry.TryGet<const CreatureLocomotion>(creature);
+	const auto searchingFor = moves != nullptr && moves->follower.GetState() == creature_route::Follower::State::Planning
+	                              ? moves->destination
+	                              : std::nullopt;
 	if (newTurn && (action.kind == Kind::PickUp || action.kind == Kind::Destroy) &&
 	    creature_object_actions::StallsOnTurn(action.stall, glm::xz(transform.position),
-	                                          registry.AllOf<ScriptControlled>(creature)))
+	                                          registry.AllOf<ScriptControlled>(creature), searchingFor))
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} gives up its walk to {}: it got nowhere",
 		                    entt::to_integral(creature), action.target.has_value() ? entt::to_integral(*action.target) : 0u);
