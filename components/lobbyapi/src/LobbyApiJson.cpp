@@ -9,10 +9,13 @@
 
 #include "LobbyApiJson.h"
 
+#include <charconv>
+
 #include <algorithm>
 #include <array>
 #include <limits>
 #include <string>
+#include <system_error>
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
@@ -230,7 +233,34 @@ bool ReadServerEntry(const Json& object, ServerEntry& out)
 	       ReadString(object, "gamever", out.gamever) && ReadInteger(object, "infoversion", out.infoversion) &&
 	       ReadInteger(object, "creatureversion", out.creatureversion) && ReadInteger(object, "oosversion", out.oosversion) &&
 	       ReadArray(object, "players", out.players, ReadRoomPlayer) && ReadString(object, "url", out.url) &&
-	       ReadTime(object, "updated", out.updated, false);
+	       ReadTime(object, "updated", out.updated, false) && ReadString(object, "map", out.map, false);
+}
+
+/// A text of hex digits as a number. False when the text is empty, longer than 16 digits or has another character.
+bool ReadHex64(const Json& object, std::string_view key, uint64_t& out)
+{
+	std::string text;
+	if (!ReadString(object, key, text) || text.empty() || text.size() > 16)
+	{
+		return false;
+	}
+	const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), out, 16);
+	return error == std::errc() && end == text.data() + text.size();
+}
+
+bool IsSha256Text(std::string_view text)
+{
+	return text.size() == 64 &&
+	       std::ranges::all_of(text, [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
+}
+
+bool ReadOnlineMap(const Json& object, OnlineMap& out)
+{
+	return ReadInteger(object, "number", out.number) && ReadString(object, "name", out.name) &&
+	       ReadString(object, "file", out.file) && !out.file.empty() && ReadInteger(object, "players", out.players) &&
+	       ReadString(object, "sha256", out.sha256) && IsSha256Text(out.sha256) &&
+	       ReadHex64(object, "checksum", out.checksum) && ReadInteger(object, "size", out.size) &&
+	       ReadString(object, "url", out.url) && !out.url.empty();
 }
 
 bool ReadRankingEntry(const Json& object, RankingEntry& out)
@@ -451,6 +481,12 @@ std::optional<ServerList> ParseServerList(std::string_view text)
 {
 	return ParseWith<ServerList>(
 	    text, [](const Json& object, ServerList& out) { return ReadArray(object, "servers", out.servers, ReadServerEntry); });
+}
+
+std::optional<MapList> ParseMapList(std::string_view text)
+{
+	return ParseWith<MapList>(
+	    text, [](const Json& object, MapList& out) { return ReadArray(object, "maps", out.maps, ReadOnlineMap); });
 }
 
 std::optional<ServerBanList> ParseServerBanList(std::string_view text)

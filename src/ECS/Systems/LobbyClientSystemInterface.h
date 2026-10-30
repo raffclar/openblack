@@ -143,6 +143,18 @@ public:
 	/// Asks the lobby for the events of a channel of the push channel ("lobby", "servers" or "server-<id>"), or stops
 	/// them. The client asks again for each channel when the push channel opens again.
 	virtual void WatchChannel(std::string channel, bool watch) = 0;
+	/// The lands of network games that the lobby gives to the players of a room that plays them (deviation 169). A lobby
+	/// with no such list gives an error.
+	virtual void GetMaps(LobbyCallback<lobby_api::MapList> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
+	/// The bytes of the file of a land of the list. The lobby gives the file only to a player with a ticket for a room
+	/// that plays it. The answer can come compressed; the callback gets the bytes of the file.
+	virtual void DownloadMap(const lobby_api::OnlineMap& /*map*/, LobbyCallback<std::vector<uint8_t>> callback)
+	{
+		callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::NotConfigured}});
+	}
 	/// A ticket to join a game server, as a god or as an observer. The address of the game socket must be a WSS
 	/// address.
 	virtual void RequestJoinTicket(std::string serverId, game_socket::Role role,

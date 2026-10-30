@@ -9,6 +9,8 @@
 
 #include "OnlineMapFile.h"
 
+#include <limits>
+
 namespace
 {
 constexpr size_t k_HeaderSize = 8;
@@ -21,6 +23,14 @@ uint32_t ReadLength(std::span<const std::byte> bytes)
 		value |= static_cast<uint32_t>(bytes[i]) << (8 * i);
 	}
 	return value;
+}
+
+void WriteLength(std::vector<uint8_t>& out, size_t length)
+{
+	for (size_t i = 0; i < 4; ++i)
+	{
+		out.push_back(static_cast<uint8_t>((length >> (8 * i)) & 0xFF));
+	}
 }
 } // namespace
 
@@ -41,4 +51,20 @@ std::optional<openblack::onlinemap::OnlineMapFile> openblack::onlinemap::Parse(s
 	    .script = std::string_view(reinterpret_cast<const char*>(script.data()), script.size()),
 	    .landscape = bytes.subspan(k_HeaderSize + scriptLength, landscapeLength),
 	};
+}
+
+std::optional<std::vector<uint8_t>> openblack::onlinemap::Write(std::string_view script, std::span<const uint8_t> landscape)
+{
+	constexpr size_t k_MostLength = std::numeric_limits<uint32_t>::max();
+	if (script.size() > k_MostLength || landscape.size() > k_MostLength)
+	{
+		return std::nullopt;
+	}
+	std::vector<uint8_t> out;
+	out.reserve(k_HeaderSize + script.size() + landscape.size());
+	WriteLength(out, script.size());
+	WriteLength(out, landscape.size());
+	out.insert(out.end(), script.begin(), script.end());
+	out.insert(out.end(), landscape.begin(), landscape.end());
+	return out;
 }

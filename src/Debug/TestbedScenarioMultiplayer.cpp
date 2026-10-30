@@ -49,7 +49,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 18> boxes = {{
+	const std::array<BoxScenario, 19> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -143,6 +143,12 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "demonstration answers each ping after 48 ms.",
 	     "The game room's player list shows \"God 2: Alice (CURRENT) ping 48\" in Alice's god colour, in the same letters "
 	     "as the other lines. The lines of Bob and Eve show no ping. The number shows after the first second in the room."},
+	    {"multiplayer.map_download_failed", "The multiplayer front end: a land that the lobby does not give",
+	     Stage::MapDownloadFailed,
+	     "The player joins Bob's game. The room plays a land that the player does not have, and the lobby of the "
+	     "demonstration does not give its file (deviation 169).",
+	     "A white box says \"ERROR: Could not download map from Internet.\" and \"Please check your Internet "
+	     "connection.\" with OK, over the dimmed room. OK closes the box, and the player stays in the room."},
 	}};
 	for (const auto& box : boxes)
 	{

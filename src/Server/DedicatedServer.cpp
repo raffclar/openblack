@@ -64,6 +64,8 @@
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
+#include "Online/GodsRingMap.h"
+#include "Online/GodsRingMapFile.h"
 #include "Online/NetworkLand.h"
 #include "Online/OnlineMapLand.h"
 #include "PlayerSlots.h"
@@ -163,6 +165,8 @@ public:
 		Replay,
 	};
 	void SetNetwork(std::function<NetworkStep()> beforeTurns) { _beforeTurns = std::move(beforeTurns); }
+	/// The file of the map for 32 gods that the server plays, empty for another land
+	[[nodiscard]] const std::vector<uint8_t>& GodsRingMapFile() const { return _godsRingMap; }
 
 	void StartupStep(std::string_view /*step*/) override {}
 	void LoadHandAnimation() override {}
@@ -183,6 +187,8 @@ private:
 	StartDevices _startDevices;
 	sim_run::Request _simulation;
 	std::filesystem::path _startMap;
+	/// The file of the map for 32 gods, which the server makes from its game folder and sends to the lobby
+	std::vector<uint8_t> _godsRingMap;
 	bool _servicesStarted {false};
 	/// The texts of the game, which the help's dialogue reads
 	std::optional<gui::TextDatabase> _texts;
@@ -369,10 +375,14 @@ bool ServerWorld::StartLand()
 	}
 	if (_settings.godsRingMap)
 	{
-		if (!land.LoadGodsRingMap())
+		// The server makes the map's file from the land of its game folder, and plays the file that its players get
+		// from the lobby (deviation 171)
+		auto file = gods_ring_map_file::MakeFromGameFolder(Locator::filesystem::value());
+		if (!file.has_value() || !land.LoadGodsRingMapFile(*file))
 		{
 			return false;
 		}
+		_godsRingMap = std::move(*file);
 	}
 	else if (_settings.testbed)
 	{
@@ -782,8 +792,15 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	{
 		landChecksum = online::start_rules::LandChecksum(fileSystem.ReadAll(landPath));
 	}
+	// The map for 32 gods is a file that the players get from the lobby, so the clients compare its checksum too
+	std::string landName = scriptLand ? network_land::WireName(landPath) : std::string();
+	if (settings.godsRingMap)
+	{
+		landName = gods_ring_map_file::WireName();
+		landChecksum = online::start_rules::LandChecksum(world.GodsRingMapFile());
+	}
 	game_socket::Start start {
-	    .land = scriptLand ? network_land::WireName(landPath) : std::string(),
+	    .land = std::move(landName),
 	    .testbed = settings.testbed,
 	    .seed = RoomStartFor(settings).seed,
 	    .turn = Locator::time::value().GetTurn(),
@@ -835,7 +852,17 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		}
 		start = *savedStart;
 	}
-	if (const auto error = network->Start(*settings.network, start, landChecksum, godSlots); error.has_value())
+	// The players do not have the map for 32 gods: the server sends its file to the lobby (deviation 169)
+	std::optional<lobby_status::CustomMap> customMap;
+	if (settings.godsRingMap)
+	{
+		customMap = lobby_status::CustomMap {.file = std::string(gods_ring_map::k_File),
+		                                     .name = std::string(gods_ring_map::k_Name),
+		                                     .players = static_cast<int32_t>(gods_ring_map::k_Slots),
+		                                     .bytes = world.GodsRingMapFile()};
+	}
+	if (const auto error = network->Start(*settings.network, start, landChecksum, godSlots, std::move(customMap));
+	    error.has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The game role cannot start: {}", *error);
 		network.reset();

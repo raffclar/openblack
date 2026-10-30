@@ -93,6 +93,8 @@ public:
 	void GetMyClans(LobbyCallback<lobby_api::ClanList> callback) override;
 	void GetClan(int64_t clanId, LobbyCallback<lobby_api::ClanDetails> callback) override;
 	void GetClanLogo(int64_t clanId, LobbyCallback<std::vector<uint8_t>> callback) override;
+	void GetMaps(LobbyCallback<lobby_api::MapList> callback) override;
+	void DownloadMap(const lobby_api::OnlineMap& map, LobbyCallback<std::vector<uint8_t>> callback) override;
 
 	void GetPlayerRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback) override;
 	void GetClanRanking(int32_t page, LobbyCallback<lobby_api::RankingPage> callback) override;
@@ -117,6 +119,8 @@ private:
 		std::function<void(online::HttpResponse&&)> done;
 		/// The lobby refused the access token one time, and the client got a new one
 		bool retried {false};
+		/// A large file (online::HttpRequest::large)
+		bool large {false};
 	};
 
 	[[nodiscard]] std::string Address(std::string_view apiPath) const;
@@ -131,7 +135,7 @@ private:
 	void EndSession();
 	/// Sends a call that needs the session, and reads its answer with a parser
 	template <typename Value, typename Parser>
-	void CallFor(online::HttpMethod method, std::string path, LobbyCallback<Value> callback, Parser parse);
+	void CallFor(online::HttpMethod method, std::string path, LobbyCallback<Value> callback, Parser parse, bool large = false);
 
 	void OpenPush();
 	void HandlePush(std::string_view text);

@@ -32,6 +32,7 @@
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
 #include "Server/DedicatedServer.h"
+#include "Server/MapExport.h"
 
 namespace
 {
@@ -59,6 +60,7 @@ int main(int argc, char* argv[])
 		("testbed", "The flat testbed in place of a land.")
 		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
+		("write-gods-ring-map", "Write the file of the network map for 32 gods, which the players get from the lobby, to this file, then stop.", cxxopts::value<std::string>())
 		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
 		("seed", "Tools: the seed of every random number of the world, which also pins the date of the world. Without it, the world starts from the seed of a room and reads the date from the clock of the computer.", cxxopts::value<uint32_t>())
 		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
@@ -154,6 +156,21 @@ int main(int argc, char* argv[])
 		settings.openingName = result["skip-opening"].as<std::string>();
 		settings.opening = openblack::new_game_choice::ParseNewGameStart(settings.openingName);
 		settings.godsRingMap = result.count("gods-ring-map") != 0;
+		if (result.count("write-gods-ring-map") != 0)
+		{
+			const std::filesystem::path out(result["write-gods-ring-map"].as<std::string>());
+			if (const auto error = openblack::server::WriteGodsRingMap(settings.gamePath, out); error.has_value())
+			{
+				std::cerr << "openblack-server: " << *error
+				          << "
+				             ";
+				    return EXIT_FAILURE;
+			}
+			std::cout << "openblack-server: wrote the map for 32 gods to " << out.generic_string()
+			          << "
+			             ";
+			    return EXIT_SUCCESS;
+		}
 		settings.soak.allComputerGods = result.count("all-computer-gods") != 0;
 		if (result.count("ai-seed") != 0)
 		{

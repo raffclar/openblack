@@ -33,6 +33,7 @@
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "Online/NetworkLand.h"
+#include "Online/OnlineMapStoreInterface.h"
 #include "PlayerSlots.h"
 
 using namespace openblack::ecs::systems;
@@ -171,15 +172,10 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	    .gamePassword = std::move(join.gamePassword),
 	    .name = std::move(join.name),
 	    .readLand = [](std::string_view land) -> std::optional<std::vector<uint8_t>> {
-		    // The land of the start is a file in the Scripts folder of the game on this computer, or a map file in its
-		    // "Online Maps" folder
-		    auto& fileSystem = Locator::filesystem::value();
-		    const auto path = network_land::PathOf(land, fileSystem.GetPath<filesystem::Path::Scripts>());
-		    if (!path.has_value() || !fileSystem.Exists(*path))
-		    {
-			    return std::nullopt;
-		    }
-		    return fileSystem.ReadAll(*path);
+		    // The land of the start is a file in the Scripts folder of the game on this computer, or a map file that the
+		    // player got from the lobby, or a map file in the "Online Maps" folder of the game
+		    const auto* store = Locator::onlineMapStore::has_value() ? &Locator::onlineMapStore::value() : nullptr;
+		    return online::ReadStartLand(land, store, Locator::filesystem::value());
 	    },
 	    .readCreature = std::move(readCreature),
 	    .readAlignment =

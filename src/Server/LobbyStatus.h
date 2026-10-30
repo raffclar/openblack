@@ -16,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <LobbyApi.h>
 
@@ -64,5 +65,26 @@ enum class Phase : uint8_t
 /// The report for the room: each seat that a god's player has (connected or away) is a god of the room. A seat with a
 /// subject that is not an account id is not in the report.
 [[nodiscard]] lobby_api::ServerStatus MakeStatus(const Room& room, Phase phase, std::span<const LockstepHost::Seat> seats);
+
+/// A land of a network game that the players do not have, which the server sends to the lobby (deviation 169). The
+/// lobby gives it only to the players with a ticket for the room of the server.
+struct CustomMap
+{
+	/// The name of the file with no folder and no extension, for example "obm_32p_1"
+	std::string file;
+	/// The name of the land in the list of the lands
+	std::string name;
+	/// The gods that the land takes
+	int32_t players {0};
+	/// The bytes of the ".map" file
+	std::vector<uint8_t> bytes;
+};
+
+/// The time before the server sends the map again after the lobby did not take it
+constexpr auto k_MapAgainAfter = std::chrono::seconds(30);
+
+/// The address of the call that sends the map of the room to the lobby: PUT <api>/servers/<id>/map with the name of
+/// the file, the name of the land and its gods in the query. The text of each value is percent-encoded.
+[[nodiscard]] std::string MapAddress(std::string_view api, std::string_view serverId, const CustomMap& map);
 
 } // namespace openblack::server::lobby_status

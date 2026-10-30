@@ -138,6 +138,7 @@
 #include "Locator.h"
 #include "MainThreadWork.h"
 #include "Online/GodsRingMap.h"
+#include "Online/GodsRingMapFile.h"
 #include "Online/OnlineMapLand.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
@@ -425,30 +426,19 @@ void LandSystem::LoadTestbed()
 
 bool LandSystem::LoadGodsRingMap()
 {
+	// The village of each slot comes from a land of the game for network play, which the player has. The game makes the
+	// map's file from it, and loads the file as a player loads the file from the lobby.
+	const auto file = gods_ring_map_file::MakeFromGameFolder(Locator::filesystem::value());
+	return file.has_value() && LoadGodsRingMapFile(*file);
+}
+
+bool LandSystem::LoadGodsRingMapFile(std::span<const uint8_t> file)
+{
 	const InspectorLoading loading {std::string(gods_ring_map::k_File)};
-	// The village of each slot comes from a land of the game for network play, which the player has
-	std::optional<gods_ring_map::VillageTemplate> village;
-	try
+	auto parts = gods_ring_map_file::Read(file);
+	if (!parts.has_value())
 	{
-		auto& fileSystem = Locator::filesystem::value();
-		const std::filesystem::path templatePath(gods_ring_map::k_TemplateMap);
-		if (fileSystem.Exists(templatePath))
-		{
-			const auto bytes = fileSystem.ReadAll(templatePath);
-			if (const auto file = onlinemap::Parse(std::as_bytes(std::span(bytes))); file.has_value())
-			{
-				village = gods_ring_map::ReadTemplate(file->script, gods_ring_map::k_TemplateGod, gods_ring_land::k_MapMiddle);
-			}
-		}
-	}
-	catch (const std::exception& e)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land {} does not load: {}", gods_ring_map::k_TemplateMap, e.what());
-	}
-	if (!village.has_value())
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map for 32 gods needs the village of the land {}",
-		                    gods_ring_map::k_TemplateMap);
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the map for 32 gods does not read");
 		return false;
 	}
 
@@ -461,7 +451,7 @@ bool LandSystem::LoadGodsRingMap()
 	PrepareNewLand(land_change::Kind::Testbed);
 	_landPath = gods_ring_map::k_File;
 	View().ShowLoadingFrame();
-	InitializeLevel(gods_ring_land::Build());
+	InitializeLevel(std::move(parts->land));
 	SetUpLandscape();
 	View().ShowLoadingFrame();
 
@@ -478,7 +468,7 @@ bool LandSystem::LoadGodsRingMap()
 	try
 	{
 		lhscriptx::Script script;
-		script.Load(gods_ring_map::MapScript(*village, slots), [this]() { View().ShowLoadingFrame(); });
+		script.Load(parts->script, [this]() { View().ShowLoadingFrame(); });
 	}
 	catch (const std::exception& e)
 	{
