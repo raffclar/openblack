@@ -46,6 +46,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Online/SkirmishPing.h"
+#include "PlayerSlots.h"
 
 namespace openblack::ecs::systems
 {
@@ -62,7 +63,7 @@ public:
 	{
 		_players.fill(entt::null);
 		_registry.Each<const components::Player>([this](entt::entity entity, const components::Player& player) {
-			if (player.name < PlayerNames::_COUNT)
+			if (player_slots::IsPlayerNumber(player.name))
 			{
 				_players.at(static_cast<size_t>(player.name)) = entity;
 			}
@@ -167,7 +168,7 @@ private:
 	}
 
 	Registry& _registry;
-	std::array<entt::entity, static_cast<size_t>(PlayerNames::_COUNT)> _players {};
+	std::array<entt::entity, player_slots::k_PlayerNumbers> _players {};
 };
 } // namespace
 

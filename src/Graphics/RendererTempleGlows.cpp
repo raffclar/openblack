@@ -28,6 +28,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlayerColour.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -160,7 +161,7 @@ void Renderer::DrawTempleCreedShells(const DrawSceneDesc& desc) const
 		const particles::draw::ShellDraw shell {
 		    .object = entt::null,
 		    .zoom = heart_look::ShellReach(temple.destructionClock) * pulse,
-		    .argb = Player::k_Colours.at(static_cast<size_t>(temple.owner)),
+		    .argb = player_colour::Of(temple.owner),
 		    .texture = texture,
 		    .alphaTexture = alpha,
 		    .uvOffset = volume_glow::UvOffset({heart_look::k_ShellSlideAcross, heart_look::k_ShellSlideUp}, since),

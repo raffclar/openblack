@@ -17,6 +17,7 @@
 #include "Controls.h"
 #include "GameFont.h"
 #include "Gui/MultiplayerFrontEndRules.h"
+#include "PlayerSlots.h"
 
 namespace openblack::gui
 {
@@ -173,7 +174,9 @@ void ChatControls::RebuildRows()
 		{
 			for (const auto& player : _people.players)
 			{
-				const auto colour = PlayerColour(multiplayer::GodColourBits(static_cast<int32_t>(player.slot) + 1));
+				// The chat colours count the gods of the room from 1, in the order of their slots
+				const auto god = player_slots::SlotOfPlayer(player.slot).value_or(0) + 1;
+				const auto colour = PlayerColour(multiplayer::GodColourBits(static_cast<int32_t>(god)));
 				items.push_back({.text = std::u16string(k_PlayerIndent) + player.name,
 				                 .mouseCell = std::nullopt,
 				                 .colour = ToColour(colour),

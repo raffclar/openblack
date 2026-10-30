@@ -19,6 +19,7 @@
 #include <gtest/gtest.h>
 
 #include "Commands/TurnCodec.h"
+#include "PlayerSlots.h"
 
 using namespace openblack;
 using namespace openblack::turn_codec;
@@ -30,6 +31,12 @@ namespace
 entt::entity Entity(uint32_t value)
 {
 	return static_cast<entt::entity>(value);
+}
+
+/// The player of a god slot, with the slot taken from any number
+PlayerNames GodOf(uint64_t number)
+{
+	return *player_slots::PlayerOfSlot(static_cast<size_t>(number % player_slots::k_MaxPlayers));
 }
 
 /// One command of each kind, with fields that show the order of the bytes
@@ -289,7 +296,7 @@ Action RandomAction(std::mt19937& random)
 		speech.recipients.resize(bits(random) % 33);
 		for (auto& recipient : speech.recipients)
 		{
-			recipient = static_cast<PlayerNames>(bits(random) % 32);
+			recipient = GodOf(bits(random));
 		}
 		speech.text.resize(bits(random) % 300);
 		for (auto& character : speech.text)
@@ -299,7 +306,7 @@ Action RandomAction(std::mt19937& random)
 		return speech;
 	}
 	case 40:
-		return ChatTaunt {.recipients = {static_cast<PlayerNames>(bits(random) % 32)}, .taunt = bits(random)};
+		return ChatTaunt {.recipients = {GodOf(bits(random))}, .taunt = bits(random)};
 	case 41:
 		return QuickSave {};
 	case 42:
@@ -337,9 +344,8 @@ Frame RandomFrame(std::mt19937& random)
 		turn.blocks.resize(random() % 40);
 		for (auto& block : turn.blocks)
 		{
-			block = StampedBlock {.sender = static_cast<PlayerNames>(random() % 32),
-			                      .sequence = static_cast<uint16_t>(random()),
-			                      .actions = RandomActions(random)};
+			block = StampedBlock {
+			    .sender = GodOf(random()), .sequence = static_cast<uint16_t>(random()), .actions = RandomActions(random)};
 		}
 		return turn;
 	}
@@ -424,8 +430,7 @@ TEST(TurnCodec, EachFrameKindGoesToBytesAndBack)
 	TurnBundle turn {.turn = 81'201, .blocks = {}};
 	for (size_t i = 0; i < all.size(); ++i)
 	{
-		turn.blocks.push_back(
-		    {.sender = static_cast<PlayerNames>((i * 2) % 31), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
+		turn.blocks.push_back({.sender = GodOf((i * 2) % 31), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
 	}
 	ExpectRoundTrip(turn);
 	ExpectRoundTrip(TurnBundle {.turn = 0, .blocks = {}});
@@ -513,8 +518,10 @@ TEST(TurnCodec, TheEncoderRefusesAFrameThatBreaksALimit)
 	commands.resize(k_MostBlockCommands + 1, HandTake {.object = Entity(1)});
 	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = commands}).empty());
 	EXPECT_TRUE(
-	    Encode(TurnBundle {.turn = 0, .blocks = {{.sender = static_cast<PlayerNames>(32), .sequence = 0, .actions = {}}}})
+	    Encode(TurnBundle {.turn = 0, .blocks = {{.sender = static_cast<PlayerNames>(33), .sequence = 0, .actions = {}}}})
 	        .empty());
+	EXPECT_TRUE(
+	    Encode(TurnBundle {.turn = 0, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}}).empty());
 	// A turn larger than the largest frame
 	TurnBundle huge {.turn = 0, .blocks = {}};
 	huge.blocks.resize(2000, StampedBlock {.sender = PlayerNames::PLAYER_ONE, .sequence = 0, .actions = commands});
@@ -604,7 +611,7 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	tattoo[56] = 0x40;
 	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
 
-	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}});
+	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::PLAYER_ONE, .sequence = 0, .actions = {}}}});
 	turn[8] = 32;
 	EXPECT_EQ(Decode(turn).error, DecodeError::Value);
 
@@ -724,7 +731,7 @@ TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 	TurnBundle turn {.turn = 1, .blocks = {}};
 	for (size_t player = 0; player < 32; ++player)
 	{
-		turn.blocks.push_back({.sender = static_cast<PlayerNames>(player), .sequence = 0, .actions = commands});
+		turn.blocks.push_back({.sender = GodOf(player), .sequence = 0, .actions = commands});
 	}
 	const auto encoded = Encode(turn);
 	// The commands without the hand report
@@ -954,7 +961,11 @@ TEST(TurnCodec, ALineOfTheChatKeepsToItsLimits)
 	// A player past the slots of the game does not go
 	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0,
 	                                 .turn = 0,
-	                                 .actions = {ChatTaunt {.recipients = {static_cast<PlayerNames>(32)}, .taunt = 0}}})
+	                                 .actions = {ChatTaunt {.recipients = {static_cast<PlayerNames>(33)}, .taunt = 0}}})
+	                .empty());
+	// The neutral player has no god slot, so it gets no line
+	EXPECT_TRUE(Encode(CommandBlock {
+	                       .sequence = 0, .turn = 0, .actions = {ChatTaunt {.recipients = {PlayerNames::NEUTRAL}, .taunt = 0}}})
 	                .empty());
 
 	// The reader refuses the same: a slot out of range, too many players, and a line that is too long
@@ -968,4 +979,45 @@ TEST(TurnCodec, ALineOfTheChatKeepsToItsLimits)
 	// A line that says more characters than it has stops early
 	const std::vector<uint8_t> shortLine {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 41, 0, 2, 0, 'a', 0};
 	EXPECT_EQ(Decode(shortLine).error, DecodeError::Truncated);
+}
+
+TEST(TurnCodec, TheFrameCarriesTheGodSlotOfEachPlayer)
+{
+	// The gods of a land keep their numbers on the wire. The god after them is in slot 7, and the last god in slot 31.
+	const TurnBundle turn {
+	    .turn = 4,
+	    .blocks = {{.sender = PlayerNames::PLAYER_SEVEN,
+	                .sequence = 0,
+	                .actions = {ChatTaunt {.recipients = {static_cast<PlayerNames>(8), static_cast<PlayerNames>(32)},
+	                                       .taunt = 1}}},
+	               {.sender = static_cast<PlayerNames>(8), .sequence = 1, .actions = {}},
+	               {.sender = static_cast<PlayerNames>(32), .sequence = 2, .actions = {}}},
+	};
+	const auto bytes = Encode(turn);
+	ASSERT_FALSE(bytes.empty());
+	// Version, kind, turn (4 bytes), count (2 bytes), then the first sender
+	EXPECT_EQ(bytes[8], 6u);
+	// The sender's sequence (2 bytes), the count of the commands, the tag and the count of the players
+	EXPECT_EQ(bytes[14], 7u);
+	EXPECT_EQ(bytes[15], 31u);
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& back = std::get<TurnBundle>(*decoded.frame);
+	ASSERT_EQ(back.blocks.size(), 3u);
+	EXPECT_EQ(back.blocks[0].sender, PlayerNames::PLAYER_SEVEN);
+	EXPECT_EQ(back.blocks[1].sender, static_cast<PlayerNames>(8));
+	EXPECT_EQ(back.blocks[2].sender, static_cast<PlayerNames>(32));
+	const auto& taunt = std::get<ChatTaunt>(back.blocks[0].actions[0]);
+	EXPECT_EQ(taunt.recipients, (std::vector<PlayerNames> {static_cast<PlayerNames>(8), static_cast<PlayerNames>(32)}));
+}
+
+TEST(TurnCodec, TheGodsOfALandHaveTheBytesOfTheirNumbers)
+{
+	for (uint8_t number = 0; number < static_cast<uint8_t>(PlayerNames::NEUTRAL); ++number)
+	{
+		const auto bytes = Encode(
+		    TurnBundle {.turn = 1, .blocks = {{.sender = static_cast<PlayerNames>(number), .sequence = 0, .actions = {}}}});
+		ASSERT_FALSE(bytes.empty());
+		EXPECT_EQ(bytes[8], number);
+	}
 }

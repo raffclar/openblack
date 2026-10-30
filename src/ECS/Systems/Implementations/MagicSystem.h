@@ -33,6 +33,7 @@
 #include "Magic/SpellBehaviours.h"
 #include "Magic/SpellGrid.h"
 #include "Magic/SpellSeedRules.h"
+#include "PlayerSlots.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -481,7 +482,7 @@ private:
 	std::deque<entt::entity> _spells;
 	std::unordered_map<entt::entity, std::unique_ptr<SpellLink>> _links;
 	std::unique_ptr<HandEffectLink> _handEffectLink;
-	std::array<std::unique_ptr<magic::PlayerSpellCaster>, static_cast<size_t>(PlayerNames::_COUNT)> _players;
+	std::array<std::unique_ptr<magic::PlayerSpellCaster>, player_slots::k_PlayerNumbers> _players;
 	magic::ObjectSpellCaster _objectCaster;
 	magic::GlobeSpellCaster _globeCaster;
 	CreatureSpellCaster _creatureCaster;

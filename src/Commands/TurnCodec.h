@@ -28,7 +28,7 @@
 /// - Frame: version (u8), kind (u8), then the body of the kind.
 /// - Commands (client to server): sequence (u16), turn (u32), count (u8), then the commands.
 /// - Turn (server to clients): turn (u32), block count (u16), then each block: sender (u8), sequence (u16), count (u8),
-///   then the commands.
+///   then the commands. The sender is the god slot of the player (player_slots::SlotOfPlayer).
 /// - Checksum (both ways): turn (u32), checksum (u64). The server sends its checksum of each turn, and each client sends
 ///   its own.
 /// - Ping and pong: id (u32), time (u64). A pong sends back the id and the time of its ping.

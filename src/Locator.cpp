@@ -611,7 +611,10 @@ void EmplaceChat(bool developer)
 		std::vector<PlayerNames> players;
 		for (size_t slot = 0; slot < player_slots::k_MaxPlayers; ++slot)
 		{
-			players.push_back(static_cast<PlayerNames>(slot));
+			if (const auto player = player_slots::PlayerOfSlot(slot))
+			{
+				players.push_back(*player);
+			}
 		}
 		return players;
 	};
@@ -664,7 +667,10 @@ void EmplaceChat(bool developer)
 		{
 			for (const auto& god : *gods)
 			{
-				names[static_cast<PlayerNames>(god.slot)] = gui::ToUtf16(god.name);
+				if (const auto player = player_slots::PlayerOfSlot(god.slot))
+				{
+					names[*player] = gui::ToUtf16(god.name);
+				}
 			}
 		}
 		return names;
