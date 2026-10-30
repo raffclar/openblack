@@ -2693,7 +2693,7 @@
   "writes": true
  },
  {
-  "description": "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen; first lets go of a creature that sim.feedback holds",
+  "description": "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen, in about a second, with the same size on the screen at each camera distance; first lets go of a creature that sim.feedback holds. The game forgets a path in the middle of the drawing, as it does for the player, when the camera moves or when the hand of the player takes or lets go of a thing or a leash changes: then no gesture is recognised. Ask players.gestures (last_recognised, circle_seconds_left) after the drawing to see that it was recognised, and draw again if it was not",
   "kind": "object",
   "parameters": [
    {
