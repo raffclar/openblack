@@ -100,6 +100,34 @@ class SaveDiffTests(unittest.TestCase):
         self.assertEqual(save_diff.differing_parts(result), ["ECSW:Tag", "SYST:fire", "TIME"])
         self.assertEqual(save_diff.differing_parts({}), [])
 
+    def test_the_start_of_a_game_explains_the_alignment_and_the_towns_at_the_start(self):
+        first = entities_block([1], [("Alignment", ["value"], [(1, [b"\x00\x00\x80\x3f"])])])
+        second = entities_block([1], [("Alignment", ["value"], [(1, [b"\x00\x00\x00\x00"])])])
+        context_a = b"\x07" * 8 + b"\x00\x00\x00\x00"
+        context_b = b"\x07" * 8 + b"\x01\x00\x00\x00"
+        result = save_diff.compare_files(world([("ECSW", first), ("RCTX", context_a)]),
+                                         world([("ECSW", second), ("RCTX", context_b)]))
+        self.assertEqual(save_diff.not_game_start(result), [])
+
+    def test_the_start_of_a_game_does_not_explain_other_values(self):
+        first = entities_block([1], [("Transform", ["position"], [(1, [b"\x00"])])])
+        second = entities_block([1], [("Transform", ["position"], [(1, [b"\x01"])])])
+        result = save_diff.compare_files(world([("ECSW", first), ("RCTX", b"\x00" * 12), ("TIME", b"\x00")]),
+                                         world([("ECSW", second), ("RCTX", b"\x01" + b"\x00" * 11), ("TIME", b"\x01")]))
+        self.assertEqual(save_diff.not_game_start(result), ["ECSW:Transform", "RCTX", "TIME"])
+
+    def test_the_sounds_that_go_at_a_load_are_the_start_of_a_game(self):
+        tag = [(2, [b"\x05"])]
+        first = entities_block([1, 2], [("SoundTag", ["sound"], tag), ("Tag", ["value"], [(1, [b"\x00"])])])
+        second = entities_block([1, 3], [("Tag", ["value"], [(1, [b"\x00"])])])
+        result = save_diff.compare_files(world([("ECSW", first)]), world([("ECSW", second)]))
+        self.assertEqual(save_diff.not_game_start(result), [])
+        # A new entity of another kind is not a sound that went
+        third = entities_block([1, 3], [("SoundTag", ["sound"], tag),
+                                        ("Tag", ["value"], [(1, [b"\x00"]), (3, [b"\x00"])])])
+        result = save_diff.compare_files(world([("ECSW", first)]), world([("ECSW", third)]))
+        self.assertIn("ECSW:Tag", save_diff.not_game_start(result))
+
 
 if __name__ == "__main__":
     unittest.main()

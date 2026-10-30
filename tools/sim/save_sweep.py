@@ -15,13 +15,15 @@ At each check the game is held, and three round trips follow with no frame and n
                   The two states must have the same bytes: a server snapshot and a rejoin load world states.
     saved game    the game saves (A), loads A and saves (B), loads B and saves (C). Each load of a saved game starts a
                   game, as the game does: the player takes the alignment that the profile keeps, and the statistics
-                  note the start again. B and C must have the same bytes; A and B can differ only by these starts.
+                  note the start again (see save_diff.GAME_START_VALUES). B and C must have the same bytes; A and B can
+                  differ only by the start of a game.
 
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/sweep --scenarios all --turns 100
     python tools/sim/save_sweep.py --exe <openblack> --out E:/runs/land1 --land Land1.txt --at 0,500,2000
 
 The result is one line of JSON for each check in sweep.jsonl, and a summary in sweep.json. The exit code is 0 only when
-every world state and every second saved-game round trip has the same bytes.
+every world state and every second saved-game round trip has the same bytes, and the start of a game explains every
+difference of the first saved-game round trip.
 """
 
 import argparse
@@ -108,8 +110,9 @@ def check(game, options, name):
     b, c = results[second_slot], results[third_slot]
     game_start = save_diff.compare_files(a, b)
     again = save_diff.compare_files(b, c)
-    entry["saved_game"] = {"same": not again, "parts": save_diff.differing_parts(again),
-                           "game_start": save_diff.differing_parts(game_start)}
+    unexplained = save_diff.not_game_start(game_start)
+    entry["saved_game"] = {"same": not again and not unexplained, "parts": save_diff.differing_parts(again),
+                           "game_start": save_diff.differing_parts(game_start), "not_game_start": unexplained}
     if options.keep:
         if again:
             entry["saved_game"]["report"] = save_diff.text_report(again)
