@@ -16,7 +16,6 @@
 #include <stdexcept>
 
 #include <L3DFile.h>
-#include <bgfx/bgfx.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/matrix.hpp>
@@ -37,8 +36,9 @@ namespace
 /// The layout of the skins of a model with these flags, on this device
 l3d_skin::Layout SkinLayoutOf(uint32_t flags)
 {
-	const auto* caps = Locator::graphicsDevice::has_value() ? Locator::graphicsDevice::value().GetCaps() : nullptr;
-	const bool has1555 = caps != nullptr && (caps->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0;
+	const bool has1555 =
+	    Locator::graphicsDevice::has_value() &&
+	    Locator::graphicsDevice::value().HasTextureFormat(graphics::TextureFormat::BGR5A1, graphics::TextureUse::Texture2D);
 	return l3d_skin::LayoutOf(flags, has1555);
 }
 

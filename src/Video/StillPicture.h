@@ -16,7 +16,7 @@
 #include <optional>
 #include <vector>
 
-#include "Graphics/VideoOverlay.h"
+#include "Visual/VideoPlanes.h"
 
 namespace openblack::bink
 {
@@ -44,7 +44,7 @@ public:
 	/// Decodes a frame, from 0. False when it is damaged or past the end: the picture stays the last good one
 	bool Decode(uint32_t frame);
 	/// The picture decoded last, for the video overlay
-	[[nodiscard]] graphics::VideoOverlay::Planes GetPlanes() const;
+	[[nodiscard]] graphics::VideoPlanes GetPlanes() const;
 	/// The picture decoded last as blue, green, red and an unused byte a pixel, with the game's video colours
 	[[nodiscard]] std::vector<uint8_t> GetBgrx() const;
 
@@ -77,7 +77,7 @@ struct StillPicture
 	/// Blue, green, red and an unused byte a pixel
 	std::vector<uint8_t> bgrx;
 
-	[[nodiscard]] graphics::VideoOverlay::Planes GetPlanes() const
+	[[nodiscard]] graphics::VideoPlanes GetPlanes() const
 	{
 		return {.y = y,
 		        .u = u,

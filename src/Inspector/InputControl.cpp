@@ -381,7 +381,8 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	     .description =
 	         "The pointer, the buttons held, the actions held and whether a box has the keyboard, the hand, what the "
 	         "cursor picks (with whether the Action button takes it "
-	         "into the hand, or takes hold of a town's totem under it, and why not), and the input still to come",
+	         "into the hand or scoops a handful out of it, or takes hold of a town's totem under it, and why not), and the "
+	         "input still to come",
 	     .parameters = {},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},

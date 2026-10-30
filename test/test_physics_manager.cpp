@@ -69,6 +69,9 @@ protected:
 		auto& altar = _info->mobileStatic.at(static_cast<size_t>(MobileStaticInfo::StandaloneAltar));
 		altar.mobileType = MobileStaticInfo::None;
 		altar.meshId = MeshId::Dummy;
+		auto& idol = _info->mobileStatic.at(static_cast<size_t>(MobileStaticInfo::Idol));
+		idol.mobileType = MobileStaticInfo::Idol;
+		idol.meshId = MeshId::Dummy;
 		auto& offering = _info->pot.at(0);
 		offering.meshId = MeshId::I_OfferingFood;
 		offering.canBecomeAPhysicsObject = 1;
@@ -156,6 +159,15 @@ TEST_F(PhysicsClassesTest, LanternsAndTheSingingStonesBaseArePlainObjects)
 	EXPECT_TRUE(base.interacts);
 	EXPECT_EQ(base.row, MaterialRow::DefaultUnmovable);
 	EXPECT_FALSE(base.dynamic);
+}
+
+TEST_F(PhysicsClassesTest, AnImmovableIdolStaysAnObstacleThatIsHit)
+{
+	// The quest idol is held immovable. It does not move, but a body that hits it still records a hit on it
+	const auto idol = Classify(Static(MobileStaticInfo::Idol), {.immovable = true});
+	EXPECT_TRUE(idol.interacts);
+	EXPECT_TRUE(idol.immovable);
+	EXPECT_FALSE(idol.dynamic);
 }
 
 TEST_F(PhysicsClassesTest, AThingHeldImmovableNeverMoves)

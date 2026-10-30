@@ -67,6 +67,7 @@ public:
 	[[nodiscard]] bool IsInInfluenceOf(PlayerNames player) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldOf(PlayerNames player) const override;
 	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
+	[[nodiscard]] bool WouldScoop(entt::entity object) const override;
 	[[nodiscard]] float HangOf(entt::entity object) const override;
 	[[nodiscard]] std::optional<uint32_t> TakeAmountToolTip() override { return std::exchange(_amountToolTip, std::nullopt); }
 	void Reset() override;

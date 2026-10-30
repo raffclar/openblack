@@ -16,7 +16,6 @@
 #include <utility>
 
 #include <PackFile.h>
-#include <bgfx/bgfx.h>
 #include <entt/core/hashed_string.hpp>
 #include <fmt/format.h>
 #include <glm/geometric.hpp>
@@ -28,7 +27,6 @@
 #include "Common/MachineClock.h"
 #include "EngineConfig.h"
 #include "Graphics/GraphicsDeviceInterface.h"
-#include "Graphics/GraphicsHandleBgfx.h"
 #include "Gui/GameFont.h"
 #include "Gui/TextDatabase.h"
 #include "Input/KeyRebinding.h"
@@ -237,7 +235,8 @@ void TempleScrolls::Create(const Facts& facts, KeptTextures kept)
 		{
 			// A texture in memory, 256 texels square, or 128 at the lowest detail levels, 16 bits a texel
 			const auto& device = Locator::graphicsDevice::value();
-			scroll.texture = device.CreateTexture2D(side, side, 1, graphics::TextureFormat::BGRA4, BGFX_TEXTURE_NONE, nullptr);
+			scroll.texture =
+			    device.CreateTexture2D(side, side, 1, graphics::TextureFormat::BGRA4, graphics::texture_flags::k_None, nullptr);
 			device.SetName(*scroll.texture, fmt::format("Scroll {}", place.subMesh));
 		}
 		_scrolls.push_back(scroll);

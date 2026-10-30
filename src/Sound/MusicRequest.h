@@ -13,6 +13,7 @@
 
 #include <functional>
 #include <optional>
+#include <string>
 
 #include <glm/vec3.hpp>
 
@@ -59,6 +60,15 @@ struct MusicChannelPlace
 {
 	int32_t groupId {0};
 	uint32_t playingChunk {1};
+};
+
+/// A music channel that plays, as the debug tools show it: the path of its bank, its volume out of 127, and the place
+/// from which the player hears it when it has a place
+struct MusicChannelState
+{
+	std::string bank;
+	int32_t volume {0};
+	std::optional<glm::vec3> position;
 };
 
 } // namespace openblack::audio

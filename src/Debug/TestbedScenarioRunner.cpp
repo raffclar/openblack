@@ -39,7 +39,6 @@
 #include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/trigonometric.hpp>
-#include <imgui.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/DayNightClock.h"
@@ -52,7 +51,6 @@
 #include "Animals/BirdRules.h"
 #include "Animals/GrazerRules.h"
 #include "Animals/HunterRules.h"
-#include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
@@ -248,7 +246,6 @@
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GesturePaths.h"
-#include "Graphics/RendererInterface.h"
 #include "Gui/GameTexts.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
@@ -258,6 +255,7 @@
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
+#include "Input/InputDeviceInterface.h"
 #include "Input/PointerSettle.h"
 #include "LHScriptX/FeatureScriptCommands.h"
 #include "LHScriptX/Script.h"
@@ -272,7 +270,9 @@
 #include "Sound/GameMusic.h"
 #include "Sound/HeaderOverrides.h"
 #include "Sound/MusicMood.h"
+#include "Sound/SoundRequestInterface.h"
 #include "TestbedDispenserGrid.h"
+#include "Visual/RendererRequestsInterface.h"
 #include "Windowing/WindowingInterface.h"
 
 #include "../Profiler.h"
@@ -439,12 +439,10 @@ glm::vec2 AheadOf(const Transform& transform)
 /// doesn't take the scenario's presses
 void KeepDebugWindowsOffTheMouse(bool off)
 {
-	if (ImGui::GetCurrentContext() == nullptr)
+	if (Locator::debugGui::has_value())
 	{
-		return;
+		Locator::debugGui::value().KeepOffTheMouse(off);
 	}
-	auto& io = ImGui::GetIO();
-	io.ConfigFlags = off ? (io.ConfigFlags | ImGuiConfigFlags_NoMouse) : (io.ConfigFlags & ~ImGuiConfigFlags_NoMouse);
 }
 /// Whether a command sends its creature somewhere, or has it face, throw or point somewhere
 bool HasPoint(Kind kind)
@@ -821,7 +819,7 @@ std::string CheckProfileFolder()
 /// The custom music player plays a track of the custom music folder, or stops; the music moods look at once
 std::string PlayCustomMusic(size_t track)
 {
-	auto* player = Locator::audio::has_value() ? Locator::audio::value().GetCustomMusic() : nullptr;
+	auto* player = Locator::sounds::has_value() ? Locator::sounds::value().GetCustomMusic() : nullptr;
 	if (player == nullptr || !Locator::musicMoodSystem::has_value())
 	{
 		return "failed: no custom music player";
@@ -2599,7 +2597,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::PlayGuidanceVoice:
 	{
-		if (!Locator::audio::has_value())
+		if (!Locator::sounds::has_value() || !Locator::sounds::value().HasAudio())
 		{
 			return "no audio";
 		}
@@ -2615,7 +2613,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			options.maxDistance = command.radius;
 			options.callerWins = audio::k_CallerDistancesWin;
 		}
-		const auto started = Locator::audio::value().StartSoundEffect(resources::HashIdentifier(sample), options);
+		const auto started = Locator::sounds::value().StartSoundEffect(resources::HashIdentifier(sample), options);
 		return fmt::format("{} asked for at volume {} and pitch {}%{}{}", sample, guidance::k_VoiceVolume,
 		                   guidance::k_VoicePitch, command.ctrl ? ", placed" : ", heard everywhere",
 		                   started == entt::null ? ", not started" : "");
@@ -2655,12 +2653,12 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			key.key.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
 			key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
 			key.key.keysym.scancode = scancode;
-			key.key.keysym.sym = SDL_GetKeyFromScancode(scancode);
+			key.key.keysym.sym = input::Device().KeyFromScancode(scancode);
 			key.key.keysym.mod = KMOD_NONE;
 			input::MarkInjected(key);
-			SDL_PushEvent(&key);
+			input::Device().PushEvent(key);
 		}
-		return fmt::format("key {} pressed", SDL_GetScancodeName(scancode));
+		return fmt::format("key {} pressed", input::Device().ScancodeName(scancode));
 	}
 	case Kind::PlainKeyDown:
 	case Kind::PlainKeyRepeat:
@@ -2675,13 +2673,13 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
 		key.key.repeat = command.kind == Kind::PlainKeyRepeat ? 1 : 0;
 		key.key.keysym.scancode = scancode;
-		key.key.keysym.sym = SDL_GetKeyFromScancode(scancode);
+		key.key.keysym.sym = input::Device().KeyFromScancode(scancode);
 		key.key.keysym.mod = KMOD_NONE;
 		input::MarkInjected(key);
 		Locator::gameActionSystem::value().HoldScriptedKey(static_cast<int>(scancode), down);
-		SDL_PushEvent(&key);
+		input::Device().PushEvent(key);
 		constexpr std::array<std::string_view, 3> k_Done {"down", "repeated", "let go"};
-		return fmt::format("key {} {}", SDL_GetScancodeName(scancode),
+		return fmt::format("key {} {}", input::Device().ScancodeName(scancode),
 		                   k_Done.at(static_cast<size_t>(command.kind) - static_cast<size_t>(Kind::PlainKeyDown)));
 	}
 	case Kind::BuildWorshipSites:
@@ -5346,7 +5344,7 @@ void PushMotion(const input::GameActionInterface::ScriptedPointer& pointer, glm:
 	event.motion.xrel = moved.x;
 	event.motion.yrel = moved.y;
 	input::MarkInjected(event);
-	SDL_PushEvent(&event);
+	input::Device().PushEvent(event);
 }
 /// What the player's hand holds, for the log
 std::string HeldByHand()
@@ -5678,7 +5676,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		event.button.x = pointer.position.x;
 		event.button.y = pointer.position.y;
 		input::MarkInjected(event);
-		SDL_PushEvent(&event);
+		input::Device().PushEvent(event);
 		_handWatchSeconds = 0.5f;
 		break;
 	}
@@ -5696,7 +5694,7 @@ std::string Runner::GivePointerCommand(const Command& command)
 		event.wheel.y = static_cast<int32_t>(command.value) * (command.ctrl ? -1 : 1);
 		event.wheel.preciseY = static_cast<float>(event.wheel.y);
 		input::MarkInjected(event);
-		SDL_PushEvent(&event);
+		input::Device().PushEvent(event);
 		break;
 	}
 	default:
@@ -5944,7 +5942,7 @@ void Runner::Measure()
 		stages.at(i) = static_cast<float>(Milliseconds(entry.stages.at(i).total));
 	}
 	// What the renderer last drew, the frame before
-	const auto draws = Locator::rendererInterface::has_value() ? Locator::rendererInterface::value().GetDrawsOfLastFrame() : 0u;
+	const auto draws = Locator::rendererRequests::has_value() ? Locator::rendererRequests::value().GetDrawsOfLastFrame() : 0u;
 	_recorder->Add(static_cast<float>(Milliseconds(frame)), static_cast<float>(Milliseconds(update)),
 	               static_cast<float>(Milliseconds(frame - update)), stages, static_cast<float>(draws));
 	if (++_framesSinceSummary >= k_FramesPerSummary || _recorder->Count() == _recorder->Capacity())

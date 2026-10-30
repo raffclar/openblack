@@ -22,10 +22,10 @@
 #include "Creature/CreatureCave.h"
 #include "Creature/TattooEditor.h"
 
-namespace openblack::gui
+namespace openblack
 {
-class GameInterface;
-} // namespace openblack::gui
+class TempleScreenInterface;
+} // namespace openblack
 
 namespace openblack::ecs::systems
 {
@@ -44,8 +44,8 @@ public:
 	/// shows the player's creature by the fire for as long as the player is in the temple
 	virtual void Update(std::chrono::duration<float, std::milli> frameTime) = 0;
 	/// The game's texts and font the screen writes with, none while the game has no interface
-	virtual void SetInterface(const gui::GameInterface* interface) = 0;
-	[[nodiscard]] virtual const gui::GameInterface* GetInterface() const = 0;
+	virtual void SetInterface(const TempleScreenInterface* interface) = 0;
+	[[nodiscard]] virtual const TempleScreenInterface* GetInterface() const = 0;
 
 	virtual void Open() = 0;
 	virtual void Close() = 0;

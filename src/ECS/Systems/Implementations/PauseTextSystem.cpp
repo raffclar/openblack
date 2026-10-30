@@ -16,8 +16,10 @@
 #include <glm/mat4x4.hpp>
 #include <glm/matrix.hpp>
 
+#include "3D/TempleScreenInterface.h"
 #include "Camera/Camera.h"
-#include "Gui/GameInterface.h"
+#include "Gui/GameFont.h"
+#include "Gui/TextDatabase.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;

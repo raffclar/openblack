@@ -22,7 +22,6 @@
 
 #include <InstantSaves.h>
 #include <PackFile.h>
-#include <SDL_keyboard.h>
 #include <SaveSlots.h>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
@@ -86,6 +85,7 @@
 #include "Gui/ToolTips.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/InputDeviceInterface.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
@@ -568,7 +568,7 @@ void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t 
 	default:
 		break;
 	}
-	SDL_StartTextInput();
+	input::Device().StartTextInput();
 }
 
 void TempleInterior::UpdateSaveGameRoom()

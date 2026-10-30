@@ -28,7 +28,6 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Game.h"
 #include "Locator.h"
 #include "Resources/Resources.h"
 

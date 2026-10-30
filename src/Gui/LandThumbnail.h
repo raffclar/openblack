@@ -20,7 +20,7 @@
 
 #include <glm/vec2.hpp>
 
-#include "DialogPainter.h"
+#include "DialogRect.h"
 
 namespace openblack::onlinemap
 {

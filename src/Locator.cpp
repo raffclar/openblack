@@ -28,8 +28,6 @@
 #include "3D/Implementations/TempleInterior.h"
 #include "3D/Implementations/UnloadedIsland.h"
 #include "3D/LandData.h"
-#include "Audio/AudioManagerNoOp.h"
-#include "Audio/GameSoundRequests.h"
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
@@ -187,11 +185,10 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
-#include "Graphics/HeadlessRenderer.h"
-#include "Graphics/RendererInterface.h"
 #include "Gui/TextDatabase.h"
 #include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
+#include "Input/InputDeviceInterface.h"
 #include "LHVM.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/NetworkSession.h"
@@ -210,6 +207,7 @@
 #include "Online/Desktop/CurlWebSocketClient.h"
 #endif
 #include "Resources/Resources.h"
+#include "Sound/SoundRequestInterface.h"
 #if __ANDROID__
 #include "FileSystem/AndroidFileSystem.h"
 #else
@@ -348,7 +346,6 @@ using openblack::ecs::systems::WeatherSystem;
 using openblack::ecs::systems::WonderSystem;
 using openblack::ecs::systems::WorkshopSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
-using openblack::graphics::HeadlessRenderer;
 using openblack::input::GameActionMap;
 using openblack::lhvm::LHVM;
 using openblack::resources::Resources;
@@ -368,14 +365,6 @@ void openblack::InitializeSimulationCore()
 #endif
 	Locator::rng::emplace<RandomNumberManagerProduction>();
 	Locator::gameRandom::emplace<GameRandomProduction>();
-}
-
-bool openblack::InitializeHeadlessEngine() noexcept
-{
-	Locator::rendererInterface::reset(std::make_unique<HeadlessRenderer>().release());
-	Locator::audio::emplace<AudioManagerNoOp>();
-	Locator::sounds::emplace<audio::GameSoundRequests>();
-	return true;
 }
 
 namespace openblack
@@ -868,9 +857,9 @@ void openblack::ShutDownServices()
 	}
 
 	// Stop all sounds
-	if (Locator::audio::has_value())
+	if (Locator::sounds::has_value())
 	{
-		Locator::audio::value().Stop();
+		Locator::sounds::value().StopAllSounds();
 	}
 
 	// Manually delete the assets here before BGFX renderer clears its buffers resulting in invalid handles in our assets
@@ -1051,8 +1040,10 @@ void openblack::ShutDownServices()
 	Locator::entitiesMap::reset();
 	Locator::drawnRegistry::reset();
 	Locator::entitiesRegistry::reset();
+	Locator::rendererRequests::reset();
 	Locator::rendererInterface::reset();
 	Locator::windowing::reset();
+	Locator::inputDevice::reset();
 	Locator::events::reset();
 	Locator::camera::reset();
 	Locator::config::reset();

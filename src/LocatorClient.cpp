@@ -41,6 +41,7 @@
 #include "EngineConfig.h"
 #include "Graphics/BgfxGraphicsDevice.h"
 #include "Graphics/RendererInterface.h"
+#include "Input/SdlInputDevice.h"
 #include "Locator.h"
 #include "Visual/UploadMode.h"
 #include "Windowing/Sdl2WindowingSystem.h"
@@ -66,10 +67,12 @@ void openblack::InitializeWindow(const std::string& title, int width, int height
 
 bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 {
+	// The keyboard, the mouse and the event queue of the window system. The world reads them through this device.
+	Locator::inputDevice::emplace<input::SdlInputDevice>();
 	// The device goes first: the renderer makes its buffers and textures on it. Its service is made before the services of
 	// the resources, so that it stays until the last texture and buffer of the resources is deleted.
 	Locator::graphicsDevice::emplace<graphics::BgfxGraphicsDevice>();
-	Locator::rendererInterface::reset(RendererInterface::Create(backend, vsync).release());
+	EmplaceRenderer(RendererInterface::Create(backend, vsync));
 	if (!Locator::rendererInterface::has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to create renderer");

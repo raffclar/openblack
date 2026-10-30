@@ -189,9 +189,18 @@ enum class OwnCommands
 /// Reads the turn and the checksum from a line of the log, when the line has them
 [[nodiscard]] std::optional<std::pair<uint32_t, uint64_t>> ParseChecksumLine(std::string_view line);
 
+/// Starts the devices of the server, which use no hardware. Gives false when they do not start.
+using StartDevices = std::function<bool()>;
+
 /// Runs the world of the server until it gets to its last turn, or until the stop flag goes on. The function gets the
-/// checksum of each turn. Gives the exit code of the program.
+/// checksum of each turn. Gives the exit code of the program. The devices of the server are the devices with no hardware
+/// (InitializeHeadlessEngine). Only the library of these devices (openblack_headless) has this function.
 int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
         const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn);
+
+/// Runs the world of the server as Run does, with the devices that startDevices starts after the core services. The
+/// simulation does not know the renderer and the audio, so the caller gives them.
+int RunWithDevices(const ServerSettings& settings, const std::atomic<bool>& stop,
+                   const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn, const StartDevices& startDevices);
 
 } // namespace openblack::server

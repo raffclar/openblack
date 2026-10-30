@@ -10,8 +10,11 @@
 #include "KeyBindings.h"
 
 #include <algorithm>
+#include <string>
 
-#include <SDL_keyboard.h>
+#include <SDL_scancode.h>
+
+#include "InputDeviceInterface.h"
 
 namespace openblack::input
 {
@@ -186,8 +189,8 @@ std::string KeyChordName(const KeyChord& chord)
 	case Modifier::None:
 		break;
 	}
-	const char* keyName = SDL_GetScancodeName(chord.key);
-	return name + ((keyName != nullptr && keyName[0] != '\0') ? keyName : "?");
+	const auto keyName = Device().ScancodeName(chord.key);
+	return name + (!keyName.empty() ? std::string(keyName) : std::string("?"));
 }
 
 std::string_view MouseInputName(MouseInput mouse) noexcept

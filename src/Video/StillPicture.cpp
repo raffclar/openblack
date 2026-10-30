@@ -101,7 +101,7 @@ bool VideoFile::Decode(uint32_t frame)
 	return decoded;
 }
 
-graphics::VideoOverlay::Planes VideoFile::GetPlanes() const
+graphics::VideoPlanes VideoFile::GetPlanes() const
 {
 	const auto picture = _reader->GetPicture();
 	return {

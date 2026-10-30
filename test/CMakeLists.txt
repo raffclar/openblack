@@ -2200,6 +2200,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_icon_charge_looks test_icon_charge_looks.cpp)
 openblack_setup_and_add_test(test_boat_film_boat test_boat_film_boat.cpp)
+openblack_setup_and_add_test(test_input_device input/test_input_device.cpp)
 openblack_setup_and_add_test(test_particle_system_draw test_particle_system_draw.cpp)
 target_link_libraries(test_particle_system_draw PRIVATE psys)
 add_test(NAME test_server_check
@@ -2210,3 +2211,7 @@ openblack_setup_and_add_test(test_script_object test_script_object.cpp)
 openblack_setup_and_add_test(test_player_slots test_player_slots.cpp)
 openblack_setup_and_add_test(test_particle_save_parts test_particle_save_parts.cpp)
 target_link_libraries(test_particle_save_parts PRIVATE psys)
+add_test(NAME test_sim_includes
+         COMMAND ${CMAKE_COMMAND} -DCONFIG=${CMAKE_BINARY_DIR}/SimIncludesConfig.cmake
+                 -P ${CMAKE_SOURCE_DIR}/CMakeModules/CheckSimIncludes.cmake
+)
