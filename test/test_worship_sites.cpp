@@ -406,6 +406,33 @@ TEST(WorshipSiteSystem, AStandingTempleGivesItsPlayersTownsTheirTribesSitesToBui
 	EXPECT_EQ(f.registry.Get<const Mesh>(norseSite).id, 1u);
 }
 
+// The temples of all the players from one walk are the temples that TempleOf gives for each player: the first temple
+// made for the player, none for a player without one or with a temple that has no worship yet
+TEST(WorshipSiteSystem, TheTemplesOfThePlayersAreTheTempleOfEachPlayer)
+{
+	Fixture f;
+	const auto first = f.Temple(PlayerNames::PLAYER_TWO);
+	const auto second = f.Temple(PlayerNames::PLAYER_TWO);
+	const auto other = f.Temple(PlayerNames::PLAYER_ONE);
+	f.Temple(PlayerNames::PLAYER_THREE);
+	// The temples come into the worship in an order that is not the order that they were made
+	f.system->AddTemple(second, 0.0f, true);
+	f.system->AddTemple(other, 0.0f, true);
+	f.system->AddTemple(first, 0.0f, true);
+	constexpr size_t k_Count = 8;
+	const auto temples = f.system->TemplesOfPlayers(k_Count);
+	ASSERT_EQ(temples.size(), k_Count);
+	for (size_t player = 0; player < k_Count; ++player)
+	{
+		EXPECT_EQ(temples[player], f.system->TempleOf(static_cast<PlayerNames>(player)));
+	}
+	EXPECT_EQ(temples[static_cast<size_t>(PlayerNames::PLAYER_TWO)], first);
+	EXPECT_EQ(temples[static_cast<size_t>(PlayerNames::PLAYER_ONE)], other);
+	EXPECT_TRUE(temples[static_cast<size_t>(PlayerNames::PLAYER_THREE)] == entt::null);
+	// A shorter list leaves out the later players
+	EXPECT_EQ(f.system->TemplesOfPlayers(1).size(), 1u);
+}
+
 TEST(WorshipSiteSystem, ASiteTakesThePlaceNearestItsTribesNearestTown)
 {
 	Fixture f;
