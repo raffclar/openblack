@@ -665,6 +665,11 @@ public:
 	    : _settings(settings)
 	    , _store(settings.folder, settings.keep)
 	{
+		// The first snapshot comes during the game, so the server makes the data of the world states ready before the game
+		if (Locator::saveGameSystem::has_value())
+		{
+			Locator::saveGameSystem::value().PrepareWorldState();
+		}
 	}
 
 	SnapshotKeeper(const SnapshotKeeper&) = delete;

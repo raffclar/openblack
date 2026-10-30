@@ -17,6 +17,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -48,6 +49,7 @@ public:
 	bool Save(uint32_t slot, std::u16string_view name) override;
 	bool Load(uint32_t slot) override;
 	[[nodiscard]] std::vector<uint8_t> WorldState() override;
+	void PrepareWorldState() override { std::ignore = Reflection(); }
 	[[nodiscard]] std::function<std::vector<uint8_t>()> WorldStateLater() override;
 	bool LoadWorldState(std::span<const uint8_t> bytes) override;
 	bool Delete(uint32_t slot) override;

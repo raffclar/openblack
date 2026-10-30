@@ -96,6 +96,8 @@ public:
 	[[nodiscard]] virtual std::vector<uint8_t> WorldState() { return {}; }
 	/// The same bytes as WorldState, in two parts. The game thread takes copies of the world now. The function that it
 	/// gives makes the bytes from the copies later, on another thread, while the world turns.
+	/// Makes ready the data that each world state uses, so that the first world state takes no more time than the next
+	virtual void PrepareWorldState() {}
 	[[nodiscard]] virtual std::function<std::vector<uint8_t>()> WorldStateLater()
 	{
 		return [] { return std::vector<uint8_t> {}; };
