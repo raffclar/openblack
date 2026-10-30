@@ -90,6 +90,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
@@ -2386,6 +2387,18 @@ bool Runs(const CreatureObjectAction& action)
 {
 	return action.status == Status::Running || action.status == Status::Contact;
 }
+
+/// Whether the thing refuses a creature's hands. A piece of the beach temple puzzle refuses them only when the puzzle is
+/// solved. The other rules of the puzzle (a base, a covered ring, a puzzle that is not calm or that is gone) stop only
+/// the player's hand.
+bool RefusesCreature(const ecs::Registry& registry, entt::entity object)
+{
+	if (const auto* block = registry.TryGet<const HanoiBlock>(object))
+	{
+		return block->fixed;
+	}
+	return registry.AllOf<CannotBePickedUp>(object);
+}
 } // namespace
 
 bool CreatureObjectActionSystem::PlaysOnAlone(entt::entity creature) const
@@ -2697,7 +2710,7 @@ creature_object_actions::PickUpFacts CreatureObjectActionSystem::PickUpFactsOf(e
 		}
 	}
 	return {
-	    .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
+	    .cannotBePickedUp = RefusesCreature(registry, object),
 	    .villagerAtHome = registry.AllOf<Villager, AtHome>(object),
 	    .worshippingForCreaturesPlayer = worshipping,
 	    .inScript = registry.AllOf<InScript>(object),
@@ -2753,9 +2766,9 @@ bool CreatureObjectActionSystem::CanTakeFromHand(entt::entity creature, entt::en
 bool CreatureObjectActionSystem::CanBeCaught(entt::entity object) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	return creature_object_actions::MayCatchKind(KindFactsOf(object),
-	                                             {.cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
-	                                              .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
+	return creature_object_actions::MayCatchKind(
+	    KindFactsOf(object),
+	    {.cannotBePickedUp = RefusesCreature(registry, object), .villagerAtHome = registry.AllOf<Villager, AtHome>(object)});
 }
 
 bool CreatureObjectActionSystem::CanThrowToImpress(entt::entity creature, entt::entity object) const

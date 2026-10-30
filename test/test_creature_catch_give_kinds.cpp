@@ -11,6 +11,9 @@
 
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Components/BuildingDamage.h"
+#include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Mobile.h"
+#include "ECS/Components/PuzzleGame.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/StreetLantern.h"
@@ -86,4 +89,28 @@ TEST_F(CreatureCatchKindsTest, ALanternIsNeverCaught)
 	const auto lantern = Make(StreetLantern {.country = false});
 	EXPECT_FALSE(hands.KindOf(lantern).canBePickedUp);
 	EXPECT_FALSE(hands.CanBeCaught(lantern));
+}
+
+// The player's hand may not take a covered ring of the beach temple puzzle, but a creature's hands may. They refuse a
+// ring only when the puzzle is solved.
+TEST_F(CreatureCatchKindsTest, ACreatureRefusesARingOfTheBeachTemplePuzzleOnlyWhenItIsSolved)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto ring = Make(MobileObject {.type = MobileObjectInfo::None});
+	registry.Assign<HanoiBlock>(ring);
+	registry.Assign<CannotBePickedUp>(ring);
+	EXPECT_EQ(hands.KindOf(ring).thing, Thing::MobileObject);
+	EXPECT_TRUE(hands.CanBeCaught(ring));
+
+	registry.Get<HanoiBlock>(ring).fixed = true;
+	EXPECT_FALSE(hands.CanBeCaught(ring));
+}
+
+TEST_F(CreatureCatchKindsTest, AThingThatCannotBePickedUpIsNotCaught)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto thing = Make(MobileObject {.type = MobileObjectInfo::None});
+	EXPECT_TRUE(hands.CanBeCaught(thing));
+	registry.Assign<CannotBePickedUp>(thing);
+	EXPECT_FALSE(hands.CanBeCaught(thing));
 }
