@@ -84,6 +84,7 @@ void GameHandObjects::PickUp(entt::entity thing, glm::vec3 hand)
 		return;
 	}
 	computer_world::ReportHand(_player, hand, _state.hand.camera);
+	// The god's hand takes the thing also where the god has no influence
 	auto& grab = Locator::handGrabSystem::value();
 	if (registry.AllOf<FishFarm>(thing))
 	{
@@ -93,7 +94,7 @@ void GameHandObjects::PickUp(entt::entity thing, glm::vec3 hand)
 	const auto* field = registry.TryGet<const Field>(thing);
 	if (field == nullptr)
 	{
-		grab.DoTake(_player, thing);
+		grab.DoComputerTake(_player, thing);
 		return;
 	}
 	// A field goes into the hand only with a crop that has grown and holds food
@@ -109,7 +110,7 @@ void GameHandObjects::PickUp(entt::entity thing, glm::vec3 hand)
 	const auto* at = registry.TryGet<const Transform>(thing);
 	const auto pot = archetypes::PotArchetype::Create(at != nullptr ? at->position : hand, 0.0f, PotInfo::HandFood, handful,
 	                                                  TownNumbered(field->town));
-	grab.DoTake(_player, pot);
+	grab.DoComputerTake(_player, pot);
 	fields.RemoveFood(thing, static_cast<float>(handful));
 	// Then all the food left in the field goes into the pot in the hand
 	const auto held = HeldBy(_player);
@@ -141,7 +142,7 @@ void GameHandObjects::PickUpFishFarm(entt::entity farm, glm::vec3 hand)
 	const auto* at = registry.TryGet<const Transform>(farm);
 	const auto pot = archetypes::PotArchetype::Create(at != nullptr ? at->position : hand, 0.0f, PotInfo::HandFood, handful,
 	                                                  registry.Get<const FishFarm>(farm).town);
-	Locator::handGrabSystem::value().DoTake(_player, pot);
+	Locator::handGrabSystem::value().DoComputerTake(_player, pot);
 }
 
 std::optional<uint32_t> GameHandObjects::HeldPotHolds(ResourceType type) const

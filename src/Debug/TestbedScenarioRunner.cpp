@@ -1783,8 +1783,18 @@ void Runner::UpdateComputerActions()
 			continue;
 		}
 		_computerActionsDone[i] = true;
-		const auto first = ComputerActionThingOf(action.first, action.player);
-		const auto second = ComputerActionThingOf(action.second, action.player);
+		// The tool makes a marker on the land when it gives the action
+		const auto thingOf = [this, &action](const ComputerActionThing& thing) {
+			if (thing.kind != ComputerActionThing::Kind::Marker)
+			{
+				return ComputerActionThingOf(thing, action.player);
+			}
+			const auto point = MapPoint(_middle, thing.point);
+			return ecs::archetypes::ScriptMarkerArchetype::Create(
+			    {point.x, Locator::terrainSystem::value().GetHeightAt(point), point.y});
+		};
+		const auto first = thingOf(action.first);
+		const auto second = thingOf(action.second);
 		if (!debug::computer_actions::Force(action.player, action.node, first, second))
 		{
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} has no node {}",
@@ -1799,6 +1809,7 @@ entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, Pla
 	switch (thing.kind)
 	{
 	case ComputerActionThing::Kind::None:
+	case ComputerActionThing::Kind::Marker:
 		break;
 	case ComputerActionThing::Kind::Town:
 	{

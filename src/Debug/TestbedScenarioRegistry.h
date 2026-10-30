@@ -1287,6 +1287,8 @@ struct ComputerActionThing
 		Workshop,
 		/// The first creature of the player that owner gives
 		PlayerCreature,
+		/// A marker that the tool makes on the land at point, as a land script makes a marker
+		Marker,
 	};
 	Kind kind {Kind::None};
 	uint32_t townId {0};
@@ -1294,6 +1296,8 @@ struct ComputerActionThing
 	/// The index of the scenario's object or creature
 	size_t object {0};
 	PlayerNames owner {PlayerNames::PLAYER_ONE};
+	/// The point of a marker from the middle of the map, x east and y north
+	glm::vec2 point {0.0f};
 };
 
 /// A testbed tool step: the computer god of a player does the action of a node of its mind with two things. The tool

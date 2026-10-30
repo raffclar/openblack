@@ -998,6 +998,33 @@ TEST_F(HandGrabSystemWithWorld, ATakeAtTheTurnAsksTheInfluenceAtTheReportedPoint
 	EXPECT_NE(system->GetHeld(), std::optional(other));
 }
 
+// The steps of a computer god take a thing also outside the influence of its player
+TEST_F(HandGrabSystemWithWorld, AComputerGodTakesAThingOutsideItsInfluence)
+{
+	world->borderX = 10.0f;
+	const auto rock = world->AddRock({12.0f, 0.0f, 0.0f});
+	world->pickedPoint = glm::vec3(12.0f, 0.0f, 0.0f);
+	world->reportedCollide = glm::vec3(12.0f, 0.0f, 0.0f);
+	// The take of a player outside the influence leaves the rock
+	system->DoTake(world->HandPlayer(), rock);
+	EXPECT_NE(system->GetHeld(), std::optional(rock));
+	// The take of a computer god takes it
+	system->DoComputerTake(world->HandPlayer(), rock);
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+}
+
+// The other rules of a take apply to the steps of a computer god
+TEST_F(HandGrabSystemWithWorld, AComputerGodLeavesAThingThatCannotBePickedUp)
+{
+	world->borderX = 10.0f;
+	const auto rock = world->AddRock({8.0f, 0.0f, 0.0f});
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	world->reportedCollide = glm::vec3(8.0f, 0.0f, 0.0f);
+	world->registry.Assign<CannotBePickedUp>(rock);
+	system->DoComputerTake(world->HandPlayer(), rock);
+	EXPECT_NE(system->GetHeld(), std::optional(rock));
+}
+
 TEST_F(HandGrabSystemWithWorld, AScoopAsksTheInfluenceWhereThePileStands)
 {
 	world->borderX = 10.0f;
