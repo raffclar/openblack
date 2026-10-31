@@ -139,6 +139,10 @@ public:
 	/// and for any player but the neutral one fireworks and a fountain of the player's symbols rise from its centre.
 	/// The player at this machine hears the town won. Nothing happens if the town is theirs already.
 	virtual void ClaimTown(entt::entity town, PlayerNames player) = 0;
+	/// A building left the town as it went from the world. If the town then has no building, no planned building and
+	/// no person, the town goes from the game at once. It leaves its player and its worship site. Its building sites,
+	/// missionaries, stone hands, reward chests and desire flags go.
+	virtual void BuildingLeft(entt::entity town) = 0;
 	/// Each frame of this real time: every village centre shows its players' symbols of belief over its totem, made with
 	/// the centre. They move on by a whole turn's time in each frame that draws the land, no more often than 60 times a
 	/// second, also while the game is paused.

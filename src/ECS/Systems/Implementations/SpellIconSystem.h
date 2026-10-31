@@ -44,6 +44,7 @@ public:
 	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity town) const override;
 	void CentreWorking(entt::entity centre) override;
 	void TownChangedHands(entt::entity town, PlayerNames previous) override;
+	void TownRemoved(entt::entity town) override;
 	void PlayerMade(PlayerNames player) override;
 	void TownJoinedSite(entt::entity site, entt::entity town) override;
 	void TownLeftSite(entt::entity site, entt::entity town) override;

@@ -339,6 +339,39 @@ void SpellIconSystem::TownChangedHands(entt::entity town, PlayerNames previous)
 	}
 }
 
+void SpellIconSystem::TownRemoved(entt::entity town)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return;
+	}
+	// Its player counts one town less that offers each miracle that it offers
+	if (const auto* magicHeld = registry.TryGet<const TownMagic>(town))
+	{
+		const auto owner = registry.Get<const Town>(town).owner;
+		for (size_t i = 0; i < magicHeld->held.size(); ++i)
+		{
+			if (magicHeld->held.at(i))
+			{
+				SetEnabled(owner, static_cast<MagicType>(i), false);
+			}
+		}
+	}
+	// Its stone hands go
+	std::vector<entt::entity> hands;
+	registry.Each<const TownCentreIcon>([town, &hands](entt::entity hand, const TownCentreIcon& icon) {
+		if (icon.town == town)
+		{
+			hands.push_back(hand);
+		}
+	});
+	for (const auto hand : hands)
+	{
+		Destroy(hand);
+	}
+}
+
 void SpellIconSystem::PlayerMade(PlayerNames player)
 {
 	// The towns of the player gave their miracles to no one while the player had no entity

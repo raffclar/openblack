@@ -89,6 +89,7 @@
 #include "ECS/TownEmpty.h"
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
+#include "ECS/TownRemoval.h"
 #include "ECS/TownTurnOrder.h"
 #include "ECS/VillagerRoutine.h"
 #include "ECS/WorldObjects.h"
@@ -848,8 +849,16 @@ void TownSystem::ProcessTurn()
 	{
 		for (const auto town : TownsInGainedOrder(player))
 		{
+			// A town can go from the game during the turn of a town before it, or during its own building step
+			if (!Locator::entitiesRegistry::value().Valid(town))
+			{
+				continue;
+			}
 			ProcessTownBuildings(town);
-			ProcessTownTurn(town);
+			if (Locator::entitiesRegistry::value().Valid(town))
+			{
+				ProcessTownTurn(town);
+			}
 		}
 	}
 }
@@ -1219,6 +1228,50 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 	if (Locator::gameEndSystem::has_value())
 	{
 		Locator::gameEndSystem::value().AddToCondition(player, game_end::Condition::TownsTakenOver, 1);
+	}
+}
+
+void TownSystem::BuildingLeft(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (town == entt::null || !registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return;
+	}
+	if (town_removal::GoesWhenBuildingLeaves(town_removal::LeftIn(registry, town)))
+	{
+		RemoveTown(town);
+	}
+}
+
+void TownSystem::RemoveTown(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town: town {} goes from the game with its last building",
+	                    registry.Get<const Town>(town).id);
+	// It leaves its player, who counts one town less that offers each of its miracles, and its stone hands go
+	if (Locator::spellIconSystem::has_value())
+	{
+		Locator::spellIconSystem::value().TownRemoved(town);
+	}
+	// It leaves its worship site, and its building site there goes
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().TownRemoved(town);
+	}
+	// Its building sites go
+	for (const auto building : construction::SitesOfTown(town))
+	{
+		construction::CloseTownsSite(building, town);
+	}
+	// The missionaries that preach in it stop
+	villager_disciple_work::StopMissionariesIn(town);
+	// Its animals, its reward chests, its desire flags and the list of all the towns let it go
+	town_removal::Forget(registry, town);
+	// The influence of the players changes
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().BordersChanged();
 	}
 }
 

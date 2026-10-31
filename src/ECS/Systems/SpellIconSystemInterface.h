@@ -46,6 +46,9 @@ public:
 	virtual void CentreWorking(entt::entity centre) = 0;
 	/// A town has changed hands: what it offers goes from its old player to its new one
 	virtual void TownChangedHands(entt::entity town, PlayerNames previous) = 0;
+	/// A town goes from the game: its player counts one town less that offers each miracle that the town offers, and
+	/// the stone hands of the town go
+	virtual void TownRemoved(entt::entity town) = 0;
 	/// A player's entity is made after the land made its towns, as a god that joins a network game: the player may cast
 	/// what each of its towns offers, as if the player had been there when the towns were made
 	virtual void PlayerMade(PlayerNames /*player*/) {}

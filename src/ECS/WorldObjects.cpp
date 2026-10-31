@@ -1003,8 +1003,15 @@ void world_objects::Remove(entt::entity object)
 	}
 	// A building that goes closes each of its sites first, so that the builders stop their work and step away from it
 	construction::CloseSite(object);
+	const auto* building = registry.TryGet<const Abode>(object);
+	const auto leftTown = building != nullptr ? TownOfAbode(*building) : entt::null;
 	registry.Destroy(object);
 	registry.SetDirty();
+	// The town that the building left goes from the game when it has nothing left
+	if (leftTown != entt::null && Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().BuildingLeft(leftTown);
+	}
 }
 
 void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
