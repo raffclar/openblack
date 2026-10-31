@@ -20,7 +20,8 @@ class Registry;
 } // namespace openblack::ecs
 
 /// The model that gives a thing its size and shape on the map. Usually this is the model that the game shows. A worship
-/// site's altar has its model from when the game makes the site, also while the game does not show the altar.
+/// site's altar has its model from when the game makes the site, also while the game does not show the altar. A piece
+/// that broke off a building has the model of the statics' rock row, and the game shows its broken triangles.
 namespace openblack::ecs::thing_model
 {
 
