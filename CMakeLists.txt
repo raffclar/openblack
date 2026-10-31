@@ -277,6 +277,49 @@ if (NOT ANDROID AND NOT EMSCRIPTEN)
   add_subdirectory(apps/openblack-server)
 endif ()
 
+# The file readers and the tools give values to the game's logic. Thus each of their float operations must also round
+# one time, as in the game's library. When a compiler fuses a multiply and an add (clang and GCC on ARM64), the results
+# are different from the results of a computer that does not fuse them. These options go only to the targets in the
+# components and apps folders.
+function (openblack_round_each_float_operation folder)
+  get_property(
+    targets
+    DIRECTORY ${folder}
+    PROPERTY BUILDSYSTEM_TARGETS
+  )
+  foreach (target ${targets})
+    get_target_property(type ${target} TYPE)
+    if (type
+        MATCHES
+        "^(STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY|EXECUTABLE)$"
+    )
+      target_compile_options(
+        ${target}
+        PRIVATE "$<IF:$<CXX_COMPILER_ID:MSVC>,/fp:precise,-ffp-contract=off>"
+      )
+    endif ()
+  endforeach ()
+  get_property(
+    folders
+    DIRECTORY ${folder}
+    PROPERTY SUBDIRECTORIES
+  )
+  foreach (child ${folders})
+    openblack_round_each_float_operation(${child})
+  endforeach ()
+endfunction ()
+get_property(
+  openblack_folders
+  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  PROPERTY SUBDIRECTORIES
+)
+foreach (folder ${openblack_folders})
+  file(RELATIVE_PATH relative_folder ${CMAKE_CURRENT_SOURCE_DIR} ${folder})
+  if (relative_folder MATCHES "^(components|apps)/")
+    openblack_round_each_float_operation(${folder})
+  endif ()
+endforeach ()
+
 # Map CMAKE_HOST_SYSTEM_PROCESSOR value
 if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64"
     OR ${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "x86_64"
