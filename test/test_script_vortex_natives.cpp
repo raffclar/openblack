@@ -37,6 +37,7 @@
 #include "ECS/Systems/EffectRequestSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "Locator.h"
+#include "Particles/ParticleDrawFrame.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
