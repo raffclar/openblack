@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "CreatureRecord.h"
+#include "ECS/WallHugRules.h"
 #include "Enums.h"
 
 namespace openblack::gamesave
@@ -55,8 +56,8 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 [[nodiscard]] bool CanKeepStateValues(uint8_t state);
 
 /// True when the import can keep a walk in the move state of the file. It keeps a walk that stands still, takes its
-/// last step, steps straight through, or goes straight with no circle ahead. It does not keep a walk round a circle.
-[[nodiscard]] bool CanKeepWalk(uint8_t moveState, bool hugsCircle);
+/// last step, steps straight through, goes straight, goes round a circle or goes out of a circle.
+[[nodiscard]] bool CanKeepWalk(uint8_t moveState);
 
 /// The states of a villager that decides again: it decides what to do, with no final state and no state before
 [[nodiscard]] std::array<uint8_t, 3> DecideAgain();
@@ -64,8 +65,7 @@ constexpr uint32_t k_FirstVillagerRowNumber = k_FirstAbodeRowNumber - static_cas
 /// The three states that a villager starts in after the import: the top state, the final state and the state before.
 /// The import keeps the states of the file when it can keep the walk and the values of the top and final states.
 /// Otherwise the villager decides again.
-[[nodiscard]] std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState,
-                                                 bool hugsCircle = false);
+[[nodiscard]] std::array<uint8_t, 3> StartStates(const std::array<uint8_t, 3>& states, uint8_t moveState);
 
 /// One value that a villager keeps in the file for one of its states: the number of an object, or bytes
 struct ImportedStateValue
@@ -86,6 +86,44 @@ struct ImportedWork
 /// The work of a state of a fisherman or of a farmer, from the values of the file. Nothing for another state.
 [[nodiscard]] std::optional<ImportedWork> WorkOf(uint8_t state, const std::vector<ImportedStateValue>& values);
 
+/// The circle that a walk of the file heads for or goes round
+struct ImportedCircle
+{
+	/// The turns until the walker comes to the circle, or 0xff when the circle is not in reach
+	uint8_t turnsToObject {0};
+	/// How far from its goal the walker was when it started round the circle, in 128ths of a metre less one
+	uint32_t entryDistance {0};
+	/// The number in the file of the thing of the circle, or 0 when the circle is not on a thing
+	uint32_t object {0};
+	/// For a thing, the circle of the thing that the save gave (-1 for its only circle). The load does not use it.
+	/// When there is no thing, 1 for water or the edge of the land, 0 for no circle.
+	int32_t index {0};
+	/// A map position in the cell of the water or of the edge of the land
+	gamesave::MapCoords coords {};
+};
+
+/// What the circle of a walk of the file is on
+enum class CircleKind : uint8_t
+{
+	/// The walk has no circle
+	None,
+	/// A thing of the file
+	Thing,
+	/// Water or the edge of the land
+	Landscape,
+};
+
+/// What the circle of a walk of the file is on
+[[nodiscard]] CircleKind KindOf(const ImportedCircle& circle);
+
+/// The circle of a thing that a walker takes after a load, from the number of circles of the thing: always the last
+/// circle, whichever circle the save gave. Nothing for a thing with no circles.
+[[nodiscard]] std::optional<size_t> CircleAfterLoad(size_t circles);
+
+/// The circle of water or of the edge of the land that a walker takes after a load: a circle at the middle of the cell
+/// of the map position
+[[nodiscard]] wall_hug::BlockingCircle LandscapeCircleOf(const gamesave::MapCoords& coords);
+
 /// The walk of a villager in the file
 struct ImportedWalk
 {
@@ -101,8 +139,9 @@ struct ImportedWalk
 	uint16_t angle {0};
 	/// Turns until a walker that steps straight through aims at its goal again
 	int8_t turnsUntilStepRebuild {0};
-	/// It heads for or goes round the circle of a thing, of water or of the edge of the land
-	bool hugsCircle {false};
+	/// The circle that a walk heads for or goes round. Only a walk that goes straight, goes round a circle or goes out
+	/// of a circle has one.
+	std::optional<ImportedCircle> circle;
 };
 
 /// The walk of a record of a walker of the file: a villager or an animal
