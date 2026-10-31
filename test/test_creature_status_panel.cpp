@@ -118,6 +118,8 @@ TEST(CreatureStatusPanel, BarFillRunsInsideTheFrame)
 	EXPECT_FLOAT_EQ(FillOf(bar, 0.032f, false).to, 106.0f);
 	EXPECT_FLOAT_EQ(FillOf(bar, 1.0f, false).to, 203.0f);
 	EXPECT_FLOAT_EQ(FillOf(bar, 2.0f, false).to, 203.0f);
+	// A value below 0, as a fight health after a knock out, fills nothing
+	EXPECT_TRUE(FillOf(bar, -0.3f, false).Empty());
 
 	// The reward fills from the middle either way, and none fills nothing
 	const auto none = FillOf(bar, 0.5f, true);

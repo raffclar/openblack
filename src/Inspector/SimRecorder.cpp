@@ -964,7 +964,8 @@ Json SimProvider::CreatureRecord(uint32_t turn, bool track, std::vector<sim_chec
 		creature["rest"] = RestName(needs->rest);
 		check("needs.energy", body.energy, sim_checks::Range {.lowest = 0.0f, .highest = largestEnergy});
 		check("needs.exhaustion", body.exhaustion, k_Unit);
-		check("needs.life", body.life, k_Unit);
+		// The payments for a fight can take the life below 0, as in the game
+		check("needs.life", body.life, std::nullopt);
 		check("needs.dehydration", body.dehydration, k_Unit);
 		check("needs.itchiness", body.itchiness, k_Unit);
 		check("needs.poo", body.poo, k_Unit);
