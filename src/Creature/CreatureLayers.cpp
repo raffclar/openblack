@@ -168,14 +168,27 @@ size_t creature_layers::ShareAnimation(const BodyAction& body)
 	case BodyAction::Kind::Once:
 		return body.kiss ? animations::k_Stand : body.animations[0];
 	case BodyAction::Kind::Sequence:
-		return body.animations[static_cast<size_t>(BodyAction::Phase::Loop)];
 	case BodyAction::Kind::Dance:
-		return body.phase == BodyAction::Phase::Start ? animations::k_Stand
-		                                              : body.animations[static_cast<size_t>(BodyAction::Phase::Loop)];
+		// A dance has the stand in its loop until it chooses its first move
+		return body.animations[static_cast<size_t>(BodyAction::Phase::Loop)];
 	case BodyAction::Kind::Stand:
 	default:
 		return animations::k_Stand;
 	}
+}
+
+std::optional<ShareClip> creature_layers::ShareOf(const BodyAction& body, bool partOfMove, std::optional<int32_t> legsTimeMs)
+{
+	if (IsPlaying(body))
+	{
+		// The confused look of a walk that waits for its route is a part of the walk, which keeps the stand
+		return ShareClip {.animation = partOfMove ? animations::k_Stand : ShareAnimation(body), .timeMs = body.timeMs};
+	}
+	if (legsTimeMs.has_value())
+	{
+		return ShareClip {.animation = animations::k_Stand, .timeMs = static_cast<float>(*legsTimeMs)};
+	}
+	return std::nullopt;
 }
 
 std::optional<BodyAction> creature_layers::PlayOnce(const BodyAction& body, size_t animation, bool mirrored)
@@ -223,9 +236,11 @@ std::optional<BodyAction> creature_layers::PlayDance(const BodyAction& body, flo
 	{
 		return std::nullopt;
 	}
+	// The loop keeps the stand until the dance chooses its first move. A dance that goes from its start straight to its
+	// finish thus keeps the stand for the share that the hand reads.
 	return BodyAction {.kind = BodyAction::Kind::Dance,
 	                   .phase = BodyAction::Phase::Start,
-	                   .animations = {animations::k_DanceStart, animations::k_FirstDanceMove, animations::k_DanceFinish},
+	                   .animations = {animations::k_DanceStart, animations::k_Stand, animations::k_DanceFinish},
 	                   .timeMs = 0.0f,
 	                   .danceMoveMs = moveMs};
 }

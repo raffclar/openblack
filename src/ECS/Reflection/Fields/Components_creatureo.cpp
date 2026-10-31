@@ -61,6 +61,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	    .Field<&components::CreatureObjectAction::catchHands>("catchHands")
 	    .Field<&components::CreatureObjectAction::catching>("catching")
 	    .Field<&components::CreatureObjectAction::catchTurned>("catchTurned")
+	    .Field<&components::CreatureObjectAction::catchStepped>("catchStepped")
 	    .Field<&components::CreatureObjectAction::catchHeight>("catchHeight")
 	    .Field<&components::CreatureObjectAction::swallows>("swallows")
 	    .Field<&components::CreatureObjectAction::eaten>("eaten")

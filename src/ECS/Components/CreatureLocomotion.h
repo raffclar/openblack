@@ -123,6 +123,10 @@ struct CreatureLocomotion
 	std::optional<Move> move;
 	/// The walk animation's time in whole milliseconds, which the run keeps in step with
 	int32_t walkTimeMs {0};
+	/// The time of the first animation of the legs in whole milliseconds, which the hand reads as the share of the move:
+	/// the stand at the point of the breath while it stands, waits for its route or walks slowly, the run, or a step,
+	/// turn or point
+	int32_t legsTimeMs {0};
 	/// How far it moved this turn
 	float distance {0.0f};
 
