@@ -34,7 +34,8 @@ the story's lessons do, up to the last; the run then continues as the creature g
                                                    (five runs at other frame rates, drawn and not: the synced worlds)
     python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 5 --load-at 700
                                                    (runs 2 to 5 save at turn 700 and load that save at once; each
-                                                   must go on as the first run, which does not load)
+                                                   must go on as the first run, which does not load; they do the
+                                                   commands that the first run wrote, so that their input is the same)
     python tools/sim/sim_run.py roundtrip --at 0,500,2000
                                                    (at each turn: save, load that save, save again at once; the two
                                                    saves must have the same bytes)
@@ -512,6 +513,12 @@ def repeat_result(records_first, records_other, synced=False):
     return result
 
 
+def replay_arguments(index, commands):
+    """The game arguments of run index of a load check: the first run writes the commands of each turn to the file, and
+    each later run does the commands of the file and none of its own player"""
+    return ["--sim-commands", commands] if index == 1 else ["--sim-play-commands", commands]
+
+
 def command_repeat(options):
     """The same run several times in the fast mode, with the same seed: their hashes, seeds and counts of draws must
     agree at every record. Each run is compared with the first, and every run that parts from it is reported with its
@@ -523,7 +530,15 @@ def command_repeat(options):
     # camera on: then only the synced worlds must agree
     synced = bool(frames) or options.load_at is not None
 
+    # A load check plays the input of the first run again in the runs that load: the hand and the camera move in the
+    # frames that the load takes, and their reports are input, not the save. The first run writes the commands of each
+    # turn, and each run that loads does those commands and none of its own player (as a network client does).
+    commands = os.path.join(options.out, "repeat-1.commands.jsonl")
+
     def run_options(index):
+        if options.load_at is not None and not frames:
+            extra = list(options.extra) + replay_arguments(index, commands)
+            return argparse.Namespace(**{**vars(options), "extra": extra})
         if not frames:
             return options
         # The hand gives no input in a frame-rate repeat: a hand that follows the pointer eases to it by the frames
