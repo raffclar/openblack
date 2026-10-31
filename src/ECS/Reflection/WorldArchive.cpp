@@ -372,18 +372,23 @@ void KeepLeftOutRows(const ComponentStorage& component, const TypeCodec* codec, 
 }
 #endif
 
-/// What the hash of the rows of one component needs, found one time for each component: how its rows save, what the
-/// hash leaves out of them, and the rows in the order of the hash
-struct RowLayout
+} // namespace
+
+/// How the rows of one component save, and what the hash leaves out of them. The memo keeps it while the parts that the
+/// hash leaves out stay the same.
+struct openblack::ecs::reflection::HashMemo::Layout
 {
+	entt::meta_type type;
 	const TypeCodec* codec {nullptr};
 	std::vector<KeptField> fields;
 	ComponentLeaveOut left;
-	std::vector<entt::entity> rows;
 	/// When each row keeps the same fields: the steps that write them, with the fields whose bytes touch in memory as one
 	/// block
 	SavePlan plan;
 	bool bySteps {false};
+	/// The steps need a row to find where each field is in the value. A layout that needs steps but found no row has
+	/// none yet.
+	bool planned {false};
 
 	/// Whether the hash keeps a field of a row
 	[[nodiscard]] bool Keeps(size_t index, entt::entity row) const
@@ -397,56 +402,92 @@ struct RowLayout
 	}
 };
 
-[[nodiscard]] RowLayout LayoutOf(const ComponentStorage& component, std::span<const HashLeaveOut> leaveOut)
+namespace
 {
-	RowLayout layout {.codec = ComponentCodec(component.type),
-	                  .fields = KeptFields(component.type),
-	                  .left = {},
-	                  .rows = LiveRows(*component.storage)};
+
+/// What the hash of the rows of one component needs: the layout of the component, and the rows in the order of the hash
+struct RowLayout
+{
+	std::shared_ptr<const HashMemo::Layout> shape;
+	std::vector<entt::entity> rows;
+};
+
+/// Finds how the rows of a component save and what the hash leaves out of them. The first row, when there is one, gives
+/// the place of each field in the value.
+[[nodiscard]] std::shared_ptr<const HashMemo::Layout> MakeLayout(const ComponentStorage& component,
+                                                                 std::span<const HashLeaveOut> leaveOut, const void* firstRow)
+{
+	auto layout = std::make_shared<HashMemo::Layout>();
+	layout->type = component.type;
+	layout->codec = ComponentCodec(component.type);
+	layout->fields = KeptFields(component.type);
 	std::vector<std::string_view> names;
-	if (layout.codec != nullptr)
+	if (layout->codec != nullptr)
 	{
 		names.push_back(k_WholeComponent);
 	}
 	else
 	{
-		std::ranges::transform(layout.fields, std::back_inserter(names),
+		std::ranges::transform(layout->fields, std::back_inserter(names),
 		                       [](const KeptField& field) { return std::string_view(field.info->name); });
 	}
-	layout.left = FindLeaveOut(leaveOut, component.name, names);
-	// The steps need a row to find where each field is in the value. A field that only the reflection can write needs
-	// the way of each field.
+	layout->left = FindLeaveOut(leaveOut, component.name, names);
+	// A field that only the reflection can write needs the way of each field
 	const auto sameForEachRow =
-	    std::ranges::all_of(layout.left.fieldMarkers, [](const auto& markers) { return markers.empty(); });
-	if (layout.codec == nullptr && !layout.left.whole && sameForEachRow && !layout.rows.empty())
+	    std::ranges::all_of(layout->left.fieldMarkers, [](const auto& markers) { return markers.empty(); });
+	const auto needsSteps = layout->codec == nullptr && !layout->left.whole && sameForEachRow;
+	layout->planned = !needsSteps || firstRow != nullptr;
+	if (needsSteps && firstRow != nullptr)
 	{
-		const auto* first = static_cast<const std::byte*>(component.storage->value(layout.rows.front()));
-		layout.bySteps = true;
-		for (size_t index = 0; index < layout.fields.size() && layout.bySteps; ++index)
+		const auto* first = static_cast<const std::byte*>(firstRow);
+		layout->bySteps = true;
+		for (size_t index = 0; index < layout->fields.size() && layout->bySteps; ++index)
 		{
-			const auto* info = layout.fields[index].info;
-			if (layout.left.fieldAlways[index])
+			const auto* info = layout->fields[index].info;
+			if (layout->left.fieldAlways[index])
 			{
 				continue;
 			}
 			if (info->saveFrom == nullptr)
 			{
-				layout.bySteps = false;
+				layout->bySteps = false;
 			}
 			else if (info->plainAddress != nullptr)
 			{
 				const auto* field = static_cast<const std::byte*>(info->plainAddress(first));
-				layout.plan.AddBlock(static_cast<size_t>(field - first), info->plainSize);
+				layout->plan.AddBlock(static_cast<size_t>(field - first), info->plainSize);
 			}
 			else
 			{
-				layout.plan.AddWriter(info->saveFrom);
+				layout->plan.AddWriter(info->saveFrom);
 			}
+		}
+	}
+	return layout;
+}
+
+/// The layout of a component and its rows. The layout comes from the memo when the memo keeps one of the same type with
+/// its steps, and else goes into the memo.
+[[nodiscard]] RowLayout LayoutOf(const ComponentStorage& component, std::span<const HashLeaveOut> leaveOut,
+                                 std::shared_ptr<const HashMemo::Layout>* kept = nullptr)
+{
+	RowLayout layout {.shape = nullptr, .rows = LiveRows(*component.storage)};
+	const void* first = layout.rows.empty() ? nullptr : component.storage->value(layout.rows.front());
+	if (kept != nullptr && *kept != nullptr && (*kept)->type == component.type && ((*kept)->planned || first == nullptr))
+	{
+		layout.shape = *kept;
+	}
+	else
+	{
+		layout.shape = MakeLayout(component, leaveOut, first);
+		if (kept != nullptr)
+		{
+			*kept = layout.shape;
 		}
 	}
 	// A component with no values only marks its entities. The game never reads the order of such a mark, so the hash
 	// takes its entities in the order of their numbers.
-	if (layout.codec == nullptr && layout.fields.empty())
+	if (layout.shape->codec == nullptr && layout.shape->fields.empty())
 	{
 		std::ranges::sort(layout.rows, {}, [](entt::entity entity) { return entt::to_integral(entity); });
 	}
@@ -462,20 +503,20 @@ void SaveRow(const ComponentStorage& component, const RowLayout& layout, entt::e
 {
 	out.WriteRaw(row);
 	const void* value = component.storage->value(row);
-	if (layout.codec != nullptr)
+	if (layout.shape->codec != nullptr)
 	{
-		if (layout.KeepsField(0, row))
+		if (layout.shape->KeepsField(0, row))
 		{
 			const auto start = out.Size();
-			layout.codec->save(value, out);
+			layout.shape->codec->save(value, out);
 			eachField(0, start);
 		}
 		return;
 	}
-	for (size_t index = 0; index < layout.fields.size(); ++index)
+	for (size_t index = 0; index < layout.shape->fields.size(); ++index)
 	{
-		const auto& field = layout.fields.at(index);
-		if (!layout.KeepsField(index, row))
+		const auto& field = layout.shape->fields.at(index);
+		if (!layout.shape->KeepsField(index, row))
 		{
 			continue;
 		}
@@ -497,7 +538,7 @@ void SaveRow(const ComponentStorage& component, const RowLayout& layout, entt::e
 void SaveRowBySteps(const ComponentStorage& component, const RowLayout& layout, entt::entity row, BinaryWriter& out)
 {
 	out.WriteRaw(row);
-	out.SaveSteps(layout.plan.steps, component.storage->value(row));
+	out.SaveSteps(layout.shape->plan.steps, component.storage->value(row));
 }
 
 /// The bytes of some rows of a component, saved before the hash mixes them: the bytes of each row that the hash keeps,
@@ -516,11 +557,11 @@ struct SavedRows
 	out.Clear();
 	for (const auto row : std::span<const entt::entity>(layout.rows).subspan(first, last - first))
 	{
-		if (AnyHas(layout.left.rowMarkers, row))
+		if (AnyHas(layout.shape->left.rowMarkers, row))
 		{
 			continue;
 		}
-		if (layout.bySteps)
+		if (layout.shape->bySteps)
 		{
 			SaveRowBySteps(component, layout, row, out);
 		}
@@ -598,18 +639,18 @@ struct SharedParts
                                           const SharedParts& parts)
 {
 	ComponentHash result;
-	const auto& left = layout.left;
+	const auto& left = layout.shape->left;
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	// Tools: the rows also keep the fields that the hash leaves out, with a mark, so that a compare shows what each
 	// computer draws of the thing that parts
 	if (keepRows)
 	{
 		KeepLeftOutRows(
-		    component, layout.codec, layout.fields,
-		    [&layout](size_t index, entt::entity row) { return layout.Keeps(index, row); }, out, result.rows);
+		    component, layout.shape->codec, layout.shape->fields,
+		    [&layout](size_t index, entt::entity row) { return layout.shape->Keeps(index, row); }, out, result.rows);
 	}
 	// A component with no values is one row of no bytes for each entity, so that a compare sees the mark
-	if (keepRows && layout.codec == nullptr && layout.fields.empty())
+	if (keepRows && layout.shape->codec == nullptr && layout.shape->fields.empty())
 	{
 		for (const auto row : LiveRows(*component.storage))
 		{
@@ -627,7 +668,7 @@ struct SharedParts
 	}
 	result.hash = k_HashOffset;
 	// The hash of each field on its own, when asked: the whole value of a component that saves as one value
-	result.fields.assign(byField ? std::max<size_t>(layout.fields.size(), 1) : 0, k_HashOffset);
+	result.fields.assign(byField ? std::max<size_t>(layout.shape->fields.size(), 1) : 0, k_HashOffset);
 	// With the memo, the bytes of all the rows of the component stay one after the other. While each row is the same as
 	// in the memo, the hash after the row comes from the memo. From the first row that changed, the hash mixes each row.
 	const bool remembers = memo != nullptr && !byField && !visit && !keepRows;
@@ -702,7 +743,7 @@ struct SharedParts
 			out.Clear();
 		}
 		const auto rowStart = out.Size();
-		if (layout.bySteps && !byField && !visit && !keepRows)
+		if (layout.shape->bySteps && !byField && !visit && !keepRows)
 		{
 			SaveRowBySteps(component, layout, row, out);
 			mixRow(out.Written(rowStart), rowStart);
@@ -728,7 +769,9 @@ struct SharedParts
 			if (visit)
 			{
 				visit(component.name, row,
-				      layout.codec != nullptr ? k_WholeComponent : std::string_view(layout.fields.at(index).info->name), bytes);
+				      layout.shape->codec != nullptr ? k_WholeComponent
+				                                     : std::string_view(layout.shape->fields.at(index).info->name),
+				      bytes);
 			}
 		});
 		mixRow(out.Written(rowStart), rowStart);
@@ -851,6 +894,22 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 	std::vector<HashMemo::Component*> memos(components.size(), nullptr);
 	if (memo != nullptr)
 	{
+		// The layouts in the memo stay while the parts that the hash leaves out stay the same
+		const auto sameLeaveOut = std::ranges::equal(memo->leaveOut, leaveOut, [](const auto& kept, const auto& part) {
+			return kept.component == part.component && kept.field == part.field && kept.marker == part.marker;
+		});
+		if (!sameLeaveOut)
+		{
+			memo->leaveOut.clear();
+			std::ranges::transform(leaveOut, std::back_inserter(memo->leaveOut), [](const HashLeaveOut& part) {
+				return HashMemo::LeftOut {
+				    .component = std::string(part.component), .field = std::string(part.field), .marker = part.marker};
+			});
+			for (auto& [name, kept] : memo->components)
+			{
+				kept.layout.reset();
+			}
+		}
 		for (size_t index = 0; index < components.size(); ++index)
 		{
 			memos[index] = &memo->components[components[index].name];
@@ -868,7 +927,9 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 			writers.assign(pool->GetLaneCount(), BinaryWriter(context));
 		}
 		std::ranges::for_each(writers, &BinaryWriter::ClearForNextWorld);
-		pool->ForEach(components.size(), [&](size_t index, size_t) { layouts[index] = LayoutOf(components[index], leaveOut); });
+		pool->ForEach(components.size(), [&](size_t index, size_t) {
+			layouts[index] = LayoutOf(components[index], leaveOut, memos[index] != nullptr ? &memos[index]->layout : nullptr);
+		});
 		// The bytes of each component in the last hash. The threads take the largest work first, so that no thread
 		// starts a large component when the others are near the end.
 		std::vector<size_t> lastBytes(components.size(), 0);
@@ -903,7 +964,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 				const auto count = layouts[index].rows.size();
 				const auto lastRows = memos[index] != nullptr ? memos[index]->rows.size() : 0;
 				inAPart[index] = RowsInAPart(lastBytes[index], lastRows);
-				if (!layouts[index].left.whole && count >= 2 * inAPart[index])
+				if (!layouts[index].shape->left.whole && count >= 2 * inAPart[index])
 				{
 					partCounts[index] = (count + inAPart[index] - 1) / inAPart[index];
 				}
@@ -963,7 +1024,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		BinaryWriter out(context);
 		for (size_t index = 0; index < components.size(); ++index)
 		{
-			layouts[index] = LayoutOf(components[index], leaveOut);
+			layouts[index] = LayoutOf(components[index], leaveOut, memos[index] != nullptr ? &memos[index]->layout : nullptr);
 			results[index] = HashComponent(components[index], layouts[index], byField, visit, out, rows != nullptr,
 			                               memos[index], SharedParts {});
 		}
