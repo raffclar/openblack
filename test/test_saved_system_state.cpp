@@ -260,7 +260,8 @@ TEST(SavedSystemState, TheStoryHistoryComesBack)
 
 TEST(SavedSystemState, TheHelpOfEachComputerIsAPresentationPart)
 {
-	// Each computer has its own help level, help record and help scripts, so no byte of the help is synced
+	// Each computer has its own help level, help record and help scripts, so no byte of the help is synced. The owner of
+	// the dialogue is a value of the help too.
 	const auto wholeSection = [](const SavedStateInterface& system) {
 		reflection::BinaryWriter out(Context());
 		system.SaveState(out);
@@ -269,6 +270,9 @@ TEST(SavedSystemState, TheHelpOfEachComputerIsAPresentationPart)
 	};
 	wholeSection(HelpMessageSystem {});
 	wholeSection(HelpTextSystem {});
+	DialogueControlSystem dialogue;
+	dialogue.Request(12, 0);
+	wholeSection(dialogue);
 }
 
 TEST(SavedSystemState, TheHelpTextsStopTheAdvisorsWithNoVoicesOnTheComputer)
