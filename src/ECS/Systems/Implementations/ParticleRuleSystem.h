@@ -428,7 +428,8 @@ private:
 	[[nodiscard]] std::deque<Running>::const_iterator FindRunning(EffectId id) const;
 	/// Steps an effect; true once it has ended
 	bool StepEffect(particles::Effect& effect, float seconds);
-	/// The particle file of an effect, loaded the first time; none if it cannot be loaded
+	/// The particle file of an effect, loaded the first time; none if it cannot be loaded. The system does not
+	/// search again for a file that it could not load.
 	std::shared_ptr<const psys::ParticleFile> LoadFile(std::string_view file);
 	/// Adds the names of the sheets that the effect uses to the list of the draw
 	void AddSheetNames(const particles::Effect& effect);
@@ -540,6 +541,8 @@ private:
 	std::set<std::string, std::less<>> _knownSheetNames;
 	/// The particle classes already reported as not run yet
 	std::set<std::string, std::less<>> _reportedUnported;
+	/// The particle files that the game's files do not have. The system does not search for them again.
+	std::set<entt::id_type> _missingFiles;
 };
 
 } // namespace openblack::ecs::systems

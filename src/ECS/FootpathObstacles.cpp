@@ -640,6 +640,20 @@ bool footpath_obstacles::GoesClearOf(glm::ivec2 low, glm::ivec2 high, const Obst
 	return high.x < x - half || low.x > x + half || high.y < z - half || low.y > z + half;
 }
 
+footpath_obstacles::ReturnSquare::ReturnSquare(const Obstacle& obstacle)
+{
+	const auto box = Box::Around(obstacle.place, gutils::ConvertMetersToWholeDistance(ReturnReach(obstacle.radius)));
+	_xMin = box.xMin;
+	_xMax = box.xMax;
+	_zMin = box.zMin;
+	_zMax = box.zMax;
+}
+
+bool footpath_obstacles::ReturnSquare::Holds(glm::ivec2 place) const
+{
+	return Box {.xMin = _xMin, .xMax = _xMax, .zMin = _zMin, .zMax = _zMax}.Holds(place);
+}
+
 void footpath_obstacles::GoRound(std::vector<KeyedNode>& nodes, const Obstacle& obstacle, const Hooks& hooks)
 {
 	Path path(nodes, hooks);

@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <glm/common.hpp>
@@ -754,7 +755,8 @@ void FootpathSystem::ThingRemoved(entt::entity thing, glm::vec3 position, bool f
 	context.footpathObstacleChanges.push_back(change);
 }
 
-void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& change)
+bool FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& change,
+                             const std::optional<std::pair<glm::ivec2, glm::ivec2>>& nodeSquare)
 {
 	auto& registry = _world->Entities();
 	const auto& footpath = registry.Get<const Footpath>(entity);
@@ -762,21 +764,16 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 	// A thing put far from every node of the path leaves the path as it is: most things come nowhere near most paths
 	if (change.put)
 	{
-		if (footpath.nodes.empty())
+		if (!nodeSquare.has_value() || obstacle_rules::GoesClearOf(nodeSquare->first, nodeSquare->second, obstacle))
 		{
-			return;
+			return false;
 		}
-		glm::ivec2 low = footpath.nodes.front().place;
-		glm::ivec2 high = low;
-		for (const auto& node : footpath.nodes)
-		{
-			low = glm::min(low, node.place);
-			high = glm::max(high, node.place);
-		}
-		if (obstacle_rules::GoesClearOf(low, high, obstacle))
-		{
-			return;
-		}
+	}
+	// A thing removed far from every node of the path leaves the path as it is too
+	else if (const obstacle_rules::ReturnSquare square(obstacle);
+	         std::ranges::none_of(footpath.nodes, [&square](const auto& node) { return square.Holds(node.place); }))
+	{
+		return false;
 	}
 	std::vector<obstacle_rules::KeyedNode> nodes;
 	nodes.reserve(footpath.nodes.size());
@@ -844,7 +841,7 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 	}
 	if (nodes == before)
 	{
-		return;
+		return false;
 	}
 	if (const auto logger = spdlog::get("game"))
 	{
@@ -865,6 +862,7 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 		walk.node = at != nodes.end() ? std::optional(static_cast<uint32_t>(std::distance(nodes.begin(), at))) : std::nullopt;
 	}
 	registry.SetLayoutDirty();
+	return true;
 }
 
 void FootpathSystem::ProcessObstacleChanges()
@@ -879,11 +877,33 @@ void FootpathSystem::ProcessObstacleChanges()
 	}
 	std::vector<entt::entity> footpaths;
 	registry.Each<const Footpath>([&footpaths](entt::entity entity, const Footpath&) { footpaths.push_back(entity); });
+	// The code finds the square of the nodes of each path one time, and again only after the path changes
+	using NodeSquare = std::optional<std::pair<glm::ivec2, glm::ivec2>>;
+	const auto squareOf = [&registry](entt::entity footpath) -> NodeSquare {
+		const auto& nodes = registry.Get<const Footpath>(footpath).nodes;
+		if (nodes.empty())
+		{
+			return std::nullopt;
+		}
+		std::pair<glm::ivec2, glm::ivec2> square {nodes.front().place, nodes.front().place};
+		for (const auto& node : nodes)
+		{
+			square.first = glm::min(square.first, node.place);
+			square.second = glm::max(square.second, node.place);
+		}
+		return square;
+	};
+	std::vector<NodeSquare> squares;
+	squares.reserve(footpaths.size());
+	std::ranges::transform(footpaths, std::back_inserter(squares), squareOf);
 	for (const auto& change : changes)
 	{
-		for (const auto footpath : footpaths)
+		for (size_t i = 0; i < footpaths.size(); ++i)
 		{
-			Reroute(footpath, change);
+			if (Reroute(footpaths[i], change, squares[i]))
+			{
+				squares[i] = squareOf(footpaths[i]);
+			}
 		}
 	}
 }

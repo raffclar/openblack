@@ -70,6 +70,7 @@ class FakeFiles final: public filesystem::FileSystemInterface
 public:
 	[[nodiscard]] std::filesystem::path FindPath(const std::filesystem::path& path) const override
 	{
+		++lookups;
 		if (!files.contains(path))
 		{
 			throw std::runtime_error("not found");
@@ -77,13 +78,21 @@ public:
 		return path;
 	}
 	std::unique_ptr<std::istream> GetData(const std::filesystem::path& /*unused*/) override { return nullptr; }
-	[[nodiscard]] bool IsPathValid(const std::filesystem::path& path) override { return files.contains(path); }
+	[[nodiscard]] bool IsPathValid(const std::filesystem::path& path) override
+	{
+		++lookups;
+		return files.contains(path);
+	}
 	std::unique_ptr<filesystem::Stream> Open(const std::filesystem::path& /*unused*/,
 	                                         filesystem::Stream::Mode /*unused*/) override
 	{
 		return nullptr;
 	}
-	[[nodiscard]] bool Exists(const std::filesystem::path& path) const override { return files.contains(path); }
+	[[nodiscard]] bool Exists(const std::filesystem::path& path) const override
+	{
+		++lookups;
+		return files.contains(path);
+	}
 	void SetGamePath(const std::filesystem::path& path) override { gamePath = path; }
 	[[nodiscard]] const std::filesystem::path& GetGamePath() const override { return gamePath; }
 	void AddAdditionalPath(const std::filesystem::path& /*unused*/) override {}
@@ -95,6 +104,8 @@ public:
 
 	std::map<std::filesystem::path, std::vector<uint8_t>> files;
 	std::filesystem::path gamePath;
+	/// The count of the searches for a file
+	mutable int lookups {0};
 };
 
 class FakeRandom final: public GameRandomInterface
@@ -303,6 +314,19 @@ TEST_F(ParticleSaveParts, TheTwoPartsGiveBackTheEffectsInTheirOrder)
 	const auto again = Save(loaded);
 	EXPECT_EQ(again.synced, parts.synced);
 	EXPECT_EQ(again.local, parts.local);
+}
+
+TEST_F(ParticleSaveParts, AFileThatIsNotThereIsLookedForOneTime)
+{
+	ParticleRuleSystem rules;
+	const auto& files = static_cast<const FakeFiles&>(Locator::filesystem::value());
+	EXPECT_EQ(rules.Start("Missing", {1.0f, 0.0f, 0.0f}, 1.0f, true), ParticleRuleSystemInterface::k_NoEffect);
+	const int looked = files.lookups;
+	EXPECT_GT(looked, 0);
+	EXPECT_EQ(rules.Start("Missing", {1.0f, 0.0f, 0.0f}, 1.0f, true), ParticleRuleSystemInterface::k_NoEffect);
+	EXPECT_EQ(files.lookups, looked);
+	// A file that is there still starts its effect
+	EXPECT_NE(rules.Start("Synced", {1.0f, 0.0f, 0.0f}, 1.0f, true), ParticleRuleSystemInterface::k_NoEffect);
 }
 
 TEST_F(ParticleSaveParts, TheSyncedPartDoesNotChangeWithTheEffectsOfThisComputer)
