@@ -1560,6 +1560,11 @@ void AddCreatureLearningScenarios(std::vector<Scenario>& all);
 void AddCreatureExplorationScenarios(std::vector<Scenario>& all);
 /// Creature actions that Land 1 can start and that no other scenario stages, each told by a script
 void AddCreatureActionScenarios(std::vector<Scenario>& all);
+/// The casts that the creature's desires choose, each told by a script (called by AddCreatureActionScenarios)
+void AddCreatureActionCastScenarios(std::vector<Scenario>& all);
+/// The gifts to a town, throws, notices and villager actions that the creature's desires choose, each told by a script
+/// (called by AddCreatureActionScenarios)
+void AddCreatureActionTownScenarios(std::vector<Scenario>& all);
 /// The network map for 32 gods, with a citadel and a village in each slot
 void AddGodsRingMapScenarios(std::vector<Scenario>& all);
 /// The looks and the chant of a worship site: its ring of light, its need flags and its motes of prayer power
