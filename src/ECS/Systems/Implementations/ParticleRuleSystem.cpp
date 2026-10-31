@@ -1027,8 +1027,9 @@ ParticleRuleSystemInterface::EffectId ParticleRuleSystem::Start(std::string_view
 	}
 	AddSheetNames(*effect);
 	effect->StepTwiceFirstTime();
-	// An effect that the simulation asked for takes the number that the simulation gave it
-	const auto effectId = _givenId != k_NoEffect ? std::exchange(_givenId, k_NoEffect) : _nextId++;
+	// An effect that the simulation asked for takes the number that the simulation gave it. The other synced effects
+	// take the next synced number, and the effects of this computer take numbers of their own.
+	const auto effectId = _givenId != k_NoEffect ? std::exchange(_givenId, k_NoEffect) : synced ? _nextId++ : _nextLocalId++;
 	_effects.push_front({.id = effectId, .file = std::string(file), .effect = std::move(effect)});
 	TellStarted(effectId);
 	return effectId;
@@ -1467,6 +1468,10 @@ bool ParticleRuleSystem::Renumber(EffectId from, EffectId to)
 	{
 		_nextId = from;
 	}
+	else if (from + 1 == _nextLocalId)
+	{
+		_nextLocalId = from;
+	}
 	if (_lifeListener != nullptr)
 	{
 		_lifeListener->EffectEnded(from);
@@ -1607,6 +1612,7 @@ void ParticleRuleSystem::Reset()
 	if (std::exchange(_freshIdsAtNextReset, false))
 	{
 		_nextId = 1;
+		_nextLocalId = k_FirstLocalEffect;
 	}
 }
 
@@ -2101,15 +2107,17 @@ namespace
 {
 
 /// The forms of the two parts of the save of the particles. A load refuses a part of another form.
-constexpr uint32_t k_SyncedPartVersion = 2;
-constexpr uint32_t k_LocalPartVersion = 2;
+constexpr uint32_t k_SyncedPartVersion = 3;
+constexpr uint32_t k_LocalPartVersion = 3;
+/// The form of the two parts before the effects of this computer took numbers of their own. A load reads it too.
+constexpr uint32_t k_NoNextNumberVersion = 2;
 /// The form of the two parts before the waits of the sounds went to the part of this computer. A load reads it too.
 constexpr uint32_t k_WaitWithSoundVersion = 1;
 
 /// The form of the world in a part of a save of a given version
 std::optional<GameParticleWorld::SavedForm> WorldForm(uint32_t version, uint32_t current)
 {
-	if (version == current)
+	if (version == current || version == k_NoNextNumberVersion)
 	{
 		return GameParticleWorld::SavedForm::WaitOnThisComputer;
 	}
@@ -2229,11 +2237,12 @@ void ParticleRuleSystem::WarnUnsaved(std::initializer_list<const reflection::Bin
 void ParticleRuleSystem::SaveState(reflection::BinaryWriter& out) const
 {
 	reflection::Save(out, k_SyncedPartVersion);
+	// The next synced number is synced too: an effect that ended can have the highest number
+	reflection::Save(out, _nextId);
 	reflection::Save(out, _paused);
 	reflection::Save(out, _explodeObject);
 	reflection::Save(out, _stormBolts);
 	reflection::Save(out, _pendingStormBolts);
-	reflection::Save(out, _gestureTrails);
 	reflection::Save(out, _beliefWanted);
 
 	SaveNumbering numbering;
@@ -2264,7 +2273,8 @@ void ParticleRuleSystem::SaveLocalState(reflection::BinaryWriter& out) const
 	// Only the frames of this computer change this part, so all of it is a presentation value
 	out.BeginPresentation();
 	reflection::Save(out, k_LocalPartVersion);
-	reflection::Save(out, _nextId);
+	reflection::Save(out, _nextLocalId);
+	reflection::Save(out, _gestureTrails);
 	reflection::Save(out, _gestureChain);
 	reflection::Save(out, _selectionEffect);
 	// Only the hand of this computer starts the effect of its mana path, also in a frame
@@ -2451,11 +2461,21 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	{
 		return false;
 	}
+	EffectId savedNext = 1;
+	if (version == k_SyncedPartVersion)
+	{
+		reflection::Load(in, savedNext);
+	}
 	reflection::Load(in, _paused);
 	reflection::Load(in, _explodeObject);
 	reflection::Load(in, _stormBolts);
 	reflection::Load(in, _pendingStormBolts);
-	reflection::Load(in, _gestureTrails);
+	// The effect of the gesture trails is an effect of this computer. An older save keeps it in the synced part.
+	_gestureTrails = k_NoEffect;
+	if (version != k_SyncedPartVersion)
+	{
+		reflection::Load(in, _gestureTrails);
+	}
 	reflection::Load(in, _beliefWanted);
 	// The effects of this computer come back with their own part of the save. Until then, this computer has none.
 	_gestureChain = k_NoEffect;
@@ -2466,16 +2486,17 @@ bool ParticleRuleSystem::LoadState(reflection::BinaryReader& in)
 	{
 		return false;
 	}
-	// The next number of an effect is after the numbers of the loaded effects. The part of this computer gives the
-	// number that the save kept.
-	_nextId = 1;
+	// The next synced number is the number that the save kept, and after the numbers of the loaded effects. An older
+	// save does not keep it. The effects of this computer start their numbers again until their part loads.
+	_nextId = savedNext;
 	for (const auto& running : _effects)
 	{
-		if (running.id < k_FirstEffectHandle && running.id >= _nextId)
+		if (running.id < k_FirstLocalEffect && running.id >= _nextId)
 		{
 			_nextId = running.id + 1;
 		}
 	}
+	_nextLocalId = k_FirstLocalEffect;
 	return true;
 }
 
@@ -2492,7 +2513,22 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 	{
 		return false;
 	}
-	reflection::Load(in, _nextId);
+	EffectId savedNext = k_NoEffect;
+	reflection::Load(in, savedNext);
+	if (version == k_LocalPartVersion)
+	{
+		_nextLocalId = std::max(savedNext, k_FirstLocalEffect);
+	}
+	else
+	{
+		// An older save kept one number for all effects. The synced effects continue after it, so that no number of an
+		// effect of this computer comes again.
+		_nextId = std::max(_nextId, savedNext);
+	}
+	if (version == k_LocalPartVersion)
+	{
+		reflection::Load(in, _gestureTrails);
+	}
 	reflection::Load(in, _gestureChain);
 	reflection::Load(in, _selectionEffect);
 	reflection::Load(in, _handManaPath);
@@ -2557,6 +2593,14 @@ bool ParticleRuleSystem::LoadLocalState(reflection::BinaryReader& in)
 	}
 	const auto firstCarried = std::min(tables.carried.firstLocal.value_or(0), tables.carried.items.size());
 	RestoreCarried(std::span(tables.carried.items).subspan(firstCarried));
+	// The next number of an effect of this computer is after the numbers of its loaded effects
+	for (const auto& running : _effects)
+	{
+		if (running.id >= k_FirstLocalEffect && running.id < k_FirstEffectHandle && running.id >= _nextLocalId)
+		{
+			_nextLocalId = running.id + 1;
+		}
+	}
 	return !in.Failed();
 }
 

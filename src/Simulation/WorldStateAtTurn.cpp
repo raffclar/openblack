@@ -19,6 +19,9 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/GameRandom.h"
+#include "ECS/Reflection/WorldArchive.h"
+#include "ECS/Registry.h"
+#include "ECS/RegistryContext.h"
 #include "ECS/Systems/ParticleRuleSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/WorldSave.h"
@@ -120,6 +123,12 @@ std::string MapText(const Map& map)
 		}
 		text += "]}";
 	}
+	text += "], \"contextPresentation\": [";
+	for (size_t range = 0; range < map.contextPresentation.size(); ++range)
+	{
+		const auto& [first, last] = map.contextPresentation[range];
+		text += fmt::format("{}[{}, {}]", range == 0 ? "" : ", ", first, last);
+	}
 	return text + "]}\n";
 }
 
@@ -134,6 +143,11 @@ bool WriteIfDue(const Settings& settings, uint32_t turn, const entt::meta_ctx& r
 	{
 		map.sections.push_back(
 		    {.name = std::move(section.name), .size = section.bytes.size(), .presentation = std::move(section.presentation)});
+	}
+	if (Locator::entitiesRegistry::has_value())
+	{
+		[[maybe_unused]] const auto context = ecs::reflection::SaveValue(
+		    reflection, Locator::entitiesRegistry::value().Context(), nullptr, &map.contextPresentation);
 	}
 	if (Locator::gameRandom::has_value())
 	{

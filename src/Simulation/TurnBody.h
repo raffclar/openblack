@@ -64,7 +64,6 @@ private:
 	{
 	case Step::TurnCheering:
 	case Step::HandToolTips:
-	case Step::HelpProfile:
 	case Step::Ambience:
 	case Step::Music:
 		return true;

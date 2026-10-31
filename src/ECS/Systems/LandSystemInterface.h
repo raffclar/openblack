@@ -69,7 +69,7 @@ public:
 };
 
 /// A view that does nothing, for a world with no player in front of it
-class NoLandView final: public LandViewInterface
+class NoLandView: public LandViewInterface
 {
 public:
 	void BeginLoadingScreen(loading::LoadingClock::Mode /*look*/) override {}

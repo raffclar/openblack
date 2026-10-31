@@ -28,6 +28,7 @@
 #include <L3DFile.h>
 #include <LHVM.h>
 #include <LNDFile.h>
+#include <SaveSlots.h>
 #include <fmt/format.h>
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
@@ -3967,6 +3968,16 @@ std::optional<std::vector<BodyInfo>> Bodies()
 
 // The help: the advisors and the scripts' dialogue
 
+/// The number of the open land, which the saved games use for their land folders
+uint32_t OpenLand()
+{
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return 0;
+	}
+	return static_cast<uint32_t>(std::max(Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 0));
+}
+
 std::unique_ptr<ProviderInterface> SavesProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("saves");
@@ -3992,7 +4003,9 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 	auto save =
 	    Query("save",
 	          "Saves the game into a slot: the whole world (every entity and its components, the clock, the random "
-	          "numbers, the camera and the scripts) and every creature with its mind file and its leash",
+	          "numbers, the camera and the scripts) and every creature with its mind file and its leash. The slots 14 to 18 "
+	          "save into a folder of the open land in the folder of the slot. The result gives the folder of the world "
+	          "file in the folder of the player",
 	          {slotParameter, {.name = "name", .type = "string", .description = "The name of the save", .required = false}});
 	save.writes = true;
 	provider->Add(std::move(save), [](const QueryContext& context) {
@@ -4002,13 +4015,17 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 			return QueryResult::Error("saves.save needs a game and a slot from 0 to 20");
 		}
 		const auto name = gui::ToUtf16(StringMember(context.params, "name").value_or(""));
-		const bool saved = Locator::saveGameSystem::value().Save(static_cast<uint32_t>(*slot), name);
-		return QueryResult::Value({{"saved", saved}, {"slot", static_cast<uint32_t>(*slot)}});
+		const auto number = static_cast<uint32_t>(*slot);
+		const bool saved = Locator::saveGameSystem::value().Save(number, name);
+		return QueryResult::Value(
+		    {{"saved", saved}, {"slot", number}, {"folder", gamesave::SlotFolder(number, OpenLand()).generic_string()}});
 	});
 	auto load = Query("load",
 	                  "Loads a slot. A save of the whole world loads its land and its world in place of the open land. An "
 	                  "older save puts the creatures of the land that is open back: the values of each record, the mind of "
-	                  "its mind file, the plan that the save kept and its leash",
+	                  "its mind file, the plan that the save kept and its leash. Slot 14 (the previous land) loads from the "
+	                  "folder of the land before the open land, and slot 18 (the next land) from the folder of the land "
+	                  "after it, as the save game room does. The result gives the folder that the load read",
 	                  {slotParameter});
 	load.writes = true;
 	provider->Add(std::move(load), [](const QueryContext& context) {
@@ -4017,8 +4034,11 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		{
 			return QueryResult::Error("saves.load needs a game and a slot from 0 to 20");
 		}
-		const bool loaded = Locator::saveGameSystem::value().Load(static_cast<uint32_t>(*slot));
-		return QueryResult::Value({{"loaded", loaded}, {"slot", static_cast<uint32_t>(*slot)}});
+		const auto number = static_cast<uint32_t>(*slot);
+		// Find the folder before the load, because a load can open another land
+		const auto folder = gamesave::LoadSlotFolder(number, OpenLand()).generic_string();
+		const bool loaded = Locator::saveGameSystem::value().Load(number);
+		return QueryResult::Value({{"loaded", loaded}, {"slot", number}, {"folder", folder}});
 	});
 	auto loadAndSave =
 	    Query("load_and_save",

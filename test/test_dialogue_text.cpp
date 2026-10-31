@@ -50,6 +50,8 @@ struct Fixture
 	bool advisorsTalking {false};
 	bool narrationSounding {false};
 	bool wideScreen {false};
+	/// The height of the screen of the computer, in pixels
+	int screenHeight {480};
 	std::vector<std::pair<int32_t, uint32_t>> advisorSaid;
 	std::vector<uint32_t> narrated;
 	int interrupts {0};
@@ -82,7 +84,7 @@ struct Fixture
 		hooks.narrate = [this](uint32_t number) { narrated.push_back(number); };
 		hooks.interruptAdvisors = [this]() { ++interrupts; };
 		hooks.stopNarration = [this]() { ++narrationStops; };
-		return {480, false, settings, std::move(queries), std::move(hooks)};
+		return {screenHeight, false, settings, std::move(queries), std::move(hooks)};
 	}
 };
 } // namespace
@@ -671,6 +673,25 @@ TEST(DialogueText, TheFramesChangeOnlyThePresentationPartsOfTheSave)
 	dialogue.ProcessClick(true, false);
 	EXPECT_FALSE(dialogue.IsWaitingForClick());
 	EXPECT_NE(SyncedBytes(dialogue), syncedBytes);
+}
+
+TEST(DialogueText, TheScreenOfTheComputerChangesOnlyThePresentationPartsOfTheSave)
+{
+	// A game server has no screen, and each client has its own screen
+	Fixture small;
+	Fixture large;
+	large.screenHeight = 1440;
+	for (auto* f : {&small, &large})
+	{
+		f->texts[10] = {.text = u"one two three"};
+	}
+	auto first = small.Make();
+	auto second = large.Make();
+	ASSERT_TRUE(first.RunText(false, 10, 1));
+	ASSERT_TRUE(second.RunText(false, 10, 1));
+	EXPECT_NE(first.GetDisplay().GetBaseLineHeight(), second.GetDisplay().GetBaseLineHeight());
+	EXPECT_NE(SavedBytes(first), SavedBytes(second));
+	EXPECT_EQ(SyncedBytes(first), SyncedBytes(second));
 }
 
 TEST(DialogueText, ALoadGivesBackThePresentationPartsOfTheSave)

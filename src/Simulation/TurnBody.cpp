@@ -79,6 +79,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
@@ -204,6 +205,9 @@ void PlayLivingTurn()
 	    [&add](entt::entity entity, const Creature&, const LivingListPlace&) { add(entity, Kind::Creature); });
 	living_turn::NewestFirst(list);
 
+	// A creature that the turn made takes its first pose in its own turn. The blends of that pose are made first, on
+	// the shared threads.
+	Locator::creatureAnimationSystem::value().PrepareFirstPoses();
 	auto& villagers = Locator::livingActionSystem::value();
 	auto& animals = Locator::animalSystem::value();
 	bool animalsTurn = false;
@@ -876,8 +880,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		}
 		break;
 	case Step::HelpProfile:
-		// The view does this step
-		view.PlayViewStep(step, cameraPosition);
+		// The help's count of what the players did moves on a turn. It reads the view of the camera from the last report,
+		// which is a command, so a game server does it too.
+		if (Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().ProcessTurn();
+		}
 		break;
 	case Step::TipBubble:
 		// The help's tip bubble stays while its sign shows

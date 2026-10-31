@@ -62,6 +62,14 @@ RUN_ONLY = {
     "CreatureArena": {"ring"},
 }
 
+# Fields of values that only the frames or the local random numbers of a computer change, and that no turn reads. A
+# save keeps them as presentation values, so the tools that compare the synced state do not look at them.
+PRESENTATION = {
+    # The frame rate of this computer and lines of code from its local random numbers. The loop of the village lights'
+    # flames, which the frames move on, from the C library's numbers of this computer.
+    "openblack::ecs::RegistryContext": {"globalStatistics", "villageLightFlames"},
+}
+
 SOURCES = ROOT / "src"
 # The headers of libraries whose types the saved world keeps, included by their names
 LIBRARY_HEADERS = [ROOT / "components" / "creaturemind" / "include"]
@@ -470,10 +478,12 @@ def names_array(enum_name):
     return "k_" + "".join(word[:1].upper() + word[1:] for word in words) + "Names"
 
 
-def field_line(owner, member, levels, run_only=False):
+def field_line(owner, member, levels, run_only=False, presentation=False):
     """A field's registration, with the names of the enumerations indexing it"""
     if run_only:
         return f'\n\t    .RunField<&{owner}::{member}>("{member}")'
+    if presentation and not levels:
+        return f'\n\t    .PresentationField<&{owner}::{member}>("{member}")'
     if not levels:
         return f'\n\t    .Field<&{owner}::{member}>("{member}")'
     names = ", ".join(names_array(level) if level is not None else "std::span<const std::string_view> {}"
@@ -685,7 +695,7 @@ def main():
         text = f"\tReflect<{name}>(context, ValueOnly {{}})"
         used = set()
         for member, levels in registered_members(definition, [member for member, _ in definition.members]):
-            text += field_line(name, member, levels)
+            text += field_line(name, member, levels, presentation=member in PRESENTATION.get(name, set()))
             used.update(level for level in levels if level is not None)
         text += ";\n"
         header = definition.header

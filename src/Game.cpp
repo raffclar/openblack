@@ -2244,13 +2244,6 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 	case Step::BeliefGained:
 		ShowBeliefGained();
 		break;
-	case Step::HelpProfile:
-		// The help's count of what the player did moves on a turn. It reads the view of the camera from the last report.
-		if (Locator::helpProfileSystem::has_value())
-		{
-			Locator::helpProfileSystem::value().ProcessTurn();
-		}
-		break;
 	case Step::Ambience:
 		// The ambience follows the weather at the camera
 		if (_atmosAudio)
