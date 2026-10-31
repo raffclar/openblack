@@ -30,6 +30,7 @@
 #include "Scenery/ObjectDrawList.h"
 
 using namespace openblack::ecs::systems;
+using openblack::ecs::components::BrokenModels;
 using openblack::ecs::components::BuildingDamage;
 using openblack::ecs::components::BuildingPiece;
 using openblack::ecs::components::Mesh;
@@ -104,8 +105,10 @@ void SnowSystem::StepObjects(Registry& registry, const ObjectDrawListSystemInter
 {
 	// In each frame: a building that breaks gives its snow to its broken model, and a new piece takes the snow of the
 	// broken model that it broke off. A tree that the frame draws out of the land carries less snow from then on.
-	registry.Each<const BuildingDamage>(
-	    [&registry](entt::entity building, const BuildingDamage&) { snow_levels::FollowBreak(registry, building, true); });
+	registry.Each<const BuildingDamage>([&registry](entt::entity building, const BuildingDamage&) {
+		const auto* models = registry.TryGet<const BrokenModels>(building);
+		snow_levels::FollowBreak(registry, building, true, models != nullptr ? models->made : 0);
+	});
 	registry.Each<SnowLevel>([&registry](entt::entity entity, SnowLevel& snow) {
 		if (snow.broken.has_value() && !registry.AllOf<BuildingDamage>(entity))
 		{
@@ -127,6 +130,9 @@ void SnowSystem::StepObjects(Registry& registry, const ObjectDrawListSystemInter
 
 	const auto gameTime = water_rings::Step(_objectPace, frameRealTime, frameGameTime);
 	const auto step = snow_cover::LevelStep(static_cast<int32_t>(gameTime.count()));
+	const auto depthAt = [this](glm::vec2 xz) { return GetDepth(xz); };
+	// The phantom buildings of the scaffolds are not in the list: a site or a hand shows them
+	snow_levels::StepScaffoldPhantoms(registry, depthAt, step);
 	if (step <= 0 || !drawList.GetView().has_value())
 	{
 		return;
@@ -157,7 +163,6 @@ void SnowSystem::StepObjects(Registry& registry, const ObjectDrawListSystemInter
 		}
 		_drawn.push_back(entity);
 	}
-	const auto depthAt = [this](glm::vec2 xz) { return GetDepth(xz); };
 	snow_levels::Step(registry, _drawn, depthAt, step);
 	snow_levels::StepBroken(registry, _broken, depthAt, step);
 }

@@ -54,8 +54,10 @@ void Step(Registry& registry, std::span<const entt::entity> things, const std::f
 [[nodiscard]] int32_t ShownLevelOf(const Registry& registry, entt::entity entity);
 
 /// Keeps the snow of the broken model of a building. When the building breaks, the snow of its broken model starts at
-/// the level of the building. When the building is whole again, it loses the snow of its broken model.
-void FollowBreak(Registry& registry, entt::entity building, bool broken);
+/// the level of the building. When the building is whole again, it loses the snow of its broken model. `model` counts
+/// the broken models of the building. A new broken model, also of a building that breaks again after a repair, starts
+/// again at the level of the building.
+void FollowBreak(Registry& registry, entt::entity building, bool broken, uint32_t model = 0);
 
 /// A piece that broke off `building` takes the snow of the broken model of the building, one time. A piece without a
 /// building takes no snow.
@@ -64,6 +66,11 @@ void TakePieceSnow(Registry& registry, entt::entity piece, entt::entity building
 /// Notes each tree that the game draws out of the land this frame: in a hand or in the physics, out of the cells of the
 /// map, and not sunk under the sea. Each one carries less snow from then on.
 void NoteTreesOutOfLand(Registry& registry);
+
+/// One step for the phantom buildings of the scaffolds that the frame shows:
+/// - A phantom that a site shows carries no snow from then on.
+/// - A phantom in a hand moves its snow towards the snow under it by at most `step`, with no cap, until a site shows it.
+void StepScaffoldPhantoms(Registry& registry, const std::function<float(glm::vec2)>& depthAt, int32_t step);
 
 /// One step for each broken building of `buildings`: the snow of its broken model moves towards the snow where it
 /// stands, by at most `step`

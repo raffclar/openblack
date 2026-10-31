@@ -31,6 +31,8 @@ enum class RenderPass : uint8_t
 	ObjectShadow,
 	/// The land seen from above, which the map in the temple's pool is textured with
 	TempleMap,
+	/// The temple's map at half size for the low detail levels: every second texel of every second row of the map
+	TempleMapHalf,
 	/// The sky of the sea's reflection, drawn first into its target
 	ReflectionSky,
 	Reflection,
@@ -103,6 +105,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Sky Dome Pass",               //
     "Object Shadow Pass",          //
     "Temple Map Pass",             //
+    "Temple Map Half Pass",        //
     "Reflection Sky Pass",         //
     "Reflection Pass",             //
     "Reflection Translucent Pass", //
