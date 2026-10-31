@@ -511,7 +511,11 @@ float construction::PlannedTempleReach(entt::entity plan)
 	return PlannedReach(Entities().Get<const Transform>(plan));
 }
 
-entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesire)
+namespace
+{
+/// A planned temple goes up where it was planned, with as much of it built as given. It is no longer among its town's
+/// plans, and the plan goes. The temple.
+entt::entity PlaceTemple(entt::entity plan, float built)
 {
 	auto& registry = Entities();
 	const auto planned = registry.Get<const PlannedTemple>(plan);
@@ -522,9 +526,9 @@ entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesir
 	{
 		std::erase(registry.Get<Town>(town->second).planned, plan);
 	}
-	// The temple's heart goes up where it was planned, with nothing of it built, and a site for its builders
+	// The temple's heart goes up where it was planned
 	const auto temple =
-	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, 0.0f);
+	    archetypes::CitadelArchetype::Create(transform.position, OwnerOf(planned), planned.yAngle, transform.scale, built);
 	registry.Get<Temple>(temple).town = planned.townId;
 	// The temple and its heart take the exact map position of the plan
 	const auto place = thing_map_place::Of(registry, plan);
@@ -536,8 +540,21 @@ entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesir
 	// Move the footpaths of the plan to the heart. Then remove the plan.
 	villager_footpath::HandOverFootpaths(plan, temple);
 	registry.Destroy(plan);
+	return temple;
+}
+} // namespace
+
+entt::entity construction::StartPlannedTemple(entt::entity plan, float siteDesire)
+{
+	// Nothing of the temple is built, and a site wants builders for it
+	const auto temple = PlaceTemple(plan, 0.0f);
 	OpenSite(temple, siteDesire);
 	return temple;
+}
+
+entt::entity construction::RaisePlannedTemple(entt::entity plan)
+{
+	return PlaceTemple(plan, 1.0f);
 }
 
 float construction::BuiltOf(entt::entity object)

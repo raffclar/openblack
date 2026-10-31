@@ -31,8 +31,10 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerWork.h"
@@ -43,6 +45,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WonderSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/VanillaScriptImport.h"
 #include "ECS/VanillaWorldImport.h"
 #include "ECS/WallHugRules.h"
 #include "ECS/WorldObjects.h"
@@ -293,6 +296,26 @@ entt::entity PutTown(ecs::Registry& registry, const world_import::ImportedTown& 
 	return entity;
 }
 
+/// Each flag of a desire of a town flies at the height of the file. The flag starts at rest, as the game makes it again.
+void PutDesireFlags(ecs::Registry& registry, const world_import::ImportedTowns& imported,
+                    const std::unordered_map<uint32_t, entt::entity>& made)
+{
+	for (const auto& file : imported.desireFlags)
+	{
+		const auto town = EntityOf(made, file.town);
+		const auto* flags = town != entt::null ? registry.TryGet<const TownDesireFlags>(town) : nullptr;
+		const auto flag = flags != nullptr ? flags->flags.at(file.desire) : entt::null;
+		if (flag == entt::null || !registry.Valid(flag))
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The town {} of the file has no flag for the desire {}", file.town, file.desire);
+			continue;
+		}
+		auto& component = registry.Get<TownDesireFlag>(flag);
+		component.level = file.level;
+		component.speed = 0.0f;
+	}
+}
+
 /// The tag of the move state of the file, for a walk that the import keeps
 void PutMoveTag(ecs::Registry& registry, entt::entity entity, uint8_t moveState, glm::vec2 at)
 {
@@ -351,6 +374,40 @@ glm::vec3 openblack::ecs::systems::vanilla_import::GroundPosition(const gamesave
 	return {map_coords::ToMetres(coords.x), coords.altitude, map_coords::ToMetres(coords.z)};
 }
 
+namespace
+{
+/// A player whose temple stands whole in the file gets a whole temple. When the land has only the plan of the temple,
+/// the temple goes up whole on the plan, with no site, no music and no save.
+void RaiseFileTemples(ecs::Registry& registry, const gamesave::VanillaWorld& world)
+{
+	for (const auto player : ecs::vanilla_script_import::WholeTemplePlayers(world))
+	{
+		bool standing = false;
+		registry.Each<const Temple>(
+		    [&standing, player](entt::entity, const Temple& temple) { standing = standing || temple.owner == player; });
+		if (standing)
+		{
+			continue;
+		}
+		entt::entity plan = entt::null;
+		registry.Each<const PlannedTemple>([&plan, player](entt::entity entity, const PlannedTemple& planned) {
+			if (plan == entt::null && planned.owner == player)
+			{
+				plan = entity;
+			}
+		});
+		if (plan == entt::null)
+		{
+			SPDLOG_LOGGER_WARN(ImportLog(), "The land has no temple and no plan of a temple for the player {} of the file",
+			                   static_cast<int>(player));
+			continue;
+		}
+		ecs::construction::RaisePlannedTemple(plan);
+		SPDLOG_LOGGER_INFO(ImportLog(), "The temple of the player {} goes up whole on its plan", static_cast<int>(player));
+	}
+}
+} // namespace
+
 bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, VanillaMade& made, VanillaWorks& works)
 {
 	const auto imported = world_import::ReadTowns(world);
@@ -386,6 +443,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 			registry.Get<Town>(town->second).gained = registry.Context().nextTownGained++;
 		}
 	}
+	RaiseFileTemples(registry, world);
 
 	for (const auto& abode : imported.abodes)
 	{
@@ -517,6 +575,7 @@ bool SaveGameSystem::ImportVanillaTowns(const gamesave::VanillaWorld& world, Van
 		                     [&ordered](entt::entity abode) { return std::ranges::find(ordered, abode) == ordered.end(); });
 		component.abodes = std::move(ordered);
 	}
+	PutDesireFlags(registry, imported, made);
 	PutPlans(registry, imported);
 	PutSites(imported, made);
 	registry.SetDirty();

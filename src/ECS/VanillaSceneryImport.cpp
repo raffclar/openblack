@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <unordered_map>
 #include <unordered_set>
@@ -448,6 +449,15 @@ ImportedAnimals ReadAnimals(const VanillaWorld& world)
 			std::memcpy(&flock.savedPlace, saved.data(), sizeof(flock.savedPlace));
 			const auto members = world.Refs(record, "members");
 			flock.members.assign(members.begin(), members.end());
+			flock.mostMembers = world.Word(record, "mostMembers").value_or(0);
+			flock.turnsOnLeg = world.Word(record, "turnsOnLeg").value_or(0);
+			flock.height = world.Float(record, "flockHeight").value_or(0.0f);
+			flock.keepsTogether = world.Word(record, "keepsTogether").value_or(0) != 0;
+			flock.calm = static_cast<int32_t>(world.Word(record, "calm").value_or(0));
+			if (const auto id = world.Word(record, "flockScriptId").value_or(0); id != 0)
+			{
+				flock.scriptId = static_cast<int32_t>(id);
+			}
 			imported.flocks.push_back(std::move(flock));
 			continue;
 		}
@@ -469,24 +479,61 @@ ImportedAnimals ReadAnimals(const VanillaWorld& world)
 			continue;
 		}
 		const auto walk = ReadWalk(world, record);
-		imported.animals.push_back({.number = record.number,
-		                            .row = *row,
-		                            .position = *position,
-		                            .scale = world.Float(record, "scale").value_or(1.0f),
-		                            .life = world.Float(record, "life").value_or(1.0f),
-		                            .birthTurn = world.Word(record, "birthTurn").value_or(0),
-		                            .goal = walk.goal,
-		                            .angle = walk.angle,
-		                            .speed = walk.speed,
-		                            .stepX = walk.stepX,
-		                            .stepZ = walk.stepZ,
-		                            .moveState = world.Byte(record, "moveState").value_or(0),
-		                            .state = action[0],
-		                            .finalState = action[1],
-		                            .flock = world.Ref(record, "flock").value_or(0),
-		                            .town = town(record.number)});
+		const auto bank = world.Raw(record, "bank");
+		const auto sleepCell = world.Raw(record, "sleepCell");
+		imported.animals.push_back(
+		    {.number = record.number,
+		     .row = *row,
+		     .position = *position,
+		     .scale = world.Float(record, "scale").value_or(1.0f),
+		     .life = world.Float(record, "life").value_or(1.0f),
+		     .birthTurn = world.Word(record, "birthTurn").value_or(0),
+		     .goal = walk.goal,
+		     .angle = walk.angle,
+		     .speed = walk.speed,
+		     .stepX = walk.stepX,
+		     .stepZ = walk.stepZ,
+		     .moveState = world.Byte(record, "moveState").value_or(0),
+		     .state = action[0],
+		     .finalState = action[1],
+		     .flock = world.Ref(record, "flock").value_or(0),
+		     .town = town(record.number),
+		     .hunger = static_cast<int16_t>(world.Half(record, "hunger").value_or(0)),
+		     .sleep = static_cast<int16_t>(world.Half(record, "sleep").value_or(0)),
+		     .breed = static_cast<int16_t>(world.Half(record, "breed").value_or(0)),
+		     .sleepCell = sleepCell.size() == 4 ? CellOf(sleepCell.first<4>()) : std::nullopt,
+		     .bank = bank.size() == k_GlideBytes ? GlideOf(bank.first<k_GlideBytes>()) : animals::Zoomer::State {}});
 	}
 	return imported;
+}
+
+animals::Zoomer::State GlideOf(std::span<const uint8_t, k_GlideBytes> bytes)
+{
+	std::array<float, k_GlideBytes / sizeof(float)> values {};
+	std::memcpy(values.data(), bytes.data(), bytes.size());
+	// The game does not read the fifth value of the file
+	return {.value = values[0],
+	        .speed = values[3],
+	        .target = values[1],
+	        .targetSpeed = values[2],
+	        .elapsed = values[5],
+	        .duration = values[6],
+	        .start = values[7],
+	        .startSpeed = values[8],
+	        .c2 = values[9],
+	        .c3 = values[10],
+	        .c4 = values[11]};
+}
+
+std::optional<glm::ivec2> CellOf(std::span<const uint8_t, 4> bytes)
+{
+	std::array<uint16_t, 2> halves {};
+	std::memcpy(halves.data(), bytes.data(), bytes.size());
+	if (halves[0] == 0 && halves[1] == 0)
+	{
+		return std::nullopt;
+	}
+	return glm::ivec2 {halves[0], halves[1]};
 }
 
 std::optional<ImportedDayCycle> ReadDayCycle(const VanillaWorld& world)

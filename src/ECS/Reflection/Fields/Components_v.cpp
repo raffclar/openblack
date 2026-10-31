@@ -124,7 +124,7 @@ void openblack::ecs::reflection::RegisterFields_Components_v(entt::meta_ctx& con
 	    .Field<&components::VillagerPose::slopeLift>("slopeLift")
 	    .Field<&components::VillagerPose::clipBlend>("clipBlend");
 	Reflect<components::WorkTarget>(context).Field<&components::WorkTarget::thing>("thing");
-	Reflect<components::FieldWorkSpot>(context).Field<&components::FieldWorkSpot::position>("position");
+	Reflect<components::FieldWorkSpot>(context).Field<&components::FieldWorkSpot::place>("place");
 	Reflect<components::WoodReactionTarget>(context)
 	    .Field<&components::WoodReactionTarget::wood>("wood")
 	    .Field<&components::WoodReactionTarget::startTurn>("startTurn");

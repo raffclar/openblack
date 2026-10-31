@@ -745,6 +745,11 @@ VillagerStates WalkingStateOf(entt::entity villager)
 
 bool villager_home::SetupMoveTo(LivingAction& action, glm::vec2 goal, VillagerStates final, WalkWay way)
 {
+	return SetupMoveTo(action, wall_hug::ToWhole(goal), final, way);
+}
+
+bool villager_home::SetupMoveTo(LivingAction& action, glm::ivec2 goal, VillagerStates final, WalkWay way)
+{
 	// It goes into the walk and the state it walks to at once, so the states it leaves hear where it is heading, and it
 	// never stops for a second before setting off. The walk itself is laid out only once it is walking.
 	if (!Locator::livingActionSystem::value().VillagerSetCurrentAndDestinationState(action, WalkingStateOf(EntityOf(action)),
@@ -758,10 +763,15 @@ bool villager_home::SetupMoveTo(LivingAction& action, glm::vec2 goal, VillagerSt
 
 void villager_home::SetupMobileMoveTo(LivingAction& action, glm::vec2 goal, WalkWay way)
 {
+	SetupMobileMoveTo(action, wall_hug::ToWhole(goal), way);
+}
+
+void villager_home::SetupMobileMoveTo(LivingAction& action, glm::ivec2 goal, WalkWay way)
+{
 	auto& registry = WorldRegistry();
 	const auto villager = EntityOf(action);
 	auto& wallHug = registry.Get<WallHug>(villager);
-	wallHug.goalPlace = wall_hug::ToWhole(goal);
+	wallHug.goalPlace = goal;
 	// A fresh step is worked out on the next pathfinding turn
 	wallHug.step = {0, 0};
 	wallHug.stepAltitude = 0.0f;

@@ -252,11 +252,11 @@ TEST(VillagerWork, AFarmerWorksAtSpotsUpToFiveMetresEitherWayOfTheFieldsMiddle)
 {
 	// The first draw moves it along x, the second along z
 	const auto spot = work::FieldWorkSpot({100.0f, 200.0f}, 0.0f, 10.0f);
-	EXPECT_NEAR(spot.x, 105.0f, 0.001f);
-	EXPECT_NEAR(spot.y, 195.0f, 0.001f);
+	EXPECT_EQ(spot.x, 688128);
+	EXPECT_EQ(spot.y, 1277952);
 	const auto middle = work::FieldWorkSpot({100.0f, 200.0f}, 5.0f, 5.0f);
-	EXPECT_NEAR(middle.x, 100.0f, 0.001f);
-	EXPECT_NEAR(middle.y, 200.0f, 0.001f);
+	EXPECT_EQ(middle.x, 655360);
+	EXPECT_EQ(middle.y, 1310720);
 }
 
 TEST(VillagerWork, AFarmerSowsOrDigsOnceAtItsSpotAndOtherwiseDecidesAfresh)
